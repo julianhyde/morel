@@ -25,9 +25,9 @@ License.
 
 [//]: # (start:lib/either)
 The `Either` structure provides a polymorphic disjoint-sum type
- `('left, 'right) either` whose values are either `INL v` (left) or
- `INR v` (right), along with operations for examining and transforming
- such values.
+`('left, 'right) either` whose values are either `INL v` (left) or
+`INR v` (right), along with operations for examining and transforming
+such values.
 
 ## Synopsis
 
@@ -53,7 +53,7 @@ val <a id='partition' href="#partition-impl">partition</a> : ('left, 'right) eit
 <h3><code><strong>datatype</strong> ('left, 'right) either</code></h3>
 
 is the type of disjoint-sum values; `INL v` represents a left value and
- `INR v` represents a right value.
+`INR v` represents a right value.
 
 <a id="isLeft-impl"></a>
 <h3><code>isLeft</code></h3>
@@ -69,37 +69,37 @@ is the type of disjoint-sum values; `INL v` represents a left value and
 <h3><code>asLeft</code></h3>
 
 `asLeft sm` (or `sm.asLeft ()`) returns `SOME (x)` if `sm` is a left value with contents `x`,
- otherwise it returns `NONE`.
+otherwise it returns `NONE`.
 
 <a id="asRight-impl"></a>
 <h3><code>asRight</code></h3>
 
 `asRight sm` (or `sm.asRight ()`) returns `SOME (x)` if `sm` is a right value with contents `x`,
- otherwise it returns `NONE`.
+otherwise it returns `NONE`.
 
 <a id="map-impl"></a>
 <h3><code>map</code></h3>
 
 `map (fl, fr) sm` maps `fl` over the contents of left values and `fr` over the contents
- of right values.
+of right values.
 
 <a id="mapLeft-impl"></a>
 <h3><code>mapLeft</code></h3>
 
 `mapLeft f sm` maps the function `f` over the contents of left values and acts as the
- identity on right values.
+identity on right values.
 
 <a id="mapRight-impl"></a>
 <h3><code>mapRight</code></h3>
 
 `mapRight f sm` maps the function `f` over the contents of right values and acts as the
- identity on left values.
+identity on left values.
 
 <a id="app-impl"></a>
 <h3><code>app</code></h3>
 
 `app (fl, fr) sm` applies `fl` to the contents of left values and `fr` to the contents
- of right values.
+of right values.
 
 <a id="appLeft-impl"></a>
 <h3><code>appLeft</code></h3>
@@ -115,8 +115,8 @@ is the type of disjoint-sum values; `INL v` represents a left value and
 <h3><code>fold</code></h3>
 
 `fold (fl, fr) init sm` computes `fx (v, init)`, where `v` is the contents of `sm` and `fx`
- is either `fl` (if `sm` is a left value) or `fr` (if `sm` is a right
- value).
+is either `fl` (if `sm` is a left value) or `fr` (if `sm` is a right
+value).
 
 <a id="proj-impl"></a>
 <h3><code>proj</code></h3>
@@ -127,6 +127,6 @@ is the type of disjoint-sum values; `INL v` represents a left value and
 <h3><code>partition</code></h3>
 
 `partition sms` partitions the list of sum values into a list of left values and a
- list of right values.
+list of right values.
 
 [//]: # (end:lib/either)

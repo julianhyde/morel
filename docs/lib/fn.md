@@ -25,7 +25,7 @@ License.
 
 [//]: # (start:lib/fn)
 The `Fn` structure provides combinators for working with function values,
- including application, composition, currying, and fixpoint operators.
+including application, composition, currying, and fixpoint operators.
 
 ## Synopsis
 
@@ -61,45 +61,45 @@ val <a id='notEqual' href="#notEqual-impl">notEqual</a> : 'a -> 'a -> bool
 <h3><code>o</code></h3>
 
 `f o g` is the function composition of `f` and `g`. Thus, `(f o g) a`
- is equivalent to `f (g a)`. This function is the same as the global
- `o` operator and is also part of the `General` structure.
+is equivalent to `f (g a)`. This function is the same as the global
+`o` operator and is also part of the `General` structure.
 
 <a id="curry-impl"></a>
 <h3><code>curry</code></h3>
 
 `curry f x y` is equivalent to `f (x, y)`; i.e., `curry f` transforms
- the binary function `f` into curried form.
+the binary function `f` into curried form.
 
 <a id="uncurry-impl"></a>
 <h3><code>uncurry</code></h3>
 
 `ucurry f (x, y)` is equivalent to `f x y`; i.e., `uncurry f` transforms the curried
- function `f` into a binary function. This function is the inverse of
- `curry`.
+function `f` into a binary function. This function is the inverse of
+`curry`.
 
 <a id="flip-impl"></a>
 <h3><code>flip</code></h3>
 
 `flip f (x, y)` is equivalent to `f (y, x)`; i.e., `flip f` flips the argument order
- of the binary function `f`.
+of the binary function `f`.
 
 <a id="repeat-impl"></a>
 <h3><code>repeat</code></h3>
 
 `repeat n f` returns the `n`-fold composition of `f`. If `n` is zero, then
- `repeat n f` returns the identity function. If `n` is negative, then
- it raises the exception `Domain`.
+`repeat n f` returns the identity function. If `n` is negative, then
+it raises the exception `Domain`.
 
 <a id="equal-impl"></a>
 <h3><code>equal</code></h3>
 
 `equal a b` returns whether `a` is equal to `b`. It is a curried version of the
- polymorphic equality function (`=`).
+polymorphic equality function (`=`).
 
 <a id="notEqual-impl"></a>
 <h3><code>notEqual</code></h3>
 
 `notEqual a b` returns whether `a` is not equal to `b`. It is a curried version of
- the polymorphic inequality function (`<>`).
+the polymorphic inequality function (`<>`).
 
 [//]: # (end:lib/fn)

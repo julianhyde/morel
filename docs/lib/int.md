@@ -25,7 +25,7 @@ License.
 
 [//]: # (start:lib/int)
 The `Int` structure provides arithmetic, comparison, and conversion
- operations for the default fixed-precision integer type.
+operations for the default fixed-precision integer type.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/int.html).*
 
@@ -89,59 +89,59 @@ is the type of fixed-precision integers.
 <h3><code>minInt</code></h3>
 
 `minInt` is the minimal (most negative) integer representable by
- `int`. If a value is `NONE`, `int` can represent all negative
- integers, within the limits of the heap size. If `precision` is `SOME
- (n)`, then we have `minInt` = -2<sup>(n-1)</sup>.
+`int`. If a value is `NONE`, `int` can represent all negative
+integers, within the limits of the heap size. If `precision` is `SOME
+(n)`, then we have `minInt` = -2<sup>(n-1)</sup>.
 
 <a id="maxInt-impl"></a>
 <h3><code>maxInt</code></h3>
 
 `maxInt` is the maximal (most positive) integer representable by
- `int`. If a value is `NONE`, `int` can represent all positive
- integers, within the limits of the heap size. If `precision` is `SOME
- (n)`, then we have `maxInt` = 2<sup>(n-1)</sup> - 1.
+`int`. If a value is `NONE`, `int` can represent all positive
+integers, within the limits of the heap size. If `precision` is `SOME
+(n)`, then we have `maxInt` = 2<sup>(n-1)</sup> - 1.
 
 <a id="div-impl"></a>
 <h3><code>div</code></h3>
 
 `i div j` returns the greatest integer less than or equal to the
- quotient of `i` by j, i.e., `floor(i / j)`. It raises `Overflow` when
- the result is not representable, or Div when `j = 0`. Note that
- rounding is towards negative infinity, not zero.
+quotient of `i` by j, i.e., `floor(i / j)`. It raises `Overflow` when
+the result is not representable, or Div when `j = 0`. Note that
+rounding is towards negative infinity, not zero.
 
 <a id="mod-impl"></a>
 <h3><code>mod</code></h3>
 
 `i mod j` returns the remainder of the division of `i` by `j`. It raises
- `Div` when `j = 0`. When defined, `(i mod j)` has the same sign as
- `j`, and `(i div j) * j + (i mod j) = i`.
+`Div` when `j = 0`. When defined, `(i mod j)` has the same sign as
+`j`, and `(i div j) * j + (i mod j) = i`.
 
 <a id="quot-impl"></a>
 <h3><code>quot</code></h3>
 
 `quot (i, j)` (or `i.quot j`) returns the truncated quotient of the division of `i` by
- `j`, i.e., it computes `(i / j)` and then drops any fractional part of
- the quotient. It raises `Overflow` when the result is not
- representable, or `Div` when `j = 0`. Note that unlike `div`, `quot`
- rounds towards zero. In addition, unlike `div` and `mod`, neither
- `quot` nor `rem` are infix by default; an appropriate infix
- declaration would be `infix 7 quot rem`. This is the semantics of most
- hardware divide instructions, so `quot` may be faster than `div`.
+`j`, i.e., it computes `(i / j)` and then drops any fractional part of
+the quotient. It raises `Overflow` when the result is not
+representable, or `Div` when `j = 0`. Note that unlike `div`, `quot`
+rounds towards zero. In addition, unlike `div` and `mod`, neither
+`quot` nor `rem` are infix by default; an appropriate infix
+declaration would be `infix 7 quot rem`. This is the semantics of most
+hardware divide instructions, so `quot` may be faster than `div`.
 
 <a id="rem-impl"></a>
 <h3><code>rem</code></h3>
 
 `rem (i, j)` (or `i.rem j`) returns the remainder of the division of `i` by `j`. It
- raises `Div` when `j = 0`. `(i rem j)` has the same sign as i, and it
- holds that `(i quot j) * j + (i rem j) = i`. This is the semantics of
- most hardware divide instructions, so `rem` may be faster than `mod`.
+raises `Div` when `j = 0`. `(i rem j)` has the same sign as i, and it
+holds that `(i quot j) * j + (i rem j) = i`. This is the semantics of
+most hardware divide instructions, so `rem` may be faster than `mod`.
 
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>
 
 `compare (i, j)` (or `i.compare j`) returns `LESS`, `EQUAL`, or `GREATER` according to
- whether its first argument is less than, equal to, or greater than the
- second.
+whether its first argument is less than, equal to, or greater than the
+second.
 
 <a id="abs-impl"></a>
 <h3><code>abs</code></h3>
@@ -167,20 +167,20 @@ is the type of fixed-precision integers.
 <h3><code>sameSign</code></h3>
 
 `sameSign (i, j)` (or `i.sameSign j`) returns true if `i` and `j` have the same sign. It
- is equivalent to `(sign i = sign j)`.
+is equivalent to `(sign i = sign j)`.
 
 <a id="toString-impl"></a>
 <h3><code>toString</code></h3>
 
 `toString i` (or `i.toString ()`) converts a `int` into a `string`; equivalent to `(fmt
- StringCvt.DEC r)`.
+StringCvt.DEC r)`.
 
 <a id="fromString-impl"></a>
 <h3><code>fromString</code></h3>
 
 `fromString s` scans a `int` value from a string. Returns `SOME (r)`
- if a `int` value can be scanned from a prefix of `s`, ignoring any
- initial whitespace; otherwise, it returns `NONE`. Equivalent to
- `StringCvt.scanString (scan StringCvt.DEC)`.
+if a `int` value can be scanned from a prefix of `s`, ignoring any
+initial whitespace; otherwise, it returns `NONE`. Equivalent to
+`StringCvt.scanString (scan StringCvt.DEC)`.
 
 [//]: # (end:lib/int)

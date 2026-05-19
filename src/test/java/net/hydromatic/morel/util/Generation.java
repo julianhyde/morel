@@ -655,7 +655,7 @@ public class Generation {
     }
 
     void generate() {
-      pw.println(strDef.overview.trim());
+      pw.println(stripLeadingSpace(strDef.overview.trim()));
       pw.println();
       if ("basis".equals(strDef.specified)) {
         pw.format(
@@ -837,7 +837,7 @@ public class Generation {
     }
 
     static String processDesc(String desc) {
-      return desc.trim()
+      return stripLeadingSpace(desc.trim())
           .replace(
               "\n" //
                   + "\n" //
@@ -857,6 +857,15 @@ public class Generation {
           // Strip trailing whitespace from every line (after <p> rewrites,
           // which can otherwise leave a stranded leading-space-only line).
           .replaceAll("(?m)[ \\t]+$", "");
+    }
+
+    /**
+     * Removes one leading space, if present, from each line. Doc comments
+     * preserve a leading space after the asterisk (matching ocamldoc -stars);
+     * for our markdown rendering we don't want that cosmetic indentation.
+     */
+    static String stripLeadingSpace(String s) {
+      return s.replaceAll("(?m)^ ", "");
     }
 
     static String toSml(String type) {

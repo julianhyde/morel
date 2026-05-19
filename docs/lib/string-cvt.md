@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/string-cvt)
 The `StringCvt` structure provides types and utilities to support
- formatted string scanning and conversion, including numeric radix
- specifiers and reader types.
+formatted string scanning and conversion, including numeric radix
+specifiers and reader types.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/string-cvt.html).*
 

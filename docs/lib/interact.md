@@ -25,7 +25,7 @@ License.
 
 [//]: # (start:lib/interact)
 The `Interact` structure provides functions for interacting with the
- Morel REPL, such as loading source files.
+Morel REPL, such as loading source files.
 
 ## Synopsis
 
@@ -43,6 +43,6 @@ val <a id='useSilently' href="#useSilently-impl">useSilently</a> : string -> uni
 <h3><code>useSilently</code></h3>
 
 `useSilently f` loads source text from the file named `f`, without
- printing to stdout.
+printing to stdout.
 
 [//]: # (end:lib/interact)

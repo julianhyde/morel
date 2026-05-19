@@ -25,9 +25,9 @@ License.
 
 [//]: # (start:lib/date)
 The `Date` structure provides an abstract type for calendar dates and
- times, with fields for year, month, day, hour, minute, and second. Dates
- can be constructed from `Time.time` values, decomposed into fields,
- formatted as strings, and compared.
+times, with fields for year, month, day, hour, minute, and second. Dates
+can be constructed from `Time.time` values, decomposed into fields,
+formatted as strings, and compared.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/date.html).*
 
@@ -76,7 +76,7 @@ val <a id='yearDay' href="#yearDay-impl">yearDay</a> : date -> int
 <h3><code><strong>type</strong> date</code></h3>
 
 is an equality type representing a calendar date and time of day,
- with an associated timezone offset.
+with an associated timezone offset.
 
 <a id="month-impl"></a>
 <h3><code><strong>datatype</strong> month</code></h3>
@@ -92,20 +92,20 @@ is the type of weekday values.
 <h3><code><strong>exception</strong> Date</code></h3>
 
 is raised when a date cannot be constructed from the given fields
- (for example, if the day or month is out of range).
+(for example, if the day or month is out of range).
 
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>
 
 `compare (d1, d2)` (or `d1.compare d2`) returns `LESS`, `EQUAL`, or `GREATER` depending on whether `d1` is less
- than, equal to, or greater than `d2` (comparing instants in time).
+than, equal to, or greater than `d2` (comparing instants in time).
 
 <a id="date-impl"></a>
 <h3><code>date</code></h3>
 
 `date {year, month, day, hour, minute, second, offset}` constructs a date from the given fields. If `offset` is `NONE`, the date
- is in local time; if `SOME t`, the date is in the timezone with offset `t`
- from UTC.
+is in local time; if `SOME t`, the date is in the timezone with offset `t`
+from UTC.
 
 <a id="day-impl"></a>
 <h3><code>day</code></h3>
@@ -116,16 +116,16 @@ is raised when a date cannot be constructed from the given fields
 <h3><code>fmt</code></h3>
 
 `fmt s d` formats `d` using the strftime-style format string `s`. Recognized
- format codes include `%Y` (4-digit year), `%m` (2-digit month),
- `%d` (2-digit day), `%H` (hour), `%M` (minute), `%S` (second),
- `%a` (abbreviated weekday), `%b` (abbreviated month), and `%%` (literal `%`).
+format codes include `%Y` (4-digit year), `%m` (2-digit month),
+`%d` (2-digit day), `%H` (hour), `%M` (minute), `%S` (second),
+`%a` (abbreviated weekday), `%b` (abbreviated month), and `%%` (literal `%`).
 
 <a id="fromString-impl"></a>
 <h3><code>fromString</code></h3>
 
 `fromString s` parses a date from the string `s`, which should be in the format
- produced by `toString` (e.g., `"Thu Jan  1 00:00:00 1970"`).
- Returns `SOME d` if successful, `NONE` otherwise.
+produced by `toString` (e.g., `"Thu Jan  1 00:00:00 1970"`).
+Returns `SOME d` if successful, `NONE` otherwise.
 
 <a id="fromTimeLocal-impl"></a>
 <h3><code>fromTimeLocal</code></h3>
@@ -146,13 +146,13 @@ is raised when a date cannot be constructed from the given fields
 <h3><code>isDst</code></h3>
 
 `isDst d` (or `d.isDst ()`) returns `SOME true` if `d` is in daylight saving time, `SOME false` if
- not, or `NONE` if the information is not available.
+not, or `NONE` if the information is not available.
 
 <a id="localOffset-impl"></a>
 <h3><code>localOffset</code></h3>
 
 `localOffset ()` returns the offset of the local timezone from UTC as a `time` value
- (nanoseconds).
+(nanoseconds).
 
 <a id="minute-impl"></a>
 <h3><code>minute</code></h3>
@@ -173,7 +173,7 @@ is raised when a date cannot be constructed from the given fields
 <h3><code>toString</code></h3>
 
 `toString d` (or `d.toString ()`) formats `d` as a string in the format `"Www Mmm DD HH:MM:SS YYYY"`,
- for example `"Thu Jan  1 00:00:00 1970"`.
+for example `"Thu Jan  1 00:00:00 1970"`.
 
 <a id="toTime-impl"></a>
 <h3><code>toTime</code></h3>

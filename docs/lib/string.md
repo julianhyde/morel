@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/string)
 The `String` structure provides the `string` type and a comprehensive
- set of operations for constructing, examining, searching, and converting
- strings.
+set of operations for constructing, examining, searching, and converting
+strings.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/string.html).*
 
@@ -86,49 +86,47 @@ is the type of character strings.
 <h3><code>sub</code></h3>
 
 `sub (s, i)` (or `s.sub i`) returns the `i`(th) character of `s`, counting from
- zero. This raises `Subscript` if `i` < 0 or |`s`| &le; `i`.
+zero. This raises `Subscript` if `i` < 0 or |`s`| &le; `i`.
 
 <a id="extract-impl"></a>
 <h3><code>extract</code></h3>
 
 `extract (s, i, NONE)` (or `s.extract (i, NONE)`) and "extract (s, i, SOME j)"
- return substrings
- of `s`. The first returns the substring of `s` from the `i`(th)
- character to the end of the string, i.e., the string
- `s`[`i`..|`s`|-1]. This raises `Subscript` if `i` < 0 or |`s`| < `i`.
-
-
+return substrings
+of `s`. The first returns the substring of `s` from the `i`(th)
+character to the end of the string, i.e., the string
+`s`[`i`..|`s`|-1]. This raises `Subscript` if `i` < 0 or |`s`| < `i`.
 
 The second form returns the substring of size `j` starting at
- index `i`, i.e., the string `s`[`i`..`i`+`j`-1]. Raises `Subscript` if
- `i` < 0 or `j` < 0 or |`s`| < `i` + `j`. Note that, if defined,
- `extract` returns the empty string when `i` = |`s`|.
+index `i`, i.e., the string `s`[`i`..`i`+`j`-1]. Raises `Subscript` if
+`i` < 0 or `j` < 0 or |`s`| < `i` + `j`. Note that, if defined,
+`extract` returns the empty string when `i` = |`s`|.
 
 <a id="substring-impl"></a>
 <h3><code>substring</code></h3>
 
 `substring (s, i, j)` (or `s.substring (i, j)`) returns the substring `s`[`i`..`i`+`j`-1], i.e.,
- the substring of size `j` starting at index `i`. This is equivalent to
- `extract(s, i, SOME j)`.
+the substring of size `j` starting at index `i`. This is equivalent to
+`extract(s, i, SOME j)`.
 
 <a id="^-impl"></a>
 <h3><code>^</code></h3>
 
 `s ^ t` is the concatenation of the strings `s` and `t`. This raises
- `Size` if `|s| + |t| > maxSize`.
+`Size` if `|s| + |t| > maxSize`.
 
 <a id="concat-impl"></a>
 <h3><code>concat</code></h3>
 
 `concat l` is the concatenation of all the strings in `l`. This raises
- `Size` if the sum of all the sizes is greater than `maxSize`.
+`Size` if the sum of all the sizes is greater than `maxSize`.
 
 <a id="concatWith-impl"></a>
 <h3><code>concatWith</code></h3>
 
 `concatWith s l` returns the concatenation of the strings in the list
- `l` using the string `s` as a separator. This raises `Size` if the
- size of the resulting string would be greater than `maxSize`.
+`l` using the string `s` as a separator. This raises `Size` if the
+size of the resulting string would be greater than `maxSize`.
 
 <a id="str-impl"></a>
 <h3><code>str</code></h3>
@@ -139,8 +137,8 @@ The second form returns the substring of size `j` starting at
 <h3><code>implode</code></h3>
 
 `implode l` generates the string containing the characters in the list
- `l`. This is equivalent to `concat (List.map str l)`. This raises
- `Size` if the resulting string would have size greater than `maxSize`.
+`l`. This is equivalent to `concat (List.map str l)`. This raises
+`Size` if the resulting string would have size greater than `maxSize`.
 
 <a id="explode-impl"></a>
 <h3><code>explode</code></h3>
@@ -151,78 +149,78 @@ The second form returns the substring of size `j` starting at
 <h3><code>map</code></h3>
 
 `map f s` applies `f` to each element of `s` from left to right,
- returning the resulting string. It is equivalent to `implode(List.map
- f (explode s))`.
+returning the resulting string. It is equivalent to `implode(List.map
+f (explode s))`.
 
 <a id="translate-impl"></a>
 <h3><code>translate</code></h3>
 
 `translate f s` returns the string generated from `s` by mapping each
- character in `s` by `f`. It is equivalent to `concat(List.map f
- (explode s))`.
+character in `s` by `f`. It is equivalent to `concat(List.map f
+(explode s))`.
 
 <a id="tokens-impl"></a>
 <h3><code>tokens</code></h3>
 
 `tokens f s` returns a list of tokens derived from `s` from left to
- right. A token is a non-empty maximal substring of `s` not containing
- any delimiter. A delimiter is a character satisfying the predicate
- `f`.
+right. A token is a non-empty maximal substring of `s` not containing
+any delimiter. A delimiter is a character satisfying the predicate
+`f`.
 
- Two tokens may be separated by more than one delimiter, whereas
- two fields are separated by exactly one delimiter. For example, if
- the only delimiter is the character `#"|"`, then the string
- `"|abc||def"` contains two tokens `"abc"` and `"def"`, whereas it
- contains the four fields `""`, `"abc"`, `""` and `"def"`.
+Two tokens may be separated by more than one delimiter, whereas
+two fields are separated by exactly one delimiter. For example, if
+the only delimiter is the character `#"|"`, then the string
+`"|abc||def"` contains two tokens `"abc"` and `"def"`, whereas it
+contains the four fields `""`, `"abc"`, `""` and `"def"`.
 
 <a id="fields-impl"></a>
 <h3><code>fields</code></h3>
 
 `fields f s` returns a list of fields derived from `s` from left to
- right. A field is a (possibly empty) maximal substring of `s` not
- containing any delimiter. A delimiter is a character satisfying the
- predicate `f`.
+right. A field is a (possibly empty) maximal substring of `s` not
+containing any delimiter. A delimiter is a character satisfying the
+predicate `f`.
 
- Two tokens may be separated by more than one delimiter, whereas
- two fields are separated by exactly one delimiter. For example, if
- the only delimiter is the character `#"|"`, then the string
- `"|abc||def"` contains two tokens `"abc"` and `"def"`, whereas it
- contains the four fields `""`, `"abc"`, `""` and `"def"`.
+Two tokens may be separated by more than one delimiter, whereas
+two fields are separated by exactly one delimiter. For example, if
+the only delimiter is the character `#"|"`, then the string
+`"|abc||def"` contains two tokens `"abc"` and `"def"`, whereas it
+contains the four fields `""`, `"abc"`, `""` and `"def"`.
 
 <a id="isPrefix-impl"></a>
 <h3><code>isPrefix</code></h3>
 
 `isPrefix s1 s2` returns `true` if the string `s1` is a prefix of the
- string `s2`. Note that the empty string is a prefix of any string, and
- that a string is a prefix of itself.
+string `s2`. Note that the empty string is a prefix of any string, and
+that a string is a prefix of itself.
 
 <a id="isSubstring-impl"></a>
 <h3><code>isSubstring</code></h3>
 
 `isSubstring s1 s2` returns `true` if the string `s1` is a substring
- of the string `s2`. Note that the empty string is a substring of any
- string, and that a string is a substring of itself.
+of the string `s2`. Note that the empty string is a substring of any
+string, and that a string is a substring of itself.
 
 <a id="isSuffix-impl"></a>
 <h3><code>isSuffix</code></h3>
 
 `isSuffix s1 s2` returns `true` if the string `s1` is a suffix of the
- string `s2`. Note that the empty string is a suffix of any string, and
- that a string is a suffix of itself.
+string `s2`. Note that the empty string is a suffix of any string, and
+that a string is a suffix of itself.
 
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>
 
 `compare (s, t)` (or `s.compare t`) does a lexicographic comparison of the two strings
- using the ordering `Char.compare` on the characters. It returns
- `LESS`, `EQUAL`, or `GREATER`, if `s` is less than, equal to, or
- greater than `t`, respectively.
+using the ordering `Char.compare` on the characters. It returns
+`LESS`, `EQUAL`, or `GREATER`, if `s` is less than, equal to, or
+greater than `t`, respectively.
 
 <a id="collate-impl"></a>
 <h3><code>collate</code></h3>
 
 `collate (f, (s, t))` performs lexicographic comparison of the two
- strings using the given ordering `f` on characters.
+strings using the given ordering `f` on characters.
 
 <a id="<-impl"></a>
 <h3><code><</code></h3>
@@ -243,6 +241,6 @@ The second form returns the substring of size `j` starting at
 <h3><code>>=</code></h3>
 
 `s >= t` returns true if `s` is greater than or equal to `t` in the string
- ordering.
+ordering.
 
 [//]: # (end:lib/string)

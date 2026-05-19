@@ -25,9 +25,9 @@ License.
 
 [//]: # (start:lib/list)
 The `List` structure provides the `list` type and a comprehensive
- set of operations for constructing, examining, and transforming
- singly-linked lists. Many operations are provided in both left-to-right
- and right-to-left variants.
+set of operations for constructing, examining, and transforming
+singly-linked lists. Many operations are provided in both left-to-right
+and right-to-left variants.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/list.html).*
 
@@ -78,7 +78,7 @@ is the type of polymorphic singly-linked lists.
 <h3><code><strong>exception</strong> Empty</code></h3>
 
 is raised by operations that require a non-empty list when given an
- empty list.
+empty list.
 
 <a id="null-impl"></a>
 <h3><code>null</code></h3>
@@ -99,54 +99,52 @@ is raised by operations that require a non-empty list when given an
 <h3><code>hd</code></h3>
 
 `hd l` (or `l.hd ()`) returns the first element of `l`. Raises `Empty` if `l` is
- `nil`.
+`nil`.
 
 <a id="tl-impl"></a>
 <h3><code>tl</code></h3>
 
 `tl l` (or `l.tl ()`) returns all but the first element of `l`. Raises `Empty` if `l`
- is `nil`.
+is `nil`.
 
 <a id="last-impl"></a>
 <h3><code>last</code></h3>
 
 `last l` (or `l.last ()`) returns the last element of `l`. Raises `Empty` if `l` is
- `nil`.
+`nil`.
 
 <a id="getItem-impl"></a>
 <h3><code>getItem</code></h3>
 
 `getItem l` (or `l.getItem ()`) returns `NONE` if the `list` is empty, and `SOME (hd l, tl
- l)` otherwise. This function is particularly useful for creating value
- readers from lists of characters. For example, `Int.scan StringCvt.DEC
- getItem` has the type `(int, char list) StringCvt.reader` and can be
- used to scan decimal integers from lists of characters.
+l)` otherwise. This function is particularly useful for creating value
+readers from lists of characters. For example, `Int.scan StringCvt.DEC
+getItem` has the type `(int, char list) StringCvt.reader` and can be
+used to scan decimal integers from lists of characters.
 
 <a id="nth-impl"></a>
 <h3><code>nth</code></h3>
 
 `nth (l, i)` (or `l.nth i`) returns the `i`(th) element of the list `l`, counting
- from 0. Raises `Subscript` if `i` < 0 or `i` &ge; `length l`. We have
- `nth(l, 0)` = `hd l`, ignoring exceptions.
+from 0. Raises `Subscript` if `i` < 0 or `i` &ge; `length l`. We have
+`nth(l, 0)` = `hd l`, ignoring exceptions.
 
 <a id="take-impl"></a>
 <h3><code>take</code></h3>
 
 `take (l, i)` (or `l.take i`) returns the first `i` elements of the list `l`. Raises
- `Subscript` if `i` < 0 or `i` > `length l`. We have `take(l, length
- l)` = `l`.
+`Subscript` if `i` < 0 or `i` > `length l`. We have `take(l, length
+l)` = `l`.
 
 <a id="drop-impl"></a>
 <h3><code>drop</code></h3>
 
 `drop (l, i)` (or `l.drop i`) returns what is left after dropping the first `i`
- elements of the list `l`. Raises `Subscript` if `i` < 0 or `i` >
- `length l`.
-
-
+elements of the list `l`. Raises `Subscript` if `i` < 0 or `i` >
+`length l`.
 
 It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le;
- `i` &le; `length l`. We also have `drop(l, length l)` = `[]`.
+`i` &le; `length l`. We also have `drop(l, length l)` = `[]`.
 
 <a id="rev-impl"></a>
 <h3><code>rev</code></h3>
@@ -157,7 +155,7 @@ It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le;
 <h3><code>concat</code></h3>
 
 `concat l` returns the list that is the concatenation of all the lists
- in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
+in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
 
 <a id="revAppend-impl"></a>
 <h3><code>revAppend</code></h3>
@@ -173,98 +171,98 @@ It holds that `take(l, i) @ drop(l, i)` = `l` when 0 &le;
 <h3><code>map</code></h3>
 
 `map f l` applies `f` to each element of `l` from left to right,
- returning the list of results.
+returning the list of results.
 
 <a id="mapPartial-impl"></a>
 <h3><code>mapPartial</code></h3>
 
 `mapPartial f l` applies `f` to each element of `l` from left to
- right, returning a list of results, with `SOME` stripped, where `f`
- was defined. `f` is not defined for an element of `l` if `f` applied
- to the element returns `NONE`. The above expression is equivalent to:
+right, returning a list of results, with `SOME` stripped, where `f`
+was defined. `f` is not defined for an element of `l` if `f` applied
+to the element returns `NONE`. The above expression is equivalent to:
 
- <pre>((map valOf) o (filter isSome) o (map f)) b</pre>
+<pre>((map valOf) o (filter isSome) o (map f)) b</pre>
 
 <a id="find-impl"></a>
 <h3><code>find</code></h3>
 
 `find f l` applies `f` to each element `x` of the list `l`, from left
- to right, until `f x` evaluates to `true`. It returns `SOME (x)` if
- such an `x` exists; otherwise it returns `NONE`.
+to right, until `f x` evaluates to `true`. It returns `SOME (x)` if
+such an `x` exists; otherwise it returns `NONE`.
 
 <a id="filter-impl"></a>
 <h3><code>filter</code></h3>
 
 `filter f l` applies `f` to each element `x` of `l`, from left to
- right, and returns the list of those `x` for which `f x` evaluated to
- `true`, in the same order as they occurred in the argument list.
+right, and returns the list of those `x` for which `f x` evaluated to
+`true`, in the same order as they occurred in the argument list.
 
 <a id="partition-impl"></a>
 <h3><code>partition</code></h3>
 
 `partition f l` applies `f` to each element `x` of `l`, from left to
- right, and returns a pair `(pos, neg)` where `pos` is the list of
- those `x` for which `f x` evaluated to `true`, and `neg` is the list
- of those for which `f x` evaluated to `false`. The elements of `pos`
- and `neg` retain the same relative order they possessed in `l`.
+right, and returns a pair `(pos, neg)` where `pos` is the list of
+those `x` for which `f x` evaluated to `true`, and `neg` is the list
+of those for which `f x` evaluated to `false`. The elements of `pos`
+and `neg` retain the same relative order they possessed in `l`.
 
 <a id="foldl-impl"></a>
 <h3><code>foldl</code></h3>
 
 `foldl f init [x1, x2, ..., xn]` returns `f(xn, ... , f(x2, f(x1,
- init))...)` or `init` if the list is empty.
+init))...)` or `init` if the list is empty.
 
 <a id="foldr-impl"></a>
 <h3><code>foldr</code></h3>
 
 `foldr f init [x1, x2, ..., xn]` returns `f(x1, f(x2, ..., f(xn,
- init)...))` or `init` if the list is empty.
+init)...))` or `init` if the list is empty.
 
 <a id="exists-impl"></a>
 <h3><code>exists</code></h3>
 
 `exists f l` applies `f` to each element `x` of the list `l`, from
- left to right, until `f(x)` evaluates to `true`; it returns `true` if
- such an `x` exists and `false` otherwise.
+left to right, until `f(x)` evaluates to `true`; it returns `true` if
+such an `x` exists and `false` otherwise.
 
 <a id="all-impl"></a>
 <h3><code>all</code></h3>
 
 `all f l` applies `f` to each element `x` of the list `l`, from left
- to right, until `f(x)` evaluates to `false`; it returns `false` if
- such an `x` exists and `true` otherwise. It is equivalent to
- `not(exists (not o f) l))`.
+to right, until `f(x)` evaluates to `false`; it returns `false` if
+such an `x` exists and `true` otherwise. It is equivalent to
+`not(exists (not o f) l))`.
 
 <a id="tabulate-impl"></a>
 <h3><code>tabulate</code></h3>
 
 `tabulate (n, f)` returns a list of length `n` equal to `[f(0), f(1),
- ..., f(n-1)]`, created from left to right. Raises `Size` if `n` < 0.
+..., f(n-1)]`, created from left to right. Raises `Size` if `n` < 0.
 
 <a id="collate-impl"></a>
 <h3><code>collate</code></h3>
 
 `collate f (l1, l2)` performs lexicographic comparison of the two
- lists using the given ordering `f` on the list elements.
+lists using the given ordering `f` on the list elements.
 
 <a id="mapi-impl"></a>
 <h3><code>mapi</code></h3>
 
 `mapi f l` applies the function `f` to the elements of the argument
- list `l`, supplying the list index and element as arguments to each
- call.
+list `l`, supplying the list index and element as arguments to each
+call.
 
 <a id="except-impl"></a>
 <h3><code>except</code></h3>
 
 `except l` returns the list that is the concatenation of all the lists
- in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
+in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
 
 <a id="intersect-impl"></a>
 <h3><code>intersect</code></h3>
 
 `intersect l` returns the list that is the concatenation of all the
- lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @
- ln`
+lists in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @
+ln`
 
 [//]: # (end:lib/list)

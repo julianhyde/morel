@@ -25,9 +25,9 @@ License.
 
 [//]: # (start:lib/general)
 The `General` structure provides the fundamental types `unit`, `exn`,
- and `order`, the standard exceptions raised by the runtime, and a few
- utility functions. Its contents are available without qualification in
- every Morel program.
+and `order`, the standard exceptions raised by the runtime, and a few
+utility functions. Its contents are available without qualification in
+every Morel program.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/general.html).*
 
@@ -61,13 +61,13 @@ val <a id='deref' href="#deref-impl">!</a> : 'a ref -> 'a val := : 'a ref * 'a -
 <h3><code><strong>type</strong> unit</code></h3>
 
 is the type that contains the single value `()`. It is used as the
- result type of functions called for side effects.
+result type of functions called for side effects.
 
 <a id="exn-impl"></a>
 <h3><code><strong>type</strong> exn</code></h3>
 
 is the type of exceptions. Every exception constructor creates a value
- of this type, and the `raise` and `handle` constructs operate on it.
+of this type, and the `raise` and `handle` constructs operate on it.
 
 <a id="order-impl"></a>
 <h3><code><strong>datatype</strong> order</code></h3>
@@ -83,7 +83,7 @@ is raised when pattern matching fails in a `val` binding.
 <h3><code><strong>exception</strong> Match</code></h3>
 
 is raised when pattern matching fails in a `case` expression or
- function application.
+function application.
 
 <a id="Chr-impl"></a>
 <h3><code><strong>exception</strong> Chr</code></h3>
@@ -114,7 +114,7 @@ is raised when an integer arithmetic result is too large to represent.
 <h3><code><strong>exception</strong> Size</code></h3>
 
 is raised when a size argument is negative or exceeds the maximum
- allowed.
+allowed.
 
 <a id="Span-impl"></a>
 <h3><code><strong>exception</strong> Span</code></h3>
@@ -130,44 +130,42 @@ is raised when a sequence index is out of bounds.
 <h3><code>exnName</code></h3>
 
 `exnName ex` returns a name for the exception `ex`. The name returned may be that
- of any exception constructor aliasing with `ex`. For instance,
+of any exception constructor aliasing with `ex`. For instance,
 
- <pre>let exception E1; exception E2 = E1 in exnName E2 end</pre>
+<pre>let exception E1; exception E2 = E1 in exnName E2 end</pre>
 
- might evaluate to "E1" or "E2".
+might evaluate to "E1" or "E2".
 
 <a id="exnMessage-impl"></a>
 <h3><code>exnMessage</code></h3>
 
 `exnMessage ex` returns a message corresponding to exception `ex`. The precise format
- of the message may vary between implementations and locales, but will
- at least contain the string `exnName ex`.
-
-
+of the message may vary between implementations and locales, but will
+at least contain the string `exnName ex`.
 
 **Example:**
 
- <pre>exnMessage Div = "Div"
- exnMessage (OS.SysErr ("No such file", NONE)) =
-   "OS.SysErr "No such file""</pre>
+<pre>exnMessage Div = "Div"
+exnMessage (OS.SysErr ("No such file", NONE)) =
+  "OS.SysErr "No such file""</pre>
 
 <a id="o-impl"></a>
 <h3><code>o</code></h3>
 
 `f o g` is the function composition of `f` and `g`. Thus, `(f o g) a`
- is equivalent to `f (g a)`.
+is equivalent to `f (g a)`.
 
 <a id="before-impl"></a>
 <h3><code>before</code></h3>
 
 `a before b` returns `a`. It provides a notational shorthand for evaluating `a`,
- then `b`, before returning the value of `a`.
+then `b`, before returning the value of `a`.
 
 <a id="ignore-impl"></a>
 <h3><code>ignore</code></h3>
 
 `ignore x` always returns `unit`. The function evaluates its argument
- but throws away the value.
+but throws away the value.
 
 <a id="deref-impl"></a>
 <h3><code>!</code></h3>

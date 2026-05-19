@@ -25,8 +25,8 @@ License.
 
 [//]: # (start:lib/int-inf)
 The `IntInf` structure provides arithmetic and conversion operations for
- arbitrary-precision integers. Operations are analogous to those in `Int`
- but operate on unbounded values.
+arbitrary-precision integers. Operations are analogous to those in `Int`
+but operate on unbounded values.
 
 *Specified by the [Standard ML Basis Library](https://smlfamily.github.io/Basis/int-inf.html).*
 
