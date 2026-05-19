@@ -803,11 +803,6 @@ public class Generation {
 
     static String processDesc(String desc) {
       return desc.trim()
-          // Strip the ` *` continuation prefix that a multi-line
-          // `(** ... *)` doc-comment leaves on each line of its body.
-          // The trailing whitespace (or end-of-line) is required so that
-          // a `*foo*` markdown emphasis at line start is not stripped.
-          .replaceAll("(?m)^[ \\t]*\\*(?:[ \\t]+|$)", "")
           // Strip trailing whitespace from every line.
           .replaceAll("(?m)[ \\t]+$", "")
           .replace(

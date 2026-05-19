@@ -208,26 +208,27 @@ Sys.parseTree "(** outer (*) line\n  rest *) val x = 1";
 >   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" outer (*) line\n  rest \")))"
 >   : string
 
-(* Multi-line doc comment: content (including newlines) is captured
- * verbatim, matching OCaml. The two forms below use, respectively,
- * `\n` escapes and real newlines in the source string; both produce
- * the same parse tree.
+(* Multi-line doc comment: content (including newlines) is captured,
+ * with the leading ` * ` continuation prefix on each line stripped
+ * (matching OCaml's tooling convention). The two forms below use,
+ * respectively, `\n` escapes and real newlines in the source string;
+ * both produce the same parse tree.
  *)
 Sys.parseTree "(** First line\n * Second line\n * Third line *) val x = 1";
 > val it =
->   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" First line\n * Second line\n * Third line \")))"
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" First line\nSecond line\nThird line \")))"
 >   : string
 Sys.parseTree "(** First line
  * Second line
  * Third line *) val x = 1";
 > val it =
->   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" First line\n * Second line\n * Third line \")))"
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \" First line\nSecond line\nThird line \")))"
 >   : string
 
 (*) Body-on-its-own-lines style: opening `(**` on its own line.
 Sys.parseTree "(**\n * Body lines\n *) val x = 1";
 > val it =
->   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \"\n * Body lines\n \")))"
+>   "(attributedDecl (val (valBind (idPat x) (int_literal 1))) (attribute @@doc (string_literal \"\nBody lines\n \")))"
 >   : string
 
 (* --- Attributes are inert: code evaluates normally -------------- *)
