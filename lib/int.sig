@@ -187,4 +187,4 @@ sig
   val fromString : string -> int option [@@prototype "fromString s"]
 end
 
-(*) End integer.sig
+(*) End int.sig

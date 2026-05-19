@@ -180,9 +180,9 @@ public class SignatureChecker {
     m.put("either", "Either");
     m.put("fn", "Fn");
     m.put("general", "General");
-    m.put("integer", "Int");
+    m.put("int", "Int");
     m.put("list", "List");
-    m.put("listpair", "ListPair");
+    m.put("list-pair", "ListPair");
     m.put("math", "Math");
     m.put("option", "Option");
     m.put("real", "Real");
@@ -192,12 +192,12 @@ public class SignatureChecker {
     m.put("bag", "Bag");
     m.put("datalog", "Datalog");
     m.put("date", "Date");
-    m.put("ieeereal", "IEEEReal");
-    m.put("intinf", "IntInf");
+    m.put("ieee-real", "IEEEReal");
+    m.put("int-inf", "IntInf");
     m.put("interact", "Interact");
     m.put("range", "Range");
     m.put("relational", "Relational");
-    m.put("stringcvt", "StringCvt");
+    m.put("string-cvt", "StringCvt");
     m.put("sys", "Sys");
     m.put("time", "Time");
     SIG_STEM_TO_STRUCTURE = m;

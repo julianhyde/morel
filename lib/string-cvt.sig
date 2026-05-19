@@ -56,4 +56,4 @@ sig
 *)
 end
 
-(*) End stringcvt.sig
+(*) End string-cvt.sig

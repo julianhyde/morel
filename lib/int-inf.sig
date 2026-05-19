@@ -34,4 +34,4 @@ sig
 *)
 end
 
-(*) End intinf.sig
+(*) End int-inf.sig

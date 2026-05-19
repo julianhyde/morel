@@ -283,4 +283,4 @@ sig
 *)
 end
 
-(*) End listpair.sig
+(*) End list-pair.sig

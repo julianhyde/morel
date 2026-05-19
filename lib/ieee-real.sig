@@ -61,4 +61,4 @@ sig
 *)
 end
 
-(*) End ieeereal.sig
+(*) End ieee-real.sig
