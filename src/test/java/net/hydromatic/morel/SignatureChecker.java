@@ -61,6 +61,7 @@ import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
+import net.hydromatic.morel.util.Generation;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Validates signature declarations against enum values in {@link BuiltIn}. */
@@ -158,31 +159,17 @@ public class SignatureChecker {
   }
 
   /**
-   * Returns the canonical structure name for the given {@code .sig} filename:
-   * the inverse of {@code Generation.toKebab}. Splits the stem at hyphens and
-   * title-cases each segment; e.g. {@code "list-pair.sig"} → {@code
-   * "ListPair"}. The {@code "ieee"} segment is the lone exception — it
-   * uppercases to {@code "IEEE"} rather than {@code "Ieee"}, so {@code
-   * "ieee-real.sig"} → {@code "IEEEReal"}.
+   * Returns the canonical structure name for the given {@code .sig} filename,
+   * e.g. {@code "list-pair.sig"} → {@code "ListPair"}. Delegates to {@link
+   * Generation#fromKebab}.
    */
   public static @Nullable String structureFromSigFileName(String fileName) {
     if (!fileName.endsWith(".sig")) {
       return null;
     }
     final String stem = fileName.substring(0, fileName.length() - 4);
-    final StringBuilder sb = new StringBuilder();
-    for (String segment : stem.split("-")) {
-      if (segment.isEmpty()) {
-        continue;
-      }
-      if (segment.equals("ieee")) {
-        sb.append("IEEE");
-      } else {
-        sb.append(Character.toUpperCase(segment.charAt(0)));
-        sb.append(segment, 1, segment.length());
-      }
-    }
-    return sb.length() == 0 ? null : sb.toString();
+    final String name = Generation.fromKebab(stem);
+    return name.isEmpty() ? null : name;
   }
 
   public ParseResult parseSpecsAndMeta(File file) throws IOException {

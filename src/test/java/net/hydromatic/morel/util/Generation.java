@@ -379,6 +379,31 @@ public class Generation {
   }
 
   /**
+   * Inverse of {@link #toKebab}. Splits at hyphens and title-cases each
+   * segment, with the single exception of {@code "ieee"}, which uppercases to
+   * {@code "IEEE"}.
+   *
+   * <p>Examples: {@code "ieee-real"} &rarr; {@code "IEEEReal"}, {@code
+   * "list-pair"} &rarr; {@code "ListPair"}, {@code "string-cvt"} &rarr; {@code
+   * "StringCvt"}.
+   */
+  public static String fromKebab(String kebab) {
+    final StringBuilder sb = new StringBuilder();
+    for (String segment : kebab.split("-")) {
+      if (segment.isEmpty()) {
+        continue;
+      }
+      if (segment.equals("ieee")) {
+        sb.append("IEEE");
+      } else {
+        sb.append(Character.toUpperCase(segment.charAt(0)));
+        sb.append(segment, 1, segment.length());
+      }
+    }
+    return sb.toString();
+  }
+
+  /**
    * Reads the {@code functions.toml} file and generates the body of a
    * per-structure page at {@code docs/lib/{structure}.md}.
    */
