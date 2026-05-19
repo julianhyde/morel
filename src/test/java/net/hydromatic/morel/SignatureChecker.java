@@ -211,6 +211,7 @@ class SignatureChecker {
       final String specified =
           stringAttribute(attrs, "specified", defaultSpecified);
       final String prototype = stringAttribute(attrs, "prototype", null);
+      final String syntax = stringAttribute(attrs, "syntax", null);
       if (inner.op == Op.SPEC_VAL) {
         final Ast.ValSpec valSpec = (Ast.ValSpec) inner;
         final AstTypeStringifier stringifier = new AstTypeStringifier();
@@ -222,7 +223,8 @@ class SignatureChecker {
                 true,
                 method,
                 specified,
-                prototype));
+                prototype,
+                syntax));
       } else if (inner.op == Op.SPEC_TYPE) {
         final Ast.TypeSpec typeSpec = (Ast.TypeSpec) inner;
         specs.add(
@@ -233,6 +235,7 @@ class SignatureChecker {
                 true,
                 false,
                 specified,
+                null,
                 null));
       } else if (inner.op == Op.SPEC_DATATYPE) {
         final Ast.DatatypeSpec datatypeSpec = (Ast.DatatypeSpec) inner;
@@ -244,6 +247,7 @@ class SignatureChecker {
                 true,
                 false,
                 specified,
+                null,
                 null));
       } else if (inner.op == Op.SPEC_EXCEPTION) {
         final Ast.ExceptionSpec exnSpec = (Ast.ExceptionSpec) inner;
@@ -255,6 +259,7 @@ class SignatureChecker {
                 true,
                 false,
                 specified,
+                null,
                 null));
       }
     }
@@ -432,6 +437,8 @@ class SignatureChecker {
     final String specified;
     /** Prototype string from {@code [@@prototype "..."]}, or null. */
     final @Nullable String prototype;
+    /** Syntax keyword from {@code [@@syntax "..."]}, or null. */
+    final @Nullable String syntax;
 
     SpecInfo(
         SpecKind kind,
@@ -440,7 +447,8 @@ class SignatureChecker {
         boolean implemented,
         boolean method,
         String specified,
-        @Nullable String prototype) {
+        @Nullable String prototype,
+        @Nullable String syntax) {
       this.kind = kind;
       this.name = name;
       this.type = type;
@@ -448,10 +456,11 @@ class SignatureChecker {
       this.method = method;
       this.specified = specified;
       this.prototype = prototype;
+      this.syntax = syntax;
     }
 
     SpecInfo(SpecKind kind, String name, String type, boolean implemented) {
-      this(kind, name, type, implemented, false, "basis", null);
+      this(kind, name, type, implemented, false, "basis", null, null);
     }
   }
 

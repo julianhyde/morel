@@ -1750,6 +1750,30 @@ public class LintTest {
               spec.specified));
     }
 
+    // Check syntax (functions only).
+    if (section.equals("functions")) {
+      final String tomlSyntax = (String) entry.get("syntax");
+      if (tomlSyntax != null
+          && spec.syntax != null
+          && !tomlSyntax.equals(spec.syntax)) {
+        errors.add(
+            format(
+                "%s.%s (function): syntax mismatch — TOML=%s, .sig=%s",
+                structure, name, tomlSyntax, spec.syntax));
+      } else if (tomlSyntax != null && spec.syntax == null) {
+        errors.add(
+            format(
+                "%s.%s (function): TOML has syntax=%s, .sig has no "
+                    + "[@@syntax \"...\"]",
+                structure, name, tomlSyntax));
+      } else if (tomlSyntax == null && spec.syntax != null) {
+        errors.add(
+            format(
+                "%s.%s (function): .sig has [@@syntax \"%s\"], TOML has none",
+                structure, name, spec.syntax));
+      }
+    }
+
     // Check prototype (functions only). Normalize markdown-escape
     // backslashes — TOML stores `\[` so it survives a Markdown table cell;
     // the .sig stores the raw call form `[`.

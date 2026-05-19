@@ -51,10 +51,10 @@ sig
   val compare : char * char -> `order` [@@method] [@@prototype "compare (c1, c2)"]
 
   (* Lexicographic comparison of characters. *)
-  val `<`  : char * char -> bool [@@prototype "c1 < c2"]
-  val `<=` : char * char -> bool [@@prototype "c1 <= c2"]
-  val `>`  : char * char -> bool [@@prototype "c1 > c2"]
-  val `>=` : char * char -> bool [@@prototype "c1 >= c2"]
+  val `<`  : char * char -> bool [@@prototype "c1 < c2"] [@@syntax "infix"]
+  val `<=` : char * char -> bool [@@prototype "c1 <= c2"] [@@syntax "infix"]
+  val `>`  : char * char -> bool [@@prototype "c1 > c2"] [@@syntax "infix"]
+  val `>=` : char * char -> bool [@@prototype "c1 >= c2"] [@@syntax "infix"]
 
   (* Returns true if the character c occurs in the string s. *)
   val contains : string -> char -> bool [@@prototype "contains s c"]

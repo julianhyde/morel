@@ -98,10 +98,10 @@ sig
 
   (* Compare strings lexicographically using the underlying character
    * ordering. *)
-  val `<`  : string * string -> bool [@@prototype "s < t"]
-  val `<=` : string * string -> bool [@@prototype "s <= t"]
-  val `>`  : string * string -> bool [@@prototype "s > t"]
-  val `>=` : string * string -> bool [@@prototype "s >= t"]
+  val `<`  : string * string -> bool [@@prototype "s < t"] [@@syntax "infix"]
+  val `<=` : string * string -> bool [@@prototype "s <= t"] [@@syntax "infix"]
+  val `>`  : string * string -> bool [@@prototype "s > t"] [@@syntax "infix"]
+  val `>=` : string * string -> bool [@@prototype "s >= t"] [@@syntax "infix"]
 
   (* Returns a string corresponding to s, with non-printable characters
    * replaced by SML escape sequences. *)
