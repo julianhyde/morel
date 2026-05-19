@@ -49,7 +49,9 @@ sig
   val planEx : string -> string [@@prototype "planEx phase"]
 
   (* sets the value of property to value. *)
-  val set : string * 'a -> unit [@@prototype "set (property, value)"]
+  val set : string * 'a -> unit
+      [@@prototype "set (property, value)"]
+      [@@extra "(See [Properties](#properties) below.)"]
 
   (* returns the current the value of property, as a string, or NONE
    * if unset. *)

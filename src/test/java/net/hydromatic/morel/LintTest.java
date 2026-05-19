@@ -1750,6 +1750,34 @@ public class LintTest {
               spec.specified));
     }
 
+    // Check extra (functions only). TOML `extra` may include a trailing
+    // newline; strip for comparison.
+    if (section.equals("functions")) {
+      final String tomlExtraRaw = (String) entry.get("extra");
+      final String tomlExtra =
+          tomlExtraRaw == null ? null : tomlExtraRaw.trim();
+      final String sigExtra = spec.extra == null ? null : spec.extra.trim();
+      if (tomlExtra != null
+          && sigExtra != null
+          && !tomlExtra.equals(sigExtra)) {
+        errors.add(
+            format(
+                "%s.%s (function): extra mismatch%n  TOML: %s%n  .sig: %s",
+                structure, name, tomlExtra, sigExtra));
+      } else if (tomlExtra != null && sigExtra == null) {
+        errors.add(
+            format(
+                "%s.%s (function): TOML has extra %s, .sig has no "
+                    + "[@@extra \"...\"]",
+                structure, name, tomlExtra));
+      } else if (tomlExtra == null && sigExtra != null) {
+        errors.add(
+            format(
+                "%s.%s (function): .sig has [@@extra \"%s\"], TOML has none",
+                structure, name, sigExtra));
+      }
+    }
+
     // Check syntax (functions only).
     if (section.equals("functions")) {
       final String tomlSyntax = (String) entry.get("syntax");
