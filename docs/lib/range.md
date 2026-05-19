@@ -39,10 +39,10 @@ OPEN endpoints are exclusive `(a, b)`.
 ## Synopsis
 
 <pre>
-eqtype 'a <a id='continuous_set' href="#continuous_set-impl">continuous_set</a>
-eqtype 'a <a id='discrete_set' href="#discrete_set-impl">discrete_set</a>
-datatype 'a <a id='range' href="#range-impl">range</a> =
-    ALL
+type 'a <a id='continuous_set' href="#continuous_set-impl">continuous_set</a>
+type 'a <a id='discrete_set' href="#discrete_set-impl">discrete_set</a>
+datatype 'a <a id='range' href="#range-impl">range</a>
+  = ALL
   | AT_LEAST of 'a
   | AT_MOST of 'a
   | CLOSED of 'a * 'a
@@ -53,27 +53,23 @@ datatype 'a <a id='range' href="#range-impl">range</a> =
   | OPEN_CLOSED of 'a * 'a
   | POINT of 'a
 
-val <a id='complement' href="#complement-impl">complement</a> : 'a continuous_set -> 'a continuous_set
-val <a id='complement-fn' href="#complement-fn-impl">complement</a> : 'a discrete_set -> 'a discrete_set
-val <a id='contains' href="#contains-impl">contains</a> : 'a range -> 'a -> bool
-val <a id='contains-fn' href="#contains-fn-impl">contains</a> : 'a continuous_set -> 'a -> bool
-val <a id='contains-fn' href="#contains-fn-impl">contains</a> : 'a discrete_set -> 'a -> bool
-val <a id='continuousSetOf' href="#continuousSetOf-impl">continuousSetOf</a> : 'a range list -> 'a continuous_set
-val <a id='discreteSetOf' href="#discreteSetOf-impl">discreteSetOf</a> : 'a range list -> 'a discrete_set
-val <a id='ranges' href="#ranges-impl">ranges</a> : 'a continuous_set -> 'a range list
-val <a id='ranges-fn' href="#ranges-fn-impl">ranges</a> : 'a discrete_set -> 'a range list
+val <a id='contains' href="#contains-impl">contains</a> : 'a discrete_set -> 'a -> bool
 val <a id='toBag' href="#toBag-impl">toBag</a> : 'a discrete_set -> 'a bag
 val <a id='toList' href="#toList-impl">toList</a> : 'a discrete_set -> 'a list
+val <a id='continuousSetOf' href="#continuousSetOf-impl">continuousSetOf</a> : 'a range list -> 'a continuous_set
+val <a id='discreteSetOf' href="#discreteSetOf-impl">discreteSetOf</a> : 'a range list -> 'a discrete_set
+val <a id='ranges' href="#ranges-impl">ranges</a> : 'a discrete_set -> 'a range list
+val <a id='complement' href="#complement-impl">complement</a> : 'a discrete_set -> 'a discrete_set
 </pre>
 
 <a id="continuous_set-impl"></a>
-<h3><code><strong>eqtype</strong> 'a continuous_set</code></h3>
+<h3><code><strong>type</strong> 'a continuous_set</code></h3>
 
 represents a set of values as a normalized list of non-overlapping,
 non-adjacent ranges.
 
 <a id="discrete_set-impl"></a>
-<h3><code><strong>eqtype</strong> 'a discrete_set</code></h3>
+<h3><code><strong>type</strong> 'a discrete_set</code></h3>
 
 represents a set of discrete values as a normalized list of
 non-overlapping, non-adjacent ranges.
@@ -95,38 +91,29 @@ The constructors and their meanings are:
 * `OPEN_CLOSED (lo, hi)`: `x > lo andalso x <= hi`
 * `POINT v`: `x = v`
 
-<a id="complement-impl"></a>
-<h3><code>complement</code></h3>
-
-`complement cs` (or `cs.complement ()`) returns the complement of continuous set `cs`: a continuous set containing
-all values not in `cs`.
-
-<a id="complement-fn-impl"></a>
-<h3><code>complement</code></h3>
-
-`complement ds` (or `ds.complement ()`) returns the complement of discrete set `ds`: a discrete set containing all
-values of the element type not in `ds`.
-
 <a id="contains-impl"></a>
-<h3><code>contains</code></h3>
-
-`contains r x` (or `r.contains x`) returns `true` if `x` is a member of range `r`.
-
-The ordering is implicit, derived from the type `α`.
-
-<a id="contains-fn-impl"></a>
-<h3><code>contains</code></h3>
-
-`contains cs x` (or `cs.contains x`) returns `true` if `x` is a member of continuous set `cs`.
-
-The ordering is implicit, derived from the type `α`.
-
-<a id="contains-fn-impl"></a>
 <h3><code>contains</code></h3>
 
 `contains ds x` (or `ds.contains x`) returns `true` if `x` is a member of discrete set `ds`.
 
 The ordering is implicit, derived from the type `α`.
+
+<a id="toBag-impl"></a>
+<h3><code>toBag</code></h3>
+
+`toBag ds` (or `ds.toBag ()`) enumerates all values in the discrete set `ds` and returns them as a bag.
+The element type must be discrete (e.g., `int`, `char`, `bool`).
+Raises an exception if any range is unbounded below and the type has no
+minimum value (e.g., `LESS_THAN 5 : int range`).
+
+<a id="toList-impl"></a>
+<h3><code>toList</code></h3>
+
+`toList ds` (or `ds.toList ()`) enumerates all values in the discrete set `ds` and returns them as a
+list, in ascending order. The element type must be discrete (e.g.,
+`int`, `char`, `bool`).
+Raises an exception if any range is unbounded below and the type has no
+minimum value (e.g., `LESS_THAN 5 : int range`).
 
 <a id="continuousSetOf-impl"></a>
 <h3><code>continuousSetOf</code></h3>
@@ -168,29 +155,13 @@ val it = [0,1,2,4,5,6,8,9,10] : int list
 <a id="ranges-impl"></a>
 <h3><code>ranges</code></h3>
 
-`ranges cs` (or `cs.ranges ()`) returns the list of ranges in the continuous set `cs`.
-
-<a id="ranges-fn-impl"></a>
-<h3><code>ranges</code></h3>
-
 `ranges ds` (or `ds.ranges ()`) returns the list of ranges in the discrete set `ds`.
 
-<a id="toBag-impl"></a>
-<h3><code>toBag</code></h3>
+<a id="complement-impl"></a>
+<h3><code>complement</code></h3>
 
-`toBag ds` (or `ds.toBag ()`) enumerates all values in the discrete set `ds` and returns them as a bag.
-The element type must be discrete (e.g., `int`, `char`, `bool`).
-Raises an exception if any range is unbounded below and the type has no
-minimum value (e.g., `LESS_THAN 5 : int range`).
-
-<a id="toList-impl"></a>
-<h3><code>toList</code></h3>
-
-`toList ds` (or `ds.toList ()`) enumerates all values in the discrete set `ds` and returns them as a
-list, in ascending order. The element type must be discrete (e.g.,
-`int`, `char`, `bool`).
-Raises an exception if any range is unbounded below and the type has no
-minimum value (e.g., `LESS_THAN 5 : int range`).
+`complement ds` (or `ds.complement ()`) returns the complement of discrete set `ds`: a discrete set containing all
+values of the element type not in `ds`.
 
 [//]: # (end:lib/range)
 

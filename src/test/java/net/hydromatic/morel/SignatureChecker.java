@@ -64,10 +64,10 @@ import net.hydromatic.morel.type.TypeVar;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Validates signature declarations against enum values in {@link BuiltIn}. */
-class SignatureChecker {
+public class SignatureChecker {
   private final TypeSystem typeSystem;
 
-  SignatureChecker() {
+  public SignatureChecker() {
     typeSystem = new TypeSystem();
     BuiltIn.dataTypes(typeSystem, new ArrayList<>());
   }
@@ -139,10 +139,10 @@ class SignatureChecker {
   }
 
   /** Result of parsing a .sig file. */
-  static class ParseResult {
-    final Map<String, List<SpecInfo>> specs;
+  public static class ParseResult {
+    public final Map<String, List<SpecInfo>> specs;
     /** Per-structure floating-attribute payloads (name → payload). */
-    final Map<String, Map<String, String>> structureMeta;
+    public final Map<String, Map<String, String>> structureMeta;
 
     ParseResult(
         Map<String, List<SpecInfo>> specs,
@@ -152,7 +152,53 @@ class SignatureChecker {
     }
   }
 
-  ParseResult parseSpecsAndMeta(File file) throws IOException {
+  /**
+   * Returns the canonical structure name for the given {@code .sig} filename.
+   * For example, {@code "integer.sig"} → {@code "Int"}, {@code "ieeereal.sig"}
+   * → {@code "IEEEReal"}, etc.
+   */
+  public static @Nullable String structureFromSigFileName(String fileName) {
+    if (!fileName.endsWith(".sig")) {
+      return null;
+    }
+    final String stem = fileName.substring(0, fileName.length() - 4);
+    return SIG_STEM_TO_STRUCTURE.get(stem);
+  }
+
+  /** Mapping from .sig file stem to structure name. */
+  private static final Map<String, String> SIG_STEM_TO_STRUCTURE;
+
+  static {
+    final Map<String, String> m = new LinkedHashMap<>();
+    m.put("bool", "Bool");
+    m.put("char", "Char");
+    m.put("either", "Either");
+    m.put("fn", "Fn");
+    m.put("general", "General");
+    m.put("integer", "Int");
+    m.put("list", "List");
+    m.put("listpair", "ListPair");
+    m.put("math", "Math");
+    m.put("option", "Option");
+    m.put("real", "Real");
+    m.put("string", "String");
+    m.put("variant", "Variant");
+    m.put("vector", "Vector");
+    m.put("bag", "Bag");
+    m.put("datalog", "Datalog");
+    m.put("date", "Date");
+    m.put("ieeereal", "IEEEReal");
+    m.put("intinf", "IntInf");
+    m.put("interact", "Interact");
+    m.put("range", "Range");
+    m.put("relational", "Relational");
+    m.put("stringcvt", "StringCvt");
+    m.put("sys", "Sys");
+    m.put("time", "Time");
+    SIG_STEM_TO_STRUCTURE = m;
+  }
+
+  public ParseResult parseSpecsAndMeta(File file) throws IOException {
     final String content =
         Files.asCharSource(file, StandardCharsets.UTF_8).read();
     final Map<String, List<SpecInfo>> result = new LinkedHashMap<>();
@@ -247,7 +293,10 @@ class SignatureChecker {
                 prototype,
                 syntax,
                 extra,
-                description));
+                description,
+                valSpec.type.toString(),
+                "",
+                null));
       } else if (inner.op == Op.SPEC_TYPE) {
         final Ast.TypeSpec typeSpec = (Ast.TypeSpec) inner;
         specs.add(
@@ -261,7 +310,10 @@ class SignatureChecker {
                 null,
                 null,
                 null,
-                description));
+                description,
+                "",
+                typeSpec.toString(),
+                null));
       } else if (inner.op == Op.SPEC_DATATYPE) {
         final Ast.DatatypeSpec datatypeSpec = (Ast.DatatypeSpec) inner;
         specs.add(
@@ -275,7 +327,10 @@ class SignatureChecker {
                 null,
                 null,
                 null,
-                description));
+                description,
+                "",
+                datatypeSpec.toString(),
+                null));
       } else if (inner.op == Op.SPEC_EXCEPTION) {
         final Ast.ExceptionSpec exnSpec = (Ast.ExceptionSpec) inner;
         specs.add(
@@ -289,7 +344,10 @@ class SignatureChecker {
                 null,
                 null,
                 null,
-                description));
+                description,
+                "",
+                "",
+                exnSpec.type == null ? null : exnSpec.type.toString()));
       }
     }
     return specs;
@@ -371,7 +429,27 @@ class SignatureChecker {
         if (name.startsWith("`") && name.endsWith("`")) {
           name = name.substring(1, name.length() - 1);
         }
-        result.add(new SpecInfo(SpecKind.FUNCTION, name, "", false));
+        // Collapse the type body to a single line.
+        final String typeBody =
+            m.group(2)
+                .replaceAll("(?m)^\\s*\\*\\s?", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        result.add(
+            new SpecInfo(
+                SpecKind.FUNCTION,
+                name,
+                "",
+                false,
+                false,
+                "basis",
+                null,
+                null,
+                null,
+                null,
+                typeBody,
+                "",
+                null));
       }
     } else if (trimmed.startsWith("type ") || trimmed.startsWith("eqtype ")) {
       // type 'a foo  OR  type foo  OR  eqtype foo  OR  type foo = ...
@@ -438,7 +516,7 @@ class SignatureChecker {
   }
 
   /** Kind of a {@link SpecInfo}. */
-  enum SpecKind {
+  public enum SpecKind {
     FUNCTION,
     TYPE,
     EXCEPTION
@@ -448,33 +526,49 @@ class SignatureChecker {
    * Information about a single spec parsed from a {@code .sig} file. Returned
    * by {@link #parseSpecs}.
    */
-  static class SpecInfo {
-    final SpecKind kind;
+  public static class SpecInfo {
+    public final SpecKind kind;
     /** Name as written in the spec (no {@code op } prefix). */
-    final String name;
+    public final String name;
     /** Canonicalized type stringification (empty for types and exceptions). */
-    final String type;
+    public final String type;
     /** {@code false} if the spec is commented out in the {@code .sig} file. */
-    final boolean implemented;
+    public final boolean implemented;
     /** True if the spec is annotated {@code [@@method]}. */
-    final boolean method;
+    public final boolean method;
     /**
      * Effective {@code specified} value: the {@code [@@specified "X"]} override
      * if present, otherwise the structure's {@code [@@@specified "X"]} default,
      * otherwise {@code "basis"}.
      */
-    final String specified;
+    public final String specified;
     /** Prototype string from {@code [@@prototype "..."]}, or null. */
-    final @Nullable String prototype;
+    public final @Nullable String prototype;
     /** Syntax keyword from {@code [@@syntax "..."]}, or null. */
-    final @Nullable String syntax;
+    public final @Nullable String syntax;
     /** Extra text from {@code [@@extra "..."]}, or null. */
-    final @Nullable String extra;
+    public final @Nullable String extra;
     /**
      * Description text from a leading {@code (** ... *)} doc-comment (desugared
      * to {@code [@@doc "..."]}), or null.
      */
-    final @Nullable String description;
+    public final @Nullable String description;
+    /**
+     * Type expression as written in the {@code .sig} source (e.g. {@code "'a
+     * list -> int"}). Empty for types and exceptions.
+     */
+    public final String displayType;
+    /**
+     * For types: the full declaration as written in the {@code .sig} source
+     * (e.g. {@code "datatype 'a list = nil | `::` of 'a * 'a list"} or {@code
+     * "eqtype 'a bag"}). Empty for functions and exceptions.
+     */
+    public final String typeDecl;
+    /**
+     * For exceptions: the {@code of T} type, or null if the exception has no
+     * payload.
+     */
+    public final @Nullable String exceptionType;
 
     SpecInfo(
         SpecKind kind,
@@ -486,7 +580,10 @@ class SignatureChecker {
         @Nullable String prototype,
         @Nullable String syntax,
         @Nullable String extra,
-        @Nullable String description) {
+        @Nullable String description,
+        String displayType,
+        String typeDecl,
+        @Nullable String exceptionType) {
       this.kind = kind;
       this.name = name;
       this.type = type;
@@ -497,6 +594,9 @@ class SignatureChecker {
       this.syntax = syntax;
       this.extra = extra;
       this.description = description;
+      this.displayType = displayType;
+      this.typeDecl = typeDecl;
+      this.exceptionType = exceptionType;
     }
 
     SpecInfo(SpecKind kind, String name, String type, boolean implemented) {
@@ -510,6 +610,9 @@ class SignatureChecker {
           null,
           null,
           null,
+          null,
+          "",
+          "",
           null);
     }
   }

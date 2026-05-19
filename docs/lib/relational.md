@@ -35,13 +35,11 @@ datatype 'a <a id='descending' href="#descending-impl">descending</a> = DESC of 
 
 val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 val <a id='count' href="#count-impl">count</a> : 'a bag -> int
-val <a id='elem' href="#elem-impl">elem</a> : 'a * 'a bag -> bool, 'a * 'a list -> bool
 val <a id='empty' href="#empty-impl">empty</a> : 'a bag -> bool
 val <a id='iterate' href="#iterate-impl">iterate</a> : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
 val <a id='max' href="#max-impl">max</a> : 'a bag -> 'a
 val <a id='min' href="#min-impl">min</a> : 'a bag -> 'a
 val <a id='nonEmpty' href="#nonEmpty-impl">nonEmpty</a> : 'a bag -> bool
-val <a id='notelem' href="#notelem-impl">notelem</a> : 'a * 'a bag -> bool, 'a * 'a list -> bool
 val <a id='only' href="#only-impl">only</a> : 'a bag -> 'a
 val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
 </pre>
@@ -77,11 +75,6 @@ particular value.
 `group`, for example `from e in emps group e.deptno compute countId =
 count`.
 
-<a id="elem-impl"></a>
-<h3><code>elem</code></h3>
-
-`e elem collection` returns whether `e` is a member of `collection`.
-
 <a id="empty-impl"></a>
 <h3><code>empty</code></h3>
 
@@ -115,12 +108,6 @@ min of e.id`.
 `nonEmpty list` (or `list.nonEmpty ()`) returns whether the list has at least one element, for
 example `from d in depts where nonEmpty (from e where e.deptno =
 d.deptno)`.
-
-<a id="notelem-impl"></a>
-<h3><code>notelem</code></h3>
-
-`e notelem collection` returns whether `e` is not a member of
-`collection`.
 
 <a id="only-impl"></a>
 <h3><code>only</code></h3>

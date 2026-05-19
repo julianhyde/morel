@@ -33,7 +33,7 @@ environment.
 <pre>
 val <a id='clearEnv' href="#clearEnv-impl">clearEnv</a> : unit -> unit
 val <a id='env' href="#env-impl">env</a> : unit -> (string * string) list
-val <a id='file' href="#file-impl">file</a> : {...}
+val <a id='file' href="#file-impl">file</a> : {}
 val <a id='parseTree' href="#parseTree-impl">parseTree</a> : string -> string
 val <a id='plan' href="#plan-impl">plan</a> : unit -> string
 val <a id='planEx' href="#planEx-impl">planEx</a> : string -> string
