@@ -216,6 +216,42 @@ When implementing a structure from the
    operator symbols (e.g., `^`, `<`, `@`) in backticks. Comment out
    unimplemented entries with a block comment so they remain visible.
 
+   **Spec-attribute convention.** Use the following attributes on specs
+   to carry metadata that today still lives in `functions.toml`. The
+   migration of each field from TOML to `.sig` lands one PR at a time
+   (issue #368); until a field is migrated, the TOML entry remains
+   authoritative, but new structures should already use these forms.
+
+   On a `val` spec:
+
+   * `(** description text *)` — prose description, immediately above
+     the spec. Desugars to `[@@doc "..."]`.
+   * `[@@prototype "drop (b, i)"]` — call form with named parameters,
+     for use in generated docs.
+   * `[@@method]` — function is postfix-callable (its first argument,
+     or the first element of its tuple argument, is the structure's
+     own type).
+   * `[@@specified "morel"]` — distinguishes Morel extensions from
+     SML Basis members; defaults to `"basis"` if absent.
+   * `[@@syntax "infix"]` — declares operator syntax (`"infix"`,
+     `"prefix"`); omit for ordinary functions.
+   * `[@@extra "..."]` — supplemental sentence appended after the
+     description in generated docs.
+
+   On a `type`, `datatype`, or `exception` spec: the same `(** ... *)`
+   doc-comment convention applies; `[@@specified "morel"]` may appear
+   where relevant.
+
+   Inside `sig ... end`, structure-level metadata uses floating
+   attributes:
+
+   * `[@@@description "one-line summary."]` — short description for
+     the structure-index table.
+   * `[@@@overview "Longer paragraph(s)..."]` — multi-paragraph
+     overview shown at the top of the structure's doc page.
+   * `[@@@specified "morel"]` — defaults `specified` for every spec
+     in the structure to this value.
+
 4. **`functions.toml`** — Add `[[structures]]`, `[[exceptions]]` (if any),
    `[[types]]` (if any), and `[[functions]]` entries. All entries must be
    interleaved alphabetically (functions, types, and exceptions together, not
