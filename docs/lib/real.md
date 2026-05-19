@@ -35,22 +35,32 @@ numbers.
 <pre>
 type <a id='real' href="#real-impl">real</a>
 
+val <a id='!=' href="#!=-impl">!=</a> : real * real -> bool
 val <a id='*' href="#*-impl">*</a> : real * real -> real
+val <a id='*+' href="#*+-impl">*+</a> : real * real * real -> real
+val <a id='*-' href="#*--impl">*-</a> : real * real * real -> real
 val <a id='+' href="#+-impl">+</a> : real * real -> real
 val <a id='-' href="#--impl">-</a> : real * real -> real
 val <a id='/' href="#/-impl">/</a> : real * real -> real
 val <a id='<' href="#<-impl"><</a> : real * real -> bool
 val <a id='<=' href="#<=-impl"><=</a> : real * real -> bool
+val <a id='==' href="#==-impl">==</a> : real * real -> bool
 val <a id='>' href="#>-impl">></a> : real * real -> bool
 val <a id='>=' href="#>=-impl">>=</a> : real * real -> bool
-val <a id='~' href="#~-impl">~</a> : real -> real
+val <a id='?=' href="#?=-impl">?=</a> : real * real -> bool
 val <a id='abs' href="#abs-impl">abs</a> : real -> real
 val <a id='ceil' href="#ceil-impl">ceil</a> : real -> int
 val <a id='checkFloat' href="#checkFloat-impl">checkFloat</a> : real -> real
+val <a id='class' href="#class-impl">class</a> : real -> IEEEReal.float_class
 val <a id='compare' href="#compare-impl">compare</a> : real * real -> order
+val <a id='compareReal' href="#compareReal-impl">compareReal</a> : real * real -> IEEEReal.real_order
 val <a id='copySign' href="#copySign-impl">copySign</a> : real * real -> real
 val <a id='floor' href="#floor-impl">floor</a> : real -> int
+val <a id='fmt' href="#fmt-impl">fmt</a> : StringCvt.realfmt -> real -> string
+val <a id='fromDecimal' href="#fromDecimal-impl">fromDecimal</a> : IEEEReal.decimal_approx -> real
 val <a id='fromInt' href="#fromInt-impl">fromInt</a> : int -> real
+val <a id='fromLarge' href="#fromLarge-impl">fromLarge</a> : IEEEReal.rounding_mode -> real -> real
+val <a id='fromLargeInt' href="#fromLargeInt-impl">fromLargeInt</a> : IntInf.int -> real
 val <a id='fromManExp' href="#fromManExp-impl">fromManExp</a> : {exp:int, man:real} -> real
 val <a id='fromString' href="#fromString-impl">fromString</a> : string -> real option
 val <a id='isFinite' href="#isFinite-impl">isFinite</a> : real -> bool
@@ -62,6 +72,7 @@ val <a id='min' href="#min-impl">min</a> : real * real -> real
 val <a id='minNormalPos' href="#minNormalPos-impl">minNormalPos</a> : real
 val <a id='minPos' href="#minPos-impl">minPos</a> : real
 val <a id='negInf' href="#negInf-impl">negInf</a> : real
+val <a id='nextAfter' href="#nextAfter-impl">nextAfter</a> : real * real -> real
 val <a id='posInf' href="#posInf-impl">posInf</a> : real
 val <a id='precision' href="#precision-impl">precision</a> : int
 val <a id='radix' href="#radix-impl">radix</a> : int
@@ -73,36 +84,32 @@ val <a id='realTrunc' href="#realTrunc-impl">realTrunc</a> : real -> real
 val <a id='rem' href="#rem-impl">rem</a> : real * real -> real
 val <a id='round' href="#round-impl">round</a> : real -> int
 val <a id='sameSign' href="#sameSign-impl">sameSign</a> : real * real -> bool
+val <a id='scan' href="#scan-impl">scan</a> : (char,'a) StringCvt.reader -> (real,'a) StringCvt.reader
 val <a id='sign' href="#sign-impl">sign</a> : real -> int
 val <a id='signBit' href="#signBit-impl">signBit</a> : real -> bool
 val <a id='split' href="#split-impl">split</a> : real -> {frac:real, whole:real}
-val <a id='trunc' href="#trunc-impl">trunc</a> : real -> int
-val <a id='toManExp' href="#toManExp-impl">toManExp</a> : real -> {man:real, exp:int}
-val <a id='toString' href="#toString-impl">toString</a> : real -> string
-val <a id='unordered' href="#unordered-impl">unordered</a> : real * real -> bool
-val <a id='!=' href="#!=-impl">!=</a> : real * real -> bool
-val <a id='*+' href="#*+-impl">*+</a> : real * real * real -> real
-val <a id='*-' href="#*--impl">*-</a> : real * real * real -> real
-val <a id='==' href="#==-impl">==</a> : real * real -> bool
-val <a id='?=' href="#?=-impl">?=</a> : real * real -> bool
-val <a id='class' href="#class-impl">class</a> : real -> IEEEReal.float_class
-val <a id='compareReal' href="#compareReal-impl">compareReal</a> : real * real -> IEEEReal.real_order
-val <a id='fmt' href="#fmt-impl">fmt</a> : StringCvt.realfmt -> real -> string
-val <a id='fromDecimal' href="#fromDecimal-impl">fromDecimal</a> : IEEEReal.decimal_approx -> real
-val <a id='fromLarge' href="#fromLarge-impl">fromLarge</a> : IEEEReal.rounding_mode -> real -> real
-val <a id='fromLargeInt' href="#fromLargeInt-impl">fromLargeInt</a> : IntInf.int -> real
-val <a id='nextAfter' href="#nextAfter-impl">nextAfter</a> : real * real -> real
-val <a id='scan' href="#scan-impl">scan</a> : (char,'a) StringCvt.reader -> (real,'a) StringCvt.reader
 val <a id='toDecimal' href="#toDecimal-impl">toDecimal</a> : real -> IEEEReal.decimal_approx
 val <a id='toInt' href="#toInt-impl">toInt</a> : real -> IEEEReal.rounding_mode -> int
 val <a id='toLarge' href="#toLarge-impl">toLarge</a> : real -> real
 val <a id='toLargeInt' href="#toLargeInt-impl">toLargeInt</a> : real -> IEEEReal.rounding_mode -> IntInf.int
+val <a id='toManExp' href="#toManExp-impl">toManExp</a> : real -> {man:real, exp:int}
+val <a id='toString' href="#toString-impl">toString</a> : real -> string
+val <a id='trunc' href="#trunc-impl">trunc</a> : real -> int
+val <a id='unordered' href="#unordered-impl">unordered</a> : real * real -> bool
+val <a id='~' href="#~-impl">~</a> : real -> real
 </pre>
 
 <a id="real-impl"></a>
 <h3><code><strong>type</strong> real</code></h3>
 
 is the type of IEEE 754 double-precision floating-point numbers.
+
+<a id="!=-impl"></a>
+<h3><code>!=</code></h3>
+
+`x != y` is equivalent to `not o op ==` and the IEEE `?<>` operator.
+
+*Not yet implemented.*
 
 <a id="*-impl"></a>
 <h3><code>*</code></h3>
@@ -111,6 +118,22 @@ is the type of IEEE 754 double-precision floating-point numbers.
 infinity produces NaN. Otherwise, if one argument is infinite, the
 result is infinite with the correct sign, e.g., -5 * (-infinity) =
 infinity, infinity * (-infinity) = -infinity.
+
+<a id="*+-impl"></a>
+<h3><code>*+</code></h3>
+
+`*+ (a, b, c)` returns `a * b + c`. Its behavior on infinities follows
+from the behaviors derived from addition and multiplication.
+
+*Not yet implemented.*
+
+<a id="*--impl"></a>
+<h3><code>*-</code></h3>
+
+`*- (a, b, c)` returns `a * b - c`. Its behavior on infinities follows
+from the behaviors derived from subtraction and multiplication.
+
+*Not yet implemented.*
 
 <a id="+-impl"></a>
 <h3><code>+</code></h3>
@@ -152,6 +175,15 @@ same as `not (a >= b)`.
 
 `x <= y` As "<"
 
+<a id="==-impl"></a>
+<h3><code>==</code></h3>
+
+`x == y` returns `true` if and only if neither `y` nor `x` is NaN, and `y` and
+`x` are equal, ignoring signs on zeros. This is equivalent to the IEEE
+`=` operator.
+
+*Not yet implemented.*
+
 <a id=">-impl"></a>
 <h3><code>></code></h3>
 
@@ -162,10 +194,14 @@ same as `not (a >= b)`.
 
 `x >= y` As "<"
 
-<a id="~-impl"></a>
-<h3><code>~</code></h3>
+<a id="?=-impl"></a>
+<h3><code>?=</code></h3>
 
-`~ r` returns the negation of `r`.
+`?= (x, y)` returns `true` if either argument is NaN or if the arguments
+are bitwise equal, ignoring signs on zeros. It is equivalent to the
+IEEE `?=` operator.
+
+*Not yet implemented.*
 
 <a id="abs-impl"></a>
 <h3><code>abs</code></h3>
@@ -183,12 +219,28 @@ same as `not (a >= b)`.
 `checkFloat x` (or `x.checkFloat ()`) raises `Overflow` if x is an infinity, and raises `Div`
 if x is NaN. Otherwise, it returns its argument.
 
+<a id="class-impl"></a>
+<h3><code>class</code></h3>
+
+`class x` returns the `IEEEReal.float_class` to which x belongs.
+
+*Not yet implemented.*
+
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>
 
 `compare (x, y)` (or `x.compare y`) returns `LESS`, `EQUAL`, or `GREATER` according to
 whether its first argument is less than, equal to, or greater than the
 second. It raises `IEEEReal.Unordered` on unordered arguments.
+
+<a id="compareReal-impl"></a>
+<h3><code>compareReal</code></h3>
+
+`compareReal (x, y)` behaves similarly to `Real.compare` except that
+the values it returns have the extended type `IEEEReal.real_order` and
+it returns `IEEEReal.UNORDERED` on unordered arguments.
+
+*Not yet implemented.*
 
 <a id="copySign-impl"></a>
 <h3><code>copySign</code></h3>
@@ -201,6 +253,22 @@ NaN.
 
 `floor r` (or `r.floor ()`) produces `floor(r)`, the largest int not larger than `r`.
 
+<a id="fmt-impl"></a>
+<h3><code>fmt</code></h3>
+
+`fmt spec r` converts a `real` into a `string` according to by `spec`;
+raises `Size` when `fmt spec` is evaluated if `spec` is an invalid
+precision
+
+*Not yet implemented.*
+
+<a id="fromDecimal-impl"></a>
+<h3><code>fromDecimal</code></h3>
+
+`fromDecimal d` converts decimal approximation to a `real`
+
+*Not yet implemented.*
+
 <a id="fromInt-impl"></a>
 <h3><code>fromInt</code></h3>
 
@@ -208,6 +276,22 @@ NaN.
 absolute value of `i` is larger than `maxFinite`, then the appropriate
 infinity is returned. If `i` cannot be exactly represented as a `real`
 value, uses current rounding mode to determine the resulting value.
+
+<a id="fromLarge-impl"></a>
+<h3><code>fromLarge</code></h3>
+
+`toLarge r` converts a value of type `real` to type
+`LargeReal.real`. If `r` is too small or too large to be represented
+as a real, converts it to a zero or an infinity.
+
+*Not yet implemented.*
+
+<a id="fromLargeInt-impl"></a>
+<h3><code>fromLargeInt</code></h3>
+
+`fromLargeInt i` As "fromInt"
+
+*Not yet implemented.*
 
 <a id="fromManExp-impl"></a>
 <h3><code>fromManExp</code></h3>
@@ -272,6 +356,15 @@ NaN, returns NaN.
 <h3><code>negInf</code></h3>
 
 `negInf` is the negative infinity value.
+
+<a id="nextAfter-impl"></a>
+<h3><code>nextAfter</code></h3>
+
+`nextAfter (r, t)` returns the next representable real after `r` in
+the direction of `t`. Thus, if `t` is less than `r`, `nextAfter`
+returns the largest representable floating-point number less than `r`.
+
+*Not yet implemented.*
 
 <a id="posInf-impl"></a>
 <h3><code>posInf</code></h3>
@@ -341,6 +434,18 @@ rounds to the nearest even integer.
 `sameSign (r1, r2)` (or `r1.sameSign r2`) returns true if and only if `signBit r1` equals
 `signBit r2`.
 
+<a id="scan-impl"></a>
+<h3><code>scan</code></h3>
+
+`scan getc strm` scans a `real` value from character source. Reads
+from ARG/strm/ using reader `getc`, ignoring initial whitespace. It
+returns `SOME (r, rest)` if successful, where `r` is the scanned
+`real` value and `rest` is the unused portion of the character stream
+`strm`. Values of too large a magnitude are represented as infinities;
+values of too small a magnitude are represented as zeros.
+
+*Not yet implemented.*
+
 <a id="sign-impl"></a>
 <h3><code>sign</code></h3>
 
@@ -360,139 +465,6 @@ zeros, and NaN, included) is negative.
 `split r` (or `r.split ()`) returns `{frac, whole}`, where `frac` and `whole` are the
 fractional and integral parts of `r`, respectively. Specifically,
 `whole` is integral, and `abs frac` < 1.0.
-
-<a id="trunc-impl"></a>
-<h3><code>trunc</code></h3>
-
-`trunc r` (or `r.trunc ()`) rounds r towards zero.
-
-<a id="toManExp-impl"></a>
-<h3><code>toManExp</code></h3>
-
-`toManExp r` (or `r.toManExp ()`) returns `{man, exp}`, where `man` and `exp` are the
-mantissa and exponent of r, respectively.
-
-<a id="toString-impl"></a>
-<h3><code>toString</code></h3>
-
-`toString r` (or `r.toString ()`) converts a `real` into a `string`; equivalent to `(fmt
-(StringCvt.GEN NONE) r)`
-
-<a id="unordered-impl"></a>
-<h3><code>unordered</code></h3>
-
-`unordered (x, y)` (or `x.unordered y`) returns true if x and y are unordered, i.e., at
-least one of x and y is NaN.
-
-<a id="!=-impl"></a>
-<h3><code>!=</code></h3>
-
-`x != y` is equivalent to `not o op ==` and the IEEE `?<>` operator.
-
-*Not yet implemented.*
-
-<a id="*+-impl"></a>
-<h3><code>*+</code></h3>
-
-`*+ (a, b, c)` returns `a * b + c`. Its behavior on infinities follows
-from the behaviors derived from addition and multiplication.
-
-*Not yet implemented.*
-
-<a id="*--impl"></a>
-<h3><code>*-</code></h3>
-
-`*- (a, b, c)` returns `a * b - c`. Its behavior on infinities follows
-from the behaviors derived from subtraction and multiplication.
-
-*Not yet implemented.*
-
-<a id="==-impl"></a>
-<h3><code>==</code></h3>
-
-`x == y` returns `true` if and only if neither `y` nor `x` is NaN, and `y` and
-`x` are equal, ignoring signs on zeros. This is equivalent to the IEEE
-`=` operator.
-
-*Not yet implemented.*
-
-<a id="?=-impl"></a>
-<h3><code>?=</code></h3>
-
-`?= (x, y)` returns `true` if either argument is NaN or if the arguments
-are bitwise equal, ignoring signs on zeros. It is equivalent to the
-IEEE `?=` operator.
-
-*Not yet implemented.*
-
-<a id="class-impl"></a>
-<h3><code>class</code></h3>
-
-`class x` returns the `IEEEReal.float_class` to which x belongs.
-
-*Not yet implemented.*
-
-<a id="compareReal-impl"></a>
-<h3><code>compareReal</code></h3>
-
-`compareReal (x, y)` behaves similarly to `Real.compare` except that
-the values it returns have the extended type `IEEEReal.real_order` and
-it returns `IEEEReal.UNORDERED` on unordered arguments.
-
-*Not yet implemented.*
-
-<a id="fmt-impl"></a>
-<h3><code>fmt</code></h3>
-
-`fmt spec r` converts a `real` into a `string` according to by `spec`;
-raises `Size` when `fmt spec` is evaluated if `spec` is an invalid
-precision
-
-*Not yet implemented.*
-
-<a id="fromDecimal-impl"></a>
-<h3><code>fromDecimal</code></h3>
-
-`fromDecimal d` converts decimal approximation to a `real`
-
-*Not yet implemented.*
-
-<a id="fromLarge-impl"></a>
-<h3><code>fromLarge</code></h3>
-
-`toLarge r` converts a value of type `real` to type
-`LargeReal.real`. If `r` is too small or too large to be represented
-as a real, converts it to a zero or an infinity.
-
-*Not yet implemented.*
-
-<a id="fromLargeInt-impl"></a>
-<h3><code>fromLargeInt</code></h3>
-
-`fromLargeInt i` As "fromInt"
-
-*Not yet implemented.*
-
-<a id="nextAfter-impl"></a>
-<h3><code>nextAfter</code></h3>
-
-`nextAfter (r, t)` returns the next representable real after `r` in
-the direction of `t`. Thus, if `t` is less than `r`, `nextAfter`
-returns the largest representable floating-point number less than `r`.
-
-*Not yet implemented.*
-
-<a id="scan-impl"></a>
-<h3><code>scan</code></h3>
-
-`scan getc strm` scans a `real` value from character source. Reads
-from ARG/strm/ using reader `getc`, ignoring initial whitespace. It
-returns `SOME (r, rest)` if successful, where `r` is the scanned
-`real` value and `rest` is the unused portion of the character stream
-`strm`. Values of too large a magnitude are represented as infinities;
-values of too small a magnitude are represented as zeros.
-
-*Not yet implemented.*
 
 <a id="toDecimal-impl"></a>
 <h3><code>toDecimal</code></h3>
@@ -524,5 +496,33 @@ representable, in particular, if `x` is an infinity. It raises
 `toLargeInt mode r` As "toInt"
 
 *Not yet implemented.*
+
+<a id="toManExp-impl"></a>
+<h3><code>toManExp</code></h3>
+
+`toManExp r` (or `r.toManExp ()`) returns `{man, exp}`, where `man` and `exp` are the
+mantissa and exponent of r, respectively.
+
+<a id="toString-impl"></a>
+<h3><code>toString</code></h3>
+
+`toString r` (or `r.toString ()`) converts a `real` into a `string`; equivalent to `(fmt
+(StringCvt.GEN NONE) r)`
+
+<a id="trunc-impl"></a>
+<h3><code>trunc</code></h3>
+
+`trunc r` (or `r.trunc ()`) rounds r towards zero.
+
+<a id="unordered-impl"></a>
+<h3><code>unordered</code></h3>
+
+`unordered (x, y)` (or `x.unordered y`) returns true if x and y are unordered, i.e., at
+least one of x and y is NaN.
+
+<a id="~-impl"></a>
+<h3><code>~</code></h3>
+
+`~ r` returns the negation of `r`.
 
 [//]: # (end:lib/real)

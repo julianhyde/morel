@@ -48,7 +48,6 @@ bags track multiplicity.
 """
 
 [[functions]]
-ordinal = 8
 structure = "Bag"
 name = "@"
 type = "α bag * α bag → α bag"
@@ -58,7 +57,6 @@ returns the bag that is the concatenation of `b1` and `b2`.
 """
 
 [[functions]]
-ordinal = 23
 structure = "Bag"
 name = "all"
 type = "(α → bool) → α bag → bool"
@@ -71,7 +69,6 @@ an `x` exists and `true` otherwise. It is equivalent to `not(exists
 """
 
 [[functions]]
-ordinal = 15
 structure = "Bag"
 name = "app"
 type = "(α → unit) → α bag → unit"
@@ -81,7 +78,6 @@ applies `f` to the elements of `b`.
 """
 
 [[functions]]
-ordinal = 25
 structure = "Bag"
 name = "collate"
 type = "(α * α → order) → α bag * α bag → order"
@@ -92,7 +88,6 @@ using the given ordering `f` on the bag elements.
 """
 
 [[functions]]
-ordinal = 14
 structure = "Bag"
 name = "concat"
 type = "α bag list → α bag"
@@ -102,7 +97,6 @@ returns the bag that is the concatenation of all the bags in `b`.
 """
 
 [[functions]]
-ordinal = 13
 structure = "Bag"
 name = "drop"
 type = "α bag * int → α bag"
@@ -117,7 +111,6 @@ elements of the bag `b`. Raises `Subscript` if `i` < 0 or `i` >
 """
 
 [[functions]]
-ordinal = 22
 structure = "Bag"
 name = "exists"
 type = "(α → bool) → α bag → bool"
@@ -129,7 +122,6 @@ if such an `x` exists and `false` otherwise.
 """
 
 [[functions]]
-ordinal = 19
 structure = "Bag"
 name = "filter"
 type = "(α → bool) → α bag → α bag"
@@ -140,7 +132,6 @@ bag of those `x` for which `f x` evaluated to `true`.
 """
 
 [[functions]]
-ordinal = 18
 structure = "Bag"
 name = "find"
 type = "(α → bool) → α bag → α option"
@@ -152,7 +143,6 @@ arbitrary order, until `f x` evaluates to `true`. It returns `SOME
 """
 
 [[functions]]
-ordinal = 21
 structure = "Bag"
 name = "fold"
 type = "(α * β → β) → β → α bag → β"
@@ -164,7 +154,6 @@ or `init` if the bag is empty.
 """
 
 [[functions]]
-ordinal = 5
 structure = "Bag"
 name = "fromList"
 type = "α list → α bag"
@@ -176,7 +165,6 @@ and whose elements are the same as those of `l`. Raises `Size` if
 """
 
 [[functions]]
-ordinal = 11
 structure = "Bag"
 name = "getItem"
 type = "α bag → * (α * α bag) option"
@@ -189,7 +177,6 @@ choose/remove the same arbitrary element).
 """
 
 [[functions]]
-ordinal = 9
 structure = "Bag"
 name = "hd"
 type = "α bag → α"
@@ -201,7 +188,6 @@ is `nil`.
 """
 
 [[functions]]
-ordinal = 7
 structure = "Bag"
 name = "length"
 type = "α bag → int"
@@ -212,7 +198,6 @@ returns the number of elements in the bag `b`.
 """
 
 [[functions]]
-ordinal = 16
 structure = "Bag"
 name = "map"
 type = "(α → β) → α bag → β bag"
@@ -225,7 +210,6 @@ results. This is equivalent to:
 """
 
 [[functions]]
-ordinal = 17
 structure = "Bag"
 name = "mapPartial"
 type = "(α → β option) → α bag → β bag"
@@ -240,7 +224,6 @@ defined for an element of `b` if `f` applied to the element returns
 """
 
 [[functions]]
-ordinal = 3
 structure = "Bag"
 name = "nil"
 type = "α bag"
@@ -262,7 +245,6 @@ b`, ignoring exceptions.
 """
 
 [[functions]]
-ordinal = 4
 structure = "Bag"
 name = "null"
 type = "α bag → bool"
@@ -273,7 +255,6 @@ returns `true` if the bag `b` is empty.
 """
 
 [[functions]]
-ordinal = 20
 structure = "Bag"
 name = "partition"
 type = "(α → bool) → α bag → α bag * α bag"
@@ -286,7 +267,6 @@ for which `f x` evaluated to `false`.
 """
 
 [[functions]]
-ordinal = 24
 structure = "Bag"
 name = "tabulate"
 type = "int * (int → α) → α bag"
@@ -301,7 +281,6 @@ Raises `Size` if `n` < 0.
 """
 
 [[functions]]
-ordinal = 12
 structure = "Bag"
 name = "take"
 type = "α bag * int → α bag"
@@ -314,7 +293,6 @@ b)` = `b`.
 """
 
 [[functions]]
-ordinal = 10
 structure = "Bag"
 name = "tl"
 type = "α bag → α bag"
@@ -326,7 +304,6 @@ returns all but one arbitrary element of bag `b`. Raises
 """
 
 [[functions]]
-ordinal = 6
 structure = "Bag"
 name = "toList"
 type = "α bag → α list"
@@ -357,7 +334,6 @@ is the type of boolean values `true` and `false`.
 
 [[values]]
 structure = "Bool"
-ordinal = 0
 name = "true"
 type = "bool"
 prototype = "true"
@@ -367,7 +343,6 @@ is literally true.
 
 [[values]]
 structure = "Bool"
-ordinal = 1
 name = "false"
 type = "bool"
 prototype = "false"
@@ -377,7 +352,6 @@ is literally false.
 
 [[functions]]
 structure = "Bool"
-ordinal = 2
 name = "fromString"
 type = "string → bool option"
 prototype = "fromString s"
@@ -388,7 +362,6 @@ scans a `bool` value from the string `s`. Returns `SOME (true)` if
 
 [[functions]]
 structure = "Bool"
-ordinal = 3
 name = "implies"
 syntax = "binary"
 specified = "morel"
@@ -400,7 +373,6 @@ returns `true` if `b1` is `false` or `b2` is `true`.
 
 [[functions]]
 structure = "Bool"
-ordinal = 4
 syntax = "prefix"
 name = "not"
 type = "bool → bool"
@@ -412,7 +384,6 @@ returns the logical inverse of `b`.
 
 [[functions]]
 structure = "Bool"
-ordinal = 5
 name = "toString"
 type = "bool → string"
 prototype = "toString b"
@@ -483,7 +454,6 @@ is the type of characters.
 """
 
 [[functions]]
-ordinal = 26
 structure = "Char"
 name = "chr"
 type = "int → char"
@@ -494,7 +464,6 @@ returns the character whose code is `i`. Raises `Chr` if `i` <
 """
 
 [[functions]]
-ordinal = 27
 structure = "Char"
 name = "compare"
 type = "char * char → order"
@@ -507,7 +476,6 @@ second.
 """
 
 [[functions]]
-ordinal = 28
 structure = "Char"
 name = "contains"
 type = "string → char → bool"
@@ -522,7 +490,6 @@ given character.
 """
 
 [[functions]]
-ordinal = 29
 structure = "Char"
 name = "fromCString"
 type = "string → char option"
@@ -535,7 +502,6 @@ initial whitespace; otherwise, it returns `NONE`. Equivalent to
 """
 
 [[functions]]
-ordinal = 30
 structure = "Char"
 name = "fromInt"
 type = "int → char option"
@@ -546,7 +512,6 @@ or `i` > `maxOrd`.
 """
 
 [[functions]]
-ordinal = 31
 structure = "Char"
 name = "fromString"
 type = "string → char option"
@@ -558,7 +523,6 @@ the string `s`. Does not skip leading whitespace. For instance,
 """
 
 [[functions]]
-ordinal = 32
 structure = "Char"
 name = "isAlpha"
 type = "char → bool"
@@ -569,7 +533,6 @@ returns true if `c` is a letter (lowercase or uppercase).
 """
 
 [[functions]]
-ordinal = 33
 structure = "Char"
 name = "isAlphaNum"
 type = "char → bool"
@@ -581,7 +544,6 @@ decimal digit).
 """
 
 [[functions]]
-ordinal = 34
 structure = "Char"
 name = "isAscii"
 type = "char → bool"
@@ -592,7 +554,6 @@ returns true if 0 ≤ `ord c` ≤ 127 `c`.
 """
 
 [[functions]]
-ordinal = 35
 structure = "Char"
 name = "isCntrl"
 type = "char → bool"
@@ -604,7 +565,6 @@ returns true if `c` is a control character, that is, if
 """
 
 [[functions]]
-ordinal = 36
 structure = "Char"
 name = "isDigit"
 type = "char → bool"
@@ -615,7 +575,6 @@ returns true if `c` is a decimal digit (0 to 9).
 """
 
 [[functions]]
-ordinal = 37
 structure = "Char"
 name = "isGraph"
 type = "char → bool"
@@ -627,7 +586,6 @@ is printable and not a whitespace character.
 """
 
 [[functions]]
-ordinal = 38
 structure = "Char"
 name = "isHexDigit"
 type = "char → bool"
@@ -638,7 +596,6 @@ returns true if `c` is a hexadecimal digit.
 """
 
 [[functions]]
-ordinal = 39
 structure = "Char"
 name = "isLower"
 type = "char → bool"
@@ -650,7 +607,6 @@ f or A to F).
 """
 
 [[functions]]
-ordinal = 40
 structure = "Char"
 name = "isOctDigit"
 type = "char → bool"
@@ -660,7 +616,6 @@ returns true if `c` is an octal digit.
 """
 
 [[functions]]
-ordinal = 41
 structure = "Char"
 name = "isPrint"
 type = "char → bool"
@@ -672,7 +627,6 @@ visible).
 """
 
 [[functions]]
-ordinal = 42
 structure = "Char"
 name = "isPunct"
 type = "char → bool"
@@ -684,7 +638,6 @@ graphical but not alphanumeric.
 """
 
 [[functions]]
-ordinal = 43
 structure = "Char"
 name = "isSpace"
 type = "char → bool"
@@ -696,7 +649,6 @@ newline, tab, vertical tab, new page).
 """
 
 [[functions]]
-ordinal = 44
 structure = "Char"
 name = "isUpper"
 type = "char → bool"
@@ -707,7 +659,6 @@ returns true if `c` is an uppercase letter (A to Z).
 """
 
 [[functions]]
-ordinal = 47
 structure = "Char"
 name = "maxChar"
 type = "char"
@@ -717,7 +668,6 @@ is the greatest character in the ordering `<`.
 """
 
 [[functions]]
-ordinal = 45
 structure = "Char"
 name = "maxOrd"
 type = "int"
@@ -727,7 +677,6 @@ is the greatest character code; it equals `ord maxChar`.
 """
 
 [[functions]]
-ordinal = 48
 structure = "Char"
 name = "minChar"
 type = "char"
@@ -740,7 +689,6 @@ integers, within the limits of the heap size. If `precision` is `SOME
 """
 
 [[functions]]
-ordinal = 49
 structure = "Char"
 name = "notContains"
 type = "string → char → bool"
@@ -752,7 +700,6 @@ in the same way as `Char.contains`.
 """
 
 [[functions]]
-ordinal = 50
 structure = "Char"
 name = "ord"
 type = "char → int"
@@ -763,7 +710,6 @@ returns the code of character `c`.
 """
 
 [[functions]]
-ordinal = 50
 structure = "Char"
 name = "pred"
 type = "char → char"
@@ -775,7 +721,6 @@ returns the predecessor of `c`. Raises `Subscript` if `c` is
 """
 
 [[functions]]
-ordinal = 51
 structure = "Char"
 name = "succ"
 type = "char → char"
@@ -787,7 +732,6 @@ returns the character immediately following `c`, or raises
 """
 
 [[functions]]
-ordinal = 52
 structure = "Char"
 name = "toCString"
 type = "char → string"
@@ -799,7 +743,6 @@ StringCvt.ORD r)`.
 """
 
 [[functions]]
-ordinal = 53
 structure = "Char"
 name = "toLower"
 type = "char → char"
@@ -811,7 +754,6 @@ is a letter (a to z or A to Z); otherwise returns `c`.
 """
 
 [[functions]]
-ordinal = 54
 structure = "Char"
 name = "toString"
 type = "char → string"
@@ -823,7 +765,6 @@ StringCvt.ORD r)`.
 """
 
 [[functions]]
-ordinal = 55
 structure = "Char"
 name = "toUpper"
 type = "char → char"
@@ -1120,7 +1061,6 @@ such values.
 """
 
 [[functions]]
-ordinal = 8
 structure = "Either"
 name = "app"
 type = "('left -> unit) * ('right -> unit) -> ('left, 'right) either -> unit"
@@ -1131,7 +1071,6 @@ of right values.
 """
 
 [[functions]]
-ordinal = 9
 structure = "Either"
 name = "appLeft"
 type = "('left -> unit) -> ('left, 'right) either -> unit"
@@ -1141,7 +1080,6 @@ applies `f` to the contents of left values and ignores right values.
 """
 
 [[functions]]
-ordinal = 10
 structure = "Either"
 name = "appRight"
 type = "('right -> unit) -> ('left, 'right) either -> unit"
@@ -1151,7 +1089,6 @@ applies `f` to the contents of right values and ignores left values.
 """
 
 [[functions]]
-ordinal = 3
 structure = "Either"
 name = "asLeft"
 type = "('left, 'right) either → 'left option"
@@ -1163,7 +1100,6 @@ otherwise it returns `NONE`.
 """
 
 [[functions]]
-ordinal = 4
 structure = "Either"
 name = "asRight"
 type = "('left, 'right) either → 'right option"
@@ -1184,7 +1120,6 @@ is the type of disjoint-sum values; `INL v` represents a left value and
 """
 
 [[functions]]
-ordinal = 11
 structure = "Either"
 name = "fold"
 type = "('left * 'b -> 'b) * ('right * 'b -> 'b) -> 'b -> ('left, 'right) either -> 'b"
@@ -1196,7 +1131,6 @@ value).
 """
 
 [[functions]]
-ordinal = 1
 structure = "Either"
 name = "isLeft"
 type = "('left, 'right) either → bool"
@@ -1207,7 +1141,6 @@ returns true if `sm` is a left value.
 """
 
 [[functions]]
-ordinal = 2
 structure = "Either"
 name = "isRight"
 type = "('left, 'right) either → bool"
@@ -1218,7 +1151,6 @@ returns true if `sm` is a right value.
 """
 
 [[functions]]
-ordinal = 5
 structure = "Either"
 name = "map"
 type = "('ldom -> 'lrng) * ('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('lrng, 'rrng) either"
@@ -1229,7 +1161,6 @@ of right values.
 """
 
 [[functions]]
-ordinal = 6
 structure = "Either"
 name = "mapLeft"
 type = "('ldom -> 'lrng) -> ('ldom, 'rdom) either -> ('lrng, 'rdom) either"
@@ -1240,7 +1171,6 @@ identity on right values.
 """
 
 [[functions]]
-ordinal = 7
 structure = "Either"
 name = "mapRight"
 type = "('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('ldom, 'rrng) either"
@@ -1251,7 +1181,6 @@ identity on left values.
 """
 
 [[functions]]
-ordinal = 13
 structure = "Either"
 name = "partition"
 type = "('left, 'right) either list -> ('left list * 'right list)"
@@ -1262,7 +1191,6 @@ list of right values.
 """
 
 [[functions]]
-ordinal = 12
 structure = "Either"
 name = "proj"
 type = "('a, 'a) either -> 'a"
@@ -1286,7 +1214,6 @@ including application, composition, currying, and fixpoint operators.
 """
 
 [[functions]]
-ordinal = 3
 structure = "Fn"
 name = "apply"
 type = "(α → β) * α → β"
@@ -1296,7 +1223,6 @@ applies the function `f` to `x`. Thus, it is equivalent to `f x`.
 """
 
 [[functions]]
-ordinal = 2
 structure = "Fn"
 name = "const"
 type = "α → β → α"
@@ -1306,7 +1232,6 @@ returns the value `x`.
 """
 
 [[functions]]
-ordinal = 5
 structure = "Fn"
 name = "curry"
 type = "(α * β → γ) → α → β → γ"
@@ -1317,7 +1242,6 @@ the binary function `f` into curried form.
 """
 
 [[functions]]
-ordinal = 9
 structure = "Fn"
 name = "equal"
 type = "α → α → bool"
@@ -1328,7 +1252,6 @@ polymorphic equality function (`=`).
 """
 
 [[functions]]
-ordinal = 7
 structure = "Fn"
 name = "flip"
 type = "(α * β → γ) → β * α → γ"
@@ -1339,7 +1262,6 @@ of the binary function `f`.
 """
 
 [[functions]]
-ordinal = 1
 structure = "Fn"
 name = "id"
 type = "α → α"
@@ -1349,7 +1271,6 @@ returns the value `x`. (`id` is the polymorphic identity function.)
 """
 
 [[functions]]
-ordinal = 10
 structure = "Fn"
 name = "notEqual"
 type = "α → α → bool"
@@ -1360,7 +1281,6 @@ the polymorphic inequality function (`<>`).
 """
 
 [[functions]]
-ordinal = 4
 structure = "Fn"
 name = "o"
 type = "(β → γ) * (α → β) → α → γ"
@@ -1372,7 +1292,6 @@ is equivalent to `f (g a)`. This function is the same as the global
 """
 
 [[functions]]
-ordinal = 8
 structure = "Fn"
 name = "repeat"
 type = "int → (α → α) → α → α"
@@ -1384,7 +1303,6 @@ it raises the exception `Domain`.
 """
 
 [[functions]]
-ordinal = 6
 structure = "Fn"
 name = "uncurry"
 type = "(α → β → γ) → α * β → γ"
@@ -1481,7 +1399,6 @@ is raised when a sequence index is out of bounds.
 """
 
 [[functions]]
-ordinal = 55
 structure = "General"
 name = "before"
 type = "α * unit → α"
@@ -1501,7 +1418,6 @@ of this type, and the `raise` and `handle` constructs operate on it.
 """
 
 [[functions]]
-ordinal = 53
 structure = "General"
 name = "exnMessage"
 type = "exn → string"
@@ -1519,7 +1435,6 @@ exnMessage (OS.SysErr ("No such file", NONE)) =
 """
 
 [[functions]]
-ordinal = 52
 structure = "General"
 name = "exnName"
 type = "exn → string"
@@ -1533,7 +1448,6 @@ of any exception constructor aliasing with `ex`. For instance,
 might evaluate to "E1" or "E2"."""
 
 [[functions]]
-ordinal = 56
 structure = "General"
 name = "ignore"
 type = "α → unit"
@@ -1544,7 +1458,6 @@ but throws away the value.
 """
 
 [[functions]]
-ordinal = 54
 structure = "General"
 name = "o"
 type = "(β → γ) * (α → β) → α → γ"
@@ -1631,7 +1544,6 @@ operations for the default fixed-precision integer type.
 """
 
 [[functions]]
-ordinal = 60
 structure = "Int"
 name = "*"
 type = "int * int → int"
@@ -1642,7 +1554,6 @@ result is not representable.
 """
 
 [[functions]]
-ordinal = 61
 structure = "Int"
 name = "+"
 type = "int * int → int"
@@ -1653,7 +1564,6 @@ result is not representable.
 """
 
 [[functions]]
-ordinal = 62
 structure = "Int"
 name = "-"
 type = "int * int → int"
@@ -1664,7 +1574,6 @@ the result is not representable.
 """
 
 [[functions]]
-ordinal = 65
 structure = "Int"
 name = "<"
 type = "int * int → bool"
@@ -1674,7 +1583,6 @@ returns true if `i` is less than `j`.
 """
 
 [[functions]]
-ordinal = 66
 structure = "Int"
 name = "<="
 type = "int * int → bool"
@@ -1684,7 +1592,6 @@ returns true if `i` is less than or equal to `j`.
 """
 
 [[functions]]
-ordinal = 67
 structure = "Int"
 name = ">"
 type = "int * int → bool"
@@ -1694,7 +1601,6 @@ returns true if `i` is greater than `j`.
 """
 
 [[functions]]
-ordinal = 68
 structure = "Int"
 name = ">="
 type = "int * int → bool"
@@ -1704,7 +1610,6 @@ returns true if `i` is greater than or equal to `j`.
 """
 
 [[functions]]
-ordinal = 70
 structure = "Int"
 name = "abs"
 type = "int → int"
@@ -1715,7 +1620,6 @@ returns the absolute value of `i`.
 """
 
 [[functions]]
-ordinal = 71
 structure = "Int"
 name = "compare"
 type = "int * int → order"
@@ -1728,7 +1632,6 @@ second.
 """
 
 [[functions]]
-ordinal = 63
 structure = "Int"
 name = "div"
 type = "int * int → int"
@@ -1741,7 +1644,6 @@ rounding is towards negative infinity, not zero.
 """
 
 [[functions]]
-ordinal = 239
 structure = "Int"
 name = "fmt"
 type = "StringCvt.radix → int → string"
@@ -1756,7 +1658,6 @@ generated for the hexadecimal representation.
 """
 
 [[functions]]
-ordinal = 72
 structure = "Int"
 name = "fromInt, int"
 type = "int → int"
@@ -1777,7 +1678,6 @@ this is an identity function as there is only one integer type.
 """
 
 [[functions]]
-ordinal = 73
 structure = "Int"
 name = "fromString"
 type = "string → int option"
@@ -1798,7 +1698,6 @@ is the type of fixed-precision integers.
 """
 
 [[functions]]
-ordinal = 74
 structure = "Int"
 name = "max"
 type = "int * int → int"
@@ -1809,7 +1708,6 @@ returns the larger of the arguments.
 """
 
 [[functions]]
-ordinal = 75
 structure = "Int"
 name = "maxInt"
 type = "int option"
@@ -1822,7 +1720,6 @@ integers, within the limits of the heap size. If `precision` is `SOME
 """
 
 [[functions]]
-ordinal = 76
 structure = "Int"
 name = "min"
 type = "int * int → int"
@@ -1833,7 +1730,6 @@ returns the smaller of the arguments.
 """
 
 [[functions]]
-ordinal = 77
 structure = "Int"
 name = "minInt"
 type = "int option"
@@ -1846,7 +1742,6 @@ integers, within the limits of the heap size. If `precision` is `SOME
 """
 
 [[functions]]
-ordinal = 64
 structure = "Int"
 name = "mod"
 type = "int * int → int"
@@ -1858,7 +1753,6 @@ returns the remainder of the division of `i` by `j`. It raises
 """
 
 [[functions]]
-ordinal = 79
 structure = "Int"
 name = "precision"
 type = "int option"
@@ -1871,7 +1765,6 @@ necessarily be a power of two.
 """
 
 [[functions]]
-ordinal = 80
 structure = "Int"
 name = "quot"
 type = "int * int → int"
@@ -1889,7 +1782,6 @@ hardware divide instructions, so `quot` may be faster than `div`.
 """
 
 [[functions]]
-ordinal = 81
 structure = "Int"
 name = "rem"
 type = "int * int → int"
@@ -1903,7 +1795,6 @@ most hardware divide instructions, so `rem` may be faster than `mod`.
 """
 
 [[functions]]
-ordinal = 82
 structure = "Int"
 name = "sameSign"
 type = "int * int → bool"
@@ -1915,7 +1806,6 @@ is equivalent to `(sign i = sign j)`.
 """
 
 [[functions]]
-ordinal = 240
 structure = "Int"
 name = "scan"
 type = "scan radix getc strm"
@@ -1931,7 +1821,6 @@ can be parsed, but is too large to be represented by type `int`.
 """
 
 [[functions]]
-ordinal = 83
 structure = "Int"
 name = "sign"
 type = "int → int"
@@ -1943,7 +1832,6 @@ greater than 0, respectively.
 """
 
 [[functions]]
-ordinal = 84
 structure = "Int"
 name = "toInt"
 type = "int → int"
@@ -1964,7 +1852,6 @@ this is an identity function as there is only one integer type.
 """
 
 [[functions]]
-ordinal = 85
 structure = "Int"
 name = "toString"
 type = "int → string"
@@ -1976,7 +1863,6 @@ StringCvt.DEC r)`.
 """
 
 [[functions]]
-ordinal = 69
 structure = "Int"
 name = "~"
 type = "int → int"
@@ -2017,7 +1903,6 @@ Morel REPL, such as loading source files.
 """
 
 [[functions]]
-ordinal = 58
 structure = "Interact"
 name = "use"
 type = "string → unit"
@@ -2027,7 +1912,6 @@ loads source text from the file named `f`.
 """
 
 [[functions]]
-ordinal = 59
 structure = "Interact"
 name = "useSilently"
 type = "string → unit"
@@ -2050,7 +1934,6 @@ and right-to-left variants.
 """
 
 [[functions]]
-ordinal = 89
 structure = "List"
 name = "@"
 type = "α list * α list → α list"
@@ -2068,7 +1951,6 @@ empty list.
 """
 
 [[functions]]
-ordinal = 113
 structure = "List"
 name = "all"
 type = "(α → bool) → α list → bool"
@@ -2081,7 +1963,6 @@ such an `x` exists and `true` otherwise. It is equivalent to
 """
 
 [[functions]]
-ordinal = 103
 structure = "List"
 name = "app"
 type = "(α → unit) → α list → unit"
@@ -2091,7 +1972,6 @@ applies `f` to the elements of `l`, from left to right.
 """
 
 [[functions]]
-ordinal = 90
 structure = "List"
 name = "at"
 type = "α list * α list → α list"
@@ -2101,7 +1981,6 @@ is equivalent to "l1 @ l2".
 """
 
 [[functions]]
-ordinal = 115
 structure = "List"
 name = "collate"
 type = "(α * α → order) → α list * α list → order"
@@ -2112,7 +1991,6 @@ lists using the given ordering `f` on the list elements.
 """
 
 [[functions]]
-ordinal = 99
 structure = "List"
 name = "concat"
 type = "α list list → α list"
@@ -2123,7 +2001,6 @@ in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
 """
 
 [[functions]]
-ordinal = 97
 structure = "List"
 name = "drop"
 type = "α list * int → α list"
@@ -2139,7 +2016,6 @@ elements of the list `l`. Raises `Subscript` if `i` < 0 or `i` >
 """
 
 [[functions]]
-ordinal = 100
 structure = "List"
 name = "except"
 specified = "morel"
@@ -2151,7 +2027,6 @@ in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
 """
 
 [[functions]]
-ordinal = 112
 structure = "List"
 name = "exists"
 type = "(α → bool) → α list → bool"
@@ -2163,7 +2038,6 @@ such an `x` exists and `false` otherwise.
 """
 
 [[functions]]
-ordinal = 108
 structure = "List"
 name = "filter"
 type = "(α → bool) → α list → α list"
@@ -2175,7 +2049,6 @@ right, and returns the list of those `x` for which `f x` evaluated to
 """
 
 [[functions]]
-ordinal = 107
 structure = "List"
 name = "find"
 type = "(α → bool) → α list → α option"
@@ -2187,7 +2060,6 @@ such an `x` exists; otherwise it returns `NONE`.
 """
 
 [[functions]]
-ordinal = 110
 structure = "List"
 name = "foldl"
 type = "(α * β → β) → β → α list → β"
@@ -2198,7 +2070,6 @@ init))...)` or `init` if the list is empty.
 """
 
 [[functions]]
-ordinal = 111
 structure = "List"
 name = "foldr"
 type = "(α * β → β) → β → α list → β"
@@ -2209,7 +2080,6 @@ init)...))` or `init` if the list is empty.
 """
 
 [[functions]]
-ordinal = 94
 structure = "List"
 name = "getItem"
 type = "α list → * (α * α list) option"
@@ -2224,7 +2094,6 @@ used to scan decimal integers from lists of characters.
 """
 
 [[functions]]
-ordinal = 91
 structure = "List"
 name = "hd"
 type = "α list → α"
@@ -2236,7 +2105,6 @@ returns the first element of `l`. Raises `Empty` if `l` is
 """
 
 [[functions]]
-ordinal = 101
 structure = "List"
 name = "intersect"
 specified = "morel"
@@ -2249,7 +2117,6 @@ ln`
 """
 
 [[functions]]
-ordinal = 93
 structure = "List"
 name = "last"
 type = "α list → α"
@@ -2261,7 +2128,6 @@ returns the last element of `l`. Raises `Empty` if `l` is
 """
 
 [[functions]]
-ordinal = 88
 structure = "List"
 name = "length"
 type = "α list → int"
@@ -2280,7 +2146,6 @@ is the type of polymorphic singly-linked lists.
 """
 
 [[functions]]
-ordinal = 104
 structure = "List"
 name = "map"
 type = "(α → β) → α list → β list"
@@ -2291,7 +2156,6 @@ returning the list of results.
 """
 
 [[functions]]
-ordinal = 106
 structure = "List"
 name = "mapPartial"
 type = "(α → β option) → α list → β list"
@@ -2306,7 +2170,6 @@ to the element returns `NONE`. The above expression is equivalent to:
 """
 
 [[functions]]
-ordinal = 105
 structure = "List"
 name = "mapi"
 type = "(int * α → β) → α list → β list"
@@ -2318,7 +2181,6 @@ call.
 """
 
 [[functions]]
-ordinal = 86
 structure = "List"
 name = "nil"
 type = "α list"
@@ -2328,7 +2190,6 @@ is the empty list.
 """
 
 [[functions]]
-ordinal = 95
 structure = "List"
 name = "nth"
 type = "α list * int → α"
@@ -2341,7 +2202,6 @@ from 0. Raises `Subscript` if `i` < 0 or `i` &ge; `length l`. We have
 """
 
 [[functions]]
-ordinal = 87
 structure = "List"
 name = "null"
 type = "α list → bool"
@@ -2352,7 +2212,6 @@ returns `true` if the list `l` is empty.
 """
 
 [[functions]]
-ordinal = 109
 structure = "List"
 name = "partition"
 type = "(α → bool) → α list → α list * α list"
@@ -2366,7 +2225,6 @@ and `neg` retain the same relative order they possessed in `l`.
 """
 
 [[functions]]
-ordinal = 98
 structure = "List"
 name = "rev"
 type = "α list → α list"
@@ -2377,7 +2235,6 @@ returns a list consisting of `l`'s elements in reverse order.
 """
 
 [[functions]]
-ordinal = 102
 structure = "List"
 name = "revAppend"
 type = "α list * α list → α list"
@@ -2388,7 +2245,6 @@ returns `(rev l1) @ l2`.
 """
 
 [[functions]]
-ordinal = 114
 structure = "List"
 name = "tabulate"
 type = "int * (int → α) → α list"
@@ -2399,7 +2255,6 @@ returns a list of length `n` equal to `[f(0), f(1),
 """
 
 [[functions]]
-ordinal = 96
 structure = "List"
 name = "take"
 type = "α list * int → α list"
@@ -2412,7 +2267,6 @@ l)` = `l`.
 """
 
 [[functions]]
-ordinal = 92
 structure = "List"
 name = "tl"
 type = "α list → α list"
@@ -2464,7 +2318,6 @@ ignore excess elements of the longer list; those ending in `Eq` raise
 """
 
 [[exceptions]]
-ordinal = 129
 structure = "ListPair"
 name = "UnequalLengths"
 prototype = "UnequalLengths"
@@ -2474,7 +2327,6 @@ of identical length.
 """
 
 [[functions]]
-ordinal = 141
 structure = "ListPair"
 name = "all"
 type = "(α * β → bool) → α list * β list → bool"
@@ -2487,7 +2339,6 @@ provides short-circuit testing of a predicate over a pair of lists.
 """
 
 [[functions]]
-ordinal = 143
 structure = "ListPair"
 name = "allEq"
 type = "(α * β → bool) → α list * β list → bool"
@@ -2519,7 +2370,6 @@ fun allEq p ([], []) = true
 """
 
 [[functions]]
-ordinal = 133
 structure = "ListPair"
 name = "app"
 type = "(α * β → unit) → α list * β list → unit"
@@ -2536,7 +2386,6 @@ tail of the longer one. It is equivalent to:
 """
 
 [[functions]]
-ordinal = 134
 structure = "ListPair"
 name = "appEq"
 type = "(α * β → unit) → α list * β list → unit"
@@ -2553,7 +2402,6 @@ equivalent to:
 """
 
 [[functions]]
-ordinal = 142
 structure = "ListPair"
 name = "exists"
 type = "(α * β → bool) → α list * β list → bool"
@@ -2566,7 +2414,6 @@ provides short-circuit testing of a predicate over a pair of lists.
 """
 
 [[functions]]
-ordinal = 137
 structure = "ListPair"
 name = "foldl"
 type = "(α * β * γ → γ) → γ → α list * β list → γ"
@@ -2583,7 +2430,6 @@ side effects of the function *f*.
 """
 
 [[functions]]
-ordinal = 139
 structure = "ListPair"
 name = "foldlEq"
 type = "(α * β * γ → γ) → γ → α list * β list → γ"
@@ -2600,7 +2446,6 @@ side effects of the function *f*.
 """
 
 [[functions]]
-ordinal = 138
 structure = "ListPair"
 name = "foldr"
 type = "(α * β * γ → γ) → γ → α list * β list → γ"
@@ -2617,7 +2462,6 @@ side effects of the function *f*.
 """
 
 [[functions]]
-ordinal = 140
 structure = "ListPair"
 name = "foldrEq"
 type = "(α * β * γ → γ) → γ → α list * β list → γ"
@@ -2634,7 +2478,6 @@ side effects of the function *f*.
 """
 
 [[functions]]
-ordinal = 135
 structure = "ListPair"
 name = "map"
 type = "(α * β → γ) → α list * β list → γ list"
@@ -2652,7 +2495,6 @@ equivalent to:
 """
 
 [[functions]]
-ordinal = 136
 structure = "ListPair"
 name = "mapEq"
 type = "(α * β → γ) → α list * β list → γ list"
@@ -2669,7 +2511,6 @@ raises `UnequalLengths`.  It is equivalent to:
 """
 
 [[functions]]
-ordinal = 132
 structure = "ListPair"
 name = "unzip"
 type = "(α * β) list → α list * β list"
@@ -2680,7 +2521,6 @@ returns a pair of lists formed by splitting the elements of
 """
 
 [[functions]]
-ordinal = 130
 structure = "ListPair"
 name = "zip"
 type = "α list * β list → (α * β) list"
@@ -2695,7 +2535,6 @@ one.
 """
 
 [[functions]]
-ordinal = 131
 structure = "ListPair"
 name = "zipEq"
 type = "α list * β list → (α * β) list"
@@ -2720,7 +2559,6 @@ and rounding operations, along with mathematical constants.
 """
 
 [[functions]]
-ordinal = 116
 structure = "Math"
 name = "acos"
 type = "real → real"
@@ -2732,7 +2570,6 @@ pi\\]. If the magnitude of `x` exceeds 1.0, returns NaN.
 """
 
 [[functions]]
-ordinal = 117
 structure = "Math"
 name = "asin"
 type = "real → real"
@@ -2744,7 +2581,6 @@ pi / 2\\]. If the magnitude of `x` exceeds 1.0, returns NaN.
 """
 
 [[functions]]
-ordinal = 118
 structure = "Math"
 name = "atan"
 type = "real → real"
@@ -2757,7 +2593,6 @@ open interval (-pi / 2, pi / 2). If `x` is +infinity, it returns pi /
 """
 
 [[functions]]
-ordinal = 119
 structure = "Math"
 name = "atan2"
 type = "real * real → real"
@@ -2772,7 +2607,6 @@ result is `(real (sign y)) * pi / 2.0`.
 """
 
 [[functions]]
-ordinal = 120
 structure = "Math"
 name = "cos"
 type = "real → real"
@@ -2783,7 +2617,6 @@ infinity, returns NaN.
 """
 
 [[functions]]
-ordinal = 121
 structure = "Math"
 name = "cosh"
 type = "real → real"
@@ -2795,7 +2628,6 @@ e(-x)) / 2`. Among its properties, cosh +-0 = 1, cosh +-infinity =
 """
 
 [[functions]]
-ordinal = 122
 structure = "Math"
 name = "e"
 type = "real"
@@ -2805,7 +2637,6 @@ is base e (2.718281828...) of the natural logarithm.
 """
 
 [[functions]]
-ordinal = 123
 structure = "Math"
 name = "exp"
 type = "real → real"
@@ -2817,7 +2648,6 @@ returns 0.
 """
 
 [[functions]]
-ordinal = 124
 structure = "Math"
 name = "ln"
 type = "real → real"
@@ -2829,7 +2659,6 @@ returns infinity.
 """
 
 [[functions]]
-ordinal = 125
 structure = "Math"
 name = "log10"
 type = "real → real"
@@ -2841,7 +2670,6 @@ returns infinity.
 """
 
 [[functions]]
-ordinal = 126
 structure = "Math"
 name = "pi"
 type = "real"
@@ -2851,7 +2679,6 @@ is the constant pi (3.141592653...).
 """
 
 [[functions]]
-ordinal = 127
 structure = "Math"
 name = "pow"
 type = "real * real → real"
@@ -2863,7 +2690,6 @@ when `x` < 0 and `y` is integral.
 """
 
 [[functions]]
-ordinal = 128
 structure = "Math"
 name = "sin"
 type = "real → real"
@@ -2874,7 +2700,6 @@ infinity, returns NaN.
 """
 
 [[functions]]
-ordinal = 129
 structure = "Math"
 name = "sinh"
 type = "real → real"
@@ -2886,7 +2711,6 @@ returns the hyperbolic sine of `x`, that is, `(e(x) - e(-x))
 """
 
 [[functions]]
-ordinal = 130
 structure = "Math"
 name = "sqrt"
 type = "real → real"
@@ -2897,7 +2721,6 @@ returns the square root of `x`. sqrt (~0.0) = ~0.0. If `x` <
 """
 
 [[functions]]
-ordinal = 131
 structure = "Math"
 name = "tan"
 type = "real → real"
@@ -2909,7 +2732,6 @@ roughly corresponding to the singularities of the tangent function.
 """
 
 [[functions]]
-ordinal = 132
 structure = "Math"
 name = "tanh"
 type = "real → real"
@@ -2939,7 +2761,6 @@ is raised by `valOf` when applied to `NONE`.
 """
 
 [[functions]]
-ordinal = 133
 structure = "Option"
 name = "app"
 type = "(α → unit) → α option → unit"
@@ -2950,7 +2771,6 @@ applies the function `f` to the value `v` if `opt` is
 """
 
 [[functions]]
-ordinal = 134
 structure = "Option"
 name = "compose"
 type = "(α → β) * (γ → α option) → γ → β option"
@@ -2961,7 +2781,6 @@ returns `NONE` if `g(a)` is `NONE`; otherwise, if
 """
 
 [[functions]]
-ordinal = 135
 structure = "Option"
 name = "composePartial"
 type = "(α → β option) * (γ → α option) → γ → β option"
@@ -2972,7 +2791,6 @@ otherwise, if `g(a)` is `SOME v`, returns `f(v)`.
 """
 
 [[functions]]
-ordinal = 140
 structure = "Option"
 name = "filter"
 type = "(α → bool) → α → α option"
@@ -2982,7 +2800,6 @@ returns `SOME a` if `f(a)` is `true`, `NONE` otherwise.
 """
 
 [[functions]]
-ordinal = 138
 structure = "Option"
 name = "getOpt"
 type = "α option * α → α"
@@ -2994,7 +2811,6 @@ returns `a`.
 """
 
 [[functions]]
-ordinal = 139
 structure = "Option"
 name = "isSome"
 type = "α option → bool"
@@ -3006,7 +2822,6 @@ returns `true` if `opt` is `SOME v`; otherwise returns
 """
 
 [[functions]]
-ordinal = 141
 structure = "Option"
 name = "join"
 type = "α option option → α option"
@@ -3016,7 +2831,6 @@ maps `NONE` to `NONE` and `SOME v` to `v`.
 """
 
 [[functions]]
-ordinal = 136
 structure = "Option"
 name = "map"
 type = "(α → β) → α option → β option"
@@ -3026,7 +2840,6 @@ maps `NONE` to `NONE` and `SOME v` to `SOME (f v)`.
 """
 
 [[functions]]
-ordinal = 137
 structure = "Option"
 name = "mapPartial"
 type = "(α → β option) → α option → β option"
@@ -3047,7 +2860,6 @@ convention of returning a NULL pointer to indicate no value.
 """
 
 [[functions]]
-ordinal = 142
 structure = "Option"
 name = "valOf"
 type = "α option → α"
@@ -3079,7 +2891,6 @@ OPEN endpoints are exclusive `(a, b)`.
 """
 
 [[functions]]
-ordinal = 271
 structure = "Range"
 name = "complement"
 type = "α continuous_set → α continuous_set"
@@ -3091,7 +2902,6 @@ all values not in `cs`.
 """
 
 [[functions]]
-ordinal = 272
 structure = "Range"
 name = "complement"
 type = "α discrete_set → α discrete_set"
@@ -3103,7 +2913,6 @@ values of the element type not in `ds`.
 """
 
 [[functions]]
-ordinal = 261
 structure = "Range"
 name = "contains"
 type = "α range → α → bool"
@@ -3116,7 +2925,6 @@ The ordering is implicit, derived from the type `α`.
 """
 
 [[functions]]
-ordinal = 268
 structure = "Range"
 name = "contains"
 type = "α continuous_set → α → bool"
@@ -3129,7 +2937,6 @@ The ordering is implicit, derived from the type `α`.
 """
 
 [[functions]]
-ordinal = 269
 structure = "Range"
 name = "contains"
 type = "α discrete_set → α → bool"
@@ -3142,7 +2949,6 @@ The ordering is implicit, derived from the type `α`.
 """
 
 [[functions]]
-ordinal = 265
 structure = "Range"
 name = "continuousSetOf"
 type = "α range list → α continuous_set"
@@ -3177,7 +2983,6 @@ non-adjacent ranges.
 """
 
 [[functions]]
-ordinal = 266
 structure = "Range"
 name = "discreteSetOf"
 type = "α range list → α discrete_set"
@@ -3237,7 +3042,6 @@ The constructors and their meanings are:
 """
 
 [[functions]]
-ordinal = 267
 structure = "Range"
 name = "ranges"
 type = "α continuous_set → α range list"
@@ -3248,7 +3052,6 @@ returns the list of ranges in the continuous set `cs`.
 """
 
 [[functions]]
-ordinal = 270
 structure = "Range"
 name = "ranges"
 type = "α discrete_set → α range list"
@@ -3259,7 +3062,6 @@ returns the list of ranges in the discrete set `ds`.
 """
 
 [[functions]]
-ordinal = 263
 structure = "Range"
 name = "toBag"
 type = "α discrete_set → α bag"
@@ -3273,7 +3075,6 @@ minimum value (e.g., `LESS_THAN 5 : int range`).
 """
 
 [[functions]]
-ordinal = 264
 structure = "Range"
 name = "toList"
 type = "α discrete_set → α list"
@@ -3299,7 +3100,6 @@ numbers.
 """
 
 [[functions]]
-ordinal = 241
 structure = "Real"
 name = "!="
 type = "real * real → bool"
@@ -3310,7 +3110,6 @@ is equivalent to `not o op ==` and the IEEE `?<>` operator.
 """
 
 [[functions]]
-ordinal = 143
 structure = "Real"
 name = "*"
 type = "real * real → real"
@@ -3323,7 +3122,6 @@ infinity, infinity * (-infinity) = -infinity.
 """
 
 [[functions]]
-ordinal = 242
 structure = "Real"
 name = "*+"
 type = "real * real * real → real"
@@ -3335,7 +3133,6 @@ from the behaviors derived from addition and multiplication.
 """
 
 [[functions]]
-ordinal = 243
 structure = "Real"
 name = "*-"
 type = "real * real * real → real"
@@ -3347,7 +3144,6 @@ from the behaviors derived from subtraction and multiplication.
 """
 
 [[functions]]
-ordinal = 144
 structure = "Real"
 name = "+"
 type = "real * real → real"
@@ -3361,7 +3157,6 @@ combination of two infinities produces NaN.
 """
 
 [[functions]]
-ordinal = 145
 structure = "Real"
 name = "-"
 type = "real * real → real"
@@ -3375,7 +3170,6 @@ other combination of two infinities produces NaN.
 """
 
 [[functions]]
-ordinal = 146
 structure = "Real"
 name = "/"
 type = "real * real → real"
@@ -3389,7 +3183,6 @@ an infinity is 0 with the correct sign.
 """
 
 [[functions]]
-ordinal = 147
 structure = "Real"
 name = "<"
 type = "real * real → bool"
@@ -3402,7 +3195,6 @@ same as `not (a >= b)`.
 """
 
 [[functions]]
-ordinal = 148
 structure = "Real"
 name = "<="
 type = "real * real → bool"
@@ -3412,7 +3204,6 @@ As "<"
 """
 
 [[functions]]
-ordinal = 244
 structure = "Real"
 name = "=="
 type = "real * real → bool"
@@ -3425,7 +3216,6 @@ returns `true` if and only if neither `y` nor `x` is NaN, and `y` and
 """
 
 [[functions]]
-ordinal = 149
 structure = "Real"
 name = ">"
 type = "real * real → bool"
@@ -3435,7 +3225,6 @@ As "<"
 """
 
 [[functions]]
-ordinal = 150
 structure = "Real"
 name = ">="
 type = "real * real → bool"
@@ -3445,7 +3234,6 @@ As "<"
 """
 
 [[functions]]
-ordinal = 245
 structure = "Real"
 name = "?="
 type = "real * real → bool"
@@ -3458,7 +3246,6 @@ IEEE `?=` operator.
 """
 
 [[functions]]
-ordinal = 152
 structure = "Real"
 name = "abs"
 type = "real → real"
@@ -3469,7 +3256,6 @@ returns the absolute value of `r`.
 """
 
 [[functions]]
-ordinal = 153
 structure = "Real"
 name = "ceil"
 type = "real → int"
@@ -3480,7 +3266,6 @@ produces `ceil(r)`, the smallest int not less than `r`.
 """
 
 [[functions]]
-ordinal = 154
 structure = "Real"
 name = "checkFloat"
 type = "real → real"
@@ -3492,7 +3277,6 @@ if x is NaN. Otherwise, it returns its argument.
 """
 
 [[functions]]
-ordinal = 246
 structure = "Real"
 name = "class"
 type = "real → IEEEReal.float_class"
@@ -3503,7 +3287,6 @@ returns the `IEEEReal.float_class` to which x belongs.
 """
 
 [[functions]]
-ordinal = 155
 structure = "Real"
 name = "compare"
 type = "real * real → order"
@@ -3516,7 +3299,6 @@ second. It raises `IEEEReal.Unordered` on unordered arguments.
 """
 
 [[functions]]
-ordinal = 247
 structure = "Real"
 name = "compareReal"
 type = "real * real → IEEEReal.real_order"
@@ -3529,7 +3311,6 @@ it returns `IEEEReal.UNORDERED` on unordered arguments.
 """
 
 [[functions]]
-ordinal = 156
 structure = "Real"
 name = "copySign"
 type = "real * real → real"
@@ -3541,7 +3322,6 @@ NaN.
 """
 
 [[functions]]
-ordinal = 157
 structure = "Real"
 name = "floor"
 type = "real → int"
@@ -3552,7 +3332,6 @@ produces `floor(r)`, the largest int not larger than `r`.
 """
 
 [[functions]]
-ordinal = 248
 structure = "Real"
 name = "fmt"
 type = "StringCvt.realfmt → real → string"
@@ -3565,7 +3344,6 @@ precision
 """
 
 [[functions]]
-ordinal = 249
 structure = "Real"
 name = "fromDecimal"
 type = "IEEEReal.decimal_approx → real"
@@ -3576,7 +3354,6 @@ converts decimal approximation to a `real`
 """
 
 [[functions]]
-ordinal = 158
 structure = "Real"
 name = "fromInt, real"
 type = "int → real"
@@ -3589,7 +3366,6 @@ value, uses current rounding mode to determine the resulting value.
 """
 
 [[functions]]
-ordinal = 250
 structure = "Real"
 name = "fromLarge"
 type = "IEEEReal.rounding_mode → real → real"
@@ -3602,7 +3378,6 @@ as a real, converts it to a zero or an infinity.
 """
 
 [[functions]]
-ordinal = 251
 structure = "Real"
 name = "fromLargeInt"
 type = "IntInf.int → real"
@@ -3613,7 +3388,6 @@ As "fromInt"
 """
 
 [[functions]]
-ordinal = 159
 structure = "Real"
 name = "fromManExp"
 type = "{exp:int, man:real} → real"
@@ -3624,7 +3398,6 @@ mantissa and exponent of r, respectively.
 """
 
 [[functions]]
-ordinal = 160
 structure = "Real"
 name = "fromString"
 type = "string → real option"
@@ -3637,7 +3410,6 @@ equivalent to `StringCvt.scanString scan`.
 """
 
 [[functions]]
-ordinal = 161
 structure = "Real"
 name = "isFinite"
 type = "real → bool"
@@ -3648,7 +3420,6 @@ returns true if x is neither NaN nor an infinity.
 """
 
 [[functions]]
-ordinal = 162
 structure = "Real"
 name = "isNan"
 type = "real → bool"
@@ -3659,7 +3430,6 @@ returns true if x NaN.
 """
 
 [[functions]]
-ordinal = 163
 structure = "Real"
 name = "isNormal"
 type = "real → bool"
@@ -3671,7 +3441,6 @@ subnormal, infinite nor NaN.
 """
 
 [[functions]]
-ordinal = 164
 structure = "Real"
 name = "max"
 type = "real * real → real"
@@ -3684,7 +3453,6 @@ NaN, returns NaN.
 """
 
 [[functions]]
-ordinal = 165
 structure = "Real"
 name = "maxFinite"
 type = "real"
@@ -3694,7 +3462,6 @@ is the maximum finite number.
 """
 
 [[functions]]
-ordinal = 166
 structure = "Real"
 name = "min"
 type = "real * real → real"
@@ -3707,7 +3474,6 @@ NaN, returns NaN.
 """
 
 [[functions]]
-ordinal = 167
 structure = "Real"
 name = "minNormalPos"
 type = "real"
@@ -3717,7 +3483,6 @@ is the minimum non-zero normalized number.
 """
 
 [[functions]]
-ordinal = 168
 structure = "Real"
 name = "minPos"
 type = "real"
@@ -3727,7 +3492,6 @@ is the minimum non-zero positive number.
 """
 
 [[functions]]
-ordinal = 169
 structure = "Real"
 name = "negInf"
 type = "real"
@@ -3737,7 +3501,6 @@ is the negative infinity value.
 """
 
 [[functions]]
-ordinal = 252
 structure = "Real"
 name = "nextAfter"
 type = "real * real → real"
@@ -3750,7 +3513,6 @@ returns the largest representable floating-point number less than `r`.
 """
 
 [[functions]]
-ordinal = 170
 structure = "Real"
 name = "posInf"
 type = "real"
@@ -3760,7 +3522,6 @@ is the positive infinity value.
 """
 
 [[functions]]
-ordinal = 171
 structure = "Real"
 name = "precision"
 type = "int"
@@ -3773,7 +3534,6 @@ Real64.precision is 53).
 """
 
 [[functions]]
-ordinal = 172
 structure = "Real"
 name = "radix"
 type = "int"
@@ -3792,7 +3552,6 @@ is the type of IEEE 754 double-precision floating-point numbers.
 """
 
 [[functions]]
-ordinal = 173
 structure = "Real"
 name = "realCeil"
 type = "real → real"
@@ -3804,7 +3563,6 @@ produces `ceil(r)`, the smallest integer not less than
 """
 
 [[functions]]
-ordinal = 174
 structure = "Real"
 name = "realFloor"
 type = "real → real"
@@ -3816,7 +3574,6 @@ produces `floor(r)`, the largest integer not larger than
 """
 
 [[functions]]
-ordinal = 175
 structure = "Real"
 name = "realMod"
 type = "real → real"
@@ -3828,7 +3585,6 @@ equivalent to `#frac o split`.
 """
 
 [[functions]]
-ordinal = 176
 structure = "Real"
 name = "realRound"
 type = "real → real"
@@ -3840,7 +3596,6 @@ to `r`. In the case of a tie, it rounds to the nearest even integer.
 """
 
 [[functions]]
-ordinal = 177
 structure = "Real"
 name = "realTrunc"
 type = "real → real"
@@ -3851,7 +3606,6 @@ rounds `r` towards zero.
 """
 
 [[functions]]
-ordinal = 178
 structure = "Real"
 name = "rem"
 type = "real * real → real"
@@ -3865,7 +3619,6 @@ than the absolute value of `y`. If `x` is an infinity or `y` is 0,
 """
 
 [[functions]]
-ordinal = 179
 structure = "Real"
 name = "round"
 type = "real → int"
@@ -3877,7 +3630,6 @@ rounds to the nearest even integer.
 """
 
 [[functions]]
-ordinal = 180
 structure = "Real"
 name = "sameSign"
 type = "real * real → bool"
@@ -3889,7 +3641,6 @@ returns true if and only if `signBit r1` equals
 """
 
 [[functions]]
-ordinal = 253
 structure = "Real"
 name = "scan"
 type = "(char,α) StringCvt.reader → (real,α) StringCvt.reader"
@@ -3905,7 +3656,6 @@ values of too small a magnitude are represented as zeros.
 """
 
 [[functions]]
-ordinal = 181
 structure = "Real"
 name = "sign"
 type = "real → int"
@@ -3918,7 +3668,6 @@ its sign. It raises `Domain` on NaN.
 """
 
 [[functions]]
-ordinal = 182
 structure = "Real"
 name = "signBit"
 type = "real → bool"
@@ -3930,7 +3679,6 @@ zeros, and NaN, included) is negative.
 """
 
 [[functions]]
-ordinal = 183
 structure = "Real"
 name = "split"
 type = "real → {frac:real, whole:real}"
@@ -3943,7 +3691,6 @@ fractional and integral parts of `r`, respectively. Specifically,
 """
 
 [[functions]]
-ordinal = 254
 structure = "Real"
 name = "toDecimal"
 type = "real → IEEEReal.decimal_approx"
@@ -3954,7 +3701,6 @@ converts a `real` to a decimal approximation
 """
 
 [[functions]]
-ordinal = 255
 structure = "Real"
 name = "toInt"
 type = "real → IEEEReal.rounding_mode → int"
@@ -3968,7 +3714,6 @@ representable, in particular, if `x` is an infinity. It raises
 """
 
 [[functions]]
-ordinal = 256
 structure = "Real"
 name = "toLarge"
 type = "real → real"
@@ -3979,7 +3724,6 @@ convert a value of type `real` to type `LargeReal.real`.
 """
 
 [[functions]]
-ordinal = 257
 structure = "Real"
 name = "toLargeInt"
 type = "real → IEEEReal.rounding_mode → IntInf.int"
@@ -3990,7 +3734,6 @@ As "toInt"
 """
 
 [[functions]]
-ordinal = 185
 structure = "Real"
 name = "toManExp"
 type = "real → {man:real, exp:int}"
@@ -4002,7 +3745,6 @@ mantissa and exponent of r, respectively.
 """
 
 [[functions]]
-ordinal = 186
 structure = "Real"
 name = "toString"
 type = "real → string"
@@ -4014,7 +3756,6 @@ converts a `real` into a `string`; equivalent to `(fmt
 """
 
 [[functions]]
-ordinal = 184
 structure = "Real"
 name = "trunc"
 type = "real → int"
@@ -4025,7 +3766,6 @@ rounds r towards zero.
 """
 
 [[functions]]
-ordinal = 187
 structure = "Real"
 name = "unordered"
 type = "real * real → bool"
@@ -4037,7 +3777,6 @@ least one of x and y is NaN.
 """
 
 [[functions]]
-ordinal = 151
 structure = "Real"
 name = "~"
 type = "real → real"
@@ -4081,7 +3820,6 @@ particular value.
 """
 
 [[functions]]
-ordinal = 188
 structure = "Relational"
 name = "count, count"
 type = "α bag → int"
@@ -4103,7 +3841,6 @@ wraps a value so that it sorts in descending order when used with
 """
 
 [[functions]]
-ordinal = 194
 structure = "Relational"
 name = "elem"
 type = "α * α bag → bool, α * α list → bool"
@@ -4113,7 +3850,6 @@ returns whether `e` is a member of `collection`.
 """
 
 [[functions]]
-ordinal = 189
 structure = "Relational"
 name = "empty, empty"
 type = "α bag → bool"
@@ -4125,7 +3861,6 @@ depts where empty (from e where e.deptno = d.deptno)`.
 """
 
 [[functions]]
-ordinal = 189
 structure = "Relational"
 name = "iterate, iterate"
 type = "α bag → (α bag * α bag → α bag) → α bag"
@@ -4138,7 +3873,6 @@ iteration when it returns `newList`.
 """
 
 [[functions]]
-ordinal = 190
 structure = "Relational"
 name = "max, max"
 type = "α bag → α"
@@ -4151,7 +3885,6 @@ max of e.id`.
 """
 
 [[functions]]
-ordinal = 191
 structure = "Relational"
 name = "min, min"
 type = "α bag → α"
@@ -4164,7 +3897,6 @@ min of e.id`.
 """
 
 [[functions]]
-ordinal = 192
 structure = "Relational"
 name = "nonEmpty, nonEmpty"
 type = "α bag → bool"
@@ -4177,7 +3909,6 @@ d.deptno)`.
 """
 
 [[functions]]
-ordinal = 195
 structure = "Relational"
 name = "notelem"
 type = "α * α bag → bool, α * α list → bool"
@@ -4188,7 +3919,6 @@ returns whether `e` is not a member of
 """
 
 [[functions]]
-ordinal = 193
 structure = "Relational"
 name = "only, only"
 type = "α bag → α"
@@ -4200,7 +3930,6 @@ emps yield only (from d where d.deptno = e.deptno)`.
 """
 
 [[functions]]
-ordinal = 196
 structure = "Relational"
 name = "sum, sum"
 type = "α bag → α"
@@ -4265,7 +3994,6 @@ ordering.
 """
 
 [[functions]]
-ordinal = 196
 structure = "String"
 name = "^"
 type = "string * string → string"
@@ -4276,7 +4004,6 @@ is the concatenation of the strings `s` and `t`. This raises
 """
 
 [[functions]]
-ordinal = 194
 structure = "String"
 name = "collate"
 type = "(char * char → order) → string * string → order"
@@ -4287,7 +4014,6 @@ strings using the given ordering `f` on characters.
 """
 
 [[functions]]
-ordinal = 195
 structure = "String"
 name = "compare"
 type = "string * string → order"
@@ -4301,7 +4027,6 @@ greater than `t`, respectively.
 """
 
 [[functions]]
-ordinal = 197
 structure = "String"
 name = "concat"
 type = "string list → string"
@@ -4312,7 +4037,6 @@ is the concatenation of all the strings in `l`. This raises
 """
 
 [[functions]]
-ordinal = 198
 structure = "String"
 name = "concatWith"
 type = "string → string list → string"
@@ -4324,7 +4048,6 @@ size of the resulting string would be greater than `maxSize`.
 """
 
 [[functions]]
-ordinal = 199
 structure = "String"
 name = "explode"
 type = "string → char list"
@@ -4335,7 +4058,6 @@ is the list of characters in the string `s`.
 """
 
 [[functions]]
-ordinal = 200
 structure = "String"
 name = "extract"
 type = "string * int * int option → string"
@@ -4373,7 +4095,6 @@ contains the four fields `""`, `"abc"`, `""` and `"def"`.
 """
 
 [[functions]]
-ordinal = 214
 structure = "String"
 name = "fromCString"
 type = "string → string option"
@@ -4392,7 +4113,6 @@ quote character.
 """
 
 [[functions]]
-ordinal = 216
 structure = "String"
 name = "fromString"
 type = "string → string option"
@@ -4448,7 +4168,6 @@ of `CHAR.scan`.
 """
 
 [[functions]]
-ordinal = 201
 structure = "String"
 name = "implode"
 type = "char list → string"
@@ -4460,7 +4179,6 @@ generates the string containing the characters in the list
 """
 
 [[functions]]
-ordinal = 202
 structure = "String"
 name = "isPrefix"
 type = "string → string → bool"
@@ -4472,7 +4190,6 @@ that a string is a prefix of itself.
 """
 
 [[functions]]
-ordinal = 203
 structure = "String"
 name = "isSubstring"
 type = "string → string → bool"
@@ -4484,7 +4201,6 @@ string, and that a string is a substring of itself.
 """
 
 [[functions]]
-ordinal = 204
 structure = "String"
 name = "isSuffix"
 type = "string → string → bool"
@@ -4496,7 +4212,6 @@ that a string is a suffix of itself.
 """
 
 [[functions]]
-ordinal = 205
 structure = "String"
 name = "map"
 type = "(char → char) → string → string"
@@ -4508,7 +4223,6 @@ f (explode s))`.
 """
 
 [[functions]]
-ordinal = 206
 structure = "String"
 name = "maxSize"
 type = "int"
@@ -4518,7 +4232,6 @@ is the longest allowed size of a string.
 """
 
 [[functions]]
-ordinal = 215
 structure = "String"
 name = "scan"
 type = "(char,α) StringCvt.reader → (string,α) StringCvt.reader"
@@ -4536,7 +4249,6 @@ stream.
 """
 
 [[functions]]
-ordinal = 207
 structure = "String"
 name = "size"
 type = "string → int"
@@ -4547,7 +4259,6 @@ returns |`s`|, the number of characters in string `s`.
 """
 
 [[functions]]
-ordinal = 208
 structure = "String"
 name = "str"
 type = "char → string"
@@ -4565,7 +4276,6 @@ is the type of character strings.
 """
 
 [[functions]]
-ordinal = 209
 structure = "String"
 name = "sub"
 type = "string * int → char"
@@ -4577,7 +4287,6 @@ zero. This raises `Subscript` if `i` < 0 or |`s`| &le; `i`.
 """
 
 [[functions]]
-ordinal = 210
 structure = "String"
 name = "substring"
 type = "string * int * int → string"
@@ -4590,7 +4299,6 @@ the substring of size `j` starting at index `i`. This is equivalent to
 """
 
 [[functions]]
-ordinal = 217
 structure = "String"
 name = "toCString"
 type = "string → string"
@@ -4604,7 +4312,6 @@ characters replaced by C escape sequences. This is equivalent to
 """
 
 [[functions]]
-ordinal = 214
 structure = "String"
 name = "toString"
 type = "string → string"
@@ -4618,7 +4325,6 @@ characters replaced by SML escape sequences. This is equivalent to
 """
 
 [[functions]]
-ordinal = 216
 structure = "String"
 name = "tokens"
 type = "(char → bool) → string → string list"
@@ -4637,7 +4343,6 @@ contains the four fields `""`, `"abc"`, `""` and `"def"`.
 """
 
 [[functions]]
-ordinal = 211
 structure = "String"
 name = "translate"
 type = "(char → string) → string → string"
@@ -4702,7 +4407,6 @@ environment.
 """
 
 [[functions]]
-ordinal = 210
 structure = "Sys"
 name = "clearEnv"
 type = "unit → unit"
@@ -4712,7 +4416,6 @@ restores the environment to the initial environment.
 """
 
 [[functions]]
-ordinal = 211
 structure = "Sys"
 name = "env, env"
 type = "unit → (string * string) list"
@@ -4722,7 +4425,6 @@ prints the environment.
 """
 
 [[functions]]
-ordinal = 212
 structure = "Sys"
 name = "file"
 type = "{...}"
@@ -4733,7 +4435,6 @@ depend on the files and directories under the configured directory.
 """
 
 [[functions]]
-ordinal = 213
 structure = "Sys"
 name = "parseTree"
 type = "string → string"
@@ -4746,7 +4447,6 @@ from `.smli` scripts. Raises `Error` if the string does not parse.
 """
 
 [[functions]]
-ordinal = 214
 structure = "Sys"
 name = "plan"
 type = "unit → string"
@@ -4756,7 +4456,6 @@ prints the plan of the most recently executed expression.
 """
 
 [[functions]]
-ordinal = 215
 structure = "Sys"
 name = "planEx"
 type = "string → string"
@@ -4768,7 +4467,6 @@ representation at the specified phase. The phase argument can be "0" (initial),
 """
 
 [[functions]]
-ordinal = 216
 structure = "Sys"
 name = "set"
 type = "string * α → unit"
@@ -4781,7 +4479,6 @@ extra = """
 """
 
 [[functions]]
-ordinal = 217
 structure = "Sys"
 name = "show"
 type = "string → string option"
@@ -4792,7 +4489,6 @@ string, or `NONE` if unset.
 """
 
 [[functions]]
-ordinal = 218
 structure = "Sys"
 name = "showAll"
 type = "unit → (string * string option) list"
@@ -4803,7 +4499,6 @@ as a string, or `NONE` if unset.
 """
 
 [[functions]]
-ordinal = 219
 structure = "Sys"
 name = "unset"
 type = "string → unit"
@@ -4826,7 +4521,6 @@ are provided.
 """
 
 [[functions]]
-ordinal = 250
 structure = "Time"
 name = "+"
 type = "time * time → time"
@@ -4837,7 +4531,6 @@ returns the sum of the two time values `t1` and `t2`.
 """
 
 [[functions]]
-ordinal = 251
 structure = "Time"
 name = "-"
 type = "time * time → time"
@@ -4848,7 +4541,6 @@ returns the difference of the two time values `t1` and `t2`.
 """
 
 [[functions]]
-ordinal = 253
 structure = "Time"
 name = "<"
 type = "time * time → bool"
@@ -4859,7 +4551,6 @@ returns `true` if `t1` is less than `t2`.
 """
 
 [[functions]]
-ordinal = 254
 structure = "Time"
 name = "<="
 type = "time * time → bool"
@@ -4870,7 +4561,6 @@ returns `true` if `t1` is less than or equal to `t2`.
 """
 
 [[functions]]
-ordinal = 255
 structure = "Time"
 name = ">"
 type = "time * time → bool"
@@ -4881,7 +4571,6 @@ returns `true` if `t1` is greater than `t2`.
 """
 
 [[functions]]
-ordinal = 256
 structure = "Time"
 name = ">="
 type = "time * time → bool"
@@ -4900,7 +4589,6 @@ is raised when a conversion produces a value that cannot be represented as a
 """
 
 [[functions]]
-ordinal = 252
 structure = "Time"
 name = "compare"
 type = "time * time → order"
@@ -4912,7 +4600,6 @@ equal to, or greater than `t2`.
 """
 
 [[functions]]
-ordinal = 258
 structure = "Time"
 name = "fmt"
 type = "int → time → string"
@@ -4924,7 +4611,6 @@ values are formatted with a leading `~`.
 """
 
 [[functions]]
-ordinal = 248
 structure = "Time"
 name = "fromMicroseconds"
 type = "int → time"
@@ -4934,7 +4620,6 @@ returns the `time` value corresponding to `n` microseconds.
 """
 
 [[functions]]
-ordinal = 247
 structure = "Time"
 name = "fromMilliseconds"
 type = "int → time"
@@ -4944,7 +4629,6 @@ returns the `time` value corresponding to `n` milliseconds.
 """
 
 [[functions]]
-ordinal = 249
 structure = "Time"
 name = "fromNanoseconds"
 type = "int → time"
@@ -4954,7 +4638,6 @@ returns the `time` value corresponding to `n` nanoseconds.
 """
 
 [[functions]]
-ordinal = 240
 structure = "Time"
 name = "fromReal"
 type = "real → time"
@@ -4965,7 +4648,6 @@ Raises `Time` if `r` is `NaN`, infinite, or otherwise not representable.
 """
 
 [[functions]]
-ordinal = 246
 structure = "Time"
 name = "fromSeconds"
 type = "int → time"
@@ -4975,7 +4657,6 @@ returns the `time` value corresponding to `n` seconds.
 """
 
 [[functions]]
-ordinal = 260
 structure = "Time"
 name = "fromString"
 type = "string → time option"
@@ -4986,7 +4667,6 @@ of seconds. Returns `SOME t` if successful, `NONE` otherwise.
 """
 
 [[functions]]
-ordinal = 257
 structure = "Time"
 name = "now"
 type = "unit → time"
@@ -5007,7 +4687,6 @@ Negative values represent times before the epoch or negative intervals.
 """
 
 [[functions]]
-ordinal = 244
 structure = "Time"
 name = "toMicroseconds"
 type = "time → int"
@@ -5018,7 +4697,6 @@ returns the number of whole microseconds in `t`, truncated toward zero.
 """
 
 [[functions]]
-ordinal = 243
 structure = "Time"
 name = "toMilliseconds"
 type = "time → int"
@@ -5029,7 +4707,6 @@ returns the number of whole milliseconds in `t`, truncated toward zero.
 """
 
 [[functions]]
-ordinal = 245
 structure = "Time"
 name = "toNanoseconds"
 type = "time → int"
@@ -5040,7 +4717,6 @@ returns the number of whole nanoseconds in `t`.
 """
 
 [[functions]]
-ordinal = 241
 structure = "Time"
 name = "toReal"
 type = "time → real"
@@ -5051,7 +4727,6 @@ converts the time value `t` to a real number representing seconds.
 """
 
 [[functions]]
-ordinal = 242
 structure = "Time"
 name = "toSeconds"
 type = "time → int"
@@ -5062,7 +4737,6 @@ returns the number of whole seconds in `t`, truncated toward zero.
 """
 
 [[functions]]
-ordinal = 259
 structure = "Time"
 name = "toString"
 type = "time → string"
@@ -5074,7 +4748,6 @@ Equivalent to `fmt 3 t`.
 """
 
 [[functions]]
-ordinal = 239
 structure = "Time"
 name = "zeroTime"
 type = "time"
@@ -5142,7 +4815,6 @@ of elements.
 """
 
 [[functions]]
-ordinal = 219
 structure = "Vector"
 name = "all"
 type = "(α → bool) → α vector → bool"
@@ -5155,7 +4827,6 @@ to `not(exists (not o f) vec)`.
 """
 
 [[functions]]
-ordinal = 220
 structure = "Vector"
 name = "app"
 type = "(α → unit) → α vector → unit"
@@ -5169,7 +4840,6 @@ left to right order (i.e., in order of increasing indices).
 """
 
 [[functions]]
-ordinal = 221
 structure = "Vector"
 name = "appi"
 type = "(int * α → unit) → α vector → unit"
@@ -5183,7 +4853,6 @@ left to right order (i.e., in order of increasing indices).
 """
 
 [[functions]]
-ordinal = 222
 structure = "Vector"
 name = "collate"
 type = "(α * α -> order) -> α vector * α vector -> order"
@@ -5194,7 +4863,6 @@ vectors using the given ordering `f` on elements.
 """
 
 [[functions]]
-ordinal = 223
 structure = "Vector"
 name = "concat"
 type = "α vector list → α vector"
@@ -5206,7 +4874,6 @@ exceeds `maxLen`
 """
 
 [[functions]]
-ordinal = 224
 structure = "Vector"
 name = "exists"
 type = "(α -> bool) -> α vector -> bool"
@@ -5219,7 +4886,6 @@ otherwise.
 """
 
 [[functions]]
-ordinal = 225
 structure = "Vector"
 name = "find"
 type = "(α → bool) → α vector → α option"
@@ -5231,7 +4897,6 @@ if such an `x` exists; otherwise it returns `NONE`.
 """
 
 [[functions]]
-ordinal = 226
 structure = "Vector"
 name = "findi"
 type = "(int * α → bool) → α vector → (int * α) option"
@@ -5244,7 +4909,6 @@ returns `NONE`.
 """
 
 [[functions]]
-ordinal = 227
 structure = "Vector"
 name = "foldl"
 type = "(α * β → β) → β → α vector → β"
@@ -5255,7 +4919,6 @@ vector `vec`, left to right, using the initial value `init`.
 """
 
 [[functions]]
-ordinal = 228
 structure = "Vector"
 name = "foldli"
 type = "(int * α * β → β) → β → α vector → β"
@@ -5267,7 +4930,6 @@ element) pairs of vector `vec`, left to right, using the initial value
 """
 
 [[functions]]
-ordinal = 229
 structure = "Vector"
 name = "foldr"
 type = "(α * β → β) → β → α vector → β"
@@ -5278,7 +4940,6 @@ vector `vec`, right to left, using the initial value `init`.
 """
 
 [[functions]]
-ordinal = 230
 structure = "Vector"
 name = "foldri"
 type = "(int * α * β → β) → β → α vector → β"
@@ -5290,7 +4951,6 @@ element) pairs of vector `vec`, right to left, using the initial value
 """
 
 [[functions]]
-ordinal = 231
 structure = "Vector"
 name = "fromList"
 type = "α list → α vector"
@@ -5303,7 +4963,6 @@ and with the `i`<sup>th</sup> element of `l` used as the
 """
 
 [[functions]]
-ordinal = 232
 structure = "Vector"
 name = "length"
 type = "α vector → int"
@@ -5314,7 +4973,6 @@ returns the number of elements in the vector `v`.
 """
 
 [[functions]]
-ordinal = 233
 structure = "Vector"
 name = "map"
 type = "(α → β) → α vector → β vector"
@@ -5328,7 +4986,6 @@ vector `vec`.
 """
 
 [[functions]]
-ordinal = 234
 structure = "Vector"
 name = "mapi"
 type = "(int * α → β) → α vector → β vector"
@@ -5343,7 +5000,6 @@ each call.
 """
 
 [[functions]]
-ordinal = 235
 structure = "Vector"
 name = "maxLen"
 type = "int"
@@ -5354,7 +5010,6 @@ implementation.
 """
 
 [[functions]]
-ordinal = 236
 structure = "Vector"
 name = "sub"
 type = "α vector * int → α"
@@ -5366,7 +5021,6 @@ Raises `Subscript` if `i` < 0 or `size vec` &le; `i`.
 """
 
 [[functions]]
-ordinal = 237
 structure = "Vector"
 name = "tabulate"
 type = "int * (int → α) → α vector"
@@ -5382,7 +5036,6 @@ Raises `Size` if `n` < 0 or `maxLen` < `n`.
 """
 
 [[functions]]
-ordinal = 238
 structure = "Vector"
 name = "update"
 type = "α vector * int * α → α vector"

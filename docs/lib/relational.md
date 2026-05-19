@@ -33,17 +33,17 @@ extend Standard ML with relational-algebra capabilities.
 <pre>
 datatype 'a <a id='descending' href="#descending-impl">descending</a> = DESC of 'a
 
+val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 val <a id='count' href="#count-impl">count</a> : 'a bag -> int
+val <a id='elem' href="#elem-impl">elem</a> : 'a * 'a bag -> bool, 'a * 'a list -> bool
 val <a id='empty' href="#empty-impl">empty</a> : 'a bag -> bool
 val <a id='iterate' href="#iterate-impl">iterate</a> : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
 val <a id='max' href="#max-impl">max</a> : 'a bag -> 'a
 val <a id='min' href="#min-impl">min</a> : 'a bag -> 'a
 val <a id='nonEmpty' href="#nonEmpty-impl">nonEmpty</a> : 'a bag -> bool
-val <a id='only' href="#only-impl">only</a> : 'a bag -> 'a
-val <a id='elem' href="#elem-impl">elem</a> : 'a * 'a bag -> bool, 'a * 'a list -> bool
 val <a id='notelem' href="#notelem-impl">notelem</a> : 'a * 'a bag -> bool, 'a * 'a list -> bool
+val <a id='only' href="#only-impl">only</a> : 'a bag -> 'a
 val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
-val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 </pre>
 
 <a id="descending-impl"></a>
@@ -52,12 +52,35 @@ val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 wraps a value so that it sorts in descending order when used with
 `Relational.compare`.
 
+<a id="compare-impl"></a>
+<h3><code>compare</code></h3>
+
+`compare (x, y)` returns `LESS`, `EQUAL`, or `GREATER` according to
+whether its first argument is less than, equal to, or greater than the
+second.
+
+Comparisons are based on the structure of the type `α`.
+Primitive types are compared using their natural order;
+Option types compare with NONE last;
+Tuple types compare lexicographically;
+Record types compare lexicographically, with the fields
+compared in alphabetical order;
+List values compare lexicographically;
+Bag values compare lexicographically, the elements appearing
+in an order that is arbitrary but is consistent for each
+particular value.
+
 <a id="count-impl"></a>
 <h3><code>count</code></h3>
 
 `count list` (or `list.count ()`) returns the number of elements in `list`. Often used with
 `group`, for example `from e in emps group e.deptno compute countId =
 count`.
+
+<a id="elem-impl"></a>
+<h3><code>elem</code></h3>
+
+`e elem collection` returns whether `e` is a member of `collection`.
 
 <a id="empty-impl"></a>
 <h3><code>empty</code></h3>
@@ -93,22 +116,17 @@ min of e.id`.
 example `from d in depts where nonEmpty (from e where e.deptno =
 d.deptno)`.
 
-<a id="only-impl"></a>
-<h3><code>only</code></h3>
-
-`only list` (or `list.only ()`) returns the sole element of list, for example `from e in
-emps yield only (from d where d.deptno = e.deptno)`.
-
-<a id="elem-impl"></a>
-<h3><code>elem</code></h3>
-
-`e elem collection` returns whether `e` is a member of `collection`.
-
 <a id="notelem-impl"></a>
 <h3><code>notelem</code></h3>
 
 `e notelem collection` returns whether `e` is not a member of
 `collection`.
+
+<a id="only-impl"></a>
+<h3><code>only</code></h3>
+
+`only list` (or `list.only ()`) returns the sole element of list, for example `from e in
+emps yield only (from d where d.deptno = e.deptno)`.
 
 <a id="sum-impl"></a>
 <h3><code>sum</code></h3>
@@ -116,23 +134,5 @@ emps yield only (from d where d.deptno = e.deptno)`.
 `sum list` (or `list.sum ()`) returns the sum of the elements of `list`. Often used with
 `group`, for example `from e in emps group e.deptno compute sumId =
 sum of e.id`.
-
-<a id="compare-impl"></a>
-<h3><code>compare</code></h3>
-
-`compare (x, y)` returns `LESS`, `EQUAL`, or `GREATER` according to
-whether its first argument is less than, equal to, or greater than the
-second.
-
-Comparisons are based on the structure of the type `α`.
-Primitive types are compared using their natural order;
-Option types compare with NONE last;
-Tuple types compare lexicographically;
-Record types compare lexicographically, with the fields
-compared in alphabetical order;
-List values compare lexicographically;
-Bag values compare lexicographically, the elements appearing
-in an order that is arbitrary but is consistent for each
-particular value.
 
 [//]: # (end:lib/relational)

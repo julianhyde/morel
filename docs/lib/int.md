@@ -37,32 +37,32 @@ eqtype <a id='int' href="#int-impl">int</a>
 val <a id='*' href="#*-impl">*</a> : int * int -> int
 val <a id='+' href="#+-impl">+</a> : int * int -> int
 val <a id='-' href="#--impl">-</a> : int * int -> int
-val <a id='div' href="#div-impl">div</a> : int * int -> int
-val <a id='mod' href="#mod-impl">mod</a> : int * int -> int
 val <a id='<' href="#<-impl"><</a> : int * int -> bool
 val <a id='<=' href="#<=-impl"><=</a> : int * int -> bool
 val <a id='>' href="#>-impl">></a> : int * int -> bool
 val <a id='>=' href="#>=-impl">>=</a> : int * int -> bool
-val <a id='~' href="#~-impl">~</a> : int -> int
 val <a id='abs' href="#abs-impl">abs</a> : int -> int
 val <a id='compare' href="#compare-impl">compare</a> : int * int -> order
+val <a id='div' href="#div-impl">div</a> : int * int -> int
+val <a id='fmt' href="#fmt-impl">fmt</a> : StringCvt.radix -> int -> string
 val <a id='fromInt' href="#fromInt-impl">fromInt</a> : int -> int
+val <a id='fromLarge' href="#fromLarge-impl">fromLarge</a> : int -> int
 val <a id='fromString' href="#fromString-impl">fromString</a> : string -> int option
 val <a id='max' href="#max-impl">max</a> : int * int -> int
 val <a id='maxInt' href="#maxInt-impl">maxInt</a> : int option
 val <a id='min' href="#min-impl">min</a> : int * int -> int
 val <a id='minInt' href="#minInt-impl">minInt</a> : int option
+val <a id='mod' href="#mod-impl">mod</a> : int * int -> int
 val <a id='precision' href="#precision-impl">precision</a> : int option
 val <a id='quot' href="#quot-impl">quot</a> : int * int -> int
 val <a id='rem' href="#rem-impl">rem</a> : int * int -> int
 val <a id='sameSign' href="#sameSign-impl">sameSign</a> : int * int -> bool
+val <a id='scan' href="#scan-impl">scan</a> : scan radix getc strm
 val <a id='sign' href="#sign-impl">sign</a> : int -> int
 val <a id='toInt' href="#toInt-impl">toInt</a> : int -> int
-val <a id='toString' href="#toString-impl">toString</a> : int -> string
-val <a id='fmt' href="#fmt-impl">fmt</a> : StringCvt.radix -> int -> string
-val <a id='scan' href="#scan-impl">scan</a> : scan radix getc strm
-val <a id='fromLarge' href="#fromLarge-impl">fromLarge</a> : int -> int
 val <a id='toLarge' href="#toLarge-impl">toLarge</a> : int -> int
+val <a id='toString' href="#toString-impl">toString</a> : int -> string
+val <a id='~' href="#~-impl">~</a> : int -> int
 </pre>
 
 <a id="int-impl"></a>
@@ -88,21 +88,6 @@ result is not representable.
 `i - j` is the difference of `i` and `j`. It raises `Overflow` when
 the result is not representable.
 
-<a id="div-impl"></a>
-<h3><code>div</code></h3>
-
-`i div j` returns the greatest integer less than or equal to the
-quotient of `i` by j, i.e., `floor(i / j)`. It raises `Overflow` when
-the result is not representable, or Div when `j = 0`. Note that
-rounding is towards negative infinity, not zero.
-
-<a id="mod-impl"></a>
-<h3><code>mod</code></h3>
-
-`i mod j` returns the remainder of the division of `i` by `j`. It raises
-`Div` when `j = 0`. When defined, `(i mod j)` has the same sign as
-`j`, and `(i div j) * j + (i mod j) = i`.
-
 <a id="<-impl"></a>
 <h3><code><</code></h3>
 
@@ -123,11 +108,6 @@ rounding is towards negative infinity, not zero.
 
 `i >= j` returns true if `i` is greater than or equal to `j`.
 
-<a id="~-impl"></a>
-<h3><code>~</code></h3>
-
-`~ i` returns the negation of `i`.
-
 <a id="abs-impl"></a>
 <h3><code>abs</code></h3>
 
@@ -140,11 +120,36 @@ rounding is towards negative infinity, not zero.
 whether its first argument is less than, equal to, or greater than the
 second.
 
+<a id="div-impl"></a>
+<h3><code>div</code></h3>
+
+`i div j` returns the greatest integer less than or equal to the
+quotient of `i` by j, i.e., `floor(i / j)`. It raises `Overflow` when
+the result is not representable, or Div when `j = 0`. Note that
+rounding is towards negative infinity, not zero.
+
+<a id="fmt-impl"></a>
+<h3><code>fmt</code></h3>
+
+`fmt radix i` returns a string containing a representation of `i` with
+#"~" used as the sign for negative numbers. Formats the string
+according to `radix`; the hexadecimal digits 10 through 15 are
+represented as #"A" through #"F", respectively. No prefix "0x" is
+generated for the hexadecimal representation.
+
+*Not yet implemented.*
+
 <a id="fromInt-impl"></a>
 <h3><code>fromInt</code></h3>
 
 `fromInt i` converts a value from type `int` to the default integer
 type. Raises `Overflow` if the value does not fit.
+
+<a id="fromLarge-impl"></a>
+<h3><code>fromLarge</code></h3>
+
+`fromLarge i` converts a value from the default integer type to type `int`. In Morel,
+this is an identity function as there is only one integer type.
 
 <a id="fromString-impl"></a>
 <h3><code>fromString</code></h3>
@@ -180,6 +185,13 @@ integers, within the limits of the heap size. If `precision` is `SOME
 integers, within the limits of the heap size. If `precision` is `SOME
 (n)`, then we have `minInt` = -2<sup>(n-1)</sup>.
 
+<a id="mod-impl"></a>
+<h3><code>mod</code></h3>
+
+`i mod j` returns the remainder of the division of `i` by `j`. It raises
+`Div` when `j = 0`. When defined, `(i mod j)` has the same sign as
+`j`, and `(i div j) * j + (i mod j) = i`.
+
 <a id="precision-impl"></a>
 <h3><code>precision</code></h3>
 
@@ -214,35 +226,6 @@ most hardware divide instructions, so `rem` may be faster than `mod`.
 `sameSign (i, j)` (or `i.sameSign j`) returns true if `i` and `j` have the same sign. It
 is equivalent to `(sign i = sign j)`.
 
-<a id="sign-impl"></a>
-<h3><code>sign</code></h3>
-
-`sign i` (or `i.sign ()`) returns ~1, 0, or 1 when `i` is less than, equal to, or
-greater than 0, respectively.
-
-<a id="toInt-impl"></a>
-<h3><code>toInt</code></h3>
-
-`toInt i` converts a value from the default integer type to type
-`int`. Raises `Overflow` if the value does not fit.
-
-<a id="toString-impl"></a>
-<h3><code>toString</code></h3>
-
-`toString i` (or `i.toString ()`) converts a `int` into a `string`; equivalent to `(fmt
-StringCvt.DEC r)`.
-
-<a id="fmt-impl"></a>
-<h3><code>fmt</code></h3>
-
-`fmt radix i` returns a string containing a representation of `i` with
-#"~" used as the sign for negative numbers. Formats the string
-according to `radix`; the hexadecimal digits 10 through 15 are
-represented as #"A" through #"F", respectively. No prefix "0x" is
-generated for the hexadecimal representation.
-
-*Not yet implemented.*
-
 <a id="scan-impl"></a>
 <h3><code>scan</code></h3>
 
@@ -255,16 +238,33 @@ can be parsed, but is too large to be represented by type `int`.
 
 *Not yet implemented.*
 
-<a id="fromLarge-impl"></a>
-<h3><code>fromLarge</code></h3>
+<a id="sign-impl"></a>
+<h3><code>sign</code></h3>
 
-`fromLarge i` converts a value from the default integer type to type `int`. In Morel,
-this is an identity function as there is only one integer type.
+`sign i` (or `i.sign ()`) returns ~1, 0, or 1 when `i` is less than, equal to, or
+greater than 0, respectively.
+
+<a id="toInt-impl"></a>
+<h3><code>toInt</code></h3>
+
+`toInt i` converts a value from the default integer type to type
+`int`. Raises `Overflow` if the value does not fit.
 
 <a id="toLarge-impl"></a>
 <h3><code>toLarge</code></h3>
 
 `toLarge i` converts a value of type `int` to the default integer type. In Morel,
 this is an identity function as there is only one integer type.
+
+<a id="toString-impl"></a>
+<h3><code>toString</code></h3>
+
+`toString i` (or `i.toString ()`) converts a `int` into a `string`; equivalent to `(fmt
+StringCvt.DEC r)`.
+
+<a id="~-impl"></a>
+<h3><code>~</code></h3>
+
+`~ i` returns the negation of `i`.
 
 [//]: # (end:lib/int)

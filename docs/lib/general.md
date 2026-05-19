@@ -49,11 +49,11 @@ exception <a id='Size' href="#Size-impl">Size</a>
 exception <a id='Span' href="#Span-impl">Span</a>
 exception <a id='Subscript' href="#Subscript-impl">Subscript</a>
 
-val <a id='exnName' href="#exnName-impl">exnName</a> : exn -> string
-val <a id='exnMessage' href="#exnMessage-impl">exnMessage</a> : exn -> string
-val <a id='o' href="#o-impl">o</a> : ('b -> 'c) * ('a -> 'b) -> 'a -> 'c
 val <a id='before' href="#before-impl">before</a> : 'a * unit -> 'a
+val <a id='exnMessage' href="#exnMessage-impl">exnMessage</a> : exn -> string
+val <a id='exnName' href="#exnName-impl">exnName</a> : exn -> string
 val <a id='ignore' href="#ignore-impl">ignore</a> : 'a -> unit
+val <a id='o' href="#o-impl">o</a> : ('b -> 'c) * ('a -> 'b) -> 'a -> 'c
 </pre>
 
 <a id="exn-impl"></a>
@@ -126,15 +126,11 @@ is raised when an invalid source span is supplied.
 
 is raised when a sequence index is out of bounds.
 
-<a id="exnName-impl"></a>
-<h3><code>exnName</code></h3>
+<a id="before-impl"></a>
+<h3><code>before</code></h3>
 
-`exnName ex` returns a name for the exception `ex`. The name returned may be that
-of any exception constructor aliasing with `ex`. For instance,
-
-<pre>let exception E1; exception E2 = E1 in exnName E2 end</pre>
-
-might evaluate to "E1" or "E2".
+`a before b` returns `a`. It provides a notational shorthand for evaluating `a`,
+then `b`, before returning the value of `a`.
 
 <a id="exnMessage-impl"></a>
 <h3><code>exnMessage</code></h3>
@@ -149,22 +145,26 @@ at least contain the string `exnName ex`.
 exnMessage (OS.SysErr ("No such file", NONE)) =
   "OS.SysErr "No such file""</pre>
 
-<a id="o-impl"></a>
-<h3><code>o</code></h3>
+<a id="exnName-impl"></a>
+<h3><code>exnName</code></h3>
 
-`f o g` is the function composition of `f` and `g`. Thus, `(f o g) a`
-is equivalent to `f (g a)`.
+`exnName ex` returns a name for the exception `ex`. The name returned may be that
+of any exception constructor aliasing with `ex`. For instance,
 
-<a id="before-impl"></a>
-<h3><code>before</code></h3>
+<pre>let exception E1; exception E2 = E1 in exnName E2 end</pre>
 
-`a before b` returns `a`. It provides a notational shorthand for evaluating `a`,
-then `b`, before returning the value of `a`.
+might evaluate to "E1" or "E2".
 
 <a id="ignore-impl"></a>
 <h3><code>ignore</code></h3>
 
 `ignore x` always returns `unit`. The function evaluates its argument
 but throws away the value.
+
+<a id="o-impl"></a>
+<h3><code>o</code></h3>
+
+`f o g` is the function composition of `f` and `g`. Thus, `(f o g) a`
+is equivalent to `f (g a)`.
 
 [//]: # (end:lib/general)

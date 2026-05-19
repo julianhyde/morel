@@ -35,6 +35,10 @@ identified by their Unicode code points.
 <pre>
 eqtype <a id='char' href="#char-impl">char</a>
 
+val <a id='<' href="#<-impl"><</a> : char * char -> bool
+val <a id='<=' href="#<=-impl"><=</a> : char * char -> bool
+val <a id='>' href="#>-impl">></a> : char * char -> bool
+val <a id='>=' href="#>=-impl">>=</a> : char * char -> bool
 val <a id='chr' href="#chr-impl">chr</a> : int -> char
 val <a id='compare' href="#compare-impl">compare</a> : char * char -> order
 val <a id='contains' href="#contains-impl">contains</a> : string -> char -> bool
@@ -54,8 +58,8 @@ val <a id='isPrint' href="#isPrint-impl">isPrint</a> : char -> bool
 val <a id='isPunct' href="#isPunct-impl">isPunct</a> : char -> bool
 val <a id='isSpace' href="#isSpace-impl">isSpace</a> : char -> bool
 val <a id='isUpper' href="#isUpper-impl">isUpper</a> : char -> bool
-val <a id='maxOrd' href="#maxOrd-impl">maxOrd</a> : int
 val <a id='maxChar' href="#maxChar-impl">maxChar</a> : char
+val <a id='maxOrd' href="#maxOrd-impl">maxOrd</a> : int
 val <a id='minChar' href="#minChar-impl">minChar</a> : char
 val <a id='notContains' href="#notContains-impl">notContains</a> : string -> char -> bool
 val <a id='ord' href="#ord-impl">ord</a> : char -> int
@@ -65,16 +69,34 @@ val <a id='toCString' href="#toCString-impl">toCString</a> : char -> string
 val <a id='toLower' href="#toLower-impl">toLower</a> : char -> char
 val <a id='toString' href="#toString-impl">toString</a> : char -> string
 val <a id='toUpper' href="#toUpper-impl">toUpper</a> : char -> char
-val <a id='<' href="#<-impl"><</a> : char * char -> bool
-val <a id='<=' href="#<=-impl"><=</a> : char * char -> bool
-val <a id='>' href="#>-impl">></a> : char * char -> bool
-val <a id='>=' href="#>=-impl">>=</a> : char * char -> bool
 </pre>
 
 <a id="char-impl"></a>
 <h3><code><strong>eqtype</strong> char</code></h3>
 
 is the type of characters.
+
+<a id="<-impl"></a>
+<h3><code><</code></h3>
+
+`c1 < c2` returns true if `c1` is less than `c2` in the character ordering.
+
+<a id="<=-impl"></a>
+<h3><code><=</code></h3>
+
+`c1 <= c2` returns true if `c1` is less than or equal to `c2` in the character
+ordering.
+
+<a id=">-impl"></a>
+<h3><code>></code></h3>
+
+`c1 > c2` returns true if `c1` is greater than `c2` in the character ordering.
+
+<a id=">=-impl"></a>
+<h3><code>>=</code></h3>
+
+`c1 >= c2` returns true if `c1` is greater than or equal to `c2` in the character
+ordering.
 
 <a id="chr-impl"></a>
 <h3><code>chr</code></h3>
@@ -192,15 +214,15 @@ newline, tab, vertical tab, new page).
 
 `isUpper c` (or `c.isUpper ()`) returns true if `c` is an uppercase letter (A to Z).
 
-<a id="maxOrd-impl"></a>
-<h3><code>maxOrd</code></h3>
-
-`maxOrd` is the greatest character code; it equals `ord maxChar`.
-
 <a id="maxChar-impl"></a>
 <h3><code>maxChar</code></h3>
 
 `maxChar` is the greatest character in the ordering `<`.
+
+<a id="maxOrd-impl"></a>
+<h3><code>maxOrd</code></h3>
+
+`maxOrd` is the greatest character code; it equals `ord maxChar`.
 
 <a id="minChar-impl"></a>
 <h3><code>minChar</code></h3>
@@ -257,27 +279,5 @@ StringCvt.ORD r)`.
 
 `toUpper c` (or `c.toUpper ()`) returns the uppercase letter corresponding to `c`, if `c`
 is a letter (a to z or A to Z); otherwise returns `c`.
-
-<a id="<-impl"></a>
-<h3><code><</code></h3>
-
-`c1 < c2` returns true if `c1` is less than `c2` in the character ordering.
-
-<a id="<=-impl"></a>
-<h3><code><=</code></h3>
-
-`c1 <= c2` returns true if `c1` is less than or equal to `c2` in the character
-ordering.
-
-<a id=">-impl"></a>
-<h3><code>></code></h3>
-
-`c1 > c2` returns true if `c1` is greater than `c2` in the character ordering.
-
-<a id=">=-impl"></a>
-<h3><code>>=</code></h3>
-
-`c1 >= c2` returns true if `c1` is greater than or equal to `c2` in the character
-ordering.
 
 [//]: # (end:lib/char)

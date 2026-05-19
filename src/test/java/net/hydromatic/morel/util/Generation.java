@@ -77,7 +77,7 @@ public class Generation {
         for (FnDef fn :
             transformEager(
                 (List<Map<String, Object>>) row.get("functions"),
-                FnDef::create)) {
+                m -> FnDef.create(m, "basis"))) {
           names.add(fn.structure + "." + fn.canonicalName());
         }
       }
@@ -101,7 +101,7 @@ public class Generation {
         for (FnDef fn :
             transformEager(
                 (List<Map<String, Object>>) row.get("functions"),
-                FnDef::create)) {
+                m -> FnDef.create(m, "basis"))) {
           if (fn.method) {
             names.add(fn.structure + "." + fn.canonicalName());
           }
@@ -397,7 +397,8 @@ public class Generation {
         if (functionsObj != null) {
           for (FnDef fn :
               transformEager(
-                  (List<Map<String, Object>>) functionsObj, FnDef::create)) {
+                  (List<Map<String, Object>>) functionsObj,
+                  m -> FnDef.create(m, "basis"))) {
             membersByStructure
                 .computeIfAbsent(fn.structure, k -> new LinkedHashSet<>())
                 .add(fn.canonicalName());
@@ -558,7 +559,6 @@ public class Generation {
     final String description;
     final @Nullable String extra;
     final boolean implemented;
-    final int ordinal;
     final String specified;
     final boolean method;
 
@@ -570,7 +570,6 @@ public class Generation {
         String description,
         String extra,
         boolean implemented,
-        int ordinal,
         String specified,
         boolean method) {
       this.structure = requireNonNull(structure, "structure");
@@ -583,7 +582,6 @@ public class Generation {
       this.description = requireNonNull(description, "description");
       this.extra = extra;
       this.implemented = implemented;
-      this.ordinal = ordinal;
       this.specified = requireNonNull(specified, "specified");
       this.method = method;
     }
@@ -598,7 +596,7 @@ public class Generation {
       return comma >= 0 ? name.substring(0, comma) : name;
     }
 
-    static FnDef create(Map<String, Object> map) {
+    static FnDef create(Map<String, Object> map, String structureSpecified) {
       return new FnDef(
           (String) map.get("structure"),
           (String) map.get("name"),
@@ -607,10 +605,9 @@ public class Generation {
           (String) map.get("description"),
           (String) map.get("extra"),
           first((Boolean) map.get("implemented"), true),
-          map.containsKey("ordinal") ? (Integer) map.get("ordinal") : -1,
           map.containsKey("specified")
               ? (String) map.get("specified")
-              : "basis",
+              : structureSpecified,
           first((Boolean) map.get("method"), false));
     }
   }
@@ -682,21 +679,18 @@ public class Generation {
     final @Nullable String type;
     final String description;
     final boolean implemented;
-    final int ordinal;
 
     ExnDef(
         String structure,
         String name,
         @Nullable String type,
         String description,
-        boolean implemented,
-        int ordinal) {
+        boolean implemented) {
       this.structure = requireNonNull(structure, "structure");
       this.name = requireNonNull(name, "name");
       this.type = type;
       this.description = requireNonNull(description, "description");
       this.implemented = implemented;
-      this.ordinal = ordinal;
     }
 
     String qualifiedName() {
@@ -709,8 +703,7 @@ public class Generation {
           (String) map.get("name"),
           (String) map.get("type"),
           (String) map.get("description"),
-          first((Boolean) map.get("implemented"), true),
-          map.containsKey("ordinal") ? (Integer) map.get("ordinal") : -1);
+          first((Boolean) map.get("implemented"), true));
     }
   }
 
@@ -734,7 +727,7 @@ public class Generation {
       StrDef foundStrDef = null;
       final List<TyDef> tyList = new ArrayList<>();
       final List<ExnDef> exnList = new ArrayList<>();
-      final List<FnDef> fnList = new ArrayList<>();
+      final List<Map<String, Object>> rawFunctions = new ArrayList<>();
       final TomlMapper mapper = new TomlMapper();
       try (MappingIterator<Object> it =
           mapper.readerForMapOf(Object.class).readValues(file)) {
@@ -772,24 +765,32 @@ public class Generation {
               }
             }
           }
-          for (FnDef fn :
-              transformEager(
-                  (List<Map<String, Object>>) row.get("functions"),
-                  FnDef::create)) {
-            if (fn.structure.equals(structure)) {
-              fnList.add(fn);
+          final Object functionsObj = row.get("functions");
+          if (functionsObj != null) {
+            for (Map<String, Object> m :
+                (List<Map<String, Object>>) functionsObj) {
+              if (structure.equals(m.get("structure"))) {
+                rawFunctions.add(m);
+              }
             }
           }
         }
+      }
+      // Now that we know the structure's `specified`, resolve each FnDef.
+      final String structureSpecified =
+          foundStrDef == null ? "basis" : foundStrDef.specified;
+      final List<FnDef> fnList = new ArrayList<>();
+      for (Map<String, Object> m : rawFunctions) {
+        fnList.add(FnDef.create(m, structureSpecified));
       }
       this.strDef =
           requireNonNull(foundStrDef, "structure not found: " + structure);
       this.tyDefs = tyList;
       this.exnDefs = exnList;
-      final Comparator<FnDef> byOrdinal =
-          Comparator.comparingInt(
-                  (FnDef f) -> f.ordinal < 0 ? Integer.MAX_VALUE : f.ordinal)
-              .thenComparing(f -> f.name);
+      // Preserve the order in which entries appear in functions.toml — the
+      // TomlMapper iterates `[[functions]]` blocks in file order. Within
+      // the structure's doc page, basis-specified functions are listed
+      // first, then a "Morel extensions" section.
       this.basisFns = new ArrayList<>();
       this.morelFns = new ArrayList<>();
       for (FnDef fn : fnList) {
@@ -799,8 +800,6 @@ public class Generation {
           basisFns.add(fn);
         }
       }
-      basisFns.sort(byOrdinal);
-      morelFns.sort(byOrdinal);
       this.allFns = new ArrayList<>();
       allFns.addAll(basisFns);
       allFns.addAll(morelFns);
