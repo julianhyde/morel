@@ -20,6 +20,7 @@
  *)
 signature SYS =
 sig
+  [@@@specified "morel"]
 
   (* restores the environment to the initial environment. *)
   val clearEnv : unit -> unit

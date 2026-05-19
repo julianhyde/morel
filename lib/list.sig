@@ -108,10 +108,10 @@ sig
 
   (* Morel extensions *)
   (* Returns the set difference of lists. *)
-  val `except` : 'a list list -> 'a list
+  val `except` : 'a list list -> 'a list [@@specified "morel"]
 
   (* Returns the set intersection of lists. *)
-  val `intersect` : 'a list list -> 'a list
+  val `intersect` : 'a list list -> 'a list [@@specified "morel"]
 
   (* Maps over a list with index; applies f to (index, element) pairs. *)
   val mapi : (int * 'a -> 'b) -> 'a list -> 'b list

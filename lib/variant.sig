@@ -26,6 +26,7 @@
 (* Variant structure signature *)
 signature VARIANT =
 sig
+  [@@@specified "morel"]
   (* The `variant` datatype that can express all Morel values
    * (primitives, lists, bags, vectors, and instances of datatypes).
    *

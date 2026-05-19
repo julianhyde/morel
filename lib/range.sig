@@ -20,6 +20,7 @@
  *)
 signature RANGE =
 sig
+  [@@@specified "morel"]
 
   (* represents a set of values as a normalized list of
    * non-overlapping, non-adjacent ranges. *)

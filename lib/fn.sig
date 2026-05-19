@@ -21,6 +21,7 @@
  *)
 signature FN =
 sig
+  [@@@specified "basis+"]
   (* Returns the value unchanged; the polymorphic identity function. *)
   val id       : 'a -> 'a
 

@@ -1590,12 +1590,15 @@ public class LintTest {
     // BuiltIn side. Each value is (section, entry).
     final Map<String, Map.Entry<String, Map<String, Object>>> tomlByKey =
         new LinkedHashMap<>();
+    // structure → effective specified (from [[structures]]).
+    final Map<String, String> structureSpecifiedDefaults = new HashMap<>();
     final TomlMapper mapper = new TomlMapper();
     try (MappingIterator<Object> it =
         mapper.readerForMapOf(Object.class).readValues(Generation.getFile())) {
       while (it.hasNextValue()) {
         @SuppressWarnings("unchecked")
         final Map<String, Object> row = (Map<String, Object>) it.nextValue();
+        collectStructureDefaults(row, structureSpecifiedDefaults);
         collectTomlRows(row, "functions", tomlByKey);
         collectTomlRows(row, "types", tomlByKey);
         collectTomlRows(row, "exceptions", tomlByKey);
@@ -1607,13 +1610,35 @@ public class LintTest {
         tomlByKey.entrySet()) {
       final String section = e.getValue().getKey();
       final Map<String, Object> entry = e.getValue().getValue();
-      checkTomlEntry(section, entry, sigSpecsByStruct, builtInKeys, errors);
+      checkTomlEntry(
+          section,
+          entry,
+          sigSpecsByStruct,
+          structureSpecifiedDefaults,
+          builtInKeys,
+          errors);
     }
 
     if (!errors.isEmpty()) {
       fail(
           "TOML / .sig divergence (fix functions.toml or the .sig file):\n"
               + String.join("\n", errors));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void collectStructureDefaults(
+      Map<String, Object> row, Map<String, String> defaults) {
+    final Object obj = row.get("structures");
+    if (!(obj instanceof List)) {
+      return;
+    }
+    for (Map<String, Object> s : (List<Map<String, Object>>) obj) {
+      final String name = (String) s.get("name");
+      if (name == null) {
+        continue;
+      }
+      defaults.put(name, (String) s.getOrDefault("specified", "basis"));
     }
   }
 
@@ -1644,6 +1669,7 @@ public class LintTest {
       String section,
       Map<String, Object> entry,
       Map<String, Map<String, SignatureChecker.SpecInfo>> sigSpecsByStruct,
+      Map<String, String> structureSpecifiedDefaults,
       Set<String> builtInKeys,
       List<String> errors) {
     final String structure = (String) entry.get("structure");
@@ -1704,6 +1730,24 @@ public class LintTest {
                     + "or method = true in functions.toml)",
                 structure, name, tomlMethod, spec.method));
       }
+    }
+
+    // Check specified — compare effective values, where TOML defaults to
+    // the structure's specified.
+    final String tomlSpecified =
+        firstNonNull(
+            (String) entry.get("specified"),
+            structureSpecifiedDefaults.get(structure),
+            "basis");
+    if (!tomlSpecified.equals(spec.specified)) {
+      errors.add(
+          format(
+              "%s.%s (%s): specified mismatch — TOML=%s, .sig=%s",
+              structure,
+              name,
+              singular(section),
+              tomlSpecified,
+              spec.specified));
     }
 
     // Check type (functions only; types/exceptions are matched by name only
@@ -1785,6 +1829,17 @@ public class LintTest {
       default:
         return null;
     }
+  }
+
+  /** Returns the first non-null argument. */
+  private static <T> T firstNonNull(T a, T b, T c) {
+    if (a != null) {
+      return a;
+    }
+    if (b != null) {
+      return b;
+    }
+    return c;
   }
 
   private static String singular(String section) {

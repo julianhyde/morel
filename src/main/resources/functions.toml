@@ -51,7 +51,6 @@ bags track multiplicity.
 ordinal = 8
 structure = "Bag"
 name = "@"
-specified = "morel"
 type = "α bag * α bag → α bag"
 prototype = "@ (b1, b2)"
 description = """
@@ -62,7 +61,6 @@ returns the bag that is the concatenation of `b1` and `b2`.
 ordinal = 23
 structure = "Bag"
 name = "all"
-specified = "morel"
 type = "(α → bool) → α bag → bool"
 prototype = "all f b"
 description = """
@@ -76,7 +74,6 @@ an `x` exists and `true` otherwise. It is equivalent to `not(exists
 ordinal = 15
 structure = "Bag"
 name = "app"
-specified = "morel"
 type = "(α → unit) → α bag → unit"
 prototype = "app f b"
 description = """
@@ -87,7 +84,6 @@ applies `f` to the elements of `b`.
 ordinal = 25
 structure = "Bag"
 name = "collate"
-specified = "morel"
 type = "(α * α → order) → α bag * α bag → order"
 prototype = "collate f (l1, l2)"
 description = """
@@ -99,7 +95,6 @@ using the given ordering `f` on the bag elements.
 ordinal = 14
 structure = "Bag"
 name = "concat"
-specified = "morel"
 type = "α bag list → α bag"
 prototype = "concat b"
 description = """
@@ -110,7 +105,6 @@ returns the bag that is the concatenation of all the bags in `b`.
 ordinal = 13
 structure = "Bag"
 name = "drop"
-specified = "morel"
 type = "α bag * int → α bag"
 prototype = "drop (b, i)"
 method = true
@@ -126,7 +120,6 @@ elements of the bag `b`. Raises `Subscript` if `i` < 0 or `i` >
 ordinal = 22
 structure = "Bag"
 name = "exists"
-specified = "morel"
 type = "(α → bool) → α bag → bool"
 prototype = "exists f b"
 description = """
@@ -139,7 +132,6 @@ if such an `x` exists and `false` otherwise.
 ordinal = 19
 structure = "Bag"
 name = "filter"
-specified = "morel"
 type = "(α → bool) → α bag → α bag"
 prototype = "filter f b"
 description = """
@@ -151,7 +143,6 @@ bag of those `x` for which `f x` evaluated to `true`.
 ordinal = 18
 structure = "Bag"
 name = "find"
-specified = "morel"
 type = "(α → bool) → α bag → α option"
 prototype = "find f b"
 description = """
@@ -164,7 +155,6 @@ arbitrary order, until `f x` evaluates to `true`. It returns `SOME
 ordinal = 21
 structure = "Bag"
 name = "fold"
-specified = "morel"
 type = "(α * β → β) → β → α bag → β"
 prototype = "fold f init (bag \\[x1, x2, ..., xn\\])"
 description = """
@@ -177,7 +167,6 @@ or `init` if the bag is empty.
 ordinal = 5
 structure = "Bag"
 name = "fromList"
-specified = "morel"
 type = "α list → α bag"
 prototype = "fromList l"
 description = """
@@ -190,7 +179,6 @@ and whose elements are the same as those of `l`. Raises `Size` if
 ordinal = 11
 structure = "Bag"
 name = "getItem"
-specified = "morel"
 type = "α bag → * (α * α bag) option"
 prototype = "getItem b"
 method = true
@@ -204,7 +192,6 @@ choose/remove the same arbitrary element).
 ordinal = 9
 structure = "Bag"
 name = "hd"
-specified = "morel"
 type = "α bag → α"
 prototype = "hd b"
 method = true
@@ -217,7 +204,6 @@ is `nil`.
 ordinal = 7
 structure = "Bag"
 name = "length"
-specified = "morel"
 type = "α bag → int"
 prototype = "length b"
 method = true
@@ -229,7 +215,6 @@ returns the number of elements in the bag `b`.
 ordinal = 16
 structure = "Bag"
 name = "map"
-specified = "morel"
 type = "(α → β) → α bag → β bag"
 prototype = "map f b"
 description = """
@@ -243,7 +228,6 @@ results. This is equivalent to:
 ordinal = 17
 structure = "Bag"
 name = "mapPartial"
-specified = "morel"
 type = "(α → β option) → α bag → β bag"
 prototype = "mapPartial f b"
 description = """
@@ -259,7 +243,6 @@ defined for an element of `b` if `f` applied to the element returns
 ordinal = 3
 structure = "Bag"
 name = "nil"
-specified = "morel"
 type = "α bag"
 prototype = "nil"
 description = """
@@ -269,7 +252,6 @@ is the empty bag.
 [[functions]]
 structure = "Bag"
 name = "nth"
-specified = "morel"
 type = "α bag * int → α"
 prototype = "nth (b, i)"
 method = true
@@ -283,7 +265,6 @@ b`, ignoring exceptions.
 ordinal = 4
 structure = "Bag"
 name = "null"
-specified = "morel"
 type = "α bag → bool"
 prototype = "null b"
 method = true
@@ -295,7 +276,6 @@ returns `true` if the bag `b` is empty.
 ordinal = 20
 structure = "Bag"
 name = "partition"
-specified = "morel"
 type = "(α → bool) → α bag → α bag * α bag"
 prototype = "partition f b"
 description = """
@@ -309,7 +289,6 @@ for which `f x` evaluated to `false`.
 ordinal = 24
 structure = "Bag"
 name = "tabulate"
-specified = "morel"
 type = "int * (int → α) → α bag"
 prototype = "tabulate (n, f)"
 description = """
@@ -325,7 +304,6 @@ Raises `Size` if `n` < 0.
 ordinal = 12
 structure = "Bag"
 name = "take"
-specified = "morel"
 type = "α bag * int → α bag"
 prototype = "take (b, i)"
 method = true
@@ -339,7 +317,6 @@ b)` = `b`.
 ordinal = 10
 structure = "Bag"
 name = "tl"
-specified = "morel"
 type = "α bag → α bag"
 prototype = "tl b"
 method = true
@@ -352,7 +329,6 @@ returns all but one arbitrary element of bag `b`. Raises
 ordinal = 6
 structure = "Bag"
 name = "toList"
-specified = "morel"
 type = "α bag → α list"
 prototype = "toList b"
 method = true
@@ -383,7 +359,6 @@ is the type of boolean values `true` and `false`.
 structure = "Bool"
 ordinal = 0
 name = "true"
-specified = "basis"
 type = "bool"
 prototype = "true"
 description = """
@@ -394,7 +369,6 @@ is literally true.
 structure = "Bool"
 ordinal = 1
 name = "false"
-specified = "basis"
 type = "bool"
 prototype = "false"
 description = """
@@ -405,7 +379,6 @@ is literally false.
 structure = "Bool"
 ordinal = 2
 name = "fromString"
-specified = "basis"
 type = "string → bool option"
 prototype = "fromString s"
 description = """
@@ -430,7 +403,6 @@ structure = "Bool"
 ordinal = 4
 syntax = "prefix"
 name = "not"
-specified = "basis"
 type = "bool → bool"
 prototype = "not b"
 method = true
@@ -442,7 +414,6 @@ returns the logical inverse of `b`.
 structure = "Bool"
 ordinal = 5
 name = "toString"
-specified = "basis"
 type = "bool → string"
 prototype = "toString b"
 method = true
@@ -464,7 +435,6 @@ identified by their Unicode code points.
 [[functions]]
 structure = "Char"
 name = "<"
-specified = "basis"
 syntax = "infix"
 type = "char * char → bool"
 prototype = "c1 < c2"
@@ -475,7 +445,6 @@ returns true if `c1` is less than `c2` in the character ordering.
 [[functions]]
 structure = "Char"
 name = "<="
-specified = "basis"
 syntax = "infix"
 type = "char * char → bool"
 prototype = "c1 <= c2"
@@ -487,7 +456,6 @@ ordering.
 [[functions]]
 structure = "Char"
 name = ">"
-specified = "basis"
 syntax = "infix"
 type = "char * char → bool"
 prototype = "c1 > c2"
@@ -498,7 +466,6 @@ returns true if `c1` is greater than `c2` in the character ordering.
 [[functions]]
 structure = "Char"
 name = ">="
-specified = "basis"
 syntax = "infix"
 type = "char * char → bool"
 prototype = "c1 >= c2"
@@ -519,7 +486,6 @@ is the type of characters.
 ordinal = 26
 structure = "Char"
 name = "chr"
-specified = "basis"
 type = "int → char"
 prototype = "chr i"
 description = """
@@ -531,7 +497,6 @@ returns the character whose code is `i`. Raises `Chr` if `i` <
 ordinal = 27
 structure = "Char"
 name = "compare"
-specified = "basis"
 type = "char * char → order"
 prototype = "compare (c1, c2)"
 method = true
@@ -545,7 +510,6 @@ second.
 ordinal = 28
 structure = "Char"
 name = "contains"
-specified = "basis"
 type = "string → char → bool"
 prototype = "contains s c"
 description = """
@@ -561,7 +525,6 @@ given character.
 ordinal = 29
 structure = "Char"
 name = "fromCString"
-specified = "basis"
 type = "string → char option"
 prototype = "fromCString s"
 description = """
@@ -575,7 +538,6 @@ initial whitespace; otherwise, it returns `NONE`. Equivalent to
 ordinal = 30
 structure = "Char"
 name = "fromInt"
-specified = "basis"
 type = "int → char option"
 prototype = "fromInt i"
 description = """
@@ -587,7 +549,6 @@ or `i` > `maxOrd`.
 ordinal = 31
 structure = "Char"
 name = "fromString"
-specified = "basis"
 type = "string → char option"
 prototype = "fromString s"
 description = """
@@ -600,7 +561,6 @@ the string `s`. Does not skip leading whitespace. For instance,
 ordinal = 32
 structure = "Char"
 name = "isAlpha"
-specified = "basis"
 type = "char → bool"
 prototype = "isAlpha c"
 method = true
@@ -612,7 +572,6 @@ returns true if `c` is a letter (lowercase or uppercase).
 ordinal = 33
 structure = "Char"
 name = "isAlphaNum"
-specified = "basis"
 type = "char → bool"
 prototype = "isAlphaNum c"
 method = true
@@ -625,7 +584,6 @@ decimal digit).
 ordinal = 34
 structure = "Char"
 name = "isAscii"
-specified = "basis"
 type = "char → bool"
 prototype = "isAscii c"
 method = true
@@ -637,7 +595,6 @@ returns true if 0 ≤ `ord c` ≤ 127 `c`.
 ordinal = 35
 structure = "Char"
 name = "isCntrl"
-specified = "basis"
 type = "char → bool"
 prototype = "isCntrl c"
 method = true
@@ -650,7 +607,6 @@ returns true if `c` is a control character, that is, if
 ordinal = 36
 structure = "Char"
 name = "isDigit"
-specified = "basis"
 type = "char → bool"
 prototype = "isDigit c"
 method = true
@@ -662,7 +618,6 @@ returns true if `c` is a decimal digit (0 to 9).
 ordinal = 37
 structure = "Char"
 name = "isGraph"
-specified = "basis"
 type = "char → bool"
 prototype = "isGraph c"
 method = true
@@ -675,7 +630,6 @@ is printable and not a whitespace character.
 ordinal = 38
 structure = "Char"
 name = "isHexDigit"
-specified = "basis"
 type = "char → bool"
 prototype = "isHexDigit c"
 method = true
@@ -687,7 +641,6 @@ returns true if `c` is a hexadecimal digit.
 ordinal = 39
 structure = "Char"
 name = "isLower"
-specified = "basis"
 type = "char → bool"
 prototype = "isLower c"
 method = true
@@ -700,7 +653,6 @@ f or A to F).
 ordinal = 40
 structure = "Char"
 name = "isOctDigit"
-specified = "basis"
 type = "char → bool"
 prototype = "isOctDigit c"
 description = """
@@ -711,7 +663,6 @@ returns true if `c` is an octal digit.
 ordinal = 41
 structure = "Char"
 name = "isPrint"
-specified = "basis"
 type = "char → bool"
 prototype = "isPrint c"
 method = true
@@ -724,7 +675,6 @@ visible).
 ordinal = 42
 structure = "Char"
 name = "isPunct"
-specified = "basis"
 type = "char → bool"
 prototype = "isPunct c"
 method = true
@@ -737,7 +687,6 @@ graphical but not alphanumeric.
 ordinal = 43
 structure = "Char"
 name = "isSpace"
-specified = "basis"
 type = "char → bool"
 prototype = "isSpace c"
 method = true
@@ -750,7 +699,6 @@ newline, tab, vertical tab, new page).
 ordinal = 44
 structure = "Char"
 name = "isUpper"
-specified = "basis"
 type = "char → bool"
 prototype = "isUpper c"
 method = true
@@ -762,7 +710,6 @@ returns true if `c` is an uppercase letter (A to Z).
 ordinal = 47
 structure = "Char"
 name = "maxChar"
-specified = "basis"
 type = "char"
 prototype = "maxChar"
 description = """
@@ -773,7 +720,6 @@ is the greatest character in the ordering `<`.
 ordinal = 45
 structure = "Char"
 name = "maxOrd"
-specified = "basis"
 type = "int"
 prototype = "maxOrd"
 description = """
@@ -784,7 +730,6 @@ is the greatest character code; it equals `ord maxChar`.
 ordinal = 48
 structure = "Char"
 name = "minChar"
-specified = "basis"
 type = "char"
 prototype = "minChar"
 description = """
@@ -798,7 +743,6 @@ integers, within the limits of the heap size. If `precision` is `SOME
 ordinal = 49
 structure = "Char"
 name = "notContains"
-specified = "basis"
 type = "string → char → bool"
 prototype = "notContains s c"
 description = """
@@ -811,7 +755,6 @@ in the same way as `Char.contains`.
 ordinal = 50
 structure = "Char"
 name = "ord"
-specified = "basis"
 type = "char → int"
 prototype = "ord c"
 method = true
@@ -823,7 +766,6 @@ returns the code of character `c`.
 ordinal = 50
 structure = "Char"
 name = "pred"
-specified = "basis"
 type = "char → char"
 prototype = "pred c"
 method = true
@@ -836,7 +778,6 @@ returns the predecessor of `c`. Raises `Subscript` if `c` is
 ordinal = 51
 structure = "Char"
 name = "succ"
-specified = "basis"
 type = "char → char"
 prototype = "succ c"
 method = true
@@ -849,7 +790,6 @@ returns the character immediately following `c`, or raises
 ordinal = 52
 structure = "Char"
 name = "toCString"
-specified = "basis"
 type = "char → string"
 prototype = "toCString c"
 method = true
@@ -862,7 +802,6 @@ StringCvt.ORD r)`.
 ordinal = 53
 structure = "Char"
 name = "toLower"
-specified = "basis"
 type = "char → char"
 prototype = "toLower c"
 method = true
@@ -875,7 +814,6 @@ is a letter (a to z or A to Z); otherwise returns `c`.
 ordinal = 54
 structure = "Char"
 name = "toString"
-specified = "basis"
 type = "char → string"
 prototype = "toString c"
 method = true
@@ -888,7 +826,6 @@ StringCvt.ORD r)`.
 ordinal = 55
 structure = "Char"
 name = "toUpper"
-specified = "basis"
 type = "char → char"
 prototype = "toUpper c"
 method = true
@@ -911,7 +848,6 @@ and execute Datalog programs within Morel.
 [[functions]]
 structure = "Datalog"
 name = "execute"
-specified = "morel"
 type = "string → variant"
 prototype = "execute program"
 description = """
@@ -921,7 +857,6 @@ executes a Datalog program and returns formatted output as a variant.
 [[functions]]
 structure = "Datalog"
 name = "translate"
-specified = "morel"
 type = "string → string option"
 prototype = "translate program"
 description = """
@@ -932,7 +867,6 @@ code` if valid or `NONE` if invalid.
 [[functions]]
 structure = "Datalog"
 name = "validate"
-specified = "morel"
 type = "string → string"
 prototype = "validate program"
 description = """
@@ -944,7 +878,6 @@ message.
 
 [[structures]]
 name = "Date"
-specified = "basis"
 description = "Calendar date and time values."
 overview = """
 The `Date` structure provides an abstract type for calendar dates and
@@ -964,7 +897,6 @@ is raised when a date cannot be constructed from the given fields
 [[functions]]
 structure = "Date"
 name = "compare"
-specified = "basis"
 type = "date * date → order"
 prototype = "compare (d1, d2)"
 method = true
@@ -976,7 +908,6 @@ than, equal to, or greater than `d2` (comparing instants in time).
 [[functions]]
 structure = "Date"
 name = "date"
-specified = "basis"
 type = "{day:int, hour:int, minute:int, month:month, offset:time option, second:int, year:int} → date"
 prototype = "date {year, month, day, hour, minute, second, offset}"
 description = """
@@ -997,7 +928,6 @@ with an associated timezone offset.
 [[functions]]
 structure = "Date"
 name = "day"
-specified = "basis"
 type = "date → int"
 prototype = "day d"
 method = true
@@ -1008,7 +938,6 @@ returns the day of the month of `d`, in the range `[1, 31]`.
 [[functions]]
 structure = "Date"
 name = "fmt"
-specified = "basis"
 type = "string → date → string"
 prototype = "fmt s d"
 description = """
@@ -1021,7 +950,6 @@ format codes include `%Y` (4-digit year), `%m` (2-digit month),
 [[functions]]
 structure = "Date"
 name = "fromString"
-specified = "basis"
 type = "string → date option"
 prototype = "fromString s"
 description = """
@@ -1033,7 +961,6 @@ Returns `SOME d` if successful, `NONE` otherwise.
 [[functions]]
 structure = "Date"
 name = "fromTimeLocal"
-specified = "basis"
 type = "time → date"
 prototype = "fromTimeLocal t"
 description = """
@@ -1043,7 +970,6 @@ converts the time value `t` to a date in the local timezone.
 [[functions]]
 structure = "Date"
 name = "fromTimeUniv"
-specified = "basis"
 type = "time → date"
 prototype = "fromTimeUniv t"
 description = """
@@ -1053,7 +979,6 @@ converts the time value `t` to a date in UTC.
 [[functions]]
 structure = "Date"
 name = "hour"
-specified = "basis"
 type = "date → int"
 prototype = "hour d"
 method = true
@@ -1064,7 +989,6 @@ returns the hour of `d`, in the range `[0, 23]`.
 [[functions]]
 structure = "Date"
 name = "isDst"
-specified = "basis"
 type = "date → bool option"
 prototype = "isDst d"
 method = true
@@ -1076,7 +1000,6 @@ not, or `NONE` if the information is not available.
 [[functions]]
 structure = "Date"
 name = "localOffset"
-specified = "basis"
 type = "unit → time"
 prototype = "localOffset ()"
 description = """
@@ -1087,7 +1010,6 @@ returns the offset of the local timezone from UTC as a `time` value
 [[functions]]
 structure = "Date"
 name = "minute"
-specified = "basis"
 type = "date → int"
 prototype = "minute d"
 method = true
@@ -1098,7 +1020,6 @@ returns the minute of `d`, in the range `[0, 59]`.
 [[functions]]
 structure = "Date"
 name = "month"
-specified = "basis"
 type = "date → month"
 prototype = "month d"
 method = true
@@ -1117,7 +1038,6 @@ is the type of month values.
 [[functions]]
 structure = "Date"
 name = "second"
-specified = "basis"
 type = "date → int"
 prototype = "second d"
 method = true
@@ -1128,7 +1048,6 @@ returns the second of `d`, in the range `[0, 59]`.
 [[functions]]
 structure = "Date"
 name = "toString"
-specified = "basis"
 type = "date → string"
 prototype = "toString d"
 method = true
@@ -1140,7 +1059,6 @@ for example `"Thu Jan  1 00:00:00 1970"`.
 [[functions]]
 structure = "Date"
 name = "toTime"
-specified = "basis"
 type = "date → time"
 prototype = "toTime d"
 method = true
@@ -1151,7 +1069,6 @@ converts `d` to a `time` value (nanoseconds since the Unix epoch).
 [[functions]]
 structure = "Date"
 name = "weekDay"
-specified = "basis"
 type = "date → weekday"
 prototype = "weekDay d"
 method = true
@@ -1170,7 +1087,6 @@ is the type of weekday values.
 [[functions]]
 structure = "Date"
 name = "year"
-specified = "basis"
 type = "date → int"
 prototype = "year d"
 method = true
@@ -1181,7 +1097,6 @@ returns the year of `d`.
 [[functions]]
 structure = "Date"
 name = "yearDay"
-specified = "basis"
 type = "date → int"
 prototype = "yearDay d"
 method = true
@@ -1195,7 +1110,7 @@ returns the day of the year of `d`, in the range `[0, 365]`.
 
 [[structures]]
 name = "Either"
-specified = "morel"
+specified = "basis+"
 description = "Values that are one of two types."
 overview = """
 The `Either` structure provides a polymorphic disjoint-sum type
@@ -1208,7 +1123,6 @@ such values.
 ordinal = 8
 structure = "Either"
 name = "app"
-specified = "basis+"
 type = "('left -> unit) * ('right -> unit) -> ('left, 'right) either -> unit"
 prototype = "app (fl, fr) sm"
 description = """
@@ -1220,7 +1134,6 @@ of right values.
 ordinal = 9
 structure = "Either"
 name = "appLeft"
-specified = "basis+"
 type = "('left -> unit) -> ('left, 'right) either -> unit"
 prototype = "appLeft f sm"
 description = """
@@ -1231,7 +1144,6 @@ applies `f` to the contents of left values and ignores right values.
 ordinal = 10
 structure = "Either"
 name = "appRight"
-specified = "basis+"
 type = "('right -> unit) -> ('left, 'right) either -> unit"
 prototype = "appRight f sm"
 description = """
@@ -1242,7 +1154,6 @@ applies `f` to the contents of right values and ignores left values.
 ordinal = 3
 structure = "Either"
 name = "asLeft"
-specified = "basis+"
 type = "('left, 'right) either → 'left option"
 prototype = "asLeft sm"
 method = true
@@ -1255,7 +1166,6 @@ otherwise it returns `NONE`.
 ordinal = 4
 structure = "Either"
 name = "asRight"
-specified = "basis+"
 type = "('left, 'right) either → 'right option"
 prototype = "asRight sm"
 method = true
@@ -1277,7 +1187,6 @@ is the type of disjoint-sum values; `INL v` represents a left value and
 ordinal = 11
 structure = "Either"
 name = "fold"
-specified = "basis+"
 type = "('left * 'b -> 'b) * ('right * 'b -> 'b) -> 'b -> ('left, 'right) either -> 'b"
 prototype = "fold (fl, fr) init sm"
 description = """
@@ -1290,7 +1199,6 @@ value).
 ordinal = 1
 structure = "Either"
 name = "isLeft"
-specified = "basis+"
 type = "('left, 'right) either → bool"
 prototype = "isLeft sm"
 method = true
@@ -1302,7 +1210,6 @@ returns true if `sm` is a left value.
 ordinal = 2
 structure = "Either"
 name = "isRight"
-specified = "basis+"
 type = "('left, 'right) either → bool"
 prototype = "isRight sm"
 method = true
@@ -1314,7 +1221,6 @@ returns true if `sm` is a right value.
 ordinal = 5
 structure = "Either"
 name = "map"
-specified = "basis+"
 type = "('ldom -> 'lrng) * ('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('lrng, 'rrng) either"
 prototype = "map (fl, fr) sm"
 description = """
@@ -1326,7 +1232,6 @@ of right values.
 ordinal = 6
 structure = "Either"
 name = "mapLeft"
-specified = "basis+"
 type = "('ldom -> 'lrng) -> ('ldom, 'rdom) either -> ('lrng, 'rdom) either"
 prototype = "mapLeft f sm"
 description = """
@@ -1338,7 +1243,6 @@ identity on right values.
 ordinal = 7
 structure = "Either"
 name = "mapRight"
-specified = "basis+"
 type = "('rdom -> 'rrng) -> ('ldom, 'rdom) either -> ('ldom, 'rrng) either"
 prototype = "mapRight f sm"
 description = """
@@ -1350,7 +1254,6 @@ identity on left values.
 ordinal = 13
 structure = "Either"
 name = "partition"
-specified = "basis+"
 type = "('left, 'right) either list -> ('left list * 'right list)"
 prototype = "partition sms"
 description = """
@@ -1362,7 +1265,6 @@ list of right values.
 ordinal = 12
 structure = "Either"
 name = "proj"
-specified = "basis+"
 type = "('a, 'a) either -> 'a"
 prototype = "proj sm"
 method = true
@@ -1376,6 +1278,7 @@ projects out the contents of `sm`.
 
 [[structures]]
 name = "Fn"
+specified = "basis+"
 description = "Higher-order function combinators."
 overview = """
 The `Fn` structure provides combinators for working with function values,
@@ -1386,7 +1289,6 @@ including application, composition, currying, and fixpoint operators.
 ordinal = 3
 structure = "Fn"
 name = "apply"
-specified = "basis+"
 type = "(α → β) * α → β"
 prototype = "apply (f, x)"
 description = """
@@ -1397,7 +1299,6 @@ applies the function `f` to `x`. Thus, it is equivalent to `f x`.
 ordinal = 2
 structure = "Fn"
 name = "const"
-specified = "basis+"
 type = "α → β → α"
 prototype = "const x y"
 description = """
@@ -1408,7 +1309,6 @@ returns the value `x`.
 ordinal = 5
 structure = "Fn"
 name = "curry"
-specified = "basis+"
 type = "(α * β → γ) → α → β → γ"
 prototype = "curry f x y"
 description = """
@@ -1420,7 +1320,6 @@ the binary function `f` into curried form.
 ordinal = 9
 structure = "Fn"
 name = "equal"
-specified = "basis+"
 type = "α → α → bool"
 prototype = "equal a b"
 description = """
@@ -1432,7 +1331,6 @@ polymorphic equality function (`=`).
 ordinal = 7
 structure = "Fn"
 name = "flip"
-specified = "basis+"
 type = "(α * β → γ) → β * α → γ"
 prototype = "flip f (x, y)"
 description = """
@@ -1444,7 +1342,6 @@ of the binary function `f`.
 ordinal = 1
 structure = "Fn"
 name = "id"
-specified = "basis+"
 type = "α → α"
 prototype = "id x"
 description = """
@@ -1455,7 +1352,6 @@ returns the value `x`. (`id` is the polymorphic identity function.)
 ordinal = 10
 structure = "Fn"
 name = "notEqual"
-specified = "basis+"
 type = "α → α → bool"
 prototype = "notEqual a b"
 description = """
@@ -1467,7 +1363,6 @@ the polymorphic inequality function (`<>`).
 ordinal = 4
 structure = "Fn"
 name = "o"
-specified = "basis+"
 type = "(β → γ) * (α → β) → α → γ"
 prototype = "f o g"
 description = """
@@ -1480,7 +1375,6 @@ is equivalent to `f (g a)`. This function is the same as the global
 ordinal = 8
 structure = "Fn"
 name = "repeat"
-specified = "basis+"
 type = "int → (α → α) → α → α"
 prototype = "repeat n f"
 description = """
@@ -1493,7 +1387,6 @@ it raises the exception `Domain`.
 ordinal = 6
 structure = "Fn"
 name = "uncurry"
-specified = "basis+"
 type = "(α → β → γ) → α * β → γ"
 prototype = "ucurry f (x, y)"
 description = """
@@ -1591,7 +1484,6 @@ is raised when a sequence index is out of bounds.
 ordinal = 55
 structure = "General"
 name = "before"
-specified = "basis"
 type = "α * unit → α"
 prototype = "a before b"
 description = """
@@ -1612,7 +1504,6 @@ of this type, and the `raise` and `handle` constructs operate on it.
 ordinal = 53
 structure = "General"
 name = "exnMessage"
-specified = "basis"
 type = "exn → string"
 prototype = "exnMessage ex"
 description = """
@@ -1631,7 +1522,6 @@ exnMessage (OS.SysErr ("No such file", NONE)) =
 ordinal = 52
 structure = "General"
 name = "exnName"
-specified = "basis"
 type = "exn → string"
 prototype = "exnName ex"
 description = """
@@ -1646,7 +1536,6 @@ might evaluate to "E1" or "E2"."""
 ordinal = 56
 structure = "General"
 name = "ignore"
-specified = "basis"
 type = "α → unit"
 prototype = "ignore x"
 description = """
@@ -1658,7 +1547,6 @@ but throws away the value.
 ordinal = 54
 structure = "General"
 name = "o"
-specified = "basis"
 type = "(β → γ) * (α → β) → α → γ"
 prototype = "f o g"
 description = """
@@ -1746,7 +1634,6 @@ operations for the default fixed-precision integer type.
 ordinal = 60
 structure = "Int"
 name = "*"
-specified = "basis"
 type = "int * int → int"
 prototype = "i * j"
 description = """
@@ -1758,7 +1645,6 @@ result is not representable.
 ordinal = 61
 structure = "Int"
 name = "+"
-specified = "basis"
 type = "int * int → int"
 prototype = "i + j"
 description = """
@@ -1770,7 +1656,6 @@ result is not representable.
 ordinal = 62
 structure = "Int"
 name = "-"
-specified = "basis"
 type = "int * int → int"
 prototype = "i - j"
 description = """
@@ -1782,7 +1667,6 @@ the result is not representable.
 ordinal = 65
 structure = "Int"
 name = "<"
-specified = "basis"
 type = "int * int → bool"
 prototype = "i < j"
 description = """
@@ -1793,7 +1677,6 @@ returns true if `i` is less than `j`.
 ordinal = 66
 structure = "Int"
 name = "<="
-specified = "basis"
 type = "int * int → bool"
 prototype = "i <= j"
 description = """
@@ -1804,7 +1687,6 @@ returns true if `i` is less than or equal to `j`.
 ordinal = 67
 structure = "Int"
 name = ">"
-specified = "basis"
 type = "int * int → bool"
 prototype = "i > j"
 description = """
@@ -1815,7 +1697,6 @@ returns true if `i` is greater than `j`.
 ordinal = 68
 structure = "Int"
 name = ">="
-specified = "basis"
 type = "int * int → bool"
 prototype = "i >= j"
 description = """
@@ -1826,7 +1707,6 @@ returns true if `i` is greater than or equal to `j`.
 ordinal = 70
 structure = "Int"
 name = "abs"
-specified = "basis"
 type = "int → int"
 prototype = "abs i"
 method = true
@@ -1838,7 +1718,6 @@ returns the absolute value of `i`.
 ordinal = 71
 structure = "Int"
 name = "compare"
-specified = "basis"
 type = "int * int → order"
 prototype = "compare (i, j)"
 method = true
@@ -1852,7 +1731,6 @@ second.
 ordinal = 63
 structure = "Int"
 name = "div"
-specified = "basis"
 type = "int * int → int"
 prototype = "i div j"
 description = """
@@ -1866,7 +1744,6 @@ rounding is towards negative infinity, not zero.
 ordinal = 239
 structure = "Int"
 name = "fmt"
-specified = "basis"
 type = "StringCvt.radix → int → string"
 implemented = false
 prototype = "fmt radix i"
@@ -1882,7 +1759,6 @@ generated for the hexadecimal representation.
 ordinal = 72
 structure = "Int"
 name = "fromInt, int"
-specified = "basis"
 type = "int → int"
 prototype = "fromInt i"
 description = """
@@ -1893,7 +1769,6 @@ type. Raises `Overflow` if the value does not fit.
 [[functions]]
 structure = "Int"
 name = "fromLarge"
-specified = "basis"
 type = "int → int"
 prototype = "fromLarge i"
 description = """
@@ -1905,7 +1780,6 @@ this is an identity function as there is only one integer type.
 ordinal = 73
 structure = "Int"
 name = "fromString"
-specified = "basis"
 type = "string → int option"
 prototype = "fromString s"
 description = """
@@ -1927,7 +1801,6 @@ is the type of fixed-precision integers.
 ordinal = 74
 structure = "Int"
 name = "max"
-specified = "basis"
 type = "int * int → int"
 prototype = "max (i, j)"
 method = true
@@ -1939,7 +1812,6 @@ returns the larger of the arguments.
 ordinal = 75
 structure = "Int"
 name = "maxInt"
-specified = "basis"
 type = "int option"
 prototype = "maxInt"
 description = """
@@ -1953,7 +1825,6 @@ integers, within the limits of the heap size. If `precision` is `SOME
 ordinal = 76
 structure = "Int"
 name = "min"
-specified = "basis"
 type = "int * int → int"
 prototype = "min (i, j)"
 method = true
@@ -1965,7 +1836,6 @@ returns the smaller of the arguments.
 ordinal = 77
 structure = "Int"
 name = "minInt"
-specified = "basis"
 type = "int option"
 prototype = "minInt"
 description = """
@@ -1979,7 +1849,6 @@ integers, within the limits of the heap size. If `precision` is `SOME
 ordinal = 64
 structure = "Int"
 name = "mod"
-specified = "basis"
 type = "int * int → int"
 prototype = "i mod j"
 description = """
@@ -1992,7 +1861,6 @@ returns the remainder of the division of `i` by `j`. It raises
 ordinal = 79
 structure = "Int"
 name = "precision"
-specified = "basis"
 type = "int option"
 prototype = "precision"
 description = """
@@ -2006,7 +1874,6 @@ necessarily be a power of two.
 ordinal = 80
 structure = "Int"
 name = "quot"
-specified = "basis"
 type = "int * int → int"
 prototype = "quot (i, j)"
 method = true
@@ -2025,7 +1892,6 @@ hardware divide instructions, so `quot` may be faster than `div`.
 ordinal = 81
 structure = "Int"
 name = "rem"
-specified = "basis"
 type = "int * int → int"
 prototype = "rem (i, j)"
 method = true
@@ -2040,7 +1906,6 @@ most hardware divide instructions, so `rem` may be faster than `mod`.
 ordinal = 82
 structure = "Int"
 name = "sameSign"
-specified = "basis"
 type = "int * int → bool"
 prototype = "sameSign (i, j)"
 method = true
@@ -2053,7 +1918,6 @@ is equivalent to `(sign i = sign j)`.
 ordinal = 240
 structure = "Int"
 name = "scan"
-specified = "basis"
 type = "scan radix getc strm"
 implemented = false
 prototype = "scan radix getc strm"
@@ -2070,7 +1934,6 @@ can be parsed, but is too large to be represented by type `int`.
 ordinal = 83
 structure = "Int"
 name = "sign"
-specified = "basis"
 type = "int → int"
 prototype = "sign i"
 method = true
@@ -2083,7 +1946,6 @@ greater than 0, respectively.
 ordinal = 84
 structure = "Int"
 name = "toInt"
-specified = "basis"
 type = "int → int"
 prototype = "toInt i"
 description = """
@@ -2094,7 +1956,6 @@ converts a value from the default integer type to type
 [[functions]]
 structure = "Int"
 name = "toLarge"
-specified = "basis"
 type = "int → int"
 prototype = "toLarge i"
 description = """
@@ -2106,7 +1967,6 @@ this is an identity function as there is only one integer type.
 ordinal = 85
 structure = "Int"
 name = "toString"
-specified = "basis"
 type = "int → string"
 prototype = "toString i"
 method = true
@@ -2119,7 +1979,6 @@ StringCvt.DEC r)`.
 ordinal = 69
 structure = "Int"
 name = "~"
-specified = "basis"
 type = "int → int"
 prototype = "~ i"
 description = """
@@ -2161,7 +2020,6 @@ Morel REPL, such as loading source files.
 ordinal = 58
 structure = "Interact"
 name = "use"
-specified = "morel"
 type = "string → unit"
 prototype = "use f"
 description = """
@@ -2172,7 +2030,6 @@ loads source text from the file named `f`.
 ordinal = 59
 structure = "Interact"
 name = "useSilently"
-specified = "morel"
 type = "string → unit"
 prototype = "useSilently f"
 description = """
@@ -2196,7 +2053,6 @@ and right-to-left variants.
 ordinal = 89
 structure = "List"
 name = "@"
-specified = "basis"
 type = "α list * α list → α list"
 prototype = "l1 @ l2"
 description = """
@@ -2215,7 +2071,6 @@ empty list.
 ordinal = 113
 structure = "List"
 name = "all"
-specified = "basis"
 type = "(α → bool) → α list → bool"
 prototype = "all f l"
 description = """
@@ -2229,7 +2084,6 @@ such an `x` exists and `true` otherwise. It is equivalent to
 ordinal = 103
 structure = "List"
 name = "app"
-specified = "basis"
 type = "(α → unit) → α list → unit"
 prototype = "app f l"
 description = """
@@ -2240,7 +2094,6 @@ applies `f` to the elements of `l`, from left to right.
 ordinal = 90
 structure = "List"
 name = "at"
-specified = "basis"
 type = "α list * α list → α list"
 prototype = "at (l1, l2)"
 description = """
@@ -2251,7 +2104,6 @@ is equivalent to "l1 @ l2".
 ordinal = 115
 structure = "List"
 name = "collate"
-specified = "basis"
 type = "(α * α → order) → α list * α list → order"
 prototype = "collate f (l1, l2)"
 description = """
@@ -2263,7 +2115,6 @@ lists using the given ordering `f` on the list elements.
 ordinal = 99
 structure = "List"
 name = "concat"
-specified = "basis"
 type = "α list list → α list"
 prototype = "concat l"
 description = """
@@ -2275,7 +2126,6 @@ in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
 ordinal = 97
 structure = "List"
 name = "drop"
-specified = "basis"
 type = "α list * int → α list"
 prototype = "drop (l, i)"
 method = true
@@ -2304,7 +2154,6 @@ in `l` in order. `concat [l1, l2, ... ln]` = `l1 @ l2 @ ... @ ln`
 ordinal = 112
 structure = "List"
 name = "exists"
-specified = "basis"
 type = "(α → bool) → α list → bool"
 prototype = "exists f l"
 description = """
@@ -2317,7 +2166,6 @@ such an `x` exists and `false` otherwise.
 ordinal = 108
 structure = "List"
 name = "filter"
-specified = "basis"
 type = "(α → bool) → α list → α list"
 prototype = "filter f l"
 description = """
@@ -2330,7 +2178,6 @@ right, and returns the list of those `x` for which `f x` evaluated to
 ordinal = 107
 structure = "List"
 name = "find"
-specified = "basis"
 type = "(α → bool) → α list → α option"
 prototype = "find f l"
 description = """
@@ -2343,7 +2190,6 @@ such an `x` exists; otherwise it returns `NONE`.
 ordinal = 110
 structure = "List"
 name = "foldl"
-specified = "basis"
 type = "(α * β → β) → β → α list → β"
 prototype = "foldl f init \\[x1, x2, ..., xn\\]"
 description = """
@@ -2355,7 +2201,6 @@ init))...)` or `init` if the list is empty.
 ordinal = 111
 structure = "List"
 name = "foldr"
-specified = "basis"
 type = "(α * β → β) → β → α list → β"
 prototype = "foldr f init \\[x1, x2, ..., xn\\]"
 description = """
@@ -2367,7 +2212,6 @@ init)...))` or `init` if the list is empty.
 ordinal = 94
 structure = "List"
 name = "getItem"
-specified = "basis"
 type = "α list → * (α * α list) option"
 prototype = "getItem l"
 method = true
@@ -2383,7 +2227,6 @@ used to scan decimal integers from lists of characters.
 ordinal = 91
 structure = "List"
 name = "hd"
-specified = "basis"
 type = "α list → α"
 prototype = "hd l"
 method = true
@@ -2409,7 +2252,6 @@ ln`
 ordinal = 93
 structure = "List"
 name = "last"
-specified = "basis"
 type = "α list → α"
 prototype = "last l"
 method = true
@@ -2422,7 +2264,6 @@ returns the last element of `l`. Raises `Empty` if `l` is
 ordinal = 88
 structure = "List"
 name = "length"
-specified = "basis"
 type = "α list → int"
 prototype = "length l"
 method = true
@@ -2442,7 +2283,6 @@ is the type of polymorphic singly-linked lists.
 ordinal = 104
 structure = "List"
 name = "map"
-specified = "basis"
 type = "(α → β) → α list → β list"
 prototype = "map f l"
 description = """
@@ -2454,7 +2294,6 @@ returning the list of results.
 ordinal = 106
 structure = "List"
 name = "mapPartial"
-specified = "basis"
 type = "(α → β option) → α list → β list"
 prototype = "mapPartial f l"
 description = """
@@ -2470,7 +2309,6 @@ to the element returns `NONE`. The above expression is equivalent to:
 ordinal = 105
 structure = "List"
 name = "mapi"
-specified = "basis"
 type = "(int * α → β) → α list → β list"
 prototype = "mapi f l"
 description = """
@@ -2483,7 +2321,6 @@ call.
 ordinal = 86
 structure = "List"
 name = "nil"
-specified = "basis"
 type = "α list"
 prototype = "nil"
 description = """
@@ -2494,7 +2331,6 @@ is the empty list.
 ordinal = 95
 structure = "List"
 name = "nth"
-specified = "basis"
 type = "α list * int → α"
 prototype = "nth (l, i)"
 method = true
@@ -2508,7 +2344,6 @@ from 0. Raises `Subscript` if `i` < 0 or `i` &ge; `length l`. We have
 ordinal = 87
 structure = "List"
 name = "null"
-specified = "basis"
 type = "α list → bool"
 prototype = "null l"
 method = true
@@ -2520,7 +2355,6 @@ returns `true` if the list `l` is empty.
 ordinal = 109
 structure = "List"
 name = "partition"
-specified = "basis"
 type = "(α → bool) → α list → α list * α list"
 prototype = "partition f l"
 description = """
@@ -2535,7 +2369,6 @@ and `neg` retain the same relative order they possessed in `l`.
 ordinal = 98
 structure = "List"
 name = "rev"
-specified = "basis"
 type = "α list → α list"
 prototype = "rev l"
 method = true
@@ -2547,7 +2380,6 @@ returns a list consisting of `l`'s elements in reverse order.
 ordinal = 102
 structure = "List"
 name = "revAppend"
-specified = "basis"
 type = "α list * α list → α list"
 prototype = "revAppend (l1, l2)"
 method = true
@@ -2559,7 +2391,6 @@ returns `(rev l1) @ l2`.
 ordinal = 114
 structure = "List"
 name = "tabulate"
-specified = "basis"
 type = "int * (int → α) → α list"
 prototype = "tabulate (n, f)"
 description = """
@@ -2571,7 +2402,6 @@ returns a list of length `n` equal to `[f(0), f(1),
 ordinal = 96
 structure = "List"
 name = "take"
-specified = "basis"
 type = "α list * int → α list"
 prototype = "take (l, i)"
 method = true
@@ -2585,7 +2415,6 @@ l)` = `l`.
 ordinal = 92
 structure = "List"
 name = "tl"
-specified = "basis"
 type = "α list → α list"
 prototype = "tl l"
 method = true
@@ -2648,7 +2477,6 @@ of identical length.
 ordinal = 141
 structure = "ListPair"
 name = "all"
-specified = "basis"
 type = "(α * β → bool) → α list * β list → bool"
 prototype = "all f (l1, l2)"
 description = """
@@ -2662,7 +2490,6 @@ provides short-circuit testing of a predicate over a pair of lists.
 ordinal = 143
 structure = "ListPair"
 name = "allEq"
-specified = "basis"
 type = "(α * β → bool) → α list * β list → bool"
 prototype = "allEq f (l1, l2)"
 description = """
@@ -2695,7 +2522,6 @@ fun allEq p ([], []) = true
 ordinal = 133
 structure = "ListPair"
 name = "app"
-specified = "basis"
 type = "(α * β → unit) → α list * β list → unit"
 prototype = "app f (l1, l2)"
 description = """
@@ -2713,7 +2539,6 @@ tail of the longer one. It is equivalent to:
 ordinal = 134
 structure = "ListPair"
 name = "appEq"
-specified = "basis"
 type = "(α * β → unit) → α list * β list → unit"
 prototype = "appEq f (l1, l2)"
 description = """
@@ -2731,7 +2556,6 @@ equivalent to:
 ordinal = 142
 structure = "ListPair"
 name = "exists"
-specified = "basis"
 type = "(α * β → bool) → α list * β list → bool"
 prototype = "exists f (l1, l2)"
 description = """
@@ -2745,7 +2569,6 @@ provides short-circuit testing of a predicate over a pair of lists.
 ordinal = 137
 structure = "ListPair"
 name = "foldl"
-specified = "basis"
 type = "(α * β * γ → γ) → γ → α list * β list → γ"
 prototype = "foldl f init (l1, l2)"
 description = """
@@ -2763,7 +2586,6 @@ side effects of the function *f*.
 ordinal = 139
 structure = "ListPair"
 name = "foldlEq"
-specified = "basis"
 type = "(α * β * γ → γ) → γ → α list * β list → γ"
 prototype = "foldlEq f init (l1, l2)"
 description = """
@@ -2781,7 +2603,6 @@ side effects of the function *f*.
 ordinal = 138
 structure = "ListPair"
 name = "foldr"
-specified = "basis"
 type = "(α * β * γ → γ) → γ → α list * β list → γ"
 prototype = "foldr f init (l1, l2)"
 description = """
@@ -2799,7 +2620,6 @@ side effects of the function *f*.
 ordinal = 140
 structure = "ListPair"
 name = "foldrEq"
-specified = "basis"
 type = "(α * β * γ → γ) → γ → α list * β list → γ"
 prototype = "foldrEq f init (l1, l2)"
 description = """
@@ -2817,7 +2637,6 @@ side effects of the function *f*.
 ordinal = 135
 structure = "ListPair"
 name = "map"
-specified = "basis"
 type = "(α * β → γ) → α list * β list → γ list"
 prototype = "map f (l1, l2)"
 description = """
@@ -2836,7 +2655,6 @@ equivalent to:
 ordinal = 136
 structure = "ListPair"
 name = "mapEq"
-specified = "basis"
 type = "(α * β → γ) → α list * β list → γ list"
 prototype = "mapEq f (l1, l2)"
 description = """
@@ -2854,7 +2672,6 @@ raises `UnequalLengths`.  It is equivalent to:
 ordinal = 132
 structure = "ListPair"
 name = "unzip"
-specified = "basis"
 type = "(α * β) list → α list * β list"
 prototype = "unzip l"
 description = """
@@ -2866,7 +2683,6 @@ returns a pair of lists formed by splitting the elements of
 ordinal = 130
 structure = "ListPair"
 name = "zip"
-specified = "basis"
 type = "α list * β list → (α * β) list"
 prototype = "zip (l1, l2)"
 description = """
@@ -2882,7 +2698,6 @@ one.
 ordinal = 131
 structure = "ListPair"
 name = "zipEq"
-specified = "basis"
 type = "α list * β list → (α * β) list"
 prototype = "zipEq (l1, l2)"
 description = """
@@ -2908,7 +2723,6 @@ and rounding operations, along with mathematical constants.
 ordinal = 116
 structure = "Math"
 name = "acos"
-specified = "basis"
 type = "real → real"
 prototype = "acos x"
 description = """
@@ -2921,7 +2735,6 @@ pi\\]. If the magnitude of `x` exceeds 1.0, returns NaN.
 ordinal = 117
 structure = "Math"
 name = "asin"
-specified = "basis"
 type = "real → real"
 prototype = "asin x"
 description = """
@@ -2934,7 +2747,6 @@ pi / 2\\]. If the magnitude of `x` exceeds 1.0, returns NaN.
 ordinal = 118
 structure = "Math"
 name = "atan"
-specified = "basis"
 type = "real → real"
 prototype = "atan x"
 description = """
@@ -2948,7 +2760,6 @@ open interval (-pi / 2, pi / 2). If `x` is +infinity, it returns pi /
 ordinal = 119
 structure = "Math"
 name = "atan2"
-specified = "basis"
 type = "real * real → real"
 prototype = "atan2 (y, x)"
 description = """
@@ -2964,7 +2775,6 @@ result is `(real (sign y)) * pi / 2.0`.
 ordinal = 120
 structure = "Math"
 name = "cos"
-specified = "basis"
 type = "real → real"
 prototype = "cos x"
 description = """
@@ -2976,7 +2786,6 @@ infinity, returns NaN.
 ordinal = 121
 structure = "Math"
 name = "cosh"
-specified = "basis"
 type = "real → real"
 prototype = "cosh x"
 description = """
@@ -2989,7 +2798,6 @@ e(-x)) / 2`. Among its properties, cosh +-0 = 1, cosh +-infinity =
 ordinal = 122
 structure = "Math"
 name = "e"
-specified = "basis"
 type = "real"
 prototype = "e"
 description = """
@@ -3000,7 +2808,6 @@ is base e (2.718281828...) of the natural logarithm.
 ordinal = 123
 structure = "Math"
 name = "exp"
-specified = "basis"
 type = "real → real"
 prototype = "exp x"
 description = """
@@ -3013,7 +2820,6 @@ returns 0.
 ordinal = 124
 structure = "Math"
 name = "ln"
-specified = "basis"
 type = "real → real"
 prototype = "ln x"
 description = """
@@ -3026,7 +2832,6 @@ returns infinity.
 ordinal = 125
 structure = "Math"
 name = "log10"
-specified = "basis"
 type = "real → real"
 prototype = "log10 x"
 description = """
@@ -3039,7 +2844,6 @@ returns infinity.
 ordinal = 126
 structure = "Math"
 name = "pi"
-specified = "basis"
 type = "real"
 prototype = "pi"
 description = """
@@ -3050,7 +2854,6 @@ is the constant pi (3.141592653...).
 ordinal = 127
 structure = "Math"
 name = "pow"
-specified = "basis"
 type = "real * real → real"
 prototype = "pow (x, y)"
 description = """
@@ -3063,7 +2866,6 @@ when `x` < 0 and `y` is integral.
 ordinal = 128
 structure = "Math"
 name = "sin"
-specified = "basis"
 type = "real → real"
 prototype = "sin x"
 description = """
@@ -3075,7 +2877,6 @@ infinity, returns NaN.
 ordinal = 129
 structure = "Math"
 name = "sinh"
-specified = "basis"
 type = "real → real"
 prototype = "sinh x"
 description = """
@@ -3088,7 +2889,6 @@ returns the hyperbolic sine of `x`, that is, `(e(x) - e(-x))
 ordinal = 130
 structure = "Math"
 name = "sqrt"
-specified = "basis"
 type = "real → real"
 prototype = "sqrt x"
 description = """
@@ -3100,7 +2900,6 @@ returns the square root of `x`. sqrt (~0.0) = ~0.0. If `x` <
 ordinal = 131
 structure = "Math"
 name = "tan"
-specified = "basis"
 type = "real → real"
 prototype = "tan x"
 description = """
@@ -3113,7 +2912,6 @@ roughly corresponding to the singularities of the tangent function.
 ordinal = 132
 structure = "Math"
 name = "tanh"
-specified = "basis"
 type = "real → real"
 prototype = "tanh x"
 description = """
@@ -3144,7 +2942,6 @@ is raised by `valOf` when applied to `NONE`.
 ordinal = 133
 structure = "Option"
 name = "app"
-specified = "basis"
 type = "(α → unit) → α option → unit"
 prototype = "app f opt"
 description = """
@@ -3156,7 +2953,6 @@ applies the function `f` to the value `v` if `opt` is
 ordinal = 134
 structure = "Option"
 name = "compose"
-specified = "basis"
 type = "(α → β) * (γ → α option) → γ → β option"
 prototype = "compose (f, g) a"
 description = """
@@ -3168,7 +2964,6 @@ returns `NONE` if `g(a)` is `NONE`; otherwise, if
 ordinal = 135
 structure = "Option"
 name = "composePartial"
-specified = "basis"
 type = "(α → β option) * (γ → α option) → γ → β option"
 prototype = "composePartial (f, g) a"
 description = """
@@ -3180,7 +2975,6 @@ otherwise, if `g(a)` is `SOME v`, returns `f(v)`.
 ordinal = 140
 structure = "Option"
 name = "filter"
-specified = "basis"
 type = "(α → bool) → α → α option"
 prototype = "filter f a"
 description = """
@@ -3191,7 +2985,6 @@ returns `SOME a` if `f(a)` is `true`, `NONE` otherwise.
 ordinal = 138
 structure = "Option"
 name = "getOpt"
-specified = "basis"
 type = "α option * α → α"
 prototype = "getOpt (opt, a)"
 method = true
@@ -3204,7 +2997,6 @@ returns `a`.
 ordinal = 139
 structure = "Option"
 name = "isSome"
-specified = "basis"
 type = "α option → bool"
 prototype = "isSome opt"
 method = true
@@ -3217,7 +3009,6 @@ returns `true` if `opt` is `SOME v`; otherwise returns
 ordinal = 141
 structure = "Option"
 name = "join"
-specified = "basis"
 type = "α option option → α option"
 prototype = "join opt"
 description = """
@@ -3228,7 +3019,6 @@ maps `NONE` to `NONE` and `SOME v` to `v`.
 ordinal = 136
 structure = "Option"
 name = "map"
-specified = "basis"
 type = "(α → β) → α option → β option"
 prototype = "map f opt"
 description = """
@@ -3239,7 +3029,6 @@ maps `NONE` to `NONE` and `SOME v` to `SOME (f v)`.
 ordinal = 137
 structure = "Option"
 name = "mapPartial"
-specified = "basis"
 type = "(α → β option) → α option → β option"
 prototype = "mapPartial f opt"
 description = """
@@ -3261,7 +3050,6 @@ convention of returning a NULL pointer to indicate no value.
 ordinal = 142
 structure = "Option"
 name = "valOf"
-specified = "basis"
 type = "α option → α"
 prototype = "valOf opt"
 method = true
@@ -3294,7 +3082,6 @@ OPEN endpoints are exclusive `(a, b)`.
 ordinal = 271
 structure = "Range"
 name = "complement"
-specified = "morel"
 type = "α continuous_set → α continuous_set"
 prototype = "complement cs"
 method = true
@@ -3307,7 +3094,6 @@ all values not in `cs`.
 ordinal = 272
 structure = "Range"
 name = "complement"
-specified = "morel"
 type = "α discrete_set → α discrete_set"
 prototype = "complement ds"
 method = true
@@ -3320,7 +3106,6 @@ values of the element type not in `ds`.
 ordinal = 261
 structure = "Range"
 name = "contains"
-specified = "morel"
 type = "α range → α → bool"
 prototype = "contains r x"
 method = true
@@ -3334,7 +3119,6 @@ The ordering is implicit, derived from the type `α`.
 ordinal = 268
 structure = "Range"
 name = "contains"
-specified = "morel"
 type = "α continuous_set → α → bool"
 prototype = "contains cs x"
 method = true
@@ -3348,7 +3132,6 @@ The ordering is implicit, derived from the type `α`.
 ordinal = 269
 structure = "Range"
 name = "contains"
-specified = "morel"
 type = "α discrete_set → α → bool"
 prototype = "contains ds x"
 method = true
@@ -3362,7 +3145,6 @@ The ordering is implicit, derived from the type `α`.
 ordinal = 265
 structure = "Range"
 name = "continuousSetOf"
-specified = "morel"
 type = "α range list → α continuous_set"
 prototype = "continuousSetOf ranges"
 description = """
@@ -3389,7 +3171,6 @@ val it = CONTINUOUS_SET [AT_MOST 1.0,CLOSED_OPEN (3.0,7.0)] : real continuous_se
 structure = "Range"
 name = "continuous_set"
 type = "eqtype 'a continuous_set"
-specified = "morel"
 description = """
 represents a set of values as a normalized list of non-overlapping,
 non-adjacent ranges.
@@ -3399,7 +3180,6 @@ non-adjacent ranges.
 ordinal = 266
 structure = "Range"
 name = "discreteSetOf"
-specified = "morel"
 type = "α range list → α discrete_set"
 prototype = "discreteSetOf ranges"
 description = """
@@ -3421,7 +3201,6 @@ val it = [0,1,2,4,5,6,8,9,10] : int list
 structure = "Range"
 name = "discrete_set"
 type = "eqtype 'a discrete_set"
-specified = "morel"
 description = """
 represents a set of discrete values as a normalized list of
 non-overlapping, non-adjacent ranges.
@@ -3441,7 +3220,6 @@ type = """datatype 'a range =
   | OPEN of 'a * 'a
   | OPEN_CLOSED of 'a * 'a
   | POINT of 'a"""
-specified = "morel"
 description = """
 represents a contiguous interval of values of an ordered type.
 
@@ -3462,7 +3240,6 @@ The constructors and their meanings are:
 ordinal = 267
 structure = "Range"
 name = "ranges"
-specified = "morel"
 type = "α continuous_set → α range list"
 prototype = "ranges cs"
 method = true
@@ -3474,7 +3251,6 @@ returns the list of ranges in the continuous set `cs`.
 ordinal = 270
 structure = "Range"
 name = "ranges"
-specified = "morel"
 type = "α discrete_set → α range list"
 prototype = "ranges ds"
 method = true
@@ -3486,7 +3262,6 @@ returns the list of ranges in the discrete set `ds`.
 ordinal = 263
 structure = "Range"
 name = "toBag"
-specified = "morel"
 type = "α discrete_set → α bag"
 prototype = "toBag ds"
 method = true
@@ -3501,7 +3276,6 @@ minimum value (e.g., `LESS_THAN 5 : int range`).
 ordinal = 264
 structure = "Range"
 name = "toList"
-specified = "morel"
 type = "α discrete_set → α list"
 prototype = "toList ds"
 method = true
@@ -3528,7 +3302,6 @@ numbers.
 ordinal = 241
 structure = "Real"
 name = "!="
-specified = "basis"
 type = "real * real → bool"
 implemented = false
 prototype = "x != y"
@@ -3540,7 +3313,6 @@ is equivalent to `not o op ==` and the IEEE `?<>` operator.
 ordinal = 143
 structure = "Real"
 name = "*"
-specified = "basis"
 type = "real * real → real"
 prototype = "r1 * r2"
 description = """
@@ -3554,7 +3326,6 @@ infinity, infinity * (-infinity) = -infinity.
 ordinal = 242
 structure = "Real"
 name = "*+"
-specified = "basis"
 type = "real * real * real → real"
 implemented = false
 prototype = "*+ (a, b, c)"
@@ -3567,7 +3338,6 @@ from the behaviors derived from addition and multiplication.
 ordinal = 243
 structure = "Real"
 name = "*-"
-specified = "basis"
 type = "real * real * real → real"
 implemented = false
 prototype = "*- (a, b, c)"
@@ -3580,7 +3350,6 @@ from the behaviors derived from subtraction and multiplication.
 ordinal = 144
 structure = "Real"
 name = "+"
-specified = "basis"
 type = "real * real → real"
 prototype = "r1 + r2"
 description = """
@@ -3595,7 +3364,6 @@ combination of two infinities produces NaN.
 ordinal = 145
 structure = "Real"
 name = "-"
-specified = "basis"
 type = "real * real → real"
 prototype = "r1 - r2"
 description = """
@@ -3610,7 +3378,6 @@ other combination of two infinities produces NaN.
 ordinal = 146
 structure = "Real"
 name = "/"
-specified = "basis"
 type = "real * real → real"
 prototype = "r1 / r2"
 description = """
@@ -3625,7 +3392,6 @@ an infinity is 0 with the correct sign.
 ordinal = 147
 structure = "Real"
 name = "<"
-specified = "basis"
 type = "real * real → bool"
 prototype = "x < y"
 description = """
@@ -3639,7 +3405,6 @@ same as `not (a >= b)`.
 ordinal = 148
 structure = "Real"
 name = "<="
-specified = "basis"
 type = "real * real → bool"
 prototype = "x <= y"
 description = """
@@ -3650,7 +3415,6 @@ As "<"
 ordinal = 244
 structure = "Real"
 name = "=="
-specified = "basis"
 type = "real * real → bool"
 implemented = false
 prototype = "x == y"
@@ -3664,7 +3428,6 @@ returns `true` if and only if neither `y` nor `x` is NaN, and `y` and
 ordinal = 149
 structure = "Real"
 name = ">"
-specified = "basis"
 type = "real * real → bool"
 prototype = "x > y"
 description = """
@@ -3675,7 +3438,6 @@ As "<"
 ordinal = 150
 structure = "Real"
 name = ">="
-specified = "basis"
 type = "real * real → bool"
 prototype = "x >= y"
 description = """
@@ -3686,7 +3448,6 @@ As "<"
 ordinal = 245
 structure = "Real"
 name = "?="
-specified = "basis"
 type = "real * real → bool"
 implemented = false
 prototype = "?= (x, y)"
@@ -3700,7 +3461,6 @@ IEEE `?=` operator.
 ordinal = 152
 structure = "Real"
 name = "abs"
-specified = "basis"
 type = "real → real"
 prototype = "abs r"
 method = true
@@ -3712,7 +3472,6 @@ returns the absolute value of `r`.
 ordinal = 153
 structure = "Real"
 name = "ceil"
-specified = "basis"
 type = "real → int"
 prototype = "ceil r"
 method = true
@@ -3724,7 +3483,6 @@ produces `ceil(r)`, the smallest int not less than `r`.
 ordinal = 154
 structure = "Real"
 name = "checkFloat"
-specified = "basis"
 type = "real → real"
 prototype = "checkFloat x"
 method = true
@@ -3737,7 +3495,6 @@ if x is NaN. Otherwise, it returns its argument.
 ordinal = 246
 structure = "Real"
 name = "class"
-specified = "basis"
 type = "real → IEEEReal.float_class"
 implemented = false
 prototype = "class x"
@@ -3749,7 +3506,6 @@ returns the `IEEEReal.float_class` to which x belongs.
 ordinal = 155
 structure = "Real"
 name = "compare"
-specified = "basis"
 type = "real * real → order"
 prototype = "compare (x, y)"
 method = true
@@ -3763,7 +3519,6 @@ second. It raises `IEEEReal.Unordered` on unordered arguments.
 ordinal = 247
 structure = "Real"
 name = "compareReal"
-specified = "basis"
 type = "real * real → IEEEReal.real_order"
 implemented = false
 prototype = "compareReal (x, y)"
@@ -3777,7 +3532,6 @@ it returns `IEEEReal.UNORDERED` on unordered arguments.
 ordinal = 156
 structure = "Real"
 name = "copySign"
-specified = "basis"
 type = "real * real → real"
 prototype = "copySign (x, y)"
 method = true
@@ -3790,7 +3544,6 @@ NaN.
 ordinal = 157
 structure = "Real"
 name = "floor"
-specified = "basis"
 type = "real → int"
 prototype = "floor r"
 method = true
@@ -3802,7 +3555,6 @@ produces `floor(r)`, the largest int not larger than `r`.
 ordinal = 248
 structure = "Real"
 name = "fmt"
-specified = "basis"
 type = "StringCvt.realfmt → real → string"
 implemented = false
 prototype = "fmt spec r"
@@ -3816,7 +3568,6 @@ precision
 ordinal = 249
 structure = "Real"
 name = "fromDecimal"
-specified = "basis"
 type = "IEEEReal.decimal_approx → real"
 implemented = false
 prototype = "fromDecimal d"
@@ -3828,7 +3579,6 @@ converts decimal approximation to a `real`
 ordinal = 158
 structure = "Real"
 name = "fromInt, real"
-specified = "basis"
 type = "int → real"
 prototype = "fromInt i"
 description = """
@@ -3842,7 +3592,6 @@ value, uses current rounding mode to determine the resulting value.
 ordinal = 250
 structure = "Real"
 name = "fromLarge"
-specified = "basis"
 type = "IEEEReal.rounding_mode → real → real"
 implemented = false
 prototype = "toLarge r"
@@ -3856,7 +3605,6 @@ as a real, converts it to a zero or an infinity.
 ordinal = 251
 structure = "Real"
 name = "fromLargeInt"
-specified = "basis"
 type = "IntInf.int → real"
 implemented = false
 prototype = "fromLargeInt i"
@@ -3868,7 +3616,6 @@ As "fromInt"
 ordinal = 159
 structure = "Real"
 name = "fromManExp"
-specified = "basis"
 type = "{exp:int, man:real} → real"
 prototype = "fromManExp r"
 description = """
@@ -3880,7 +3627,6 @@ mantissa and exponent of r, respectively.
 ordinal = 160
 structure = "Real"
 name = "fromString"
-specified = "basis"
 type = "string → real option"
 prototype = "fromString s"
 description = """
@@ -3894,7 +3640,6 @@ equivalent to `StringCvt.scanString scan`.
 ordinal = 161
 structure = "Real"
 name = "isFinite"
-specified = "basis"
 type = "real → bool"
 prototype = "isFinite x"
 method = true
@@ -3906,7 +3651,6 @@ returns true if x is neither NaN nor an infinity.
 ordinal = 162
 structure = "Real"
 name = "isNan"
-specified = "basis"
 type = "real → bool"
 prototype = "isNan x"
 method = true
@@ -3918,7 +3662,6 @@ returns true if x NaN.
 ordinal = 163
 structure = "Real"
 name = "isNormal"
-specified = "basis"
 type = "real → bool"
 prototype = "isNormal x"
 method = true
@@ -3931,7 +3674,6 @@ subnormal, infinite nor NaN.
 ordinal = 164
 structure = "Real"
 name = "max"
-specified = "basis"
 type = "real * real → real"
 prototype = "max (x, y)"
 method = true
@@ -3945,7 +3687,6 @@ NaN, returns NaN.
 ordinal = 165
 structure = "Real"
 name = "maxFinite"
-specified = "basis"
 type = "real"
 prototype = "maxFinite"
 description = """
@@ -3956,7 +3697,6 @@ is the maximum finite number.
 ordinal = 166
 structure = "Real"
 name = "min"
-specified = "basis"
 type = "real * real → real"
 prototype = "min (x, y)"
 method = true
@@ -3970,7 +3710,6 @@ NaN, returns NaN.
 ordinal = 167
 structure = "Real"
 name = "minNormalPos"
-specified = "basis"
 type = "real"
 prototype = "minNormalPos"
 description = """
@@ -3981,7 +3720,6 @@ is the minimum non-zero normalized number.
 ordinal = 168
 structure = "Real"
 name = "minPos"
-specified = "basis"
 type = "real"
 prototype = "minPos"
 description = """
@@ -3992,7 +3730,6 @@ is the minimum non-zero positive number.
 ordinal = 169
 structure = "Real"
 name = "negInf"
-specified = "basis"
 type = "real"
 prototype = "negInf"
 description = """
@@ -4003,7 +3740,6 @@ is the negative infinity value.
 ordinal = 252
 structure = "Real"
 name = "nextAfter"
-specified = "basis"
 type = "real * real → real"
 implemented = false
 prototype = "nextAfter (r, t)"
@@ -4017,7 +3753,6 @@ returns the largest representable floating-point number less than `r`.
 ordinal = 170
 structure = "Real"
 name = "posInf"
-specified = "basis"
 type = "real"
 prototype = "posInf"
 description = """
@@ -4028,7 +3763,6 @@ is the positive infinity value.
 ordinal = 171
 structure = "Real"
 name = "precision"
-specified = "basis"
 type = "int"
 prototype = "precision"
 description = """
@@ -4042,7 +3776,6 @@ Real64.precision is 53).
 ordinal = 172
 structure = "Real"
 name = "radix"
-specified = "basis"
 type = "int"
 prototype = "radix"
 description = """
@@ -4062,7 +3795,6 @@ is the type of IEEE 754 double-precision floating-point numbers.
 ordinal = 173
 structure = "Real"
 name = "realCeil"
-specified = "basis"
 type = "real → real"
 prototype = "realCeil r"
 method = true
@@ -4075,7 +3807,6 @@ produces `ceil(r)`, the smallest integer not less than
 ordinal = 174
 structure = "Real"
 name = "realFloor"
-specified = "basis"
 type = "real → real"
 prototype = "realFloor r"
 method = true
@@ -4088,7 +3819,6 @@ produces `floor(r)`, the largest integer not larger than
 ordinal = 175
 structure = "Real"
 name = "realMod"
-specified = "basis"
 type = "real → real"
 prototype = "realMod r"
 method = true
@@ -4101,7 +3831,6 @@ equivalent to `#frac o split`.
 ordinal = 176
 structure = "Real"
 name = "realRound"
-specified = "basis"
 type = "real → real"
 prototype = "realRound r"
 method = true
@@ -4114,7 +3843,6 @@ to `r`. In the case of a tie, it rounds to the nearest even integer.
 ordinal = 177
 structure = "Real"
 name = "realTrunc"
-specified = "basis"
 type = "real → real"
 prototype = "realTrunc r"
 method = true
@@ -4126,7 +3854,6 @@ rounds `r` towards zero.
 ordinal = 178
 structure = "Real"
 name = "rem"
-specified = "basis"
 type = "real * real → real"
 prototype = "rem (x, y)"
 method = true
@@ -4141,7 +3868,6 @@ than the absolute value of `y`. If `x` is an infinity or `y` is 0,
 ordinal = 179
 structure = "Real"
 name = "round"
-specified = "basis"
 type = "real → int"
 prototype = "round r"
 method = true
@@ -4154,7 +3880,6 @@ rounds to the nearest even integer.
 ordinal = 180
 structure = "Real"
 name = "sameSign"
-specified = "basis"
 type = "real * real → bool"
 prototype = "sameSign (r1, r2)"
 method = true
@@ -4167,7 +3892,6 @@ returns true if and only if `signBit r1` equals
 ordinal = 253
 structure = "Real"
 name = "scan"
-specified = "basis"
 type = "(char,α) StringCvt.reader → (real,α) StringCvt.reader"
 implemented = false
 prototype = "scan getc strm"
@@ -4184,7 +3908,6 @@ values of too small a magnitude are represented as zeros.
 ordinal = 181
 structure = "Real"
 name = "sign"
-specified = "basis"
 type = "real → int"
 prototype = "sign r"
 method = true
@@ -4198,7 +3921,6 @@ its sign. It raises `Domain` on NaN.
 ordinal = 182
 structure = "Real"
 name = "signBit"
-specified = "basis"
 type = "real → bool"
 prototype = "signBit r"
 method = true
@@ -4211,7 +3933,6 @@ zeros, and NaN, included) is negative.
 ordinal = 183
 structure = "Real"
 name = "split"
-specified = "basis"
 type = "real → {frac:real, whole:real}"
 prototype = "split r"
 method = true
@@ -4225,7 +3946,6 @@ fractional and integral parts of `r`, respectively. Specifically,
 ordinal = 254
 structure = "Real"
 name = "toDecimal"
-specified = "basis"
 type = "real → IEEEReal.decimal_approx"
 implemented = false
 prototype = "toDecimal r"
@@ -4237,7 +3957,6 @@ converts a `real` to a decimal approximation
 ordinal = 255
 structure = "Real"
 name = "toInt"
-specified = "basis"
 type = "real → IEEEReal.rounding_mode → int"
 implemented = false
 prototype = "toInt mode x"
@@ -4252,7 +3971,6 @@ representable, in particular, if `x` is an infinity. It raises
 ordinal = 256
 structure = "Real"
 name = "toLarge"
-specified = "basis"
 type = "real → real"
 implemented = false
 prototype = "toLarge r"
@@ -4264,7 +3982,6 @@ convert a value of type `real` to type `LargeReal.real`.
 ordinal = 257
 structure = "Real"
 name = "toLargeInt"
-specified = "basis"
 type = "real → IEEEReal.rounding_mode → IntInf.int"
 implemented = false
 prototype = "toLargeInt mode r"
@@ -4276,7 +3993,6 @@ As "toInt"
 ordinal = 185
 structure = "Real"
 name = "toManExp"
-specified = "basis"
 type = "real → {man:real, exp:int}"
 prototype = "toManExp r"
 method = true
@@ -4289,7 +4005,6 @@ mantissa and exponent of r, respectively.
 ordinal = 186
 structure = "Real"
 name = "toString"
-specified = "basis"
 type = "real → string"
 prototype = "toString r"
 method = true
@@ -4302,7 +4017,6 @@ converts a `real` into a `string`; equivalent to `(fmt
 ordinal = 184
 structure = "Real"
 name = "trunc"
-specified = "basis"
 type = "real → int"
 prototype = "trunc r"
 method = true
@@ -4314,7 +4028,6 @@ rounds r towards zero.
 ordinal = 187
 structure = "Real"
 name = "unordered"
-specified = "basis"
 type = "real * real → bool"
 prototype = "unordered (x, y)"
 method = true
@@ -4327,7 +4040,6 @@ least one of x and y is NaN.
 ordinal = 151
 structure = "Real"
 name = "~"
-specified = "basis"
 type = "real → real"
 prototype = "~ r"
 description = """
@@ -4349,7 +4061,6 @@ extend Standard ML with relational-algebra capabilities.
 [[functions]]
 structure = "Relational"
 name = "compare"
-specified = "morel"
 type = "α * α → order"
 prototype = "compare (x, y)"
 description = """
@@ -4373,7 +4084,6 @@ particular value.
 ordinal = 188
 structure = "Relational"
 name = "count, count"
-specified = "morel"
 type = "α bag → int"
 prototype = "count list"
 method = true
@@ -4387,7 +4097,6 @@ count`.
 structure = "Relational"
 name = "descending"
 type = "datatype 'a descending = DESC of 'a"
-specified = "morel"
 description = """
 wraps a value so that it sorts in descending order when used with
 `Relational.compare`.
@@ -4397,7 +4106,6 @@ wraps a value so that it sorts in descending order when used with
 ordinal = 194
 structure = "Relational"
 name = "elem"
-specified = "morel"
 type = "α * α bag → bool, α * α list → bool"
 prototype = "e elem collection"
 description = """
@@ -4408,7 +4116,6 @@ returns whether `e` is a member of `collection`.
 ordinal = 189
 structure = "Relational"
 name = "empty, empty"
-specified = "morel"
 type = "α bag → bool"
 prototype = "empty list"
 method = true
@@ -4421,7 +4128,6 @@ depts where empty (from e where e.deptno = d.deptno)`.
 ordinal = 189
 structure = "Relational"
 name = "iterate, iterate"
-specified = "morel"
 type = "α bag → (α bag * α bag → α bag) → α bag"
 prototype = "iterate initialList listUpdate"
 method = true
@@ -4435,7 +4141,6 @@ iteration when it returns `newList`.
 ordinal = 190
 structure = "Relational"
 name = "max, max"
-specified = "morel"
 type = "α bag → α"
 prototype = "max list"
 method = true
@@ -4449,7 +4154,6 @@ max of e.id`.
 ordinal = 191
 structure = "Relational"
 name = "min, min"
-specified = "morel"
 type = "α bag → α"
 prototype = "min list"
 method = true
@@ -4463,7 +4167,6 @@ min of e.id`.
 ordinal = 192
 structure = "Relational"
 name = "nonEmpty, nonEmpty"
-specified = "morel"
 type = "α bag → bool"
 prototype = "nonEmpty list"
 method = true
@@ -4477,7 +4180,6 @@ d.deptno)`.
 ordinal = 195
 structure = "Relational"
 name = "notelem"
-specified = "morel"
 type = "α * α bag → bool, α * α list → bool"
 prototype = "e notelem collection"
 description = """
@@ -4489,7 +4191,6 @@ returns whether `e` is not a member of
 ordinal = 193
 structure = "Relational"
 name = "only, only"
-specified = "morel"
 type = "α bag → α"
 prototype = "only list"
 method = true
@@ -4502,7 +4203,6 @@ emps yield only (from d where d.deptno = e.deptno)`.
 ordinal = 196
 structure = "Relational"
 name = "sum, sum"
-specified = "morel"
 type = "α bag → α"
 prototype = "sum list"
 method = true
@@ -4526,7 +4226,6 @@ strings.
 [[functions]]
 structure = "String"
 name = "<"
-specified = "basis"
 syntax = "infix"
 type = "string * string → bool"
 prototype = "s < t"
@@ -4537,7 +4236,6 @@ returns true if `s` is less than `t` in the string ordering.
 [[functions]]
 structure = "String"
 name = "<="
-specified = "basis"
 syntax = "infix"
 type = "string * string → bool"
 prototype = "s <= t"
@@ -4548,7 +4246,6 @@ returns true if `s` is less than or equal to `t` in the string ordering.
 [[functions]]
 structure = "String"
 name = ">"
-specified = "basis"
 syntax = "infix"
 type = "string * string → bool"
 prototype = "s > t"
@@ -4559,7 +4256,6 @@ returns true if `s` is greater than `t` in the string ordering.
 [[functions]]
 structure = "String"
 name = ">="
-specified = "basis"
 syntax = "infix"
 type = "string * string → bool"
 prototype = "s >= t"
@@ -4572,7 +4268,6 @@ ordering.
 ordinal = 196
 structure = "String"
 name = "^"
-specified = "basis"
 type = "string * string → string"
 prototype = "s ^ t"
 description = """
@@ -4584,7 +4279,6 @@ is the concatenation of the strings `s` and `t`. This raises
 ordinal = 194
 structure = "String"
 name = "collate"
-specified = "basis"
 type = "(char * char → order) → string * string → order"
 prototype = "collate (f, (s, t))"
 description = """
@@ -4596,7 +4290,6 @@ strings using the given ordering `f` on characters.
 ordinal = 195
 structure = "String"
 name = "compare"
-specified = "basis"
 type = "string * string → order"
 prototype = "compare (s, t)"
 method = true
@@ -4611,7 +4304,6 @@ greater than `t`, respectively.
 ordinal = 197
 structure = "String"
 name = "concat"
-specified = "basis"
 type = "string list → string"
 prototype = "concat l"
 description = """
@@ -4623,7 +4315,6 @@ is the concatenation of all the strings in `l`. This raises
 ordinal = 198
 structure = "String"
 name = "concatWith"
-specified = "basis"
 type = "string → string list → string"
 prototype = "concatWith s l"
 description = """
@@ -4636,7 +4327,6 @@ size of the resulting string would be greater than `maxSize`.
 ordinal = 199
 structure = "String"
 name = "explode"
-specified = "basis"
 type = "string → char list"
 prototype = "explode s"
 method = true
@@ -4648,7 +4338,6 @@ is the list of characters in the string `s`.
 ordinal = 200
 structure = "String"
 name = "extract"
-specified = "basis"
 type = "string * int * int option → string"
 prototype = "extract (s, i, NONE)"
 method = true
@@ -4668,7 +4357,6 @@ index `i`, i.e., the string `s`[`i`..`i`+`j`-1]. Raises `Subscript` if
 [[functions]]
 structure = "String"
 name = "fields"
-specified = "basis"
 type = "(char → bool) → string → string list"
 prototype = "fields f s"
 description = """
@@ -4688,7 +4376,6 @@ contains the four fields `""`, `"abc"`, `""` and `"def"`.
 ordinal = 214
 structure = "String"
 name = "fromCString"
-specified = "basis"
 type = "string → string option"
 implemented = false
 prototype = "fromCString s"
@@ -4708,7 +4395,6 @@ quote character.
 ordinal = 216
 structure = "String"
 name = "fromString"
-specified = "basis"
 type = "string → string option"
 implemented = false
 prototype = "fromString s"
@@ -4765,7 +4451,6 @@ of `CHAR.scan`.
 ordinal = 201
 structure = "String"
 name = "implode"
-specified = "basis"
 type = "char list → string"
 prototype = "implode l"
 description = """
@@ -4778,7 +4463,6 @@ generates the string containing the characters in the list
 ordinal = 202
 structure = "String"
 name = "isPrefix"
-specified = "basis"
 type = "string → string → bool"
 prototype = "isPrefix s1 s2"
 description = """
@@ -4791,7 +4475,6 @@ that a string is a prefix of itself.
 ordinal = 203
 structure = "String"
 name = "isSubstring"
-specified = "basis"
 type = "string → string → bool"
 prototype = "isSubstring s1 s2"
 description = """
@@ -4804,7 +4487,6 @@ string, and that a string is a substring of itself.
 ordinal = 204
 structure = "String"
 name = "isSuffix"
-specified = "basis"
 type = "string → string → bool"
 prototype = "isSuffix s1 s2"
 description = """
@@ -4817,7 +4499,6 @@ that a string is a suffix of itself.
 ordinal = 205
 structure = "String"
 name = "map"
-specified = "basis"
 type = "(char → char) → string → string"
 prototype = "map f s"
 description = """
@@ -4830,7 +4511,6 @@ f (explode s))`.
 ordinal = 206
 structure = "String"
 name = "maxSize"
-specified = "basis"
 type = "int"
 prototype = "maxSize"
 description = """
@@ -4841,7 +4521,6 @@ is the longest allowed size of a string.
 ordinal = 215
 structure = "String"
 name = "scan"
-specified = "basis"
 type = "(char,α) StringCvt.reader → (string,α) StringCvt.reader"
 implemented = false
 prototype = "scan getc strm"
@@ -4860,7 +4539,6 @@ stream.
 ordinal = 207
 structure = "String"
 name = "size"
-specified = "basis"
 type = "string → int"
 prototype = "size s"
 method = true
@@ -4872,7 +4550,6 @@ returns |`s`|, the number of characters in string `s`.
 ordinal = 208
 structure = "String"
 name = "str"
-specified = "basis"
 type = "char → string"
 prototype = "str c"
 description = """
@@ -4891,7 +4568,6 @@ is the type of character strings.
 ordinal = 209
 structure = "String"
 name = "sub"
-specified = "basis"
 type = "string * int → char"
 prototype = "sub (s, i)"
 method = true
@@ -4904,7 +4580,6 @@ zero. This raises `Subscript` if `i` < 0 or |`s`| &le; `i`.
 ordinal = 210
 structure = "String"
 name = "substring"
-specified = "basis"
 type = "string * int * int → string"
 prototype = "substring (s, i, j)"
 method = true
@@ -4918,7 +4593,6 @@ the substring of size `j` starting at index `i`. This is equivalent to
 ordinal = 217
 structure = "String"
 name = "toCString"
-specified = "basis"
 type = "string → string"
 implemented = false
 prototype = "toCString s"
@@ -4933,7 +4607,6 @@ characters replaced by C escape sequences. This is equivalent to
 ordinal = 214
 structure = "String"
 name = "toString"
-specified = "basis"
 type = "string → string"
 implemented = false
 prototype = "toString s"
@@ -4948,7 +4621,6 @@ characters replaced by SML escape sequences. This is equivalent to
 ordinal = 216
 structure = "String"
 name = "tokens"
-specified = "basis"
 type = "(char → bool) → string → string list"
 prototype = "tokens f s"
 description = """
@@ -4968,7 +4640,6 @@ contains the four fields `""`, `"abc"`, `""` and `"def"`.
 ordinal = 211
 structure = "String"
 name = "translate"
-specified = "basis"
 type = "(char → string) → string → string"
 prototype = "translate f s"
 description = """
@@ -5034,7 +4705,6 @@ environment.
 ordinal = 210
 structure = "Sys"
 name = "clearEnv"
-specified = "morel"
 type = "unit → unit"
 prototype = "clearEnv ()"
 description = """
@@ -5045,7 +4715,6 @@ restores the environment to the initial environment.
 ordinal = 211
 structure = "Sys"
 name = "env, env"
-specified = "morel"
 type = "unit → (string * string) list"
 prototype = "env ()"
 description = """
@@ -5056,7 +4725,6 @@ prints the environment.
 ordinal = 212
 structure = "Sys"
 name = "file"
-specified = "morel"
 type = "{...}"
 prototype = "file"
 description = """
@@ -5068,7 +4736,6 @@ depend on the files and directories under the configured directory.
 ordinal = 213
 structure = "Sys"
 name = "parseTree"
-specified = "morel"
 type = "string → string"
 prototype = "parseTree s"
 description = """
@@ -5082,7 +4749,6 @@ from `.smli` scripts. Raises `Error` if the string does not parse.
 ordinal = 214
 structure = "Sys"
 name = "plan"
-specified = "morel"
 type = "unit → string"
 prototype = "plan ()"
 description = """
@@ -5093,7 +4759,6 @@ prints the plan of the most recently executed expression.
 ordinal = 215
 structure = "Sys"
 name = "planEx"
-specified = "morel"
 type = "string → string"
 prototype = "planEx phase"
 description = """
@@ -5106,7 +4771,6 @@ representation at the specified phase. The phase argument can be "0" (initial),
 ordinal = 216
 structure = "Sys"
 name = "set"
-specified = "morel"
 type = "string * α → unit"
 prototype = "set (property, value)"
 description = """
@@ -5120,7 +4784,6 @@ extra = """
 ordinal = 217
 structure = "Sys"
 name = "show"
-specified = "morel"
 type = "string → string option"
 prototype = "show property"
 description = """
@@ -5132,7 +4795,6 @@ string, or `NONE` if unset.
 ordinal = 218
 structure = "Sys"
 name = "showAll"
-specified = "morel"
 type = "unit → (string * string option) list"
 prototype = "showAll ()"
 description = """
@@ -5144,7 +4806,6 @@ as a string, or `NONE` if unset.
 ordinal = 219
 structure = "Sys"
 name = "unset"
-specified = "morel"
 type = "string → unit"
 prototype = "unset property"
 description = """
@@ -5155,7 +4816,6 @@ clears the current the value of `property`.
 
 [[structures]]
 name = "Time"
-specified = "basis"
 description = "Time values and operations."
 overview = """
 The `Time` structure provides an abstract type for representing both absolute
@@ -5169,7 +4829,6 @@ are provided.
 ordinal = 250
 structure = "Time"
 name = "+"
-specified = "basis"
 type = "time * time → time"
 prototype = "t1 + t2"
 method = true
@@ -5181,7 +4840,6 @@ returns the sum of the two time values `t1` and `t2`.
 ordinal = 251
 structure = "Time"
 name = "-"
-specified = "basis"
 type = "time * time → time"
 prototype = "t1 - t2"
 method = true
@@ -5193,7 +4851,6 @@ returns the difference of the two time values `t1` and `t2`.
 ordinal = 253
 structure = "Time"
 name = "<"
-specified = "basis"
 type = "time * time → bool"
 prototype = "t1 < t2"
 method = true
@@ -5205,7 +4862,6 @@ returns `true` if `t1` is less than `t2`.
 ordinal = 254
 structure = "Time"
 name = "<="
-specified = "basis"
 type = "time * time → bool"
 prototype = "t1 <= t2"
 method = true
@@ -5217,7 +4873,6 @@ returns `true` if `t1` is less than or equal to `t2`.
 ordinal = 255
 structure = "Time"
 name = ">"
-specified = "basis"
 type = "time * time → bool"
 prototype = "t1 > t2"
 method = true
@@ -5229,7 +4884,6 @@ returns `true` if `t1` is greater than `t2`.
 ordinal = 256
 structure = "Time"
 name = ">="
-specified = "basis"
 type = "time * time → bool"
 prototype = "t1 >= t2"
 method = true
@@ -5249,7 +4903,6 @@ is raised when a conversion produces a value that cannot be represented as a
 ordinal = 252
 structure = "Time"
 name = "compare"
-specified = "basis"
 type = "time * time → order"
 prototype = "compare (t1, t2)"
 method = true
@@ -5262,7 +4915,6 @@ equal to, or greater than `t2`.
 ordinal = 258
 structure = "Time"
 name = "fmt"
-specified = "basis"
 type = "int → time → string"
 prototype = "fmt n t"
 description = """
@@ -5275,7 +4927,6 @@ values are formatted with a leading `~`.
 ordinal = 248
 structure = "Time"
 name = "fromMicroseconds"
-specified = "basis"
 type = "int → time"
 prototype = "fromMicroseconds n"
 description = """
@@ -5286,7 +4937,6 @@ returns the `time` value corresponding to `n` microseconds.
 ordinal = 247
 structure = "Time"
 name = "fromMilliseconds"
-specified = "basis"
 type = "int → time"
 prototype = "fromMilliseconds n"
 description = """
@@ -5297,7 +4947,6 @@ returns the `time` value corresponding to `n` milliseconds.
 ordinal = 249
 structure = "Time"
 name = "fromNanoseconds"
-specified = "basis"
 type = "int → time"
 prototype = "fromNanoseconds n"
 description = """
@@ -5308,7 +4957,6 @@ returns the `time` value corresponding to `n` nanoseconds.
 ordinal = 240
 structure = "Time"
 name = "fromReal"
-specified = "basis"
 type = "real → time"
 prototype = "fromReal r"
 description = """
@@ -5320,7 +4968,6 @@ Raises `Time` if `r` is `NaN`, infinite, or otherwise not representable.
 ordinal = 246
 structure = "Time"
 name = "fromSeconds"
-specified = "basis"
 type = "int → time"
 prototype = "fromSeconds n"
 description = """
@@ -5331,7 +4978,6 @@ returns the `time` value corresponding to `n` seconds.
 ordinal = 260
 structure = "Time"
 name = "fromString"
-specified = "basis"
 type = "string → time option"
 prototype = "fromString s"
 description = """
@@ -5343,7 +4989,6 @@ of seconds. Returns `SOME t` if successful, `NONE` otherwise.
 ordinal = 257
 structure = "Time"
 name = "now"
-specified = "basis"
 type = "unit → time"
 prototype = "now ()"
 description = """
@@ -5365,7 +5010,6 @@ Negative values represent times before the epoch or negative intervals.
 ordinal = 244
 structure = "Time"
 name = "toMicroseconds"
-specified = "basis"
 type = "time → int"
 prototype = "toMicroseconds t"
 method = true
@@ -5377,7 +5021,6 @@ returns the number of whole microseconds in `t`, truncated toward zero.
 ordinal = 243
 structure = "Time"
 name = "toMilliseconds"
-specified = "basis"
 type = "time → int"
 prototype = "toMilliseconds t"
 method = true
@@ -5389,7 +5032,6 @@ returns the number of whole milliseconds in `t`, truncated toward zero.
 ordinal = 245
 structure = "Time"
 name = "toNanoseconds"
-specified = "basis"
 type = "time → int"
 prototype = "toNanoseconds t"
 method = true
@@ -5401,7 +5043,6 @@ returns the number of whole nanoseconds in `t`.
 ordinal = 241
 structure = "Time"
 name = "toReal"
-specified = "basis"
 type = "time → real"
 prototype = "toReal t"
 method = true
@@ -5413,7 +5054,6 @@ converts the time value `t` to a real number representing seconds.
 ordinal = 242
 structure = "Time"
 name = "toSeconds"
-specified = "basis"
 type = "time → int"
 prototype = "toSeconds t"
 method = true
@@ -5425,7 +5065,6 @@ returns the number of whole seconds in `t`, truncated toward zero.
 ordinal = 259
 structure = "Time"
 name = "toString"
-specified = "basis"
 type = "time → string"
 prototype = "toString t"
 method = true
@@ -5438,7 +5077,6 @@ Equivalent to `fmt 3 t`.
 ordinal = 239
 structure = "Time"
 name = "zeroTime"
-specified = "basis"
 type = "time"
 prototype = "zeroTime"
 description = """
@@ -5461,7 +5099,6 @@ fashion.
 [[functions]]
 structure = "Variant"
 name = "parse"
-specified = "morel"
 type = "string → variant"
 prototype = "parse s"
 description = """
@@ -5474,7 +5111,6 @@ and therefore `parse (print v) = v` for all variant values `v`.
 [[functions]]
 structure = "Variant"
 name = "print"
-specified = "morel"
 type = "variant → string"
 prototype = "print v"
 method = true
@@ -5490,7 +5126,6 @@ For example,
 structure = "Variant"
 name = "variant"
 type = "datatype variant = UNIT | BOOL of bool | INT of int | REAL of real | CHAR of char | STRING of string | LIST of variant list | BAG of variant list | VECTOR of variant list | VARIANT_NONE | VARIANT_SOME of variant | RECORD of (string * variant) list | CONSTANT of string | CONSTRUCT of string * variant"
-specified = "morel"
 description = """
 is a dynamically-typed value that can hold any Morel value.
 """
@@ -5510,7 +5145,6 @@ of elements.
 ordinal = 219
 structure = "Vector"
 name = "all"
-specified = "basis"
 type = "(α → bool) → α vector → bool"
 prototype = "all f vec"
 description = """
@@ -5524,7 +5158,6 @@ to `not(exists (not o f) vec)`.
 ordinal = 220
 structure = "Vector"
 name = "app"
-specified = "basis"
 type = "(α → unit) → α vector → unit"
 prototype = "app f vec"
 description = """
@@ -5539,7 +5172,6 @@ left to right order (i.e., in order of increasing indices).
 ordinal = 221
 structure = "Vector"
 name = "appi"
-specified = "basis"
 type = "(int * α → unit) → α vector → unit"
 prototype = "appi f vec"
 description = """
@@ -5554,7 +5186,6 @@ left to right order (i.e., in order of increasing indices).
 ordinal = 222
 structure = "Vector"
 name = "collate"
-specified = "basis"
 type = "(α * α -> order) -> α vector * α vector -> order"
 prototype = "collate f (v1, v2)"
 description = """
@@ -5566,7 +5197,6 @@ vectors using the given ordering `f` on elements.
 ordinal = 223
 structure = "Vector"
 name = "concat"
-specified = "basis"
 type = "α vector list → α vector"
 prototype = "concat l"
 description = """
@@ -5579,7 +5209,6 @@ exceeds `maxLen`
 ordinal = 224
 structure = "Vector"
 name = "exists"
-specified = "basis"
 type = "(α -> bool) -> α vector -> bool"
 prototype = "exists f vec"
 description = """
@@ -5593,7 +5222,6 @@ otherwise.
 ordinal = 225
 structure = "Vector"
 name = "find"
-specified = "basis"
 type = "(α → bool) → α vector → α option"
 prototype = "find f vec"
 description = """
@@ -5606,7 +5234,6 @@ if such an `x` exists; otherwise it returns `NONE`.
 ordinal = 226
 structure = "Vector"
 name = "findi"
-specified = "basis"
 type = "(int * α → bool) → α vector → (int * α) option"
 prototype = "findi f vec"
 description = """
@@ -5620,7 +5247,6 @@ returns `NONE`.
 ordinal = 227
 structure = "Vector"
 name = "foldl"
-specified = "basis"
 type = "(α * β → β) → β → α vector → β"
 prototype = "foldl f init vec"
 description = """
@@ -5632,7 +5258,6 @@ vector `vec`, left to right, using the initial value `init`.
 ordinal = 228
 structure = "Vector"
 name = "foldli"
-specified = "basis"
 type = "(int * α * β → β) → β → α vector → β"
 prototype = "foldli f init vec"
 description = """
@@ -5645,7 +5270,6 @@ element) pairs of vector `vec`, left to right, using the initial value
 ordinal = 229
 structure = "Vector"
 name = "foldr"
-specified = "basis"
 type = "(α * β → β) → β → α vector → β"
 prototype = "foldr f init vec"
 description = """
@@ -5657,7 +5281,6 @@ vector `vec`, right to left, using the initial value `init`.
 ordinal = 230
 structure = "Vector"
 name = "foldri"
-specified = "basis"
 type = "(int * α * β → β) → β → α vector → β"
 prototype = "foldri f init vec"
 description = """
@@ -5670,7 +5293,6 @@ element) pairs of vector `vec`, right to left, using the initial value
 ordinal = 231
 structure = "Vector"
 name = "fromList"
-specified = "basis"
 type = "α list → α vector"
 prototype = "fromList l"
 description = """
@@ -5684,7 +5306,6 @@ and with the `i`<sup>th</sup> element of `l` used as the
 ordinal = 232
 structure = "Vector"
 name = "length"
-specified = "basis"
 type = "α vector → int"
 prototype = "length v"
 method = true
@@ -5696,7 +5317,6 @@ returns the number of elements in the vector `v`.
 ordinal = 233
 structure = "Vector"
 name = "map"
-specified = "basis"
 type = "(α → β) → α vector → β vector"
 prototype = "map f vec"
 description = """
@@ -5711,7 +5331,6 @@ vector `vec`.
 ordinal = 234
 structure = "Vector"
 name = "mapi"
-specified = "basis"
 type = "(int * α → β) → α vector → β vector"
 prototype = "mapi f vec"
 description = """
@@ -5727,7 +5346,6 @@ each call.
 ordinal = 235
 structure = "Vector"
 name = "maxLen"
-specified = "basis"
 type = "int"
 prototype = "maxLen"
 description = """
@@ -5739,7 +5357,6 @@ implementation.
 ordinal = 236
 structure = "Vector"
 name = "sub"
-specified = "basis"
 type = "α vector * int → α"
 prototype = "sub (vec, i)"
 method = true
@@ -5752,7 +5369,6 @@ Raises `Subscript` if `i` < 0 or `size vec` &le; `i`.
 ordinal = 237
 structure = "Vector"
 name = "tabulate"
-specified = "basis"
 type = "int * (int → α) → α vector"
 prototype = "tabulate (n, f)"
 description = """
@@ -5769,7 +5385,6 @@ Raises `Size` if `n` < 0 or `maxLen` < `n`.
 ordinal = 238
 structure = "Vector"
 name = "update"
-specified = "basis"
 type = "α vector * int * α → α vector"
 prototype = "update (vec, i, x)"
 description = """

@@ -138,6 +138,7 @@ class SignatureChecker {
     final String content =
         Files.asCharSource(file, StandardCharsets.UTF_8).read();
     final Map<String, List<SpecInfo>> result = new LinkedHashMap<>();
+    final Map<String, String> specifiedByStructure = new HashMap<>();
     ml(content)
         .withParser(
             parser -> {
@@ -151,9 +152,26 @@ class SignatureChecker {
                 final Ast.SignatureDecl decl = (Ast.SignatureDecl) node;
                 for (Ast.SignatureBind bind : decl.binds) {
                   final String structure = structureName(bind);
+                  // Find structure-level [@@@specified "X"] if present.
+                  String defaultSpecified = "basis";
+                  for (Ast.Spec spec : bind.specs) {
+                    if (spec.op == Op.FLOATING_ATTR_SPEC) {
+                      final Ast.FloatingAttrSpec f =
+                          (Ast.FloatingAttrSpec) spec;
+                      if ("specified".equals(f.attribute.name)
+                          && f.attribute.payload instanceof Ast.Literal) {
+                        final Object v =
+                            ((Ast.Literal) f.attribute.payload).value;
+                        if (v instanceof String) {
+                          defaultSpecified = (String) v;
+                        }
+                      }
+                    }
+                  }
+                  specifiedByStructure.put(structure, defaultSpecified);
                   result
                       .computeIfAbsent(structure, k -> new ArrayList<>())
-                      .addAll(specsFromBind(structure, bind));
+                      .addAll(specsFromBind(structure, bind, defaultSpecified));
                 }
               } catch (Exception e) {
                 throw new RuntimeException(
@@ -174,7 +192,7 @@ class SignatureChecker {
   }
 
   private List<SpecInfo> specsFromBind(
-      String structure, Ast.SignatureBind bind) {
+      String structure, Ast.SignatureBind bind, String defaultSpecified) {
     final List<SpecInfo> specs = new ArrayList<>();
     for (Ast.Spec spec : bind.specs) {
       final List<Ast.Attribute> attrs;
@@ -183,11 +201,15 @@ class SignatureChecker {
         final Ast.AttributedSpec a = (Ast.AttributedSpec) spec;
         attrs = a.attributes;
         inner = a.spec;
+      } else if (spec.op == Op.FLOATING_ATTR_SPEC) {
+        continue; // floating attrs handled separately
       } else {
         attrs = Collections.emptyList();
         inner = spec;
       }
       final boolean method = hasAttribute(attrs, "method");
+      final String specified =
+          stringAttribute(attrs, "specified", defaultSpecified);
       if (inner.op == Op.SPEC_VAL) {
         final Ast.ValSpec valSpec = (Ast.ValSpec) inner;
         final AstTypeStringifier stringifier = new AstTypeStringifier();
@@ -197,18 +219,33 @@ class SignatureChecker {
                 valSpec.name.name,
                 stringifier.str(valSpec.type),
                 true,
-                method));
+                method,
+                specified));
       } else if (inner.op == Op.SPEC_TYPE) {
         final Ast.TypeSpec typeSpec = (Ast.TypeSpec) inner;
-        specs.add(new SpecInfo(SpecKind.TYPE, typeSpec.name.name, "", true));
+        specs.add(
+            new SpecInfo(
+                SpecKind.TYPE, typeSpec.name.name, "", true, false, specified));
       } else if (inner.op == Op.SPEC_DATATYPE) {
         final Ast.DatatypeSpec datatypeSpec = (Ast.DatatypeSpec) inner;
         specs.add(
-            new SpecInfo(SpecKind.TYPE, datatypeSpec.name.name, "", true));
+            new SpecInfo(
+                SpecKind.TYPE,
+                datatypeSpec.name.name,
+                "",
+                true,
+                false,
+                specified));
       } else if (inner.op == Op.SPEC_EXCEPTION) {
         final Ast.ExceptionSpec exnSpec = (Ast.ExceptionSpec) inner;
         specs.add(
-            new SpecInfo(SpecKind.EXCEPTION, exnSpec.name.name, "", true));
+            new SpecInfo(
+                SpecKind.EXCEPTION,
+                exnSpec.name.name,
+                "",
+                true,
+                false,
+                specified));
       }
     }
     return specs;
@@ -221,6 +258,23 @@ class SignatureChecker {
       }
     }
     return false;
+  }
+
+  /**
+   * Returns the string payload of the named attribute, or {@code defaultValue}
+   * if not present.
+   */
+  private static String stringAttribute(
+      List<Ast.Attribute> attrs, String name, String defaultValue) {
+    for (Ast.Attribute a : attrs) {
+      if (a.name.equals(name) && a.payload instanceof Ast.Literal) {
+        final Object v = ((Ast.Literal) a.payload).value;
+        if (v instanceof String) {
+          return (String) v;
+        }
+      }
+    }
+    return defaultValue;
   }
 
   private static final Pattern COMMENTED_VAL_PATTERN =
@@ -360,22 +414,30 @@ class SignatureChecker {
     final boolean implemented;
     /** True if the spec is annotated {@code [@@method]}. */
     final boolean method;
+    /**
+     * Effective {@code specified} value: the {@code [@@specified "X"]} override
+     * if present, otherwise the structure's {@code [@@@specified "X"]} default,
+     * otherwise {@code "basis"}.
+     */
+    final String specified;
 
     SpecInfo(
         SpecKind kind,
         String name,
         String type,
         boolean implemented,
-        boolean method) {
+        boolean method,
+        String specified) {
       this.kind = kind;
       this.name = name;
       this.type = type;
       this.implemented = implemented;
       this.method = method;
+      this.specified = specified;
     }
 
     SpecInfo(SpecKind kind, String name, String type, boolean implemented) {
-      this(kind, name, type, implemented, false);
+      this(kind, name, type, implemented, false, "basis");
     }
   }
 

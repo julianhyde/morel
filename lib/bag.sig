@@ -20,6 +20,7 @@
  *)
 signature BAG =
 sig
+  [@@@specified "morel"]
   (* a multiset of values of type 'a, an equality type if 'a is. *)
   eqtype 'a bag
 

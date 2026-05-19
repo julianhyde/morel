@@ -20,6 +20,7 @@
  *)
 signature INTERACT =
 sig
+  [@@@specified "morel"]
 
   (* loads source text from the file named f. *)
   val use : string -> unit

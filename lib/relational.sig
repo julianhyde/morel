@@ -20,6 +20,7 @@
  *)
 signature RELATIONAL =
 sig
+  [@@@specified "morel"]
 
   (* wraps a value so that it sorts in descending order when used with
    * Relational.compare. *)

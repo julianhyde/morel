@@ -21,6 +21,7 @@
  *)
 signature EITHER =
 sig
+  [@@@specified "basis+"]
   (* A generic union type with left and right variants. *)
   datatype ('left, 'right) either = INL of 'left | INR of 'right
 

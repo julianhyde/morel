@@ -20,6 +20,7 @@
  *)
 signature DATALOG =
 sig
+  [@@@specified "morel"]
 
   (* executes a Datalog program and returns formatted output as a
    * variant. *)
