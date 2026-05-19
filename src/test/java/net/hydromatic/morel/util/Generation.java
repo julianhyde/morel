@@ -55,10 +55,9 @@ public class Generation {
    * Returns the set of "Structure.name" keys for all functions declared in any
    * {@code lib/*.sig} file.
    */
-  public static Set<String> functionNames() throws IOException {
+  public static Set<String> functionNames(Model model) {
     final Set<String> names = new HashSet<>();
-    final Model model = loadModel();
-    for (List<FnDef> fns : model.functionsByStructure.values()) {
+    for (List<FnDef> fns : model.functionsByStructure().values()) {
       for (FnDef fn : fns) {
         names.add(fn.structure + "." + fn.canonicalName());
       }
@@ -70,10 +69,9 @@ public class Generation {
    * Returns the set of "Structure.name" keys for functions annotated {@code
    * [@@method]} in their {@code lib/*.sig}.
    */
-  public static Set<String> methodNames() throws IOException {
+  public static Set<String> methodNames(Model model) {
     final Set<String> names = new HashSet<>();
-    final Model model = loadModel();
-    for (List<FnDef> fns : model.functionsByStructure.values()) {
+    for (List<FnDef> fns : model.functionsByStructure().values()) {
       for (FnDef fn : fns) {
         if (fn.method) {
           names.add(fn.structure + "." + fn.canonicalName());
@@ -85,9 +83,10 @@ public class Generation {
 
   /**
    * Loads the data model of all structures, types, exceptions, and functions
-   * from the {@code lib/*.sig} files. Built fresh on every call.
+   * from the {@code lib/*.sig} files. The result is immutable; callers should
+   * hold the model and pass it to the methods that consume it.
    */
-  static Model loadModel() throws IOException {
+  public static Model loadModel() throws IOException {
     final File libDir = new File("lib");
     checkArgument(libDir.isDirectory(), "lib directory not found: %s", libDir);
     final SignatureChecker checker = new SignatureChecker();
@@ -160,22 +159,37 @@ public class Generation {
       tysByStructure.put(structure, tys);
       exnsByStructure.put(structure, exns);
     }
-    return new Model(
+    return new ModelImpl(
         structures, fnsByStructure, tysByStructure, exnsByStructure);
   }
 
-  /** Loaded data: structures and per-structure functions, types, exceptions. */
-  static class Model {
+  /**
+   * Immutable snapshot of all structures, types, exceptions, and functions
+   * loaded from {@code lib/*.sig}. Callers obtain a Model via {@link
+   * #loadModel()} and pass it to the generation/lookup methods.
+   */
+  public interface Model {
     /** Structures, sorted by name. */
-    final Map<String, StrDef> structures;
-    /** Per-structure function lists in physical .sig file order. */
-    final Map<String, List<FnDef>> functionsByStructure;
-    /** Per-structure type lists in physical .sig file order. */
-    final Map<String, List<TyDef>> typesByStructure;
-    /** Per-structure exception lists in physical .sig file order. */
-    final Map<String, List<ExnDef>> exceptionsByStructure;
+    Map<String, StrDef> structures();
 
-    Model(
+    /** Per-structure function lists in physical .sig file order. */
+    Map<String, List<FnDef>> functionsByStructure();
+
+    /** Per-structure type lists in physical .sig file order. */
+    Map<String, List<TyDef>> typesByStructure();
+
+    /** Per-structure exception lists in physical .sig file order. */
+    Map<String, List<ExnDef>> exceptionsByStructure();
+  }
+
+  /** Default implementation of {@link Model}. */
+  private static class ModelImpl implements Model {
+    private final Map<String, StrDef> structures;
+    private final Map<String, List<FnDef>> functionsByStructure;
+    private final Map<String, List<TyDef>> typesByStructure;
+    private final Map<String, List<ExnDef>> exceptionsByStructure;
+
+    ModelImpl(
         Map<String, StrDef> structures,
         Map<String, List<FnDef>> fnsByStructure,
         Map<String, List<TyDef>> tysByStructure,
@@ -184,6 +198,26 @@ public class Generation {
       this.functionsByStructure = fnsByStructure;
       this.typesByStructure = tysByStructure;
       this.exceptionsByStructure = exnsByStructure;
+    }
+
+    @Override
+    public Map<String, StrDef> structures() {
+      return structures;
+    }
+
+    @Override
+    public Map<String, List<FnDef>> functionsByStructure() {
+      return functionsByStructure;
+    }
+
+    @Override
+    public Map<String, List<TyDef>> typesByStructure() {
+      return typesByStructure;
+    }
+
+    @Override
+    public Map<String, List<ExnDef>> exceptionsByStructure() {
+      return exceptionsByStructure;
     }
   }
 
@@ -267,17 +301,17 @@ public class Generation {
   }
 
   /** Returns the list of structure names, sorted. */
-  public static List<String> structureNames() throws IOException {
-    return new ArrayList<>(loadModel().structures.keySet());
+  public static List<String> structureNames(Model model) {
+    return new ArrayList<>(model.structures().keySet());
   }
 
   /**
    * Returns the set of {@code (structure, name)} pairs for all {@code type},
    * {@code eqtype}, and {@code datatype} declarations in any {@code lib/*.sig}.
    */
-  public static Set<List<String>> typeNames() throws IOException {
+  public static Set<List<String>> typeNames(Model model) {
     final Set<List<String>> names = new HashSet<>();
-    for (List<TyDef> tys : loadModel().typesByStructure.values()) {
+    for (List<TyDef> tys : model.typesByStructure().values()) {
       for (TyDef ty : tys) {
         names.add(Arrays.asList(ty.structure, ty.name));
       }
@@ -286,40 +320,34 @@ public class Generation {
   }
 
   /**
-   * Reads the {@code functions.toml} file and generates a two-column index
-   * table of structures into {@code reference.md}.
+   * Generates a two-column index table of structures into {@code reference.md}.
    *
    * <p>Each row links the structure name to its {@code docs/lib/{name}.md}
    * page; the description column contains the one-sentence description followed
    * by a comma-separated list of hyperlinked members (types, exceptions,
    * functions).
-   *
-   * <p>Also validates that {@code [[structures]]} entries are sorted by name,
-   * and that all {@code [[functions]]}, {@code [[types]]}, and {@code
-   * [[exceptions]]} entries are sorted within each structure.
    */
-  public static void generateStructureIndex(PrintWriter pw) throws IOException {
-    generateStructureIndexImpl(pw, "lib/", true);
+  public static void generateStructureIndex(Model model, PrintWriter pw) {
+    generateStructureIndexImpl(model, pw, "lib/", true);
   }
 
   /**
-   * Reads the {@code functions.toml} file and generates a two-column index
-   * table of structures into {@code docs/lib/index.md}.
+   * Generates a two-column index table of structures into {@code
+   * docs/lib/index.md}.
    *
    * <p>Like {@link #generateStructureIndex} but uses local links (no {@code
    * lib/} prefix) since the file is already inside {@code docs/lib/}.
    */
-  public static void generateLibIndex(PrintWriter pw) throws IOException {
-    generateStructureIndexImpl(pw, "", false);
+  public static void generateLibIndex(Model model, PrintWriter pw) {
+    generateStructureIndexImpl(model, pw, "", false);
   }
 
   private static void generateStructureIndexImpl(
-      PrintWriter pw, String linkPrefix, boolean checkSort) throws IOException {
-    final Model model = loadModel();
+      Model model, PrintWriter pw, String linkPrefix, boolean checkSort) {
     // Structures are sorted alphabetically by TreeMap.
     if (checkSort) {
       final List<String> structureNames =
-          new ArrayList<>(model.structures.keySet());
+          new ArrayList<>(model.structures().keySet());
       if (!Ordering.natural().isOrdered(structureNames)) {
         fail(
             "Structure names are not sorted\n"
@@ -330,25 +358,28 @@ public class Generation {
     pw.printf("%n");
     final Tabulator tabulator = new Tabulator(pw, -1, -1);
     tabulator.header("Structure", "Description");
-    for (StrDef strDef : model.structures.values()) {
+    for (StrDef strDef : model.structures().values()) {
       final String kebab = toKebab(strDef.name);
       final String link =
           "[" + strDef.name + "](" + linkPrefix + kebab + ".md)";
       final String linkBase = linkPrefix + kebab + ".md";
       final LinkedHashSet<String> members = new LinkedHashSet<>();
       for (TyDef ty :
-          model.typesByStructure.getOrDefault(
-              strDef.name, Collections.emptyList())) {
+          model
+              .typesByStructure()
+              .getOrDefault(strDef.name, Collections.emptyList())) {
         members.add(ty.name);
       }
       for (ExnDef e :
-          model.exceptionsByStructure.getOrDefault(
-              strDef.name, Collections.emptyList())) {
+          model
+              .exceptionsByStructure()
+              .getOrDefault(strDef.name, Collections.emptyList())) {
         members.add(e.name);
       }
       for (FnDef fn :
-          model.functionsByStructure.getOrDefault(
-              strDef.name, Collections.emptyList())) {
+          model
+              .functionsByStructure()
+              .getOrDefault(strDef.name, Collections.emptyList())) {
         members.add(fn.canonicalName());
       }
       final String memberList =
@@ -377,9 +408,9 @@ public class Generation {
    * Reads the {@code functions.toml} file and generates the body of a
    * per-structure page at {@code docs/lib/{structure}.md}.
    */
-  public static void generateStructureDoc(String structure, PrintWriter pw)
-      throws IOException {
-    new StructureDocGenerator(structure, pw).generate();
+  public static void generateStructureDoc(
+      Model model, String structure, PrintWriter pw) {
+    new StructureDocGenerator(model, structure, pw).generate();
   }
 
   /** Generates a table of properties into {@code reference.md}. */
@@ -404,30 +435,29 @@ public class Generation {
    *
    * <p>Unrecognized keys are silently ignored (no output written).
    */
-  public static void generateSection(String key, PrintWriter pw)
-      throws IOException {
+  public static void generateSection(Model model, String key, PrintWriter pw) {
     switch (key) {
       case "structures":
-        generateStructureIndex(pw);
+        generateStructureIndex(model, pw);
         break;
       case "properties":
         generatePropertyTable(pw);
         break;
       case "lib/index":
-        generateLibIndex(pw);
+        generateLibIndex(model, pw);
         break;
       default:
         if (key.startsWith("lib/")) {
           final String kebab = key.substring(4);
           final String structureName =
-              structureNames().stream()
+              structureNames(model).stream()
                   .filter(n -> toKebab(n).equals(kebab))
                   .findFirst()
                   .orElseThrow(
                       () ->
                           new IllegalArgumentException(
                               "No structure for key: " + key));
-          generateStructureDoc(structureName, pw);
+          generateStructureDoc(model, structureName, pw);
         }
         break;
     }
@@ -585,28 +615,30 @@ public class Generation {
     final List<FnDef> allFns;
     final Map<FnDef, String> fnAnchors;
 
-    StructureDocGenerator(String structure, PrintWriter pw) throws IOException {
+    StructureDocGenerator(Model model, String structure, PrintWriter pw) {
       this.structure = structure;
       this.pw = pw;
-      final Model model = loadModel();
       this.strDef =
           requireNonNull(
-              model.structures.get(structure),
+              model.structures().get(structure),
               "structure not found: " + structure);
       this.tyDefs =
-          model.typesByStructure.getOrDefault(
-              structure, Collections.emptyList());
+          model
+              .typesByStructure()
+              .getOrDefault(structure, Collections.emptyList());
       this.exnDefs =
-          model.exceptionsByStructure.getOrDefault(
-              structure, Collections.emptyList());
+          model
+              .exceptionsByStructure()
+              .getOrDefault(structure, Collections.emptyList());
       // Within the structure's doc page, basis-specified functions are
       // listed first, then a "Morel extensions" section. Preserve physical
       // .sig file order within each group.
       this.basisFns = new ArrayList<>();
       this.morelFns = new ArrayList<>();
       for (FnDef fn :
-          model.functionsByStructure.getOrDefault(
-              structure, Collections.emptyList())) {
+          model
+              .functionsByStructure()
+              .getOrDefault(structure, Collections.emptyList())) {
         if ("morel".equals(fn.specified)) {
           morelFns.add(fn);
         } else {

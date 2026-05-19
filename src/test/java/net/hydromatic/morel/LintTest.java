@@ -1302,6 +1302,7 @@ public class LintTest {
     final List<File> mdFiles = new ArrayList<>();
     collectMdFiles(docsDir, mdFiles);
     mdFiles.sort(Comparator.comparing(File::getPath));
+    final Generation.Model model = Generation.loadModel();
     for (File file : mdFiles) {
       final String relPath = docsDir.toURI().relativize(file.toURI()).getPath();
       final File genFile = new File(targetDocsDir, relPath);
@@ -1321,7 +1322,7 @@ public class LintTest {
           if (line.startsWith("[//]: # (start:")) {
             final String key = line.substring(15, line.length() - 1);
             emit = false;
-            Generation.generateSection(key, pw);
+            Generation.generateSection(model, key, pw);
           }
         }
       }
@@ -1368,7 +1369,8 @@ public class LintTest {
    */
   @Test
   void testBuiltInsDocumented() throws IOException {
-    final Set<String> documented = Generation.functionNames();
+    final Set<String> documented =
+        Generation.functionNames(Generation.loadModel());
     final Set<String> missing = new TreeSet<>();
     for (BuiltIn builtIn : BuiltIn.values()) {
       final String structure = builtIn.structure;
@@ -1410,7 +1412,8 @@ public class LintTest {
    */
   @Test
   void testMethodConsistent() throws IOException {
-    final Set<String> sigMethod = Generation.methodNames();
+    final Set<String> sigMethod =
+        Generation.methodNames(Generation.loadModel());
     final List<String> errors = new ArrayList<>();
     for (BuiltIn builtIn : BuiltIn.values()) {
       final String structure = builtIn.structure;
@@ -1445,7 +1448,8 @@ public class LintTest {
    */
   @Test
   void testDatatypesDocumented() throws IOException {
-    final Set<List<String>> documented = Generation.typeNames();
+    final Set<List<String>> documented =
+        Generation.typeNames(Generation.loadModel());
     final List<String> missing = new ArrayList<>();
     for (BuiltIn.Datatype datatype : BuiltIn.Datatype.values()) {
       final String structure = datatype.structure;
@@ -1497,7 +1501,8 @@ public class LintTest {
     final File baseDir = TestUtils.getBaseDir(TestUtils.class);
     final File libDir = new File(baseDir, "docs/lib");
     final List<String> missing = new ArrayList<>();
-    for (String structureName : Generation.structureNames()) {
+    for (String structureName :
+        Generation.structureNames(Generation.loadModel())) {
       final String fileName = Generation.toKebab(structureName) + ".md";
       if (!new File(libDir, fileName).exists()) {
         missing.add(fileName);
