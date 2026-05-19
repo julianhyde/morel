@@ -51,7 +51,7 @@ exception <a id='Subscript' href="#Subscript-impl">Subscript</a>
 
 val <a id='exnName' href="#exnName-impl">exnName</a> : exn -> string
 val <a id='exnMessage' href="#exnMessage-impl">exnMessage</a> : exn -> string
-val <a id='o' href="#o-impl">o</a> : ('b -> 'c) ('a -> 'b) -> 'a -> 'c
+val <a id='o' href="#o-impl">o</a> : ('b -> 'c) * ('a -> 'b) -> 'a -> 'c
 val <a id='before' href="#before-impl">before</a> : 'a * unit -> 'a
 val <a id='ignore' href="#ignore-impl">ignore</a> : 'a -> unit
 </pre>

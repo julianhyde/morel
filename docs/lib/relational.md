@@ -33,16 +33,16 @@ extend Standard ML with relational-algebra capabilities.
 <pre>
 datatype 'a <a id='descending' href="#descending-impl">descending</a> = DESC of 'a
 
-val <a id='count' href="#count-impl">count</a> : int list -> int
-val <a id='empty' href="#empty-impl">empty</a> : 'a list -> bool
+val <a id='count' href="#count-impl">count</a> : 'a bag -> int
+val <a id='empty' href="#empty-impl">empty</a> : 'a bag -> bool
 val <a id='iterate' href="#iterate-impl">iterate</a> : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
-val <a id='max' href="#max-impl">max</a> : 'a list -> 'a
-val <a id='min' href="#min-impl">min</a> : 'a list -> 'a
-val <a id='nonEmpty' href="#nonEmpty-impl">nonEmpty</a> : 'a list -> bool
-val <a id='only' href="#only-impl">only</a> : 'a list -> 'a
+val <a id='max' href="#max-impl">max</a> : 'a bag -> 'a
+val <a id='min' href="#min-impl">min</a> : 'a bag -> 'a
+val <a id='nonEmpty' href="#nonEmpty-impl">nonEmpty</a> : 'a bag -> bool
+val <a id='only' href="#only-impl">only</a> : 'a bag -> 'a
 val <a id='elem' href="#elem-impl">elem</a> : 'a * 'a bag -> bool, 'a * 'a list -> bool
 val <a id='notelem' href="#notelem-impl">notelem</a> : 'a * 'a bag -> bool, 'a * 'a list -> bool
-val <a id='sum' href="#sum-impl">sum</a> : int list -> int
+val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
 val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 </pre>
 

@@ -31,6 +31,8 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.fasterxml.jackson.databind.MappingIterator;
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -40,13 +42,18 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
@@ -1510,6 +1517,273 @@ public class LintTest {
               "Missing docs/lib files: %s\n" //
                   + "Create a file for each in %s",
               missing, libDir.getAbsolutePath()));
+    }
+  }
+
+  /**
+   * Checks that each {@code [[functions]]} / {@code [[types]]} / {@code
+   * [[exceptions]]} entry in {@code functions.toml} has a matching spec in the
+   * corresponding {@code lib/*.sig} file, with consistent name, type, and
+   * {@code implemented} flag.
+   *
+   * <p>Structures with no {@code .sig} file (the entire {@code lib/} directory
+   * is migrating piecemeal toward signatures) are skipped, as are TOML entries
+   * whose name is documented under a structure but has no corresponding {@link
+   * BuiltIn} enum value of that same structure (e.g. {@code Relational.elem},
+   * {@code Relational.notelem} — top-level operators parked here for docs).
+   */
+  @Test
+  void testSigToTomlConsistent() throws IOException {
+    final Map<String, File> sigByStructure = new HashMap<>();
+    final File libDir = new File("lib");
+    final File @Nullable [] sigFiles =
+        libDir.listFiles((d, n) -> n.endsWith(".sig"));
+    assertThat(sigFiles, notNullValue());
+    for (File sig : sigFiles) {
+      final String structure = structureFromSigPath(sig.getName());
+      if (structure != null) {
+        sigByStructure.put(structure, sig);
+      }
+    }
+
+    // Set of "Structure.name" keys actually backed by a BuiltIn entry for
+    // this structure — used to filter out TOML-only documentation rows.
+    final Set<String> builtInKeys = new HashSet<>();
+    for (BuiltIn b : BuiltIn.values()) {
+      if (b.structure != null
+          && !b.structure.equals("$")
+          && !b.structure.equals("Test")) {
+        builtInKeys.add(b.structure + "." + b.mlName);
+      }
+    }
+    for (BuiltIn.Datatype dt : BuiltIn.Datatype.values()) {
+      if (!dt.structure.equals("$")) {
+        builtInKeys.add(dt.structure + "." + dt.mlName());
+      }
+    }
+    for (Codes.BuiltInExn exn : Codes.BuiltInExn.values()) {
+      if (exn.structure != null) {
+        builtInKeys.add(exn.structure + "." + exn.mlName());
+      }
+    }
+
+    // Cache parsed .sig specs.
+    final SignatureChecker checker = new SignatureChecker();
+    final Map<String, Map<String, SignatureChecker.SpecInfo>> sigSpecsByStruct =
+        new HashMap<>();
+    for (Map.Entry<String, File> e : sigByStructure.entrySet()) {
+      final Map<String, List<SignatureChecker.SpecInfo>> parsed =
+          checker.parseSpecs(e.getValue());
+      final Map<String, SignatureChecker.SpecInfo> byName = new HashMap<>();
+      for (List<SignatureChecker.SpecInfo> infos : parsed.values()) {
+        for (SignatureChecker.SpecInfo info : infos) {
+          // Last-wins for overloaded names — same convention as
+          // SignatureChecker uses on the BuiltIn side.
+          byName.put(info.name, info);
+        }
+      }
+      sigSpecsByStruct.put(e.getKey(), byName);
+    }
+
+    // Group TOML entries by (structure + name) — last write wins for
+    // overloaded names, matching how SignatureChecker collapses on the
+    // BuiltIn side. Each value is (section, entry).
+    final Map<String, Map.Entry<String, Map<String, Object>>> tomlByKey =
+        new LinkedHashMap<>();
+    final TomlMapper mapper = new TomlMapper();
+    try (MappingIterator<Object> it =
+        mapper.readerForMapOf(Object.class).readValues(Generation.getFile())) {
+      while (it.hasNextValue()) {
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> row = (Map<String, Object>) it.nextValue();
+        collectTomlRows(row, "functions", tomlByKey);
+        collectTomlRows(row, "types", tomlByKey);
+        collectTomlRows(row, "exceptions", tomlByKey);
+      }
+    }
+
+    final List<String> errors = new ArrayList<>();
+    for (Map.Entry<String, Map.Entry<String, Map<String, Object>>> e :
+        tomlByKey.entrySet()) {
+      final String section = e.getValue().getKey();
+      final Map<String, Object> entry = e.getValue().getValue();
+      checkTomlEntry(section, entry, sigSpecsByStruct, builtInKeys, errors);
+    }
+
+    if (!errors.isEmpty()) {
+      fail(
+          "TOML / .sig divergence (fix functions.toml or the .sig file):\n"
+              + String.join("\n", errors));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void collectTomlRows(
+      Map<String, Object> row,
+      String section,
+      Map<String, Map.Entry<String, Map<String, Object>>> tomlByKey) {
+    final Object listObj = row.get(section);
+    if (!(listObj instanceof List)) {
+      return;
+    }
+    for (Map<String, Object> entry : (List<Map<String, Object>>) listObj) {
+      final String structure = (String) entry.get("structure");
+      final String rawName = (String) entry.get("name");
+      if (structure == null || rawName == null) {
+        continue;
+      }
+      final int comma = rawName.indexOf(", ");
+      final String name = comma >= 0 ? rawName.substring(0, comma) : rawName;
+      tomlByKey.put(
+          structure + "." + name + " (" + section + ")",
+          new AbstractMap.SimpleEntry<>(section, entry));
+    }
+  }
+
+  private static void checkTomlEntry(
+      String section,
+      Map<String, Object> entry,
+      Map<String, Map<String, SignatureChecker.SpecInfo>> sigSpecsByStruct,
+      Set<String> builtInKeys,
+      List<String> errors) {
+    final String structure = (String) entry.get("structure");
+    final String rawName = (String) entry.get("name");
+    final int comma = rawName.indexOf(", ");
+    final String name = comma >= 0 ? rawName.substring(0, comma) : rawName;
+
+    final Map<String, SignatureChecker.SpecInfo> sigSpecs =
+        sigSpecsByStruct.get(structure);
+    if (sigSpecs == null) {
+      return; // structure has no .sig file yet
+    }
+
+    // Skip TOML rows that have no corresponding BuiltIn entry under the
+    // same structure (e.g. Relational.elem documents OP_ELEM, which has
+    // structure=null and is not a Relational member).
+    final String key = structure + "." + name;
+    if (!builtInKeys.contains(key)) {
+      return;
+    }
+
+    // Skip datatype constructors masquerading as functions in TOML —
+    // they're declared via `datatype` in the .sig, not `val`.
+    if ("List".equals(structure) && ("nil".equals(name) || "::".equals(name))) {
+      return;
+    }
+    if ("Bool".equals(structure)
+        && ("true".equals(name) || "false".equals(name))) {
+      return;
+    }
+
+    final SignatureChecker.SpecInfo spec = sigSpecs.get(name);
+    if (spec == null) {
+      errors.add(
+          format(
+              "%s.%s (%s): in functions.toml but no matching spec in .sig",
+              structure, name, singular(section)));
+      return;
+    }
+
+    // Check implemented flag.
+    final boolean tomlImpl = !Boolean.FALSE.equals(entry.get("implemented"));
+    if (tomlImpl != spec.implemented) {
+      errors.add(
+          format(
+              "%s.%s (%s): implemented mismatch — TOML=%s, .sig=%s",
+              structure, name, singular(section), tomlImpl, spec.implemented));
+    }
+
+    // Check type (functions only; types/exceptions are matched by name only
+    // for now — types have richer structure that needs richer comparison).
+    if (section.equals("functions")) {
+      final String tomlType = (String) entry.get("type");
+      if (tomlType != null) {
+        final String canonical = SignatureChecker.canonicalizeType(tomlType);
+        if (canonical != null && !canonical.equals(spec.type)) {
+          errors.add(
+              format(
+                  "%s.%s (function): type mismatch%n"
+                      + "  TOML: %s%n"
+                      + "  .sig: (canonical) %s",
+                  structure, name, tomlType, spec.type));
+        }
+      }
+    }
+  }
+
+  /** Returns the structure name for a {@code lib/foo.sig} file, or null. */
+  @SuppressWarnings("checkstyle:MagicNumber")
+  private static @Nullable String structureFromSigPath(String fileName) {
+    if (!fileName.endsWith(".sig")) {
+      return null;
+    }
+    final String stem = fileName.substring(0, fileName.length() - 4);
+    switch (stem) {
+      case "bool":
+        return "Bool";
+      case "char":
+        return "Char";
+      case "either":
+        return "Either";
+      case "fn":
+        return "Fn";
+      case "general":
+        return "General";
+      case "integer":
+        return "Int";
+      case "list":
+        return "List";
+      case "listpair":
+        return "ListPair";
+      case "math":
+        return "Math";
+      case "option":
+        return "Option";
+      case "real":
+        return "Real";
+      case "string":
+        return "String";
+      case "variant":
+        return "Variant";
+      case "vector":
+        return "Vector";
+      case "bag":
+        return "Bag";
+      case "datalog":
+        return "Datalog";
+      case "date":
+        return "Date";
+      case "ieeereal":
+        return "IEEEReal";
+      case "intinf":
+        return "IntInf";
+      case "interact":
+        return "Interact";
+      case "range":
+        return "Range";
+      case "relational":
+        return "Relational";
+      case "stringcvt":
+        return "StringCvt";
+      case "sys":
+        return "Sys";
+      case "time":
+        return "Time";
+      default:
+        return null;
+    }
+  }
+
+  private static String singular(String section) {
+    switch (section) {
+      case "functions":
+        return "function";
+      case "types":
+        return "type";
+      case "exceptions":
+        return "exception";
+      default:
+        return section;
     }
   }
 

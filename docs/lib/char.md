@@ -37,7 +37,7 @@ eqtype <a id='char' href="#char-impl">char</a>
 
 val <a id='chr' href="#chr-impl">chr</a> : int -> char
 val <a id='compare' href="#compare-impl">compare</a> : char * char -> order
-val <a id='contains' href="#contains-impl">contains</a> : char -> string -> bool
+val <a id='contains' href="#contains-impl">contains</a> : string -> char -> bool
 val <a id='fromCString' href="#fromCString-impl">fromCString</a> : string -> char option
 val <a id='fromInt' href="#fromInt-impl">fromInt</a> : int -> char option
 val <a id='fromString' href="#fromString-impl">fromString</a> : string -> char option
@@ -55,9 +55,9 @@ val <a id='isPunct' href="#isPunct-impl">isPunct</a> : char -> bool
 val <a id='isSpace' href="#isSpace-impl">isSpace</a> : char -> bool
 val <a id='isUpper' href="#isUpper-impl">isUpper</a> : char -> bool
 val <a id='maxOrd' href="#maxOrd-impl">maxOrd</a> : int
-val <a id='maxChar' href="#maxChar-impl">maxChar</a> : int
+val <a id='maxChar' href="#maxChar-impl">maxChar</a> : char
 val <a id='minChar' href="#minChar-impl">minChar</a> : char
-val <a id='notContains' href="#notContains-impl">notContains</a> : char -> string -> bool
+val <a id='notContains' href="#notContains-impl">notContains</a> : string -> char -> bool
 val <a id='ord' href="#ord-impl">ord</a> : char -> int
 val <a id='pred' href="#pred-impl">pred</a> : char -> char
 val <a id='succ' href="#succ-impl">succ</a> : char -> char

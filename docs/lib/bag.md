@@ -43,7 +43,7 @@ val <a id='tl' href="#tl-impl">tl</a> : 'a bag -> 'a bag
 val <a id='getItem' href="#getItem-impl">getItem</a> : 'a bag -> * ('a * 'a bag) option
 val <a id='take' href="#take-impl">take</a> : 'a bag * int -> 'a bag
 val <a id='drop' href="#drop-impl">drop</a> : 'a bag * int -> 'a bag
-val <a id='concat' href="#concat-impl">concat</a> : 'a bag bag -> 'a bag
+val <a id='concat' href="#concat-impl">concat</a> : 'a bag list -> 'a bag
 val <a id='app' href="#app-impl">app</a> : ('a -> unit) -> 'a bag -> unit
 val <a id='map' href="#map-impl">map</a> : ('a -> 'b) -> 'a bag -> 'b bag
 val <a id='mapPartial' href="#mapPartial-impl">mapPartial</a> : ('a -> 'b option) -> 'a bag -> 'b bag

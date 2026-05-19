@@ -40,8 +40,8 @@ exception <a id='Option' href="#Option-impl">Option</a>
 val <a id='app' href="#app-impl">app</a> : ('a -> unit) -> 'a option -> unit
 val <a id='compose' href="#compose-impl">compose</a> : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option
 val <a id='composePartial' href="#composePartial-impl">composePartial</a> : ('a -> 'b option) * ('c -> 'a option) -> 'c -> 'b option
-val <a id='map' href="#map-impl">map</a> : 'a -> 'b) -> 'a option -> 'b option
-val <a id='mapPartial' href="#mapPartial-impl">mapPartial</a> : 'a -> 'b option) -> 'a option -> 'b option
+val <a id='map' href="#map-impl">map</a> : ('a -> 'b) -> 'a option -> 'b option
+val <a id='mapPartial' href="#mapPartial-impl">mapPartial</a> : ('a -> 'b option) -> 'a option -> 'b option
 val <a id='getOpt' href="#getOpt-impl">getOpt</a> : 'a option * 'a -> 'a
 val <a id='isSome' href="#isSome-impl">isSome</a> : 'a option -> bool
 val <a id='filter' href="#filter-impl">filter</a> : ('a -> bool) -> 'a -> 'a option

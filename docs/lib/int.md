@@ -49,10 +49,10 @@ val <a id='compare' href="#compare-impl">compare</a> : int * int -> order
 val <a id='fromInt' href="#fromInt-impl">fromInt</a> : int -> int
 val <a id='fromString' href="#fromString-impl">fromString</a> : string -> int option
 val <a id='max' href="#max-impl">max</a> : int * int -> int
-val <a id='maxInt' href="#maxInt-impl">maxInt</a> : int
+val <a id='maxInt' href="#maxInt-impl">maxInt</a> : int option
 val <a id='min' href="#min-impl">min</a> : int * int -> int
-val <a id='minInt' href="#minInt-impl">minInt</a> : int
-val <a id='precision' href="#precision-impl">precision</a> : int
+val <a id='minInt' href="#minInt-impl">minInt</a> : int option
+val <a id='precision' href="#precision-impl">precision</a> : int option
 val <a id='quot' href="#quot-impl">quot</a> : int * int -> int
 val <a id='rem' href="#rem-impl">rem</a> : int * int -> int
 val <a id='sameSign' href="#sameSign-impl">sameSign</a> : int * int -> bool
