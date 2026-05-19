@@ -23,79 +23,79 @@ sig
   eqtype 'a vector
 
   (* The maximum length of vectors supported by this implementation. *)
-  val maxLen : int
+  val maxLen : int [@@prototype "maxLen"]
 
   (* Creates a vector from a list, where each element at index i in the
    * list becomes the element at index i in the resulting vector. *)
-  val fromList : 'a list -> 'a vector
+  val fromList : 'a list -> 'a vector [@@prototype "fromList l"]
 
   (* Creates a vector of n elements, where the elements are defined in
    * order of increasing index by applying f to the element's index. *)
-  val tabulate : int * (int -> 'a) -> 'a vector
+  val tabulate : int * (int -> 'a) -> 'a vector [@@prototype "tabulate (n, f)"]
 
   (* Returns the number of elements in a vector. *)
-  val length : 'a vector -> int [@@method]
+  val length : 'a vector -> int [@@method] [@@prototype "length v"]
 
   (* Returns the i(th) element of the vector vec.
    * Raises Subscript if the index is out of bounds. *)
-  val sub : 'a vector * int -> 'a [@@method]
+  val sub : 'a vector * int -> 'a [@@method] [@@prototype "sub (vec, i)"]
 
   (* Returns a new vector, identical to vec, except the i(th) element
    * of vec is set to x. *)
-  val update : 'a vector * int * 'a -> 'a vector
+  val update : 'a vector * int * 'a -> 'a vector [@@prototype "update (vec, i, x)"]
 
   (* Combines multiple vectors from a list into a single vector. *)
-  val concat : 'a vector list -> 'a vector
+  val concat : 'a vector list -> 'a vector [@@prototype "concat l"]
 
   (* Applies a function to each element and its index in left-to-right
    * order for side effects only. *)
-  val appi : (int * 'a -> unit) -> 'a vector -> unit
+  val appi : (int * 'a -> unit) -> 'a vector -> unit [@@prototype "appi f vec"]
 
   (* Applies a function to each element in left-to-right order for
    * side effects only. *)
-  val app : ('a -> unit) -> 'a vector -> unit
+  val app : ('a -> unit) -> 'a vector -> unit [@@prototype "app f vec"]
 
   (* Produces a new vector by mapping the function f from left to right
    * over the argument vector while supplying indices. *)
-  val mapi : (int * 'a -> 'b) -> 'a vector -> 'b vector
+  val mapi : (int * 'a -> 'b) -> 'a vector -> 'b vector [@@prototype "mapi f vec"]
 
   (* Produces a new vector by applying a function to each element from
    * left to right. *)
-  val map : ('a -> 'b) -> 'a vector -> 'b vector
+  val map : ('a -> 'b) -> 'a vector -> 'b vector [@@prototype "map f vec"]
 
   (* Accumulates a result by applying a function to each indexed element
    * from left to right. *)
-  val foldli : (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b
+  val foldli : (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b [@@prototype "foldli f init vec"]
 
   (* Accumulates a result by applying a function to each indexed element
    * from right to left. *)
-  val foldri : (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b
+  val foldri : (int * 'a * 'b -> 'b) -> 'b -> 'a vector -> 'b [@@prototype "foldri f init vec"]
 
   (* Accumulates a result by processing elements left to right without
    * index information. *)
-  val foldl : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b
+  val foldl : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b [@@prototype "foldl f init vec"]
 
   (* Accumulates a result by processing elements right to left without
    * index information. *)
-  val foldr : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b
+  val foldr : ('a * 'b -> 'b) -> 'b -> 'a vector -> 'b [@@prototype "foldr f init vec"]
 
   (* Searches for the first element satisfying a predicate, returning
    * both its index and value. *)
-  val findi : (int * 'a -> bool) -> 'a vector -> (int * 'a) option
+  val findi : (int * 'a -> bool) -> 'a vector -> (int * 'a) option [@@prototype "findi f vec"]
 
   (* Searches for the first element satisfying a predicate, returning
    * the element itself. *)
-  val find : ('a -> bool) -> 'a vector -> 'a option
+  val find : ('a -> bool) -> 'a vector -> 'a option [@@prototype "find f vec"]
 
   (* Returns true if any element satisfies the predicate. *)
-  val `exists` : ('a -> bool) -> 'a vector -> bool
+  val `exists` : ('a -> bool) -> 'a vector -> bool [@@prototype "exists f vec"]
 
   (* Returns true if all elements satisfy the predicate. *)
-  val all : ('a -> bool) -> 'a vector -> bool
+  val all : ('a -> bool) -> 'a vector -> bool [@@prototype "all f vec"]
 
   (* Performs lexicographic comparison of two vectors using a provided
    * element ordering function. *)
-  val collate : ('a * 'a -> `order`) -> 'a vector * 'a vector -> `order`
+  val collate : ('a * 'a -> `order`) -> 'a vector * 'a vector -> `order` [@@prototype "collate f (v1, v2)"]
 end
 
 (*) End vector.sig

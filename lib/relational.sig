@@ -28,49 +28,49 @@ sig
 
   (* returns LESS, EQUAL, or GREATER according to whether its first
    * argument is less than, equal to, or greater than the second. *)
-  val compare : 'a * 'a -> `order`
+  val compare : 'a * 'a -> `order` [@@prototype "compare (x, y)"]
 
   (* returns the number of elements in a bag (or list). Often used
    * with group, for example
    *   from e in emps
    *   group e.deptno compute countId = count *)
-  val count : 'a bag -> int [@@method]
+  val count : 'a bag -> int [@@method] [@@prototype "count list"]
 
   (* returns whether the bag (or list) is empty, for example
    *   from d in depts
    *   where empty (from e where e.deptno = d.deptno) *)
-  val empty : 'a bag -> bool [@@method]
+  val empty : 'a bag -> bool [@@method] [@@prototype "empty list"]
 
   (* computes a fixed point, starting with initialList and calling
    * listUpdate (prevList, newList) each iteration, terminating when
    * the result equals the previous result. *)
-  val iterate : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag [@@method]
+  val iterate : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag [@@method] [@@prototype "iterate initialList listUpdate"]
 
   (* returns the greatest element. Often used with group, for example
    *   from e in emps
    *   group e.deptno compute maxId = max of e.id *)
-  val max : 'a bag -> 'a [@@method]
+  val max : 'a bag -> 'a [@@method] [@@prototype "max list"]
 
   (* returns the least element. Often used with group, for example
    *   from e in emps
    *   group e.deptno compute minId = min of e.id *)
-  val min : 'a bag -> 'a [@@method]
+  val min : 'a bag -> 'a [@@method] [@@prototype "min list"]
 
   (* returns whether the bag (or list) has at least one element, for
    * example
    *   from d in depts
    *   where nonEmpty (from e where e.deptno = d.deptno) *)
-  val nonEmpty : 'a bag -> bool [@@method]
+  val nonEmpty : 'a bag -> bool [@@method] [@@prototype "nonEmpty list"]
 
   (* returns the sole element of a bag (or list); raises Empty if the
    * collection is empty, Size if it has more than one element. *)
-  val only : 'a bag -> 'a [@@method]
+  val only : 'a bag -> 'a [@@method] [@@prototype "only list"]
 
   (* returns the sum of the elements. Often used with group, for
    * example
    *   from e in emps
    *   group e.deptno compute sumId = sum of e.id *)
-  val sum : 'a bag -> 'a [@@method]
+  val sum : 'a bag -> 'a [@@method] [@@prototype "sum list"]
 end
 
 (*) End relational.sig

@@ -23,85 +23,85 @@ sig
   eqtype int
 
   (* Converts an integer to LargeInt representation. *)
-  val toLarge   : int -> (*LargeInt.*)int
+  val toLarge   : int -> (*LargeInt.*)int [@@prototype "toLarge i"]
 
   (* Converts from LargeInt representation; may raise Overflow. *)
-  val fromLarge : (*LargeInt.*)int -> int
+  val fromLarge : (*LargeInt.*)int -> int [@@prototype "fromLarge i"]
 
   (* Converts an integer to default Int representation. *)
-  val toInt   : int -> (*Int.*)int
+  val toInt   : int -> (*Int.*)int [@@prototype "toInt i"]
 
   (* Converts from default Int representation. *)
-  val fromInt : (*Int.*)int -> int
+  val fromInt : (*Int.*)int -> int [@@prototype "fromInt i"]
 
   (* The number of significant bits in this integer type; NONE for
    * infinite precision. *)
-  val precision : (*Int.*)int option
+  val precision : (*Int.*)int option [@@prototype "precision"]
 
   (* The smallest representable integer; NONE for infinite precision. *)
-  val minInt : int option
+  val minInt : int option [@@prototype "minInt"]
 
   (* The largest representable integer; NONE for infinite precision. *)
-  val maxInt : int option
+  val maxInt : int option [@@prototype "maxInt"]
 
 (*
-  val + : int * int -> int
-  val - : int * int -> int
+  val + : int * int -> int [@@prototype "i + j"]
+  val - : int * int -> int [@@prototype "i - j"]
   val * : int * int -> int
-*)
+*) [@@prototype "i * j"]
   (* Integer division truncated toward negative infinity; raises Div on
    * division by zero. *)
-  val div : int * int -> int
+  val div : int * int -> int [@@prototype "i div j"]
 
   (* Modulus operation; result has same sign as divisor; raises Div on
    * division by zero. *)
-  val mod : int * int -> int
+  val mod : int * int -> int [@@prototype "i mod j"]
 
   (* Integer division truncated toward zero; raises Div on division by
    * zero. *)
-  val quot : int * int -> int [@@method]
+  val quot : int * int -> int [@@method] [@@prototype "quot (i, j)"]
 
   (* Remainder operation; result has same sign as dividend; raises Div
    * on division by zero. *)
-  val rem : int * int -> int [@@method]
+  val rem : int * int -> int [@@method] [@@prototype "rem (i, j)"]
 
   (* Returns the ordering of two integers. *)
-  val compare : int * int -> `order` [@@method]
+  val compare : int * int -> `order` [@@method] [@@prototype "compare (i, j)"]
 (*
-  val <  : int * int -> bool
-  val <= : int * int -> bool
-  val >  : int * int -> bool
-  val >= : int * int -> bool
+  val <  : int * int -> bool [@@prototype "i < j"]
+  val <= : int * int -> bool [@@prototype "i <= j"]
+  val >  : int * int -> bool [@@prototype "i > j"]
+  val >= : int * int -> bool [@@prototype "i >= j"]
 
   val ~ : int -> int
-*)
+*) [@@prototype "~ i"]
   (* Returns the absolute value; raises Overflow on minInt for bounded types. *)
-  val abs : int -> int [@@method]
+  val abs : int -> int [@@method] [@@prototype "abs i"]
 
   (* Returns the smaller of two integers. *)
-  val min : int * int -> int [@@method]
+  val min : int * int -> int [@@method] [@@prototype "min (i, j)"]
 
   (* Returns the larger of two integers. *)
-  val max : int * int -> int [@@method]
+  val max : int * int -> int [@@method] [@@prototype "max (i, j)"]
 
   (* Returns -1, 0, or 1 when the argument is negative, zero, or positive. *)
-  val sign : int -> (*Int.*)int [@@method]
+  val sign : int -> (*Int.*)int [@@method] [@@prototype "sign i"]
 
   (* Returns true if both arguments have the same sign. *)
-  val sameSign : int * int -> bool [@@method]
+  val sameSign : int * int -> bool [@@method] [@@prototype "sameSign (i, j)"]
 
 (*
   val fmt      : StringCvt.radix -> int -> string
-*)
+*) [@@prototype "fmt radix i"]
   (* Converts an integer to its decimal string representation. *)
-  val toString : int -> string [@@method]
+  val toString : int -> string [@@method] [@@prototype "toString i"]
 (*
   val scan       : StringCvt.radix
                      -> (char, 'a) StringCvt.reader
                        -> (int, 'a) StringCvt.reader
-*)
+*) [@@prototype "scan radix getc strm"]
   (* Parses an integer from a string; returns SOME i or NONE. *)
-  val fromString : string -> int option
+  val fromString : string -> int option [@@prototype "fromString s"]
 end
 
 (*) End integer.sig

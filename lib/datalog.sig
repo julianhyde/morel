@@ -24,15 +24,15 @@ sig
 
   (* executes a Datalog program and returns formatted output as a
    * variant. *)
-  val execute : string -> variant
+  val execute : string -> variant [@@prototype "execute program"]
 
   (* translates a Datalog program to Morel source code, returning SOME
    * code if valid or NONE if invalid. *)
-  val translate : string -> string option
+  val translate : string -> string option [@@prototype "translate program"]
 
   (* validates a Datalog program and returns type information or error
    * message. *)
-  val validate : string -> string
+  val validate : string -> string [@@prototype "validate program"]
 end
 
 (*) End datalog.sig

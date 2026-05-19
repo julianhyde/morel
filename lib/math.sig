@@ -23,57 +23,57 @@ sig
   type real
 
   (* The constant pi (3.141592653...). *)
-  val pi : real
+  val pi : real [@@prototype "pi"]
 
   (* The base e (2.718281828...) of the natural logarithm. *)
-  val e : real
+  val e : real [@@prototype "e"]
 
   (* Returns the square root; returns NaN for negative values. *)
-  val sqrt : real -> real
+  val sqrt : real -> real [@@prototype "sqrt x"]
 
   (* Returns the sine of the argument (in radians). *)
-  val sin : real -> real
+  val sin : real -> real [@@prototype "sin x"]
 
   (* Returns the cosine of the argument (in radians). *)
-  val cos : real -> real
+  val cos : real -> real [@@prototype "cos x"]
 
   (* Returns the tangent of the argument (in radians). *)
-  val tan : real -> real
+  val tan : real -> real [@@prototype "tan x"]
 
   (* Returns the arc sine in the range [-pi/2, pi/2]; returns NaN if |x| > 1. *)
-  val asin : real -> real
+  val asin : real -> real [@@prototype "asin x"]
 
   (* Returns the arc cosine in the range [0, pi]; returns NaN if |x| > 1. *)
-  val acos : real -> real
+  val acos : real -> real [@@prototype "acos x"]
 
   (* Returns the arc tangent in the range (-pi/2, pi/2). *)
-  val atan : real -> real
+  val atan : real -> real [@@prototype "atan x"]
 
   (* Returns the arc tangent of y/x in the range [-pi, pi]. *)
-  val atan2 : real * real -> real
+  val atan2 : real * real -> real [@@prototype "atan2 (y, x)"]
 
   (* Returns e raised to the power of the argument. *)
-  val exp : real -> real
+  val exp : real -> real [@@prototype "exp x"]
 
   (* Returns x raised to the power y. *)
-  val pow : real * real -> real
+  val pow : real * real -> real [@@prototype "pow (x, y)"]
 
   (* Returns the natural logarithm; returns -infinity for 0, NaN for
    * negative values. *)
-  val ln    : real -> real
+  val ln    : real -> real [@@prototype "ln x"]
 
   (* Returns the base-10 logarithm; returns -infinity for 0, NaN for
    * negative values. *)
-  val log10 : real -> real
+  val log10 : real -> real [@@prototype "log10 x"]
 
   (* Returns the hyperbolic sine. *)
-  val sinh : real -> real
+  val sinh : real -> real [@@prototype "sinh x"]
 
   (* Returns the hyperbolic cosine. *)
-  val cosh : real -> real
+  val cosh : real -> real [@@prototype "cosh x"]
 
   (* Returns the hyperbolic tangent. *)
-  val tanh : real -> real
+  val tanh : real -> real [@@prototype "tanh x"]
 end
 
 (*) End math.sig

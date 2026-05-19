@@ -58,10 +58,10 @@ sig
   exception Subscript
 
   (* Returns the name of an exception. *)
-  val exnName : exn -> string
+  val exnName : exn -> string [@@prototype "exnName ex"]
 
   (* Returns the message associated with an exception. *)
-  val exnMessage : exn -> string
+  val exnMessage : exn -> string [@@prototype "exnMessage ex"]
 
   (* The type for ordering values. *)
   datatype `order` = LESS | EQUAL | GREATER
@@ -70,13 +70,13 @@ sig
   val := : 'a ref * 'a -> unit
 *)
   (* Function composition; (f o g) x equals f(g(x)). *)
-  val o : ('b -> 'c) * ('a -> 'b) -> 'a -> 'c
+  val o : ('b -> 'c) * ('a -> 'b) -> 'a -> 'c [@@prototype "f o g"]
 
   (* Evaluates both arguments and returns the first, ignoring the second. *)
-  val before : 'a * unit -> 'a
+  val before : 'a * unit -> 'a [@@prototype "a before b"]
 
   (* Evaluates its argument and returns (). *)
-  val ignore : 'a -> unit
+  val ignore : 'a -> unit [@@prototype "ignore x"]
 end
 
 (*) End general.sig

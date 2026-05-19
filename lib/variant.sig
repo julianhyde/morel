@@ -74,7 +74,7 @@ sig
    * This enables round-tripping: `parse (print v) = v` for any variant
    * value `v`.
    *)
-  val parse : string -> variant
+  val parse : string -> variant [@@prototype "parse s"]
 
   (*
    * print : variant -> string
@@ -84,7 +84,7 @@ sig
    * The output is a valid Standard ML expression that can be parsed
    * back into the same variant using the parse function.
    *)
-  val print : variant -> string [@@method]
+  val print : variant -> string [@@method] [@@prototype "print v"]
 end
 
 (*) End variant.sig

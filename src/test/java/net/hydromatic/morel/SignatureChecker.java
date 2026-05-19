@@ -210,6 +210,7 @@ class SignatureChecker {
       final boolean method = hasAttribute(attrs, "method");
       final String specified =
           stringAttribute(attrs, "specified", defaultSpecified);
+      final String prototype = stringAttribute(attrs, "prototype", null);
       if (inner.op == Op.SPEC_VAL) {
         final Ast.ValSpec valSpec = (Ast.ValSpec) inner;
         final AstTypeStringifier stringifier = new AstTypeStringifier();
@@ -220,12 +221,19 @@ class SignatureChecker {
                 stringifier.str(valSpec.type),
                 true,
                 method,
-                specified));
+                specified,
+                prototype));
       } else if (inner.op == Op.SPEC_TYPE) {
         final Ast.TypeSpec typeSpec = (Ast.TypeSpec) inner;
         specs.add(
             new SpecInfo(
-                SpecKind.TYPE, typeSpec.name.name, "", true, false, specified));
+                SpecKind.TYPE,
+                typeSpec.name.name,
+                "",
+                true,
+                false,
+                specified,
+                null));
       } else if (inner.op == Op.SPEC_DATATYPE) {
         final Ast.DatatypeSpec datatypeSpec = (Ast.DatatypeSpec) inner;
         specs.add(
@@ -235,7 +243,8 @@ class SignatureChecker {
                 "",
                 true,
                 false,
-                specified));
+                specified,
+                null));
       } else if (inner.op == Op.SPEC_EXCEPTION) {
         final Ast.ExceptionSpec exnSpec = (Ast.ExceptionSpec) inner;
         specs.add(
@@ -245,7 +254,8 @@ class SignatureChecker {
                 "",
                 true,
                 false,
-                specified));
+                specified,
+                null));
       }
     }
     return specs;
@@ -264,8 +274,8 @@ class SignatureChecker {
    * Returns the string payload of the named attribute, or {@code defaultValue}
    * if not present.
    */
-  private static String stringAttribute(
-      List<Ast.Attribute> attrs, String name, String defaultValue) {
+  private static @Nullable String stringAttribute(
+      List<Ast.Attribute> attrs, String name, @Nullable String defaultValue) {
     for (Ast.Attribute a : attrs) {
       if (a.name.equals(name) && a.payload instanceof Ast.Literal) {
         final Object v = ((Ast.Literal) a.payload).value;
@@ -420,6 +430,8 @@ class SignatureChecker {
      * otherwise {@code "basis"}.
      */
     final String specified;
+    /** Prototype string from {@code [@@prototype "..."]}, or null. */
+    final @Nullable String prototype;
 
     SpecInfo(
         SpecKind kind,
@@ -427,17 +439,19 @@ class SignatureChecker {
         String type,
         boolean implemented,
         boolean method,
-        String specified) {
+        String specified,
+        @Nullable String prototype) {
       this.kind = kind;
       this.name = name;
       this.type = type;
       this.implemented = implemented;
       this.method = method;
       this.specified = specified;
+      this.prototype = prototype;
     }
 
     SpecInfo(SpecKind kind, String name, String type, boolean implemented) {
-      this(kind, name, type, implemented, false, "basis");
+      this(kind, name, type, implemented, false, "basis", null);
     }
   }
 

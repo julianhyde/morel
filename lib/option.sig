@@ -27,46 +27,46 @@ sig
 
   (* Returns the value v if opt is SOME(v); otherwise returns the default
    * value a. Provides a default value when an option is empty. *)
-  val getOpt : 'a option * 'a -> 'a [@@method]
+  val getOpt : 'a option * 'a -> 'a [@@method] [@@prototype "getOpt (opt, a)"]
 
   (* Returns true if opt is SOME(v); otherwise returns false.
    * Checks whether an option contains a value. *)
-  val isSome : 'a option -> bool [@@method]
+  val isSome : 'a option -> bool [@@method] [@@prototype "isSome opt"]
 
   (* Returns v if opt is SOME(v); otherwise raises the Option exception.
    * Extracts the value from an option or fails. *)
-  val valOf : 'a option -> 'a [@@method]
+  val valOf : 'a option -> 'a [@@method] [@@prototype "valOf opt"]
 
   (* Returns SOME(a) if f(a) is true and NONE otherwise.
    * Wraps a value in SOME only if it satisfies a predicate. *)
-  val filter : ('a -> bool) -> 'a -> 'a option
+  val filter : ('a -> bool) -> 'a -> 'a option [@@prototype "filter f a"]
 
   (* Maps NONE to NONE and SOME(v) to v.
    * Flattens a nested option type by one level. *)
-  val `join` : 'a option option -> 'a option
+  val `join` : 'a option option -> 'a option [@@prototype "join opt"]
 
   (* Applies the function f to the value v if opt is SOME(v), and otherwise
    * does nothing. Executes a side effect if an option contains a value. *)
-  val app : ('a -> unit) -> 'a option -> unit
+  val app : ('a -> unit) -> 'a option -> unit [@@prototype "app f opt"]
 
   (* Maps NONE to NONE and SOME(v) to SOME(f v).
    * Transforms the contained value without changing the option structure. *)
-  val map : ('a -> 'b) -> 'a option -> 'b option
+  val map : ('a -> 'b) -> 'a option -> 'b option [@@prototype "map f opt"]
 
   (* Maps NONE to NONE and SOME(v) to f(v).
    * Applies a partial function to a contained value, flattening the result. *)
   val mapPartial : ('a -> 'b option)
-                   -> 'a option -> 'b option
+                   -> 'a option -> 'b option [@@prototype "mapPartial f opt"]
 
   (* Composes a total function with a partial function.
    * Returns NONE if the partial function produces NONE. *)
   val compose : ('a -> 'b) * ('c -> 'a option)
-                -> 'c -> 'b option
+                -> 'c -> 'b option [@@prototype "compose (f, g) a"]
 
   (* Composes two partial functions together.
    * Returns NONE if either function produces NONE. *)
   val composePartial : ('a -> 'b option) * ('c -> 'a option)
-                       -> 'c -> 'b option
+                       -> 'c -> 'b option [@@prototype "composePartial (f, g) a"]
 end
 
 (*) End option.sig

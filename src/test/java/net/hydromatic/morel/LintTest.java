@@ -1750,6 +1750,33 @@ public class LintTest {
               spec.specified));
     }
 
+    // Check prototype (functions only). Normalize markdown-escape
+    // backslashes — TOML stores `\[` so it survives a Markdown table cell;
+    // the .sig stores the raw call form `[`.
+    if (section.equals("functions")) {
+      final String tomlProtoRaw = (String) entry.get("prototype");
+      final String tomlProto =
+          tomlProtoRaw == null
+              ? null
+              : tomlProtoRaw.replace("\\[", "[").replace("\\]", "]");
+      if (tomlProto != null
+          && spec.prototype != null
+          && !tomlProto.equals(spec.prototype)) {
+        errors.add(
+            format(
+                "%s.%s (function): prototype mismatch%n"
+                    + "  TOML: %s%n"
+                    + "  .sig: %s",
+                structure, name, tomlProto, spec.prototype));
+      } else if (tomlProto != null && spec.prototype == null) {
+        errors.add(
+            format(
+                "%s.%s (function): TOML has prototype %s, .sig has no "
+                    + "[@@prototype \"...\"]",
+                structure, name, tomlProto));
+      }
+    }
+
     // Check type (functions only; types/exceptions are matched by name only
     // for now — types have richer structure that needs richer comparison).
     if (section.equals("functions")) {

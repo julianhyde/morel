@@ -34,35 +34,35 @@ sig
   datatype 'a range = ALL | AT_LEAST of 'a | AT_MOST of 'a | CLOSED of 'a * 'a | CLOSED_OPEN of 'a * 'a | GREATER_THAN of 'a | LESS_THAN of 'a | OPEN of 'a * 'a | OPEN_CLOSED of 'a * 'a | POINT of 'a
 
   (* returns true if x is a member of discrete set ds. *)
-  val contains : 'a discrete_set -> 'a -> bool [@@method]
+  val contains : 'a discrete_set -> 'a -> bool [@@method] [@@prototype "contains ds x"]
 
   (* enumerates all values in the discrete set ds and returns them as
    * a bag. The element type must be discrete (e.g., int, char, bool).
    * Raises an exception if any range is unbounded below and the type
    * has no minimum value (e.g., LESS_THAN 5 : int range). *)
-  val toBag : 'a discrete_set -> 'a bag [@@method]
+  val toBag : 'a discrete_set -> 'a bag [@@method] [@@prototype "toBag ds"]
 
   (* enumerates all values in the discrete set ds and returns them as
    * a list, in ascending order. The element type must be discrete
    * (e.g., int, char, bool). Raises an exception if any range is
    * unbounded below and the type has no minimum value (e.g., *)
-  val toList : 'a discrete_set -> 'a list [@@method]
+  val toList : 'a discrete_set -> 'a list [@@method] [@@prototype "toList ds"]
 
   (* normalizes ranges into a continuous_set. Overlapping and adjacent
    * ranges are merged, and the result is sorted by lower bound. *)
-  val continuousSetOf : 'a range list -> 'a continuous_set
+  val continuousSetOf : 'a range list -> 'a continuous_set [@@prototype "continuousSetOf ranges"]
 
   (* normalizes ranges into a discrete_set. Overlapping and adjacent
    * ranges are merged (treating adjacent discrete values as
    * mergeable), and the result is sorted by lower bound. *)
-  val discreteSetOf : 'a range list -> 'a discrete_set
+  val discreteSetOf : 'a range list -> 'a discrete_set [@@prototype "discreteSetOf ranges"]
 
   (* returns the list of ranges in the discrete set ds. *)
-  val ranges : 'a discrete_set -> 'a range list [@@method]
+  val ranges : 'a discrete_set -> 'a range list [@@method] [@@prototype "ranges ds"]
 
   (* returns the complement of discrete set ds: a discrete set
    * containing all values of the element type not in ds. *)
-  val complement : 'a discrete_set -> 'a discrete_set [@@method]
+  val complement : 'a discrete_set -> 'a discrete_set [@@method] [@@prototype "complement ds"]
 end
 
 (*) End range.sig

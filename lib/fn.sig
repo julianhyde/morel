@@ -23,46 +23,46 @@ signature FN =
 sig
   [@@@specified "basis+"]
   (* Returns the value unchanged; the polymorphic identity function. *)
-  val id       : 'a -> 'a
+  val id       : 'a -> 'a [@@prototype "id x"]
 
   (* Returns the first argument, ignoring the second;
    * useful for creating constant functions. *)
-  val const    : 'a -> 'b -> 'a
+  val const    : 'a -> 'b -> 'a [@@prototype "const x y"]
 
   (* Applies a function to an argument;
    * equivalent to direct function application. *)
-  val apply    : ('a -> 'b) * 'a -> 'b
+  val apply    : ('a -> 'b) * 'a -> 'b [@@prototype "apply (f, x)"]
 
   (* Composes two functions; (f o g) x evaluates to f (g x). *)
-  val o        : ('b -> 'c) * ('a -> 'b) -> ('a -> 'c)
+  val o        : ('b -> 'c) * ('a -> 'b) -> ('a -> 'c) [@@prototype "f o g"]
 
   (* Transforms a binary function into curried form,
    * taking arguments separately. *)
-  val curry    : ('a * 'b -> 'c) -> ('a -> 'b -> 'c)
+  val curry    : ('a * 'b -> 'c) -> ('a -> 'b -> 'c) [@@prototype "curry f x y"]
 
   (* Transforms a curried function into binary form,
    * taking a tuple argument. *)
-  val uncurry  : ('a -> 'b -> 'c) -> ('a * 'b -> 'c)
+  val uncurry  : ('a -> 'b -> 'c) -> ('a * 'b -> 'c) [@@prototype "ucurry f (x, y)"]
 
   (* Reverses argument order for a binary function;
    * flip f (x, y) becomes f (y, x). *)
-  val flip     : ('a * 'b -> 'c) -> ('b * 'a -> 'c)
+  val flip     : ('a * 'b -> 'c) -> ('b * 'a -> 'c) [@@prototype "flip f (x, y)"]
 
   (* Returns the n-fold composition of a function;
    * raises Domain exception if n is negative. *)
-  val repeat   : int -> ('a -> 'a) -> ('a -> 'a)
+  val repeat   : int -> ('a -> 'a) -> ('a -> 'a) [@@prototype "repeat n f"]
 
 (* TODO support eqtype in signatures
-  val equal    : ''a -> ''a -> bool
+  val equal    : ''a -> ''a -> bool [@@prototype "equal a b"]
   val notEqual : ''a -> ''a -> bool
-*)
+*) [@@prototype "notEqual a b"]
   (* Curried version of the polymorphic equality operator
    * for functional composition. *)
-  val equal    : 'a -> 'a -> bool
+  val equal    : 'a -> 'a -> bool [@@prototype "equal a b"]
 
   (* Curried version of the polymorphic inequality operator
    * for functional composition. *)
-  val notEqual : 'a -> 'a -> bool
+  val notEqual : 'a -> 'a -> bool [@@prototype "notEqual a b"]
 end
 
 (*) End fn.sig

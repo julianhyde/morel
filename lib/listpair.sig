@@ -20,24 +20,24 @@
  *)
 signature LIST_PAIR =
 sig
-  val zip    : 'a list * 'b list -> ('a * 'b) list
-  val unzip  : ('a * 'b) list -> 'a list * 'b list
-  val map    : ('a * 'b -> 'c)   -> 'a list * 'b list -> 'c list
-  val app    : ('a * 'b -> unit) -> 'a list * 'b list -> unit
-  val all    : ('a * 'b -> bool) -> 'a list * 'b list -> bool
-  val `exists` : ('a * 'b -> bool) -> 'a list * 'b list -> bool
-  val foldr  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c
-  val foldl  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c
+  val zip    : 'a list * 'b list -> ('a * 'b) list [@@prototype "zip (l1, l2)"]
+  val unzip  : ('a * 'b) list -> 'a list * 'b list [@@prototype "unzip l"]
+  val map    : ('a * 'b -> 'c)   -> 'a list * 'b list -> 'c list [@@prototype "map f (l1, l2)"]
+  val app    : ('a * 'b -> unit) -> 'a list * 'b list -> unit [@@prototype "app f (l1, l2)"]
+  val all    : ('a * 'b -> bool) -> 'a list * 'b list -> bool [@@prototype "all f (l1, l2)"]
+  val `exists` : ('a * 'b -> bool) -> 'a list * 'b list -> bool [@@prototype "exists f (l1, l2)"]
+  val foldr  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c [@@prototype "foldr f init (l1, l2)"]
+  val foldl  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c [@@prototype "foldl f init (l1, l2)"]
 
-  val allEq    : ('a * 'b -> bool) -> 'a list * 'b list -> bool
+  val allEq    : ('a * 'b -> bool) -> 'a list * 'b list -> bool [@@prototype "allEq f (l1, l2)"]
 
   exception UnequalLengths
 
-  val zipEq    : ('a list * 'b list) -> ('a * 'b) list
-  val mapEq    : ('a * 'b -> 'c) -> 'a list * 'b list -> 'c list
-  val appEq    : ('a * 'b -> unit) -> 'a list * 'b list -> unit
-  val foldrEq  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c
-  val foldlEq  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c
+  val zipEq    : ('a list * 'b list) -> ('a * 'b) list [@@prototype "zipEq (l1, l2)"]
+  val mapEq    : ('a * 'b -> 'c) -> 'a list * 'b list -> 'c list [@@prototype "mapEq f (l1, l2)"]
+  val appEq    : ('a * 'b -> unit) -> 'a list * 'b list -> unit [@@prototype "appEq f (l1, l2)"]
+  val foldrEq  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c [@@prototype "foldrEq f init (l1, l2)"]
+  val foldlEq  : ('a * 'b * 'c -> 'c) -> 'c -> 'a list * 'b list -> 'c [@@prototype "foldlEq f init (l1, l2)"]
 
 (*
    These functions process pairs (xs, ys) of lists.
