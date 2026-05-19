@@ -31,28 +31,36 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import com.google.common.io.Files;
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.MultiType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Validates signature declarations against enum values in {@link BuiltIn}. */
 class SignatureChecker {
@@ -88,6 +96,252 @@ class SignatureChecker {
   void checkSignature(Ast.SignatureDecl signatureDecl) {
     for (Ast.SignatureBind bind : signatureDecl.binds) {
       verifyBuiltInType(bind, structureName(bind));
+    }
+  }
+
+  /**
+   * Returns the canonical string form of a Morel type, parsed from {@code
+   * typeString}. Unicode forms ({@code α}, {@code →}, etc.) are first rewritten
+   * to ASCII. Returns {@code null} if the string cannot be parsed.
+   */
+  static @Nullable String canonicalizeType(String typeString) {
+    String s = unicodeToAscii(typeString);
+    // 'order' is a Morel keyword — escape so the parser sees an identifier.
+    s = s.replaceAll("\\border\\b", "`order`");
+    try {
+      final MorelParserImpl parser = new MorelParserImpl(new StringReader(s));
+      final Ast.Type t = parser.typeSafe();
+      final AstTypeStringifier stringifier = new AstTypeStringifier();
+      return stringifier.str(t);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private static String unicodeToAscii(String t) {
+    return t.replace("α", "'a")
+        .replace("β", "'b")
+        .replace("γ", "'c")
+        .replace("→", "->")
+        .replace("≤", "<=")
+        .replace("≥", ">=");
+  }
+
+  /**
+   * Parses a {@code .sig} file and returns, for each structure declared in it,
+   * the list of {@link SpecInfo} entries describing its functions, types, and
+   * exceptions. Commented-out {@code (* val ... *)} blocks are also returned,
+   * with {@link SpecInfo#implemented} set to {@code false}.
+   */
+  Map<String, List<SpecInfo>> parseSpecs(File file) throws IOException {
+    final String content =
+        Files.asCharSource(file, StandardCharsets.UTF_8).read();
+    final Map<String, List<SpecInfo>> result = new LinkedHashMap<>();
+    ml(content)
+        .withParser(
+            parser -> {
+              try {
+                final AstNode node = parser.statementSemicolonOrEof();
+                assertThat(node, notNullValue());
+                assertThat(
+                    "File: " + file.getName(),
+                    node,
+                    instanceOf(Ast.SignatureDecl.class));
+                final Ast.SignatureDecl decl = (Ast.SignatureDecl) node;
+                for (Ast.SignatureBind bind : decl.binds) {
+                  final String structure = structureName(bind);
+                  result
+                      .computeIfAbsent(structure, k -> new ArrayList<>())
+                      .addAll(specsFromBind(structure, bind));
+                }
+              } catch (Exception e) {
+                throw new RuntimeException(
+                    "Failed to parse " + file.getName(), e);
+              }
+            });
+
+    // Second pass: scan raw lines for commented-out specs like
+    // "(* val foo : T *)" — the parser doesn't see these. We append them to
+    // the matching structure's list with implemented=false.
+    if (!result.isEmpty()) {
+      // Single-structure files are the norm; pick the first structure as the
+      // owner of any commented entries.
+      final String structure = result.keySet().iterator().next();
+      result.get(structure).addAll(commentedSpecs(content));
+    }
+    return result;
+  }
+
+  private List<SpecInfo> specsFromBind(
+      String structure, Ast.SignatureBind bind) {
+    final List<SpecInfo> specs = new ArrayList<>();
+    for (Ast.Spec spec : bind.specs) {
+      if (spec.op == Op.SPEC_VAL) {
+        final Ast.ValSpec valSpec = (Ast.ValSpec) spec;
+        final AstTypeStringifier stringifier = new AstTypeStringifier();
+        specs.add(
+            new SpecInfo(
+                SpecKind.FUNCTION,
+                valSpec.name.name,
+                stringifier.str(valSpec.type),
+                true));
+      } else if (spec.op == Op.SPEC_TYPE) {
+        final Ast.TypeSpec typeSpec = (Ast.TypeSpec) spec;
+        specs.add(new SpecInfo(SpecKind.TYPE, typeSpec.name.name, "", true));
+      } else if (spec.op == Op.SPEC_DATATYPE) {
+        final Ast.DatatypeSpec datatypeSpec = (Ast.DatatypeSpec) spec;
+        specs.add(
+            new SpecInfo(SpecKind.TYPE, datatypeSpec.name.name, "", true));
+      } else if (spec.op == Op.SPEC_EXCEPTION) {
+        final Ast.ExceptionSpec exnSpec = (Ast.ExceptionSpec) spec;
+        specs.add(
+            new SpecInfo(SpecKind.EXCEPTION, exnSpec.name.name, "", true));
+      }
+    }
+    return specs;
+  }
+
+  private static final Pattern COMMENTED_VAL_PATTERN =
+      Pattern.compile(
+          "^\\s*val\\s+(`[^`]+`|[A-Za-z_][\\w']*|[^\\s:]+)\\s*:\\s*(.+?)\\s*$",
+          Pattern.DOTALL);
+
+  /**
+   * Extracts commented-out specs like {@code (* val foo : T *)} from the raw
+   * file text. Returns a list of {@link SpecInfo} with {@code implemented =
+   * false}.
+   */
+  private static List<SpecInfo> commentedSpecs(String content) {
+    final List<SpecInfo> result = new ArrayList<>();
+    final String[] lines = content.split("\n", -1);
+    int i = 0;
+    while (i < lines.length) {
+      final String line = lines[i];
+      // Looking for "(*" on its own line, followed by val/type/datatype line(s)
+      // and "*)". We're conservative: only match the simple, well-formatted
+      // shape produced by the convention.
+      if (line.trim().equals("(*")) {
+        final int start = i + 1;
+        int end = start;
+        while (end < lines.length && !lines[end].trim().equals("*)")) {
+          end++;
+        }
+        if (end < lines.length) {
+          final StringBuilder buf = new StringBuilder();
+          for (int j = start; j < end; j++) {
+            buf.append(lines[j]).append('\n');
+          }
+          parseCommentedSpec(buf.toString(), result);
+          i = end + 1;
+          continue;
+        }
+      }
+      i++;
+    }
+    return result;
+  }
+
+  private static void parseCommentedSpec(String text, List<SpecInfo> result) {
+    final String trimmed = text.trim();
+    // Match "val name : type" possibly spanning lines.
+    if (trimmed.startsWith("val ")) {
+      final Matcher m = COMMENTED_VAL_PATTERN.matcher(trimmed);
+      if (m.matches()) {
+        String name = m.group(1);
+        if (name.startsWith("`") && name.endsWith("`")) {
+          name = name.substring(1, name.length() - 1);
+        }
+        result.add(new SpecInfo(SpecKind.FUNCTION, name, "", false));
+      }
+    } else if (trimmed.startsWith("type ") || trimmed.startsWith("eqtype ")) {
+      // type 'a foo  OR  type foo  OR  eqtype foo  OR  type foo = ...
+      final String rest =
+          trimmed.startsWith("eqtype ")
+              ? trimmed.substring(7)
+              : trimmed.substring(5);
+      // Strip leading type vars like "'a " or "('a, 'b) "
+      String s = rest.trim();
+      if (s.startsWith("(")) {
+        final int rp = s.indexOf(')');
+        if (rp > 0) {
+          s = s.substring(rp + 1).trim();
+        }
+      } else if (s.startsWith("'")) {
+        final int sp = s.indexOf(' ');
+        if (sp > 0) {
+          s = s.substring(sp + 1).trim();
+        }
+      }
+      final int firstNonId = findFirstNonIdent(s);
+      final String name = firstNonId < 0 ? s : s.substring(0, firstNonId);
+      if (!name.isEmpty()) {
+        result.add(new SpecInfo(SpecKind.TYPE, name, "", false));
+      }
+    } else if (trimmed.startsWith("datatype ")) {
+      // Same handling as type — extract the datatype name.
+      final String rest = trimmed.substring(9).trim();
+      String s = rest;
+      if (s.startsWith("(")) {
+        final int rp = s.indexOf(')');
+        if (rp > 0) {
+          s = s.substring(rp + 1).trim();
+        }
+      } else if (s.startsWith("'")) {
+        final int sp = s.indexOf(' ');
+        if (sp > 0) {
+          s = s.substring(sp + 1).trim();
+        }
+      }
+      final int firstNonId = findFirstNonIdent(s);
+      final String name = firstNonId < 0 ? s : s.substring(0, firstNonId);
+      if (!name.isEmpty()) {
+        result.add(new SpecInfo(SpecKind.TYPE, name, "", false));
+      }
+    } else if (trimmed.startsWith("exception ")) {
+      final String rest = trimmed.substring(10).trim();
+      final int firstNonId = findFirstNonIdent(rest);
+      final String name = firstNonId < 0 ? rest : rest.substring(0, firstNonId);
+      if (!name.isEmpty()) {
+        result.add(new SpecInfo(SpecKind.EXCEPTION, name, "", false));
+      }
+    }
+  }
+
+  private static int findFirstNonIdent(String s) {
+    for (int i = 0; i < s.length(); i++) {
+      final char c = s.charAt(i);
+      if (!Character.isLetterOrDigit(c) && c != '_' && c != '\'') {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /** Kind of a {@link SpecInfo}. */
+  enum SpecKind {
+    FUNCTION,
+    TYPE,
+    EXCEPTION
+  }
+
+  /**
+   * Information about a single spec parsed from a {@code .sig} file. Returned
+   * by {@link #parseSpecs}.
+   */
+  static class SpecInfo {
+    final SpecKind kind;
+    /** Name as written in the spec (no {@code op } prefix). */
+    final String name;
+    /** Canonicalized type stringification (empty for types and exceptions). */
+    final String type;
+    /** {@code false} if the spec is commented out in the {@code .sig} file. */
+    final boolean implemented;
+
+    SpecInfo(SpecKind kind, String name, String type, boolean implemented) {
+      this.kind = kind;
+      this.name = name;
+      this.type = type;
+      this.implemented = implemented;
     }
   }
 
@@ -210,14 +464,22 @@ class SignatureChecker {
 
     for (Ast.TyCon tyCon : datatypeSpec.tyCons) {
       String constructorName = tyCon.id.name;
-      // Normalize constructor name for lookup
-      String normalizedName = normalizeConstructorName(constructorName);
+      // Try the spec name as written, with operator/keyword specials, and
+      // then an all-uppercase fallback. Different datatypes use different
+      // conventions (e.g. Date.month uses "Jan", Range uses "AT_LEAST").
+      String[] candidates = {
+        constructorName, normalizeConstructorName(constructorName),
+      };
 
-      // Find matching constructor in BuiltIn.Constructor
       BuiltIn.Constructor foundConstructor = null;
-      for (BuiltIn.Constructor constructor : BuiltIn.Constructor.values()) {
-        if (constructor.constructor.equals(normalizedName)) {
-          foundConstructor = constructor;
+      for (String candidate : candidates) {
+        for (BuiltIn.Constructor constructor : BuiltIn.Constructor.values()) {
+          if (constructor.constructor.equals(candidate)) {
+            foundConstructor = constructor;
+            break;
+          }
+        }
+        if (foundConstructor != null) {
           break;
         }
       }
@@ -375,6 +637,12 @@ class SignatureChecker {
         case FORALL_TYPE:
           final ForallType forallType = (ForallType) t;
           return str(forallType.type);
+        case MULTI_TYPE:
+          // Overloaded type — collapse to the first variant for the
+          // signature comparison. The .sig should declare the same first
+          // variant; subsequent variants are implementation detail.
+          final MultiType multiType = (MultiType) t;
+          return str(multiType.types.get(0));
         case TY_VAR:
           final TypeVar typeVar = (TypeVar) t;
           final int normalizedOrdinal =
