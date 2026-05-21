@@ -926,18 +926,41 @@ Real.fromString "-inf";
 Real.fromString "nan";
 > val it = NONE : real option
 
-List.map (fn x => (x, Real.fromString (Real.toString x)))
-  [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
-   0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
-   Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
-   Real.posInf, Real.negInf, nan];
-> val it =
->   [(1,SOME 1),(0,SOME 0),(~0,SOME ~0),(~1,SOME ~1),(0.5,SOME 0.5),(2,SOME 2),
->    (1.23456E~5,SOME 1.23456E~5),(1.23456E~6,SOME 1.23456E~6),
->    (1.23456E~7,SOME 1.23456E~7),(~1.23456E~6,SOME ~1.23456E~6),
->    (1.4E~45,SOME 1.4E~45),(1.1754944E~38,SOME 1.1754944E~38),
->    (3.4028235E38,SOME 3.4028235E38),(~3.4028235E38,SOME ~3.4028235E38),
->    (inf,NONE),(~inf,NONE),(nan,NONE)] : (real * real option) list
+Sys.set ("output", "tabular");
+> val it = () : unit
+from x in [1.0, 0.0, ~0.0, ~1.0, 0.5, 2.0,
+           0.0000123456, 0.00000123456, 0.000000123456, ~0.00000123456,
+           Real.minPos, Real.minNormalPos, Real.maxFinite, ~Real.maxFinite,
+           Real.posInf, Real.negInf, nan]
+  yield {x,
+         toString = Real.toString x,
+         sci3 = Real.fmt (SCI (SOME 3)) x,
+         fix3 = Real.fmt (FIX (SOME 3)) x,
+         gen6 = Real.fmt (GEN (SOME 6)) x,
+         exact = Real.fmt EXACT x};
+> exact          fix3                                         gen6        sci3      toString      x
+> -------------- -------------------------------------------- ----------- --------- ------------- -------------
+> 0.1E1          1.000                                        1           1.000E0   1             1
+> 0.0            0.000                                        0           0.000E0   0             0
+> ~0.0           ~0.000                                       ~0          ~0.000E0  ~0            ~0
+> ~0.1E1         ~1.000                                       ~1          ~1.000E0  ~1            ~1
+> 0.5            0.500                                        0.5         5.000E~1  0.5           0.5
+> 0.2E1          2.000                                        2           2.000E0   2             2
+> 0.123456E~4    0.000                                        1.23456E~5  1.235E~5  1.23456E~5    1.23456E~5
+> 0.123456E~5    0.000                                        1.23456E~6  1.235E~6  1.23456E~6    1.23456E~6
+> 0.123456E~6    0.000                                        1.23456E~7  1.235E~7  1.23456E~7    1.23456E~7
+> ~0.123456E~5   ~0.000                                       ~1.23456E~6 ~1.235E~6 ~1.23456E~6   ~1.23456E~6
+> 0.14E~44       0.000                                        1.4E~45     1.400E~45 1.4E~45       1.4E~45
+> 0.11754944E~37 0.000                                        1.17549E~38 1.175E~38 1.1754944E~38 1.1754944E~38
+> 0.34028235E39  340282350000000000000000000000000000000.000  3.40282E38  3.403E38  3.4028235E38  3.4028235E38
+> ~0.34028235E39 ~340282350000000000000000000000000000000.000 ~3.40282E38 ~3.403E38 ~3.4028235E38 ~3.4028235E38
+> inf            inf                                          inf         inf       inf           inf
+> ~inf           ~inf                                         ~inf        ~inf      ~inf          ~inf
+> nan            nan                                          nan         nan       nan           nan
+>
+> val it : {exact:string, fix3:string, gen6:string, sci3:string, toString:string, x:real} list
+Sys.unset "output";
+> val it = () : unit
 
 (* "toLarge r", "fromLarge r" convert between values of type real and type
    LargeReal.real. If r is too small or too large to be represented as a real,
