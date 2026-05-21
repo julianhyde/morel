@@ -3201,8 +3201,8 @@ public abstract class Codes {
         return sb.append("E0").toString();
       }
       // Express |r| as mantissa * 10^exp where mantissa in [1, 10).
-      BigDecimal bd = toBigDecimal(r);
-      int exp = bd.precision() - bd.scale() - 1;
+      final BigDecimal bd = toBigDecimal(r);
+      int exp = decimalExp(bd);
       BigDecimal mantissa =
           bd.movePointLeft(exp).setScale(n, RoundingMode.HALF_DOWN);
       // Rounding may push the mantissa to exactly 10; renormalize.
@@ -3210,57 +3210,71 @@ public abstract class Codes {
         mantissa = mantissa.movePointLeft(1);
         exp++;
       }
-      return sb.append(mantissa.toPlainString())
-          .append('E')
-          .append(smlExp(exp))
-          .toString();
+      sb.append(mantissa.toPlainString()).append('E');
+      return appendSmlExp(sb, exp).toString();
     }
 
     /** Formats r as {@code 0.dddE±exp} with no trailing zeros. */
     private static String formatExact(float r) {
-      final String prefix = signPrefix(r);
+      final StringBuilder sb = new StringBuilder().append(signPrefix(r));
       if (r == 0.0f) {
-        return prefix + "0.0";
+        return sb.append("0.0").toString();
       }
-      BigDecimal bd = toBigDecimal(r).stripTrailingZeros();
-      final int exp = bd.precision() - bd.scale();
-      // Move all digits past the decimal point: 0.<digits>
-      final String digits = bd.unscaledValue().abs().toString();
-      final String body = "0." + digits;
-      return prefix + body + (exp == 0 ? "" : "E" + smlExp(exp));
+      // bd is already non-negative because toBigDecimal uses Math.abs.
+      final BigDecimal bd = toBigDecimal(r).stripTrailingZeros();
+      // Emit as 0.<digits>; the exponent is one greater than the standard
+      // scientific exponent because the implied decimal point moves left by 1.
+      sb.append("0.").append(bd.unscaledValue().toString());
+      final int exp = decimalExp(bd) + 1;
+      if (exp == 0) {
+        return sb.toString();
+      }
+      return appendSmlExp(sb.append('E'), exp).toString();
     }
 
     /**
      * Formats r with at most n significant digits, using fixed-point notation
-     * when the exponent is in {@code [-4, n)}, scientific notation otherwise.
+     * when the exponent is in {@code [-2, n)}, scientific notation otherwise.
      * Trailing zeros are dropped.
      */
     private static String formatGen(float r, int n) {
-      final String prefix = signPrefix(r);
+      final StringBuilder sb = new StringBuilder().append(signPrefix(r));
       if (r == 0.0f) {
-        return prefix + "0";
+        return sb.append('0').toString();
       }
-      BigDecimal bd = toBigDecimal(r);
-      final int exp = bd.precision() - bd.scale() - 1;
-      // Round to n significant digits.
-      bd = bd.round(new MathContext(n, RoundingMode.HALF_DOWN));
-      bd = bd.stripTrailingZeros();
-      // After rounding, recompute exp (rounding 9.99 to 3sf gives 10.0 -> 1E1).
-      final int exp2 = bd.precision() - bd.scale() - 1;
+      // Round to n significant digits, drop trailing zeros, then compute the
+      // exponent (rounding 9.99 to 3 s.f. gives 10.0, which is 1E1).
+      final BigDecimal bd =
+          toBigDecimal(r)
+              .round(new MathContext(n, RoundingMode.HALF_DOWN))
+              .stripTrailingZeros();
+      final int exp = decimalExp(bd);
       // SML/NJ uses scientific form when exp <= -3 or exp >= n (i.e., the
       // value would otherwise need leading zeros or be very large).
-      if (exp2 <= -3 || exp2 >= n) {
-        // Scientific: D[.ddd]E±exp
-        final BigDecimal mantissa = bd.movePointLeft(exp2);
-        return prefix + mantissa.toPlainString() + "E" + smlExp(exp2);
+      if (exp <= -3 || exp >= n) {
+        sb.append(bd.movePointLeft(exp).toPlainString()).append('E');
+        return appendSmlExp(sb, exp).toString();
       }
       // Fixed: emit at full precision, no trailing zeros.
-      return prefix + bd.toPlainString();
+      return sb.append(bd.toPlainString()).toString();
     }
 
-    /** Formats an exponent using SML's {@code ~} for negative. */
-    private static String smlExp(int exp) {
-      return exp < 0 ? "~" + (-exp) : Integer.toString(exp);
+    /**
+     * The exponent that would appear in standard scientific notation — 0 for
+     * [1, 10), 1 for [10, 100), -1 for [0.1, 1), etc. Assumes {@code bd} is
+     * non-zero.
+     */
+    private static int decimalExp(BigDecimal bd) {
+      return bd.precision() - bd.scale() - 1;
+    }
+
+    /** Appends {@code exp} to {@code sb} using SML's {@code ~} for negative. */
+    private static StringBuilder appendSmlExp(StringBuilder sb, int exp) {
+      if (exp < 0) {
+        sb.append('~');
+        exp = -exp;
+      }
+      return sb.append(exp);
     }
   }
 
