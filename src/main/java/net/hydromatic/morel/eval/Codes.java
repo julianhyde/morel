@@ -3175,7 +3175,11 @@ public abstract class Codes {
     }
 
     private static String repeat(char c, int n) {
-      return String.valueOf(c).repeat(n);
+      final StringBuilder sb = new StringBuilder(n);
+      for (int i = 0; i < n; i++) {
+        sb.append(c);
+      }
+      return sb.toString();
     }
 
     private static String formatFix(float r, int n) {
