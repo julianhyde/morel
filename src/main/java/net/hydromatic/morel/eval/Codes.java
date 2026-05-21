@@ -1377,6 +1377,34 @@ public abstract class Codes {
   /** @see BuiltIn#INT_DIV */
   private static final Applicable2 INT_DIV = new IntDiv(BuiltIn.INT_DIV);
 
+  /** @see BuiltIn#INT_FMT */
+  private static final Applicable2 INT_FMT =
+      new BaseApplicable2<String, List, Integer>(BuiltIn.INT_FMT) {
+        @Override
+        public String apply(List radix, Integer i) {
+          final int base;
+          switch ((String) radix.get(0)) {
+            case "BIN":
+              base = 2;
+              break;
+            case "OCT":
+              base = 8;
+              break;
+            case "DEC":
+              base = 10;
+              break;
+            case "HEX":
+              base = 16;
+              break;
+            default:
+              throw new AssertionError(radix);
+          }
+          // Use upper-case digits A..F for hex, prefix '-' with '~'.
+          final String s = Integer.toString(i, base).toUpperCase(Locale.ROOT);
+          return s.startsWith("-") ? "~" + s.substring(1) : s;
+        }
+      };
+
   /** @see BuiltIn#INT_FROM_INT */
   private static final Applicable1 INT_FROM_INT =
       identity(BuiltIn.INT_FROM_INT);
@@ -3868,6 +3896,35 @@ public abstract class Codes {
     }
   }
 
+  /** @see BuiltIn#STRING_CVT_PAD_LEFT */
+  private static final Applicable STRING_CVT_PAD_LEFT =
+      new BaseApplicable3<String, Character, Integer, String>(
+          BuiltIn.STRING_CVT_PAD_LEFT) {
+        @Override
+        public String apply(Character c, Integer i, String s) {
+          if (s.length() >= i) {
+            return s;
+          }
+          final StringBuilder sb = new StringBuilder(i);
+          padRightTo(sb, i - s.length(), c);
+          return sb.append(s).toString();
+        }
+      };
+
+  /** @see BuiltIn#STRING_CVT_PAD_RIGHT */
+  private static final Applicable STRING_CVT_PAD_RIGHT =
+      new BaseApplicable3<String, Character, Integer, String>(
+          BuiltIn.STRING_CVT_PAD_RIGHT) {
+        @Override
+        public String apply(Character c, Integer i, String s) {
+          if (s.length() >= i) {
+            return s;
+          }
+          final StringBuilder sb = new StringBuilder(i).append(s);
+          return padRightTo(sb, i, c).toString();
+        }
+      };
+
   /** @see BuiltIn#STRING_EXPLODE */
   private static final Applicable1 STRING_EXPLODE =
       new BaseApplicable1<List, String>(BuiltIn.STRING_EXPLODE) {
@@ -5489,6 +5546,7 @@ public abstract class Codes {
           .put(BuiltIn.INT_ABS, INT_ABS)
           .put(BuiltIn.INT_COMPARE, INT_COMPARE)
           .put(BuiltIn.INT_DIV, INT_DIV)
+          .put(BuiltIn.INT_FMT, INT_FMT)
           .put(BuiltIn.INT_FROM_INT, INT_FROM_INT)
           .put(BuiltIn.INT_FROM_LARGE, INT_FROM_LARGE)
           .put(BuiltIn.INT_FROM_STRING, INT_FROM_STRING)
@@ -5661,6 +5719,8 @@ public abstract class Codes {
           .put(BuiltIn.STRING_COMPARE, STRING_COMPARE)
           .put(BuiltIn.STRING_CONCAT, STRING_CONCAT)
           .put(BuiltIn.STRING_CONCAT_WITH, STRING_CONCAT_WITH)
+          .put(BuiltIn.STRING_CVT_PAD_LEFT, STRING_CVT_PAD_LEFT)
+          .put(BuiltIn.STRING_CVT_PAD_RIGHT, STRING_CVT_PAD_RIGHT)
           .put(BuiltIn.STRING_EXPLODE, STRING_EXPLODE)
           .put(BuiltIn.STRING_EXTRACT, STRING_EXTRACT)
           .put(BuiltIn.STRING_FIELDS, STRING_FIELDS)
