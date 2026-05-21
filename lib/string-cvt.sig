@@ -43,10 +43,8 @@ sig
   type ('a, 'b) reader = 'b -> ('a * 'b) option
 *)
 
-(*
   (** specifies the format for converting real numbers to strings. *)
   datatype realfmt = SCI of int option | FIX of int option | GEN of int option | EXACT
-*)
 end
 [@@description "String conversion utilities and types."]
 

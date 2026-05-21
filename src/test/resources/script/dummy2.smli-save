@@ -1,0 +1,144 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *)
+
+(*) Polymorphic agg applied to list
+from i in [1, 2, 3]
+  compute Fn.id over i;
+> val it = [1,2,3] : int list
+
+(*) List agg applied to bag
+from i in (bag [1, 2, 3])
+  compute List.hd over i;
+> val it = 1 : int
+
+over toList;
+> over toList
+val inst toList = fn list => if List.length list < 0 then "" else "list";
+> val toList = fn : 'a list -> string
+val inst toList = fn bag => if Bag.length bag < 0 then "" else "bag";
+> val toList = fn : 'a bag -> string
+
+(*)
+from i in bag [1, 2, 3]
+  compute toList over i;
+> val it = "bag" : string
+from i in [1, 2, 3]
+  compute toList over i;
+> val it = "list" : string
+(*)
+
+(* ----------------------------------
+   below this point, everything works
+   ---------------------------------- *)
+
+(*) Bag agg applied to list
+from i in [1, 2, 3]
+  compute Bag.hd over i;
+> val it = 1 : int
+
+(*) List agg applied to list
+from i in [1, 2, 3]
+  compute List.hd over i;
+> val it = 1 : int
+
+from e in [{a = 1, b = 5}, {a = 0, b = 1}, {a = 1, b = 1}]
+  group e.a compute {rows = (fn x => x) over e};
+> val it = [{a=1,rows=[{a=1,b=5},{a=1,b=1}]},{a=0,rows=[{a=0,b=1}]}]
+>   : {a:int, rows:{a:int, b:int} list} list
+
+(*) List aggregate function returns first element, bag returns second.
+(*)
+let
+  fun listAgg list = List.hd list
+in
+  from i in bag [7, 6]
+    compute listAgg over i
+end;
+> val it = 7 : int
+(*)
+
+(*)
+from i in bag [7, 6]
+  compute count over i;
+> val it = 2 : int
+(*)
+
+let
+  val foo = List.hd
+in
+  from i in bag [7, 6]
+    compute foo over i
+end;
+> val it = 7 : int
+
+(*)
+let
+  fun foo (h::t) = h
+in
+  from i in bag [7, 6]
+    compute foo over i
+end;
+> stdIn:2.7-2.21 Warning: match nonexhaustive
+>   raised at: stdIn:2.7-2.21
+> val it = 7 : int
+(*)
+
+(*)
+from i in bag [7, 6]
+  compute List.hd over i;
+> val it = 7 : int
+(*)
+
+(*)
+from i in [7, 6]
+  compute count over i;
+> val it = 2 : int
+(*)
+
+(*) Polymorphic agg applied to list
+from i in [1, 2, 3]
+  compute Fn.id over i;
+> val it = [1,2,3] : int list
+
+(*) Polymorphic agg applied to bag
+from i in bag [1, 2, 3]
+  compute Fn.id over i;
+> val it = [1,2,3] : int bag
+
+(*) Bag agg applied to bag
+from i in bag [1, 2, 3]
+  compute sum over i;
+> val it = 6 : int
+
+(*) Bag agg applied to list
+from i in [1, 2, 3]
+  compute sum over i;
+> val it = 6 : int
+
+(*) List agg applied to bag
+from i in bag [1, 2, 3]
+  compute List.tl over i;
+> val it = [2,3] : int list
+
+(*) List agg applied to list
+from i in [1, 2, 3]
+  compute List.tl over i;
+> val it = [2,3] : int list
+
+(*) End dummy2.smli

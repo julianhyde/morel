@@ -33,6 +33,16 @@ specifiers and reader types.
 ## Synopsis
 
 <pre>
+datatype <a id='realfmt' href="#realfmt-impl">realfmt</a>
+  = SCI of int option
+  | FIX of int option
+  | GEN of int option
+  | EXACT
 </pre>
+
+<a id="realfmt-impl"></a>
+<h3><code><strong>datatype</strong> realfmt</code></h3>
+
+specifies the format for converting real numbers to strings.
 
 [//]: # (end:lib/string-cvt)

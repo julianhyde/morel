@@ -36,6 +36,9 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
 import java.io.StringReader;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -3058,6 +3061,199 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#REAL_FMT */
+  private static final Applicable2 REAL_FMT = new RealFmt(Pos.ZERO);
+
+  /** Implements {@link #REAL_FMT}. */
+  private static class RealFmt
+      extends BasePositionedApplicable2<String, List, Float> {
+    RealFmt(Pos pos) {
+      super(BuiltIn.REAL_FMT, pos);
+    }
+
+    @Override
+    public RealFmt withPos(Pos pos) {
+      return new RealFmt(pos);
+    }
+
+    @Override
+    public String apply(List spec, Float r) {
+      return format(parseSpec(spec), r);
+    }
+
+    /**
+     * Validates {@code spec} on partial application so that {@code Real.fmt
+     * (StringCvt.SCI (SOME ~1))} raises {@code Size} immediately, matching
+     * SML/NJ's behavior.
+     */
+    @Override
+    public Applicable1<Applicable1<String, Float>, List> curry() {
+      return new CurriedApplicable1<Applicable1<String, Float>, List>(
+          builtIn, this) {
+        @Override
+        public Applicable1<String, Float> apply(List spec) {
+          final FmtSpec info = parseSpec(spec);
+          return r -> format(info, r);
+        }
+      };
+    }
+
+    /** Spec kind + precision, after validation. */
+    private static class FmtSpec {
+      final String kind;
+      final int n;
+
+      FmtSpec(String kind, int n) {
+        this.kind = kind;
+        this.n = n;
+      }
+    }
+
+    private FmtSpec parseSpec(List spec) {
+      final String kind = (String) spec.get(0);
+      if (kind.equals("EXACT")) {
+        return new FmtSpec("EXACT", 0);
+      }
+      final List opt = (List) spec.get(1);
+      final Integer n = opt.size() == 2 ? (Integer) opt.get(1) : null;
+      final int defaultN;
+      final int minN;
+      switch (kind) {
+        case "SCI":
+          defaultN = 6;
+          minN = 0;
+          break;
+        case "FIX":
+          defaultN = 6;
+          minN = 0;
+          break;
+        case "GEN":
+          defaultN = 12;
+          minN = 1;
+          break;
+        default:
+          throw new AssertionError("unknown realfmt: " + kind);
+      }
+      if (n != null && n < minN) {
+        throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
+      }
+      return new FmtSpec(kind, n != null ? n : defaultN);
+    }
+
+    private static String format(FmtSpec info, float r) {
+      if (Float.isNaN(r)) {
+        return "nan";
+      }
+      if (r == Float.POSITIVE_INFINITY) {
+        return "inf";
+      }
+      if (r == Float.NEGATIVE_INFINITY) {
+        return "~inf";
+      }
+      switch (info.kind) {
+        case "SCI":
+          return formatSci(r, info.n);
+        case "FIX":
+          return formatFix(r, info.n);
+        case "GEN":
+          return formatGen(r, info.n);
+        case "EXACT":
+          return formatExact(r);
+        default:
+          throw new AssertionError();
+      }
+    }
+
+    /** Returns "~" for negative reals (including {@code ~0.0}), else "". */
+    private static String signPrefix(float r) {
+      return Float.floatToRawIntBits(r) < 0 ? "~" : "";
+    }
+
+    /** Formats {@code abs} as a non-negative BigDecimal with the bits of r. */
+    private static BigDecimal toBigDecimal(float r) {
+      return new BigDecimal(Float.toString(Math.abs(r)));
+    }
+
+    private static String repeat(char c, int n) {
+      return String.valueOf(c).repeat(n);
+    }
+
+    private static String formatFix(float r, int n) {
+      final String prefix = signPrefix(r);
+      if (r == 0.0f) {
+        return prefix + (n == 0 ? "0" : "0." + repeat('0', n));
+      }
+      final BigDecimal bd = toBigDecimal(r).setScale(n, RoundingMode.HALF_DOWN);
+      return prefix + bd.toPlainString();
+    }
+
+    /** Formats r as {@code D.dddE±exp} with n digits after the decimal. */
+    private static String formatSci(float r, int n) {
+      final String prefix = signPrefix(r);
+      if (r == 0.0f) {
+        return prefix + (n == 0 ? "0E0" : "0." + repeat('0', n) + "E0");
+      }
+      // Express |r| as mantissa * 10^exp where mantissa in [1, 10).
+      BigDecimal bd = toBigDecimal(r);
+      int exp = bd.precision() - bd.scale() - 1;
+      BigDecimal mantissa =
+          bd.movePointLeft(exp).setScale(n, RoundingMode.HALF_DOWN);
+      // Rounding may push the mantissa to exactly 10; renormalize.
+      if (mantissa.compareTo(BigDecimal.TEN) >= 0) {
+        mantissa = mantissa.movePointLeft(1);
+        exp++;
+      }
+      return prefix + mantissa.toPlainString() + "E" + smlExp(exp);
+    }
+
+    /** Formats r as {@code 0.dddE±exp} with no trailing zeros. */
+    private static String formatExact(float r) {
+      final String prefix = signPrefix(r);
+      if (r == 0.0f) {
+        return prefix + "0.0";
+      }
+      BigDecimal bd = toBigDecimal(r).stripTrailingZeros();
+      final int exp = bd.precision() - bd.scale();
+      // Move all digits past the decimal point: 0.<digits>
+      final String digits = bd.unscaledValue().abs().toString();
+      final String body = "0." + digits;
+      return prefix + body + (exp == 0 ? "" : "E" + smlExp(exp));
+    }
+
+    /**
+     * Formats r with at most n significant digits, using fixed-point notation
+     * when the exponent is in {@code [-4, n)}, scientific notation otherwise.
+     * Trailing zeros are dropped.
+     */
+    private static String formatGen(float r, int n) {
+      final String prefix = signPrefix(r);
+      if (r == 0.0f) {
+        return prefix + "0";
+      }
+      BigDecimal bd = toBigDecimal(r);
+      final int exp = bd.precision() - bd.scale() - 1;
+      // Round to n significant digits.
+      bd = bd.round(new MathContext(n, RoundingMode.HALF_DOWN));
+      bd = bd.stripTrailingZeros();
+      // After rounding, recompute exp (rounding 9.99 to 3sf gives 10.0 -> 1E1).
+      final int exp2 = bd.precision() - bd.scale() - 1;
+      // SML/NJ uses scientific form when exp <= -3 or exp >= n (i.e., the
+      // value would otherwise need leading zeros or be very large).
+      if (exp2 <= -3 || exp2 >= n) {
+        // Scientific: D[.ddd]E±exp
+        final BigDecimal mantissa = bd.movePointLeft(exp2);
+        return prefix + mantissa.toPlainString() + "E" + smlExp(exp2);
+      }
+      // Fixed: emit at full precision, no trailing zeros.
+      return prefix + bd.toPlainString();
+    }
+
+    /** Formats an exponent using SML's {@code ~} for negative. */
+    private static String smlExp(int exp) {
+      return exp < 0 ? "~" + (-exp) : Integer.toString(exp);
+    }
+  }
+
   /** @see BuiltIn#REAL_FROM_INT */
   private static final Applicable REAL_FROM_INT =
       new BaseApplicable1<Float, Integer>(BuiltIn.REAL_FROM_INT) {
@@ -5380,6 +5576,7 @@ public abstract class Codes {
           .put(BuiltIn.REAL_COPY_SIGN, REAL_COPY_SIGN)
           .put(BuiltIn.REAL_DIVIDE, REAL_DIVIDE)
           .put(BuiltIn.REAL_FLOOR, REAL_FLOOR)
+          .put(BuiltIn.REAL_FMT, REAL_FMT)
           .put(BuiltIn.REAL_FROM_INT, REAL_FROM_INT)
           .put(BuiltIn.REAL_FROM_MAN_EXP, REAL_FROM_MAN_EXP)
           .put(BuiltIn.REAL_FROM_STRING, REAL_FROM_STRING)
