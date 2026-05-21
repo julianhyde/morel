@@ -3176,7 +3176,7 @@ public abstract class Codes {
     }
 
     private static String formatFix(float r, int n) {
-      final StringBuilder sb = new StringBuilder().append(signPrefix(r));
+      final StringBuilder sb = new StringBuilder(signPrefix(r));
       if (r == 0.0f) {
         sb.append('0');
         if (n > 0) {
@@ -3191,7 +3191,7 @@ public abstract class Codes {
 
     /** Formats r as {@code D.dddE±exp} with n digits after the decimal. */
     private static String formatSci(float r, int n) {
-      final StringBuilder sb = new StringBuilder().append(signPrefix(r));
+      final StringBuilder sb = new StringBuilder(signPrefix(r));
       if (r == 0.0f) {
         sb.append('0');
         if (n > 0) {
@@ -3216,7 +3216,7 @@ public abstract class Codes {
 
     /** Formats r as {@code 0.dddE±exp} with no trailing zeros. */
     private static String formatExact(float r) {
-      final StringBuilder sb = new StringBuilder().append(signPrefix(r));
+      final StringBuilder sb = new StringBuilder(signPrefix(r));
       if (r == 0.0f) {
         return sb.append("0.0").toString();
       }
@@ -3238,7 +3238,7 @@ public abstract class Codes {
      * Trailing zeros are dropped.
      */
     private static String formatGen(float r, int n) {
-      final StringBuilder sb = new StringBuilder().append(signPrefix(r));
+      final StringBuilder sb = new StringBuilder(signPrefix(r));
       if (r == 0.0f) {
         return sb.append('0').toString();
       }
