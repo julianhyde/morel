@@ -26,6 +26,7 @@ import static net.hydromatic.morel.eval.Slots.maxOf;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.SKIP;
+import static net.hydromatic.morel.util.Static.padRightTo;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
@@ -3174,28 +3175,30 @@ public abstract class Codes {
       return new BigDecimal(Float.toString(Math.abs(r)));
     }
 
-    private static String repeat(char c, int n) {
-      final StringBuilder sb = new StringBuilder(n);
-      for (int i = 0; i < n; i++) {
-        sb.append(c);
-      }
-      return sb.toString();
-    }
-
     private static String formatFix(float r, int n) {
-      final String prefix = signPrefix(r);
+      final StringBuilder sb = new StringBuilder().append(signPrefix(r));
       if (r == 0.0f) {
-        return prefix + (n == 0 ? "0" : "0." + repeat('0', n));
+        sb.append('0');
+        if (n > 0) {
+          sb.append('.');
+          padRightTo(sb, sb.length() + n, '0');
+        }
+        return sb.toString();
       }
       final BigDecimal bd = toBigDecimal(r).setScale(n, RoundingMode.HALF_DOWN);
-      return prefix + bd.toPlainString();
+      return sb.append(bd.toPlainString()).toString();
     }
 
     /** Formats r as {@code D.dddE±exp} with n digits after the decimal. */
     private static String formatSci(float r, int n) {
-      final String prefix = signPrefix(r);
+      final StringBuilder sb = new StringBuilder().append(signPrefix(r));
       if (r == 0.0f) {
-        return prefix + (n == 0 ? "0E0" : "0." + repeat('0', n) + "E0");
+        sb.append('0');
+        if (n > 0) {
+          sb.append('.');
+          padRightTo(sb, sb.length() + n, '0');
+        }
+        return sb.append("E0").toString();
       }
       // Express |r| as mantissa * 10^exp where mantissa in [1, 10).
       BigDecimal bd = toBigDecimal(r);
@@ -3207,7 +3210,10 @@ public abstract class Codes {
         mantissa = mantissa.movePointLeft(1);
         exp++;
       }
-      return prefix + mantissa.toPlainString() + "E" + smlExp(exp);
+      return sb.append(mantissa.toPlainString())
+          .append('E')
+          .append(smlExp(exp))
+          .toString();
     }
 
     /** Formats r as {@code 0.dddE±exp} with no trailing zeros. */
