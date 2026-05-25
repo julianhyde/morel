@@ -759,7 +759,8 @@ public class TypeResolver {
           args2.add(deduceExpType(env, arg, vArg2));
         }
         return reg(list.copy(args2), v, listTerm(vArg2));
-
+      case RANGE_LIST:
+        return deduceRangeListType(env, (Ast.RangeList) node, v);
       case RECORD:
         return deduceRecordType(env, (Ast.Record) node, v);
 
@@ -1435,6 +1436,63 @@ public class TypeResolver {
           reg(exp2, v8);
         });
     return args2;
+  }
+
+  /**
+   * Desugars a {@link Ast.RangeList} into {@code Range.flatten [...]} where
+   * each item becomes a {@code Range} constructor application ({@code POINT e},
+   * {@code CLOSED (lo, hi)}, etc.), then type-resolves the desugared form.
+   */
+  private Ast.Exp deduceRangeListType(
+      TypeEnv env, Ast.RangeList rangeList, Variable v) {
+    final Pos pos = rangeList.pos;
+    final List<Ast.Exp> rangeExps = new ArrayList<>(rangeList.items.size());
+    for (Ast.RangeListItem item : rangeList.items) {
+      rangeExps.add(rangeItemToExp(pos, item));
+    }
+    final Ast.Exp flattenFn =
+        ast.apply(ast.recordSelector(pos, "flatten"), ast.id(pos, "Range"));
+    final Ast.Exp call = ast.apply(flattenFn, ast.list(pos, rangeExps));
+    return deduceExpType(env, call, v);
+  }
+
+  /**
+   * Converts one {@link Ast.RangeListItem} to a {@code Range} constructor
+   * application.
+   */
+  private static Ast.Exp rangeItemToExp(Pos pos, Ast.RangeListItem item) {
+    switch (item.kind) {
+      case POINT:
+        return ast.apply(ast.id(pos, "POINT"), item.lo);
+      case CLOSED:
+        return ast.apply(
+            ast.id(pos, "CLOSED"),
+            ast.tuple(pos, ImmutableList.of(item.lo, item.hi)));
+      case CLOSED_OPEN:
+        return ast.apply(
+            ast.id(pos, "CLOSED_OPEN"),
+            ast.tuple(pos, ImmutableList.of(item.lo, item.hi)));
+      case OPEN_CLOSED:
+        return ast.apply(
+            ast.id(pos, "OPEN_CLOSED"),
+            ast.tuple(pos, ImmutableList.of(item.lo, item.hi)));
+      case OPEN:
+        return ast.apply(
+            ast.id(pos, "OPEN"),
+            ast.tuple(pos, ImmutableList.of(item.lo, item.hi)));
+      case AT_LEAST:
+        return ast.apply(ast.id(pos, "AT_LEAST"), item.lo);
+      case GREATER_THAN:
+        return ast.apply(ast.id(pos, "GREATER_THAN"), item.lo);
+      case AT_MOST:
+        return ast.apply(ast.id(pos, "AT_MOST"), item.hi);
+      case LESS_THAN:
+        return ast.apply(ast.id(pos, "LESS_THAN"), item.hi);
+      case ALL:
+        return ast.id(pos, "ALL");
+      default:
+        throw new AssertionError(item.kind);
+    }
   }
 
   /** Deduces a record constructor expression's type. */

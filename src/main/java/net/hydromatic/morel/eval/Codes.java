@@ -2961,6 +2961,10 @@ public abstract class Codes {
       new DiscreteSetEnumerate(
           BuiltIn.RANGE_DISCRETE_SET_TO_LIST, Discretes.dummy());
 
+  /** @see BuiltIn#RANGE_FLATTEN */
+  private static final Applicable RANGE_FLATTEN =
+      new RangeFlatten(Discretes.dummy());
+
   /** @see BuiltIn#REAL_ABS */
   private static final Applicable REAL_ABS =
       new BaseApplicable1<Float, Float>(BuiltIn.REAL_ABS) {
@@ -5706,6 +5710,7 @@ public abstract class Codes {
           .put(BuiltIn.RANGE_DISCRETE_SET_RANGES, RANGE_DISCRETE_SET_RANGES)
           .put(BuiltIn.RANGE_DISCRETE_SET_TO_BAG, RANGE_DISCRETE_SET_TO_BAG)
           .put(BuiltIn.RANGE_DISCRETE_SET_TO_LIST, RANGE_DISCRETE_SET_TO_LIST)
+          .put(BuiltIn.RANGE_FLATTEN, RANGE_FLATTEN)
           .put(BuiltIn.RELATIONAL_COMPARE, RELATIONAL_COMPARE)
           .put(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT)
           .put(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY)
@@ -7497,6 +7502,37 @@ public abstract class Codes {
       ranges.forEach(
           (lo, hi) -> Bound.enumerate(discrete, lo, hi, result::add));
       return result.build();
+    }
+  }
+
+  /** Implementation of {@link BuiltIn#RANGE_FLATTEN}. */
+  @SuppressWarnings("rawtypes")
+  private static class RangeFlatten extends BaseApplicable1<List, List>
+      implements Typed {
+    private final Discrete<Object> discrete;
+
+    RangeFlatten(Discrete<Object> discrete) {
+      super(BuiltIn.RANGE_FLATTEN);
+      this.discrete = requireNonNull(discrete);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      Type elemType = rangeElementType(type);
+      return new RangeFlatten(Discretes.discreteFor(typeSystem, elemType));
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List apply(List ranges) {
+      final LinkedHashSet<Object> seen = new LinkedHashSet<>();
+      for (Object r : ranges) {
+        final List range = (List) r;
+        final Bound lo = Bound.lowerBound(range);
+        final Bound hi = Bound.upperBound(range);
+        Bound.enumerate(discrete, lo, hi, seen::add);
+      }
+      return ImmutableList.copyOf(seen);
     }
   }
 

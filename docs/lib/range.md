@@ -58,6 +58,7 @@ val <a id='toBag' href="#toBag-impl">toBag</a> : 'a discrete_set -> 'a bag
 val <a id='toList' href="#toList-impl">toList</a> : 'a discrete_set -> 'a list
 val <a id='continuousSetOf' href="#continuousSetOf-impl">continuousSetOf</a> : 'a range list -> 'a continuous_set
 val <a id='discreteSetOf' href="#discreteSetOf-impl">discreteSetOf</a> : 'a range list -> 'a discrete_set
+val <a id='flatten' href="#flatten-impl">flatten</a> : 'a range list -> 'a list
 val <a id='ranges' href="#ranges-impl">ranges</a> : 'a discrete_set -> 'a range list
 val <a id='complement' href="#complement-impl">complement</a> : 'a discrete_set -> 'a discrete_set
 </pre>
@@ -150,6 +151,23 @@ The ordering and discreteness are implicit, derived from the element type.
 val evens = DISCRETE_SET [CLOSED (0,2),CLOSED (4,6),CLOSED (8,10)] : int discrete_set
 - evens.toList ();
 val it = [0,1,2,4,5,6,8,9,10] : int list
+```
+
+<a id="flatten-impl"></a>
+<h3><code>flatten</code></h3>
+
+`flatten ranges` enumerates the values in `ranges`, preserving the order of first
+occurrence and dropping duplicates. The element type must be
+discrete (e.g., `int`, `char`, `bool`). Raises an exception if any
+range is unbounded below and the type has no minimum value.
+
+Equivalent to `Range.toList (Range.discreteSetOf ranges)` except
+that `flatten` preserves the input order, while `toList` returns
+values in ascending order.
+
+```
+- Range.flatten [CLOSED (0, 3), POINT 10, CLOSED (2, 5)];
+val it = [0,1,2,3,10,4,5] : int list
 ```
 
 <a id="ranges-impl"></a>

@@ -127,6 +127,23 @@ sig
   val discreteSetOf : 'a range list -> 'a discrete_set
       [@@prototype "discreteSetOf ranges"]
 
+  (**
+   * enumerates the values in `ranges`, preserving the order of first
+   * occurrence and dropping duplicates. The element type must be
+   * discrete (e.g., `int`, `char`, `bool`). Raises an exception if any
+   * range is unbounded below and the type has no minimum value.
+   *
+   * Equivalent to `Range.toList (Range.discreteSetOf ranges)` except
+   * that `flatten` preserves the input order, while `toList` returns
+   * values in ascending order.
+   *
+   * ```
+   * - Range.flatten [CLOSED (0, 3), POINT 10, CLOSED (2, 5)];
+   * val it = [0,1,2,3,10,4,5] : int list
+   * ```
+   *)
+  val flatten : 'a range list -> 'a list [@@prototype "flatten ranges"]
+
   (** returns the list of ranges in the discrete set `ds`. *)
   val ranges : 'a discrete_set -> 'a range list
       [@@method] [@@prototype "ranges ds"]
