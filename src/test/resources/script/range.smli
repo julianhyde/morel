@@ -513,6 +513,57 @@ from x in [1, 2, 3] where x < 2;
 > uncaught exception Size
 >   raised at: 0.0-0.0
 
+(* Membership in infinite range-lists ----------------------------- *)
+
+(*) Unbounded discrete range: AT_LEAST.
+5 elem [0..];
+> val it = true : bool
+
+~3 elem [0..];
+> val it = false : bool
+
+5 notelem [0..];
+> val it = false : bool
+
+~3 notelem [0..];
+> val it = true : bool
+
+(*) Unbounded discrete range: LESS_THAN.
+0 elem [..^ 5];
+> val it = true : bool
+
+10 elem [..^ 5];
+> val it = false : bool
+
+(*) ALL: any value of the element type belongs.
+#"c" elem [..];
+> val it = true : bool
+
+(*) Continuous range over real.
+5.5 elem [0.0 .. 10.0];
+> val it = true : bool
+
+15.0 elem [0.0 .. 10.0];
+> val it = false : bool
+
+(*) Endpoint inclusion follows the operator.
+5 elem [0 ..^ 5];
+> val it = false : bool
+
+5 elem [0 ^.. 5];
+> val it = true : bool
+
+(*) Mixed bounded + unbounded items.
+5 elem [0..3, 10..];
+> val it = false : bool
+
+12 elem [0..3, 10..];
+> val it = true : bool
+
+(*) String range (continuous-style; non-POINT ranges allowed for elem).
+"b" elem ["a" ..^ "z"];
+> val it = true : bool
+
 (* Non-discrete element type -------------------------------------- *)
 
 (*) POINT items over real are finite.

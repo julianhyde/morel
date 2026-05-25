@@ -3370,9 +3370,48 @@ public class TypeResolver {
 
   /** Registers an infix operator. */
   private Ast.Exp infix(TypeEnv env, Ast.InfixCall call, Variable v) {
+    // Special case: 'x elem [r1, r2, ...]' (where the RHS contains range
+    // items) is rewritten to
+    //   Range.contains r1 x orelse Range.contains r2 x orelse ...
+    // This avoids materializing the list, which may be infinite (e.g.
+    // '5 elem [0..]' or 'x elem [0.0 ..^ 1.0]').
+    if ((call.op == Op.ELEM || call.op == Op.NOT_ELEM)
+        && call.a1 instanceof Ast.RangeList) {
+      return elemOnRangeList(env, call, v);
+    }
     Ast.Id id = ast.id(Pos.ZERO, requireNonNull(call.op.opName));
     Ast.Tuple arg = ast.tuple(Pos.ZERO, ImmutableList.of(call.a0, call.a1));
     return deduceExpType(env, ast.apply(id, arg), v);
+  }
+
+  /**
+   * Desugars {@code x elem [r1, r2, ...]} (and {@code notelem}) into a chain of
+   * {@code Range.contains} calls combined with {@code orelse}.
+   */
+  private Ast.Exp elemOnRangeList(TypeEnv env, Ast.InfixCall call, Variable v) {
+    final Ast.RangeList rangeList = (Ast.RangeList) call.a1;
+    final Pos pos = call.pos;
+    final Ast.Exp x = call.a0;
+    final Ast.Exp result;
+    if (rangeList.items.isEmpty()) {
+      result = ast.boolLiteral(pos, call.op == Op.NOT_ELEM);
+    } else {
+      Ast.Exp disjunction = null;
+      for (Ast.RangeListItem item : rangeList.items) {
+        final Ast.Exp rangeExp = rangeItemToExp(pos, item);
+        final Ast.Exp containsCurried =
+            ast.apply(
+                ast.recordSelector(pos, "contains"), ast.id(pos, "Range"));
+        final Ast.Exp test = ast.apply(ast.apply(containsCurried, rangeExp), x);
+        disjunction =
+            (disjunction == null) ? test : ast.orElse(disjunction, test);
+      }
+      result =
+          (call.op == Op.NOT_ELEM)
+              ? ast.apply(ast.id(pos, "not"), disjunction)
+              : disjunction;
+    }
+    return deduceExpType(env, result, v);
   }
 
   /** Registers a prefix operator. */
