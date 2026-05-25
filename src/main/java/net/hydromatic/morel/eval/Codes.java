@@ -71,6 +71,7 @@ import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
@@ -7509,17 +7510,29 @@ public abstract class Codes {
   @SuppressWarnings("rawtypes")
   private static class RangeFlatten extends BaseApplicable1<List, List>
       implements Typed {
-    private final Discrete<Object> discrete;
+    /**
+     * Discrete instance for the element type, or null if not discrete (e.g.
+     * {@code real}). When null, only POINT items are finite at runtime.
+     */
+    private final @Nullable Discrete<Object> discrete;
 
-    RangeFlatten(Discrete<Object> discrete) {
+    RangeFlatten(@Nullable Discrete<Object> discrete) {
       super(BuiltIn.RANGE_FLATTEN);
-      this.discrete = requireNonNull(discrete);
+      this.discrete = discrete;
     }
 
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type) {
       Type elemType = rangeElementType(type);
-      return new RangeFlatten(Discretes.discreteFor(typeSystem, elemType));
+      Discrete<Object> d;
+      try {
+        d = Discretes.discreteFor(typeSystem, elemType);
+      } catch (CompileException ex) {
+        // Element type is not discrete (e.g. real). POINT items are still
+        // finite; non-POINT items raise Size at runtime.
+        d = null;
+      }
+      return new RangeFlatten(d);
     }
 
     @Override
@@ -7528,9 +7541,18 @@ public abstract class Codes {
       final LinkedHashSet<Object> seen = new LinkedHashSet<>();
       for (Object r : ranges) {
         final List range = (List) r;
-        final Bound lo = Bound.lowerBound(range);
-        final Bound hi = Bound.upperBound(range);
-        Bound.enumerate(discrete, lo, hi, seen::add);
+        if (discrete == null) {
+          // Only POINT items are finite over a non-discrete element type.
+          if (!BuiltIn.Constructor.RANGE_POINT.constructor.equals(
+              range.get(0))) {
+            throw new MorelRuntimeException(BuiltInExn.SIZE, Pos.ZERO);
+          }
+          seen.add(Bound.lowerBound(range).value);
+        } else {
+          final Bound lo = Bound.lowerBound(range);
+          final Bound hi = Bound.upperBound(range);
+          Bound.enumerate(discrete, lo, hi, seen::add);
+        }
       }
       return ImmutableList.copyOf(seen);
     }

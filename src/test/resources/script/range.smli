@@ -515,9 +515,27 @@ from x in [1, 2, 3] where x < 2;
 
 (* Non-discrete element type -------------------------------------- *)
 
-(*) real is not discrete.
+(*) POINT items over real are finite.
+[1.0];
+> val it = [1] : real list
+
+[1.0, 2.5, 1.0];
+> val it = [1,2.5,1] : real list
+
+Range.flatten [POINT 1.0, POINT 3.0, POINT 1.0];
+> val it = [1,3] : real list
+
+(*) Non-POINT ranges over real are infinite.
 [0.0 .. 1.0];
-> 0.0-0.0 Error: not a discrete type: real
+> uncaught exception Size
+>   raised at: 0.0-0.0
+
+(*) Same for string.
+["a"];
+> val it = ["a"] : string list
+
+["a" .. "z"];
+> uncaught exception Size
 >   raised at: 0.0-0.0
 
 (*) End range.smli

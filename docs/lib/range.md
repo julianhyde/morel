@@ -157,17 +157,22 @@ val it = [0,1,2,4,5,6,8,9,10] : int list
 <h3><code>flatten</code></h3>
 
 `flatten ranges` enumerates the values in `ranges`, preserving the order of first
-occurrence and dropping duplicates. The element type must be
-discrete (e.g., `int`, `char`, `bool`). Raises an exception if any
-range is unbounded below and the type has no minimum value.
+occurrence and dropping duplicates. The element type may be any
+ordered type, but a range over a non-discrete type (e.g. `real`)
+is infinite unless it is a `POINT`, and unbounded ranges over a
+discrete type (e.g. `AT_LEAST 5 : int range`) are also infinite.
+Raises `Size` at runtime if any range is infinite.
 
-Equivalent to `Range.toList (Range.discreteSetOf ranges)` except
-that `flatten` preserves the input order, while `toList` returns
-values in ascending order.
+For a discrete element type with bounded ranges, equivalent to
+`Range.toList (Range.discreteSetOf ranges)` except that `flatten`
+preserves the input order, while `toList` returns values in
+ascending order.
 
 ```
 - Range.flatten [CLOSED (0, 3), POINT 10, CLOSED (2, 5)];
 val it = [0,1,2,3,10,4,5] : int list
+- Range.flatten [POINT 1.0, POINT 3.0, POINT 1.0];
+val it = [1.0,3.0] : real list
 ```
 
 <a id="ranges-impl"></a>
