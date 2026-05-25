@@ -429,15 +429,15 @@ Range.flatten ([] : int range list);
 > val it = [1,2,3,4,5] : int list
 
 (*) CLOSED_OPEN.
-[1 ..< 5];
+[1 ..^ 5];
 > val it = [1,2,3,4] : int list
 
 (*) OPEN_CLOSED.
-[1 <.. 5];
+[1 ^.. 5];
 > val it = [2,3,4,5] : int list
 
 (*) OPEN.
-[1 <..< 5];
+[1 ^..^ 5];
 > val it = [2,3,4] : int list
 
 (*) Singleton range = POINT becomes ordinary list literal.
@@ -465,28 +465,28 @@ Range.flatten ([] : int range list);
 bag [0 .. 5, 10];
 > val it = [0,1,2,3,4,5,10] : int bag
 
-(* Lexer disambiguation between `<` and the new tokens. *)
+(* Lexer disambiguation between `^` (string concat) and the new tokens. *)
 
-(*) Plain comparison: `<` alone.
-1 < 2;
-> val it = true : bool
+(*) Plain `^` is string concatenation.
+"a" ^ "b";
+> val it = "ab" : string
 
 (*) Plain comparison in a where clause.
 from x in [1, 2, 3] where x < 2;
 > val it = [1] : int list
 
-(*) `<..<` between values: OPEN.
-[1 <..< 5];
+(*) `^..^` between values: OPEN.
+[1 ^..^ 5];
 > val it = [2,3,4] : int list
 
 (*) Whitespace insensitivity.
-[1<..<5];
+[1^..^5];
 > val it = [2,3,4] : int list
 
-[1<..5];
+[1^..5];
 > val it = [2,3,4,5] : int list
 
-[1..<5];
+[1..^5];
 > val it = [1,2,3,4] : int list
 
 (*) Comparison expressions as range operands (parens required;
@@ -509,7 +509,7 @@ from x in [1, 2, 3] where x < 2;
 >   raised at: 0.0-0.0
 
 (*) Similar for GREATER_THAN.
-[5 <..] : int list;
+[5 ^..] : int list;
 > uncaught exception Size
 >   raised at: 0.0-0.0
 

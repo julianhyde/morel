@@ -2323,25 +2323,25 @@ public class Ast {
           w.append(lo, 0, 0).append(" .. ").append(hi, 0, 0);
           break;
         case CLOSED_OPEN:
-          w.append(lo, 0, 0).append(" ..< ").append(hi, 0, 0);
+          w.append(lo, 0, 0).append(" ..^ ").append(hi, 0, 0);
           break;
         case OPEN_CLOSED:
-          w.append(lo, 0, 0).append(" <.. ").append(hi, 0, 0);
+          w.append(lo, 0, 0).append(" ^.. ").append(hi, 0, 0);
           break;
         case OPEN:
-          w.append(lo, 0, 0).append(" <..< ").append(hi, 0, 0);
+          w.append(lo, 0, 0).append(" ^..^ ").append(hi, 0, 0);
           break;
         case AT_LEAST:
           w.append(lo, 0, 0).append(" ..");
           break;
         case GREATER_THAN:
-          w.append(lo, 0, 0).append(" <..");
+          w.append(lo, 0, 0).append(" ^..");
           break;
         case AT_MOST:
           w.append(".. ").append(hi, 0, 0);
           break;
         case LESS_THAN:
-          w.append("..< ").append(hi, 0, 0);
+          w.append("..^ ").append(hi, 0, 0);
           break;
         case ALL:
           w.append("..");

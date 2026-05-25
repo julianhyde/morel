@@ -1417,19 +1417,20 @@ void recordExp(PairList<Id, Exp> nameExps) :
 
 /**
  * Parses one item in a bracketed list literal: either a plain expression
- * (POINT), or a range form involving "..", "..&lt;", "&lt;..", or "&lt;..&lt;".
+ * (POINT), or a range form involving "..", "..^", "^..", or "^..^". A
+ * caret marks an excluded endpoint.
  *
  * <p>Forms recognised:
  * <ul>
  *   <li>{@code e}           &rarr; {@code POINT e}
  *   <li>{@code e .. e'}     &rarr; {@code CLOSED (e, e')}
- *   <li>{@code e ..&lt; e'}    &rarr; {@code CLOSED_OPEN (e, e')}
- *   <li>{@code e &lt;.. e'}    &rarr; {@code OPEN_CLOSED (e, e')}
- *   <li>{@code e &lt;..&lt; e'}   &rarr; {@code OPEN (e, e')}
+ *   <li>{@code e ..^ e'}    &rarr; {@code CLOSED_OPEN (e, e')}
+ *   <li>{@code e ^.. e'}    &rarr; {@code OPEN_CLOSED (e, e')}
+ *   <li>{@code e ^..^ e'}   &rarr; {@code OPEN (e, e')}
  *   <li>{@code e ..}        &rarr; {@code AT_LEAST e}
- *   <li>{@code e &lt;..}       &rarr; {@code GREATER_THAN e}
+ *   <li>{@code e ^..}       &rarr; {@code GREATER_THAN e}
  *   <li>{@code .. e}        &rarr; {@code AT_MOST e}
- *   <li>{@code ..&lt; e}       &rarr; {@code LESS_THAN e}
+ *   <li>{@code ..^ e}       &rarr; {@code LESS_THAN e}
  *   <li>{@code ..}          &rarr; {@code ALL}
  * </ul>
  */
@@ -1450,7 +1451,7 @@ void rangeListItem(List<RangeListItem> items) :
     }
   )
 |
-  <DOT_DOT_LT> e = expression() {
+  <DOT_DOT_CARET> e = expression() {
     items.add(ast.rangeListItem(RangeListItem.Kind.LESS_THAN, null, e));
   }
 |
@@ -1468,11 +1469,11 @@ void rangeListItem(List<RangeListItem> items) :
       }
     )
   |
-    <DOT_DOT_LT> e2 = expression() {
+    <DOT_DOT_CARET> e2 = expression() {
       items.add(ast.rangeListItem(RangeListItem.Kind.CLOSED_OPEN, e, e2));
     }
   |
-    <LT_DOT_DOT>
+    <CARET_DOT_DOT>
     (
       LOOKAHEAD({ getToken(1).kind == COMMA || getToken(1).kind == RBRACKET })
       { items.add(
@@ -1483,7 +1484,7 @@ void rangeListItem(List<RangeListItem> items) :
       }
     )
   |
-    <LT_DOT_DOT_LT> e2 = expression() {
+    <CARET_DOT_DOT_CARET> e2 = expression() {
       items.add(ast.rangeListItem(RangeListItem.Kind.OPEN, e, e2));
     }
   |
@@ -2454,9 +2455,9 @@ AstNode statementEof() :
     | < AT: "@" >
     | < ELLIPSIS: "..." >
     | < DOT_DOT: ".." >
-    | < DOT_DOT_LT: "..<" >
-    | < LT_DOT_DOT: "<.." >
-    | < LT_DOT_DOT_LT: "<..<" >
+    | < DOT_DOT_CARET: "..^" >
+    | < CARET_DOT_DOT: "^.." >
+    | < CARET_DOT_DOT_CARET: "^..^" >
     | < QUOTE: "'" >
     | < DOUBLE_QUOTE: "\"" >
 }
