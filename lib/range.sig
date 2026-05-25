@@ -128,23 +128,22 @@ sig
       [@@prototype "discreteSetOf ranges"]
 
   (**
-   * enumerates the values in `ranges`, preserving the order of first
-   * occurrence and dropping duplicates. The element type may be any
-   * ordered type, but a range over a non-discrete type (e.g. `real`)
-   * is infinite unless it is a `POINT`, and unbounded ranges over a
-   * discrete type (e.g. `AT_LEAST 5 : int range`) are also infinite.
-   * Raises `Size` at runtime if any range is infinite.
+   * concatenates the values in `ranges`. Within each range, values
+   * appear in ascending order; ranges are concatenated in the order
+   * they appear in the input, and duplicate values are preserved. To
+   * eliminate duplicates, apply `distinct` to the result.
    *
-   * For a discrete element type with bounded ranges, equivalent to
-   * `Range.toList (Range.discreteSetOf ranges)` except that `flatten`
-   * preserves the input order, while `toList` returns values in
-   * ascending order.
+   * The element type may be any ordered type, but a range over a
+   * non-discrete type (e.g. `real`) is infinite unless it is a
+   * `POINT`, and unbounded ranges over a discrete type (e.g.
+   * `AT_LEAST 5 : int range`) are also infinite. Raises `Size` at
+   * runtime if any range is infinite.
    *
    * ```
    * - Range.flatten [CLOSED (0, 3), POINT 10, CLOSED (2, 5)];
-   * val it = [0,1,2,3,10,4,5] : int list
+   * val it = [0,1,2,3,10,2,3,4,5] : int list
    * - Range.flatten [POINT 1.0, POINT 3.0, POINT 1.0];
-   * val it = [1.0,3.0] : real list
+   * val it = [1.0,3.0,1.0] : real list
    * ```
    *)
   val flatten : 'a range list -> 'a list [@@prototype "flatten ranges"]

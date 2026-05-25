@@ -402,17 +402,17 @@ List.map f (eitherSet.toList ());
 
 (* Range.flatten -------------------------------------------------- *)
 
-(*) flatten preserves first-occurrence order and dedups.
+(*) flatten concatenates the ranges, preserving order and duplicates.
 Range.flatten [CLOSED (0, 3), POINT 10, CLOSED (2, 5)];
-> val it = [0,1,2,3,10,4,5] : int list
+> val it = [0,1,2,3,10,2,3,4,5] : int list
 
 (*) flatten on a single CLOSED range.
 Range.flatten [CLOSED (1, 5)];
 > val it = [1,2,3,4,5] : int list
 
-(*) flatten on POINTs only.
+(*) flatten preserves duplicate POINTs.
 Range.flatten [POINT 1, POINT 2, POINT 1, POINT 3];
-> val it = [1,2,3] : int list
+> val it = [1,2,1,3] : int list
 
 (*) flatten on an empty list.
 Range.flatten ([] : int range list);
@@ -448,9 +448,9 @@ Range.flatten ([] : int range list);
 [1 .. 5, 10];
 > val it = [1,2,3,4,5,10] : int list
 
-(*) Multiple ranges with dedup and order preservation.
+(*) Multiple ranges; duplicates are preserved.
 [0..3, 10, 2..5, 10];
-> val it = [0,1,2,3,10,4,5] : int list
+> val it = [0,1,2,3,10,2,3,4,5,10] : int list
 
 (*) char ranges.
 [#"a" .. #"e"];
@@ -523,7 +523,7 @@ from x in [1, 2, 3] where x < 2;
 > val it = [1,2.5,1] : real list
 
 Range.flatten [POINT 1.0, POINT 3.0, POINT 1.0];
-> val it = [1,3] : real list
+> val it = [1,3,1] : real list
 
 (*) Non-POINT ranges over real are infinite.
 [0.0 .. 1.0];

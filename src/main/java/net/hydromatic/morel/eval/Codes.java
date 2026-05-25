@@ -7538,7 +7538,7 @@ public abstract class Codes {
     @Override
     @SuppressWarnings("unchecked")
     public List apply(List ranges) {
-      final LinkedHashSet<Object> seen = new LinkedHashSet<>();
+      final ImmutableList.Builder<Object> result = ImmutableList.builder();
       for (Object r : ranges) {
         final List range = (List) r;
         if (discrete == null) {
@@ -7547,14 +7547,14 @@ public abstract class Codes {
               range.get(0))) {
             throw new MorelRuntimeException(BuiltInExn.SIZE, Pos.ZERO);
           }
-          seen.add(Bound.lowerBound(range).value);
+          result.add(Bound.lowerBound(range).value);
         } else {
           final Bound lo = Bound.lowerBound(range);
           final Bound hi = Bound.upperBound(range);
-          Bound.enumerate(discrete, lo, hi, seen::add);
+          Bound.enumerate(discrete, lo, hi, result::add);
         }
       }
-      return ImmutableList.copyOf(seen);
+      return result.build();
     }
   }
 
