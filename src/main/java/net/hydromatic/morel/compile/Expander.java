@@ -44,6 +44,7 @@ import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
@@ -123,6 +124,8 @@ public class Expander {
     // distinguish local scan patterns from outer-scope variables.
     final Set<Core.NamedPat> allScanPats = new HashSet<>();
     final Map<Core.NamedPat, Generator> generatorMap = new HashMap<>();
+    // Source position of each extent pattern, for error reporting.
+    final Map<Core.NamedPat, Pos> patternPos = new HashMap<>();
     stepVarSet.stepVars.forEach(
         (step, vars) -> {
           if (step.op == Op.SCAN) {
@@ -131,6 +134,7 @@ public class Expander {
             allScanPats.addAll(namedPats);
             if (scan.exp.isExtent()) {
               for (Core.NamedPat namedPat : namedPats) {
+                patternPos.put(namedPat, scan.exp.pos);
                 if (!stepVarSet.usedPats.contains(namedPat)) {
                   // Ignore patterns that are not used. For example, "y" is
                   // unused in "exists x, y where x elem [1,2,3]".
@@ -266,6 +270,8 @@ public class Expander {
           fromBuilder.addAll(ImmutableList.of(step));
         });
 
+    checkAllGrounded(stepVarSet, originalPats, patternState, patternPos);
+
     // If we added shared patterns for joining, project them away at the end.
     // The final result should only contain the original query patterns.
     if (!sharedPats.isEmpty()) {
@@ -288,6 +294,46 @@ public class Expander {
     }
 
     return fromBuilder.build();
+  }
+
+  /**
+   * Throws "pattern '...' is not grounded" if any extent pattern is not {@link
+   * PatternState#DONE}.
+   *
+   * <p>This happens when a pattern has a generator but the generator depends on
+   * another pattern's generator and the dependency cycles back. For example, in
+   * {@code from x, y where x > 0 andalso x < y andalso y < 10}, x's generator
+   * depends on y (upper bound) and y's generator depends on x (lower bound).
+   * Without bound propagation across the cycle, neither can be scheduled.
+   */
+  private static void checkAllGrounded(
+      StepVarSet stepVarSet,
+      Set<Core.NamedPat> originalPats,
+      Map<Core.NamedPat, PatternState> patternState,
+      Map<Core.NamedPat, Pos> patternPos) {
+    // Iterate in source order so the error is deterministic and points at
+    // the first ungrounded pattern.
+    stepVarSet.stepVars.forEach(
+        (step, vars) -> {
+          if (step.op != Op.SCAN) {
+            return;
+          }
+          final Core.Scan scan = (Core.Scan) step;
+          if (!scan.exp.isExtent()) {
+            return;
+          }
+          for (Core.NamedPat p : scan.pat.expand()) {
+            if (!stepVarSet.usedPats.contains(p) || !originalPats.contains(p)) {
+              continue;
+            }
+            if (patternState.get(p) != PatternState.DONE) {
+              throw new CompileException(
+                  format("pattern '%s' is not grounded", p.name),
+                  false,
+                  patternPos.getOrDefault(p, Pos.ZERO));
+            }
+          }
+        });
   }
 
   /**

@@ -244,6 +244,41 @@ from x where (x + 2) * (x - 3) = 0;
 > stdIn:1.6 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.6
 
+(* Ranges that cannot be deduced.
+ *
+ * Each variable has a generator whose bound references another
+ * variable. Without bound-propagation the local extractor cannot
+ * resolve the cycle, so the patterns are reported as not grounded.
+ *
+ * Once FBBT (#373) lands, the first four queries will succeed with
+ * deduced ranges; the last three need other techniques (Fourier-Motzkin
+ * for tilted polytopes, monotonicity for non-linear products, and an
+ * actual finite-domain check for the feasible-but-unbounded case) and
+ * will continue to report 'not grounded'. *)
+from x, y where x > 0 andalso x < y andalso y < 10;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+from x, y where y > 0 andalso y < x andalso x < 10;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+from x, y, z where x > 0 andalso x < y andalso y < z andalso z < 10;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+from x where x > 0 andalso x < x + 1 andalso x < 5;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+from x, y where x < y andalso y < x + 10;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+from x, y where x > 0 andalso x * y = 100 andalso y > 0;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+from x, y
+  where x + y >= 0 andalso x + y <= 10
+  andalso x - y >= ~3 andalso x - y <= 3;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+
 (* -- elem patterns ----------------------------------------------- *)
 
 (*) Pattern
