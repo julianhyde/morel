@@ -276,6 +276,20 @@ Sys.planEx "3";
 >   "val it = #length Bag (from x in #toBag Range (#discreteSetOf Range ([CLOSED (1, 7)])) join y in #toBag Range (#discreteSetOf Range ([CLOSED_OPEN (1, 27)])) where *:int (x, y + 3) < 30)"
 >   : string
 
+(* Same strengthening via the literal range-list syntax. FBBT injects
+ * the implied lower bounds from `[1..]`, propagates through the
+ * multiplication constraint, and pushes the deduced upper bounds back
+ * into each scan's range constructor — turning `[1..]` into `[1..7]`
+ * and `[1..^27]`. Preserves the original `int list` (ordered) type. *)
+from x in [1..] where x < 5;
+> val it = [1,2,3,4] : int list
+List.length (from x in [1..], y in [1..] where x * (y + 3) < 30);
+> val it = 51 : int
+Sys.planEx "3";
+> val it =
+>   "val it = #length List (from x in #flatten Range ([CLOSED (1, 7)]) join y in #flatten Range ([CLOSED_OPEN (1, 27)]) where x >= 1 andalso (y >= 1 andalso *:int (x, y + 3) < 30))"
+>   : string
+
 (* Cyclic bounds resolved by FBBT.
  *
  * Each variable's generator depends on another. FBBT (#373) propagates
