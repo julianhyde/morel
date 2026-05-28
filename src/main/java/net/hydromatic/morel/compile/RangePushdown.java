@@ -68,8 +68,11 @@ final class RangePushdown {
   }
 
   /**
-   * If {@code scan.exp} is {@code Range.flatten [<single_infinite_ctor>]},
-   * returns a {@link ScanInfo}; otherwise null.
+   * If {@code scan.exp} is {@code Range.flatten [<single_infinite_ctor>]} or
+   * {@code Bag.fromList (Range.flatten [<single_infinite_ctor>])}, returns a
+   * {@link ScanInfo}; otherwise null. The bag wrapper is matched so that
+   * generator-built scans (e.g. {@code from x where x >= 1}) share the same
+   * pushdown machinery as user-written {@code from x in [1..]}.
    */
   static @Nullable ScanInfo match(Core.Scan scan) {
     if (!(scan.pat instanceof Core.NamedPat)) {
@@ -79,7 +82,17 @@ final class RangePushdown {
     if (!(scan.exp instanceof Core.Apply)) {
       return null;
     }
-    final Core.Apply apply = (Core.Apply) scan.exp;
+    Core.Apply apply = (Core.Apply) scan.exp;
+    // Peel an optional Bag.fromList wrapper so we work on the inner
+    // Range.flatten regardless of the surrounding collection type.
+    final boolean bagWrapped;
+    if (apply.builtIn() == BuiltIn.BAG_FROM_LIST
+        && apply.arg instanceof Core.Apply) {
+      apply = (Core.Apply) apply.arg;
+      bagWrapped = true;
+    } else {
+      bagWrapped = false;
+    }
     if (apply.builtIn() != BuiltIn.RANGE_FLATTEN) {
       return null;
     }
@@ -105,13 +118,13 @@ final class RangePushdown {
     }
     switch (ctorEnum) {
       case RANGE_AT_LEAST:
-        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_GE);
+        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_GE, bagWrapped);
       case RANGE_AT_MOST:
-        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_LE);
+        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_LE, bagWrapped);
       case RANGE_GREATER_THAN:
-        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_GT);
+        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_GT, bagWrapped);
       case RANGE_LESS_THAN:
-        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_LT);
+        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_LT, bagWrapped);
       default:
         return null;
     }
@@ -243,7 +256,12 @@ final class RangePushdown {
     final BuiltIn.Constructor ctor = finiteCtor(lowerStrict, upperStrict);
     final Core.Exp newExp =
         buildRangeFlatten(
-            typeSystem, info.pat.type, ctor, lowerValue, upperValue);
+            typeSystem,
+            info.pat.type,
+            ctor,
+            lowerValue,
+            upperValue,
+            info.bagWrapped);
     return new Tightening(newExp, bestConjunct);
   }
 
@@ -261,14 +279,16 @@ final class RangePushdown {
 
   /**
    * Builds {@code Range.flatten [ctor (lo, hi)]} of type {@code <elemType>
-   * list}.
+   * list}, optionally wrapped in {@code Bag.fromList} to give an {@code
+   * <elemType> bag}.
    */
   private static Core.Exp buildRangeFlatten(
       TypeSystem typeSystem,
       Type elemType,
       BuiltIn.Constructor ctor,
       BigDecimal lo,
-      BigDecimal hi) {
+      BigDecimal hi,
+      boolean bagWrapped) {
     final Type rangeType = typeSystem.range(elemType);
     final FnType conFnType =
         typeSystem.fnType(typeSystem.tupleType(elemType, elemType), rangeType);
@@ -283,8 +303,17 @@ final class RangePushdown {
             core.tuple(typeSystem, loLit, hiLit));
     final Core.Exp rangeListExp =
         core.list(typeSystem, rangeType, ImmutableList.of(rangeExp));
-    return core.call(
-        typeSystem, BuiltIn.RANGE_FLATTEN, elemType, Pos.ZERO, rangeListExp);
+    final Core.Apply flatten =
+        core.call(
+            typeSystem,
+            BuiltIn.RANGE_FLATTEN,
+            elemType,
+            Pos.ZERO,
+            rangeListExp);
+    return bagWrapped
+        ? core.call(
+            typeSystem, BuiltIn.BAG_FROM_LIST, elemType, Pos.ZERO, flatten)
+        : flatten;
   }
 
   /**
@@ -335,19 +364,23 @@ final class RangePushdown {
 
   /**
    * Descriptor of an infinite single-constructor range scan: which pattern it
-   * binds, the constructor's int value, and the comparison op that value
-   * implies on the pattern (e.g. {@code AT_LEAST 1} implies {@code x >= 1}, so
-   * {@code op} is {@code OP_GE}).
+   * binds, the constructor's int value, the comparison op that value implies on
+   * the pattern (e.g. {@code AT_LEAST 1} implies {@code x >= 1}, so {@code op}
+   * is {@code OP_GE}), and whether the original scan exp was wrapped in {@code
+   * Bag.fromList} (so the rewritten scan can wear the same wrapper).
    */
   static final class ScanInfo {
     final Core.NamedPat pat;
     final Core.Exp value;
     final BuiltIn op;
+    final boolean bagWrapped;
 
-    ScanInfo(Core.NamedPat pat, Core.Exp value, BuiltIn op) {
+    ScanInfo(
+        Core.NamedPat pat, Core.Exp value, BuiltIn op, boolean bagWrapped) {
       this.pat = pat;
       this.value = value;
       this.op = op;
+      this.bagWrapped = bagWrapped;
     }
 
     /**

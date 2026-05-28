@@ -381,7 +381,7 @@ from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
 > val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int bag
 Sys.planEx "1";
 > val it =
->   "val it = from i in #toBag Range (#discreteSetOf Range ([OPEN (0, 10), OPEN_CLOSED (12, 15)]))"
+>   "val it = from i in #fromList Bag (#flatten Range ([OPEN (0, 10), OPEN_CLOSED (12, 15)]))"
 >   : string
 
 (*) Point (i = v) and range branches are also merged.
@@ -389,7 +389,7 @@ from i where i = 1 orelse i > 5 andalso i < 8 orelse i = 3;
 > val it = [1,3,6,7] : int bag
 Sys.planEx "1";
 > val it =
->   "val it = from i in #toBag Range (#discreteSetOf Range ([POINT 1, OPEN (5, 8), POINT 3]))"
+>   "val it = from i in #fromList Bag (#flatten Range ([POINT 1, OPEN (5, 8), POINT 3]))"
 >   : string
 
 (*) Char is a finite type (256 values), so the plan filters the extent directly.

@@ -2400,8 +2400,13 @@ class Generators {
       boolean ordered,
       List<Generator> generators,
       Core.@Nullable Exp constraint) {
-    // If every branch is a RangeGenerator or PointGenerator, merge all range
-    // expressions into a single discreteSetOf call.
+    // If every branch is a RangeGenerator or PointGenerator, merge their
+    // range constructors into one generator. When the ctors are provably
+    // disjoint (over int literal endpoints), emit the flatten-based shape
+    // that matches generateRange and user-written [k..n] syntax. When we
+    // can't prove disjointness (overlapping ranges, tuple endpoints,
+    // variable endpoints), fall back to Range.discreteSetOf — which has
+    // set semantics and so handles deduplication.
     if (generators.stream()
         .allMatch(
             g -> g instanceof RangeGenerator || g instanceof PointGenerator)) {
@@ -2414,19 +2419,40 @@ class Generators {
               .flatMap(g -> g.rangeExp(typeSystem).stream())
               .collect(ImmutableList.toImmutableList());
       final Core.Exp rangeListExp = core.list(typeSystem, rangeType, rangeExps);
-      final Core.Apply discreteSetExp =
-          core.call(
-              typeSystem,
-              BuiltIn.RANGE_DISCRETE_SET_OF,
-              type,
-              Pos.ZERO,
-              rangeListExp);
-      final BuiltIn toListOrBag =
-          ordered
-              ? BuiltIn.RANGE_DISCRETE_SET_TO_LIST
-              : BuiltIn.RANGE_DISCRETE_SET_TO_BAG;
-      final Core.Apply mergedExp =
-          core.call(typeSystem, toListOrBag, type, Pos.ZERO, discreteSetExp);
+      final boolean disjoint = rangesAreDisjointIntLiterals(rangeExps);
+      final Core.Exp mergedExp;
+      if (disjoint) {
+        final Core.Apply flattenExp =
+            core.call(
+                typeSystem,
+                BuiltIn.RANGE_FLATTEN,
+                type,
+                Pos.ZERO,
+                rangeListExp);
+        mergedExp =
+            ordered
+                ? flattenExp
+                : core.call(
+                    typeSystem,
+                    BuiltIn.BAG_FROM_LIST,
+                    type,
+                    Pos.ZERO,
+                    flattenExp);
+      } else {
+        final Core.Apply discreteSetExp =
+            core.call(
+                typeSystem,
+                BuiltIn.RANGE_DISCRETE_SET_OF,
+                type,
+                Pos.ZERO,
+                rangeListExp);
+        final BuiltIn toListOrBag =
+            ordered
+                ? BuiltIn.RANGE_DISCRETE_SET_TO_LIST
+                : BuiltIn.RANGE_DISCRETE_SET_TO_BAG;
+        mergedExp =
+            core.call(typeSystem, toListOrBag, type, Pos.ZERO, discreteSetExp);
+      }
       final Core.Exp simplified = Simplifier.simplify(typeSystem, mergedExp);
       final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
       final ImmutableSet<Core.Exp> mergedProvenance =
@@ -2862,6 +2888,179 @@ class Generators {
   }
 
   /**
+   * Returns whether the given list of range constructor applications (each one
+   * a {@code CTOR(args)} Apply expression) is pairwise disjoint, given that
+   * every endpoint is an integer literal. Returns false conservatively if any
+   * endpoint is not an int literal (e.g. tuples, variables).
+   *
+   * <p>Adjacent-but-touching ranges over reals (e.g. {@code CLOSED (1, 5)} and
+   * {@code CLOSED (5, 10)}) are NOT considered disjoint, because the point 5
+   * belongs to both. {@code CLOSED (1, 5)} and {@code OPEN (5, 10)} are
+   * disjoint (5 belongs only to the first).
+   */
+  private static boolean rangesAreDisjointIntLiterals(
+      List<Core.Apply> rangeExps) {
+    final List<RangeEndpoints> endpoints = new ArrayList<>(rangeExps.size());
+    for (Core.Apply rangeExp : rangeExps) {
+      final RangeEndpoints e = extractIntLiteralEndpoints(rangeExp);
+      if (e == null) {
+        return false;
+      }
+      endpoints.add(e);
+    }
+    // Sort by low endpoint (-inf first; ties broken by closed-before-open).
+    endpoints.sort(RangeEndpoints::compareByLow);
+    // Pairwise check.
+    for (int i = 0; i + 1 < endpoints.size(); i++) {
+      final RangeEndpoints a = endpoints.get(i);
+      final RangeEndpoints b = endpoints.get(i + 1);
+      if (!a.isStrictlyBelow(b)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Extracts (low, lowOpen, high, highOpen) from a range constructor Apply.
+   * Endpoints must be int literals; returns null otherwise (or for ctors we
+   * don't recognize).
+   */
+  private static @Nullable RangeEndpoints extractIntLiteralEndpoints(
+      Core.Apply rangeExp) {
+    if (!(rangeExp.fn instanceof Core.Id)) {
+      return null;
+    }
+    final BuiltIn.Constructor ctor =
+        BuiltIn.Constructor.forName(((Core.Id) rangeExp.fn).idPat.name);
+    if (ctor == null) {
+      return null;
+    }
+    final Core.Exp arg = rangeExp.arg;
+    switch (ctor) {
+      case RANGE_ALL:
+        return new RangeEndpoints(null, false, null, false);
+      case RANGE_AT_LEAST:
+        {
+          BigDecimal v = Bounds.literalInt(arg);
+          return v == null ? null : new RangeEndpoints(v, false, null, false);
+        }
+      case RANGE_AT_MOST:
+        {
+          BigDecimal v = Bounds.literalInt(arg);
+          return v == null ? null : new RangeEndpoints(null, false, v, false);
+        }
+      case RANGE_GREATER_THAN:
+        {
+          BigDecimal v = Bounds.literalInt(arg);
+          return v == null ? null : new RangeEndpoints(v, true, null, false);
+        }
+      case RANGE_LESS_THAN:
+        {
+          BigDecimal v = Bounds.literalInt(arg);
+          return v == null ? null : new RangeEndpoints(null, false, v, true);
+        }
+      case RANGE_POINT:
+        {
+          BigDecimal v = Bounds.literalInt(arg);
+          return v == null ? null : new RangeEndpoints(v, false, v, false);
+        }
+      case RANGE_CLOSED:
+      case RANGE_CLOSED_OPEN:
+      case RANGE_OPEN_CLOSED:
+      case RANGE_OPEN:
+        {
+          if (arg.op != Op.TUPLE) {
+            return null;
+          }
+          final Core.Tuple tuple = (Core.Tuple) arg;
+          if (tuple.args.size() != 2) {
+            return null;
+          }
+          final BigDecimal lo = Bounds.literalInt(tuple.args.get(0));
+          final BigDecimal hi = Bounds.literalInt(tuple.args.get(1));
+          if (lo == null || hi == null) {
+            return null;
+          }
+          final boolean lowOpen =
+              ctor == BuiltIn.Constructor.RANGE_OPEN
+                  || ctor == BuiltIn.Constructor.RANGE_OPEN_CLOSED;
+          final boolean highOpen =
+              ctor == BuiltIn.Constructor.RANGE_OPEN
+                  || ctor == BuiltIn.Constructor.RANGE_CLOSED_OPEN;
+          return new RangeEndpoints(lo, lowOpen, hi, highOpen);
+        }
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * A real-number interval with optional open/closed endpoints. {@link #low} ==
+   * null means -infinity; {@link #high} == null means +infinity.
+   */
+  private static final class RangeEndpoints {
+    final @Nullable BigDecimal low;
+    final boolean lowOpen;
+    final @Nullable BigDecimal high;
+    final boolean highOpen;
+
+    RangeEndpoints(
+        @Nullable BigDecimal low,
+        boolean lowOpen,
+        @Nullable BigDecimal high,
+        boolean highOpen) {
+      this.low = low;
+      this.lowOpen = lowOpen;
+      this.high = high;
+      this.highOpen = highOpen;
+    }
+
+    /**
+     * Sort order: -inf first; then by value; closed-low before open-low at the
+     * same value.
+     */
+    int compareByLow(RangeEndpoints other) {
+      if (this.low == null && other.low == null) {
+        return 0;
+      }
+      if (this.low == null) {
+        return -1;
+      }
+      if (other.low == null) {
+        return 1;
+      }
+      final int cmp = this.low.compareTo(other.low);
+      if (cmp != 0) {
+        return cmp;
+      }
+      return Boolean.compare(this.lowOpen, other.lowOpen);
+    }
+
+    /**
+     * Returns whether this range lies strictly below {@code other} on the real
+     * number line (no shared point).
+     */
+    boolean isStrictlyBelow(RangeEndpoints other) {
+      if (this.high == null) {
+        return false;
+      }
+      if (other.low == null) {
+        return false;
+      }
+      final int cmp = this.high.compareTo(other.low);
+      if (cmp < 0) {
+        return true;
+      }
+      if (cmp > 0) {
+        return false;
+      }
+      // Same value at the boundary: disjoint iff at least one side is open.
+      return this.highOpen || other.lowOpen;
+    }
+  }
+
+  /**
    * Creates an expression that generates a range of integer values.
    *
    * <p>For example, a {@code lower} of {@code (3, true)} and an {@code upper}
@@ -2891,9 +3090,12 @@ class Generators {
     final ImmutableSet.Builder<Core.Exp> provenance = ImmutableSet.builder();
     provenance.add(lower.source);
     provenance.add(upper.source);
-    // Range.discreteSetOf [CTOR (lower, upper)] |> Range.toList
-    // or Range.discreteSetOf [CTOR (lower, upper)] |> Range.toBag
+    // Emit: Range.flatten [CTOR (lower, upper)]                 (list)
+    //   or: Bag.fromList (Range.flatten [CTOR (lower, upper)])  (bag)
     // where CTOR is CLOSED, CLOSED_OPEN, OPEN_CLOSED, or OPEN.
+    // (A single ctor means there's no overlap to deduplicate, so we don't
+    // need Range.discreteSetOf; the shape matches user-written [k..n] /
+    // bag [k..n] syntax.)
     final TypeSystem typeSystem = cache.typeSystem;
     final BuiltIn.Constructor rangeCtor =
         getConstructor(lowerStrict, upperStrict);
@@ -2910,19 +3112,14 @@ class Generators {
             core.tuple(typeSystem, lowerValue, upperValue));
     final Core.Exp rangeListExp =
         core.list(typeSystem, rangeType, ImmutableList.of(rangeExp));
-    final Core.Apply discreteSetExp =
+    final Core.Apply flattenExp =
         core.call(
-            typeSystem,
-            BuiltIn.RANGE_DISCRETE_SET_OF,
-            type,
-            Pos.ZERO,
-            rangeListExp);
-    final BuiltIn toListOrBag =
+            typeSystem, BuiltIn.RANGE_FLATTEN, type, Pos.ZERO, rangeListExp);
+    final Core.Exp exp =
         ordered
-            ? BuiltIn.RANGE_DISCRETE_SET_TO_LIST
-            : BuiltIn.RANGE_DISCRETE_SET_TO_BAG;
-    final Core.Apply exp =
-        core.call(typeSystem, toListOrBag, type, Pos.ZERO, discreteSetExp);
+            ? flattenExp
+            : core.call(
+                typeSystem, BuiltIn.BAG_FROM_LIST, type, Pos.ZERO, flattenExp);
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
     final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
     return cache.add(
