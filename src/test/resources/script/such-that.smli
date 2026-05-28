@@ -287,7 +287,7 @@ List.length (from x in [1..], y in [1..] where x * (y + 3) < 30);
 > val it = 51 : int
 Sys.planEx "3";
 > val it =
->   "val it = #length List (from x in #flatten Range ([CLOSED (1, 7)]) join y in #flatten Range ([CLOSED_OPEN (1, 27)]) where x >= 1 andalso (y >= 1 andalso *:int (x, y + 3) < 30))"
+>   "val it = #length List (from x in #flatten Range ([CLOSED (1, 7)]) join y in #flatten Range ([CLOSED_OPEN (1, 27)]) where *:int (x, y + 3) < 30)"
 >   : string
 
 (* Cyclic bounds resolved by FBBT.

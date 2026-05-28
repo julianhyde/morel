@@ -152,8 +152,10 @@ public class Expander {
         // Augment the where's conjuncts with the infinite-range implied
         // bounds before strengthening, so FBBT can use them. Only inject
         // into the first where step.
+        final boolean injectHere =
+            !injectedImplied && !rangeImpliedBounds.isEmpty();
         final Core.Exp whereWithImplied;
-        if (!injectedImplied && !rangeImpliedBounds.isEmpty()) {
+        if (injectHere) {
           whereWithImplied =
               core.andAlso(
                   typeSystem,
@@ -167,8 +169,17 @@ public class Expander {
         }
         final Core.Exp strengthened =
             Fbbt.strengthen(typeSystem, unboundedPats, whereWithImplied);
-        if (strengthened != where.exp) {
-          newSteps.add(where.copy(strengthened, where.env));
+        // The injected bounds were only useful as input to FBBT (they let
+        // it deduce cross-variable bounds). Once FBBT is done, they are
+        // implied by the original scan range and would just appear as
+        // redundant filters in the final query. Strip them.
+        final Core.Exp cleaned =
+            injectHere
+                ? stripConjunctsByIdentity(
+                    typeSystem, strengthened, rangeImpliedBounds)
+                : strengthened;
+        if (cleaned != where.exp) {
+          newSteps.add(where.copy(cleaned, where.env));
           changed = true;
         } else {
           newSteps.add(step);
@@ -187,6 +198,37 @@ public class Expander {
     // scan's result type (still a list) and removes the runtime need to
     // materialize the infinite range.
     return RangePushdown.apply(typeSystem, result);
+  }
+
+  /**
+   * Returns {@code whereExp} with any top-level conjuncts (those at the leaves
+   * of an {@code andalso} tree) that are reference-equal (==) to one of {@code
+   * toStrip} removed. Used to drop synthetic FBBT-input bounds after FBBT has
+   * used them.
+   */
+  private static Core.Exp stripConjunctsByIdentity(
+      TypeSystem typeSystem, Core.Exp whereExp, List<Core.Exp> toStrip) {
+    if (toStrip.isEmpty()) {
+      return whereExp;
+    }
+    final List<Core.Exp> conjuncts = core.decomposeAnd(whereExp);
+    final List<Core.Exp> remaining = new ArrayList<>(conjuncts.size());
+    for (Core.Exp c : conjuncts) {
+      boolean strip = false;
+      for (Core.Exp t : toStrip) {
+        if (c == t) {
+          strip = true;
+          break;
+        }
+      }
+      if (!strip) {
+        remaining.add(c);
+      }
+    }
+    if (remaining.size() == conjuncts.size()) {
+      return whereExp;
+    }
+    return core.andAlso(typeSystem, remaining);
   }
 
   /** Processing state for a pattern during generator expansion. */

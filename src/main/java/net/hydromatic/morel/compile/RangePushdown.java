@@ -95,19 +95,22 @@ final class RangePushdown {
       return null;
     }
     final Core.Apply ctor = (Core.Apply) elem;
-    final String name =
-        ctor.fn instanceof Core.Id ? ((Core.Id) ctor.fn).idPat.name : null;
-    if (name == null) {
+    if (!(ctor.fn instanceof Core.Id)) {
       return null;
     }
-    switch (name) {
-      case "AT_LEAST":
+    final BuiltIn.Constructor ctorEnum =
+        BuiltIn.Constructor.forName(((Core.Id) ctor.fn).idPat.name);
+    if (ctorEnum == null) {
+      return null;
+    }
+    switch (ctorEnum) {
+      case RANGE_AT_LEAST:
         return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_GE);
-      case "AT_MOST":
+      case RANGE_AT_MOST:
         return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_LE);
-      case "GREATER_THAN":
+      case RANGE_GREATER_THAN:
         return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_GT);
-      case "LESS_THAN":
+      case RANGE_LESS_THAN:
         return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_LT);
       default:
         return null;
