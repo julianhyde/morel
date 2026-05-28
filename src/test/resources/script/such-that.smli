@@ -248,6 +248,10 @@ from x where (x + 2) * (x - 3) = 0;
  * connected-interval cases and emits the equivalent two-sided bounds. *)
 from x where abs x < 5;
 > val it = [~4,~3,~2,~1,0,1,2,3,4] : int bag
+Sys.planEx "3";
+> val it =
+>   "val it = from x in #toBag Range (#discreteSetOf Range ([OPEN (~5, 5)])) where #abs Int x < 5"
+>   : string
 from x where abs x <= 3;
 > val it = [~3,~2,~1,0,1,2,3] : int bag
 from x where 5 > abs x;
@@ -262,6 +266,16 @@ from x where abs x > 5;
 > stdIn:1.6 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.6
 
+(* Strengthened bounds via a non-linear constraint. FBBT (#373)
+ * recognizes `(varA + kA) * (varB + kB) OP c` and propagates one side's
+ * bounds to the other (positive quadrant only). *)
+Bag.length (from x, y where x >= 1 andalso y >= 1 andalso x * (y + 3) < 30);
+> val it = 51 : int
+Sys.planEx "3";
+> val it =
+>   "val it = #length Bag (from x in #toBag Range (#discreteSetOf Range ([CLOSED (1, 7)])) join y in #toBag Range (#discreteSetOf Range ([CLOSED_OPEN (1, 27)])) where *:int (x, y + 3) < 30)"
+>   : string
+
 (* Cyclic bounds resolved by FBBT.
  *
  * Each variable's generator depends on another. FBBT (#373) propagates
@@ -271,6 +285,10 @@ from x where abs x > 5;
  * (e.g. `x < y`) remain as post-generation filters. *)
 Bag.length (from x, y where x > 0 andalso x < y andalso y < 10);
 > val it = 36 : int
+Sys.planEx "3";
+> val it =
+>   "val it = #length Bag (from x in #toBag Range (#discreteSetOf Range ([OPEN (0, 10)])) join y in #toBag Range (#discreteSetOf Range ([OPEN (0, 10)])) where x < y)"
+>   : string
 Bag.length (from x, y where y > 0 andalso y < x andalso x < 10);
 > val it = 36 : int
 Bag.length (from x, y, z where x > 0 andalso x < y andalso y < z andalso z < 10);
