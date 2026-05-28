@@ -121,6 +121,20 @@ public class FbbtTest {
     final Core.Exp result = Fbbt.strengthen(typeSystem, ImmutableSet.of(), w);
     assertThat(result, equalTo(w));
   }
+
+  /**
+   * {@code abs x < 5}: FBBT deduces {@code x > ~5} and {@code x < 5} (open on
+   * both sides because {@code <} is strict).
+   */
+  @Test
+  void testAbsLessThan() {
+    final Core.Apply absX = core.call(typeSystem, BuiltIn.INT_ABS, xId);
+    final Core.Exp w = core.lessThan(typeSystem, absX, i(5));
+    final Core.Exp result =
+        Fbbt.strengthen(typeSystem, ImmutableSet.of(xPat), w);
+    assertThat(
+        result, hasToString("x > ~5 andalso (x < 5 andalso #abs Int x < 5)"));
+  }
 }
 
 // End FbbtTest.java

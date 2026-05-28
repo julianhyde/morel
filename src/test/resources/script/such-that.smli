@@ -244,6 +244,24 @@ from x where (x + 2) * (x - 3) = 0;
 > stdIn:1.6 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.6
 
+(* Supplied bounds via abs. FBBT (#373) recognizes `abs x OP c` for the
+ * connected-interval cases and emits the equivalent two-sided bounds. *)
+from x where abs x < 5;
+> val it = [~4,~3,~2,~1,0,1,2,3,4] : int bag
+from x where abs x <= 3;
+> val it = [~3,~2,~1,0,1,2,3] : int bag
+from x where 5 > abs x;
+> val it = [~4,~3,~2,~1,0,1,2,3,4] : int bag
+from x where abs x = 0;
+> val it = [0] : int bag
+from x where abs x < 10 andalso x > 0;
+> val it = [1,2,3,4,5,6,7,8,9] : int bag
+(*) Disjoint case (abs x > c) is two intervals — FBBT skips and the
+(*) constraint cannot be inverted by the existing extractor either.
+from x where abs x > 5;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+
 (* Cyclic bounds resolved by FBBT.
  *
  * Each variable's generator depends on another. FBBT (#373) propagates

@@ -47,11 +47,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * where} clause as conjuncts; the existing range extractor in {@link
  * Generators} then turns them into finite generators.
  *
- * <p>Current scope: integer-valued patterns over linear constraints of the form
- * {@code (varA + kA) OP (varB + kB)} for {@code OP} in {@code <, <=, >, >=, =},
- * where {@code kA} and {@code kB} are integer-literal offsets and either side
- * may be a bare constant. Non-linear constraints and other primitive types are
- * out of scope here and arrive in follow-up work.
+ * <p>Current scope: integer-valued patterns over (a) linear constraints of the
+ * form {@code (varA + kA) OP (varB + kB)} for {@code OP} in {@code <, <=, >,
+ * >=, =}, where {@code kA} and {@code kB} are integer-literal offsets and
+ * either side may be a bare constant; and (b) {@code abs(x) OP c} for the
+ * connected-interval cases ({@code <}, {@code <=}, and {@code = 0}). Other
+ * non-linear constraints and other primitive types are out of scope here and
+ * arrive in follow-up work.
  *
  * <p>TODO: there is meaningful overlap with {@link Generators#lowerBound} and
  * {@link Generators#upperBound}, which also extract per-variable bounds from
@@ -72,7 +74,7 @@ class Fbbt {
       ImmutableRangeSet.of(Range.all());
 
   private static final ImmutableList<Propagator> PROPAGATORS =
-      ImmutableList.of(new LinearPropagator());
+      ImmutableList.of(new LinearPropagator(), new AbsPropagator());
 
   private Fbbt() {}
 
@@ -629,6 +631,142 @@ class Fbbt {
         return null;
       }
       return new Term(b.var, a.offset.add(b.offset));
+    }
+  }
+
+  /**
+   * Propagator for {@code abs(x) OP c} (or {@code c OP abs(x)}) where {@code c}
+   * is an integer literal.
+   *
+   * <p>Handles the connected-interval cases:
+   *
+   * <ul>
+   *   <li>{@code abs(x) < c} -> {@code x} in {@code (-c, c)}
+   *   <li>{@code abs(x) <= c} -> {@code x} in {@code [-c, c]}
+   *   <li>{@code abs(x) = 0} -> {@code x = 0}
+   * </ul>
+   *
+   * <p>The {@code >}, {@code >=}, and non-zero {@code =} cases produce a
+   * disjoint range set ({@code x < -c} OR {@code x > c}, etc.). FBBT can track
+   * these via {@code ImmutableRangeSet.union}, but the materializer currently
+   * emits per-side conjuncts that assume a contiguous span; until the
+   * materializer is taught to emit unions, these cases are skipped (no
+   * tightening). The constraint remains in the where as a filter.
+   */
+  static class AbsPropagator implements Propagator {
+    @Override
+    public boolean propagate(Core.Exp constraint, State state) {
+      if (constraint.op != Op.APPLY) {
+        return false;
+      }
+      final BuiltIn op = constraint.builtIn();
+      if (op == null) {
+        return false;
+      }
+      switch (op) {
+        case OP_LT:
+        case OP_LE:
+        case OP_GT:
+        case OP_GE:
+        case OP_EQ:
+          break;
+        default:
+          return false;
+      }
+      final Core.Exp lhs = constraint.arg(0);
+      final Core.Exp rhs = constraint.arg(1);
+      // Normalize so that abs(x) is on the left.
+      final Core.NamedPat absArg;
+      final BigDecimal constant;
+      final BuiltIn normalized;
+      final Core.@Nullable NamedPat lhsAbsArg = extractAbsArg(lhs);
+      final Core.@Nullable NamedPat rhsAbsArg = extractAbsArg(rhs);
+      if (lhsAbsArg != null && rhs instanceof Core.Literal) {
+        final BigDecimal v = literalInt((Core.Literal) rhs);
+        if (v == null) {
+          return false;
+        }
+        absArg = lhsAbsArg;
+        constant = v;
+        normalized = op;
+      } else if (rhsAbsArg != null && lhs instanceof Core.Literal) {
+        final BigDecimal v = literalInt((Core.Literal) lhs);
+        if (v == null) {
+          return false;
+        }
+        absArg = rhsAbsArg;
+        constant = v;
+        normalized = op.reverse();
+      } else {
+        return false;
+      }
+      if (!state.knows(absArg)) {
+        return false;
+      }
+      // Only handle cases that yield a single connected interval. Note
+      // that abs(x) < c for c <= 0 is infeasible; we treat as empty range.
+      switch (normalized) {
+        case OP_LT:
+          // abs(x) < c: x in (-c, c). If c <= 0, infeasible.
+          if (constant.signum() <= 0) {
+            return state.tighten(absArg, ImmutableRangeSet.of());
+          }
+          return state.tighten(
+              absArg,
+              ImmutableRangeSet.of(Range.open(constant.negate(), constant)));
+        case OP_LE:
+          // abs(x) <= c: x in [-c, c]. If c < 0, infeasible.
+          if (constant.signum() < 0) {
+            return state.tighten(absArg, ImmutableRangeSet.of());
+          }
+          return state.tighten(
+              absArg,
+              ImmutableRangeSet.of(Range.closed(constant.negate(), constant)));
+        case OP_EQ:
+          // abs(x) = 0: x = 0. Otherwise the solution is two disjoint
+          // points (x = c or x = -c), which we don't materialize per-side.
+          if (constant.signum() == 0) {
+            return state.tighten(
+                absArg, ImmutableRangeSet.of(Range.singleton(BigDecimal.ZERO)));
+          }
+          return false;
+        case OP_GT:
+        case OP_GE:
+        default:
+          // Disjoint cases — see class comment.
+          return false;
+      }
+    }
+
+    /**
+     * If {@code exp} is a call to {@code Int.abs} with a bare-variable
+     * argument, returns that variable; otherwise {@code null}.
+     */
+    private static Core.@Nullable NamedPat extractAbsArg(Core.Exp exp) {
+      if (!(exp instanceof Core.Apply)) {
+        return null;
+      }
+      final Core.Apply apply = (Core.Apply) exp;
+      if (apply.builtIn() != BuiltIn.INT_ABS) {
+        return null;
+      }
+      // abs is unary; its single argument is at .arg.
+      final Core.Exp arg = apply.arg;
+      if (!(arg instanceof Core.Id)) {
+        return null;
+      }
+      return ((Core.Id) arg).idPat;
+    }
+
+    /**
+     * Returns {@code lit}'s value as a {@link BigDecimal} if it is an int
+     * literal, otherwise null.
+     */
+    private static @Nullable BigDecimal literalInt(Core.Literal lit) {
+      if (lit.op != Op.INT_LITERAL) {
+        return null;
+      }
+      return (BigDecimal) lit.value;
     }
   }
 
