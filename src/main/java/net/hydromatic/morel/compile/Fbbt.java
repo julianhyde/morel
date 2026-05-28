@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -74,7 +75,10 @@ class Fbbt {
       ImmutableRangeSet.of(Range.all());
 
   private static final ImmutableList<Propagator> PROPAGATORS =
-      ImmutableList.of(new LinearPropagator(), new AbsPropagator());
+      ImmutableList.of(
+          new LinearPropagator(),
+          new AbsPropagator(),
+          new MultiplyPropagator());
 
   private Fbbt() {}
 
@@ -161,6 +165,27 @@ class Fbbt {
       boolean lower,
       BigDecimal value,
       boolean strict) {
+    // Multiplication-style propagators can produce fractional bound values
+    // (e.g. 30/4 = 7.5). For an integer-typed pattern, snap the bound to
+    // the tightest integer endpoint: x > 7.5 => x >= 8, x < 7.5 => x <= 7.
+    // (The materializer is the right place to do this; the State stores
+    // exact real-arithmetic intervals.)
+    if (pat.type == PrimitiveType.INT) {
+      final BigDecimal floor = value.setScale(0, RoundingMode.FLOOR);
+      if (floor.compareTo(value) != 0) {
+        if (lower) {
+          value = value.setScale(0, RoundingMode.CEILING);
+        } else {
+          value = floor;
+        }
+        strict = false;
+      } else {
+        // Value is integer-valued; strip any trailing zeros introduced by
+        // earlier division so the literal prints as e.g. "27" not
+        // "27.00000000".
+        value = value.setScale(0, RoundingMode.UNNECESSARY);
+      }
+    }
     final Core.Exp idExp = core.id(pat);
     final Core.Exp constExp = core.literal(PrimitiveType.INT, value);
     if (lower) {
@@ -577,61 +602,62 @@ class Fbbt {
       }
       return Range.all();
     }
+  }
 
-    /**
-     * Decomposes {@code exp} into a linear term {@code (var ?, offset)}.
-     * Returns null if {@code exp} is not a linear combination of one variable
-     * and an integer constant.
-     */
-    private static @Nullable Term linearTerm(Core.Exp exp) {
-      if (exp instanceof Core.Id) {
-        final Core.NamedPat p = ((Core.Id) exp).idPat;
-        return new Term(p, BigDecimal.ZERO);
-      }
-      if (exp instanceof Core.Literal) {
-        final Core.Literal lit = (Core.Literal) exp;
-        if (lit.op == Op.INT_LITERAL && lit.value instanceof BigDecimal) {
-          return new Term(null, (BigDecimal) lit.value);
-        }
-        return null;
-      }
-      if (!(exp instanceof Core.Apply)) {
-        return null;
-      }
-      final Core.Apply apply = (Core.Apply) exp;
-      final BuiltIn op = apply.builtIn();
-      if (op != BuiltIn.Z_PLUS_INT
-          && op != BuiltIn.OP_PLUS
-          && op != BuiltIn.Z_MINUS_INT
-          && op != BuiltIn.OP_MINUS) {
-        return null;
-      }
-      final Term a = linearTerm(apply.arg(0));
-      final Term b = linearTerm(apply.arg(1));
-      if (a == null || b == null) {
-        return null;
-      }
-      final boolean minus = op == BuiltIn.Z_MINUS_INT || op == BuiltIn.OP_MINUS;
-      final BigDecimal otherOffset = minus ? b.offset.negate() : b.offset;
-      if (a.var != null && b.var != null) {
-        // Linear combination of two distinct variables; we don't model
-        // that as a single Term.
-        return null;
-      }
-      if (a.var == null && b.var == null) {
-        return new Term(null, a.offset.add(otherOffset));
-      }
-      if (a.var != null) {
-        // var + const, or var - const
-        return new Term(a.var, a.offset.add(otherOffset));
-      }
-      // const + var. The "const - var" case (i.e. minus with var on rhs)
-      // would introduce a -1 coefficient on var, which we don't model.
-      if (minus) {
-        return null;
-      }
-      return new Term(b.var, a.offset.add(b.offset));
+  /**
+   * Decomposes {@code exp} into a linear term {@code (var ?, offset)}. Returns
+   * null if {@code exp} is not a linear combination of one variable and an
+   * integer constant. Examples: {@code x} -> {@code (x, 0)}; {@code x + 3} ->
+   * {@code (x, 3)}; {@code 5} -> {@code (null, 5)}; {@code x + y} -> null.
+   */
+  static @Nullable Term linearTerm(Core.Exp exp) {
+    if (exp instanceof Core.Id) {
+      final Core.NamedPat p = ((Core.Id) exp).idPat;
+      return new Term(p, BigDecimal.ZERO);
     }
+    if (exp instanceof Core.Literal) {
+      final Core.Literal lit = (Core.Literal) exp;
+      if (lit.op == Op.INT_LITERAL && lit.value instanceof BigDecimal) {
+        return new Term(null, (BigDecimal) lit.value);
+      }
+      return null;
+    }
+    if (!(exp instanceof Core.Apply)) {
+      return null;
+    }
+    final Core.Apply apply = (Core.Apply) exp;
+    final BuiltIn op = apply.builtIn();
+    if (op != BuiltIn.Z_PLUS_INT
+        && op != BuiltIn.OP_PLUS
+        && op != BuiltIn.Z_MINUS_INT
+        && op != BuiltIn.OP_MINUS) {
+      return null;
+    }
+    final Term a = linearTerm(apply.arg(0));
+    final Term b = linearTerm(apply.arg(1));
+    if (a == null || b == null) {
+      return null;
+    }
+    final boolean minus = op == BuiltIn.Z_MINUS_INT || op == BuiltIn.OP_MINUS;
+    final BigDecimal otherOffset = minus ? b.offset.negate() : b.offset;
+    if (a.var != null && b.var != null) {
+      // Linear combination of two distinct variables; we don't model
+      // that as a single Term.
+      return null;
+    }
+    if (a.var == null && b.var == null) {
+      return new Term(null, a.offset.add(otherOffset));
+    }
+    if (a.var != null) {
+      // var + const, or var - const
+      return new Term(a.var, a.offset.add(otherOffset));
+    }
+    // const + var. The "const - var" case (i.e. minus with var on rhs) would
+    // introduce a -1 coefficient on var, which we don't model.
+    if (minus) {
+      return null;
+    }
+    return new Term(b.var, a.offset.add(b.offset));
   }
 
   /**
@@ -762,6 +788,179 @@ class Fbbt {
      * Returns {@code lit}'s value as a {@link BigDecimal} if it is an int
      * literal, otherwise null.
      */
+    private static @Nullable BigDecimal literalInt(Core.Literal lit) {
+      if (lit.op != Op.INT_LITERAL) {
+        return null;
+      }
+      return (BigDecimal) lit.value;
+    }
+  }
+
+  /**
+   * Propagator for {@code A * B OP c} (or {@code c OP A * B}) where {@code A}
+   * and {@code B} are each linear in a single variable and {@code c} is an
+   * integer literal.
+   *
+   * <p>Currently handles only the non-negative quadrant: both {@code A} and
+   * {@code B} are known to be {@code >= 0} on their current intervals, with at
+   * least one side bounded strictly positive so division is well-defined.
+   *
+   * <ul>
+   *   <li>{@code A * B < c} (or {@code <=}): {@code A < c / B.lo} when {@code
+   *       B.lo > 0}; symmetric for {@code B}.
+   *   <li>{@code A * B > c} (or {@code >=}): {@code A > c / B.hi} when {@code
+   *       B.hi > 0}; symmetric for {@code B}.
+   * </ul>
+   *
+   * <p>Mixed-sign and fully-negative quadrants, and exact equality, are
+   * deferred. The constraint remains in the where clause as a filter.
+   */
+  static class MultiplyPropagator implements Propagator {
+    @Override
+    public boolean propagate(Core.Exp constraint, State state) {
+      if (constraint.op != Op.APPLY) {
+        return false;
+      }
+      final BuiltIn op = constraint.builtIn();
+      if (op == null) {
+        return false;
+      }
+      switch (op) {
+        case OP_LT:
+        case OP_LE:
+        case OP_GT:
+        case OP_GE:
+          break;
+        default:
+          return false;
+      }
+      // Determine which side is the product and which is the constant.
+      final Core.Exp lhs = constraint.arg(0);
+      final Core.Exp rhs = constraint.arg(1);
+      final Core.Apply product;
+      final BigDecimal constant;
+      final BuiltIn normalized;
+      if (isMultiply(lhs) && rhs instanceof Core.Literal) {
+        product = (Core.Apply) lhs;
+        final BigDecimal c = literalInt((Core.Literal) rhs);
+        if (c == null) {
+          return false;
+        }
+        constant = c;
+        normalized = op;
+      } else if (isMultiply(rhs) && lhs instanceof Core.Literal) {
+        product = (Core.Apply) rhs;
+        final BigDecimal c = literalInt((Core.Literal) lhs);
+        if (c == null) {
+          return false;
+        }
+        constant = c;
+        normalized = op.reverse();
+      } else {
+        return false;
+      }
+      // Decompose the product's two operands as linear-in-single-variable.
+      final Term a = linearTerm(product.arg(0));
+      final Term b = linearTerm(product.arg(1));
+      if (a == null || b == null) {
+        return false;
+      }
+      // Each side must reference a distinct variable.
+      if (a.var == null || b.var == null) {
+        return false;
+      }
+      if (!state.knows(a.var) || !state.knows(b.var)) {
+        return false;
+      }
+      boolean changed = false;
+      changed |= tightenSide(state, a, b, normalized, constant);
+      changed |= tightenSide(state, b, a, normalized, constant);
+      return changed;
+    }
+
+    /**
+     * Tightens {@code self.var}'s interval given {@code self * other OP c}. The
+     * propagation uses {@code other}'s current interval shifted by its offset.
+     */
+    private static boolean tightenSide(
+        State state, Term self, Term other, BuiltIn op, BigDecimal c) {
+      final Range<BigDecimal> otherSpan =
+          shiftSpan(state.get(other.var).span(), other.offset);
+      // For OP_LT / OP_LE: need other.lo > 0 to divide.
+      // For OP_GT / OP_GE: need other.hi > 0.
+      switch (op) {
+        case OP_LT:
+        case OP_LE:
+          if (!otherSpan.hasLowerBound()) {
+            return false;
+          }
+          if (otherSpan.lowerEndpoint().signum() <= 0) {
+            return false;
+          }
+          final BigDecimal selfUpper = divide(c, otherSpan.lowerEndpoint());
+          // self < c / otherLow. Open because A * B < c is strict, or because
+          // otherLow is open (smaller other gives looser self bound).
+          // Translate back to self.var (subtract self.offset).
+          final BigDecimal varUpper = selfUpper.subtract(self.offset);
+          return state.tighten(
+              self.var, ImmutableRangeSet.of(Range.lessThan(varUpper)));
+        case OP_GT:
+        case OP_GE:
+          if (!otherSpan.hasUpperBound()) {
+            return false;
+          }
+          if (otherSpan.upperEndpoint().signum() <= 0) {
+            return false;
+          }
+          final BigDecimal selfLower = divide(c, otherSpan.upperEndpoint());
+          final BigDecimal varLower = selfLower.subtract(self.offset);
+          return state.tighten(
+              self.var, ImmutableRangeSet.of(Range.greaterThan(varLower)));
+        default:
+          return false;
+      }
+    }
+
+    /**
+     * Returns {@code num/den} as a {@link BigDecimal} with enough precision to
+     * capture a finite decimal expansion when possible.
+     */
+    private static BigDecimal divide(BigDecimal num, BigDecimal den) {
+      return num.divide(den, 20, RoundingMode.HALF_EVEN);
+    }
+
+    /** Translates {@code r} by {@code delta} along the number line. */
+    private static Range<BigDecimal> shiftSpan(
+        Range<BigDecimal> r, BigDecimal delta) {
+      if (delta.signum() == 0) {
+        return r;
+      }
+      if (r.hasLowerBound() && r.hasUpperBound()) {
+        return Range.range(
+            r.lowerEndpoint().add(delta), r.lowerBoundType(),
+            r.upperEndpoint().add(delta), r.upperBoundType());
+      }
+      if (r.hasLowerBound()) {
+        return r.lowerBoundType() == BoundType.CLOSED
+            ? Range.atLeast(r.lowerEndpoint().add(delta))
+            : Range.greaterThan(r.lowerEndpoint().add(delta));
+      }
+      if (r.hasUpperBound()) {
+        return r.upperBoundType() == BoundType.CLOSED
+            ? Range.atMost(r.upperEndpoint().add(delta))
+            : Range.lessThan(r.upperEndpoint().add(delta));
+      }
+      return Range.all();
+    }
+
+    private static boolean isMultiply(Core.Exp exp) {
+      if (!(exp instanceof Core.Apply)) {
+        return false;
+      }
+      final BuiltIn op = exp.builtIn();
+      return op == BuiltIn.Z_TIMES_INT || op == BuiltIn.OP_TIMES;
+    }
+
     private static @Nullable BigDecimal literalInt(Core.Literal lit) {
       if (lit.op != Op.INT_LITERAL) {
         return null;
