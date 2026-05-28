@@ -231,10 +231,11 @@ final class RangePushdown {
     if (bestConjunct == null) {
       return null;
     }
-    final BigDecimal scanValue = Bounds.literalInt(info.value);
-    if (scanValue == null) {
+    final Core.@Nullable Literal scanLit = Bounds.numericLiteral(info.value);
+    if (scanLit == null) {
       return null;
     }
+    final BigDecimal scanValue = scanLit.unwrap(BigDecimal.class);
     final BigDecimal lowerValue;
     final boolean lowerStrict;
     final BigDecimal upperValue;
@@ -344,10 +345,11 @@ final class RangePushdown {
     } else {
       return null;
     }
-    final BigDecimal value = Bounds.literalInt(constSide);
-    if (value == null) {
+    final Core.@Nullable Literal valueLit = Bounds.numericLiteral(constSide);
+    if (valueLit == null) {
       return null;
     }
+    final BigDecimal value = valueLit.unwrap(BigDecimal.class);
     switch (normalized) {
       case OP_LT:
         return new LiteralBound(true, true, value);

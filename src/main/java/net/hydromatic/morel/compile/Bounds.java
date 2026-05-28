@@ -62,8 +62,11 @@ final class Bounds {
       return new Term(p, BigDecimal.ZERO);
     }
     if (exp instanceof Core.Literal) {
-      final BigDecimal v = literalInt(exp);
-      return v == null ? null : new Term(null, v);
+      final Core.Literal lit = numericLiteral(exp);
+      if (lit == null) {
+        return null;
+      }
+      return new Term(null, lit.unwrap(BigDecimal.class));
     }
     if (!(exp instanceof Core.Apply)) {
       return null;
@@ -73,7 +76,9 @@ final class Bounds {
     if (op != BuiltIn.Z_PLUS_INT
         && op != BuiltIn.OP_PLUS
         && op != BuiltIn.Z_MINUS_INT
-        && op != BuiltIn.OP_MINUS) {
+        && op != BuiltIn.OP_MINUS
+        && op != BuiltIn.Z_PLUS_REAL
+        && op != BuiltIn.Z_MINUS_REAL) {
       return null;
     }
     final Term a = linearTerm(apply.arg(0));
@@ -81,7 +86,10 @@ final class Bounds {
     if (a == null || b == null) {
       return null;
     }
-    final boolean minus = op == BuiltIn.Z_MINUS_INT || op == BuiltIn.OP_MINUS;
+    final boolean minus =
+        op == BuiltIn.Z_MINUS_INT
+            || op == BuiltIn.OP_MINUS
+            || op == BuiltIn.Z_MINUS_REAL;
     final BigDecimal otherOffset = minus ? b.offset.negate() : b.offset;
     if (a.var != null && b.var != null) {
       // Linear combination of two distinct variables; we don't model
@@ -104,18 +112,26 @@ final class Bounds {
   }
 
   /**
-   * Returns {@code exp}'s value as a {@link BigDecimal} if it is an integer
-   * literal, otherwise {@code null}.
+   * If {@code exp} is an integer or real literal, returns the {@link
+   * Core.Literal}; otherwise null. Callers extract the numeric value with
+   * {@link Core.Literal#unwrap(Class) unwrap(BigDecimal.class)}.
+   *
+   * <p>Keeping the {@code Literal} rather than pre-extracting a {@code
+   * BigDecimal} lets the caller distinguish int from real (different {@link
+   * Core.Literal#op}) and rebuild a literal of the same type later.
    */
-  static @Nullable BigDecimal literalInt(Core.Exp exp) {
+  static Core.@Nullable Literal numericLiteral(Core.Exp exp) {
     if (!(exp instanceof Core.Literal)) {
       return null;
     }
     final Core.Literal lit = (Core.Literal) exp;
-    if (lit.op != Op.INT_LITERAL) {
-      return null;
+    switch (lit.op) {
+      case INT_LITERAL:
+      case REAL_LITERAL:
+        return lit;
+      default:
+        return null;
     }
-    return (BigDecimal) lit.value;
   }
 
   /**

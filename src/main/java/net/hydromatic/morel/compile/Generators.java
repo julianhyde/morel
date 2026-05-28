@@ -2419,7 +2419,7 @@ class Generators {
               .flatMap(g -> g.rangeExp(typeSystem).stream())
               .collect(ImmutableList.toImmutableList());
       final Core.Exp rangeListExp = core.list(typeSystem, rangeType, rangeExps);
-      final boolean disjoint = rangesAreDisjointIntLiterals(rangeExps);
+      final boolean disjoint = rangesAreDisjointNumericLiterals(rangeExps);
       final Core.Exp mergedExp;
       if (disjoint) {
         final Core.Apply flattenExp =
@@ -2890,19 +2890,19 @@ class Generators {
   /**
    * Returns whether the given list of range constructor applications (each one
    * a {@code CTOR(args)} Apply expression) is pairwise disjoint, given that
-   * every endpoint is an integer literal. Returns false conservatively if any
-   * endpoint is not an int literal (e.g. tuples, variables).
+   * every endpoint is an int or real literal. Returns false conservatively if
+   * any endpoint is not a numeric literal (e.g. tuples, variables, char).
    *
-   * <p>Adjacent-but-touching ranges over reals (e.g. {@code CLOSED (1, 5)} and
-   * {@code CLOSED (5, 10)}) are NOT considered disjoint, because the point 5
-   * belongs to both. {@code CLOSED (1, 5)} and {@code OPEN (5, 10)} are
-   * disjoint (5 belongs only to the first).
+   * <p>Adjacent-but-touching ranges (e.g. {@code CLOSED (1, 5)} and {@code
+   * CLOSED (5, 10)}) are NOT considered disjoint, because the point 5 belongs
+   * to both. {@code CLOSED (1, 5)} and {@code OPEN (5, 10)} are disjoint (5
+   * belongs only to the first).
    */
-  private static boolean rangesAreDisjointIntLiterals(
+  private static boolean rangesAreDisjointNumericLiterals(
       List<Core.Apply> rangeExps) {
     final List<RangeEndpoints> endpoints = new ArrayList<>(rangeExps.size());
     for (Core.Apply rangeExp : rangeExps) {
-      final RangeEndpoints e = extractIntLiteralEndpoints(rangeExp);
+      final RangeEndpoints e = extractNumericLiteralEndpoints(rangeExp);
       if (e == null) {
         return false;
       }
@@ -2923,10 +2923,10 @@ class Generators {
 
   /**
    * Extracts (low, lowOpen, high, highOpen) from a range constructor Apply.
-   * Endpoints must be int literals; returns null otherwise (or for ctors we
-   * don't recognize).
+   * Endpoints must be int or real literals; returns null otherwise (or for
+   * ctors we don't recognize).
    */
-  private static @Nullable RangeEndpoints extractIntLiteralEndpoints(
+  private static @Nullable RangeEndpoints extractNumericLiteralEndpoints(
       Core.Apply rangeExp) {
     if (!(rangeExp.fn instanceof Core.Id)) {
       return null;
@@ -2942,27 +2942,32 @@ class Generators {
         return new RangeEndpoints(null, false, null, false);
       case RANGE_AT_LEAST:
         {
-          BigDecimal v = Bounds.literalInt(arg);
+          Core.@Nullable Literal vLit = Bounds.numericLiteral(arg);
+          BigDecimal v = vLit == null ? null : vLit.unwrap(BigDecimal.class);
           return v == null ? null : new RangeEndpoints(v, false, null, false);
         }
       case RANGE_AT_MOST:
         {
-          BigDecimal v = Bounds.literalInt(arg);
+          Core.@Nullable Literal vLit = Bounds.numericLiteral(arg);
+          BigDecimal v = vLit == null ? null : vLit.unwrap(BigDecimal.class);
           return v == null ? null : new RangeEndpoints(null, false, v, false);
         }
       case RANGE_GREATER_THAN:
         {
-          BigDecimal v = Bounds.literalInt(arg);
+          Core.@Nullable Literal vLit = Bounds.numericLiteral(arg);
+          BigDecimal v = vLit == null ? null : vLit.unwrap(BigDecimal.class);
           return v == null ? null : new RangeEndpoints(v, true, null, false);
         }
       case RANGE_LESS_THAN:
         {
-          BigDecimal v = Bounds.literalInt(arg);
+          Core.@Nullable Literal vLit = Bounds.numericLiteral(arg);
+          BigDecimal v = vLit == null ? null : vLit.unwrap(BigDecimal.class);
           return v == null ? null : new RangeEndpoints(null, false, v, true);
         }
       case RANGE_POINT:
         {
-          BigDecimal v = Bounds.literalInt(arg);
+          Core.@Nullable Literal vLit = Bounds.numericLiteral(arg);
+          BigDecimal v = vLit == null ? null : vLit.unwrap(BigDecimal.class);
           return v == null ? null : new RangeEndpoints(v, false, v, false);
         }
       case RANGE_CLOSED:
@@ -2977,8 +2982,14 @@ class Generators {
           if (tuple.args.size() != 2) {
             return null;
           }
-          final BigDecimal lo = Bounds.literalInt(tuple.args.get(0));
-          final BigDecimal hi = Bounds.literalInt(tuple.args.get(1));
+          final Core.@Nullable Literal loLit =
+              Bounds.numericLiteral(tuple.args.get(0));
+          final Core.@Nullable Literal hiLit =
+              Bounds.numericLiteral(tuple.args.get(1));
+          final BigDecimal lo =
+              loLit == null ? null : loLit.unwrap(BigDecimal.class);
+          final BigDecimal hi =
+              hiLit == null ? null : hiLit.unwrap(BigDecimal.class);
           if (lo == null || hi == null) {
             return null;
           }

@@ -36,6 +36,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -48,17 +49,20 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * where} clause as conjuncts; the existing range extractor in {@link
  * Generators} then turns them into finite generators.
  *
- * <p>Current scope: integer-valued patterns over (a) linear constraints of the
- * form {@code (varA + kA) OP (varB + kB)} for {@code OP} in {@code <, <=, >,
- * >=, =}, where {@code kA} and {@code kB} are integer-literal offsets and
- * either side may be a bare constant; and (b) {@code abs(x) OP c} for the
- * connected-interval cases ({@code <}, {@code <=}, and {@code = 0}). Other
- * non-linear constraints and other primitive types are out of scope here and
- * arrive in follow-up work.
+ * <p>Current scope: int- or real-valued patterns over (a) linear constraints of
+ * the form {@code (varA + kA) OP (varB + kB)} for {@code OP} in {@code <, <=,
+ * >, >=, =}, where {@code kA} and {@code kB} are numeric literal offsets and
+ * either side may be a bare constant; (b) {@code abs(x) OP c} for the
+ * connected-interval cases ({@code <}, {@code <=}, and {@code = 0}); and (c)
+ * {@code (a * b) OP c} with non-negative operands. For real-typed patterns FBBT
+ * deduces bounds the same way it does for int, but real extents are uncountable
+ * so the downstream "not grounded" check still fires when nothing else makes
+ * the pattern finite (e.g. a literal range scan, or a finite source like {@code
+ * from e in emps}).
  *
  * <p>Shares the {@link Bounds.Term} decomposition and {@link
- * Bounds#linearTerm}, {@link Bounds#literalInt} helpers with {@link Generators}
- * and {@link RangePushdown}.
+ * Bounds#linearTerm}, {@link Bounds#numericLiteral} helpers with {@link
+ * Generators} and {@link RangePushdown}.
  *
  * <p>See <a href="https://github.com/hydromatic/morel/issues/373">issue
  * #373</a>.
@@ -167,8 +171,9 @@ class Fbbt {
     // Multiplication-style propagators can produce fractional bound values
     // (e.g. 30/4 = 7.5). For an integer-typed pattern, snap the bound to
     // the tightest integer endpoint: x > 7.5 => x >= 8, x < 7.5 => x <= 7.
-    // (The materializer is the right place to do this; the State stores
-    // exact real-arithmetic intervals.)
+    // For real-typed patterns no snap is needed — the BigDecimal carries
+    // the exact value and real comparisons are well-defined at any
+    // precision.
     if (pat.type == PrimitiveType.INT) {
       final BigDecimal floor = value.setScale(0, RoundingMode.FLOOR);
       if (floor.compareTo(value) != 0) {
@@ -186,7 +191,7 @@ class Fbbt {
       }
     }
     final Core.Exp idExp = core.id(pat);
-    final Core.Exp constExp = core.literal(PrimitiveType.INT, value);
+    final Core.Exp constExp = core.literal((PrimitiveType) pat.type, value);
     if (lower) {
       return strict
           ? core.greaterThan(typeSystem, idExp, constExp)
@@ -223,7 +228,7 @@ class Fbbt {
 
     boolean isEmpty() {
       for (Core.NamedPat p : pats) {
-        if (p.type == PrimitiveType.INT) {
+        if (isNumeric(p.type)) {
           return false;
         }
       }
@@ -231,7 +236,16 @@ class Fbbt {
     }
 
     boolean knows(Core.NamedPat pat) {
-      return pats.contains(pat) && pat.type == PrimitiveType.INT;
+      return pats.contains(pat) && isNumeric(pat.type);
+    }
+
+    /**
+     * Returns whether {@code t} is a numeric primitive type FBBT can track:
+     * {@code int} or {@code real}. Both store values as {@code BigDecimal} in
+     * the interval map.
+     */
+    private static boolean isNumeric(Type t) {
+      return t == PrimitiveType.INT || t == PrimitiveType.REAL;
     }
 
     ImmutableRangeSet<BigDecimal> get(Core.NamedPat pat) {
@@ -650,21 +664,21 @@ class Fbbt {
       final BuiltIn normalized;
       final Core.@Nullable NamedPat lhsAbsArg = extractAbsArg(lhs);
       final Core.@Nullable NamedPat rhsAbsArg = extractAbsArg(rhs);
-      if (lhsAbsArg != null && rhs instanceof Core.Literal) {
-        final BigDecimal v = Bounds.literalInt(rhs);
-        if (v == null) {
+      if (lhsAbsArg != null) {
+        final Core.@Nullable Literal lit = Bounds.numericLiteral(rhs);
+        if (lit == null) {
           return false;
         }
         absArg = lhsAbsArg;
-        constant = v;
+        constant = lit.unwrap(BigDecimal.class);
         normalized = op;
-      } else if (rhsAbsArg != null && lhs instanceof Core.Literal) {
-        final BigDecimal v = Bounds.literalInt(lhs);
-        if (v == null) {
+      } else if (rhsAbsArg != null) {
+        final Core.@Nullable Literal lit = Bounds.numericLiteral(lhs);
+        if (lit == null) {
           return false;
         }
         absArg = rhsAbsArg;
-        constant = v;
+        constant = lit.unwrap(BigDecimal.class);
         normalized = op.reverse();
       } else {
         return false;
@@ -708,15 +722,16 @@ class Fbbt {
     }
 
     /**
-     * If {@code exp} is a call to {@code Int.abs} with a bare-variable
-     * argument, returns that variable; otherwise {@code null}.
+     * If {@code exp} is a call to {@code Int.abs} or {@code Real.abs} with a
+     * bare-variable argument, returns that variable; otherwise {@code null}.
      */
     private static Core.@Nullable NamedPat extractAbsArg(Core.Exp exp) {
       if (!(exp instanceof Core.Apply)) {
         return null;
       }
       final Core.Apply apply = (Core.Apply) exp;
-      if (apply.builtIn() != BuiltIn.INT_ABS) {
+      final BuiltIn b = apply.builtIn();
+      if (b != BuiltIn.INT_ABS && b != BuiltIn.REAL_ABS) {
         return null;
       }
       // abs is unary; its single argument is at .arg.
@@ -772,21 +787,21 @@ class Fbbt {
       final Core.Apply product;
       final BigDecimal constant;
       final BuiltIn normalized;
-      if (isMultiply(lhs) && rhs instanceof Core.Literal) {
+      if (isMultiply(lhs)) {
         product = (Core.Apply) lhs;
-        final BigDecimal c = Bounds.literalInt(rhs);
-        if (c == null) {
+        final Core.@Nullable Literal lit = Bounds.numericLiteral(rhs);
+        if (lit == null) {
           return false;
         }
-        constant = c;
+        constant = lit.unwrap(BigDecimal.class);
         normalized = op;
-      } else if (isMultiply(rhs) && lhs instanceof Core.Literal) {
+      } else if (isMultiply(rhs)) {
         product = (Core.Apply) rhs;
-        final BigDecimal c = Bounds.literalInt(lhs);
-        if (c == null) {
+        final Core.@Nullable Literal lit = Bounds.numericLiteral(lhs);
+        if (lit == null) {
           return false;
         }
-        constant = c;
+        constant = lit.unwrap(BigDecimal.class);
         normalized = op.reverse();
       } else {
         return false;
@@ -894,7 +909,9 @@ class Fbbt {
         return false;
       }
       final BuiltIn op = exp.builtIn();
-      return op == BuiltIn.Z_TIMES_INT || op == BuiltIn.OP_TIMES;
+      return op == BuiltIn.Z_TIMES_INT
+          || op == BuiltIn.OP_TIMES
+          || op == BuiltIn.Z_TIMES_REAL;
     }
   }
 }
