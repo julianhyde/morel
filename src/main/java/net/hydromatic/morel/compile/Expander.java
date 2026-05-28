@@ -68,6 +68,11 @@ public class Expander {
    */
   public static Core.From expandFrom(
       TypeSystem typeSystem, Environment env, Core.From from) {
+    // Pre-pass: run FBBT to deduce tighter bounds for unbounded patterns
+    // and strengthen any 'where' clause with the new bounds. The existing
+    // extractor (below) then picks them up as finite generators.
+    from = applyFbbt(typeSystem, from);
+
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     final Expander expander = new Expander(cache, ImmutableList.of());
 
@@ -103,6 +108,47 @@ public class Expander {
     // Third, substitute generators.
     Core.From from2 = expandFrom2(cache, env, stepVars);
     return from2.equals(from) ? from : from2;
+  }
+
+  /**
+   * Runs FBBT over each {@code where} step in {@code from}, strengthening its
+   * expression with newly-deduced bounds on the in-scope unbounded patterns.
+   * Returns the original {@code from} if FBBT made no progress.
+   *
+   * <p>"In-scope unbounded patterns" at a given step are the extent-scan
+   * patterns seen earlier in the same {@code from}. We don't track wider scope;
+   * deductions about an outer-bound variable would require treating it as a
+   * free variable here, which the current scope does not handle.
+   */
+  private static Core.From applyFbbt(TypeSystem typeSystem, Core.From from) {
+    final Set<Core.NamedPat> unboundedPats = new HashSet<>();
+    boolean changed = false;
+    final List<Core.FromStep> newSteps = new ArrayList<>(from.steps.size());
+    for (Core.FromStep step : from.steps) {
+      if (step.op == Op.SCAN) {
+        final Core.Scan scan = (Core.Scan) step;
+        if (scan.exp.isExtent()) {
+          unboundedPats.addAll(scan.pat.expand());
+        }
+        newSteps.add(step);
+      } else if (step instanceof Core.Where && !unboundedPats.isEmpty()) {
+        final Core.Where where = (Core.Where) step;
+        final Core.Exp strengthened =
+            Fbbt.strengthen(typeSystem, unboundedPats, where.exp);
+        if (strengthened != where.exp) {
+          newSteps.add(where.copy(strengthened, where.env));
+          changed = true;
+        } else {
+          newSteps.add(step);
+        }
+      } else {
+        newSteps.add(step);
+      }
+    }
+    if (!changed) {
+      return from;
+    }
+    return core.from(typeSystem, newSteps);
   }
 
   /** Processing state for a pattern during generator expansion. */

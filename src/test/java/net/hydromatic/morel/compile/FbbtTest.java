@@ -59,15 +59,11 @@ public class FbbtTest {
   }
 
   /**
-   * {@code x > 0 andalso x < 10} stays as-is: each conjunct is already a bound,
-   * so the strengthen pass adds equivalents (which the framework does emit,
-   * today, because forEachTightened doesn't yet distinguish "this came from the
-   * input" from "this was newly deduced"). For now we just verify FBBT
-   * converges and produces a strengthened result.
+   * {@code x > 0 andalso x < 10} produces no deductions beyond what the input
+   * already says, so the strengthen pass returns the input unchanged.
    */
   @Test
-  void testConstantBoundsConverge() {
-    // x > 0 andalso x < 10
+  void testConstantBoundsNoNewDeductions() {
     final Core.Exp w =
         core.andAlso(
             typeSystem,
@@ -75,11 +71,32 @@ public class FbbtTest {
             core.lessThan(typeSystem, xId, i(10)));
     final Core.Exp result =
         Fbbt.strengthen(typeSystem, ImmutableSet.of(xPat), w);
-    // The strengthen pass deduced x in (0, 10) and re-emitted both bounds;
-    // the input survives as the head of an andAlso.
+    assertThat(result, equalTo(w));
+  }
+
+  /**
+   * {@code x > 0 andalso x < y andalso y < 10} (the issue's cyclic-bound
+   * example): FBBT deduces {@code x < 10} and {@code y > 0} by combining the
+   * three input conjuncts.
+   */
+  @Test
+  void testCyclicBoundDeduction() {
+    // x > 0 andalso x < y andalso y < 10
+    final Core.Exp w =
+        core.andAlso(
+            typeSystem,
+            ImmutableSet.of(
+                core.greaterThan(typeSystem, xId, i(0)),
+                core.lessThan(typeSystem, xId, yId),
+                core.lessThan(typeSystem, yId, i(10))));
+    final Core.Exp result =
+        Fbbt.strengthen(typeSystem, ImmutableSet.of(xPat, yPat), w);
+    // FBBT appends "x < 10" (from x < y, y < 10) and "y > 0" (from y > x,
+    // x > 0). Both are strict, both open at the propagated endpoint.
     assertThat(
         result,
-        hasToString("x > 0 andalso (x < 10 andalso (x > 0 andalso x < 10))"));
+        hasToString(
+            "x < 10 andalso (y > 0 andalso (x > 0 andalso (x < y andalso y < 10)))"));
   }
 
   /**

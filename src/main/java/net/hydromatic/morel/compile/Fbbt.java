@@ -20,10 +20,13 @@ package net.hydromatic.morel.compile;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
+import com.google.common.collect.BoundType;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,19 +36,27 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.TypeSystem;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Feasibility-based bound tightening (FBBT).
  *
  * <p>Given the conjunction of conjuncts in a {@code where} clause, FBBT
  * tightens the per-variable feasible interval by propagating each constraint,
- * iterating to a fixed point. Bounds deduced by FBBT are appended to the {@code
- * where} clause as new conjuncts; the existing range extractor in {@link
+ * iterating to a fixed point. Newly deduced bounds are appended to the {@code
+ * where} clause as conjuncts; the existing range extractor in {@link
  * Generators} then turns them into finite generators.
  *
- * <p>The current FBBT scope is integer-valued patterns over linear constraints.
- * Other primitive numeric types and non-linear constraints will be added
- * incrementally.
+ * <p>Current scope: integer-valued patterns over linear constraints of the form
+ * {@code (varA + kA) OP (varB + kB)} for {@code OP} in {@code <, <=, >, >=, =},
+ * where {@code kA} and {@code kB} are integer-literal offsets and either side
+ * may be a bare constant. Non-linear constraints and other primitive types are
+ * out of scope here and arrive in follow-up work.
+ *
+ * <p>TODO: there is meaningful overlap with {@link Generators#lowerBound} and
+ * {@link Generators#upperBound}, which also extract per-variable bounds from
+ * the same constraint shapes. After all FBBT propagators are in, factor the
+ * shared bound-extraction code into a common helper.
  *
  * <p>See <a href="https://github.com/hydromatic/morel/issues/373">issue
  * #373</a>.
@@ -61,7 +72,7 @@ class Fbbt {
       ImmutableRangeSet.of(Range.all());
 
   private static final ImmutableList<Propagator> PROPAGATORS =
-      ImmutableList.of(new ConstantBoundPropagator());
+      ImmutableList.of(new LinearPropagator());
 
   private Fbbt() {}
 
@@ -69,8 +80,9 @@ class Fbbt {
    * Tightens the bounds of each pattern in {@code unboundedPats} by propagating
    * the conjuncts of {@code whereExp} to a fixed point.
    *
-   * <p>Returns a strengthened where-expression with new range conjuncts
-   * appended, or the original expression unchanged if FBBT made no progress.
+   * <p>Returns a strengthened where-expression with newly-deduced bounds
+   * appended as additional conjuncts, or the original expression unchanged if
+   * FBBT made no progress beyond what the input already expressed.
    *
    * @param typeSystem Type system
    * @param unboundedPats Patterns to deduce bounds for (typically the extent
@@ -86,6 +98,10 @@ class Fbbt {
       return whereExp;
     }
     final List<Core.Exp> conjuncts = core.decomposeAnd(whereExp);
+    // Snapshot the input-implied intervals so the materializer can tell
+    // which bounds are *newly deduced* (and worth appending) versus
+    // already-expressed by an input conjunct (which would just be noise).
+    state.captureInputs(conjuncts);
     iterateToFixedPoint(state, conjuncts);
     return augmentWhere(typeSystem, whereExp, state);
   }
@@ -107,59 +123,49 @@ class Fbbt {
   }
 
   /**
-   * If FBBT deduced any tighter bounds, appends them as new conjuncts to {@code
-   * whereExp}; otherwise returns it unchanged.
+   * If FBBT deduced bounds tighter than the input already expressed, appends
+   * them as new conjuncts to {@code whereExp}; otherwise returns it unchanged.
    */
   private static Core.Exp augmentWhere(
       TypeSystem typeSystem, Core.Exp whereExp, State state) {
     final ImmutableList.Builder<Core.Exp> extras = ImmutableList.builder();
-    state.forEachTightened(
-        (pat, rangeSet) -> {
-          for (Range<BigDecimal> r : rangeSet.asRanges()) {
-            if (r.hasLowerBound()) {
-              extras.add(boundConjunct(typeSystem, pat, r, true));
-            }
-            if (r.hasUpperBound()) {
-              extras.add(boundConjunct(typeSystem, pat, r, false));
-            }
-          }
-        });
+    state.forEachDeducedBound(
+        (pat, side, value, strict) ->
+            extras.add(boundConjunct(typeSystem, pat, side, value, strict)));
     final ImmutableList<Core.Exp> extraConjuncts = extras.build();
     if (extraConjuncts.isEmpty()) {
       return whereExp;
     }
+    // Prepend the deduced conjuncts. The existing range extractor in
+    // Generators.lowerBound / upperBound returns the *first* matching
+    // constraint, so putting our (constant-valued) bounds in front makes
+    // them win over any same-side bound that references another variable
+    // (which would create a cyclic generator dependency).
     return core.andAlso(
         typeSystem,
         ImmutableList.<Core.Exp>builder()
-            .add(whereExp)
             .addAll(extraConjuncts)
+            .add(whereExp)
             .build());
   }
 
   /**
-   * Builds a conjunct expressing one side of a range as a Core.Exp. For
-   * example, {@code (pat=x, range=[1, 8], lower=true)} returns {@code x >= 1};
-   * with {@code lower=false} returns {@code x <= 8}.
+   * Builds a conjunct expressing one side of a deduced bound. For example,
+   * {@code (pat=x, lower=true, value=1, strict=false)} returns {@code x >= 1}.
    */
   private static Core.Exp boundConjunct(
       TypeSystem typeSystem,
       Core.NamedPat pat,
-      Range<BigDecimal> range,
-      boolean lower) {
-    final BigDecimal value =
-        lower ? range.lowerEndpoint() : range.upperEndpoint();
-    final boolean strict =
-        (lower ? range.lowerBoundType() : range.upperBoundType())
-            == com.google.common.collect.BoundType.OPEN;
+      boolean lower,
+      BigDecimal value,
+      boolean strict) {
     final Core.Exp idExp = core.id(pat);
     final Core.Exp constExp = core.literal(PrimitiveType.INT, value);
     if (lower) {
-      // x > c (strict) or x >= c
       return strict
           ? core.greaterThan(typeSystem, idExp, constExp)
           : core.greaterThanOrEqualTo(typeSystem, idExp, constExp);
     } else {
-      // x < c (strict) or x <= c
       return strict
           ? core.lessThan(typeSystem, idExp, constExp)
           : core.call(
@@ -177,15 +183,18 @@ class Fbbt {
     private final Set<Core.NamedPat> pats;
     private final Map<Core.NamedPat, ImmutableRangeSet<BigDecimal>> intervals =
         new HashMap<>();
+    /**
+     * Snapshot of intervals after applying only the constant-bound conjuncts of
+     * the original where-clause. Used to identify which deductions are newly
+     * produced by cross-variable propagation.
+     */
+    private final Map<Core.NamedPat, ImmutableRangeSet<BigDecimal>> inputs =
+        new HashMap<>();
 
     State(Set<Core.NamedPat> pats) {
       this.pats = pats;
     }
 
-    /**
-     * Returns whether there are no integer patterns to deduce bounds for. (We
-     * restrict to int for now.)
-     */
     boolean isEmpty() {
       for (Core.NamedPat p : pats) {
         if (p.type == PrimitiveType.INT) {
@@ -195,12 +204,10 @@ class Fbbt {
       return true;
     }
 
-    /** Returns whether {@code pat} is one of the patterns under analysis. */
     boolean knows(Core.NamedPat pat) {
       return pats.contains(pat) && pat.type == PrimitiveType.INT;
     }
 
-    /** Returns the current best interval for {@code pat}. */
     ImmutableRangeSet<BigDecimal> get(Core.NamedPat pat) {
       return intervals.getOrDefault(pat, ALL);
     }
@@ -222,21 +229,118 @@ class Fbbt {
       return true;
     }
 
-    /** Calls {@code consumer} once per pattern with a tightened interval. */
-    void forEachTightened(BoundsConsumer consumer) {
-      intervals.forEach(
-          (pat, rs) -> {
-            if (!rs.equals(ALL)) {
-              consumer.accept(pat, rs);
-            }
-          });
+    /**
+     * Initializes {@link #inputs} by scanning {@code conjuncts} for
+     * constant-side bounds (i.e. {@code (var + k) OP c}). Mirrors the intervals
+     * into {@link #inputs} and {@link #intervals} so iteration starts from the
+     * same place but the snapshot is preserved.
+     */
+    void captureInputs(List<Core.Exp> conjuncts) {
+      for (Core.Exp conjunct : conjuncts) {
+        LinearPropagator.applyConstantBound(conjunct, this, true);
+      }
+      // After capturing, intervals == inputs. The fixed-point loop will
+      // diverge them.
+      inputs.putAll(intervals);
+    }
+
+    /**
+     * Streams every side (lower/upper) where the final bound is strictly
+     * tighter than the input bound. Patterns are visited in name order so the
+     * emitted conjuncts are deterministic; lower side is visited before upper
+     * for the same pattern.
+     */
+    void forEachDeducedBound(DeducedBoundConsumer consumer) {
+      final List<Core.NamedPat> sortedPats =
+          new ArrayList<>(intervals.keySet());
+      sortedPats.sort(Comparator.comparing(p -> p.name));
+      for (Core.NamedPat pat : sortedPats) {
+        final ImmutableRangeSet<BigDecimal> finalRs = intervals.get(pat);
+        if (finalRs.isEmpty()) {
+          continue;
+        }
+        final ImmutableRangeSet<BigDecimal> inputRs =
+            inputs.getOrDefault(pat, ALL);
+        final Range<BigDecimal> finalSpan = finalRs.span();
+        final Range<BigDecimal> inputSpan =
+            inputRs.isEmpty() ? Range.all() : inputRs.span();
+        if (finalSpan.hasLowerBound() && isLowerTighter(finalSpan, inputSpan)) {
+          consumer.accept(
+              pat,
+              true,
+              finalSpan.lowerEndpoint(),
+              finalSpan.lowerBoundType() == BoundType.OPEN);
+        }
+        if (finalSpan.hasUpperBound() && isUpperTighter(finalSpan, inputSpan)) {
+          consumer.accept(
+              pat,
+              false,
+              finalSpan.upperEndpoint(),
+              finalSpan.upperBoundType() == BoundType.OPEN);
+        }
+      }
+    }
+
+    /**
+     * Returns whether {@code finalSpan}'s lower endpoint is strictly tighter
+     * than {@code inputSpan}'s. Tighter means: input had no lower bound but
+     * final does; or the final lower exceeds the input lower; or they share the
+     * same value but final is closed-strict (OPEN) and input is closed (CLOSED
+     * — same value reachable). For our use the values come from the same
+     * propagator, so the equal-value case never triggers a "newly deduced"
+     * emission.
+     */
+    private static boolean isLowerTighter(
+        Range<BigDecimal> finalSpan, Range<BigDecimal> inputSpan) {
+      if (!inputSpan.hasLowerBound()) {
+        return true;
+      }
+      final int cmp =
+          finalSpan.lowerEndpoint().compareTo(inputSpan.lowerEndpoint());
+      if (cmp > 0) {
+        return true;
+      }
+      if (cmp < 0) {
+        return false;
+      }
+      // Same value: tighter only if final is OPEN and input is CLOSED.
+      return finalSpan.lowerBoundType() == BoundType.OPEN
+          && inputSpan.lowerBoundType() == BoundType.CLOSED;
+    }
+
+    private static boolean isUpperTighter(
+        Range<BigDecimal> finalSpan, Range<BigDecimal> inputSpan) {
+      if (!inputSpan.hasUpperBound()) {
+        return true;
+      }
+      final int cmp =
+          finalSpan.upperEndpoint().compareTo(inputSpan.upperEndpoint());
+      if (cmp < 0) {
+        return true;
+      }
+      if (cmp > 0) {
+        return false;
+      }
+      return finalSpan.upperBoundType() == BoundType.OPEN
+          && inputSpan.upperBoundType() == BoundType.CLOSED;
     }
   }
 
-  /** Receives a tightened bound for use in materialization. */
+  /** Receives one newly-deduced bound side. */
   @FunctionalInterface
-  interface BoundsConsumer {
-    void accept(Core.NamedPat pat, ImmutableRangeSet<BigDecimal> rangeSet);
+  interface DeducedBoundConsumer {
+    /**
+     * Receives one tightened bound for materialization.
+     *
+     * @param pat Pattern
+     * @param lower True for lower bound ({@code x >= v} / {@code x > v}), false
+     *     for upper
+     * @param value Bound value
+     * @param strict True for strict inequality ({@code >} / {@code <}), false
+     *     for non-strict
+     */
+    void accept(
+        Core.NamedPat pat, boolean lower, BigDecimal value, boolean strict);
   }
 
   /**
@@ -250,61 +354,138 @@ class Fbbt {
   }
 
   /**
-   * Propagator for {@code x op c} and {@code c op x} where {@code c} is an
-   * integer literal and {@code op} is one of {@code <, <=, >, >=, =}.
-   *
-   * <p>This is what the existing range extractor (in {@link Generators}) also
-   * picks up; we duplicate the work here so the FBBT state has a useful
-   * starting point for cross-variable propagators.
+   * Propagator for linear constraints of the form {@code (varA + kA) OP (varB +
+   * kB)} where {@code kA}, {@code kB} are integer-literal offsets (possibly
+   * zero, possibly missing on one side) and {@code OP} is one of {@code <, <=,
+   * >, >=, =}.
    */
-  static class ConstantBoundPropagator implements Propagator {
+  static class LinearPropagator implements Propagator {
     @Override
     public boolean propagate(Core.Exp constraint, State state) {
       if (constraint.op != Op.APPLY) {
         return false;
       }
-      final BuiltIn builtIn = constraint.builtIn();
-      if (builtIn == null) {
+      final BuiltIn op = constraint.builtIn();
+      if (op == null || !isComparisonOp(op)) {
         return false;
       }
-      switch (builtIn) {
+      final Term lhs = linearTerm(constraint.arg(0));
+      final Term rhs = linearTerm(constraint.arg(1));
+      if (lhs == null || rhs == null) {
+        return false;
+      }
+      // Both sides constant: nothing to deduce.
+      if (lhs.var == null && rhs.var == null) {
+        return false;
+      }
+      // Constant on one side: a "x + k OP c" constraint. Reduce to
+      //   x OP (c - k)
+      if (lhs.var == null) {
+        return tightenFromConstant(
+            state, rhs.var, op.reverse(), lhs.offset.subtract(rhs.offset));
+      }
+      if (rhs.var == null) {
+        return tightenFromConstant(
+            state, lhs.var, op, rhs.offset.subtract(lhs.offset));
+      }
+      // Both sides have a variable: "varA + kA OP varB + kB"
+      // Reduce to "varA OP varB + (kB - kA)".
+      final BigDecimal delta = rhs.offset.subtract(lhs.offset);
+      boolean changed = false;
+      changed |= tightenFromOther(state, lhs.var, op, rhs.var, delta);
+      // And solving for varB: "varB OP' varA - (kB - kA)" where OP' is the
+      // reverse. (E.g. "x < y + 1" becomes "y > x - 1".)
+      changed |=
+          tightenFromOther(
+              state, rhs.var, op.reverse(), lhs.var, delta.negate());
+      return changed;
+    }
+
+    /** Applies a "var op constant" tightening to {@code state}. */
+    static boolean applyConstantBound(
+        Core.Exp constraint, State state, boolean recordOnly) {
+      if (constraint.op != Op.APPLY) {
+        return false;
+      }
+      final BuiltIn op = constraint.builtIn();
+      if (op == null || !isComparisonOp(op)) {
+        return false;
+      }
+      final Term lhs = linearTerm(constraint.arg(0));
+      final Term rhs = linearTerm(constraint.arg(1));
+      if (lhs == null || rhs == null) {
+        return false;
+      }
+      // We only want the constant case here.
+      final Core.NamedPat pat;
+      final BuiltIn finalOp;
+      final BigDecimal constant;
+      if (lhs.var != null && rhs.var == null) {
+        pat = lhs.var;
+        finalOp = op;
+        constant = rhs.offset.subtract(lhs.offset);
+      } else if (lhs.var == null && rhs.var != null) {
+        pat = rhs.var;
+        finalOp = op.reverse();
+        constant = lhs.offset.subtract(rhs.offset);
+      } else {
+        return false;
+      }
+      return tightenFromConstant(state, pat, finalOp, constant);
+    }
+
+    private static boolean isComparisonOp(BuiltIn op) {
+      switch (op) {
         case OP_LT:
         case OP_LE:
         case OP_GT:
         case OP_GE:
         case OP_EQ:
-          break;
+          return true;
         default:
           return false;
       }
-      final Core.Exp lhs = constraint.arg(0);
-      final Core.Exp rhs = constraint.arg(1);
-      // Normalize so 'pat OP const'.
-      final Core.NamedPat pat;
-      final BigDecimal value;
-      final BuiltIn normalized;
-      if (lhs instanceof Core.Id && rhs instanceof Core.Literal) {
-        pat = ((Core.Id) lhs).idPat;
-        value = literalInt((Core.Literal) rhs);
-        normalized = builtIn;
-      } else if (rhs instanceof Core.Id && lhs instanceof Core.Literal) {
-        pat = ((Core.Id) rhs).idPat;
-        value = literalInt((Core.Literal) lhs);
-        normalized = builtIn.reverse();
-      } else {
+    }
+
+    /** Tightens {@code pat}'s interval by {@code pat OP constant}. */
+    private static boolean tightenFromConstant(
+        State state, Core.NamedPat pat, BuiltIn op, BigDecimal constant) {
+      if (!state.knows(pat)) {
         return false;
       }
-      if (value == null || !state.knows(pat)) {
-        return false;
-      }
-      return state.tighten(pat, rangeOf(normalized, value));
+      return state.tighten(pat, rangeFromOp(op, constant));
     }
 
     /**
-     * Returns the half-open range that an integer-typed variable must lie in to
-     * satisfy {@code v op c}.
+     * Tightens {@code targetPat}'s interval by {@code targetPat OP (otherPat +
+     * delta)}, using {@code otherPat}'s current interval.
      */
-    private static ImmutableRangeSet<BigDecimal> rangeOf(
+    private static boolean tightenFromOther(
+        State state,
+        Core.NamedPat targetPat,
+        BuiltIn op,
+        Core.NamedPat otherPat,
+        BigDecimal delta) {
+      if (!state.knows(targetPat)) {
+        return false;
+      }
+      final ImmutableRangeSet<BigDecimal> otherRs = state.get(otherPat);
+      if (otherRs.isEmpty()) {
+        return false;
+      }
+      final Range<BigDecimal> otherSpan = otherRs.span();
+      final ImmutableRangeSet<BigDecimal> bound =
+          rangeFromOther(op, otherSpan, delta);
+      if (bound == null) {
+        return false;
+      }
+      return state.tighten(targetPat, bound);
+    }
+
+    /**
+     * Returns the range that {@code v} must lie in to satisfy {@code v OP c}.
+     */
+    private static ImmutableRangeSet<BigDecimal> rangeFromOp(
         BuiltIn op, BigDecimal c) {
       switch (op) {
         case OP_LT:
@@ -323,14 +504,145 @@ class Fbbt {
     }
 
     /**
-     * Returns {@code lit}'s value as a {@link BigDecimal} if it's an int
-     * literal, otherwise null.
+     * Given {@code v OP (otherPat + delta)} and {@code otherPat}'s span,
+     * returns the range that {@code v} must lie in, or {@code null} if no
+     * useful bound can be derived (e.g. the relevant side of {@code otherSpan}
+     * is unbounded).
      */
-    private static BigDecimal literalInt(Core.Literal lit) {
-      if (lit.op != Op.INT_LITERAL) {
+    private static @Nullable ImmutableRangeSet<BigDecimal> rangeFromOther(
+        BuiltIn op, Range<BigDecimal> otherSpan, BigDecimal delta) {
+      switch (op) {
+        case OP_LT:
+          // v < other + delta; need other's upper.
+          if (!otherSpan.hasUpperBound()) {
+            return null;
+          }
+          // Always open: v can approach but never equal other_hi + delta.
+          return ImmutableRangeSet.of(
+              Range.lessThan(otherSpan.upperEndpoint().add(delta)));
+        case OP_LE:
+          // v <= other + delta; need other's upper.
+          if (!otherSpan.hasUpperBound()) {
+            return null;
+          }
+          return ImmutableRangeSet.of(
+              otherSpan.upperBoundType() == BoundType.CLOSED
+                  ? Range.atMost(otherSpan.upperEndpoint().add(delta))
+                  : Range.lessThan(otherSpan.upperEndpoint().add(delta)));
+        case OP_GT:
+          if (!otherSpan.hasLowerBound()) {
+            return null;
+          }
+          return ImmutableRangeSet.of(
+              Range.greaterThan(otherSpan.lowerEndpoint().add(delta)));
+        case OP_GE:
+          if (!otherSpan.hasLowerBound()) {
+            return null;
+          }
+          return ImmutableRangeSet.of(
+              otherSpan.lowerBoundType() == BoundType.CLOSED
+                  ? Range.atLeast(otherSpan.lowerEndpoint().add(delta))
+                  : Range.greaterThan(otherSpan.lowerEndpoint().add(delta)));
+        case OP_EQ:
+          // v = other + delta. Shift other's range by delta.
+          if (!otherSpan.hasLowerBound() && !otherSpan.hasUpperBound()) {
+            return null;
+          }
+          final Range<BigDecimal> shifted = shift(otherSpan, delta);
+          return ImmutableRangeSet.of(shifted);
+        default:
+          throw new AssertionError(op);
+      }
+    }
+
+    /** Translates {@code r} by {@code delta} along the number line. */
+    private static Range<BigDecimal> shift(
+        Range<BigDecimal> r, BigDecimal delta) {
+      if (r.hasLowerBound() && r.hasUpperBound()) {
+        return Range.range(
+            r.lowerEndpoint().add(delta), r.lowerBoundType(),
+            r.upperEndpoint().add(delta), r.upperBoundType());
+      }
+      if (r.hasLowerBound()) {
+        return r.lowerBoundType() == BoundType.CLOSED
+            ? Range.atLeast(r.lowerEndpoint().add(delta))
+            : Range.greaterThan(r.lowerEndpoint().add(delta));
+      }
+      if (r.hasUpperBound()) {
+        return r.upperBoundType() == BoundType.CLOSED
+            ? Range.atMost(r.upperEndpoint().add(delta))
+            : Range.lessThan(r.upperEndpoint().add(delta));
+      }
+      return Range.all();
+    }
+
+    /**
+     * Decomposes {@code exp} into a linear term {@code (var ?, offset)}.
+     * Returns null if {@code exp} is not a linear combination of one variable
+     * and an integer constant.
+     */
+    private static @Nullable Term linearTerm(Core.Exp exp) {
+      if (exp instanceof Core.Id) {
+        final Core.NamedPat p = ((Core.Id) exp).idPat;
+        return new Term(p, BigDecimal.ZERO);
+      }
+      if (exp instanceof Core.Literal) {
+        final Core.Literal lit = (Core.Literal) exp;
+        if (lit.op == Op.INT_LITERAL && lit.value instanceof BigDecimal) {
+          return new Term(null, (BigDecimal) lit.value);
+        }
         return null;
       }
-      return (BigDecimal) lit.value;
+      if (!(exp instanceof Core.Apply)) {
+        return null;
+      }
+      final Core.Apply apply = (Core.Apply) exp;
+      final BuiltIn op = apply.builtIn();
+      if (op != BuiltIn.Z_PLUS_INT
+          && op != BuiltIn.OP_PLUS
+          && op != BuiltIn.Z_MINUS_INT
+          && op != BuiltIn.OP_MINUS) {
+        return null;
+      }
+      final Term a = linearTerm(apply.arg(0));
+      final Term b = linearTerm(apply.arg(1));
+      if (a == null || b == null) {
+        return null;
+      }
+      final boolean minus = op == BuiltIn.Z_MINUS_INT || op == BuiltIn.OP_MINUS;
+      final BigDecimal otherOffset = minus ? b.offset.negate() : b.offset;
+      if (a.var != null && b.var != null) {
+        // Linear combination of two distinct variables; we don't model
+        // that as a single Term.
+        return null;
+      }
+      if (a.var == null && b.var == null) {
+        return new Term(null, a.offset.add(otherOffset));
+      }
+      if (a.var != null) {
+        // var + const, or var - const
+        return new Term(a.var, a.offset.add(otherOffset));
+      }
+      // const + var. The "const - var" case (i.e. minus with var on rhs)
+      // would introduce a -1 coefficient on var, which we don't model.
+      if (minus) {
+        return null;
+      }
+      return new Term(b.var, a.offset.add(b.offset));
+    }
+  }
+
+  /**
+   * A linear term of the form {@code (var + offset)} or {@code (offset)} (when
+   * {@link #var} is null).
+   */
+  private static class Term {
+    final Core.@Nullable NamedPat var;
+    final BigDecimal offset;
+
+    Term(Core.@Nullable NamedPat var, BigDecimal offset) {
+      this.var = var;
+      this.offset = offset;
     }
   }
 }

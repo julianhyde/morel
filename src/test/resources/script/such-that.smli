@@ -244,29 +244,31 @@ from x where (x + 2) * (x - 3) = 0;
 > stdIn:1.6 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.6
 
-(* Ranges that cannot be deduced.
+(* Cyclic bounds resolved by FBBT.
  *
- * Each variable has a generator whose bound references another
- * variable. Without bound-propagation the local extractor cannot
- * resolve the cycle, so the patterns are reported as not grounded.
- *
- * Once FBBT (#373) lands, the first four queries will succeed with
- * deduced ranges; the last three need other techniques (Fourier-Motzkin
- * for tilted polytopes, monotonicity for non-linear products, and an
- * actual finite-domain check for the feasible-but-unbounded case) and
- * will continue to report 'not grounded'. *)
-from x, y where x > 0 andalso x < y andalso y < 10;
-> stdIn:1.6 Error: pattern 'x' is not grounded
->   raised at: stdIn:1.6
-from x, y where y > 0 andalso y < x andalso x < 10;
-> stdIn:1.6 Error: pattern 'x' is not grounded
->   raised at: stdIn:1.6
-from x, y, z where x > 0 andalso x < y andalso y < z andalso z < 10;
-> stdIn:1.6 Error: pattern 'x' is not grounded
->   raised at: stdIn:1.6
+ * Each variable's generator depends on another. FBBT (#373) propagates
+ * the constants through the cycle to deduce constant bounds for each
+ * variable: the deduced bounds let the extractor build a finite range
+ * for each generator, and the original cross-variable predicates
+ * (e.g. `x < y`) remain as post-generation filters. *)
+Bag.length (from x, y where x > 0 andalso x < y andalso y < 10);
+> val it = 36 : int
+Bag.length (from x, y where y > 0 andalso y < x andalso x < 10);
+> val it = 36 : int
+Bag.length (from x, y, z where x > 0 andalso x < y andalso y < z andalso z < 10);
+> val it = 84 : int
 from x where x > 0 andalso x < x + 1 andalso x < 5;
-> stdIn:1.6 Error: pattern 'x' is not grounded
->   raised at: stdIn:1.6
+> val it = [1,2,3,4] : int bag
+
+(* Ranges that cannot be deduced even with FBBT.
+ *
+ * The first query is feasible but unbounded (`x < y andalso y < x + 10`
+ * admits any x). The second has a non-linear constraint that needs
+ * monotonicity reasoning. The third is a tilted polytope where the
+ * variables only acquire bounds after pairs of constraints are added,
+ * which is the job of Fourier-Motzkin elimination, not FBBT. All three
+ * report 'not grounded' for now; subsequent techniques in the #229 epic
+ * will handle them. *)
 from x, y where x < y andalso y < x + 10;
 > stdIn:1.6 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.6
