@@ -116,15 +116,32 @@ final class RangePushdown {
     if (ctorEnum == null) {
       return null;
     }
+    final boolean isChar = namedPat.type == PrimitiveType.CHAR;
     switch (ctorEnum) {
       case RANGE_AT_LEAST:
-        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_GE, bagWrapped);
+        return new ScanInfo(
+            namedPat,
+            ctor.arg,
+            isChar ? BuiltIn.CHAR_OP_GE : BuiltIn.OP_GE,
+            bagWrapped);
       case RANGE_AT_MOST:
-        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_LE, bagWrapped);
+        return new ScanInfo(
+            namedPat,
+            ctor.arg,
+            isChar ? BuiltIn.CHAR_OP_LE : BuiltIn.OP_LE,
+            bagWrapped);
       case RANGE_GREATER_THAN:
-        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_GT, bagWrapped);
+        return new ScanInfo(
+            namedPat,
+            ctor.arg,
+            isChar ? BuiltIn.CHAR_OP_GT : BuiltIn.OP_GT,
+            bagWrapped);
       case RANGE_LESS_THAN:
-        return new ScanInfo(namedPat, ctor.arg, BuiltIn.OP_LT, bagWrapped);
+        return new ScanInfo(
+            namedPat,
+            ctor.arg,
+            isChar ? BuiltIn.CHAR_OP_LT : BuiltIn.OP_LT,
+            bagWrapped);
       default:
         return null;
     }
@@ -208,7 +225,10 @@ final class RangePushdown {
     // AT_LEAST/GREATER_THAN -> need an upper bound; AT_MOST/LESS_THAN ->
     // need a lower bound.
     final boolean needUpper =
-        info.op == BuiltIn.OP_GE || info.op == BuiltIn.OP_GT;
+        info.op == BuiltIn.OP_GE
+            || info.op == BuiltIn.OP_GT
+            || info.op == BuiltIn.CHAR_OP_GE
+            || info.op == BuiltIn.CHAR_OP_GT;
     Core.Exp bestConjunct = null;
     BigDecimal bestValue = null;
     boolean bestStrict = false;
@@ -231,25 +251,25 @@ final class RangePushdown {
     if (bestConjunct == null) {
       return null;
     }
-    final Core.@Nullable Literal scanLit = Bounds.numericLiteral(info.value);
+    final Core.@Nullable Literal scanLit = Bounds.scalarLiteral(info.value);
     if (scanLit == null) {
       return null;
     }
-    final BigDecimal scanValue = scanLit.unwrap(BigDecimal.class);
+    final BigDecimal scanValue = Bounds.asBigDecimal(scanLit);
     final BigDecimal lowerValue;
     final boolean lowerStrict;
     final BigDecimal upperValue;
     final boolean upperStrict;
     if (needUpper) {
       lowerValue = scanValue;
-      lowerStrict = info.op == BuiltIn.OP_GT;
+      lowerStrict = info.op == BuiltIn.OP_GT || info.op == BuiltIn.CHAR_OP_GT;
       upperValue = bestValue;
       upperStrict = bestStrict;
     } else {
       lowerValue = bestValue;
       lowerStrict = bestStrict;
       upperValue = scanValue;
-      upperStrict = info.op == BuiltIn.OP_LT;
+      upperStrict = info.op == BuiltIn.OP_LT || info.op == BuiltIn.CHAR_OP_LT;
     }
     if (lowerValue.compareTo(upperValue) > 0) {
       return null;
@@ -294,8 +314,9 @@ final class RangePushdown {
     final FnType conFnType =
         typeSystem.fnType(typeSystem.tupleType(elemType, elemType), rangeType);
     final Core.IdPat conIdPat = core.idPat(conFnType, ctor.constructor, 0);
-    final Core.Exp loLit = core.literal((PrimitiveType) elemType, lo);
-    final Core.Exp hiLit = core.literal((PrimitiveType) elemType, hi);
+    final PrimitiveType pType = (PrimitiveType) elemType;
+    final Core.Exp loLit = numericValueAsLiteral(pType, lo);
+    final Core.Exp hiLit = numericValueAsLiteral(pType, hi);
     final Core.Apply rangeExp =
         core.apply(
             Pos.ZERO,
@@ -315,6 +336,20 @@ final class RangePushdown {
         ? core.call(
             typeSystem, BuiltIn.BAG_FROM_LIST, elemType, Pos.ZERO, flatten)
         : flatten;
+  }
+
+  /**
+   * Builds a literal of {@code type} from the {@link BigDecimal}-encoded value.
+   * For int and real this is a straight {@code core.literal} call; for char,
+   * the BigDecimal carries the integer character code and the literal is
+   * rebuilt via {@link net.hydromatic.morel.ast.CoreBuilder#charLiteral(char)}.
+   */
+  private static Core.Literal numericValueAsLiteral(
+      PrimitiveType type, BigDecimal value) {
+    if (type == PrimitiveType.CHAR) {
+      return core.charLiteral((char) value.intValueExact());
+    }
+    return core.literal(type, value);
   }
 
   /**
@@ -345,19 +380,23 @@ final class RangePushdown {
     } else {
       return null;
     }
-    final Core.@Nullable Literal valueLit = Bounds.numericLiteral(constSide);
+    final Core.@Nullable Literal valueLit = Bounds.scalarLiteral(constSide);
     if (valueLit == null) {
       return null;
     }
-    final BigDecimal value = valueLit.unwrap(BigDecimal.class);
+    final BigDecimal value = Bounds.asBigDecimal(valueLit);
     switch (normalized) {
       case OP_LT:
+      case CHAR_OP_LT:
         return new LiteralBound(true, true, value);
       case OP_LE:
+      case CHAR_OP_LE:
         return new LiteralBound(true, false, value);
       case OP_GT:
+      case CHAR_OP_GT:
         return new LiteralBound(false, true, value);
       case OP_GE:
+      case CHAR_OP_GE:
         return new LiteralBound(false, false, value);
       default:
         return null;
@@ -390,8 +429,23 @@ final class RangePushdown {
      * into a where clause.
      */
     Core.Exp boundExp(TypeSystem typeSystem) {
-      return core.call(
-          typeSystem, op, PrimitiveType.BOOL, Pos.ZERO, core.id(pat), value);
+      // CHAR_OP_* are concretely typed (char * char -> bool); the OP_* family
+      // is polymorphic and needs the type-parameter form of core.call.
+      switch (op) {
+        case CHAR_OP_LT:
+        case CHAR_OP_LE:
+        case CHAR_OP_GT:
+        case CHAR_OP_GE:
+          return core.call(typeSystem, op, core.id(pat), value);
+        default:
+          return core.call(
+              typeSystem,
+              op,
+              PrimitiveType.BOOL,
+              Pos.ZERO,
+              core.id(pat),
+              value);
+      }
     }
   }
 

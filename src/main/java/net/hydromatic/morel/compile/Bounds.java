@@ -135,6 +135,43 @@ final class Bounds {
   }
 
   /**
+   * Like {@link #numericLiteral} but also accepts {@code char} literals. Used
+   * by {@link RangePushdown}, where bound endpoints can be int, real, or char.
+   */
+  static Core.@Nullable Literal scalarLiteral(Core.Exp exp) {
+    if (!(exp instanceof Core.Literal)) {
+      return null;
+    }
+    final Core.Literal lit = (Core.Literal) exp;
+    switch (lit.op) {
+      case INT_LITERAL:
+      case REAL_LITERAL:
+      case CHAR_LITERAL:
+        return lit;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Returns {@code lit}'s value as a {@link BigDecimal} suitable for arithmetic
+   * and comparison. Char literals are encoded as the integer character code
+   * (e.g. {@code #"a"} -> 97).
+   */
+  static BigDecimal asBigDecimal(Core.Literal lit) {
+    switch (lit.op) {
+      case INT_LITERAL:
+      case REAL_LITERAL:
+        return lit.unwrap(BigDecimal.class);
+      case CHAR_LITERAL:
+        return BigDecimal.valueOf(
+            (int) lit.unwrap(Character.class).charValue());
+      default:
+        throw new AssertionError("not a scalar literal: " + lit);
+    }
+  }
+
+  /**
    * Returns whether {@code exp} is an {@link Core.Id} that references {@code
    * pat}.
    */

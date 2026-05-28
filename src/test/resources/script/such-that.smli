@@ -288,6 +288,15 @@ Sys.planEx "3";
 >   "val it = #length List (from x in #flatten Range ([CLOSED (1, 7)]) join y in #flatten Range ([CLOSED_OPEN (1, 27)]) where *:int (x, y + 3) < 30)"
 >   : string
 
+(* RangePushdown also handles char-typed infinite range scans. *)
+from c in [#"a"..] where c < #"e";
+> val it = [#"a",#"b",#"c",#"d"] : char list
+Sys.planEx "3";
+> val it = "val it = from c in #flatten Range ([CLOSED_OPEN (#\"a\", #\"e\")])"
+>   : string
+from c in [#"a"..] where c <= #"d";
+> val it = [#"a",#"b",#"c",#"d"] : char list
+
 (* Cyclic bounds resolved by FBBT.
  *
  * Each variable's generator depends on another. FBBT (#373) propagates
