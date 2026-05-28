@@ -81,7 +81,7 @@ class SuchThatShuttle extends EnvShuttle {
           protected void visit(Core.Scan scan) {
             super.visit(scan);
             if (Extents.isInfinite(scan.exp)
-                || Expander.isInfiniteRangeScan(scan)) {
+                || RangePushdown.isInfiniteRangeScan(scan)) {
               found.set(true);
             }
           }
