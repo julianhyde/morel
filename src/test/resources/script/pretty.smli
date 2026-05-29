@@ -29,20 +29,20 @@ Sys.set ("output", "tabular");
 from e in scott.depts;
 > deptno dname      loc
 > ------ ---------- --------
-> 10     ACCOUNTING NEW YORK
-> 20     RESEARCH   DALLAS
-> 30     SALES      CHICAGO
-> 40     OPERATIONS BOSTON
+>     10 ACCOUNTING NEW YORK
+>     20 RESEARCH   DALLAS
+>     30 SALES      CHICAGO
+>     40 OPERATIONS BOSTON
 >
 > val it : {deptno:int, dname:string, loc:string} bag
 
 from e in scott.depts order DESC e.deptno;
 > deptno dname      loc
 > ------ ---------- --------
-> 40     OPERATIONS BOSTON
-> 30     SALES      CHICAGO
-> 20     RESEARCH   DALLAS
-> 10     ACCOUNTING NEW YORK
+>     40 OPERATIONS BOSTON
+>     30 SALES      CHICAGO
+>     20 RESEARCH   DALLAS
+>     10 ACCOUNTING NEW YORK
 >
 > val it : {deptno:int, dname:string, loc:string} list
 
@@ -81,10 +81,16 @@ Sys.set ("output", "tabular");
 > val it = {employed=false,id=1,name="julian"}
 >   : {employed:bool, id:int, name:string}
 
-(* List of records with a list field uses classic style. *)
+(* List of records with a list field is tabular: the list expands
+ * vertically under its header. *)
 [{id=1, pets=["ruby"]}, {id=2, pets=["stealth", "luna"]}];
-> val it = [{id=1,pets=["ruby"]},{id=2,pets=["stealth","luna"]}]
->   : {id:int, pets:string list} list
+> id pets
+> -- -------
+>  1 ruby
+>  2 stealth
+>    luna
+>
+> val it : {id:int, pets:string list} list
 
 (* List of records with a sum-type field uses classic style. *)
 [{id=1, salary=NONE}, {id=2, salary=SOME 100}];
@@ -101,5 +107,103 @@ Sys.set ("output", "tabular");
 > val it =
 >   [{address={state="CA",zip=94705},id=1},{address={state="CA",zip=94618},id=2}]
 >   : {address:{state:string, zip:int}, id:int} list
+
+(* -------------------------------------------------------------------
+ * [MOREL-376] Tabular mode for nested collections
+ *)
+
+(* Issue example (a): one field is an `int list`. Rows expand
+ * vertically; an empty list contributes zero lines. *)
+[{id = 1, name = "alpha", scores = [10, 20]},
+ {id = 2, name = "beta",  scores = [30]},
+ {id = 3, name = "gamma", scores = []}];
+> id name  scores
+> -- ----- ------
+>  1 alpha     10
+>              20
+>  2 beta      30
+>  3 gamma
+>
+> val it : {id:int, name:string, scores:int list} list
+
+(* Issue example (b): one field is a record bag, another is an
+ * `int list`. Nested record-bag fields get a second header row of
+ * sub-column names. *)
+[{id = 1,
+  events = bag [{a = 100, b = true}, {a = 200, b = false}],
+  scores = [10, 20, 30]},
+ {id = 2,
+  events = bag [{a = 300, b = true}],
+  scores = [5]}];
+> events    id scores
+> a   b
+> --- ----- -- ------
+> 100 true   1     10
+> 200 false        20
+>                  30
+> 300 true   2      5
+>
+> val it : {events:{a:int, b:bool} bag, id:int, scores:int list} list
+
+(* Tuple fields are treated like records, with sub-columns named
+ * "1", "2", etc. *)
+[{id = 1, pair = [(10, true), (20, false)]},
+ {id = 2, pair = [(30, true)]}];
+> id pair
+>    1  2
+> -- -- -----
+>  1 10 true
+>    20 false
+>  2 30 true
+>
+> val it : {id:int, pair:(int * bool) list} list
+
+(* Top-level list of tuples renders as a table with columns named
+ * "1", "2", "3". *)
+[(1, "a"), (2, "b"), (3, "c")];
+> 1 2
+> - -
+> 1 a
+> 2 b
+> 3 c
+>
+> val it : (int * string) list
+
+(* Two levels of nested collections: a list of records whose
+ * record-list field contains records that themselves have a
+ * scalar-list field. *)
+[{id = 1,
+  items = [{name = "a", tags = ["x", "y"]},
+           {name = "b", tags = ["z"]}]},
+ {id = 2,
+  items = [{name = "c", tags = []}]}];
+> id items
+>    name tags
+> -- ---- ----
+>  1 a    x
+>         y
+>    b    z
+>  2 c
+>
+> val it : {id:int, items:{name:string, tags:string list} list} list
+
+(* Edge case: a row where every nested field is empty still occupies
+ * a single line of scalar values. *)
+[{id = 1, names = ([]: string list), scores = ([]: int list)},
+ {id = 2, names = ["x"],           scores = [10]}];
+> id names scores
+> -- ----- ------
+>  1
+>  2 x         10
+>
+> val it : {id:int, names:string list, scores:int list} list
+
+(* Edge case: empty outer collection still prints headers plus the
+ * dashed separator. *)
+([]: {a:int, b:string} list);
+> a b
+> - -
+>
+> val it : {a:int, b:string} list
 
 (*) End pretty.smli

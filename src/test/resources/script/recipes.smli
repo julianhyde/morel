@@ -13,15 +13,15 @@ val recipes = bag [
   {name = "Pizza Margherita",    gluten = "yes",  cal = 900, satFat = 11}];
 > cal gluten name                satFat
 > --- ------ ------------------- ------
-> 700 free   Grilled Salmon Bowl 4
-> 550 free   Quinoa Veg Stir-fry 2
-> 600 free   Lentil Curry        3
-> 850 free   Chicken Rice Plate  6
-> 950 free   Steak & Potatoes    12
-> 500 free   Avocado Tofu Salad  5
-> 650 free   Cheese Omelette     10
-> 800 yes    Pasta Carbonara     14
-> 900 yes    Pizza Margherita    11
+> 700 free   Grilled Salmon Bowl      4
+> 550 free   Quinoa Veg Stir-fry      2
+> 600 free   Lentil Curry             3
+> 850 free   Chicken Rice Plate       6
+> 950 free   Steak & Potatoes        12
+> 500 free   Avocado Tofu Salad       5
+> 650 free   Cheese Omelette         10
+> 800 yes    Pasta Carbonara         14
+> 900 yes    Pizza Margherita        11
 >
 > val recipes : {cal:int, gluten:string, name:string, satFat:int} bag
 
@@ -114,16 +114,14 @@ from p in subBags (from r in recipes where r.gluten = "free", 0)
   where c = 3 andalso cal elem [2000 .. 2500]
   order fat
   take 1;
-> val it =
->   [
->    {c=3,cal=2000,fat=11,
->     p=
->     [{cal=550,gluten="free",name="Quinoa Veg Stir-fry",satFat=2},
->      {cal=600,gluten="free",name="Lentil Curry",satFat=3},
->      {cal=850,gluten="free",name="Chicken Rice Plate",satFat=6}]}]
->   :
->     {c:int, cal:int, fat:int,
->      p:{cal:int, gluten:string, name:string, satFat:int} bag} list
+> c cal  fat p
+>            cal gluten name                satFat
+> - ---- --- --- ------ ------------------- ------
+> 3 2000  11 550 free   Quinoa Veg Stir-fry      2
+>            600 free   Lentil Curry             3
+>            850 free   Chicken Rice Plate       6
+>
+> val it : {c:int, cal:int, fat:int, p:{cal:int, gluten:string, name:string, satFat:int} bag} list
 
 (*) Same query, using `compute` (without `group`) for the per-subset
 (*) aggregates.
@@ -136,15 +134,13 @@ from p in subSets (from r in recipes where r.gluten = "free"),
   where c = 3 andalso cal elem [2000 .. 2500]
   order fat
   take 1;
-> val it =
->   [
->    {c=3,cal=2000,fat=11,
->     p=
->     [{cal=550,gluten="free",name="Quinoa Veg Stir-fry",satFat=2},
->      {cal=600,gluten="free",name="Lentil Curry",satFat=3},
->      {cal=850,gluten="free",name="Chicken Rice Plate",satFat=6}]}]
->   :
->     {c:int, cal:int, fat:int,
->      p:{cal:int, gluten:string, name:string, satFat:int} bag} list
+> c cal  fat p
+>            cal gluten name                satFat
+> - ---- --- --- ------ ------------------- ------
+> 3 2000  11 550 free   Quinoa Veg Stir-fry      2
+>            600 free   Lentil Curry             3
+>            850 free   Chicken Rice Plate       6
+>
+> val it : {c:int, cal:int, fat:int, p:{cal:int, gluten:string, name:string, satFat:int} bag} list
 
 (*) End recipes.smli

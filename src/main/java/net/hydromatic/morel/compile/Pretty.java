@@ -21,13 +21,9 @@ package net.hydromatic.morel.compile;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.parse.Parsers.appendId;
-import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
 import static net.hydromatic.morel.util.Static.endsWith;
 
-import com.google.common.collect.ImmutableList;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import net.hydromatic.morel.ast.Op;
@@ -47,7 +43,6 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Ord;
-import net.hydromatic.morel.util.PairList;
 
 /** Prints values. */
 class Pretty {
@@ -279,7 +274,6 @@ class Pretty {
    * unsuccessful, returns false, and the contents of {@code buf} are not
    * changed.
    */
-  @SuppressWarnings("unchecked")
   private boolean customPrint(
       StringBuilder buf,
       int indent,
@@ -287,87 +281,11 @@ class Pretty {
       int depth,
       Type type,
       Object o) {
-    if (output != Prop.Output.CLASSIC && canPrintTabular(type)) {
-      final RecordType recordType = (RecordType) type.elementType();
-      final List<List<String>> recordList = new ArrayList<>();
-      final List<String> valueList = new ArrayList<>();
-      for (List<?> record : (List<List<?>>) o) {
-        for (Object value : record) {
-          valueList.add(
-              value instanceof Float
-                  ? Codes.floatToString((Float) value)
-                  : value.toString());
-        }
-        recordList.add(ImmutableList.copyOf(valueList));
-        valueList.clear();
-      }
-
-      // Default widths are based on headers.
-      final List<Integer> widths = new ArrayList<>();
-      final List<String> headers =
-          ImmutableList.copyOf(recordType.argNameTypes.keySet());
-      headers.forEach(s -> widths.add(s.length()));
-
-      // Compute the widest value in each column.
-      for (List<String> values : recordList) {
-        for (int i = 0; i < values.size(); i++) {
-          String s = values.get(i);
-          if (widths.get(i) < s.length()) {
-            widths.set(i, s.length());
-          }
-        }
-      }
-
-      row(buf, headers, widths, ' ');
-      row(buf, Collections.nCopies(headers.size(), ""), widths, '-');
-      for (List<String> strings : recordList) {
-        row(buf, strings, widths, ' ');
-      }
-      buf.append(newline);
+    if (output != Prop.Output.CLASSIC && TabularPrinter.canPrint(type)) {
+      new TabularPrinter().print(buf, type, o);
       return true;
     }
     return false;
-  }
-
-  /** Can print a type in tabular format if it is a list of records. */
-  private static boolean canPrintTabular(Type type) {
-    return type.isCollection()
-        && type.elementType() instanceof RecordType
-        && canPrintTabular2((RecordType) type.elementType());
-  }
-
-  /** Can print a record in tabular format if its fields are all primitive. */
-  private static boolean canPrintTabular2(RecordType recordType) {
-    return PairList.viewOf(recordType.argNameTypes)
-        .allMatch((label, type) -> type instanceof PrimitiveType);
-  }
-
-  private void row(
-      StringBuilder buf, List<String> values, List<Integer> widths, char pad) {
-    final int i = buf.length();
-    forEach(
-        values,
-        widths,
-        (value, width) -> {
-          if (buf.length() > i) {
-            buf.append(' ');
-          }
-          final int j = buf.length() + width;
-          buf.append(value);
-          padTo(buf, j, pad);
-        });
-    int j = buf.length();
-    while (j > 0 && buf.charAt(j - 1) == ' ') {
-      --j;
-    }
-    buf.setLength(j);
-    buf.append(newline);
-  }
-
-  private void padTo(StringBuilder buf, int desiredLength, char pad) {
-    while (buf.length() < desiredLength) {
-      buf.append(pad);
-    }
   }
 
   private StringBuilder prettyPrimitive(
