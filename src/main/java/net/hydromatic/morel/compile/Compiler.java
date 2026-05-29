@@ -2186,10 +2186,12 @@ public class Compiler {
 
     private Pretty getPretty(Map<Prop, Object> map, BagPrinter bagPrinter) {
       int stringDepth = Prop.STRING_DEPTH.intValue(map);
-      // STRING_FOLD is optional. Convert "unset" (null) to 0, which the
+      // STRING_FOLD is optional and only takes effect for values >= 1.
+      // Treat unset (null) and any non-positive value as 0, which the
       // tabular printer treats as "folding disabled".
       Integer stringFoldObj = (Integer) Prop.STRING_FOLD.get(map);
-      int stringFold = stringFoldObj == null ? 0 : stringFoldObj;
+      int stringFold =
+          stringFoldObj != null && stringFoldObj > 0 ? stringFoldObj : 0;
       int lineWidth = Prop.LINE_WIDTH.intValue(map);
       Prop.Output output = Prop.OUTPUT.enumValue(map, Prop.Output.class);
       int printDepth = Prop.PRINT_DEPTH.intValue(map);

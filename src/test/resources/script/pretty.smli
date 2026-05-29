@@ -290,4 +290,18 @@ Sys.set ("stringFold", 5);
 Sys.unset "stringFold";
 > val it = () : unit
 
+(* A negative stringFold is treated as if unset: no folding. *)
+Sys.set ("stringFold", ~3);
+> val it = () : unit
+
+[{id=1, name="The Avocado Tofu Salad"}];
+> id name
+> -- ----------------------
+>  1 The Avocado Tofu Salad
+>
+> val it : {id:int, name:string} list
+
+Sys.unset "stringFold";
+> val it = () : unit
+
 (*) End pretty.smli
