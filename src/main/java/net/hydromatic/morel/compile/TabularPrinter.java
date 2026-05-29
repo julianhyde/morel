@@ -60,6 +60,16 @@ class TabularPrinter {
   private static final char NEWLINE = '\n';
 
   /**
+   * Maximum length of a string value before it is truncated with an ellipsis
+   * marker ({@code #}). A value of {@code -1} means no limit.
+   */
+  private final int stringDepth;
+
+  TabularPrinter(int stringDepth) {
+    this.stringDepth = stringDepth;
+  }
+
+  /**
    * Returns whether a type can be rendered as a table. A type is
    * tabular-printable if it is a collection (list or bag) of records or tuples
    * every field of which is itself a tabular-printable field type (see {@link
@@ -81,7 +91,8 @@ class TabularPrinter {
   void print(StringBuilder buf, Type type, Object value) {
     final RecordLikeType recordType = (RecordLikeType) type.elementType();
     final Section root = Section.forRecord("", recordType);
-    final RecordListCell rootCell = (RecordListCell) root.buildCell(value);
+    final RecordListCell rootCell =
+        (RecordListCell) root.buildCell(value, stringDepth);
     root.finalizeWidths();
 
     int headerLines = 0;
@@ -174,11 +185,23 @@ class TabularPrinter {
     }
   }
 
-  /** Returns the unquoted string form used for a scalar value in a table. */
-  private static String stringifyScalar(Object value) {
-    return value instanceof Float
-        ? Codes.floatToString((Float) value)
-        : value.toString();
+  /**
+   * Returns the unquoted string form used for a scalar value in a table. String
+   * values longer than {@code stringDepth} are truncated and marked with a
+   * {@code #} (matching classic mode's behavior).
+   */
+  private static String stringifyScalar(Object value, int stringDepth) {
+    if (value instanceof Float) {
+      return Codes.floatToString((Float) value);
+    }
+    if (value instanceof String && stringDepth >= 0) {
+      final String s = (String) value;
+      if (s.length() > stringDepth) {
+        return s.substring(0, stringDepth) + "#";
+      }
+      return s;
+    }
+    return value.toString();
   }
 
   /**
@@ -266,14 +289,15 @@ class TabularPrinter {
      * Builds a Cell tree from a value, updating leaf widths as a side effect.
      * For SCALAR_LIST and RECORD_LIST sections, {@code value} is the nested
      * collection (a {@link List}). For SCALAR sections, {@code value} is the
-     * primitive value.
+     * primitive value. String values are truncated according to {@code
+     * stringDepth} (see {@link #stringifyScalar}).
      */
     @SuppressWarnings("unchecked")
-    Cell buildCell(Object value) {
+    Cell buildCell(Object value, int stringDepth) {
       switch (kind) {
         case SCALAR:
           {
-            final String s = stringifyScalar(value);
+            final String s = stringifyScalar(value, stringDepth);
             if (s.length() > width) {
               width = s.length();
             }
@@ -283,7 +307,7 @@ class TabularPrinter {
           {
             final List<String> items = new ArrayList<>();
             for (Object item : (List<?>) value) {
-              final String s = stringifyScalar(item);
+              final String s = stringifyScalar(item, stringDepth);
               if (s.length() > width) {
                 width = s.length();
               }
@@ -298,7 +322,8 @@ class TabularPrinter {
             for (List<?> record : (List<List<?>>) value) {
               final List<Cell> rowCells = new ArrayList<>();
               for (int i = 0; i < children.size(); i++) {
-                rowCells.add(children.get(i).buildCell(record.get(i)));
+                rowCells.add(
+                    children.get(i).buildCell(record.get(i), stringDepth));
               }
               records.add(ImmutableList.copyOf(rowCells));
             }

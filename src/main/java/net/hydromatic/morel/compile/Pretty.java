@@ -281,11 +281,17 @@ class Pretty {
       int depth,
       Type type,
       Object o) {
-    if (output != Prop.Output.CLASSIC && TabularPrinter.canPrint(type)) {
-      new TabularPrinter().print(buf, type, o);
-      return true;
+    if (output == Prop.Output.CLASSIC || !TabularPrinter.canPrint(type)) {
+      return false;
     }
-    return false;
+    // Skip tabular when classic would render the outer collection's
+    // elements (at depth + 1) as `#`. Fall through to classic so the same
+    // `#` appears there.
+    if (printDepth >= 0 && depth + 1 > printDepth) {
+      return false;
+    }
+    new TabularPrinter(stringDepth).print(buf, type, o);
+    return true;
   }
 
   private StringBuilder prettyPrimitive(

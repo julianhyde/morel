@@ -206,4 +206,47 @@ Sys.set ("output", "tabular");
 >
 > val it : {a:int, b:string} list
 
+(* -------------------------------------------------------------------
+ * Tabular mode observes printDepth and stringDepth.
+ *)
+
+(* String values longer than stringDepth are truncated with `#`,
+ * including in width computation. *)
+Sys.set ("stringDepth", 4);
+> val it = () : unit
+
+[{id=1, name="alpha"}, {id=2, name="beta"}, {id=3, name="gammaray"}];
+> id name
+> -- -----
+>  1 alph#
+>  2 beta
+>  3 gamm#
+>
+> val it : {id:int, name:string} list
+
+Sys.unset "stringDepth";
+> val it = () : unit
+
+(* printDepth=0 means classic would print the list's elements as `#`,
+ * so tabular declines and lets classic render the `#`. *)
+Sys.set ("printDepth", 0);
+> val it = # : unit
+
+[{id=1, name="alpha"}];
+> val it = # : {id:int, name:string} list
+
+(* printDepth=1 leaves elements visible, so tabular renders. *)
+Sys.set ("printDepth", 1);
+> val it = () : unit
+
+[{id=1, name="alpha"}];
+> id name
+> -- -----
+>  1 alpha
+>
+> val it : {id:int, name:string} list
+
+Sys.unset "printDepth";
+> val it = () : unit
+
 (*) End pretty.smli
