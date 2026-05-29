@@ -1,0 +1,150 @@
+Sys.set ("output", "tabular");
+> val it = () : unit
+
+val recipes = bag [
+  {name = "Grilled Salmon Bowl", gluten = "free", cal = 700, satFat = 4},
+  {name = "Quinoa Veg Stir-fry", gluten = "free", cal = 550, satFat = 2},
+  {name = "Lentil Curry",        gluten = "free", cal = 600, satFat = 3},
+  {name = "Chicken Rice Plate",  gluten = "free", cal = 850, satFat = 6},
+  {name = "Steak & Potatoes",    gluten = "free", cal = 950, satFat = 12},
+  {name = "Avocado Tofu Salad",  gluten = "free", cal = 500, satFat = 5},
+  {name = "Cheese Omelette",     gluten = "free", cal = 650, satFat = 10},
+  {name = "Pasta Carbonara",     gluten = "yes",  cal = 800, satFat = 14},
+  {name = "Pizza Margherita",    gluten = "yes",  cal = 900, satFat = 11}];
+> cal gluten name                satFat
+> --- ------ ------------------- ------
+> 700 free   Grilled Salmon Bowl 4
+> 550 free   Quinoa Veg Stir-fry 2
+> 600 free   Lentil Curry        3
+> 850 free   Chicken Rice Plate  6
+> 950 free   Steak & Potatoes    12
+> 500 free   Avocado Tofu Salad  5
+> 650 free   Cheese Omelette     10
+> 800 yes    Pasta Carbonara     14
+> 900 yes    Pizza Margherita    11
+>
+> val recipes : {cal:int, gluten:string, name:string, satFat:int} bag
+
+(*) Power set: all sub-bags of a bag.  Bags have no natural cons, so
+(*) the recursion goes through a list intermediate.
+fun subSets b =
+  let
+    fun pow [] = [[]]
+      | pow (x :: xs) =
+          let
+            val rest = pow xs
+          in
+            rest @ List.map (fn s => x :: s) rest
+          end
+  in
+    Bag.map Bag.fromList (Bag.fromList (pow (Bag.toList b)))
+  end;
+> val subSets = fn : 'a bag -> 'a bag bag
+
+(*) Test subSets
+subSets Bag.nil;
+> val it = [[]] : 'a bag bag
+subSets (bag [1, 2]);
+> val it = [[],[2],[1],[1,2]] : int bag bag
+
+(*) `subBags (b, k)` returns all sub-bags of b where each element occurs at most k+1 times.
+fun subBags (b, k) =
+  let
+    fun uniq [] = []
+      | uniq (x :: xs) =
+          if x elem xs
+          then uniq xs
+          else x :: uniq xs
+    fun copies (0, _) = []
+      | copies (n, x) = x :: copies (n - 1, x)
+    fun multiplicities [] = [[]]
+      | multiplicities (x :: xs) =
+          let
+            val rest = multiplicities xs
+            fun expand r =
+              List.tabulate (k + 1, fn i => from v in copies (i + 1, x) union r)
+          in
+            List.concat (List.map expand rest)
+          end
+    fun pow [] = [[]]
+      | pow (x :: xs) =
+          let
+            val rest = pow xs
+            val withX = from s in rest yield x :: s
+          in
+            from s in rest union withX
+          end
+    val ds = uniq (Bag.toList b)
+  in
+    Bag.map Bag.fromList
+      (Bag.fromList (List.concat (List.map multiplicities (pow ds))))
+  end;
+> val subBags = fn : 'a bag * int -> 'a bag bag
+
+(*) Test subBags
+subBags (Bag.nil, 2);
+> val it = [[]] : 'a bag bag
+subBags (bag [1, 2], 0);
+> val it = [[],[2],[1],[1,2]] : int bag bag
+subBags (bag [1, 2], 1);
+> val it = [[],[2],[2,2],[1],[1,1],[1,2],[1,1,2],[1,2,2],[1,1,2,2]] : int bag bag
+
+(*) Pick three gluten-free recipes whose total calories fall in
+(*) [2000, 2500]; order by smallest total saturated fat, take one.
+from p in subSets (from r in recipes where r.gluten = "free")
+  where Bag.length p = 3
+    andalso Relational.sum (from r in p yield r.cal) >= 2000
+    andalso Relational.sum (from r in p yield r.cal) <= 2500
+  order Relational.sum (from r in p yield r.satFat)
+  take 1;
+> val it =
+>   [
+>    [{cal=550,gluten="free",name="Quinoa Veg Stir-fry",satFat=2},
+>     {cal=600,gluten="free",name="Lentil Curry",satFat=3},
+>     {cal=850,gluten="free",name="Chicken Rice Plate",satFat=6}]]
+>   : {cal:int, gluten:string, name:string, satFat:int} bag list
+
+(*) Same query, computing the per-subset aggregates once via yield
+(*) rather than re-running the inner sums in every clause.
+from p in subBags (from r in recipes where r.gluten = "free", 0)
+  yield {p,
+         c = Bag.length p,
+         cal = Relational.sum (from r in p yield r.cal),
+         fat = Relational.sum (from r in p yield r.satFat)}
+  where c = 3 andalso cal elem [2000 .. 2500]
+  order fat
+  take 1;
+> val it =
+>   [
+>    {c=3,cal=2000,fat=11,
+>     p=
+>     [{cal=550,gluten="free",name="Quinoa Veg Stir-fry",satFat=2},
+>      {cal=600,gluten="free",name="Lentil Curry",satFat=3},
+>      {cal=850,gluten="free",name="Chicken Rice Plate",satFat=6}]}]
+>   :
+>     {c:int, cal:int, fat:int,
+>      p:{cal:int, gluten:string, name:string, satFat:int} bag} list
+
+(*) Same query, using `compute` (without `group`) for the per-subset
+(*) aggregates.
+from p in subSets (from r in recipes where r.gluten = "free"),
+    {c, cal, fat} =
+      (from r in p
+         compute {c = count over (),
+             cal = sum over r.cal,
+             fat = sum over r.satFat})
+  where c = 3 andalso cal elem [2000 .. 2500]
+  order fat
+  take 1;
+> val it =
+>   [
+>    {c=3,cal=2000,fat=11,
+>     p=
+>     [{cal=550,gluten="free",name="Quinoa Veg Stir-fry",satFat=2},
+>      {cal=600,gluten="free",name="Lentil Curry",satFat=3},
+>      {cal=850,gluten="free",name="Chicken Rice Plate",satFat=6}]}]
+>   :
+>     {c:int, cal:int, fat:int,
+>      p:{cal:int, gluten:string, name:string, satFat:int} bag} list
+
+(*) End recipes.smli
