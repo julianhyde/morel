@@ -287,6 +287,30 @@ Sys.set ("stringFold", 5);
 >
 > val it : {id:int, name:string} list
 
+(* stringFold combined with a nested record list: each row's height is
+ * max(folded-string lines, nested record count). The folded cell and
+ * the nested cell advance independently within one logical row. *)
+Sys.set ("stringFold", 10);
+> val it = () : unit
+
+[{id=1,
+  description="The quick brown fox jumps over the lazy dog",
+  items=[{name="a"}, {name="b"}, {name="c"}]},
+ {id=2,
+  description="Short text",
+  items=[{name="d"}]}];
+> description id items
+>                name
+> ----------- -- -----
+> The quick    1 a
+> brown fox      b
+> jumps over     c
+> the lazy
+> dog
+> Short text   2 d
+>
+> val it : {description:string, id:int, items:{name:string} list} list
+
 Sys.unset "stringFold";
 > val it = () : unit
 
