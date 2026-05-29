@@ -268,18 +268,18 @@ public enum Prop {
 
   /**
    * Integer property "stringFold" controls how tabular mode renders long
-   * strings: when set to a positive value, a string longer than that is folded
-   * across multiple lines, breaking at word boundaries when possible.
-   *
-   * <p>A value of 0 (the default) or a negative value disables folding.
+   * strings. When set, strings longer than this value are folded across
+   * multiple lines, breaking at word boundaries when possible. Legal values are
+   * 1 or greater. If not set (the default), folding is disabled.
    */
   STRING_FOLD(
       "stringFold",
       Integer.class,
-      true,
-      0,
+      false,
+      null,
       "In tabular mode, the column width at which long strings are folded "
-          + "across multiple lines. 0 disables folding."),
+          + "across multiple lines. If not set, folding is disabled. "
+          + "Legal values are 1 or greater."),
 
   /**
    * String property "timeZone" overrides the local timezone used by {@code
