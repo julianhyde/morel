@@ -1694,6 +1694,8 @@ Sys.set ("output", "tabular");
 > val it = () : unit
 Sys.set ("lineWidth", 65);
 > val it = () : unit
+Sys.set ("printLength", 20);
+> val it = () : unit
 
 from e in scott.emps
   where e.deptno = 10
@@ -2138,7 +2140,8 @@ from d in scott.depts
 > SALES      WARD
 > SALES      MARTIN
 > SALES      BLAKE
-> ...
+> SALES      TURNER
+> SALES      JAMES
 >
 > val it : {dname:string, ename:string} bag
 
@@ -2161,7 +2164,8 @@ from e in scott.emps
 > MARTIN SALESMAN  1250
 > WARD   SALESMAN  1250
 > ADAMS  CLERK     1100
-> ...
+> JAMES  CLERK      950
+> SMITH  CLERK      800
 >
 > val it : {ename:string, job:string, sal:real} list
 
@@ -2188,7 +2192,8 @@ from e in scott.emps
 > KING   PRESIDENT 5000
 > WARD   SALESMAN  1250
 > MARTIN SALESMAN  1250
-> ...
+> TURNER SALESMAN  1500
+> ALLEN  SALESMAN  1600
 >
 > val it : {ename:string, job:string, sal:real} list
 
@@ -2297,7 +2302,8 @@ from e in scott.emps
 >        18000 TURNER salesman
 >        13200 ADAMS  clerk
 >        11400 JAMES  clerk
-> ...
+>        36000 FORD   analyst
+>        15600 MILLER clerk
 >
 > val it : {annualSalary:real, name:string, position:string} bag
 
