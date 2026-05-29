@@ -59,19 +59,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 class TabularPrinter {
   private static final char NEWLINE = '\n';
 
-  /**
-   * Maximum length of a string value before it is truncated with an ellipsis
-   * marker ({@code #}). A value of {@code -1} means no limit.
-   */
+  private final int printDepth;
   private final int stringDepth;
-
-  /**
-   * Column width at which a long string value is folded across multiple lines.
-   * A value of {@code 0} or negative disables folding.
-   */
   private final int stringFold;
 
-  TabularPrinter(int stringDepth, int stringFold) {
+  TabularPrinter(int printDepth, int stringDepth, int stringFold) {
+    this.printDepth = printDepth;
     this.stringDepth = stringDepth;
     this.stringFold = stringFold;
   }
@@ -94,8 +87,17 @@ class TabularPrinter {
     return canPrintRecord((RecordLikeType) elementType);
   }
 
-  /** Renders a tabular value into {@code buf}. */
-  void print(StringBuilder buf, Type type, Object value) {
+  /**
+   * Renders a tabular value into {@code buf}. Returns {@code true} on success.
+   * Returns {@code false} (without writing to {@code buf}) when {@code
+   * printDepth} would force the outer collection's elements to be rendered as
+   * {@code #} — in that case the caller should fall back to classic so the same
+   * {@code #} appears there.
+   */
+  boolean print(StringBuilder buf, int depth, Type type, Object value) {
+    if (printDepth >= 0 && depth + 1 > printDepth) {
+      return false;
+    }
     final RecordLikeType recordType = (RecordLikeType) type.elementType();
     final Section root = Section.forRecord("", recordType);
     final RecordListCell rootCell =
@@ -112,6 +114,7 @@ class TabularPrinter {
     emitSeparatorRow(buf, root.children);
     emitDataRows(buf, root, rootCell);
     buf.append(NEWLINE);
+    return true;
   }
 
   private static boolean canPrintRecord(RecordLikeType recordType) {
