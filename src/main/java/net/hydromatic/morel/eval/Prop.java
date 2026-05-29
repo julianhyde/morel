@@ -267,6 +267,21 @@ public enum Prop {
       "When printing, the length of strings at which ellipsis begins."),
 
   /**
+   * Integer property "stringFold" controls how tabular mode renders long
+   * strings: when set to a positive value, a string longer than that is folded
+   * across multiple lines, breaking at word boundaries when possible.
+   *
+   * <p>A value of 0 (the default) or a negative value disables folding.
+   */
+  STRING_FOLD(
+      "stringFold",
+      Integer.class,
+      true,
+      0,
+      "In tabular mode, the column width at which long strings are folded "
+          + "across multiple lines. 0 disables folding."),
+
+  /**
    * String property "timeZone" overrides the local timezone used by {@code
    * Date.fromTimeLocal()}, {@code Date.localOffset()}, and {@code Date.date}
    * when {@code offset=NONE}. Value is a timezone ID (e.g. {@code "UTC"} or

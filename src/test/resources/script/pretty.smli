@@ -249,4 +249,45 @@ Sys.set ("printDepth", 1);
 Sys.unset "printDepth";
 > val it = () : unit
 
+(* -------------------------------------------------------------------
+ * Tabular mode: stringFold folds long strings to multiple lines,
+ * preferring word boundaries when possible.
+ *)
+
+Sys.set ("stringFold", 10);
+> val it = () : unit
+
+(* Word-boundary folding: spaces are the preferred break points,
+ * with the space itself consumed in the break. *)
+[{id=1, name="The Avocado Tofu Salad"},
+ {id=2, name="Cheese Omelette"},
+ {id=3, name="A"}];
+> id name
+> -- ----------
+>  1 The
+>    Avocado
+>    Tofu Salad
+>  2 Cheese
+>    Omelette
+>  3 A
+>
+> val it : {id:int, name:string} list
+
+(* Hard-break: no whitespace available, split at the fold width. *)
+Sys.set ("stringFold", 5);
+> val it = () : unit
+
+[{id=1, name="verylongwordhere"}];
+> id name
+> -- -----
+>  1 veryl
+>    ongwo
+>    rdher
+>    e
+>
+> val it : {id:int, name:string} list
+
+Sys.unset "stringFold";
+> val it = () : unit
+
 (*) End pretty.smli

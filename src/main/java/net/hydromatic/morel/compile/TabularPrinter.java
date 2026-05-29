@@ -65,8 +65,15 @@ class TabularPrinter {
    */
   private final int stringDepth;
 
-  TabularPrinter(int stringDepth) {
+  /**
+   * Column width at which a long string value is folded across multiple lines.
+   * A value of {@code 0} or negative disables folding.
+   */
+  private final int stringFold;
+
+  TabularPrinter(int stringDepth, int stringFold) {
     this.stringDepth = stringDepth;
+    this.stringFold = stringFold;
   }
 
   /**
@@ -92,7 +99,7 @@ class TabularPrinter {
     final RecordLikeType recordType = (RecordLikeType) type.elementType();
     final Section root = Section.forRecord("", recordType);
     final RecordListCell rootCell =
-        (RecordListCell) root.buildCell(value, stringDepth);
+        (RecordListCell) root.buildCell(value, stringDepth, stringFold);
     root.finalizeWidths();
 
     int headerLines = 0;
@@ -205,6 +212,49 @@ class TabularPrinter {
   }
 
   /**
+   * Folds {@code s} into lines no longer than {@code width}, breaking at
+   * whitespace where possible and otherwise hard-breaking at the limit. If
+   * folding is disabled or {@code s} already fits, returns a singleton list.
+   */
+  private static List<String> foldString(String s, int width) {
+    if (width <= 0 || s.length() <= width) {
+      return ImmutableList.of(s);
+    }
+    final ImmutableList.Builder<String> result = ImmutableList.builder();
+    int pos = 0;
+    while (s.length() - pos > width) {
+      final int end = pos + width;
+      // Prefer to break at the last space at or before `end`.
+      final int breakAt = s.lastIndexOf(' ', end);
+      if (breakAt > pos) {
+        result.add(stripTrailing(s.substring(pos, breakAt)));
+        pos = breakAt + 1;
+        // Skip any additional consecutive spaces at the start of the next
+        // line so they don't appear as leading whitespace.
+        while (pos < s.length() && s.charAt(pos) == ' ') {
+          pos++;
+        }
+      } else {
+        // No suitable break point; hard-break at width.
+        result.add(s.substring(pos, end));
+        pos = end;
+      }
+    }
+    if (pos < s.length()) {
+      result.add(s.substring(pos));
+    }
+    return result.build();
+  }
+
+  private static String stripTrailing(String s) {
+    int end = s.length();
+    while (end > 0 && s.charAt(end - 1) == ' ') {
+      end--;
+    }
+    return end == s.length() ? s : s.substring(0, end);
+  }
+
+  /**
    * Appends a line to {@code buf}, stripping trailing spaces, and adds a
    * newline.
    */
@@ -289,29 +339,35 @@ class TabularPrinter {
      * Builds a Cell tree from a value, updating leaf widths as a side effect.
      * For SCALAR_LIST and RECORD_LIST sections, {@code value} is the nested
      * collection (a {@link List}). For SCALAR sections, {@code value} is the
-     * primitive value. String values are truncated according to {@code
-     * stringDepth} (see {@link #stringifyScalar}).
+     * primitive value. String values are truncated by {@code stringDepth} (see
+     * {@link #stringifyScalar}) and folded by {@code stringFold} (see {@link
+     * #foldString}).
      */
     @SuppressWarnings("unchecked")
-    Cell buildCell(Object value, int stringDepth) {
+    Cell buildCell(Object value, int stringDepth, int stringFold) {
       switch (kind) {
         case SCALAR:
           {
             final String s = stringifyScalar(value, stringDepth);
-            if (s.length() > width) {
-              width = s.length();
+            final List<String> lines = foldString(s, stringFold);
+            for (String line : lines) {
+              if (line.length() > width) {
+                width = line.length();
+              }
             }
-            return new ScalarCell(s);
+            return new ScalarCell(lines);
           }
         case SCALAR_LIST:
           {
             final List<String> items = new ArrayList<>();
             for (Object item : (List<?>) value) {
               final String s = stringifyScalar(item, stringDepth);
-              if (s.length() > width) {
-                width = s.length();
+              for (String line : foldString(s, stringFold)) {
+                if (line.length() > width) {
+                  width = line.length();
+                }
+                items.add(line);
               }
-              items.add(s);
             }
             return new ScalarListCell(ImmutableList.copyOf(items));
           }
@@ -323,7 +379,9 @@ class TabularPrinter {
               final List<Cell> rowCells = new ArrayList<>();
               for (int i = 0; i < children.size(); i++) {
                 rowCells.add(
-                    children.get(i).buildCell(record.get(i), stringDepth));
+                    children
+                        .get(i)
+                        .buildCell(record.get(i), stringDepth, stringFold));
               }
               records.add(ImmutableList.copyOf(rowCells));
             }
@@ -437,16 +495,20 @@ class TabularPrinter {
     abstract Iterator<String> iter(Section section);
   }
 
+  /**
+   * A scalar cell. {@code lines} normally has one element, but folding
+   * (controlled by {@code stringFold}) may produce several.
+   */
   private static class ScalarCell extends Cell {
-    final String s;
+    final List<String> lines;
 
-    ScalarCell(String s) {
-      this.s = s;
+    ScalarCell(List<String> lines) {
+      this.lines = lines;
     }
 
     @Override
     Iterator<String> iter(Section section) {
-      return new ScalarIter(section, s);
+      return new ScalarListIter(section, lines);
     }
   }
 
@@ -476,33 +538,6 @@ class TabularPrinter {
     @Override
     Iterator<String> iter(Section section) {
       return new RecordListIter(section, records);
-    }
-  }
-
-  private static class ScalarIter implements Iterator<String> {
-    private final Section section;
-    private final String s;
-    private boolean emitted;
-
-    ScalarIter(Section section, String s) {
-      this.section = section;
-      this.s = s;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return !emitted;
-    }
-
-    @Override
-    public String next() {
-      if (emitted) {
-        throw new NoSuchElementException();
-      }
-      emitted = true;
-      final StringBuilder b = new StringBuilder(section.width);
-      section.appendPadded(b, s);
-      return b.toString();
     }
   }
 

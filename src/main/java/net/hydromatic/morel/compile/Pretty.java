@@ -52,6 +52,7 @@ class Pretty {
   private final int printLength;
   private final int printDepth;
   private final int stringDepth;
+  private final int stringFold;
   private final char newline;
   private final BagPrinter bagPrinter;
 
@@ -62,6 +63,7 @@ class Pretty {
       int printLength,
       int printDepth,
       int stringDepth,
+      int stringFold,
       BagPrinter bagPrinter) {
     this.typeSystem = requireNonNull(typeSystem);
     this.lineWidth = lineWidth;
@@ -69,6 +71,7 @@ class Pretty {
     this.printLength = printLength;
     this.printDepth = printDepth;
     this.stringDepth = stringDepth;
+    this.stringFold = stringFold;
     this.newline = '\n';
     this.bagPrinter = requireNonNull(bagPrinter);
   }
@@ -290,7 +293,7 @@ class Pretty {
     if (printDepth >= 0 && depth + 1 > printDepth) {
       return false;
     }
-    new TabularPrinter(stringDepth).print(buf, type, o);
+    new TabularPrinter(stringDepth, stringFold).print(buf, type, o);
     return true;
   }
 

@@ -2186,6 +2186,7 @@ public class Compiler {
 
     private Pretty getPretty(Map<Prop, Object> map, BagPrinter bagPrinter) {
       int stringDepth = Prop.STRING_DEPTH.intValue(map);
+      int stringFold = Prop.STRING_FOLD.intValue(map);
       int lineWidth = Prop.LINE_WIDTH.intValue(map);
       Prop.Output output = Prop.OUTPUT.enumValue(map, Prop.Output.class);
       int printDepth = Prop.PRINT_DEPTH.intValue(map);
@@ -2197,6 +2198,7 @@ public class Compiler {
           printLength,
           printDepth,
           stringDepth,
+          stringFold,
           bagPrinter);
     }
   }
