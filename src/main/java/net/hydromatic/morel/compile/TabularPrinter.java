@@ -59,12 +59,17 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 class TabularPrinter {
   private static final char NEWLINE = '\n';
 
+  private static final String ELLIPSIS = "...";
+
   private final int printDepth;
+  private final int printLength;
   private final int stringDepth;
   private final int stringFold;
 
-  TabularPrinter(int printDepth, int stringDepth, int stringFold) {
+  TabularPrinter(
+      int printDepth, int printLength, int stringDepth, int stringFold) {
     this.printDepth = printDepth;
+    this.printLength = printLength;
     this.stringDepth = stringDepth;
     this.stringFold = stringFold;
   }
@@ -101,7 +106,8 @@ class TabularPrinter {
     final RecordLikeType recordType = (RecordLikeType) type.elementType();
     final Section root = Section.forRecord("", recordType);
     final RecordListCell rootCell =
-        (RecordListCell) root.buildCell(value, stringDepth, stringFold);
+        (RecordListCell)
+            root.buildCell(value, printLength, stringDepth, stringFold);
     root.finalizeWidths();
 
     int headerLines = 0;
@@ -179,7 +185,9 @@ class TabularPrinter {
    * Emits data rows. The root section is a RECORD_LIST whose children are the
    * top-level fields; for each top-level record we drive a {@link RowIter}
    * until exhaustion, guaranteeing at least one emitted line per top-level row
-   * (even when every nested collection is empty).
+   * (even when every nested collection is empty). If the root cell was
+   * truncated to {@code printLength} rows, a final {@link #ELLIPSIS} line is
+   * emitted.
    */
   private void emitDataRows(
       StringBuilder buf, Section root, RecordListCell rootCell) {
@@ -192,6 +200,9 @@ class TabularPrinter {
       do {
         appendLine(buf, row.next());
       } while (row.hasNext());
+    }
+    if (rootCell.truncated) {
+      appendLine(buf, ELLIPSIS);
     }
   }
 
@@ -344,10 +355,12 @@ class TabularPrinter {
      * collection (a {@link List}). For SCALAR sections, {@code value} is the
      * primitive value. String values are truncated by {@code stringDepth} (see
      * {@link #stringifyScalar}) and folded by {@code stringFold} (see {@link
-     * #foldString}).
+     * #foldString}). Collections longer than {@code printLength} are truncated
+     * and marked with {@link #ELLIPSIS}.
      */
     @SuppressWarnings("unchecked")
-    Cell buildCell(Object value, int stringDepth, int stringFold) {
+    Cell buildCell(
+        Object value, int printLength, int stringDepth, int stringFold) {
       switch (kind) {
         case SCALAR:
           {
@@ -363,7 +376,15 @@ class TabularPrinter {
         case SCALAR_LIST:
           {
             final List<String> items = new ArrayList<>();
+            int count = 0;
             for (Object item : (List<?>) value) {
+              if (printLength >= 0 && count >= printLength) {
+                items.add(ELLIPSIS);
+                if (ELLIPSIS.length() > width) {
+                  width = ELLIPSIS.length();
+                }
+                break;
+              }
               final String s = stringifyScalar(item, stringDepth);
               for (String line : foldString(s, stringFold)) {
                 if (line.length() > width) {
@@ -371,6 +392,7 @@ class TabularPrinter {
                 }
                 items.add(line);
               }
+              count++;
             }
             return new ScalarListCell(ImmutableList.copyOf(items));
           }
@@ -378,17 +400,31 @@ class TabularPrinter {
         default:
           {
             final List<List<Cell>> records = new ArrayList<>();
+            boolean truncated = false;
+            int count = 0;
             for (List<?> record : (List<List<?>>) value) {
+              if (printLength >= 0 && count >= printLength) {
+                truncated = true;
+                break;
+              }
               final List<Cell> rowCells = new ArrayList<>();
               for (int i = 0; i < children.size(); i++) {
                 rowCells.add(
                     children
                         .get(i)
-                        .buildCell(record.get(i), stringDepth, stringFold));
+                        .buildCell(
+                            record.get(i),
+                            printLength,
+                            stringDepth,
+                            stringFold));
               }
               records.add(ImmutableList.copyOf(rowCells));
+              count++;
             }
-            return new RecordListCell(ImmutableList.copyOf(records));
+            if (truncated && ELLIPSIS.length() > width) {
+              width = ELLIPSIS.length();
+            }
+            return new RecordListCell(ImmutableList.copyOf(records), truncated);
           }
       }
     }
@@ -534,13 +570,17 @@ class TabularPrinter {
      */
     final List<List<Cell>> records;
 
-    RecordListCell(List<List<Cell>> records) {
+    /** True if the records were truncated by {@code printLength}. */
+    final boolean truncated;
+
+    RecordListCell(List<List<Cell>> records, boolean truncated) {
       this.records = records;
+      this.truncated = truncated;
     }
 
     @Override
     Iterator<String> iter(Section section) {
-      return new RecordListIter(section, records);
+      return new RecordListIter(section, records, truncated);
     }
   }
 
@@ -621,12 +661,16 @@ class TabularPrinter {
   private static class RecordListIter extends AbstractIterator<String> {
     private final Section section;
     private final List<List<Cell>> records;
+    private final boolean truncated;
     private int recordIdx;
     private @Nullable Iterator<String> currentRow;
+    private boolean truncationEmitted;
 
-    RecordListIter(Section section, List<List<Cell>> records) {
+    RecordListIter(
+        Section section, List<List<Cell>> records, boolean truncated) {
       this.section = section;
       this.records = records;
+      this.truncated = truncated;
     }
 
     @Override
@@ -634,6 +678,15 @@ class TabularPrinter {
       while (true) {
         if (currentRow == null) {
           if (recordIdx >= records.size()) {
+            if (truncated && !truncationEmitted) {
+              truncationEmitted = true;
+              // Emit ellipsis padded to the cell's width so column
+              // alignment is preserved.
+              final StringBuilder b = new StringBuilder(section.width);
+              b.append(ELLIPSIS);
+              padSpaces(b, section.width - b.length());
+              return b.toString();
+            }
             return endOfData();
           }
           final List<Cell> rec = records.get(recordIdx++);

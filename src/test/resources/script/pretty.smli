@@ -250,6 +250,53 @@ Sys.unset "printDepth";
 > val it = () : unit
 
 (* -------------------------------------------------------------------
+ * Tabular mode observes printLength.
+ *)
+
+Sys.set ("printLength", 3);
+> val it = () : unit
+
+(* Top-level table: rows beyond printLength are replaced with `...`. *)
+[{id=1, name="a"}, {id=2, name="b"}, {id=3, name="c"},
+ {id=4, name="d"}, {id=5, name="e"}];
+> id name
+> -- ----
+>  1 a
+>  2 b
+>  3 c
+> ...
+>
+> val it : {id:int, name:string} list
+
+(* Nested scalar-list: items beyond printLength are replaced with `...`
+ * inside the cell column. *)
+[{id=1, scores=[10, 20, 30, 40, 50]}];
+> id scores
+> -- ------
+>  1     10
+>        20
+>        30
+>       ...
+>
+> val it : {id:int, scores:int list} list
+
+(* Nested record-list: records beyond printLength are replaced with
+ * `...` inside the cell. *)
+[{id=1, items=[{name="a"}, {name="b"}, {name="c"}, {name="d"}]}];
+> id items
+>    name
+> -- -----
+>  1 a
+>    b
+>    c
+>    ...
+>
+> val it : {id:int, items:{name:string} list} list
+
+Sys.unset "printLength";
+> val it = () : unit
+
+(* -------------------------------------------------------------------
  * Tabular mode: stringFold folds long strings to multiple lines,
  * preferring word boundaries when possible.
  *)

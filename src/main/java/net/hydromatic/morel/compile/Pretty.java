@@ -287,7 +287,7 @@ class Pretty {
     if (output == Prop.Output.CLASSIC || !TabularPrinter.canPrint(type)) {
       return false;
     }
-    return new TabularPrinter(printDepth, stringDepth, stringFold)
+    return new TabularPrinter(printDepth, printLength, stringDepth, stringFold)
         .print(buf, depth, type, o);
   }
 
