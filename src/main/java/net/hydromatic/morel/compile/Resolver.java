@@ -684,6 +684,9 @@ public class Resolver {
     final Core.Exp coreFn;
     if (apply.fn.op == Op.RECORD_SELECTOR) {
       final Ast.RecordSelector recordSelector = (Ast.RecordSelector) apply.fn;
+      if (recordSelector.safe) {
+        return toCoreSafeNav(apply, recordSelector, coreArg, type);
+      }
       RecordLikeType recordType = (RecordLikeType) coreArg.type;
       if (coreArg.type.isProgressive()) {
         Object o = valueOf(env, coreArg);
@@ -709,6 +712,79 @@ public class Resolver {
       coreFn = fnToCore(apply.fn, typeMap.getType(apply.arg));
     }
     return core.apply(apply.pos, type, coreFn, coreArg);
+  }
+
+  /**
+   * Lowers safe navigation {@code e?.f} to {@code F.map #f e}, where {@code F}
+   * is the receiver's functor (option or list), or to {@code F.join (F.map #f
+   * e)} when the field is itself {@code F}-wrapped (flatten).
+   */
+  private Core.Apply toCoreSafeNav(
+      Ast.Apply apply,
+      Ast.RecordSelector recordSelector,
+      Core.Exp coreArg,
+      Type type) {
+    final TypeSystem ts = typeMap.typeSystem;
+    final Type receiverType = coreArg.type;
+    final Type elementType;
+    final BuiltIn mapBuiltIn;
+    final BuiltIn joinBuiltIn;
+    if (receiverType instanceof ListType) {
+      elementType = receiverType.elementType();
+      mapBuiltIn = BuiltIn.LIST_MAP;
+      joinBuiltIn = BuiltIn.LIST_CONCAT;
+    } else if (receiverType.op() == Op.DATA_TYPE
+        && ((DataType) receiverType).name().equals("option")) {
+      elementType = ((DataType) receiverType).arguments.get(0);
+      mapBuiltIn = BuiltIn.OPTION_MAP;
+      joinBuiltIn = BuiltIn.OPTION_JOIN;
+    } else {
+      throw new AssertionError(
+          "safe navigation on non-functor type " + receiverType);
+    }
+
+    final Core.RecordSelector selector =
+        core.recordSelector(
+            ts, (RecordLikeType) elementType, recordSelector.name);
+    final Type fieldType = ((FnType) selector.type).resultType;
+    // "F.map #f" has type "(F element) -> (F fieldType)";
+    // "F.map #f e" has type "F fieldType".
+    final Type mappedType = applyFunctor(ts, receiverType, fieldType);
+    final Core.Exp mapped =
+        core.apply(
+            apply.pos,
+            mappedType,
+            core.apply(
+                apply.pos,
+                ts.fnType(receiverType, mappedType),
+                core.functionLiteral(ts, mapBuiltIn),
+                selector),
+            coreArg);
+    final boolean flatten =
+        receiverType instanceof ListType
+            ? fieldType instanceof ListType
+            : fieldType.op() == Op.DATA_TYPE
+                && ((DataType) fieldType).name().equals("option");
+    if (!flatten) {
+      // No flatten: result is "F fieldType", the deduced type.
+      return (Core.Apply) mapped;
+    }
+    // Flatten: the field is itself "F"-wrapped, so "F.map #f e" has type
+    // "F (F ρ)"; collapse it to "F ρ" with "F.join".
+    return core.apply(
+        apply.pos, type, core.functionLiteral(ts, joinBuiltIn), mapped);
+  }
+
+  /**
+   * Builds {@code F elementType}, where {@code F} is the functor of {@code
+   * functorType} (a list or option type).
+   */
+  private static Type applyFunctor(
+      TypeSystem ts, Type functorType, Type elementType) {
+    if (functorType instanceof ListType) {
+      return ts.listType(elementType);
+    }
+    return ts.option(elementType);
   }
 
   /**

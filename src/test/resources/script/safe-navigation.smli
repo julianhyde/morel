@@ -1,0 +1,73 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Tests for the safe-navigation operator "?.", which projects a field
+ * through the receiver's functor (option or list).
+ *)
+
+(*) Projecting a field of an option.
+(SOME {a=1, b=2})?.b;
+> val it = SOME 2 : int option
+(NONE : {a:int, b:int} option)?.b;
+> val it = NONE : int option
+
+(*) Projecting a field of a list (equivalent to "from e in es yield e.a").
+[{a=1},{a=2},{a=3}]?.a;
+> val it = [1,2,3] : int list
+
+(*) Chaining "?." through nested records.
+let val z = SOME {b={c={d=42}}} in z?.b?.c?.d end;
+> val it = SOME 42 : int option
+[{b={c=1}},{b={c=2}}]?.b?.c;
+> val it = [1,2] : int list
+
+(*) When the field is itself option-typed, "?." flattens (binds) rather than
+(*) nesting: the result is "int option", not "int option option". The type is
+(*) inferred end-to-end here, so the field type is not known when the functor
+(*) resolves.
+let val z = SOME {b = SOME {c=5}} in z?.b?.c end;
+> val it = SOME 5 : int option
+let val z : {b:{c:int} option} option = NONE in z?.b?.c end;
+> val it = NONE : int option
+
+(*) Receiver type comes from a query rather than an annotation.
+from x in [SOME {a=10}, NONE] yield x?.a;
+> val it = [SOME 10,NONE] : int option list
+
+(*) Receiver is not a functor.
+let val n = 5 in n?.x end;
+> stdIn:1.18 Error: '?.' applied to non-functor type int (expected option or list)
+>   raised at: stdIn:1.18
+
+(*) Functor whose element is not a record.
+(SOME 1)?.a;
+> stdIn:1.2-1.8 Error: reference to field a of non-record element type int
+>   raised at: stdIn:1.2-1.8
+
+(*) Record element, but no such field.
+(SOME {a=1})?.b;
+> stdIn:1.15 Error: no field 'b' in element type '{a:int}'
+>   raised at: stdIn:1.15
+
+(*) Flatten is same-functor only: a field wrapped in a different functor does
+(*) not flatten, so the second "?." sees a non-record element.
+let val w : {b:int list} option = NONE in w?.b?.c end;
+> stdIn:1.43-1.47 Error: reference to field c of non-record element type int list
+>   raised at: stdIn:1.43-1.47
+
+(*) End safe-navigation.smli
