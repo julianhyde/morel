@@ -400,7 +400,7 @@ Sys.planEx "1";
 >   "val it = from c in extent \"char\" where c >= #\"a\" andalso c <= #\"e\" orelse c >= #\"x\" andalso c <= #\"z\""
 >   : string
 
-(* --- FBBT (feasibility-based bound tightening) --------------------
+(* --- FBBT (feasibility-based bound tightening) ---------------------
  * FBBT uses inequality conditions and tightens bounds to those that
  * could pass the filters (are 'feasible').
  *)
