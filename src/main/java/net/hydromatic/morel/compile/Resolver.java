@@ -715,9 +715,9 @@ public class Resolver {
   }
 
   /**
-   * Lowers safe navigation {@code e?.f} to {@code F.map #f e}, where {@code F}
-   * is the receiver's functor (option or list), or to {@code F.join (F.map #f
-   * e)} when the field is itself {@code F}-wrapped (flatten).
+   * Lowers safe navigation {@code e?.f} by tunneling through the receiver's
+   * functor layers (option, list): {@code F1.map (F2.map (... (Fn.map #f))) e}.
+   * The field's own type is preserved (no flattening).
    */
   private Core.Apply toCoreSafeNav(
       Ast.Apply apply,
@@ -725,66 +725,54 @@ public class Resolver {
       Core.Exp coreArg,
       Type type) {
     final TypeSystem ts = typeMap.typeSystem;
-    final Type receiverType = coreArg.type;
-    final Type elementType;
-    final BuiltIn mapBuiltIn;
-    final BuiltIn joinBuiltIn;
-    if (receiverType instanceof ListType) {
-      elementType = receiverType.elementType();
-      mapBuiltIn = BuiltIn.LIST_MAP;
-      joinBuiltIn = BuiltIn.LIST_CONCAT;
-    } else if (receiverType.op() == Op.DATA_TYPE
-        && ((DataType) receiverType).name().equals("option")) {
-      elementType = ((DataType) receiverType).arguments.get(0);
-      mapBuiltIn = BuiltIn.OPTION_MAP;
-      joinBuiltIn = BuiltIn.OPTION_JOIN;
-    } else {
-      throw new AssertionError(
-          "safe navigation on non-functor type " + receiverType);
+    // Peel the functor layers (outermost first) down to the record.
+    final List<BuiltIn> maps = new ArrayList<>();
+    Type t = coreArg.type;
+    while (true) {
+      if (t instanceof ListType) {
+        maps.add(BuiltIn.LIST_MAP);
+        t = t.elementType();
+      } else if (t.op() == Op.DATA_TYPE
+          && ((DataType) t).name().equals("option")) {
+        maps.add(BuiltIn.OPTION_MAP);
+        t = ((DataType) t).arguments.get(0);
+      } else {
+        break;
+      }
     }
 
     final Core.RecordSelector selector =
-        core.recordSelector(
-            ts, (RecordLikeType) elementType, recordSelector.name);
-    final Type fieldType = ((FnType) selector.type).resultType;
-    // "F.map #f" has type "(F element) -> (F fieldType)";
-    // "F.map #f e" has type "F fieldType".
-    final Type mappedType = applyFunctor(ts, receiverType, fieldType);
-    final Core.Exp mapped =
-        core.apply(
-            apply.pos,
-            mappedType,
-            core.apply(
-                apply.pos,
-                ts.fnType(receiverType, mappedType),
-                core.functionLiteral(ts, mapBuiltIn),
-                selector),
-            coreArg);
-    final boolean flatten =
-        receiverType instanceof ListType
-            ? fieldType instanceof ListType
-            : fieldType.op() == Op.DATA_TYPE
-                && ((DataType) fieldType).name().equals("option");
-    if (!flatten) {
-      // No flatten: result is "F fieldType", the deduced type.
-      return (Core.Apply) mapped;
+        core.recordSelector(ts, (RecordLikeType) t, recordSelector.name);
+    // Build "F1.map (F2.map (... (Fn.map #f)))", innermost layer first, then
+    // apply to the receiver.
+    Core.Exp fn = selector;
+    Type inType = t; // record type
+    Type outType = ((FnType) selector.type).resultType; // field type
+    for (int i = maps.size() - 1; i >= 0; i--) {
+      final BuiltIn mapBuiltIn = maps.get(i);
+      final Type fInType = wrapFunctor(ts, mapBuiltIn, inType);
+      final Type fOutType = wrapFunctor(ts, mapBuiltIn, outType);
+      fn =
+          core.apply(
+              apply.pos,
+              ts.fnType(fInType, fOutType),
+              core.functionLiteral(ts, mapBuiltIn),
+              fn);
+      inType = fInType;
+      outType = fOutType;
     }
-    // Flatten: the field is itself "F"-wrapped, so "F.map #f e" has type
-    // "F (F ρ)"; collapse it to "F ρ" with "F.join".
-    return core.apply(
-        apply.pos, type, core.functionLiteral(ts, joinBuiltIn), mapped);
+    return core.apply(apply.pos, type, fn, coreArg);
   }
 
   /**
    * Builds {@code F elementType}, where {@code F} is the functor of {@code
-   * functorType} (a list or option type).
+   * mapBuiltIn} ({@link BuiltIn#LIST_MAP} or {@link BuiltIn#OPTION_MAP}).
    */
-  private static Type applyFunctor(
-      TypeSystem ts, Type functorType, Type elementType) {
-    if (functorType instanceof ListType) {
-      return ts.listType(elementType);
-    }
-    return ts.option(elementType);
+  private static Type wrapFunctor(
+      TypeSystem ts, BuiltIn mapBuiltIn, Type elementType) {
+    return mapBuiltIn == BuiltIn.LIST_MAP
+        ? ts.listType(elementType)
+        : ts.option(elementType);
   }
 
   /**

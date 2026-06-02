@@ -387,45 +387,55 @@ public class TypeResolver {
 
   /**
    * Checks a resolved safe-navigation selector {@code e?.f}: the receiver must
-   * be a functor (option or list) whose element is a record containing field
-   * {@code f}. Throws {@link TypeException} with a positioned message
-   * otherwise.
+   * be a record wrapped in one or more functor layers (option or list), and the
+   * record must contain field {@code f}. Throws {@link TypeException} with a
+   * positioned message otherwise.
    */
   private static void checkSafeNav(
       Ast.Apply apply, Ast.RecordSelector recordSelector, TypeMap typeMap) {
     final Type argType = typeMap.getType(apply.arg);
-    final Type elementType;
-    if (argType instanceof ListType) {
-      elementType = argType.elementType();
-    } else if (argType.op() == Op.DATA_TYPE
-        && ((DataType) argType).name().equals("option")) {
-      elementType = ((DataType) argType).arguments.get(0);
-    } else {
+    Type type = argType;
+    boolean tunneled = false;
+    for (Type element; (element = safeNavElement(type)) != null; ) {
+      type = element;
+      tunneled = true;
+    }
+    if (!tunneled) {
       throw new TypeException(
           "'?.' applied to non-functor type "
               + argType
               + " (expected option or list)",
           apply.arg.pos);
     }
-    if (elementType.op() != Op.RECORD_TYPE
-        && elementType.op() != Op.TUPLE_TYPE) {
+    if (type.op() != Op.RECORD_TYPE && type.op() != Op.TUPLE_TYPE) {
       throw new TypeException(
           "reference to field "
               + recordSelector.name
-              + " of non-record element type "
-              + elementType,
+              + " of non-record type "
+              + type,
           apply.arg.pos);
     }
-    final RecordLikeType recordType = (RecordLikeType) elementType;
+    final RecordLikeType recordType = (RecordLikeType) type;
     if (!recordType.argNameTypes().containsKey(recordSelector.name)) {
       throw new TypeException(
-          "no field '"
-              + recordSelector.name
-              + "' in element type '"
-              + elementType
-              + "'",
+          "no field '" + recordSelector.name + "' in type '" + type + "'",
           apply.fn.pos);
     }
+  }
+
+  /**
+   * If {@code type} is a safe-navigation functor (option or list), returns its
+   * element type; otherwise returns null.
+   */
+  private static @Nullable Type safeNavElement(Type type) {
+    if (type instanceof ListType) {
+      return type.elementType();
+    }
+    if (type.op() == Op.DATA_TYPE
+        && ((DataType) type).name().equals("option")) {
+      return ((DataType) type).arguments.get(0);
+    }
+    return null;
   }
 
   /**
@@ -2530,27 +2540,21 @@ public class TypeResolver {
       Variable vResult) {
     final String fieldName = recordSelector.name;
     if (recordSelector.safe) {
-      // Safe navigation "e?.f": the receiver "e" has type "F elem" for some
-      // functor F (option, list). When "vArg" resolves to "F elem" we peel F
-      // eagerly, then look up "f" in the element record (deferring if the
-      // element is not yet known), and re-wrap in F -- except when the field is
-      // itself "F"-wrapped, in which case we flatten.
+      // Safe navigation "e?.f": the receiver "e" is a record wrapped in one or
+      // more functor layers (option, list). Tunnel through all the layers to
+      // the record, project "f", and re-wrap the field type in the same layers.
+      // The field's own type is preserved: if "e" has type "{f:int option}
+      // option" then "e?.f" has type "int option option".
       actionMap.put(
           vArg,
-          (v, t, substitution, termPairs) -> {
-            if (t instanceof Sequence) {
-              final Sequence seq = (Sequence) t;
-              if (isSafeNavFunctor(seq.operator) && seq.terms.size() == 1) {
-                resolveSafeField(
-                    seq.operator,
-                    fieldName,
-                    seq.terms.get(0),
-                    vResult,
-                    substitution,
-                    termPairs);
-              }
-            }
-          });
+          (v, t, substitution, termPairs) ->
+              resolveSafeField(
+                  ImmutableList.of(),
+                  fieldName,
+                  t,
+                  vResult,
+                  substitution,
+                  termPairs));
     } else {
       // Plain "#f e": when we resolve "vArg" (the argument type) to a record
       // "{a: int, b: real}" and "f" is "b", we can declare "vResult" to be
@@ -2568,56 +2572,54 @@ public class TypeResolver {
   }
 
   /**
-   * Resolves the element type of a safe-navigation receiver and binds the
-   * result, deferring on the element or field-type variable if either is not
-   * yet known (eager functor, lazy field).
+   * Tunnels through the functor layers of a safe-navigation receiver to the
+   * record, projects {@code fieldName}, and binds {@code vResult} to the field
+   * type re-wrapped in those layers. {@code functors} is the stack of layers
+   * peeled so far (outermost first). Defers if a layer is not yet resolved.
    */
   private void resolveSafeField(
-      String functor,
+      List<String> functors,
       String fieldName,
-      Term elemTerm,
+      Term term,
       Variable vResult,
       Unifier.Substitution substitution,
       BiConsumer<Term, Term> termPairs) {
-    final Term elem = substitution.resolve(elemTerm);
-    if (elem instanceof Variable) {
-      // Functor known but element record not yet; defer until it resolves.
+    final Term t = substitution.resolve(term);
+    if (t instanceof Variable) {
+      // A layer (or the record) is not yet resolved; defer until it is.
       actionMap.put(
-          (Variable) elem,
-          (v, t, sub, tp) ->
-              resolveSafeField(functor, fieldName, t, vResult, sub, tp));
+          (Variable) t,
+          (v, t2, sub, tp) ->
+              resolveSafeField(functors, fieldName, t2, vResult, sub, tp));
       return;
     }
-    final Term fieldType = lookupField(elem, fieldName, substitution);
+    if (!(t instanceof Sequence)) {
+      return; // not a record or functor; reported by the post-pass
+    }
+    final Sequence seq = (Sequence) t;
+    if (isSafeNavFunctor(seq.operator) && seq.terms.size() == 1) {
+      // Tunnel through this functor layer.
+      resolveSafeField(
+          ImmutableList.<String>builder()
+              .addAll(functors)
+              .add(seq.operator)
+              .build(),
+          fieldName,
+          seq.terms.get(0),
+          vResult,
+          substitution,
+          termPairs);
+      return;
+    }
+    // Reached a non-functor type; it must be a record with field "f".
+    final Term fieldType = lookupField(seq, fieldName, substitution);
     if (fieldType == null) {
       return; // not a record, or no such field; reported by the post-pass
     }
-    if (fieldType instanceof Variable) {
-      // Field type not yet known; defer the flatten decision until it resolves.
-      actionMap.put(
-          (Variable) fieldType,
-          (v, t, sub, tp) -> bindSafeResult(functor, t, vResult, sub, tp));
-      return;
-    }
-    bindSafeResult(functor, fieldType, vResult, substitution, termPairs);
-  }
-
-  /**
-   * Binds {@code vResult} to {@code F fieldType}, or to {@code fieldType}
-   * itself when it is already {@code F}-wrapped (flatten same-functor field).
-   */
-  private void bindSafeResult(
-      String functor,
-      Term fieldType,
-      Variable vResult,
-      Unifier.Substitution substitution,
-      BiConsumer<Term, Term> termPairs) {
-    final Term ft = substitution.resolve(fieldType);
-    final Term result;
-    if (ft instanceof Sequence && ((Sequence) ft).operator.equals(functor)) {
-      result = ft; // flatten
-    } else {
-      result = unifier.apply(functor, ft);
+    // Re-wrap the field type in the functor layers (innermost layer first).
+    Term result = fieldType;
+    for (int i = functors.size() - 1; i >= 0; i--) {
+      result = unifier.apply(functors.get(i), result);
     }
     termPairs.accept(substitution.resolve(vResult), result);
   }

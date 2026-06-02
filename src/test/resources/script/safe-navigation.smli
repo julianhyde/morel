@@ -36,14 +36,19 @@ let val z = SOME {b={c={d=42}}} in z?.b?.c?.d end;
 [{b={c=1}},{b={c=2}}]?.b?.c;
 > val it = [1,2] : int list
 
-(*) When the field is itself option-typed, "?." flattens (binds) rather than
-(*) nesting: the result is "int option", not "int option option". The type is
-(*) inferred end-to-end here, so the field type is not known when the functor
-(*) resolves.
+(*) "?." preserves the field's own type. If the field is itself option-typed,
+(*) the result keeps both layers: "int option option", not "int option".
 let val z = SOME {b = SOME {c=5}} in z?.b?.c end;
-> val it = SOME 5 : int option
+> val it = SOME (SOME 5) : int option option
 let val z : {b:{c:int} option} option = NONE in z?.b?.c end;
-> val it = NONE : int option
+> val it = NONE : int option option
+
+(*) "?." tunnels through multiple functor layers in the receiver to reach the
+(*) record, then re-wraps the field in those layers.
+let val x = SOME (SOME {y=7}) in x?.y end;
+> val it = SOME (SOME 7) : int option option
+let val xs = [SOME {a=1}, NONE] in xs?.a end;
+> val it = [SOME 1,NONE] : int option list
 
 (*) Receiver type comes from a query rather than an annotation.
 from x in [SOME {a=10}, NONE] yield x?.a;
@@ -54,20 +59,20 @@ let val n = 5 in n?.x end;
 > stdIn:1.18 Error: '?.' applied to non-functor type int (expected option or list)
 >   raised at: stdIn:1.18
 
-(*) Functor whose element is not a record.
+(*) Functor whose innermost type is not a record.
 (SOME 1)?.a;
-> stdIn:1.2-1.8 Error: reference to field a of non-record element type int
+> stdIn:1.2-1.8 Error: reference to field a of non-record type int
 >   raised at: stdIn:1.2-1.8
 
-(*) Record element, but no such field.
+(*) Record, but no such field.
 (SOME {a=1})?.b;
-> stdIn:1.15 Error: no field 'b' in element type '{a:int}'
+> stdIn:1.15 Error: no field 'b' in type '{a:int}'
 >   raised at: stdIn:1.15
 
-(*) Flatten is same-functor only: a field wrapped in a different functor does
-(*) not flatten, so the second "?." sees a non-record element.
+(*) Tunneling reaches a non-record type: "w?.b" is "int list option", and so
+(*) "?.c" tunnels through both layers to "int", which has no fields.
 let val w : {b:int list} option = NONE in w?.b?.c end;
-> stdIn:1.43-1.47 Error: reference to field c of non-record element type int list
+> stdIn:1.43-1.47 Error: reference to field c of non-record type int
 >   raised at: stdIn:1.43-1.47
 
 (*) End safe-navigation.smli
