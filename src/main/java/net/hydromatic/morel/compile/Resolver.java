@@ -733,8 +733,8 @@ public class Resolver {
         maps.add(BuiltIn.LIST_MAP);
         t = t.elementType();
       } else if (t.op() == Op.DATA_TYPE
-          && ((DataType) t).name().equals("option")) {
-        maps.add(BuiltIn.OPTION_MAP);
+          && functorMap(((DataType) t).name()) != null) {
+        maps.add(functorMap(((DataType) t).name()));
         t = ((DataType) t).arguments.get(0);
       } else {
         break;
@@ -765,14 +765,40 @@ public class Resolver {
   }
 
   /**
+   * Returns the {@code map} built-in for a safe-navigation functor (option,
+   * bag, vector) named {@code name}, or null if {@code name} is not such a
+   * functor. (List is handled separately, as it is a {@link ListType} rather
+   * than a {@link DataType}.)
+   */
+  private static @Nullable BuiltIn functorMap(String name) {
+    switch (name) {
+      case "option":
+        return BuiltIn.OPTION_MAP;
+      case "bag":
+        return BuiltIn.BAG_MAP;
+      case "vector":
+        return BuiltIn.VECTOR_MAP;
+      default:
+        return null;
+    }
+  }
+
+  /**
    * Builds {@code F elementType}, where {@code F} is the functor of {@code
-   * mapBuiltIn} ({@link BuiltIn#LIST_MAP} or {@link BuiltIn#OPTION_MAP}).
+   * mapBuiltIn} (LIST_MAP, OPTION_MAP, BAG_MAP or VECTOR_MAP).
    */
   private static Type wrapFunctor(
       TypeSystem ts, BuiltIn mapBuiltIn, Type elementType) {
-    return mapBuiltIn == BuiltIn.LIST_MAP
-        ? ts.listType(elementType)
-        : ts.option(elementType);
+    switch (mapBuiltIn) {
+      case LIST_MAP:
+        return ts.listType(elementType);
+      case BAG_MAP:
+        return ts.bagType(elementType);
+      case VECTOR_MAP:
+        return ts.vector(elementType);
+      default:
+        return ts.option(elementType);
+    }
   }
 
   /**

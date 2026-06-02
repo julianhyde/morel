@@ -432,7 +432,7 @@ public class TypeResolver {
       return type.elementType();
     }
     if (type.op() == Op.DATA_TYPE
-        && ((DataType) type).name().equals("option")) {
+        && isSafeNavFunctor(((DataType) type).name())) {
       return ((DataType) type).arguments.get(0);
     }
     return null;
@@ -2629,7 +2629,10 @@ public class TypeResolver {
    * navigation {@code ?.} projects fields.
    */
   private static boolean isSafeNavFunctor(String op) {
-    return op.equals("option") || op.equals(LIST_TY_CON);
+    return op.equals("option")
+        || op.equals("vector")
+        || op.equals(LIST_TY_CON)
+        || op.equals(BAG_TY_CON);
   }
 
   /**
