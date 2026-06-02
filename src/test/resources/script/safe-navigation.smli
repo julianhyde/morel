@@ -50,6 +50,15 @@ let val x = SOME (SOME {y=7}) in x?.y end;
 let val xs = [SOME {a=1}, NONE] in xs?.a end;
 > val it = [SOME 1,NONE] : int option list
 
+(*) The layers may be any mix of functors; "?." reconstructs the exact stack
+(*) (each layer with its own functor), replacing the record with the field.
+(SOME [SOME {y=1}, NONE, SOME {y=3}])?.y;
+> val it = SOME [SOME 1,NONE,SOME 3] : int option list option
+[[{y=1},{y=2}],[{y=3}]]?.y;
+> val it = [[1,2],[3]] : int list list
+(SOME [{y=1},{y=2}])?.y;
+> val it = SOME [1,2] : int list option
+
 (*) Receiver type comes from a query rather than an annotation.
 from x in [SOME {a=10}, NONE] yield x?.a;
 > val it = [SOME 10,NONE] : int option list
