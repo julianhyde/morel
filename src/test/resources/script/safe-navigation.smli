@@ -94,4 +94,52 @@ let val w : {b:int list} option = NONE in w?.b?.c end;
 > stdIn:1.43-1.47 Error: reference to field c of non-record type int
 >   raised at: stdIn:1.43-1.47
 
+(* Safe navigation through the 'option' that an outer join produces, over the
+ * 'scott' data set, displayed as a table. *)
+useSilently "scott.smli";
+> [opening scott.smli]
+> val it = () : unit
+
+(* A local data set of assignments; the last references an employee (9999) who
+ * is not in 'scott.emps'. *)
+val assignments =
+  [{empno = 7839, task = "Plan budget"},
+   {empno = 7566, task = "Review code"},
+   {empno = 9999, task = "Orphaned task"}];
+> val assignments =
+>   [{empno=7839,task="Plan budget"},{empno=7566,task="Review code"},
+>    {empno=9999,task="Orphaned task"}] : {empno:int, task:string} list
+Sys.set ("output", "tabular");
+> val it = () : unit
+
+(* A 'left join' makes the employee optional; 'e?.ename' is the employee's name,
+ * or a blank cell for the orphaned task. *)
+from a in assignments
+  left join e in scott.emps on a.empno = e.empno
+  yield {a.task, who = e?.ename};
+> task          who
+> ------------- -----
+> Plan budget   KING
+> Review code   JONES
+> Orphaned task
+>
+> val it : {task:string, who:string option} bag
+
+(* A 'right join' keeps every department, even OPERATIONS (40), which has no
+ * manager and so shows a blank. *)
+from e in (from x in scott.emps where x.job = "MANAGER")
+  right join d in scott.depts on e.deptno = d.deptno
+  yield {d.dname, manager = e?.ename};
+> dname      manager
+> ---------- -------
+> RESEARCH   JONES
+> SALES      BLAKE
+> ACCOUNTING CLARK
+> OPERATIONS
+>
+> val it : {dname:string, manager:string option} bag
+
+Sys.set ("output", "classic");
+> val it = () : unit
+
 (*) End safe-navigation.smli
