@@ -504,6 +504,22 @@ from d in [{a=1,b=true}], i in [2] yield {d} yield a;
 :t from a in bag [1], _ = ();
 > val it : int bag
 
+(*) Outer joins. The null-generating side is not yet wrapped in 'option',
+(*) so for now the element types are the same as an inner join.
+:t from i in [1, 2] left join j in [i] on true;
+> val it : {i:int, j:int} list
+:t from i in [1, 2] right join j in [3, 4] on i = j;
+> val it : {i:int, j:int} list
+:t from i in [1, 2] full join j in [3, 4] on i = j;
+> val it : {i:int, j:int} list
+(*) A variable bound inside the source (shadowing) is not the input.
+:t from i in [1, 2] right join j in (let val i = 9 in [i] end) on true;
+> val it : {i:int, j:int} list
+(*) 'ordinal' inside a nested query refers to that query, not the input.
+:t from i in [1, 2]
+  right join j in (from x in [10, 20] yield ordinal) on true;
+> val it : {i:int, j:int} list
+
 :t from a in [1], b in [true] yield a;
 > val it : int list
 :t from a in [1], b in [true] yield {a,b};

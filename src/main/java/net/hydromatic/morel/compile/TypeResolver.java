@@ -1114,6 +1114,9 @@ public class TypeResolver {
     final Ast.Pat pat;
     switch (step.op) {
       case SCAN:
+      case LEFT_JOIN:
+      case RIGHT_JOIN:
+      case FULL_JOIN:
         return deduceScanStepType((Ast.Scan) step, p, fieldVars, steps);
 
       case WHERE:
@@ -1304,6 +1307,18 @@ public class TypeResolver {
     final List<PatTerm> termMap = new ArrayList<>();
     final CollectionType containerize;
     requireNonNull(p.c);
+    // The source of a 'right join' or 'full join' generates null rows on its
+    // left, so (for now) it must not depend on the query's input. We resolve
+    // it in the outer environment ('rootEnv'), so that a reference to an input
+    // variable fails to resolve, and we check explicitly for 'current' and
+    // 'ordinal' (which resolve via the step stack, not the environment).
+    final TypeEnv scanEnv;
+    if (scan.op.generatesNullsOnLeft() && scan.exp != null) {
+      checkJoinSourceIndependent(scan.exp, fieldVars);
+      scanEnv = p.rootEnv;
+    } else {
+      scanEnv = p.env;
+    }
     if (scan.exp == null) {
       scanExp3 = null;
       // If we're iterating over 'all values' of the type, we'd better not
@@ -1312,14 +1327,14 @@ public class TypeResolver {
       c0 = null;
     } else if (scan.exp.op == Op.FROM_EQ) {
       final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
-      final Ast.Exp scanExp2 = deduceExpType(p.env, scanExp, v0);
+      final Ast.Exp scanExp2 = deduceExpType(scanEnv, scanExp, v0);
       scanExp3 = ast.fromEq(scanExp2);
       containerize = CollectionType.INHERIT; // retain source collection type
       c0 = null;
       reg(scanExp, v0);
     } else {
       c0 = unifier.variable();
-      scanExp3 = deduceExpType(p.env, scan.exp, c0);
+      scanExp3 = deduceExpType(scanEnv, scan.exp, c0);
       reg(scan.exp, c0);
       containerize = CollectionType.BOTH; // retain source collection type
     }
@@ -1398,6 +1413,154 @@ public class TypeResolver {
     }
     steps.add(scan.copy(pat, scanExp3, scanCondition2));
     return Triple.of(p.rootEnv, env4, v, c);
+  }
+
+  /**
+   * Checks that the source expression of a 'right join' or 'full join' does not
+   * depend on the query's input. Such a source generates null rows on its left,
+   * so (for now) it may not reference the variables of earlier steps, nor
+   * 'current' or 'ordinal'.
+   *
+   * <p>This catches the obvious cases with a clear message; references to input
+   * variables that are missed here (e.g. inside a nested query) still fail
+   * because the source is type-resolved in the outer environment.
+   */
+  private void checkJoinSourceIndependent(
+      Ast.Exp exp, PairList<Ast.Id, Variable> inputVars) {
+    final Set<String> inputNames = new HashSet<>();
+    inputVars.forEach((id, v) -> inputNames.add(id.name));
+    exp.accept(
+        new Visitor() {
+          /** Names bound by an enclosing 'let', 'fn' or 'case'. */
+          final Set<String> shadowed = new HashSet<>();
+
+          /**
+           * Nesting depth of enclosing queries; 'current' and 'ordinal' refer
+           * to the input only at depth 0.
+           */
+          int queryDepth = 0;
+
+          @Override
+          protected void visit(Ast.Id id) {
+            if (queryDepth == 0
+                && inputNames.contains(id.name)
+                && !shadowed.contains(id.name)) {
+              throw referenceError(id.name, id.pos);
+            }
+          }
+
+          @Override
+          protected void visit(Ast.Current current) {
+            if (queryDepth == 0) {
+              throw referenceError("current", current.pos);
+            }
+          }
+
+          @Override
+          protected void visit(Ast.Ordinal ordinal) {
+            if (queryDepth == 0) {
+              throw referenceError("ordinal", ordinal.pos);
+            }
+          }
+
+          @Override
+          protected void visit(Ast.From from) {
+            nested(from.steps);
+          }
+
+          @Override
+          protected void visit(Ast.Exists exists) {
+            nested(exists.steps);
+          }
+
+          @Override
+          protected void visit(Ast.Forall forall) {
+            nested(forall.steps);
+          }
+
+          private void nested(List<Ast.FromStep> steps) {
+            ++queryDepth;
+            steps.forEach(this::accept);
+            --queryDepth;
+          }
+
+          @Override
+          protected void visit(Ast.Let let) {
+            final Set<String> added = addShadow(declNames(let.decls));
+            super.visit(let);
+            shadowed.removeAll(added);
+          }
+
+          @Override
+          protected void visit(Ast.Fn fn) {
+            fn.matchList.forEach(this::matchScope);
+          }
+
+          @Override
+          protected void visit(Ast.Case kase) {
+            kase.exp.accept(this);
+            kase.matchList.forEach(this::matchScope);
+          }
+
+          private void matchScope(Ast.Match match) {
+            final Set<String> added = addShadow(patNames(match.pat));
+            match.exp.accept(this);
+            shadowed.removeAll(added);
+          }
+
+          /**
+           * Adds names to {@link #shadowed} and returns those that were not
+           * already present (so the caller can remove exactly those).
+           */
+          private Set<String> addShadow(Set<String> names) {
+            names.removeAll(shadowed);
+            shadowed.addAll(names);
+            return names;
+          }
+
+          private RuntimeException referenceError(String name, Pos pos) {
+            return new CompileException(
+                format(
+                    "join source must not reference '%s' "
+                        + "(right and full joins must be independent)",
+                    name),
+                false,
+                pos);
+          }
+        });
+  }
+
+  private static Set<String> patNames(Ast.Pat pat) {
+    final Set<String> set = new HashSet<>();
+    addPatNames(pat, set);
+    return set;
+  }
+
+  private static void addPatNames(Ast.Pat pat, Set<String> set) {
+    if (pat instanceof Ast.IdPat) {
+      set.add(((Ast.IdPat) pat).name);
+    } else if (pat instanceof Ast.AsPat) {
+      set.add(((Ast.AsPat) pat).id.name);
+    }
+    pat.forEachArg((subPat, i) -> addPatNames(subPat, set));
+  }
+
+  private static Set<String> declNames(List<Ast.Decl> decls) {
+    final Set<String> set = new HashSet<>();
+    for (Ast.Decl decl : decls) {
+      if (decl instanceof Ast.ValDecl) {
+        for (Ast.ValBind valBind : ((Ast.ValDecl) decl).valBinds) {
+          addPatNames(valBind.pat, set);
+        }
+      } else if (decl instanceof Ast.FunDecl) {
+        for (Ast.FunBind funBind : ((Ast.FunDecl) decl).funBinds) {
+          for (Ast.FunMatch funMatch : funBind.matchList) {
+            set.add(funMatch.name);
+          }
+        }
+      }
+    }
+    return set;
   }
 
   private Sequence argTerm(Term... args) {
