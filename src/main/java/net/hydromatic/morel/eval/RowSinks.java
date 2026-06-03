@@ -448,8 +448,8 @@ public abstract class RowSinks {
       this.rightRows.clear();
       Iterables.addAll(rightRows, elements);
       // Initially every source row is unmatched.
-      rightUnmatched.clear();
       rightUnmatched.set(0, rightRows.size());
+      rightUnmatched.clear(rightRows.size(), rightUnmatched.length());
       super.start(stack);
     }
 
