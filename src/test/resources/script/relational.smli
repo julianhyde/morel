@@ -689,6 +689,30 @@ from i in [1, 2] full join j in [i] on true;
 > stdIn:1.34 Error: join source must not reference 'i' (right and full joins must be independent)
 >   raised at: stdIn:1.34
 
+(* A 'left join' wraps the right fields in 'option'; an input ('left') row
+ * with no matching right row is emitted with 'NONE'. *)
+from i in [1, 2, 3] left join j in [1, 2] on i = j;
+> val it = [{i=1,j=SOME 1},{i=2,j=SOME 2},{i=3,j=NONE}]
+>   : {i:int, j:int option} list
+
+(*) Every input row matches at least once.
+from i in [1, 2] left join j in [1, 2] on i = j;
+> val it = [{i=1,j=SOME 1},{i=2,j=SOME 2}] : {i:int, j:int option} list
+
+(*) The source of a 'left join' may be correlated with the input.
+from r in orders
+  left join i in r.items on i.units > 2;
+> val it =
+>   [
+>    {i=SOME {product="soda",units=3},
+>     r={id=1,items=[{product="beer",units=1},{product="soda",units=3}]}},
+>    {i=SOME {product="milk",units=5},
+>     r={id=2,items=[{product="milk",units=5},{product="beer",units=2}]}},
+>    {i=NONE,r={id=3,items=[{product="soda",units=1},{product="beer",units=1}]}}]
+>   :
+>     {i:{product:string, units:int} option,
+>      r:{id:int, items:{product:string, units:int} list}} list
+
 (* Degenerate joins ----------------------------------------------- *)
 
 (*) Join atom to list of units

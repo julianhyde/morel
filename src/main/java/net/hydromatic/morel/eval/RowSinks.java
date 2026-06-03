@@ -245,10 +245,12 @@ public abstract class RowSinks {
 
   /** Implementation of {@link RowSink} for a {@code join} step. */
   private static class ScanRowSink extends BaseRowSink {
-    final Op op; // inner, left, right, full
+    final Op op; // inner (SCAN) or left
     final Core.Pat pat;
     /** Number of stack slots pushed per element. */
     final int varCount;
+    /** Whether the newly scanned fields are optional downstream (left join). */
+    final boolean optionalRight;
 
     final Code code;
     final Code conditionCode;
@@ -261,10 +263,14 @@ public abstract class RowSinks {
         Code conditionCode,
         RowSink rowSink) {
       super(rowSink);
-      checkArgument(op == Op.SCAN);
+      checkArgument(
+          op == Op.SCAN || op == Op.LEFT_JOIN,
+          "not a nested-loop join: %s",
+          op);
       this.op = op;
       this.pat = pat;
       this.varCount = varCount;
+      this.optionalRight = op.generatesNullsOnRight();
       this.code = code;
       this.conditionCode = conditionCode;
     }
@@ -302,16 +308,35 @@ public abstract class RowSinks {
       // Grow slots if needed for scan variable slots.
       Stack s = stack.ensureSize(varCount);
       final int savedTop = s.save();
+      boolean matched = false;
       for (Object element : elements) {
         s.restore(savedTop);
         // Push scan variable bindings onto the stack.
         if (Closure.StackClosure.pushBindings(pat, element, s)) {
           if ((Boolean) conditionCode.eval(s)) {
+            if (optionalRight) {
+              // 'left join': the newly scanned fields are optional downstream,
+              // so wrap them in 'SOME'. (The 'on' condition above saw the raw,
+              // unwrapped values.)
+              for (int k = savedTop; k < savedTop + varCount; k++) {
+                s.slots[k] = Codes.optionSome(s.slots[k]);
+              }
+            }
+            matched = true;
             rowSink.accept(s);
           }
         }
       }
       s.restore(savedTop);
+      if (optionalRight && !matched) {
+        // 'left join' with no matching right row: emit the input ('left') row
+        // with 'NONE' for the newly scanned fields.
+        for (int k = 0; k < varCount; k++) {
+          s.push(Codes.OPTION_NONE);
+        }
+        rowSink.accept(s);
+        s.restore(savedTop);
+      }
     }
   }
 
