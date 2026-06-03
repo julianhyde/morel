@@ -25,9 +25,11 @@ import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -388,9 +390,13 @@ public abstract class RowSinks {
     final boolean fullJoin;
 
     /** Materialized source rows; set in {@link #start}. */
-    @Nullable List<Object> rightRows;
-    /** Whether each source row matched some input row. */
-    boolean @Nullable [] rightMatched;
+    final List<Object> rightRows = new ArrayList<>();
+    /**
+     * Source rows that have not yet matched any input row (a set bit means the
+     * row at that index is unmatched). Iterated by {@link #result} to emit the
+     * unmatched rows, visiting only the set bits.
+     */
+    final BitSet rightUnmatched = new BitSet();
 
     BuildJoinRowSink(
         Op op,
@@ -439,38 +445,34 @@ public abstract class RowSinks {
       // Materialize the source ('right') side. It is independent of the input,
       // so a single evaluation suffices.
       final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
-      final List<Object> rows = new ArrayList<>();
-      for (Object element : elements) {
-        rows.add(element);
-      }
-      this.rightRows = rows;
-      this.rightMatched = new boolean[rows.size()];
+      this.rightRows.clear();
+      Iterables.addAll(rightRows, elements);
+      // Initially every source row is unmatched.
+      rightUnmatched.clear();
+      rightUnmatched.set(0, rightRows.size());
       super.start(stack);
     }
 
     @Override
     public void accept(Stack stack) {
-      final List<Object> rows = requireNonNull(rightRows);
-      final boolean[] matched = requireNonNull(rightMatched);
       final Stack s = stack.ensureSize(varCount);
       final int savedTop = s.save();
       // Save the raw input ('left') field values. They are present in this row,
-      // so we wrap them in 'SOME' below, but must restore them afterwards so we
+      // so we wrap them in 'SOME' below, but must restore them afterward so we
       // do not corrupt the slots seen by earlier steps' loops.
       final Object[] rawLeft = new Object[leftSlotCount];
-      for (int k = 0; k < leftSlotCount; k++) {
-        rawLeft[k] = s.slots[savedTop - leftSlotCount + k];
-      }
+      System.arraycopy(
+          s.slots, savedTop - leftSlotCount, rawLeft, 0, leftSlotCount);
       // Find the source rows matching this input row. The 'on' condition sees
       // the raw, unwrapped values.
-      final int[] matchIndexes = new int[rows.size()];
+      final int[] matchIndexes = new int[rightRows.size()];
       int matchCount = 0;
-      for (int ri = 0; ri < rows.size(); ri++) {
+      for (int ri = 0; ri < rightRows.size(); ri++) {
         s.restore(savedTop);
-        if (Closure.StackClosure.pushBindings(pat, rows.get(ri), s)
+        if (Closure.StackClosure.pushBindings(pat, rightRows.get(ri), s)
             && (Boolean) conditionCode.eval(s)) {
           matchIndexes[matchCount++] = ri;
-          matched[ri] = true;
+          rightUnmatched.clear(ri);
         }
       }
       s.restore(savedTop);
@@ -481,7 +483,8 @@ public abstract class RowSinks {
       // Emit each matching (input, source) pair.
       for (int m = 0; m < matchCount; m++) {
         s.restore(savedTop);
-        Closure.StackClosure.pushBindings(pat, rows.get(matchIndexes[m]), s);
+        Closure.StackClosure.pushBindings(
+            pat, rightRows.get(matchIndexes[m]), s);
         if (optionalRight) {
           for (int k = savedTop; k < savedTop + varCount; k++) {
             s.slots[k] = Codes.optionSome(s.slots[k]);
@@ -500,30 +503,28 @@ public abstract class RowSinks {
         s.restore(savedTop);
       }
       // Restore the raw input field values.
-      for (int k = 0; k < leftSlotCount; k++) {
-        s.slots[savedTop - leftSlotCount + k] = rawLeft[k];
-      }
+      System.arraycopy(
+          rawLeft, 0, s.slots, savedTop - leftSlotCount, leftSlotCount);
     }
 
     @Override
     public List<Object> result(Stack stack) {
-      final List<Object> rows = requireNonNull(rightRows);
-      final boolean[] matched = requireNonNull(rightMatched);
       final Stack s = stack.ensureSize(leftSlotCount + varCount);
       // At this point the input fields are no longer on the stack, so the top
       // is at the query's base.
       final int savedTop = s.save();
-      for (int ri = 0; ri < rows.size(); ri++) {
-        if (matched[ri]) {
-          continue;
-        }
+      // Emit the source rows that matched no input row, visiting only the set
+      // (unmatched) bits.
+      for (int ri = rightUnmatched.nextSetBit(0);
+          ri >= 0;
+          ri = rightUnmatched.nextSetBit(ri + 1)) {
         s.restore(savedTop);
         // The input fields are absent: 'NONE'.
         for (int k = 0; k < leftSlotCount; k++) {
           s.push(Codes.OPTION_NONE);
         }
         // The source fields are present.
-        if (Closure.StackClosure.pushBindings(pat, rows.get(ri), s)) {
+        if (Closure.StackClosure.pushBindings(pat, rightRows.get(ri), s)) {
           if (optionalRight) {
             for (int k = savedTop + leftSlotCount;
                 k < savedTop + leftSlotCount + varCount;
@@ -687,7 +688,7 @@ public abstract class RowSinks {
     @Override
     public Describer describe(Describer describer) {
       return describer.start(
-          op.opName,
+          requireNonNull(op.opName),
           d -> {
             d.arg("distinct", distinct);
             forEachIndexed(codes, (code, i) -> d.arg("arg" + i, code));
