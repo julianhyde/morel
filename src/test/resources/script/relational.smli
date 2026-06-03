@@ -713,6 +713,23 @@ from r in orders
 >     {i:{product:string, units:int} option,
 >      r:{id:int, items:{product:string, units:int} list}} list
 
+(* A 'right join' wraps the input ('left') fields in 'option'. A source row
+ * matching no input row is emitted with 'NONE' for the input fields; an input
+ * row matching no source row is dropped. *)
+from i in [1, 2, 3] right join j in [2, 4] on i = j;
+> val it = [{i=SOME 2,j=2},{i=NONE,j=4}] : {i:int option, j:int} list
+
+(* A 'full join' keeps unmatched rows from both sides. *)
+from i in [1, 3] full join j in [3, 5] on i = j;
+> val it = [{i=SOME 1,j=NONE},{i=SOME 3,j=SOME 3},{i=NONE,j=SOME 5}]
+>   : {i:int option, j:int option} list
+
+(*) Order is preserved: matched rows first (input order), then unmatched
+(*) source rows.
+from i in [3, 1, 2] right join j in [4, 2, 1] on i = j;
+> val it = [{i=SOME 1,j=1},{i=SOME 2,j=2},{i=NONE,j=4}]
+>   : {i:int option, j:int} list
+
 (* Degenerate joins ----------------------------------------------- *)
 
 (*) Join atom to list of units
