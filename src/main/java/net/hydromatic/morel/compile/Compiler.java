@@ -710,7 +710,7 @@ public class Compiler {
         createRowSinkFactory(
             cxScan, cxFrom, scanAllScope, scan.env, skip(steps), elementType);
     final int scanVarCount = depth - cx.localDepth;
-    if (scan.op.generatesNullsOnLeft()) {
+    if (scan.op.optionalizesLeft()) {
       // 'right join' or 'full join': the source may produce rows that match no
       // input row, so use a build-side sink that materializes the source and
       // emits unmatched source rows at the end.

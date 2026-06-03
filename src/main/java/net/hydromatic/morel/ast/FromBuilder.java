@@ -261,15 +261,14 @@ public class FromBuilder {
     final int priorCount = bindings.size();
     Compiles.acceptBinding(typeSystem, pat, bindings);
     if (op != Op.SCAN) {
-      // An outer join generates null rows, represented as 'option' values, on
-      // one or both sides. A 'left'/'full' join wraps the newly scanned fields;
-      // a 'right'/'full' join wraps the fields of earlier steps. Wrapping is
-      // additive, so nested outer joins stack 'option' layers.
+      // An outer join makes the fields on one or both sides optional (so that
+      // an absent row can be represented as 'NONE'). A 'left'/'full' join wraps
+      // the newly scanned fields; a 'right'/'full' join wraps the fields of
+      // earlier steps. Wrapping is additive, so nested outer joins stack
+      // 'option' layers.
       for (int i = 0; i < bindings.size(); i++) {
         final boolean wrap =
-            i < priorCount
-                ? op.generatesNullsOnLeft()
-                : op.generatesNullsOnRight();
+            i < priorCount ? op.optionalizesLeft() : op.optionalizesRight();
         if (wrap) {
           final Binding b = bindings.get(i);
           bindings.set(

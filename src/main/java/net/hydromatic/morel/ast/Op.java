@@ -288,20 +288,22 @@ public enum Op {
   }
 
   /**
-   * Returns whether this join operator generates null (NONE) values on the
-   * left, that is, makes the variables already in scope optional. True for
-   * {@code right join} and {@code full join}.
+   * Returns whether this join operator makes the variables already in scope
+   * optional, that is, wraps them in {@code option} (yielding {@code NONE} for
+   * an input row that has no matching source row). True for {@code right join}
+   * and {@code full join}.
    */
-  public boolean generatesNullsOnLeft() {
+  public boolean optionalizesLeft() {
     return this == RIGHT_JOIN || this == FULL_JOIN;
   }
 
   /**
-   * Returns whether this join operator generates null (NONE) values on the
-   * right, that is, makes the newly scanned variable optional. True for {@code
-   * left join} and {@code full join}.
+   * Returns whether this join operator makes the newly scanned variable
+   * optional, that is, wraps it in {@code option} (yielding {@code NONE} for a
+   * source row that has no matching input row). True for {@code left join} and
+   * {@code full join}.
    */
-  public boolean generatesNullsOnRight() {
+  public boolean optionalizesRight() {
     return this == LEFT_JOIN || this == FULL_JOIN;
   }
 

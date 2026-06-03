@@ -1308,13 +1308,13 @@ public class TypeResolver {
     final List<PatTerm> termMap = new ArrayList<>();
     final CollectionType containerize;
     requireNonNull(p.c);
-    // The source of a 'right join' or 'full join' generates null rows on its
-    // left, so (for now) it must not depend on the query's input. We resolve
-    // it in the outer environment ('rootEnv'), so that a reference to an input
+    // The source of a 'right join' or 'full join' may have rows that match no
+    // input row, so it must not depend on the query's input. We resolve it in
+    // the outer environment ('rootEnv'), so that a reference to an input
     // variable fails to resolve, and we check explicitly for 'current' and
     // 'ordinal' (which resolve via the step stack, not the environment).
     final TypeEnv scanEnv;
-    if (scan.op.generatesNullsOnLeft() && scan.exp != null) {
+    if (scan.op.optionalizesLeft() && scan.exp != null) {
       checkJoinSourceIndependent(scan.exp, fieldVars);
       scanEnv = p.rootEnv;
     } else {
@@ -1362,19 +1362,19 @@ public class TypeResolver {
       scanCondition2 = null;
     }
 
-    // An outer join generates null rows, represented as 'option' values, on one
-    // or both sides. A 'left'/'full' join wraps the newly scanned fields; a
-    // 'right'/'full' join wraps the fields of earlier steps. Wrapping is
-    // additive, so nested outer joins stack 'option' layers (e.g. 'option
-    // option'). Only the downstream environment ('outEnv') and element type
-    // ('v') are affected, not the 'on' clause resolved above.
+    // An outer join makes the fields on one or both sides optional, so that an
+    // absent row can be represented as 'NONE'. A 'left'/'full' join wraps the
+    // newly scanned fields; a 'right'/'full' join wraps the fields of earlier
+    // steps. Wrapping is additive, so nested outer joins stack 'option' layers
+    // (e.g. 'option option'). Only the downstream environment ('outEnv') and
+    // element type ('v') are affected, not the 'on' clause resolved above.
     TypeEnv outEnv = env4;
-    if (scan.op.generatesNullsOnLeft() || scan.op.generatesNullsOnRight()) {
+    if (scan.op.optionalizesLeft() || scan.op.optionalizesRight()) {
       for (int i = 0; i < fieldVars.size(); i++) {
         final boolean wrap =
             i < priorCount
-                ? scan.op.generatesNullsOnLeft()
-                : scan.op.generatesNullsOnRight();
+                ? scan.op.optionalizesLeft()
+                : scan.op.optionalizesRight();
         if (wrap) {
           final Ast.Id id = fieldVars.left(i);
           final Variable wrapped =
@@ -1446,8 +1446,8 @@ public class TypeResolver {
 
   /**
    * Checks that the source expression of a 'right join' or 'full join' does not
-   * depend on the query's input. Such a source generates null rows on its left,
-   * so (for now) it may not reference the variables of earlier steps, nor
+   * depend on the query's input. Such a source may have rows that match no
+   * input row, so it may not reference the variables of earlier steps, nor
    * 'current' or 'ordinal'.
    *
    * <p>This catches the obvious cases with a clear message; references to input

@@ -724,10 +724,17 @@ from i in [1, 3] full join j in [3, 5] on i = j;
 > val it = [{i=SOME 1,j=NONE},{i=SOME 3,j=SOME 3},{i=NONE,j=SOME 5}]
 >   : {i:int option, j:int option} list
 
-(*) Order is preserved: matched rows first (input order), then unmatched
-(*) source rows.
-from i in [3, 1, 2] right join j in [4, 2, 1] on i = j;
-> val it = [{i=SOME 1,j=1},{i=SOME 2,j=2},{i=NONE,j=4}]
+(* Order is preserved: matched rows come first (in input order), then the
+ * unmatched source rows in source order (5 before 4), not sorted by key. *)
+from i in [3, 1] right join j in [5, 3, 1, 4] on i = j;
+> val it = [{i=SOME 3,j=3},{i=SOME 1,j=1},{i=NONE,j=5},{i=NONE,j=4}]
+>   : {i:int option, j:int} list
+
+(* The same holds for a non-equi condition (whose evaluation might use a
+ * different data structure to match rows). The unmatched source rows 2 and 1
+ * are emitted in source order, not sorted. *)
+from i in [3] right join j in [5, 2, 8, 1] on i < j;
+> val it = [{i=SOME 3,j=5},{i=SOME 3,j=8},{i=NONE,j=2},{i=NONE,j=1}]
 >   : {i:int option, j:int} list
 
 (* Degenerate joins ----------------------------------------------- *)

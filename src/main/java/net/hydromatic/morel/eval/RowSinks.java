@@ -291,7 +291,7 @@ public abstract class RowSinks {
       this.op = op;
       this.pat = pat;
       this.varCount = varCount;
-      this.optionalRight = op.generatesNullsOnRight();
+      this.optionalRight = op.optionalizesRight();
       this.code = code;
       this.conditionCode = conditionCode;
     }
@@ -411,7 +411,7 @@ public abstract class RowSinks {
       this.leftSlotCount = leftSlotCount;
       this.code = code;
       this.conditionCode = conditionCode;
-      this.optionalRight = op.generatesNullsOnRight();
+      this.optionalRight = op.optionalizesRight();
       this.fullJoin = op == Op.FULL_JOIN;
     }
 
