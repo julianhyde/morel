@@ -148,6 +148,7 @@ public class TypeResolver {
   static final String ARG_TY_CON = "$arg";
   static final String OVERLOAD_TY_CON = BuiltIn.Datatype.OVERLOAD.mlName();
   static final String LIST_TY_CON = "list";
+  static final String OPTION_TY_CON = BuiltIn.Datatype.OPTION.mlName();
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
 
@@ -1338,6 +1339,9 @@ public class TypeResolver {
       reg(scan.exp, c0);
       containerize = CollectionType.BOTH; // retain source collection type
     }
+    // Fields bound by earlier steps; if this is a 'right join' or 'full join'
+    // they become optional downstream.
+    final int priorCount = fieldVars.size();
     pat = deducePatType(p.env, scan.pat, termMap::add, null, v0, t -> t);
     final TypeEnvHolder typeEnvs = new TypeEnvHolder(p.env);
     for (PatTerm patTerm : termMap) {
@@ -1346,7 +1350,40 @@ public class TypeResolver {
       fieldVars.add(id1, (Variable) patTerm.term);
       reg(id1, patTerm.term);
     }
+    // The 'on' clause sees the non-optional ('unwrapped') types, so resolve it
+    // before wrapping any fields in 'option' below.
     final TypeEnv env4 = typeEnvs.typeEnv;
+    final Ast.Exp scanCondition2;
+    if (scan.condition != null) {
+      final Variable v5 = unifier.variable();
+      scanCondition2 = deduceExpType(env4, scan.condition, v5);
+      equiv(v5, toTerm(PrimitiveType.BOOL));
+    } else {
+      scanCondition2 = null;
+    }
+
+    // An outer join generates null rows, represented as 'option' values, on one
+    // or both sides. A 'left'/'full' join wraps the newly scanned fields; a
+    // 'right'/'full' join wraps the fields of earlier steps. Wrapping is
+    // additive, so nested outer joins stack 'option' layers (e.g. 'option
+    // option'). Only the downstream environment ('outEnv') and element type
+    // ('v') are affected, not the 'on' clause resolved above.
+    TypeEnv outEnv = env4;
+    if (scan.op.generatesNullsOnLeft() || scan.op.generatesNullsOnRight()) {
+      for (int i = 0; i < fieldVars.size(); i++) {
+        final boolean wrap =
+            i < priorCount
+                ? scan.op.generatesNullsOnLeft()
+                : scan.op.generatesNullsOnRight();
+        if (wrap) {
+          final Ast.Id id = fieldVars.left(i);
+          final Variable wrapped =
+              equiv(unifier.variable(), optionTerm(fieldVars.right(i)));
+          fieldVars.set(i, id, wrapped);
+          outEnv = outEnv.bind(id.name, wrapped);
+        }
+      }
+    }
 
     final Variable v = fieldVar(fieldVars, true);
     final Variable c;
@@ -1403,16 +1440,8 @@ public class TypeResolver {
         }
     }
 
-    final Ast.Exp scanCondition2;
-    if (scan.condition != null) {
-      final Variable v5 = unifier.variable();
-      scanCondition2 = deduceExpType(env4, scan.condition, v5);
-      equiv(v5, toTerm(PrimitiveType.BOOL));
-    } else {
-      scanCondition2 = null;
-    }
     steps.add(scan.copy(pat, scanExp3, scanCondition2));
-    return Triple.of(p.rootEnv, env4, v, c);
+    return Triple.of(p.rootEnv, outEnv, v, c);
   }
 
   /**
@@ -3832,6 +3861,10 @@ public class TypeResolver {
 
   private Sequence bagTerm(Term term) {
     return unifier.apply(BAG_TY_CON, term);
+  }
+
+  private Sequence optionTerm(Term term) {
+    return unifier.apply(OPTION_TY_CON, term);
   }
 
   private Sequence fnTerm(Term arg, Term result) {

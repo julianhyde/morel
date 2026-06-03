@@ -712,6 +712,9 @@ public class Compiler {
     final Code code;
     switch (firstStep.op) {
       case SCAN:
+      case LEFT_JOIN:
+      case RIGHT_JOIN:
+      case FULL_JOIN:
         final Core.Scan scan = (Core.Scan) firstStep;
         code = compileRow(cx, scan.exp);
         // Extend the layout with scan variable patterns at stack slots.

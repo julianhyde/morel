@@ -171,7 +171,13 @@ public class FromBuilder {
   }
 
   public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    if (exp.op == Op.FROM
+    return scan(Op.SCAN, pat, exp, condition);
+  }
+
+  public FromBuilder scan(
+      Op op, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+    if (op == Op.SCAN
+        && exp.op == Op.FROM
         && core.boolLiteral(true).equals(condition)
         && isSimplePat(pat, (Core.From) exp)
         && !containsOrdinal(exp)
@@ -252,9 +258,27 @@ public class FromBuilder {
       return yield_(
           uselessIfLast, env, core.record(typeSystem, nameExps), atom1);
     }
+    final int priorCount = bindings.size();
     Compiles.acceptBinding(typeSystem, pat, bindings);
+    if (op != Op.SCAN) {
+      // An outer join generates null rows, represented as 'option' values, on
+      // one or both sides. A 'left'/'full' join wraps the newly scanned fields;
+      // a 'right'/'full' join wraps the fields of earlier steps. Wrapping is
+      // additive, so nested outer joins stack 'option' layers.
+      for (int i = 0; i < bindings.size(); i++) {
+        final boolean wrap =
+            i < priorCount
+                ? op.generatesNullsOnLeft()
+                : op.generatesNullsOnRight();
+        if (wrap) {
+          final Binding b = bindings.get(i);
+          bindings.set(
+              i, Binding.of(b.id.withType(typeSystem.option(b.id.type))));
+        }
+      }
+    }
     atom = bindings.size() == 1;
-    return addStep(core.scan(stepEnv(), pat, exp, condition));
+    return addStep(core.scan(op, stepEnv(), pat, exp, condition));
   }
 
   /** Returns whether a expression calls {@code ordinal}. */
@@ -563,7 +587,7 @@ public class FromBuilder {
 
     @Override
     protected void visit(Core.Scan scan) {
-      scan(scan.pat, scan.exp, scan.condition);
+      scan(scan.op, scan.pat, scan.exp, scan.condition);
     }
 
     @Override
