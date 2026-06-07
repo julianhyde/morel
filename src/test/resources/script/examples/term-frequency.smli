@@ -1,0 +1,281 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Term frequency - inverse document frequency (TF-IDF)
+ * ====================================================
+ *
+ * TF-IDF is a numeric statistic, used in search and text mining,
+ * that reflects how important a term is to a document within a
+ * collection of documents (a "corpus"). A term that occurs often in
+ * one document but rarely across the corpus is a good signal for that
+ * document; a term that occurs everywhere (such as "the") carries
+ * little information.
+ *
+ * For a term 't' and a document 'd' drawn from a corpus of 'n'
+ * documents:
+ *
+ *   tf-idf(t, d) = tf(t, d) * idf(t)
+ *
+ *   - tf(t, d), the "term frequency", is the number of occurrences
+ *     of 't' in 'd';
+ *   - df(t), the "document frequency", is the number of documents
+ *     that contain 't';
+ *   - idf(t), the "inverse document frequency", is
+ *     'ln (n / df(t)) + 1'. The logarithm damps the effect of very
+ *     common terms; the '+ 1' ensures that a term occurring in every
+ *     document is not ignored entirely.
+ *
+ * What makes this interesting as a query is that the three measures
+ * are computed at three different granularities: 'tf' per (term,
+ * document), 'df' per term (counting distinct documents), and 'n'
+ * over the whole corpus. Expressing all three in one pass is awkward
+ * in SQL -- it needs 'GROUPING SETS' -- but in Morel we can phrase
+ * 'tf', 'df' and 'idf' as ordinary functions that contain correlated
+ * sub-queries, and call them from a single outer query. (This
+ * example is from https://github.com/hydromatic/morel/issues/87.)
+ *)
+
+(*) The corpus: eight short documents over a ten-letter vocabulary.
+val docs =
+  [{name = "doc0.txt", text = "a a a d b b b c c c"},
+   {name = "doc1.txt", text = "a c c d e f e e i j"},
+   {name = "doc2.txt", text = "e f c d f f i h a j"},
+   {name = "doc3.txt", text = "a i c j e f g h i j"},
+   {name = "doc4.txt", text = "e f j d d f i d d j"},
+   {name = "doc5.txt", text = "b i c i e j g j i g"},
+   {name = "doc6.txt", text = "a a c d b b e e j j"},
+   {name = "doc7.txt", text = "a b j j e f f h i j"}];
+> val docs =
+>   [{name="doc0.txt",text="a a a d b b b c c c"},
+>    {name="doc1.txt",text="a c c d e f e e i j"},
+>    {name="doc2.txt",text="e f c d f f i h a j"},
+>    {name="doc3.txt",text="a i c j e f g h i j"},
+>    {name="doc4.txt",text="e f j d d f i d d j"},
+>    {name="doc5.txt",text="b i c i e j g j i g"},
+>    {name="doc6.txt",text="a a c d b b e e j j"},
+>    {name="doc7.txt",text="a b j j e f f h i j"}]
+>   : {name:string, text:string} list
+
+(* Solution 1. Compute tf, idf and tf-idf for every (document, term) pair.
+   'df' counts the distinct documents containing a term by reducing to one row
+   per document with 'group', then counting those rows. *)
+fun docTerms () =
+  let
+    (* One row per occurrence of a term in a document. 'String.tokens' splits
+       the text on whitespace. *)
+    val rawDocTerms =
+      from doc in docs,
+          t in String.tokens Char.isSpace doc.text
+        yield {d = doc.name, t}
+    (* n: the number of documents in the corpus. A 'compute' step with no
+       'group' aggregates the whole input to a single scalar. *)
+    val n = from d in docs compute count over ()
+    (* tf (t, d): how many times term t occurs in document d. *)
+    fun tf (t, d) =
+      from dt in rawDocTerms
+        where dt.t = t andalso dt.d = d
+        compute count over ()
+    (* df t: how many distinct documents contain term t. The inner 'group r.d'
+       reduces to one row per document; 'compute' then counts those rows. *)
+    fun df t =
+      from d in (from r in rawDocTerms where r.t = t group r.d)
+        compute count over ()
+    fun idf t = Math.ln (real n / real (df t)) + 1.0
+    fun idf_tf (t, d) = idf t * real (tf (t, d))
+  in
+    from {d, t} in rawDocTerms
+      group {d, t}
+      yield {d, t, tf = tf (t, d), idf = idf t, idf_tf = idf_tf (t, d)}
+  end;
+> val docTerms = fn
+>   : unit -> {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+(*) Render results as a table.
+Sys.set ("output", "tabular");
+> val it = () : unit
+
+(*) The terms of a single document, with their scores.
+from x in docTerms ()
+  where x.d = "doc5.txt"
+  order DESC x.idf_tf;
+> d        idf       idf_tf    t tf
+> -------- --------- --------- - --
+> doc5.txt 2.3862944 4.7725887 g  2
+> doc5.txt  1.287682 3.8630462 i  3
+> doc5.txt 1.1335315  2.267063 j  2
+> doc5.txt 1.6931472 1.6931472 b  1
+> doc5.txt  1.287682  1.287682 c  1
+> doc5.txt 1.1335315 1.1335315 e  1
+>
+> val it : {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+(*) Where do the terms "b" and "g" score highest? "g" is rarer (it appears
+(*) in fewer documents) so it earns a higher idf, but "b" wins overall in
+(*) doc0, where it occurs three times.
+from x in docTerms ()
+  where x.t elem ["b", "g"]
+  order DESC x.idf_tf;
+> d        idf       idf_tf    t tf
+> -------- --------- --------- - --
+> doc0.txt 1.6931472 5.0794415 b  3
+> doc5.txt 2.3862944 4.7725887 g  2
+> doc6.txt 1.6931472 3.3862944 b  2
+> doc3.txt 2.3862944 2.3862944 g  1
+> doc5.txt 1.6931472 1.6931472 b  1
+> doc7.txt 1.6931472 1.6931472 b  1
+>
+> val it : {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+(* Solution 2. The same computation, but 'df' reads more directly: take the
+   document of each matching row, remove duplicates with 'distinct', and count
+   what remains. Morel has no distinct-aggregate, but an aggregate applied to a
+   'distinct' query has the same effect. *)
+fun docTerms () =
+  let
+    val rawDocTerms =
+      from doc in docs,
+          t in String.tokens Char.isSpace doc.text
+        yield {d = doc.name, t}
+    val n = from d in docs compute count over ()
+    fun tf (t, d) =
+      from dt in rawDocTerms
+        where dt.t = t andalso dt.d = d
+        compute count over ()
+    fun df t =
+      from r in rawDocTerms
+        where r.t = t
+        yield r.d
+        distinct
+        compute count over ()
+    fun idf t = Math.ln (real n / real (df t)) + 1.0
+    fun idf_tf (t, d) = idf t * real (tf (t, d))
+  in
+    from {d, t} in rawDocTerms
+      group {d, t}
+      yield {d, t, tf = tf (t, d), idf = idf t, idf_tf = idf_tf (t, d)}
+  end;
+> val docTerms = fn
+>   : unit -> {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+(*) Same answer as Solution 1.
+from x in docTerms ()
+  where x.t elem ["b", "g"]
+  order DESC x.idf_tf;
+> d        idf       idf_tf    t tf
+> -------- --------- --------- - --
+> doc0.txt 1.6931472 5.0794415 b  3
+> doc5.txt 2.3862944 4.7725887 g  2
+> doc6.txt 1.6931472 3.3862944 b  2
+> doc3.txt 2.3862944 2.3862944 g  1
+> doc5.txt 1.6931472 1.6931472 b  1
+> doc7.txt 1.6931472 1.6931472 b  1
+>
+> val it : {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+(* Solution 3. Rather than calling tf and df as functions, inline them as
+   dependent (correlated) sub-queries. A '=' binding sets a variable to the
+   scalar result of a sub-query that depends on the outer row's 'd' and 't'.
+   The two 'yield' steps compute 'idf' once, then reuse it. *)
+fun docTerms () =
+  let
+    val rawDocTerms =
+      from doc in docs,
+          t in String.tokens Char.isSpace doc.text
+        yield {d = doc.name, t}
+    val n = from d in docs compute count over ()
+  in
+    from {d, t} in (from r in rawDocTerms group {r.d, r.t}),
+        tf = (from x in rawDocTerms
+                where x.d = d andalso x.t = t
+                compute count over ()),
+        df = (from x in rawDocTerms
+                where x.t = t
+                yield x.d
+                distinct
+                compute count over ())
+      yield {d, t, tf, idf = Math.ln (real n / real df) + 1.0}
+      yield {d, t, tf, idf, idf_tf = real tf * idf}
+  end;
+> val docTerms = fn
+>   : unit -> {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+(*) Same answer as Solutions 1 and 2.
+from x in docTerms ()
+  where x.t elem ["b", "g"]
+  order DESC x.idf_tf;
+> d        idf       idf_tf    t tf
+> -------- --------- --------- - --
+> doc0.txt 1.6931472 5.0794415 b  3
+> doc5.txt 2.3862944 4.7725887 g  2
+> doc6.txt 1.6931472 3.3862944 b  2
+> doc3.txt 2.3862944 2.3862944 g  1
+> doc5.txt 1.6931472 1.6931472 b  1
+> doc7.txt 1.6931472 1.6931472 b  1
+>
+> val it : {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+(* Solution 4. 'tf' is just the number of rows per (d, t), so compute it in
+   the 'group' itself. This also subsumes the distinct-pairs sub-query: grouping
+   'rawDocTerms' by {d, t} already yields one row per pair. The 'yield' uses a
+   'let' to derive 'df' (a dependent sub-query), 'idf' and 'idf_tf'; 'df' is
+   local to the 'let', so it is not a field of the result. *)
+fun docTerms () =
+  let
+    val rawDocTerms =
+      from doc in docs,
+          t in String.tokens Char.isSpace doc.text
+        yield {d = doc.name, t}
+    val n = from d in docs compute count over ()
+  in
+    from {d, t} in rawDocTerms
+      group {d, t} compute {tf = count over ()}
+      yield
+        let
+          val df =
+            (from x in rawDocTerms
+              where x.t = t
+              group x.d compute {}
+              compute count over ())
+          val idf = Math.ln (real n / real df) + 1.0
+          val idf_tf = real tf * idf
+        in
+          {d, t, tf, idf, idf_tf}
+        end
+  end;
+> val docTerms = fn
+>   : unit -> {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+(*) Same answer as the other solutions.
+from x in docTerms ()
+  where x.t elem ["b", "g"]
+  order DESC x.idf_tf;
+> d        idf       idf_tf    t tf
+> -------- --------- --------- - --
+> doc0.txt 1.6931472 5.0794415 b  3
+> doc5.txt 2.3862944 4.7725887 g  2
+> doc6.txt 1.6931472 3.3862944 b  2
+> doc3.txt 2.3862944 2.3862944 g  1
+> doc5.txt 1.6931472 1.6931472 b  1
+> doc7.txt 1.6931472 1.6931472 b  1
+>
+> val it : {d:string, idf:real, idf_tf:real, t:string, tf:int} list
+
+Sys.unset "output";
+> val it = () : unit
+
+(*) End term-frequency.smli
