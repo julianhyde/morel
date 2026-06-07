@@ -307,6 +307,15 @@ String s = "first line\n" //
 We use American English. Use "optimize" instead of "optimise",
 "behavior" instead of "behaviour", etc.
 
+### Git branches
+
+When working on a GitHub issue, name the branch
+`<issue-number>-<short-summary>`, where the summary is a few words from the
+issue title in lower-case kebab-case. Do not prefix it with `issue-`.
+
+For example, issue 87 ("Term frequency and document frequency") gives the
+branch `87-term-frequency`.
+
 ### Verification
 
 Before a commit, run the `fullMake` command (in `/usr/local/bin` and on path).
