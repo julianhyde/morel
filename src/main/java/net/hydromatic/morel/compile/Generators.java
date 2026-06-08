@@ -74,12 +74,30 @@ class Generators {
     boolean hasBounds = false;
     Core.Exp prefixMatch = null;
     Core.Exp prefixString = null;
+    Core.Exp rangeContainsMatch = null;
+    Core.Exp rangeContainsValue = null;
+    Core.Exp rangeContainsRange = null;
 
     for (Core.Exp c : context.constraints) {
       if (elemMatch == null
           && c.isCallTo(BuiltIn.OP_ELEM)
           && containsRef(c.arg(0), pat)) {
         elemMatch = c;
+      }
+      // 'pat elem [a..b]' is rewritten to 'Range.contains (a..b) pat'. If the
+      // range is finite and 'pat' is discrete, it is a finite generator for
+      // 'pat', equivalent to 'pat in Range.flatten [a..b]'.
+      if (rangeContainsMatch == null
+          && c.op == Op.APPLY
+          && ((Core.Apply) c).fn.isCallTo(BuiltIn.RANGE_CONTAINS)
+          && references(((Core.Apply) c).arg, pat)
+          && pat.type.isDiscrete(cache.typeSystem)) {
+        final Core.Exp range = ((Core.Apply) ((Core.Apply) c).fn).arg;
+        if (isFiniteRange(range)) {
+          rangeContainsMatch = c;
+          rangeContainsValue = ((Core.Apply) c).arg;
+          rangeContainsRange = range;
+        }
       }
       if (pointMatch == null && c.isCallTo(BuiltIn.OP_EQ)) {
         if (references(c.arg(0), pat)) {
@@ -114,6 +132,31 @@ class Generators {
       final Core.Pat elemPat = cache.patForExp(elemMatch.arg(0));
       CollectionGenerator.create(
           cache, ordered, elemPat, collection, ImmutableSet.of(elemMatch));
+      cache.deriveFieldGenerators(ordered);
+      return true;
+    }
+    if (rangeContainsMatch != null) {
+      final TypeSystem typeSystem = cache.typeSystem;
+      final Type elementType = pat.type;
+      final Core.Exp rangeListExp =
+          core.list(
+              typeSystem,
+              typeSystem.range(elementType),
+              ImmutableList.of(rangeContainsRange));
+      final Core.Exp collection =
+          core.call(
+              typeSystem,
+              BuiltIn.RANGE_FLATTEN,
+              elementType,
+              Pos.ZERO,
+              rangeListExp);
+      final Core.Pat elemPat = cache.patForExp(rangeContainsValue);
+      CollectionGenerator.create(
+          cache,
+          ordered,
+          elemPat,
+          collection,
+          ImmutableSet.of(rangeContainsMatch));
       cache.deriveFieldGenerators(ordered);
       return true;
     }
@@ -2860,6 +2903,36 @@ class Generators {
       this.value = value;
       this.strict = strict;
       this.source = source;
+    }
+  }
+
+  /**
+   * Returns whether {@code range} is a range constructor application bounded on
+   * both ends (e.g. {@code CLOSED (a, b)}), and therefore finite (and
+   * enumerable, for a discrete element type). Infinite constructors such as
+   * {@code AT_LEAST a} and {@code ALL} return false.
+   */
+  private static boolean isFiniteRange(Core.Exp range) {
+    if (!(range instanceof Core.Apply)) {
+      return false;
+    }
+    final Core.Apply ctor = (Core.Apply) range;
+    if (!(ctor.fn instanceof Core.Id)) {
+      return false;
+    }
+    final BuiltIn.Constructor c =
+        BuiltIn.Constructor.forName(((Core.Id) ctor.fn).idPat.name);
+    if (c == null) {
+      return false;
+    }
+    switch (c) {
+      case RANGE_CLOSED:
+      case RANGE_CLOSED_OPEN:
+      case RANGE_OPEN:
+      case RANGE_OPEN_CLOSED:
+        return true;
+      default:
+        return false;
     }
   }
 
