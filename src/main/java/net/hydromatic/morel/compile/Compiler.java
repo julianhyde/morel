@@ -1061,6 +1061,27 @@ public class Compiler {
       Op op,
       List<Core.FromStep> remainingSteps,
       Type elementType) {
+    // If the input row's variables are in the environment (the upstream is a
+    // 'group'/'distinct'), insert a 'rematerialize' adapter that pushes them
+    // onto the stack, then compile the set step against the stack-based
+    // context. The set sinks can then assume their row is on the stack.
+    final ImmutablePairList<String, Code> envSlots =
+        buildEnvRowSlots(cx, stepEnv.bindings);
+    if (!envSlots.isEmpty()) {
+      final Context cxStack = buildEnvSlotsContext(cx, stepEnv.bindings);
+      final Supplier<RowSink> setFactory =
+          compileSetSink(
+              cxStack,
+              cxFrom,
+              allScopeBindings,
+              stepEnv,
+              args,
+              distinct,
+              op,
+              remainingSteps,
+              elementType);
+      return () -> RowSinks.rematerialize(envSlots, setFactory.get());
+    }
     // RHS codes: non-distinct EXCEPT/INTERSECT evaluate codes in accept() when
     // scan vars ARE on the stack, so use cx. UNION and distinct
     // EXCEPT/INTERSECT evaluate codes in result() when scan vars are NOT on the
@@ -1089,16 +1110,11 @@ public class Compiler {
     final ImmutableList<Code> codes =
         transformEager(args, a -> compile(codeCx, a));
     final ImmutableList<String> names = bindingNames(stepEnv.bindings);
-    // inSlots: capture all scope vars during accept() using cx.
+    // inSlots: capture all scope vars during accept() using cx. At this point
+    // the row's variables are always on the stack (the 'rematerialize' adapter
+    // above handles the env case), so these are StackCode.
     final ImmutablePairList<String, Code> inSlots =
         buildInSlots(cx, allScopeBindings.values());
-    // scanDepth: how many of the SET step's output vars are in the stack
-    // layout. These are pushed back at result() time via withRowFromKey().
-    final int scanDepth =
-        (int)
-            stepEnv.bindings.stream()
-                .filter(b -> cx.layout.get(b.id) >= 0)
-                .count();
     // cxResult: extends cx so that env-based stepEnv output vars (those not
     // yet in the stack layout) are assigned new slot indices. This allows
     // downstream code to reference all SET output vars via StackCode.
@@ -1120,16 +1136,14 @@ public class Compiler {
     switch (op) {
       case EXCEPT:
         return () ->
-            RowSinks.except(
-                distinct, codes, names, inSlots, scanDepth, nextFactory.get());
+            RowSinks.except(distinct, codes, names, inSlots, nextFactory.get());
       case INTERSECT:
         return () ->
             RowSinks.intersect(
-                distinct, codes, names, inSlots, scanDepth, nextFactory.get());
+                distinct, codes, names, inSlots, nextFactory.get());
       case UNION:
         return () ->
-            RowSinks.union(
-                distinct, codes, names, inSlots, scanDepth, nextFactory.get());
+            RowSinks.union(distinct, codes, names, inSlots, nextFactory.get());
       default:
         throw new AssertionError(op);
     }
@@ -1171,6 +1185,25 @@ public class Compiler {
     return ImmutablePairList.fromTransformed(
         sortedInBindings(cx, bindings),
         (b, add) -> add.accept(b.id.name, compileFieldName(cx, b.id)));
+  }
+
+  /**
+   * Builds (name, code) slots that read each environment-based binding (those
+   * not in {@code cx.layout}), in {@code bindings} order. This matches the
+   * slot-assignment order of {@link #buildEnvSlotsContext}, so a {@code
+   * rematerialize} sink built from these slots pushes the row's variables to
+   * the positions that downstream {@code StackCode} reads. Returns an empty
+   * list when every binding is already on the stack.
+   */
+  private ImmutablePairList<String, Code> buildEnvRowSlots(
+      Context cx, List<Binding> bindings) {
+    final PairList<String, Code> slots = PairList.of();
+    for (Binding b : bindings) {
+      if (cx.layout.get(b.id) < 0) {
+        slots.add(b.id.name, compileFieldName(cx, b.id));
+      }
+    }
+    return slots.immutable();
   }
 
   /**

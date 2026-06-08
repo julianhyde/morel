@@ -86,11 +86,10 @@ public abstract class RowSinks {
       ImmutableList<Code> codes,
       ImmutableList<String> names,
       ImmutablePairList<String, Code> inSlots,
-      int scanDepth,
       RowSink rowSink) {
     return distinct
-        ? new ExceptDistinctRowSink(codes, names, inSlots, scanDepth, rowSink)
-        : new ExceptAllRowSink(codes, names, inSlots, scanDepth, rowSink);
+        ? new ExceptDistinctRowSink(codes, names, inSlots, rowSink)
+        : new ExceptAllRowSink(codes, names, inSlots, rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code group} step. */
@@ -118,12 +117,10 @@ public abstract class RowSinks {
       ImmutableList<Code> codes,
       ImmutableList<String> names,
       ImmutablePairList<String, Code> inSlots,
-      int scanDepth,
       RowSink rowSink) {
     return distinct
-        ? new IntersectDistinctRowSink(
-            codes, names, inSlots, scanDepth, rowSink)
-        : new IntersectAllRowSink(codes, names, inSlots, scanDepth, rowSink);
+        ? new IntersectDistinctRowSink(codes, names, inSlots, rowSink)
+        : new IntersectAllRowSink(codes, names, inSlots, rowSink);
   }
 
   /** Creates a {@link RowSink} for an {@code order} step. */
@@ -184,15 +181,27 @@ public abstract class RowSinks {
       ImmutableList<Code> codes,
       ImmutableList<String> names,
       ImmutablePairList<String, Code> inSlots,
-      int scanDepth,
       RowSink rowSink) {
-    return new UnionRowSink(
-        distinct, codes, names, inSlots, scanDepth, rowSink);
+    return new UnionRowSink(distinct, codes, names, inSlots, rowSink);
   }
 
   /** Creates a {@link RowSink} for a {@code where} step. */
   public static RowSink where(Code filterCode, RowSink rowSink) {
     return new WhereRowSink(filterCode, rowSink);
+  }
+
+  /**
+   * Creates a {@link RowSink} that pushes the current row's variables onto the
+   * stack before passing it downstream.
+   *
+   * <p>It adapts a row produced "in the environment" (by name, after a {@code
+   * group}/{@code distinct}) to a downstream sink that expects it on the stack
+   * (positionally). The compiler inserts it when the two disagree; see {@link
+   * net.hydromatic.morel.compile.Compiler#compileSetSink}.
+   */
+  public static RowSink rematerialize(
+      ImmutablePairList<String, Code> slots, RowSink rowSink) {
+    return new RematerializeRowSink(slots, rowSink);
   }
 
   /** Creates a {@link RowSink} for a non-terminal {@code yield} step. */
@@ -564,6 +573,51 @@ public abstract class RowSinks {
     }
   }
 
+  /**
+   * Implementation of {@link RowSink} that pushes the current row's variables
+   * onto the stack before delegating, adapting an environment-based row to a
+   * stack-based downstream sink.
+   */
+  private static class RematerializeRowSink extends BaseRowSink {
+    /**
+     * (Name, code) slots that read the row's variables from the environment.
+     */
+    final ImmutablePairList<String, Code> slots;
+
+    RematerializeRowSink(
+        ImmutablePairList<String, Code> slots, RowSink rowSink) {
+      super(rowSink);
+      this.slots = slots;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start("rematerialize", d -> d.arg("sink", rowSink));
+    }
+
+    @Override
+    public int maxSlots() {
+      return slots.size() + rowSink.maxSlots();
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      // Evaluate all values from the input stack/env before pushing any, so
+      // that StackCode offsets stay valid throughout (mirrors YieldRowSink).
+      final Object[] values = new Object[slots.size()];
+      for (int i = 0; i < slots.size(); i++) {
+        values[i] = slots.right(i).eval(stack);
+      }
+      final Stack s = stack.ensureSize(slots.size());
+      final int savedTop = s.top;
+      for (Object value : values) {
+        s.push(value);
+      }
+      rowSink.accept(s);
+      s.restore(savedTop);
+    }
+  }
+
   /** Implementation of {@link RowSink} for a {@code skip} step. */
   private static class SkipRowSink extends BaseRowSink {
     final Code skipCode;
@@ -643,21 +697,6 @@ public abstract class RowSinks {
      * accept(Stack)}.
      */
     final ImmutablePairList<String, Code> inSlots;
-    /**
-     * Number of {@code names} entries that are stack-layout-based. These are
-     * pushed back onto the stack at {@code result()} time.
-     */
-    final int scanDepth;
-
-    /**
-     * Whether {@link #accept(Stack)} must reconstruct the current row onto the
-     * stack before passing it downstream. This is true when the row's variables
-     * are in {@code globalEnv} rather than on the stack, as happens after a
-     * {@code group} or {@code distinct} step (then {@code scanDepth} is 0).
-     * When false, the variables are already live on the stack and the row can
-     * be passed through directly.
-     */
-    final boolean pushOnAccept;
 
     /**
      * Maps each position in {@code names} to the position of that field within
@@ -679,7 +718,6 @@ public abstract class RowSinks {
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         ImmutablePairList<String, Code> inSlots,
-        int scanDepth,
         RowSink rowSink) {
       super(rowSink);
       checkArgument(
@@ -691,8 +729,6 @@ public abstract class RowSinks {
       this.codes = requireNonNull(codes);
       this.names = requireNonNull(names);
       this.inSlots = requireNonNull(inSlots);
-      this.scanDepth = scanDepth;
-      this.pushOnAccept = scanDepth == 0 && !names.isEmpty();
       this.values = new Object[names.size()];
       final List<String> orderedNames = RecordType.ORDERING.sortedCopy(names);
       this.recordFieldIndex = new int[names.size()];
@@ -866,30 +902,6 @@ public abstract class RowSinks {
       }
       return s;
     }
-
-    /**
-     * Passes the current upstream row to the downstream sink during {@code
-     * accept()}.
-     *
-     * <p>If the row's variables are already live on the stack the stack is
-     * passed through unchanged. Otherwise (after a {@code group}/{@code
-     * distinct}, where they live in {@code globalEnv}; see {@link
-     * #pushOnAccept}) the row is reconstructed onto the stack first, just as
-     * {@link #result(Stack)} does for the right-hand-side elements, so that
-     * downstream code reads it via the same stack slots.
-     */
-    void acceptRow(Stack stack) {
-      if (pushOnAccept) {
-        final Object key = computeKey(stack);
-        final Stack s = stack.ensureSize(names.size());
-        final int savedTop = s.top;
-        rowSink.accept(withRowFromKey(s, key));
-        s.restore(savedTop);
-      } else {
-        // Scan vars are live on the stack; pass through directly.
-        rowSink.accept(stack);
-      }
-    }
   }
 
   /** Implementation of {@link RowSink} for non-distinct {@code except} step. */
@@ -900,9 +912,8 @@ public abstract class RowSinks {
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         ImmutablePairList<String, Code> inSlots,
-        int scanDepth,
         RowSink rowSink) {
-      super(Op.EXCEPT, false, codes, names, inSlots, scanDepth, rowSink);
+      super(Op.EXCEPT, false, codes, names, inSlots, rowSink);
     }
 
     @Override
@@ -925,7 +936,10 @@ public abstract class RowSinks {
           map.remove(value);
         }
       } else {
-        acceptRow(stack);
+        // The row's variables are live on the stack (a 'rematerialize' adapter
+        // is inserted upstream when they would otherwise be in the env); pass
+        // the stack through directly.
+        rowSink.accept(stack);
       }
     }
   }
@@ -936,9 +950,8 @@ public abstract class RowSinks {
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         ImmutablePairList<String, Code> inSlots,
-        int scanDepth,
         RowSink rowSink) {
-      super(Op.EXCEPT, true, codes, names, inSlots, scanDepth, rowSink);
+      super(Op.EXCEPT, true, codes, names, inSlots, rowSink);
     }
 
     @Override
@@ -991,9 +1004,8 @@ public abstract class RowSinks {
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         ImmutablePairList<String, Code> inSlots,
-        int scanDepth,
         RowSink rowSink) {
-      super(Op.INTERSECT, false, codes, names, inSlots, scanDepth, rowSink);
+      super(Op.INTERSECT, false, codes, names, inSlots, rowSink);
     }
 
     @Override
@@ -1034,7 +1046,7 @@ public abstract class RowSinks {
       map.computeIfPresent(
           value,
           (k, counts) -> {
-            acceptRow(stack);
+            rowSink.accept(stack);
             return --counts[0] == 0 ? null : counts;
           });
     }
@@ -1058,9 +1070,8 @@ public abstract class RowSinks {
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         ImmutablePairList<String, Code> inSlots,
-        int scanDepth,
         RowSink rowSink) {
-      super(Op.INTERSECT, true, codes, names, inSlots, scanDepth, rowSink);
+      super(Op.INTERSECT, true, codes, names, inSlots, rowSink);
     }
 
     @Override
@@ -1109,15 +1120,16 @@ public abstract class RowSinks {
         ImmutableList<Code> codes,
         ImmutableList<String> names,
         ImmutablePairList<String, Code> inSlots,
-        int scanDepth,
         RowSink rowSink) {
-      super(Op.UNION, distinct, codes, names, inSlots, scanDepth, rowSink);
+      super(Op.UNION, distinct, codes, names, inSlots, rowSink);
     }
 
     @Override
     public void accept(Stack stack) {
       if (!distinct || add(stack)) {
-        acceptRow(stack);
+        // The row is live on the stack (see ExceptAllRowSink.accept); pass
+        // through directly.
+        rowSink.accept(stack);
       }
     }
 
