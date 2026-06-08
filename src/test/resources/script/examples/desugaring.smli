@@ -352,12 +352,32 @@ from i in [1, 2]
    'exists' and 'forall ... require' are query forms whose desugaring in
    terms of the core operators is not yet illustrated. *)
 
-(* todo: unbounded *)
+(* unbounded -> join over each variable's extent
+   A 'from' may bind a variable without a collection: 'i' and 'j' here are
+   "unbounded". A 'where' that pins each one to a finite set of values gives
+   it an extent, and each extent becomes a 'join'. 'i = deptno' makes 'i'
+   range over '[deptno]'; 'j elem [i + 1, i + 2]' makes 'j' range over
+   '[i + 1, i + 2]'. ('Sys.planEx "3"' prints this expanded form.) *)
 from {deptno, dname, loc} in scott.depts,
-  i,
-  j
-where i = deptno
-andalso j elem [i + 1, i + 2];
+    i,
+    j
+  where i = deptno
+  andalso j elem [i + 1, i + 2];
+> deptno dname      i  j  loc
+> ------ ---------- -- -- --------
+>     10 ACCOUNTING 10 11 NEW YORK
+>     10 ACCOUNTING 10 12 NEW YORK
+>     20 RESEARCH   20 21 DALLAS
+>     20 RESEARCH   20 22 DALLAS
+>     30 SALES      30 31 CHICAGO
+>     30 SALES      30 32 CHICAGO
+>     40 OPERATIONS 40 41 BOSTON
+>     40 OPERATIONS 40 42 BOSTON
+>
+> val it : {deptno:int, dname:string, i:int, j:int, loc:string} bag
+from {deptno, dname, loc} in scott.depts
+  join i in [deptno]
+  join j in [i + 1, i + 2];
 > deptno dname      i  j  loc
 > ------ ---------- -- -- --------
 >     10 ACCOUNTING 10 11 NEW YORK
