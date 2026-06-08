@@ -58,6 +58,9 @@ useSilently "../scott.smli";
 > [opening ../scott.smli]
 > val it = () : unit
 
+set ("output", "tabular");
+> val it = () : unit
+
 (* ---------------------------------------------------------------- *)
 (* The core operators                                               *)
 (* ---------------------------------------------------------------- *)
@@ -74,10 +77,10 @@ from i in [1, 2], j in [10, 20] yield i + j;
 > val it = [11,21,12,22] : int list
 
 (*) 'yield' maps each element to a new value.
-from d in scott.depts yield d.dname order current;
-> val it = ["ACCOUNTING","OPERATIONS","RESEARCH","SALES"] : string list
+from d in scott.depts yield d.dname;
+> val it = ["ACCOUNTING","OPERATIONS","RESEARCH","SALES"] : string bag
 
-(*) 'order' sorts the elements.
+(*) 'order' sorts the elements. The result is always a list.
 from d in scott.depts order DESC d.deptno yield d.dname;
 > val it = ["OPERATIONS","SALES","RESEARCH","ACCOUNTING"] : string list
 
@@ -87,11 +90,15 @@ from d in scott.depts order DESC d.deptno yield d.dname;
 (*) primitive, 'group k compute {es = elements}', which pairs each key
 (*) with its elements.
 from e in [{job = "A", x = 1}, {job = "A", x = 2}, {job = "B", x = 3}]
-  group e.job compute {es = elements}
-  order job;
-> val it =
->   [{es=[{job="A",x=1},{job="A",x=2}],job="A"},{es=[{job="B",x=3}],job="B"}]
->   : {es:{job:string, x:int} list, job:string} list
+  group e.job compute {elements};
+> elements job
+> job x
+> --- ---- ---
+> A      1 A
+> A      2
+> B      3 B
+>
+> val it : {`elements`:{job:string, x:int} list, job:string} list
 
 (*) 'union1' concatenates one more collection (like SQL 'UNION ALL').
 from i in [1, 2] union [2, 3];
@@ -120,67 +127,116 @@ from u in [()], e in scott.emps where e.deptno = 10 yield e.ename order current;
 (* scan p = exp -> scan p in [exp]
    A scan that binds a variable to a single value, 'p = exp', is a scan
    over the one-element list '[exp]'. 'exp' may depend on earlier scans. *)
-from e in scott.emps, d = e.deptno where e.deptno = 10 yield {e.ename, d} order ename;
-> val it = [{d=10,ename="CLARK"},{d=10,ename="KING"},{d=10,ename="MILLER"}]
->   : {d:int, ename:string} list
-from e in scott.emps, d in [e.deptno] where e.deptno = 10 yield {e.ename, d} order ename;
-> val it = [{d=10,ename="CLARK"},{d=10,ename="KING"},{d=10,ename="MILLER"}]
->   : {d:int, ename:string} list
+from b in ["John", "Paul", "George", "Ringo"],
+  len = size b;
+> b      len
+> ------ ---
+> John     4
+> Paul     4
+> George   6
+> Ringo    5
+>
+> val it : {b:string, len:int} list
+from b in ["John", "Paul", "George", "Ringo"]
+  join len in [size b];
+> b      len
+> ------ ---
+> John     4
+> Paul     4
+> George   6
+> Ringo    5
+>
+> val it : {b:string, len:int} list
 
 (* join -> join1 ...
    A 'from' with several scans is one 'join1' per scan. An 'on'
    condition rides along with its scan's 'join1'. *)
-from e in scott.emps, d in scott.depts on e.deptno = d.deptno
+from e in scott.emps,
+    d in scott.depts on e.deptno = d.deptno
   where e.deptno = 20
-  yield {e.ename, d.loc}
-  order ename;
-> val it =
->   [{ename="ADAMS",loc="DALLAS"},{ename="FORD",loc="DALLAS"},
->    {ename="JONES",loc="DALLAS"},{ename="SCOTT",loc="DALLAS"},
->    {ename="SMITH",loc="DALLAS"}] : {ename:string, loc:string} list
+  yield {e.ename, d.loc};
+> ename loc
+> ----- ------
+> SMITH DALLAS
+> JONES DALLAS
+> SCOTT DALLAS
+> ADAMS DALLAS
+> FORD  DALLAS
+>
+> val it : {ename:string, loc:string} bag
+from e in scott.emps
+  join d in scott.depts on e.deptno = d.deptno
+  where e.deptno = 20
+  yield {e.ename, d.loc};
+> ename loc
+> ----- ------
+> SMITH DALLAS
+> JONES DALLAS
+> SCOTT DALLAS
+> ADAMS DALLAS
+> FORD  DALLAS
+>
+> val it : {ename:string, loc:string} bag
 
 (* where -> join1 [()] on cond
    'where cond' is a 'join1' against the one-element pipeline '[()]'
    whose 'on' condition is 'cond': the row survives if 'cond' holds. *)
-from e in scott.emps where e.deptno = 10 yield e.ename order current;
-> val it = ["CLARK","KING","MILLER"] : string list
-from e in scott.emps, u in [()] on e.deptno = 10 yield e.ename order current;
-> val it = ["CLARK","KING","MILLER"] : string list
+from e in scott.emps where e.deptno = 10 yield e.ename;
+> val it = ["CLARK","KING","MILLER"] : string bag
+from e in scott.emps, u in [()] on e.deptno = 10 yield e.ename;
+> val it = ["CLARK","KING","MILLER"] : string bag
 
 (* distinct -> coreGroup
    'distinct' removes duplicates by grouping on every column and keeping
    the keys. Grouping by all columns ('group {...}') is exactly that. *)
-from e in scott.emps yield {e.deptno, e.job} distinct order deptno;
-> val it =
->   [{deptno=10,job="MANAGER"},{deptno=10,job="PRESIDENT"},
->    {deptno=10,job="CLERK"},{deptno=20,job="CLERK"},{deptno=20,job="ANALYST"},
->    {deptno=20,job="MANAGER"},{deptno=30,job="MANAGER"},
->    {deptno=30,job="SALESMAN"},{deptno=30,job="CLERK"}]
->   : {deptno:int, job:string} list
-from e in scott.emps group {e.deptno, e.job} order deptno;
-> val it =
->   [{deptno=10,job="MANAGER"},{deptno=10,job="PRESIDENT"},
->    {deptno=10,job="CLERK"},{deptno=20,job="CLERK"},{deptno=20,job="ANALYST"},
->    {deptno=20,job="MANAGER"},{deptno=30,job="MANAGER"},
->    {deptno=30,job="SALESMAN"},{deptno=30,job="CLERK"}]
->   : {deptno:int, job:string} list
+from e in scott.emps yield {e.job} distinct;
+> job
+> ---------
+> CLERK
+> SALESMAN
+> ANALYST
+> MANAGER
+> PRESIDENT
+>
+> val it : {job:string} bag
+from e in scott.emps group {e.job};
+> job
+> ---------
+> CLERK
+> SALESMAN
+> ANALYST
+> MANAGER
+> PRESIDENT
+>
+> val it : {job:string} bag
 
 (* group -> coreGroup yield
    'group k compute {a = f over ...}' is 'coreGroup' (which keeps each
    key's elements) followed by a 'yield' that applies the aggregate to
    those elements. Here 'count over ()' is the number of elements. *)
-from e in scott.emps group e.deptno compute {c = count over ()} order deptno;
-> val it = [{c=3,deptno=10},{c=5,deptno=20},{c=6,deptno=30}]
->   : {c:int, deptno:int} list
+from e in scott.emps group e.deptno compute {c = count over ()};
+> c deptno
+> - ------
+> 5     20
+> 3     10
+> 6     30
+>
+> val it : {c:int, deptno:int} bag
 from e in scott.emps
   group e.deptno compute {es = elements}
-  yield {deptno, c = Bag.length es}
-  order deptno;
-> val it = [{c=3,deptno=10},{c=5,deptno=20},{c=6,deptno=30}]
->   : {c:int, deptno:int} list
+  yield {deptno, c = Bag.length es};
+> c deptno
+> - ------
+> 5     20
+> 3     10
+> 6     30
+>
+> val it : {c:int, deptno:int} bag
 
 (* unorder -> join1 bag [()]
-   'unorder' turns an ordered pipeline into an unordered one. Joining
+   'unorder' turns an ordered pipeline into an unordered one.
+   The result is always a bag.
+   Joining
    against an unordered one-element collection 'bag [()]' does the
    same, because a join is unordered if either input is. *)
 from i in [1, 2, 3] unorder;
@@ -214,12 +270,11 @@ from i in [2, 1, 2, 2, 2, 3] except (from j in [2, 1, 2, 2, 2, 3] except [2, 2, 
 
 (* union distinct -> union1 distinct
    A 'distinct' qualifier on a set operator desugars to the plain
-   operator followed by a 'distinct' step. (Ordered here so the two
-   forms print in the same order.) *)
-from i in [2, 1, 2, 3] union distinct [2, 4] order current;
-> val it = [1,2,3,4] : int list
-from i in [2, 1, 2, 3] union [2, 4] distinct order current;
-> val it = [1,2,3,4] : int list
+   operator followed by a 'distinct' step. *)
+from i in [2, 1, 2, 3] union distinct [2, 4];
+> val it = [2,1,3,4] : int list
+from i in [2, 1, 2, 3] union [2, 4] distinct;
+> val it = [2,1,3,4] : int list
 
 (* List.map -> yield
    'List.map f xs' is a query that yields 'f' of each element. *)
