@@ -291,14 +291,32 @@ List.filter (fn x => x mod 2 = 0) [1, 2, 3, 4];
 from x in [1, 2, 3, 4] where x mod 2 = 0;
 > val it = [2,4] : int list
 
-(* current
-   'current' is a core expression: it denotes the element currently
+(* current -> {current variables}
+   'current' denotes the element currently
    flowing through a step. In a single-scan 'from' it equals the scan
    variable. *)
-from e in scott.emps where e.deptno = 10 yield e.ename order current;
-> val it = ["CLARK","KING","MILLER"] : string list
-from e in scott.emps where current.deptno = 10 yield current.ename order current;
-> val it = ["CLARK","KING","MILLER"] : string list
+from i in [1, 2]
+  join s in ["a", "b"]
+  yield current;
+> i s
+> - -
+> 1 a
+> 1 b
+> 2 a
+> 2 b
+>
+> val it : {i:int, s:string} list
+from i in [1, 2]
+  join s in ["a", "b"]
+  yield {i, s};
+> i s
+> - -
+> 1 a
+> 1 b
+> 2 a
+> 2 b
+>
+> val it : {i:int, s:string} list
 
 (* ---------------------------------------------------------------- *)
 (* todo: rules not yet covered                                      *)
@@ -326,8 +344,31 @@ from e in scott.emps where current.deptno = 10 yield current.ename order current
    they are core operators or desugar to something more primitive is
    still to be determined. *)
 
-(* todo: forall, exists
+(* todo: forall
    'exists' and 'forall ... require' are query forms whose desugaring in
    terms of the core operators is not yet illustrated. *)
+
+(* todo: exists
+   'exists' and 'forall ... require' are query forms whose desugaring in
+   terms of the core operators is not yet illustrated. *)
+
+(* todo: unbounded *)
+from {deptno, dname, loc} in scott.depts,
+  i,
+  j
+where i = deptno
+andalso j elem [i + 1, i + 2];
+> deptno dname      i  j  loc
+> ------ ---------- -- -- --------
+>     10 ACCOUNTING 10 11 NEW YORK
+>     10 ACCOUNTING 10 12 NEW YORK
+>     20 RESEARCH   20 21 DALLAS
+>     20 RESEARCH   20 22 DALLAS
+>     30 SALES      30 31 CHICAGO
+>     30 SALES      30 32 CHICAGO
+>     40 OPERATIONS 40 41 BOSTON
+>     40 OPERATIONS 40 42 BOSTON
+>
+> val it : {deptno:int, dname:string, i:int, j:int, loc:string} bag
 
 (*) End desugaring.smli
