@@ -2907,6 +2907,34 @@ class Generators {
   }
 
   /**
+   * If {@code constraint} is {@code Range.contains range pat}, returns the
+   * range constructor application (e.g. {@code AT_LEAST a} or {@code CLOSED (a,
+   * b)}); otherwise returns null.
+   */
+  private static Core.@Nullable Apply rangeContainsArg(
+      Core.Exp constraint, Core.Pat pat) {
+    if (constraint.op != Op.APPLY) {
+      return null;
+    }
+    final Core.Apply apply = (Core.Apply) constraint;
+    if (!apply.fn.isCallTo(BuiltIn.RANGE_CONTAINS)
+        || !references(apply.arg, pat)) {
+      return null;
+    }
+    final Core.Exp range = ((Core.Apply) apply.fn).arg;
+    return range instanceof Core.Apply
+            && ((Core.Apply) range).fn instanceof Core.Id
+        ? (Core.Apply) range
+        : null;
+  }
+
+  /** Returns the range constructor of a range application, or null. */
+  private static BuiltIn.@Nullable Constructor rangeConstructor(
+      Core.Apply range) {
+    return BuiltIn.Constructor.forName(((Core.Id) range.fn).idPat.name);
+  }
+
+  /**
    * Returns whether {@code range} is a range constructor application bounded on
    * both ends (e.g. {@code CLOSED (a, b)}), and therefore finite (and
    * enumerable, for a discrete element type). Infinite constructors such as
@@ -2956,6 +2984,17 @@ class Generators {
         return references(constraint.arg(0), pat)
             || references(constraint.arg(1), pat);
       default:
+        // 'Range.contains (AT_LEAST a) pat' (and the other one-sided ranges)
+        // is a comparison bound; a two-sided range is handled as a generator,
+        // not a bound.
+        final Core.Apply range = rangeContainsArg(constraint, pat);
+        if (range != null) {
+          final BuiltIn.Constructor c = rangeConstructor(range);
+          return c == BuiltIn.Constructor.RANGE_AT_LEAST
+              || c == BuiltIn.Constructor.RANGE_AT_MOST
+              || c == BuiltIn.Constructor.RANGE_GREATER_THAN
+              || c == BuiltIn.Constructor.RANGE_LESS_THAN;
+        }
         return false;
     }
   }
@@ -3353,6 +3392,24 @@ class Generators {
                 bound, constraint.builtIn() == BuiltIn.CHAR_OP_LT, constraint);
           }
           break;
+        default:
+          // 'Range.contains (AT_LEAST a) pat' -> "pat >= a";
+          // 'Range.contains (GREATER_THAN a) pat' -> "pat > a".
+          final Core.Apply range = rangeContainsArg(constraint, pat);
+          if (range != null) {
+            final BuiltIn.Constructor c = rangeConstructor(range);
+            if (c == BuiltIn.Constructor.RANGE_AT_LEAST
+                || c == BuiltIn.Constructor.RANGE_GREATER_THAN) {
+              final Core.Exp bound = range.arg;
+              if (requireConstant && !bound.isConstant()) {
+                continue;
+              }
+              return new Bound(
+                  bound,
+                  c == BuiltIn.Constructor.RANGE_GREATER_THAN,
+                  constraint);
+            }
+          }
       }
     }
     return null;
@@ -3444,6 +3501,22 @@ class Generators {
                 bound, constraint.builtIn() == BuiltIn.CHAR_OP_GT, constraint);
           }
           break;
+        default:
+          // 'Range.contains (AT_MOST b) pat' -> "pat <= b";
+          // 'Range.contains (LESS_THAN b) pat' -> "pat < b".
+          final Core.Apply range = rangeContainsArg(constraint, pat);
+          if (range != null) {
+            final BuiltIn.Constructor c = rangeConstructor(range);
+            if (c == BuiltIn.Constructor.RANGE_AT_MOST
+                || c == BuiltIn.Constructor.RANGE_LESS_THAN) {
+              final Core.Exp bound = range.arg;
+              if (requireConstant && !bound.isConstant()) {
+                continue;
+              }
+              return new Bound(
+                  bound, c == BuiltIn.Constructor.RANGE_LESS_THAN, constraint);
+            }
+          }
       }
     }
     return null;
