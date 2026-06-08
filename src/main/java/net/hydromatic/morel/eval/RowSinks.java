@@ -727,20 +727,18 @@ public abstract class RowSinks {
      * Returns the map key for {@code element}.
      *
      * <p>For a single-name row, the key is the element itself. For a multi-name
-     * row, the element is a record -- represented at runtime as a {@link List}
-     * (see {@link Codes.TupleCode}), or occasionally an {@code Object[]} -- and
-     * the key is an {@link ImmutableList} of its fields. This matches the key
-     * built by {@link #computeKey(Stack)} for the left-hand side, so the two
-     * sides probe the same map entries.
+     * row, the element is a record, represented at runtime as a {@link List}
+     * (see {@link Codes.TupleCode}); the key is an {@link ImmutableList} of its
+     * fields, reordered from {@link RecordType#ORDERING} (record) order into
+     * {@code names} order. This matches the key built by {@link
+     * #computeKey(Stack)} for the left-hand side, so the two sides probe the
+     * same map entries.
      */
     Object elementKey(Object element) {
       if (names.size() == 1) {
         return element;
       }
-      final List<Object> fields =
-          element instanceof Object[]
-              ? ImmutableList.copyOf((Object[]) element)
-              : (List<Object>) element;
+      final List<Object> fields = (List<Object>) element;
       final Object[] key = new Object[names.size()];
       for (int i = 0; i < names.size(); i++) {
         key[i] = fields.get(recordFieldIndex[i]);
