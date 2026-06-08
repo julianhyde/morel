@@ -41,6 +41,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.util.ImmutablePairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -658,6 +659,16 @@ public abstract class RowSinks {
      */
     final boolean pushOnAccept;
 
+    /**
+     * Maps each position in {@code names} to the position of that field within
+     * a record value. A record's fields are stored in {@link
+     * RecordType#ORDERING} order, which need not match {@code names} order
+     * (e.g. a {@code group} lists its key before its aggregates). {@link
+     * #elementKey} uses this to build a key in {@code names} order, matching
+     * {@link #computeKey}.
+     */
+    final int[] recordFieldIndex;
+
     final Map<Object, int[]> map;
 
     final Object[] values;
@@ -683,6 +694,11 @@ public abstract class RowSinks {
       this.scanDepth = scanDepth;
       this.pushOnAccept = scanDepth == 0 && !names.isEmpty();
       this.values = new Object[names.size()];
+      final List<String> orderedNames = RecordType.ORDERING.sortedCopy(names);
+      this.recordFieldIndex = new int[names.size()];
+      for (int i = 0; i < names.size(); i++) {
+        recordFieldIndex[i] = orderedNames.indexOf(names.get(i));
+      }
       if (op == Op.UNION && !distinct) {
         // Union-all does not require storage.
         map = ImmutableMap.of();
@@ -711,15 +727,25 @@ public abstract class RowSinks {
      * Returns the map key for {@code element}.
      *
      * <p>For a single-name row, the key is the element itself. For a multi-name
-     * row, the element is an {@code Object[]} and the key is an {@link
-     * ImmutableList} of its entries.
+     * row, the element is a record -- represented at runtime as a {@link List}
+     * (see {@link Codes.TupleCode}), or occasionally an {@code Object[]} -- and
+     * the key is an {@link ImmutableList} of its fields. This matches the key
+     * built by {@link #computeKey(Stack)} for the left-hand side, so the two
+     * sides probe the same map entries.
      */
     Object elementKey(Object element) {
       if (names.size() == 1) {
         return element;
-      } else {
-        return ImmutableList.copyOf((Object[]) element);
       }
+      final List<Object> fields =
+          element instanceof Object[]
+              ? ImmutableList.copyOf((Object[]) element)
+              : (List<Object>) element;
+      final Object[] key = new Object[names.size()];
+      for (int i = 0; i < names.size(); i++) {
+        key[i] = fields.get(recordFieldIndex[i]);
+      }
+      return ImmutableList.copyOf(key);
     }
 
     /**
