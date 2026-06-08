@@ -194,8 +194,8 @@ from e in scott.emps yield {e.job} distinct;
 > ---------
 > CLERK
 > SALESMAN
-> ANALYST
 > MANAGER
+> ANALYST
 > PRESIDENT
 >
 > val it : {job:string} bag
@@ -204,8 +204,8 @@ from e in scott.emps group {e.job};
 > ---------
 > CLERK
 > SALESMAN
-> ANALYST
 > MANAGER
+> ANALYST
 > PRESIDENT
 >
 > val it : {job:string} bag
@@ -218,8 +218,8 @@ from e in scott.emps group e.deptno compute {c = count over ()};
 > c deptno
 > - ------
 > 5     20
-> 3     10
 > 6     30
+> 3     10
 >
 > val it : {c:int, deptno:int} bag
 from e in scott.emps
@@ -228,8 +228,8 @@ from e in scott.emps
 > c deptno
 > - ------
 > 5     20
-> 3     10
 > 6     30
+> 3     10
 >
 > val it : {c:int, deptno:int} bag
 
