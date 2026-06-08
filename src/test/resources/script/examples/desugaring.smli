@@ -148,6 +148,28 @@ from b in ["John", "Paul", "George", "Ringo"]
 >
 > val it : {b:string, len:int} list
 
+(* scan {f1, f2 = const, ...} in t -> where yield
+   A record pattern in a scan splits into two parts: each field matched against
+   a constant becomes a 'where', and each field bound to a variable becomes a
+   'yield'. So '{deptno = 10, ename, sal, ...}' filters on 'deptno = 10' and
+   yields '{ename, sal}'. *)
+from {deptno = 10, ename, sal, ...} in scott.emps;
+> ename  sal
+> ------ ----
+> CLARK  2450
+> KING   5000
+> MILLER 1300
+>
+> val it : {ename:string, sal:real} bag
+from e in scott.emps where e.deptno = 10 yield {e.ename, e.sal};
+> ename  sal
+> ------ ----
+> CLARK  2450
+> KING   5000
+> MILLER 1300
+>
+> val it : {ename:string, sal:real} bag
+
 (* join -> join1 ...
    A 'from' with several scans is one 'join1' per scan. An 'on'
    condition rides along with its scan's 'join1'. *)
@@ -211,27 +233,32 @@ from e in scott.emps group {e.job};
 > val it : {job:string} bag
 
 (* group -> coreGroup yield
-   'group k compute {a = f over ...}' is 'coreGroup' (which keeps each
-   key's elements) followed by a 'yield' that applies the aggregate to
-   those elements. Here 'count over ()' is the number of elements. *)
-from e in scott.emps group e.deptno compute {c = count over ()};
-> c deptno
-> - ------
-> 5     20
-> 6     30
-> 3     10
+   'group k compute {a = f over arg}' is 'coreGroup' (which pairs each key with
+   its 'elements') followed by a 'yield'. Each aggregate 'f over arg' becomes a
+   query over those elements -- 'from e in elements compute f over arg' -- so
+   'count over ()' counts the elements, and 'sum over e.sal' sums a projection
+   of them. *)
+from e in scott.emps
+  group e.deptno compute {c = count over (), s = sum over e.sal};
+> c deptno s
+> - ------ -----
+> 5     20 10875
+> 6     30  9400
+> 3     10  8750
 >
-> val it : {c:int, deptno:int} bag
+> val it : {c:int, deptno:int, s:real} bag
 from e in scott.emps
   group e.deptno compute {es = elements}
-  yield {deptno, c = Bag.length es};
-> c deptno
-> - ------
-> 5     20
-> 6     30
-> 3     10
+  yield {deptno,
+      c = (from e in es compute count over ()),
+      s = (from e in es compute sum over e.sal)};
+> c deptno s
+> - ------ -----
+> 5     20 10875
+> 6     30  9400
+> 3     10  8750
 >
-> val it : {c:int, deptno:int} bag
+> val it : {c:int, deptno:int, s:real} bag
 
 (* unorder -> join1 bag [()]
    'unorder' turns an ordered pipeline into an unordered one.
@@ -318,9 +345,61 @@ from i in [1, 2]
 >
 > val it : {i:int, s:string} list
 
+(* yieldAll -> join1 yield
+   'yieldAll e' evaluates the collection 'e' for each row and flattens the
+   results into the pipeline (a flatMap). It is a 'join1' over 'e' followed by
+   a 'yield' of the joined element: ', v in e yield v'. *)
+from x in [[1, 2], [3], [4, 5]] yieldAll x;
+> val it = [1,2,3,4,5] : int list
+from x in [[1, 2], [3], [4, 5]], v in x yield v;
+> val it = [1,2,3,4,5] : int list
+
+(* compute -> only (... group {} compute ...)
+   The terminal 'compute agg' reduces the whole pipeline to one value. Grouping
+   by the empty key ('group {}') makes a single group; the aggregate runs over
+   it; 'Relational.only' takes that one row. *)
+from e in scott.emps compute sum over e.sal;
+> val it = 29025 : real
+Relational.only (from e in scott.emps group {} compute (sum over e.sal));
+> val it = 29025 : real
+
+(* into -> apply
+   The terminal 'into f' feeds the whole pipeline to the function 'f'. It is
+   just 'f' applied to the query. *)
+from i in [3, 1, 2] yield i + 1 into List.length;
+> val it = 3 : int
+List.length (from i in [3, 1, 2] yield i + 1);
+> val it = 3 : int
+
+(* exists -> Relational.nonEmpty
+   'exists scans where cond' tests whether the query has any row. It is
+   'Relational.nonEmpty' applied to the corresponding 'from'. *)
+exists e in scott.emps where e.deptno = 10;
+> val it = true : bool
+Relational.nonEmpty (from e in scott.emps where e.deptno = 10);
+> val it = true : bool
+
+(* forall ... require -> not exists
+   'forall scans require cond' tests whether every row satisfies 'cond'. It
+   holds when no row violates it: 'not exists (scans where not cond)'. *)
+forall e in scott.emps require e.sal > 0.0;
+> val it = true : bool
+not (Relational.nonEmpty (from e in scott.emps where not (e.sal > 0.0)));
+> val it = true : bool
+
 (* ---------------------------------------------------------------- *)
 (* todo: rules not yet covered                                      *)
 (* ---------------------------------------------------------------- *)
+
+(* The remaining query operators are either primitive (no simpler form) or
+   not yet documented:
+
+   - 'skip' and 'take' slice an ordered pipeline (like SQL OFFSET / FETCH).
+     They are primitive ordered operators with no simpler desugaring.
+   - 'through pat in f' pipes the whole pipeline through the function 'f' and
+     scans the result, e.g. 'from i in xs through j in (sort)'. (As of
+     writing, a trailing 'through' as the final step hits a compiler bug, so
+     it is not illustrated here.) *)
 
 (* todo: ordinal -> enumerate
    'ordinal' (the position of the current element) is meant to desugar
@@ -333,24 +412,15 @@ from i in [1, 2]
    'Bag.map' and 'Bag.filter' desugar to query operations on bags, just
    as 'List.map' and 'List.filter' do for lists. *)
 
-(* todo: except1 distinct, intersect1 distinct
+(* todo: except distinct, intersect distinct
    The distinct-qualified forms of 'except' and 'intersect' have more
    involved desugarings (each argument is made distinct, and the result
-   is made distinct) that are not yet illustrated here. *)
+   is made distinct) than 'union distinct', and are not illustrated here. *)
 
-(* todo: into, through, compute
-   The terminal steps 'into exp' and 'through pat in exp', and the
-   terminal 'compute exp', reduce a pipeline to a single value. Whether
-   they are core operators or desugar to something more primitive is
-   still to be determined. *)
-
-(* todo: forall
-   'exists' and 'forall ... require' are query forms whose desugaring in
-   terms of the core operators is not yet illustrated. *)
-
-(* todo: exists
-   'exists' and 'forall ... require' are query forms whose desugaring in
-   terms of the core operators is not yet illustrated. *)
+(* todo: left/right/full join
+   Outer joins ('join pat in exp on cond' qualified by 'left', 'right' or
+   'full') pad unmatched rows with NULL; their desugaring is not illustrated
+   here. *)
 
 (* unbounded -> join over each variable's extent
    A 'from' may bind a variable without a collection: 'i' and 'j' here are
