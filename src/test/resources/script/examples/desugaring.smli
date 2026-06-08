@@ -341,22 +341,20 @@ from i in [2, 1, 2, 3] union distinct [2, 4];
 from i in [2, 1, 2, 3] union [2, 4] distinct;
 > val it = [2,1,3,4] : int list
 
-(* except distinct -> distinct then anti-semijoin
-   'a except distinct b' is the set difference: the distinct elements of 'a'
-   that do not appear in 'b'. So make 'a' distinct, then keep those 'notelem
-   b'. (The set-operator form, 'distinct except (b distinct) distinct', is the
-   formal core expansion but currently hits a compiler bug.) *)
+(* except distinct -> distinct except1 (b distinct) distinct
+   'a except distinct b' is the set difference. The core expansion makes each
+   side distinct, takes the (multiset) difference, and makes the result
+   distinct. *)
 from i in [2, 1, 2, 2, 2, 3] except distinct [2, 4];
 > val it = [1,3] : int list
-from i in [2, 1, 2, 2, 2, 3] distinct where i notelem [2, 4];
+from i in [2, 1, 2, 2, 2, 3] distinct except (from j in [2, 4] distinct) distinct;
 > val it = [1,3] : int list
 
-(* intersect distinct -> distinct then semijoin
-   'a intersect distinct b' keeps the distinct elements of 'a' that also appear
-   in 'b'. So make 'a' distinct, then keep those 'elem b'. *)
+(* intersect distinct -> distinct intersect1 (b distinct) distinct
+   'a intersect distinct b' is the set intersection, expanded the same way. *)
 from i in [2, 1, 2, 2, 2, 3] intersect distinct [2, 2, 4];
 > val it = [2] : int list
-from i in [2, 1, 2, 2, 2, 3] distinct where i elem [2, 2, 4];
+from i in [2, 1, 2, 2, 2, 3] distinct intersect (from j in [2, 2, 4] distinct) distinct;
 > val it = [2] : int list
 
 (* List.map -> yield

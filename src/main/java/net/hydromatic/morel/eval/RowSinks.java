@@ -648,6 +648,16 @@ public abstract class RowSinks {
      */
     final int scanDepth;
 
+    /**
+     * Whether {@link #accept(Stack)} must reconstruct the current row onto the
+     * stack before passing it downstream. This is true when the row's variables
+     * are in {@code globalEnv} rather than on the stack, as happens after a
+     * {@code group} or {@code distinct} step (then {@code scanDepth} is 0).
+     * When false, the variables are already live on the stack and the row can
+     * be passed through directly.
+     */
+    final boolean pushOnAccept;
+
     final Map<Object, int[]> map;
 
     final Object[] values;
@@ -671,6 +681,7 @@ public abstract class RowSinks {
       this.names = requireNonNull(names);
       this.inSlots = requireNonNull(inSlots);
       this.scanDepth = scanDepth;
+      this.pushOnAccept = scanDepth == 0 && !names.isEmpty();
       this.values = new Object[names.size()];
       if (op == Op.UNION && !distinct) {
         // Union-all does not require storage.
@@ -831,6 +842,30 @@ public abstract class RowSinks {
       }
       return s;
     }
+
+    /**
+     * Passes the current upstream row to the downstream sink during {@code
+     * accept()}.
+     *
+     * <p>If the row's variables are already live on the stack the stack is
+     * passed through unchanged. Otherwise (after a {@code group}/{@code
+     * distinct}, where they live in {@code globalEnv}; see {@link
+     * #pushOnAccept}) the row is reconstructed onto the stack first, just as
+     * {@link #result(Stack)} does for the right-hand-side elements, so that
+     * downstream code reads it via the same stack slots.
+     */
+    void acceptRow(Stack stack) {
+      if (pushOnAccept) {
+        final Object key = computeKey(stack);
+        final Stack s = stack.ensureSize(names.size());
+        final int savedTop = s.top;
+        rowSink.accept(withRowFromKey(s, key));
+        s.restore(savedTop);
+      } else {
+        // Scan vars are live on the stack; pass through directly.
+        rowSink.accept(stack);
+      }
+    }
   }
 
   /** Implementation of {@link RowSink} for non-distinct {@code except} step. */
@@ -866,8 +901,7 @@ public abstract class RowSinks {
           map.remove(value);
         }
       } else {
-        // Scan vars are live on the stack; pass through directly.
-        rowSink.accept(stack);
+        acceptRow(stack);
       }
     }
   }
@@ -976,8 +1010,7 @@ public abstract class RowSinks {
       map.computeIfPresent(
           value,
           (k, counts) -> {
-            // Scan vars are live on the stack; pass through directly.
-            rowSink.accept(stack);
+            acceptRow(stack);
             return --counts[0] == 0 ? null : counts;
           });
     }
@@ -1060,8 +1093,7 @@ public abstract class RowSinks {
     @Override
     public void accept(Stack stack) {
       if (!distinct || add(stack)) {
-        // Scan vars are live on the stack; pass through directly.
-        rowSink.accept(stack);
+        acceptRow(stack);
       }
     }
 
