@@ -254,12 +254,18 @@ from e in scott.emps yield e.job distinct;
 from e in scott.emps group e.job;
 > val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
 
-(*) But when the row has no columns, 'distinct' is NOT 'group {}'. 'distinct'
-(*) never increases the row count, so an empty input gives an empty result,
-(*) whereas 'group {}' always returns one (grand-total) row. (The zero-column
-(*) case desugars instead to '[()]' if the query has a row, else '[]'.)
+(* distinct {} -> take 1
+   When the row has no columns, 'distinct' is NOT 'group {}' -- that would
+   always return one grand-total row, even on empty input. 'distinct' never
+   increases the row count, so it desugars to 'take 1': of a relation whose
+   rows are all '()', taking one gives '[()]' if there is a row, else '[]'. *)
 from e in scott.emps where false yield {} distinct;
 > val it = [] : unit bag
+from e in scott.emps where false yield {} take 1;
+> val it = [] : unit bag
+
+(*) Contrast 'group {}', which keeps its one grand-total row even when the
+(*) input is empty.
 from e in scott.emps where false group {};
 > val it = [()] : unit bag
 
