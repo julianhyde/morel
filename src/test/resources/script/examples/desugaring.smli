@@ -51,10 +51,12 @@
  * that does. A final section covers the primitive operators -- those,
  * such as 'order', 'skip'/'take' and the outer joins, that have no
  * simpler form.
+ *
+ * The examples draw on the 'scott' database -- 'scott.emps' and
+ * 'scott.depts' -- and, where order or duplicates matter, on small
+ * inline lists.
  *)
 
-(*) Load the 'scott' database (emps, depts, ...). The examples draw on
-(*) 'scott.emps' and 'scott.depts'.
 useSilently "../scott.smli";
 > [opening ../scott.smli]
 > val it = () : unit
@@ -66,47 +68,57 @@ set ("output", "tabular");
 (* The core operators                                               *)
 (* ---------------------------------------------------------------- *)
 
-(*) 'fromUnit' is the empty 'from'. It yields a single zero-field
-(*) element, so a pipeline built on it has exactly one row to start.
+(*) 'fromUnit' is the empty 'from': one zero-field element.
 from;
 > val it = [()] : unit list
 
-(*) 'join1' adds a scan to a pipeline. A 'from' with two scans is two
-(*) 'join1's; each row pairs an element from the left with one from the
-(*) right (a Cartesian product, optionally filtered by 'on').
-from i in [1, 2], j in [10, 20] yield i + j;
-> val it = [11,21,12,22] : int list
+(*) 'join1' adds a scan, pairing each existing row with each element of
+(*) the new collection (a Cartesian product).
+from i in [1, 2], j in [3, 4];
+> i j
+> - -
+> 1 3
+> 1 4
+> 2 3
+> 2 4
+>
+> val it : {i:int, j:int} list
 
 (*) 'yield' maps each element to a new value.
 from d in scott.depts yield d.dname;
-> val it = ["ACCOUNTING","OPERATIONS","RESEARCH","SALES"] : string bag
+> val it = ["ACCOUNTING","RESEARCH","SALES","OPERATIONS"] : string bag
 
-(*) 'order' sorts the elements. The result is always a list.
-from d in scott.depts order DESC d.deptno yield d.dname;
-> val it = ["OPERATIONS","SALES","RESEARCH","ACCOUNTING"] : string list
-
-(*) 'coreGroup' gathers the elements that share a key into a group. It
-(*) does not apply aggregate functions; the group's elements are kept
-(*) verbatim. Morel has no 'coreGroup' keyword, so we use the closest
-(*) primitive, 'group k compute {es = elements}', which pairs each key
-(*) with its elements.
-from e in [{job = "A", x = 1}, {job = "A", x = 2}, {job = "B", x = 3}]
-  group e.job compute {elements};
-> elements job
-> job x
-> --- ---- ---
-> A      1 A
-> A      2
-> B      3 B
+(*) 'order' sorts the elements.
+from d in scott.depts order DESC d.deptno;
+> deptno dname      loc
+> ------ ---------- --------
+>     40 OPERATIONS BOSTON
+>     30 SALES      CHICAGO
+>     20 RESEARCH   DALLAS
+>     10 ACCOUNTING NEW YORK
 >
-> val it : {`elements`:{job:string, x:int} list, job:string} list
+> val it : {deptno:int, dname:string, loc:string} list
 
-(*) 'union1' concatenates one more collection (like SQL 'UNION ALL').
+(*) 'coreGroup' gathers the elements that share a key into a group,
+(*) without applying any aggregate. Morel has no 'coreGroup' keyword, so
+(*) we use 'group k compute {elements}', which pairs each key with its
+(*) elements.
+from i in [1, 2, 3, 4] group {even = i mod 2 = 0} compute {elements};
+> elements even
+> -------- -----
+>        1 false
+>        3
+>        2 true
+>        4
+>
+> val it : {`elements`:int list, even:bool} list
+
+(*) 'union1' concatenates one more collection (SQL 'UNION ALL').
 from i in [1, 2] union [2, 3];
 > val it = [1,2,2,3] : int list
 
-(*) 'except1' removes the elements of one more collection (like SQL
-(*) 'EXCEPT ALL': one element is removed per matching element).
+(*) 'except1' removes the elements of one more collection (SQL
+(*) 'EXCEPT ALL': one element removed per match).
 from i in [1, 2, 2, 3] except [2];
 > val it = [1,2,3] : int list
 
@@ -119,253 +131,148 @@ from i in [1, 2, 2, 3] except [2];
 
 (* from -> fromUnit join1
    A 'from' with one scan is 'fromUnit' (the one-element pipeline '[()]')
-   followed by a 'join1' that adds the scan. *)
-from e in scott.emps where e.deptno = 10 yield e.ename order current;
-> val it = ["CLARK","KING","MILLER"] : string list
-from u in [()], e in scott.emps where e.deptno = 10 yield e.ename order current;
-> val it = ["CLARK","KING","MILLER"] : string list
+   followed by a 'join1' that adds the scan (then a 'yield' to drop the
+   unit). *)
+from d in scott.depts;
+> deptno dname      loc
+> ------ ---------- --------
+>     10 ACCOUNTING NEW YORK
+>     20 RESEARCH   DALLAS
+>     30 SALES      CHICAGO
+>     40 OPERATIONS BOSTON
+>
+> val it : {deptno:int, dname:string, loc:string} bag
+from u in [()], d in scott.depts yield d;
+> deptno dname      loc
+> ------ ---------- --------
+>     10 ACCOUNTING NEW YORK
+>     20 RESEARCH   DALLAS
+>     30 SALES      CHICAGO
+>     40 OPERATIONS BOSTON
+>
+> val it : {deptno:int, dname:string, loc:string} bag
 
 (* scan p = exp -> scan p in [exp]
-   A scan that binds a variable to a single value, 'p = exp', is a scan
-   over the one-element list '[exp]'. 'exp' may depend on earlier scans. *)
-from b in ["John", "Paul", "George", "Ringo"],
-  len = size b;
-> b      len
-> ------ ---
-> John     4
-> Paul     4
-> George   6
-> Ringo    5
+   A scan that binds a variable to a single value is a scan over the
+   one-element list '[exp]'. 'exp' may depend on earlier scans. *)
+from d in scott.depts, hi = d.deptno + 1;
+> d                          hi
+> deptno dname      loc
+> ------ ---------- -------- --
+>     10 ACCOUNTING NEW YORK 11
+>     20 RESEARCH   DALLAS   21
+>     30 SALES      CHICAGO  31
+>     40 OPERATIONS BOSTON   41
 >
-> val it : {b:string, len:int} list
-from b in ["John", "Paul", "George", "Ringo"]
-  join len in [size b];
-> b      len
-> ------ ---
-> John     4
-> Paul     4
-> George   6
-> Ringo    5
+> val it : {d:{deptno:int, dname:string, loc:string}, hi:int} bag
+from d in scott.depts, hi in [d.deptno + 1];
+> d                          hi
+> deptno dname      loc
+> ------ ---------- -------- --
+>     10 ACCOUNTING NEW YORK 11
+>     20 RESEARCH   DALLAS   21
+>     30 SALES      CHICAGO  31
+>     40 OPERATIONS BOSTON   41
 >
-> val it : {b:string, len:int} list
+> val it : {d:{deptno:int, dname:string, loc:string}, hi:int} bag
 
 (* scan {f1, f2 = const, ...} in t -> where yield
-   A record pattern in a scan splits into two parts: each field matched against
-   a constant becomes a 'where', and each field bound to a variable becomes a
-   'yield'. So '{deptno = 10, ename, sal, ...}' filters on 'deptno = 10' and
-   yields '{ename, sal}'. *)
-from {deptno = 10, ename, sal, ...} in scott.emps;
-> ename  sal
-> ------ ----
-> CLARK  2450
-> KING   5000
-> MILLER 1300
->
-> val it : {ename:string, sal:real} bag
-from e in scott.emps where e.deptno = 10 yield {e.ename, e.sal};
-> ename  sal
-> ------ ----
-> CLARK  2450
-> KING   5000
-> MILLER 1300
->
-> val it : {ename:string, sal:real} bag
-
-(* join -> join1 ...
-   A 'from' with several scans is one 'join1' per scan. An 'on'
-   condition rides along with its scan's 'join1'. *)
-from e in scott.emps,
-    d in scott.depts on e.deptno = d.deptno
-  where e.deptno = 20
-  yield {e.ename, d.loc};
-> ename loc
-> ----- ------
-> SMITH DALLAS
-> JONES DALLAS
-> SCOTT DALLAS
-> ADAMS DALLAS
-> FORD  DALLAS
->
-> val it : {ename:string, loc:string} bag
-from e in scott.emps
-  join d in scott.depts on e.deptno = d.deptno
-  where e.deptno = 20
-  yield {e.ename, d.loc};
-> ename loc
-> ----- ------
-> SMITH DALLAS
-> JONES DALLAS
-> SCOTT DALLAS
-> ADAMS DALLAS
-> FORD  DALLAS
->
-> val it : {ename:string, loc:string} bag
-
-(* left join -> yieldAll with NULL padding
-   A 'left join' keeps every left row, pairing it with each matching right row
-   (as 'SOME r') or, if none match, with 'NONE'. For each left row, run a
-   correlated sub-query for the matches and 'yieldAll' them: emit one '{d, e =
-   SOME e}' per match, or a single '{d, e = NONE}' when there are none.
-   ('right' and 'full' joins, below, are fundamental operators rather than
-   derived ones.) *)
-val ds = [{id = 1, c = "x"}, {id = 2, c = "y"}];
-> c id
-> - --
-> x  1
-> y  2
->
-> val ds : {c:string, id:int} list
-val es = [{id = 1, n = "a"}, {id = 1, n = "b"}];
-> id n
-> -- -
->  1 a
->  1 b
->
-> val es : {id:int, n:string} list
-from d in ds left join e in es on d.id = e.id;
-> d    e
-> c id id n
-> - -- -- -
-> x  1  1 a
-> x  1  1 b
-> y  2
->
-> val it : {d:{c:string, id:int}, e:{id:int, n:string} option} list
-from d in ds
-  yieldAll
-    (let
-       val ms = from e in es where d.id = e.id
-     in
-       if List.null ms then [{d = d, e = NONE}]
-       else from e in ms yield {d = d, e = SOME e}
-     end);
-> d    e
-> c id id n
-> - -- -- -
-> x  1  1 a
-> x  1  1 b
-> y  2
->
-> val it : {d:{c:string, id:int}, e:{id:int, n:string} option} list
-
-(* right join (fundamental)
-   A 'right join' is the mirror of 'left join': it keeps every right row and
-   makes the left side an option. Here every department is kept; its employees
-   are 'SOME e', and a department with none (OPERATIONS, deptno 40) is paired
-   with 'NONE'. (Filtered to two departments to keep the result small.) *)
-from e in scott.emps
-  right join d in scott.depts on e.deptno = d.deptno
-  where d.deptno elem [10, 40]
-  yield {d.dname, ename = Option.map (fn e => e.ename) e};
-> dname      ename
-> ---------- ------
-> ACCOUNTING CLARK
-> ACCOUNTING KING
-> ACCOUNTING MILLER
-> OPERATIONS
->
-> val it : {dname:string, ename:string option} bag
-
-(* full join (fundamental)
-   A 'full join' keeps every row of both inputs, so both sides are options: a
-   matched pair is '(SOME, SOME)', an unmatched left row is '(NONE, SOME d)',
-   and an unmatched right row is '(SOME e, NONE)'. (Inputs are filtered so all
-   three cases appear in three rows.) *)
-from e in (from x in scott.emps where x.ename elem ["SMITH", "CLARK"])
-  full join d in (from y in scott.depts where y.deptno elem [10, 40])
-    on e.deptno = d.deptno
-  yield {dept = Option.map (fn d => d.dname) d,
-      emp = Option.map (fn e => e.ename) e};
-> dept       emp
-> ---------- -----
->            SMITH
-> ACCOUNTING CLARK
-> OPERATIONS
->
-> val it : {dept:string option, emp:string option} bag
-
-(* where -> join1 [()] on cond
-   'where cond' is a 'join1' against the one-element pipeline '[()]'
-   whose 'on' condition is 'cond': the row survives if 'cond' holds. *)
+   A record pattern splits in two: a field matched against a constant
+   becomes a 'where', a field bound to a variable becomes a 'yield'. *)
+from {deptno = 10, ename, ...} in scott.emps;
+> val it = ["CLARK","KING","MILLER"] : string bag
 from e in scott.emps where e.deptno = 10 yield e.ename;
 > val it = ["CLARK","KING","MILLER"] : string bag
-from e in scott.emps, u in [()] on e.deptno = 10 yield e.ename;
-> val it = ["CLARK","KING","MILLER"] : string bag
+
+(* join -> join1 ...
+   A 'from' with several scans is one 'join1' per scan; an 'on' condition
+   rides with its scan. The comma and the 'join' keyword are the same. *)
+from d in scott.depts, e in scott.depts on d.deptno = e.deptno;
+> d                          e
+> deptno dname      loc      deptno dname      loc
+> ------ ---------- -------- ------ ---------- --------
+>     10 ACCOUNTING NEW YORK     10 ACCOUNTING NEW YORK
+>     20 RESEARCH   DALLAS       20 RESEARCH   DALLAS
+>     30 SALES      CHICAGO      30 SALES      CHICAGO
+>     40 OPERATIONS BOSTON       40 OPERATIONS BOSTON
+>
+> val it : {d:{deptno:int, dname:string, loc:string}, e:{deptno:int, dname:string, loc:string}} bag
+from d in scott.depts join e in scott.depts on d.deptno = e.deptno;
+> d                          e
+> deptno dname      loc      deptno dname      loc
+> ------ ---------- -------- ------ ---------- --------
+>     10 ACCOUNTING NEW YORK     10 ACCOUNTING NEW YORK
+>     20 RESEARCH   DALLAS       20 RESEARCH   DALLAS
+>     30 SALES      CHICAGO      30 SALES      CHICAGO
+>     40 OPERATIONS BOSTON       40 OPERATIONS BOSTON
+>
+> val it : {d:{deptno:int, dname:string, loc:string}, e:{deptno:int, dname:string, loc:string}} bag
+
+(* where -> join1 [()] on cond
+   'where cond' is a 'join1' against '[()]' with 'on' condition 'cond'
+   (then a 'yield' to drop the unit). *)
+from d in scott.depts where d.deptno = 10;
+> deptno dname      loc
+> ------ ---------- --------
+>     10 ACCOUNTING NEW YORK
+>
+> val it : {deptno:int, dname:string, loc:string} bag
+from d in scott.depts, u in [()] on d.deptno = 10 yield d;
+> deptno dname      loc
+> ------ ---------- --------
+>     10 ACCOUNTING NEW YORK
+>
+> val it : {deptno:int, dname:string, loc:string} bag
 
 (* distinct -> coreGroup
    'distinct' removes duplicates by grouping on every column and keeping
-   the keys. Grouping by all columns ('group {...}') is exactly that. *)
-from e in scott.emps yield {e.job} distinct;
-> job
-> ---------
-> CLERK
-> SALESMAN
-> MANAGER
-> ANALYST
-> PRESIDENT
->
-> val it : {job:string} bag
-from e in scott.emps group {e.job};
-> job
-> ---------
-> CLERK
-> SALESMAN
-> MANAGER
-> ANALYST
-> PRESIDENT
->
-> val it : {job:string} bag
+   the keys. Grouping by the only column is exactly that. *)
+from e in scott.emps yield e.job distinct;
+> val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
+from e in scott.emps group e.job;
+> val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
 
 (* group -> coreGroup yield
-   'group k compute {a = f over arg}' is 'coreGroup' (which pairs each key with
-   its 'elements') followed by a 'yield'. Each aggregate 'f over arg' becomes a
-   query over those elements -- 'from e in elements compute f over arg' -- so
-   'count over ()' counts the elements, and 'sum over e.sal' sums a projection
-   of them. *)
-from e in scott.emps
-  group e.deptno compute {c = count over (), s = sum over e.sal};
-> c deptno s
-> - ------ -----
-> 5     20 10875
-> 6     30  9400
-> 3     10  8750
+   'group k compute {a = f over arg}' is 'coreGroup' (which pairs each key
+   with its 'elements') followed by a 'yield'. The aggregate 'f over arg'
+   becomes a query over those elements. *)
+from e in scott.emps group e.deptno compute {c = count over ()};
+> c deptno
+> - ------
+> 5     20
+> 6     30
+> 3     10
 >
-> val it : {c:int, deptno:int, s:real} bag
+> val it : {c:int, deptno:int} bag
 from e in scott.emps
   group e.deptno compute {es = elements}
-  yield {deptno,
-      c = (from e in es compute count over ()),
-      s = (from e in es compute sum over e.sal)};
-> c deptno s
-> - ------ -----
-> 5     20 10875
-> 6     30  9400
-> 3     10  8750
+  yield {deptno, c = (from e in es compute count over ())};
+> c deptno
+> - ------
+> 5     20
+> 6     30
+> 3     10
 >
-> val it : {c:int, deptno:int, s:real} bag
+> val it : {c:int, deptno:int} bag
 
 (* unorder -> join1 bag [()]
-   'unorder' turns an ordered pipeline into an unordered one.
-   The result is always a bag.
-   Joining
-   against an unordered one-element collection 'bag [()]' does the
-   same, because a join is unordered if either input is. *)
+   'unorder' makes an ordered pipeline unordered; joining against an
+   unordered '[()]' does the same, since a join is unordered if either
+   input is. *)
 from i in [1, 2, 3] unorder;
 > val it = [1,2,3] : int bag
 from i in [1, 2, 3], u in bag [()] yield i;
 > val it = [1,2,3] : int bag
 
 (* union -> union1 ...
-   'union' with several arguments is 'union1' applied once per
-   argument. *)
+   'union' with several arguments is 'union1' applied once per argument. *)
 from i in [2, 1] union [3], [4, 5];
 > val it = [2,1,3,4,5] : int list
 from i in [2, 1] union [3] union [4, 5];
 > val it = [2,1,3,4,5] : int list
 
 (* except -> except1 ...
-   'except' with several arguments is 'except1' applied once per
-   argument. *)
+   'except' with several arguments is 'except1' applied once per argument. *)
 from i in [1, 2, 3, 4, 5] except [2], [4];
 > val it = [1,3,5] : int list
 from i in [1, 2, 3, 4, 5] except [2] except [4];
@@ -380,70 +287,57 @@ from i in [2, 1, 2, 2, 2, 3] except (from j in [2, 1, 2, 2, 2, 3] except [2, 2, 
 > val it = [2,2] : int list
 
 (* union distinct -> union1 distinct
-   A 'distinct' qualifier on a set operator desugars to the plain
-   operator followed by a 'distinct' step. *)
+   A 'distinct' qualifier on a set operator is the plain operator followed
+   by a 'distinct' step. *)
 from i in [2, 1, 2, 3] union distinct [2, 4];
 > val it = [2,1,3,4] : int list
 from i in [2, 1, 2, 3] union [2, 4] distinct;
 > val it = [2,1,3,4] : int list
 
 (* except distinct -> distinct except1 (b distinct) distinct
-   'a except distinct b' is the set difference. The core expansion makes each
-   side distinct, takes the (multiset) difference, and makes the result
-   distinct. *)
+   The core expansion makes each side distinct, takes the (multiset)
+   difference, and makes the result distinct. *)
 from i in [2, 1, 2, 2, 2, 3] except distinct [2, 4];
 > val it = [1,3] : int list
 from i in [2, 1, 2, 2, 2, 3] distinct except (from j in [2, 4] distinct) distinct;
 > val it = [1,3] : int list
 
 (* intersect distinct -> distinct intersect1 (b distinct) distinct
-   'a intersect distinct b' is the set intersection, expanded the same way. *)
+   The set intersection, expanded the same way. *)
 from i in [2, 1, 2, 2, 2, 3] intersect distinct [2, 2, 4];
 > val it = [2] : int list
 from i in [2, 1, 2, 2, 2, 3] distinct intersect (from j in [2, 2, 4] distinct) distinct;
 > val it = [2] : int list
 
-(* List.map -> yield
-   'List.map f xs' is a query that yields 'f' of each element. *)
+(* List.map -> yield, List.filter -> where
+   'List.map f' is a 'yield', 'List.filter p' is a 'where'. *)
 List.map (fn x => x + 1) [1, 2, 3];
 > val it = [2,3,4] : int list
 from x in [1, 2, 3] yield x + 1;
 > val it = [2,3,4] : int list
-
-(* List.filter -> where
-   'List.filter p xs' is a query that keeps the elements satisfying
-   'p'. *)
 List.filter (fn x => x mod 2 = 0) [1, 2, 3, 4];
 > val it = [2,4] : int list
 from x in [1, 2, 3, 4] where x mod 2 = 0;
 > val it = [2,4] : int list
 
 (* Bag.map -> yield, Bag.filter -> where
-   'Bag.map' and 'Bag.filter' are the same query operations as 'List.map' and
-   'List.filter', but over a bag instead of a list. *)
+   The same query operations as 'List.map'/'List.filter', over a bag. *)
 Bag.map (fn x => x + 1) (bag [1, 2, 3]);
 > val it = [2,3,4] : int bag
 from x in bag [1, 2, 3] yield x + 1;
 > val it = [2,3,4] : int bag
-Bag.filter (fn x => x mod 2 = 0) (bag [1, 2, 3, 4]);
-> val it = [2,4] : int bag
-from x in bag [1, 2, 3, 4] where x mod 2 = 0;
-> val it = [2,4] : int bag
 
 (* notelem -> not elem
-   'x notelem xs' is just the negation of membership. *)
+   'x notelem xs' is the negation of membership. *)
 from i in [1, 2, 3] where i notelem [2];
 > val it = [1,3] : int list
 from i in [1, 2, 3] where not (i elem [2]);
 > val it = [1,3] : int list
 
 (* current -> {current variables}
-   'current' denotes the element currently
-   flowing through a step. In a single-scan 'from' it equals the scan
-   variable. *)
-from i in [1, 2]
-  join s in ["a", "b"]
-  yield current;
+   'current' denotes the element flowing through a step; in a multi-scan
+   'from' it is the record of the scan variables. *)
+from i in [1, 2], s in ["a", "b"] yield current;
 > i s
 > - -
 > 1 a
@@ -452,9 +346,7 @@ from i in [1, 2]
 > 2 b
 >
 > val it : {i:int, s:string} list
-from i in [1, 2]
-  join s in ["a", "b"]
-  yield {i, s};
+from i in [1, 2], s in ["a", "b"] yield {i, s};
 > i s
 > - -
 > 1 a
@@ -465,80 +357,103 @@ from i in [1, 2]
 > val it : {i:int, s:string} list
 
 (* yieldAll -> join1 yield
-   'yieldAll e' evaluates the collection 'e' for each row and flattens the
-   results into the pipeline (a flatMap). It is a 'join1' over 'e' followed by
-   a 'yield' of the joined element: ', v in e yield v'. *)
+   'yieldAll e' evaluates 'e' for each row and flattens the results (a
+   flatMap): a 'join1' over 'e' then a 'yield' of the element. *)
 from x in [[1, 2], [3], [4, 5]] yieldAll x;
 > val it = [1,2,3,4,5] : int list
 from x in [[1, 2], [3], [4, 5]], v in x yield v;
 > val it = [1,2,3,4,5] : int list
 
 (* compute -> only (... group {} compute ...)
-   The terminal 'compute agg' reduces the whole pipeline to one value. Grouping
-   by the empty key ('group {}') makes a single group; the aggregate runs over
-   it; 'Relational.only' takes that one row. *)
+   Terminal 'compute agg' reduces the pipeline to one value: 'group {}'
+   makes one group, the aggregate runs over it, 'only' takes the row. *)
 from e in scott.emps compute sum over e.sal;
 > val it = 29025 : real
 Relational.only (from e in scott.emps group {} compute (sum over e.sal));
 > val it = 29025 : real
 
 (* into -> apply
-   The terminal 'into f' feeds the whole pipeline to the function 'f'. It is
-   just 'f' applied to the query. *)
-from i in [3, 1, 2] yield i + 1 into List.length;
+   Terminal 'into f' feeds the whole pipeline to 'f'. *)
+from i in [1, 2, 3] into List.length;
 > val it = 3 : int
-List.length (from i in [3, 1, 2] yield i + 1);
+List.length (from i in [1, 2, 3]);
 > val it = 3 : int
 
 (* through pat in f -> scan over f of the pipeline
-   The terminal-ish 'through pat in f' pipes the whole pipeline through the
-   function 'f' and scans the result. It is 'from pat in (f query)'. *)
+   'through pat in f' pipes the pipeline through 'f' and scans the result:
+   'from pat in (f query)'. *)
 from i in [1, 2, 3] through xs in (List.map (fn x => x * 10));
 > val it = [10,20,30] : int list
 from xs in (List.map (fn x => x * 10) [1, 2, 3]);
 > val it = [10,20,30] : int list
 
 (* exists -> Relational.nonEmpty
-   'exists scans where cond' tests whether the query has any row. It is
-   'Relational.nonEmpty' applied to the corresponding 'from'. *)
+   'exists scans where cond' tests whether the query has any row. *)
 exists e in scott.emps where e.deptno = 10;
 > val it = true : bool
 Relational.nonEmpty (from e in scott.emps where e.deptno = 10);
 > val it = true : bool
 
 (* forall ... require -> not exists
-   'forall scans require cond' tests whether every row satisfies 'cond'. It
-   holds when no row violates it: 'not exists (scans where not cond)'. *)
+   'forall scans require cond' holds when no row violates 'cond'. *)
 forall e in scott.emps require e.sal > 0.0;
 > val it = true : bool
 not (Relational.nonEmpty (from e in scott.emps where not (e.sal > 0.0)));
 > val it = true : bool
 
 (* ---------------------------------------------------------------- *)
-(* Primitive operators and remaining limitations                    *)
+(* Primitive and fundamental operators                              *)
 (* ---------------------------------------------------------------- *)
 
-(* These query operators are primitive: they have no simpler desugaring.
+(*) 'order' sorts (a core operator); 'skip n' and 'take n' slice an
+(*) ordered pipeline (SQL OFFSET and FETCH). None has a simpler form.
+from i in [1, 2, 3, 4, 5] skip 1 take 2;
+> val it = [2,3] : int list
 
-   - 'skip n' and 'take n' slice an ordered pipeline (like SQL OFFSET and
-     FETCH), keeping a contiguous run of elements.
-   - 'order' sorts (a core operator).
-   - 'right join' and 'full join' (shown above) are fundamental. *)
-from e in scott.emps order e.sal skip 11 take 2 yield {e.ename, e.sal};
-> ename sal
-> ----- ----
-> SCOTT 3000
-> FORD  3000
+(* Outer joins are fundamental. 'left join' keeps every left row and makes
+   the right side an option ('NONE' where nothing matches); 'right join' is
+   its mirror; 'full join' keeps both sides, so both are options. Each is
+   filtered to a couple of departments to keep the result small. *)
+from d in scott.depts left join e in scott.emps on d.deptno = e.deptno
+  where d.deptno elem [10, 40]
+  yield {d.dname, ename = Option.map (fn e => e.ename) e};
+> dname      ename
+> ---------- ------
+> ACCOUNTING CLARK
+> ACCOUNTING KING
+> ACCOUNTING MILLER
+> OPERATIONS
 >
-> val it : {ename:string, sal:real} list
+> val it : {dname:string, ename:string option} bag
+from e in scott.emps right join d in scott.depts on e.deptno = d.deptno
+  where d.deptno elem [10, 40]
+  yield {d.dname, ename = Option.map (fn e => e.ename) e};
+> dname      ename
+> ---------- ------
+> ACCOUNTING CLARK
+> ACCOUNTING KING
+> ACCOUNTING MILLER
+> OPERATIONS
+>
+> val it : {dname:string, ename:string option} bag
+from e in (from x in scott.emps where x.ename elem ["SMITH", "CLARK"])
+  full join d in (from y in scott.depts where y.deptno elem [10, 40])
+    on e.deptno = d.deptno
+  yield {dept = Option.map (fn d => d.dname) d,
+      emp = Option.map (fn e => e.ename) e};
+> dept       emp
+> ---------- -----
+>            SMITH
+> ACCOUNTING CLARK
+> OPERATIONS
+>
+> val it : {dept:string option, emp:string option} bag
 
 (* ordinal -> enumerate
-   'enumerate' pairs each element with its position; it has no surface syntax,
-   so it cannot be written directly. But the sugar 'ordinal' exposes the
-   position, so yielding each element together with its 'ordinal' produces
-   exactly what 'enumerate' would -- a collection of (element, ordinal) pairs. *)
-from e in [{name = "Ann"}, {name = "Bob"}, {name = "Cy"}]
-  yield {e, ordinal};
+   'enumerate' has no surface syntax, but the sugar 'ordinal' exposes the
+   position, so yielding each element with its 'ordinal' is what
+   'enumerate' would produce. *)
+from e in [{name = "Ann"}, {name = "Bob"}, {name = "Cy"}] yield {e, ordinal};
 > e    ordinal
 > name
 > ---- -------
@@ -549,42 +464,35 @@ from e in [{name = "Ann"}, {name = "Bob"}, {name = "Cy"}]
 > val it : {e:{name:string}, `ordinal`:int} list
 
 (* unbounded -> join over each variable's extent
-   A 'from' may bind a variable without a collection: 'i' and 'j' here are
-   "unbounded". A 'where' that pins each one to a finite set of values gives
-   it an extent, and each extent becomes a 'join'. 'i = deptno' makes 'i'
-   range over '[deptno]'; 'j elem [i + 1, i + 2]' makes 'j' range over
-   '[i + 1, i + 2]'. ('Sys.planEx "3"' prints this expanded form.) *)
-from {deptno, dname, loc} in scott.depts,
-    i,
-    j
-  where i = deptno
-  andalso j elem [i + 1, i + 2];
-> deptno dname      i  j  loc
-> ------ ---------- -- -- --------
->     10 ACCOUNTING 10 11 NEW YORK
->     10 ACCOUNTING 10 12 NEW YORK
->     20 RESEARCH   20 21 DALLAS
->     20 RESEARCH   20 22 DALLAS
->     30 SALES      30 31 CHICAGO
->     30 SALES      30 32 CHICAGO
->     40 OPERATIONS 40 41 BOSTON
->     40 OPERATIONS 40 42 BOSTON
+   A 'from' may bind a variable with no collection ('i' and 'j' here). A
+   'where' that pins each one to a finite set gives it an extent, and each
+   extent becomes a 'join'. ('Sys.planEx "3"' prints the expanded form.) *)
+from {deptno, ...} in scott.depts, i, j
+  where i = deptno andalso j elem [i + 1, i + 2];
+> deptno i  j
+> ------ -- --
+>     10 10 11
+>     10 10 12
+>     20 20 21
+>     20 20 22
+>     30 30 31
+>     30 30 32
+>     40 40 41
+>     40 40 42
 >
-> val it : {deptno:int, dname:string, i:int, j:int, loc:string} bag
-from {deptno, dname, loc} in scott.depts
-  join i in [deptno]
-  join j in [i + 1, i + 2];
-> deptno dname      i  j  loc
-> ------ ---------- -- -- --------
->     10 ACCOUNTING 10 11 NEW YORK
->     10 ACCOUNTING 10 12 NEW YORK
->     20 RESEARCH   20 21 DALLAS
->     20 RESEARCH   20 22 DALLAS
->     30 SALES      30 31 CHICAGO
->     30 SALES      30 32 CHICAGO
->     40 OPERATIONS 40 41 BOSTON
->     40 OPERATIONS 40 42 BOSTON
+> val it : {deptno:int, i:int, j:int} bag
+from {deptno, ...} in scott.depts join i in [deptno] join j in [i + 1, i + 2];
+> deptno i  j
+> ------ -- --
+>     10 10 11
+>     10 10 12
+>     20 20 21
+>     20 20 22
+>     30 30 31
+>     30 30 32
+>     40 40 41
+>     40 40 42
 >
-> val it : {deptno:int, dname:string, i:int, j:int, loc:string} bag
+> val it : {deptno:int, i:int, j:int} bag
 
 (*) End desugaring.smli
