@@ -155,6 +155,13 @@ Sys.set ("output", "tabular");
 > val it = [{addr=SOME {zip=SOME 94705},id=1},{addr=NONE,id=2}]
 >   : {addr:{zip:int option} option, id:int} list
 
+(* A doubly-'option' field (e.g. from a right join of a right join) is not
+ * tabulated either: a blank cell cannot tell 'NONE' from 'SOME NONE'. Classic
+ * style keeps all three states distinct. *)
+[{id=1, p=SOME (SOME 7)}, {id=2, p=SOME NONE}, {id=3, p=NONE}];
+> val it = [{id=1,p=SOME (SOME 7)},{id=2,p=SOME NONE},{id=3,p=NONE}]
+>   : {id:int, p:int option option} list
+
 (* Records nested to three levels: the header grows one level per depth. *)
 [{id=1, a={b={c=10, d="p"}, e=2}}, {id=2, a={b={c=20, d="q"}, e=3}}];
 > a      id
