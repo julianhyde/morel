@@ -270,27 +270,27 @@ from e in scott.emps where false group {};
 > val it = [()] : unit bag
 
 (* group -> coreGroup yield
-   'group k compute {a = f over arg}' is 'coreGroup' (which pairs each key
-   with its 'elements') followed by a 'yield'. The aggregate 'f over arg'
-   becomes a query over those elements. *)
-from e in scott.emps group e.deptno compute {c = count over ()};
-> c deptno
-> - ------
-> 5     20
-> 6     30
-> 3     10
+   'group k compute {a = f over arg}' is 'coreGroup' (which pairs each key with
+   its 'elements') followed by a 'yield'. The aggregate 'f over arg' becomes a
+   sub-query over those elements that 'yield's 'arg' and aggregates it. *)
+from e in scott.emps group e.deptno compute {s = sum over e.sal};
+> deptno s
+> ------ -----
+>     20 10875
+>     30  9400
+>     10  8750
 >
-> val it : {c:int, deptno:int} bag
+> val it : {deptno:int, s:real} bag
 from e in scott.emps
   group e.deptno compute {es = elements}
-  yield {deptno, c = (from e in es compute count over ())};
-> c deptno
-> - ------
-> 5     20
-> 6     30
-> 3     10
+  yield {deptno, s = (from e in es yield e.sal compute sum over current)};
+> deptno s
+> ------ -----
+>     20 10875
+>     30  9400
+>     10  8750
 >
-> val it : {c:int, deptno:int} bag
+> val it : {deptno:int, s:real} bag
 
 (* unorder -> join1 bag [()]
    'unorder' makes an ordered pipeline unordered; joining against an
