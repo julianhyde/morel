@@ -26,36 +26,30 @@
  * construct is "sugar" that desugars into a combination of core
  * operators.
  *
- * This script names each desugaring rule (for example,
- * 'distinct -> coreGroup') and, for each, gives two queries that
- * produce the same result: the first written with sugar, the second
- * written using only the operators it desugars to. Running both and
- * seeing identical output is a check that the rule holds.
+ * Each rule below has a divider header naming it (for example,
+ * 'distinct -> group') and gives two queries that produce the same
+ * result: the first written with sugar, the second using only the
+ * operators it desugars to. Running both and seeing identical output
+ * is a check that the rule holds.
  *
  * The core operators are:
  *
  *   - 'fromUnit', the empty pipeline 'from', a collection of one
  *     zero-field element, where every query starts;
- *   - 'join1', add one scan 'pat in exp [on cond]' to a pipeline;
+ *   - 'join', add one scan 'pat in exp [on cond]' to a pipeline;
  *   - 'yield', map each element to a new value;
  *   - 'order', sort the elements;
- *   - 'coreGroup', gather elements that share a key, without applying
- *     any aggregate function;
- *   - 'union1', concatenate one more collection;
- *   - 'except1', remove the elements of one more collection;
+ *   - 'group', gather the elements that share a key, keeping each
+ *     key's elements (no aggregate function);
+ *   - 'union', concatenate one more collection;
+ *   - 'except', remove the elements of one more collection;
  *   - 'enumerate', pair each element with its ordinal.
  *
- * Some of these operators ('coreGroup', 'join1', 'union1', 'except1',
- * 'enumerate') have no surface syntax of their own; where that is so,
- * the "core" query below expresses them using the nearest primitive
- * that does. A final section covers the primitive operators -- those,
- * such as 'order', 'skip'/'take' and the outer joins, that have no
- * simpler form.
- *
- * The examples draw on the 'scott' database -- 'scott.emps' and
- * 'scott.depts' -- and, where order or duplicates matter, on small
- * inline lists. A closing section covers the base Standard ML
- * desugarings (such as 'if' -> 'case' and 'fun' -> 'val rec').
+ * Two of these ('group' keeping elements, and 'enumerate') have no
+ * surface syntax; where that is so, the "core" query expresses them
+ * using the nearest primitive. The first sections cover the core
+ * operators and the base Standard ML desugarings; then the relational
+ * rules; then the primitive operators that have no simpler form.
  *)
 
 useSilently "../scott.smli";
@@ -73,7 +67,7 @@ set ("output", "tabular");
 from;
 > val it = [()] : unit list
 
-(*) 'join1' adds a scan, pairing each existing row with each element of
+(*) 'join' adds a scan, pairing each existing row with each element of
 (*) the new collection (a Cartesian product).
 from i in [1, 2], j in [3, 4];
 > i j
@@ -100,10 +94,9 @@ from d in scott.depts order DESC d.deptno;
 >
 > val it : {deptno:int, dname:string, loc:string} list
 
-(*) 'coreGroup' gathers the elements that share a key into a group,
-(*) without applying any aggregate. Morel has no 'coreGroup' keyword, so
-(*) we use 'group k compute {elements}', which pairs each key with its
-(*) elements.
+(*) 'group' gathers the elements that share a key into a group, keeping
+(*) the elements (no aggregate). It has no keyword of its own, so we use
+(*) 'group k compute {elements}', which pairs each key with its elements.
 from i in [1, 2, 3, 4] group {even = i mod 2 = 0} compute {elements};
 > elements even
 > -------- -----
@@ -114,26 +107,109 @@ from i in [1, 2, 3, 4] group {even = i mod 2 = 0} compute {elements};
 >
 > val it : {`elements`:int list, even:bool} list
 
-(*) 'union1' concatenates one more collection (SQL 'UNION ALL').
+(*) 'union' concatenates one more collection (SQL 'UNION ALL').
 from i in [1, 2] union [2, 3];
 > val it = [1,2,2,3] : int list
 
-(*) 'except1' removes the elements of one more collection (SQL
+(*) 'except' removes the elements of one more collection (SQL
 (*) 'EXCEPT ALL': one element removed per match).
 from i in [1, 2, 2, 3] except [2];
 > val it = [1,2,3] : int list
 
 (*) 'enumerate' pairs each element with its ordinal. It has no surface
-(*) syntax; see the 'ordinal' note near the end.
+(*) syntax; see 'ordinal' near the end.
 
 (* ---------------------------------------------------------------- *)
-(* Desugaring rules (fundamental concepts first)                    *)
+(* Standard ML desugarings                                          *)
 (* ---------------------------------------------------------------- *)
 
-(* from -> fromUnit join1
+(* if -> case --------------------------------------------------------
+   'if c then a else b' is 'case c of true => a | _ => b'. *)
+if 1 < 2 then "yes" else "no";
+> val it = "yes" : string
+case 1 < 2 of true => "yes" | _ => "no";
+> val it = "yes" : string
+
+(* fun -> val rec ----------------------------------------------------
+   'fun f x = e' is 'val rec f = fn x => e' (curried for more arguments). *)
+fun dbl x = x * 2;
+> val dbl = fn : int -> int
+val rec dbl = fn x => x * 2;
+> val dbl = fn : int -> int
+
+(* fn-multi -> fn case -----------------------------------------------
+   A 'fn' with several arms is a one-argument 'fn' over a 'case'. (This is
+   also how 'fun' gets its multiple clauses.) *)
+List.map (fn 0 => "zero" | _ => "other") [0, 1, 2];
+> val it = ["zero","other","other"] : string list
+List.map (fn v => case v of 0 => "zero" | _ => "other") [0, 1, 2];
+> val it = ["zero","other","other"] : string list
+
+(* tuple -> record ---------------------------------------------------
+   A tuple is a record with numeric labels: '(a, b)' is '{1 = a, 2 = b}'. *)
+(1, "a");
+> val it = (1,"a") : int * string
+{1 = 1, 2 = "a"};
+> val it = (1,"a") : int * string
+
+(* andalso -> if -----------------------------------------------------
+   'p andalso q' short-circuits: it is 'if p then q else false' (dually,
+   'p orelse q' is 'if p then true else q'). *)
+true andalso 1 < 2;
+> val it = true : bool
+if true then 1 < 2 else false;
+> val it = true : bool
+
+(* infix -> apply ----------------------------------------------------
+   An infix operator applied to two arguments is a function applied to their
+   tuple: 'a + b' is 'op + (a, b)'. *)
+1 + 2;
+> val it = 3 : int
+op + (1, 2);
+> val it = 3 : int
+
+(* dot -> selector ---------------------------------------------------
+   Dotted access 'x.y' is the selector '#y' applied to 'x'; for a tuple, a
+   positive-integer label selects a component, so 'x.2' is '#2 x'. *)
+{a = 1, b = 2}.a;
+> val it = 1 : int
+#a {a = 1, b = 2};
+> val it = 1 : int
+(10, 20, 30).2;
+> val it = 20 : int
+#2 (10, 20, 30);
+> val it = 20 : int
+
+(* selector -> fn ----------------------------------------------------
+   The field selector '#label' is a function that projects 'label' from a
+   record. *)
+#a {a = 1, b = 2};
+> val it = 1 : int
+(fn {a, ...} => a) {a = 1, b = 2};
+> val it = 1 : int
+
+(* list -> cons ------------------------------------------------------
+   '[a, b, c]' is 'a :: b :: c :: []' -- a chain of '::' ending in nil. *)
+[1, 2, 3];
+> val it = [1,2,3] : int list
+1 :: 2 :: 3 :: [];
+> val it = [1,2,3] : int list
+
+(* val-pat -> case ---------------------------------------------------
+   A 'val' binding whose left side is a pattern binds the value, then matches
+   it: 'val (a, b) = e' is 'val v = e' then 'case v of (a, b) => ...'. *)
+let val (a, b) = (1, 2) in a + b end;
+> val it = 3 : int
+let val v = (1, 2) in case v of (a, b) => a + b end;
+> val it = 3 : int
+
+(* ---------------------------------------------------------------- *)
+(* Relational desugaring rules                                      *)
+(* ---------------------------------------------------------------- *)
+
+(* from -> fromUnit join ---------------------------------------------
    A 'from' with one scan is 'fromUnit' (the one-element pipeline '[()]')
-   followed by a 'join1' that adds the scan (then a 'yield' to drop the
-   unit). *)
+   followed by a 'join' that adds the scan (then a 'yield' to drop the unit). *)
 from d in scott.depts;
 > deptno dname      loc
 > ------ ---------- --------
@@ -153,7 +229,7 @@ from u in [()], d in scott.depts yield d;
 >
 > val it : {deptno:int, dname:string, loc:string} bag
 
-(* scan p = exp -> scan p in [exp]
+(* scan-eq -> scan-in ------------------------------------------------
    A scan that binds a variable to a single value is a scan over the
    one-element list '[exp]'. 'exp' may depend on earlier scans. *)
 from d in scott.depts, hi = d.deptno + 1;
@@ -177,18 +253,18 @@ from d in scott.depts, hi in [d.deptno + 1];
 >
 > val it : {d:{deptno:int, dname:string, loc:string}, hi:int} bag
 
-(* scan {f1, f2 = const, ...} in t -> where yield
-   A record pattern splits in two: a field matched against a constant
-   becomes a 'where', a field bound to a variable becomes a 'yield'. *)
+(* scan-pat -> where yield -------------------------------------------
+   A record pattern splits in two: a field matched against a constant becomes
+   a 'where', a field bound to a variable becomes a 'yield'. *)
 from {deptno = 10, ename, ...} in scott.emps;
 > val it = ["CLARK","KING","MILLER"] : string bag
 from e in scott.emps where e.deptno = 10 yield e.ename;
 > val it = ["CLARK","KING","MILLER"] : string bag
 
-(* join -> join1 ...
-   A 'from' with several scans is one 'join1' per scan; an 'on' condition
-   rides with its scan. The comma and the 'join' keyword are the same.
-   (Projected with 'yield', since the joined records are wide.) *)
+(* join-multi -> join ------------------------------------------------
+   A 'from' with several scans is one 'join' per scan; an 'on' condition rides
+   with its scan. The comma and the 'join' keyword are the same. (Projected
+   with 'yield', since the joined records are wide.) *)
 from d in scott.depts, e in scott.emps on d.deptno = e.deptno
   yield {d.dname, e.ename};
 > dname      ename
@@ -230,9 +306,9 @@ from d in scott.depts join e in scott.emps on d.deptno = e.deptno
 >
 > val it : {dname:string, ename:string} bag
 
-(* where -> join1 [()] on cond
-   'where cond' is a 'join1' against '[()]' with 'on' condition 'cond'
-   (then a 'yield' to drop the unit). *)
+(* where -> join -----------------------------------------------------
+   'where cond' is a 'join' against '[()]' with 'on' condition 'cond' (then a
+   'yield' to drop the unit). *)
 from d in scott.depts where d.deptno = 10;
 > deptno dname      loc
 > ------ ---------- --------
@@ -246,20 +322,20 @@ from d in scott.depts, u in [()] on d.deptno = 10 yield d;
 >
 > val it : {deptno:int, dname:string, loc:string} bag
 
-(* distinct -> coreGroup
-   When the row has at least one column, 'distinct' is 'coreGroup' over all of
-   them -- group by every column, keeping the keys. Grouping by the only column
-   here is exactly that. *)
+(* distinct -> group -------------------------------------------------
+   When the row has at least one column, 'distinct' is 'group' over all of them
+   (group by every column, keeping the keys). Grouping by the only column here
+   is exactly that. *)
 from e in scott.emps yield e.job distinct;
 > val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
 from e in scott.emps group e.job;
 > val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
 
-(* distinct {} -> take 1
-   When the row has no columns, 'distinct' is NOT 'group {}' -- that would
-   always return one grand-total row, even on empty input. 'distinct' never
-   increases the row count, so it desugars to 'take 1': of a relation whose
-   rows are all '()', taking one gives '[()]' if there is a row, else '[]'. *)
+(* distinct-empty -> take --------------------------------------------
+   When the row has no columns, 'distinct' is NOT 'group {}' -- that always
+   returns one grand-total row, even on empty input. 'distinct' never increases
+   the row count, so it is 'take 1': of a relation whose rows are all '()',
+   taking one gives '[()]' if there is a row, else '[]'. *)
 from e in scott.emps where false yield {} distinct;
 > val it = [] : unit bag
 from e in scott.emps where false yield {} take 1;
@@ -270,9 +346,9 @@ from e in scott.emps where false yield {} take 1;
 from e in scott.emps where false group {};
 > val it = [()] : unit bag
 
-(* group -> coreGroup yield
-   'group k compute {a = f over arg}' is 'coreGroup' (which pairs each key with
-   its 'elements') followed by a 'yield'. The aggregate 'f over arg' becomes a
+(* group-compute -> group yield --------------------------------------
+   'group k compute {a = f over arg}' is 'group' (which pairs each key with its
+   'elements') followed by a 'yield'. The aggregate 'f over arg' becomes a
    sub-query over those elements that 'yield's 'arg' and aggregates it. *)
 from e in scott.emps group e.deptno compute {s = sum over e.sal};
 > deptno s
@@ -293,30 +369,29 @@ from e in scott.emps
 >
 > val it : {deptno:int, s:real} bag
 
-(* unorder -> join1 bag [()]
-   'unorder' makes an ordered pipeline unordered; joining against an
-   unordered '[()]' does the same, since a join is unordered if either
-   input is. *)
+(* unorder -> join ---------------------------------------------------
+   'unorder' makes an ordered pipeline unordered; joining against an unordered
+   '[()]' does the same, since a join is unordered if either input is. *)
 from i in [1, 2, 3] unorder;
 > val it = [1,2,3] : int bag
 from i in [1, 2, 3], u in bag [()] yield i;
 > val it = [1,2,3] : int bag
 
-(* union -> union1 ...
-   'union' with several arguments is 'union1' applied once per argument. *)
+(* union-multi -> union ----------------------------------------------
+   'union' with several arguments is 'union' applied once per argument. *)
 from i in [2, 1] union [3], [4, 5];
 > val it = [2,1,3,4,5] : int list
 from i in [2, 1] union [3] union [4, 5];
 > val it = [2,1,3,4,5] : int list
 
-(* except -> except1 ...
-   'except' with several arguments is 'except1' applied once per argument. *)
+(* except-multi -> except --------------------------------------------
+   'except' with several arguments is 'except' applied once per argument. *)
 from i in [1, 2, 3, 4, 5] except [2], [4];
 > val it = [1,3,5] : int list
 from i in [1, 2, 3, 4, 5] except [2] except [4];
 > val it = [1,3,5] : int list
 
-(* intersect1 -> except1
+(* intersect -> except -----------------------------------------------
    Intersection is derived from difference: 'a intersect b' is
    'a except (a except b)'. *)
 from i in [2, 1, 2, 2, 2, 3] intersect [2, 2, 4];
@@ -324,15 +399,15 @@ from i in [2, 1, 2, 2, 2, 3] intersect [2, 2, 4];
 from i in [2, 1, 2, 2, 2, 3] except (from j in [2, 1, 2, 2, 2, 3] except [2, 2, 4]);
 > val it = [2,2] : int list
 
-(* union distinct -> union1 distinct
-   A 'distinct' qualifier on a set operator is the plain operator followed
-   by a 'distinct' step. *)
+(* union-distinct -> union distinct ----------------------------------
+   A 'distinct' qualifier on a set operator is the plain operator followed by a
+   'distinct' step. *)
 from i in [2, 1, 2, 3] union distinct [2, 4];
 > val it = [2,1,3,4] : int list
 from i in [2, 1, 2, 3] union [2, 4] distinct;
 > val it = [2,1,3,4] : int list
 
-(* except distinct -> distinct except1 (b distinct) distinct
+(* except-distinct -> distinct except distinct -----------------------
    The core expansion makes each side distinct, takes the (multiset)
    difference, and makes the result distinct. *)
 from i in [2, 1, 2, 2, 2, 3] except distinct [2, 4];
@@ -340,14 +415,14 @@ from i in [2, 1, 2, 2, 2, 3] except distinct [2, 4];
 from i in [2, 1, 2, 2, 2, 3] distinct except (from j in [2, 4] distinct) distinct;
 > val it = [1,3] : int list
 
-(* intersect distinct -> distinct intersect1 (b distinct) distinct
+(* intersect-distinct -> distinct intersect distinct -----------------
    The set intersection, expanded the same way. *)
 from i in [2, 1, 2, 2, 2, 3] intersect distinct [2, 2, 4];
 > val it = [2] : int list
 from i in [2, 1, 2, 2, 2, 3] distinct intersect (from j in [2, 2, 4] distinct) distinct;
 > val it = [2] : int list
 
-(* List.map -> yield, List.filter -> where
+(* List.map/filter -> yield/where ------------------------------------
    'List.map f' is a 'yield', 'List.filter p' is a 'where'. *)
 List.map (fn x => x + 1) [1, 2, 3];
 > val it = [2,3,4] : int list
@@ -358,23 +433,27 @@ List.filter (fn x => x mod 2 = 0) [1, 2, 3, 4];
 from x in [1, 2, 3, 4] where x mod 2 = 0;
 > val it = [2,4] : int list
 
-(* Bag.map -> yield, Bag.filter -> where
+(* Bag.map/filter -> yield/where -------------------------------------
    The same query operations as 'List.map'/'List.filter', over a bag. *)
 Bag.map (fn x => x + 1) (bag [1, 2, 3]);
 > val it = [2,3,4] : int bag
 from x in bag [1, 2, 3] yield x + 1;
 > val it = [2,3,4] : int bag
+Bag.filter (fn x => x mod 2 = 0) (bag [1, 2, 3, 4]);
+> val it = [2,4] : int bag
+from x in bag [1, 2, 3, 4] where x mod 2 = 0;
+> val it = [2,4] : int bag
 
-(* notelem -> not elem
+(* notelem -> not elem -----------------------------------------------
    'x notelem xs' is the negation of membership. *)
 from i in [1, 2, 3] where i notelem [2];
 > val it = [1,3] : int list
 from i in [1, 2, 3] where not (i elem [2]);
 > val it = [1,3] : int list
 
-(* current -> {current variables}
-   'current' denotes the element flowing through a step; in a multi-scan
-   'from' it is the record of the scan variables. *)
+(* current -> fields -------------------------------------------------
+   'current' denotes the element flowing through a step; in a multi-scan 'from'
+   it is the record of the scan variables. *)
 from i in [1, 2], s in ["a", "b"] yield current;
 > i s
 > - -
@@ -394,30 +473,30 @@ from i in [1, 2], s in ["a", "b"] yield {i, s};
 >
 > val it : {i:int, s:string} list
 
-(* yieldAll -> join1 yield
+(* yieldAll -> join yield --------------------------------------------
    'yieldAll e' evaluates 'e' for each row and flattens the results (a
-   flatMap): a 'join1' over 'e' then a 'yield' of the element. *)
+   flatMap): a 'join' over 'e' then a 'yield' of the element. *)
 from x in [[1, 2], [3], [4, 5]] yieldAll x;
 > val it = [1,2,3,4,5] : int list
 from x in [[1, 2], [3], [4, 5]], v in x yield v;
 > val it = [1,2,3,4,5] : int list
 
-(* compute -> only (... group {} compute ...)
-   Terminal 'compute agg' reduces the pipeline to one value: 'group {}'
-   makes one group, the aggregate runs over it, 'only' takes the row. *)
+(* compute -> only ---------------------------------------------------
+   Terminal 'compute agg' reduces the pipeline to one value: 'group {}' makes
+   one group, the aggregate runs over it, 'only' takes the row. *)
 from e in scott.emps compute sum over e.sal;
 > val it = 29025 : real
 Relational.only (from e in scott.emps group {} compute (sum over e.sal));
 > val it = 29025 : real
 
-(* into -> apply
+(* into -> apply -----------------------------------------------------
    Terminal 'into f' feeds the whole pipeline to 'f'. *)
 from i in [1, 2, 3] into List.length;
 > val it = 3 : int
 List.length (from i in [1, 2, 3]);
 > val it = 3 : int
 
-(* through pat in f -> scan over f of the pipeline
+(* through -> scan ---------------------------------------------------
    'through pat in f' pipes the pipeline through 'f' and scans the result:
    'from pat in (f query)'. *)
 from i in [1, 2, 3] through xs in (List.map (fn x => x * 10));
@@ -425,33 +504,65 @@ from i in [1, 2, 3] through xs in (List.map (fn x => x * 10));
 from xs in (List.map (fn x => x * 10) [1, 2, 3]);
 > val it = [10,20,30] : int list
 
-(* exists -> Relational.nonEmpty
+(* exists -> nonEmpty ------------------------------------------------
    'exists scans where cond' tests whether the query has any row. *)
 exists e in scott.emps where e.deptno = 10;
 > val it = true : bool
 Relational.nonEmpty (from e in scott.emps where e.deptno = 10);
 > val it = true : bool
 
-(* forall ... require -> not exists
+(* forall -> not exists ----------------------------------------------
    'forall scans require cond' holds when no row violates 'cond'. *)
 forall e in scott.emps require e.sal > 0.0;
 > val it = true : bool
 not (Relational.nonEmpty (from e in scott.emps where not (e.sal > 0.0)));
 > val it = true : bool
 
+(* unbounded -> join -------------------------------------------------
+   A 'from' may bind a variable with no collection ('i' and 'j' here). A
+   'where' that pins each one to a finite set gives it an extent, and each
+   extent becomes a 'join'. ('Sys.planEx "3"' prints the expanded form.) *)
+from {deptno, ...} in scott.depts, i, j
+  where i = deptno andalso j elem [i + 1, i + 2];
+> deptno i  j
+> ------ -- --
+>     10 10 11
+>     10 10 12
+>     20 20 21
+>     20 20 22
+>     30 30 31
+>     30 30 32
+>     40 40 41
+>     40 40 42
+>
+> val it : {deptno:int, i:int, j:int} bag
+from {deptno, ...} in scott.depts join i in [deptno] join j in [i + 1, i + 2];
+> deptno i  j
+> ------ -- --
+>     10 10 11
+>     10 10 12
+>     20 20 21
+>     20 20 22
+>     30 30 31
+>     30 30 32
+>     40 40 41
+>     40 40 42
+>
+> val it : {deptno:int, i:int, j:int} bag
+
 (* ---------------------------------------------------------------- *)
 (* Primitive and fundamental operators                              *)
 (* ---------------------------------------------------------------- *)
 
-(*) 'order' sorts (a core operator); 'skip n' and 'take n' slice an
-(*) ordered pipeline (SQL OFFSET and FETCH). None has a simpler form.
+(*) 'order' sorts (a core operator); 'skip n' and 'take n' slice an ordered
+(*) pipeline (SQL OFFSET and FETCH). None has a simpler form.
 from i in [1, 2, 3, 4, 5] skip 1 take 2;
 > val it = [2,3] : int list
 
-(* Outer joins are fundamental. 'left join' keeps every left row and makes
-   the right side an option ('NONE' where nothing matches); 'right join' is
-   its mirror; 'full join' keeps both sides, so both are options. Each is
-   filtered to a couple of departments to keep the result small. *)
+(* Outer joins are fundamental. 'left join' keeps every left row and makes the
+   right side an option ('NONE' where nothing matches); 'right join' is its
+   mirror; 'full join' keeps both sides, so both are options. Each is filtered
+   to a couple of departments to keep the result small. *)
 from d in scott.depts left join e in scott.emps on d.deptno = e.deptno
   where d.deptno elem [10, 40]
   yield {d.dname, ename = Option.map (fn e => e.ename) e};
@@ -487,10 +598,9 @@ from e in (from x in scott.emps where x.ename elem ["SMITH", "CLARK"])
 >
 > val it : {dept:string option, emp:string option} bag
 
-(* ordinal -> enumerate
-   'enumerate' has no surface syntax, but the sugar 'ordinal' exposes the
-   position, so yielding each element with its 'ordinal' is what
-   'enumerate' would produce. *)
+(*) 'ordinal' -> 'enumerate': 'enumerate' has no surface syntax, but the sugar
+(*) 'ordinal' exposes the position, so yielding each element with its 'ordinal'
+(*) is what 'enumerate' would produce.
 from e in [{name = "Ann"}, {name = "Bob"}, {name = "Cy"}] yield {e, ordinal};
 > e    ordinal
 > name
@@ -500,114 +610,5 @@ from e in [{name = "Ann"}, {name = "Bob"}, {name = "Cy"}] yield {e, ordinal};
 > Cy         2
 >
 > val it : {e:{name:string}, `ordinal`:int} list
-
-(* unbounded -> join over each variable's extent
-   A 'from' may bind a variable with no collection ('i' and 'j' here). A
-   'where' that pins each one to a finite set gives it an extent, and each
-   extent becomes a 'join'. ('Sys.planEx "3"' prints the expanded form.) *)
-from {deptno, ...} in scott.depts, i, j
-  where i = deptno andalso j elem [i + 1, i + 2];
-> deptno i  j
-> ------ -- --
->     10 10 11
->     10 10 12
->     20 20 21
->     20 20 22
->     30 30 31
->     30 30 32
->     40 40 41
->     40 40 42
->
-> val it : {deptno:int, i:int, j:int} bag
-from {deptno, ...} in scott.depts join i in [deptno] join j in [i + 1, i + 2];
-> deptno i  j
-> ------ -- --
->     10 10 11
->     10 10 12
->     20 20 21
->     20 20 22
->     30 30 31
->     30 30 32
->     40 40 41
->     40 40 42
->
-> val it : {deptno:int, i:int, j:int} bag
-
-(* ---------------------------------------------------------------- *)
-(* Standard ML desugarings                                          *)
-(* ---------------------------------------------------------------- *)
-
-(* The base language desugars too: Morel lowers surface Standard ML into a
-   smaller core. These are the main rewrites. *)
-
-(* if -> case
-   'if c then a else b' is 'case c of true => a | _ => b'. *)
-if 1 < 2 then "yes" else "no";
-> val it = "yes" : string
-case 1 < 2 of true => "yes" | _ => "no";
-> val it = "yes" : string
-
-(* fun -> val rec fn
-   'fun f x = e' is 'val rec f = fn x => e' (curried for more arguments;
-   multiple clauses become a 'case' on a tuple of the arguments). *)
-fun dbl x = x * 2;
-> val dbl = fn : int -> int
-val rec dbl = fn x => x * 2;
-> val dbl = fn : int -> int
-
-(* multi-arm fn -> fn case
-   A 'fn' with several arms is a one-argument 'fn' over a 'case': 'fn p1 => e1 |
-   p2 => e2' is 'fn v => case v of p1 => e1 | p2 => e2'. (This is also how 'fun'
-   gets its multiple clauses.) *)
-List.map (fn 0 => "zero" | _ => "other") [0, 1, 2];
-> val it = ["zero","other","other"] : string list
-List.map (fn v => case v of 0 => "zero" | _ => "other") [0, 1, 2];
-> val it = ["zero","other","other"] : string list
-
-(* tuple -> record
-   A tuple is a record with numeric labels: '(a, b)' is '{1 = a, 2 = b}'. *)
-(1, "a");
-> val it = (1,"a") : int * string
-{1 = 1, 2 = "a"};
-> val it = (1,"a") : int * string
-
-(* andalso -> if
-   'p andalso q' short-circuits: it is 'if p then q else false' (dually,
-   'p orelse q' is 'if p then true else q'). *)
-true andalso 1 < 2;
-> val it = true : bool
-if true then 1 < 2 else false;
-> val it = true : bool
-
-(* infix -> application
-   An infix operator applied to two arguments is a function applied to their
-   tuple: 'a + b' is 'op + (a, b)'. *)
-1 + 2;
-> val it = 3 : int
-op + (1, 2);
-> val it = 3 : int
-
-(* #label -> selector function
-   The field selector '#label' is a function that projects 'label' from a
-   record. *)
-#a {a = 1, b = 2};
-> val it = 1 : int
-(fn {a, ...} => a) {a = 1, b = 2};
-> val it = 1 : int
-
-(* list literal -> cons
-   '[a, b, c]' is 'a :: b :: c :: []' -- a chain of '::' ending in nil. *)
-[1, 2, 3];
-> val it = [1,2,3] : int list
-1 :: 2 :: 3 :: [];
-> val it = [1,2,3] : int list
-
-(* val pat -> case
-   A 'val' binding whose left side is a pattern binds the value, then matches
-   it: 'val (a, b) = e' is 'val v = e' followed by 'case v of (a, b) => ...'. *)
-let val (a, b) = (1, 2) in a + b end;
-> val it = 3 : int
-let val v = (1, 2) in case v of (a, b) => a + b end;
-> val it = 3 : int
 
 (*) End desugaring.smli
