@@ -155,6 +155,29 @@ Sys.set ("output", "tabular");
 > val it = [{addr=SOME {zip=SOME 94705},id=1},{addr=NONE,id=2}]
 >   : {addr:{zip:int option} option, id:int} list
 
+(* Records nested to three levels: the header grows one level per depth. *)
+[{id=1, a={b={c=10, d="p"}, e=2}}, {id=2, a={b={c=20, d="q"}, e=3}}];
+> a      id
+> b    e
+> c  d
+> -- - - --
+> 10 p 2  1
+> 20 q 3  2
+>
+> val it : {a:{b:{c:int, d:string}, e:int}, id:int} list
+
+(* Three levels with 'option' at the outer and an inner level; an outer 'NONE'
+ * blanks the whole nested block. *)
+[{id=1, a=SOME {b={c=10}, e=SOME {f="x"}}}, {id=2, a=NONE}];
+> a    id
+> b  e
+> c  f
+> -- - --
+> 10 x  1
+>       2
+>
+> val it : {a:{b:{c:int}, e:{f:string} option} option, id:int} list
+
 (* -------------------------------------------------------------------
  * [MOREL-376] Tabular mode for nested collections
  *)
