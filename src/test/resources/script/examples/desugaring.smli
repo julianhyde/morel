@@ -48,8 +48,9 @@
  * Some of these operators ('coreGroup', 'join1', 'union1', 'except1',
  * 'enumerate') have no surface syntax of their own; where that is so,
  * the "core" query below expresses them using the nearest primitive
- * that does. A final section covers the primitive operators (those
- * with no simpler form) and the one rule ('ordinal') still to do.
+ * that does. A final section covers the primitive operators -- those,
+ * such as 'order', 'skip'/'take' and the outer joins, that have no
+ * simpler form.
  *)
 
 (*) Load the 'scott' database (emps, depts, ...). The examples draw on
@@ -205,7 +206,8 @@ from e in scott.emps
    (as 'SOME r') or, if none match, with 'NONE'. For each left row, run a
    correlated sub-query for the matches and 'yieldAll' them: emit one '{d, e =
    SOME e}' per match, or a single '{d, e = NONE}' when there are none.
-   ('right' and 'full' joins are symmetric.) *)
+   ('right' and 'full' joins, below, are fundamental operators rather than
+   derived ones.) *)
 val ds = [{id = 1, c = "x"}, {id = 2, c = "y"}];
 > c id
 > - --
@@ -237,6 +239,42 @@ from d in ds
 >   [{d={c="x",id=1},e=SOME {id=1,n="a"}},{d={c="x",id=1},e=SOME {id=1,n="b"}},
 >    {d={c="y",id=2},e=NONE}]
 >   : {d:{c:string, id:int}, e:{id:int, n:string} option} list
+
+(* right join (fundamental)
+   A 'right join' is the mirror of 'left join': it keeps every right row and
+   makes the left side an option. Here every department is kept; its employees
+   are 'SOME e', and a department with none (OPERATIONS, deptno 40) is paired
+   with 'NONE'. (Filtered to two departments to keep the result small.) *)
+from e in scott.emps
+  right join d in scott.depts on e.deptno = d.deptno
+  where d.deptno elem [10, 40]
+  yield {d.dname, ename = Option.map (fn e => e.ename) e};
+> dname      ename
+> ---------- ------
+> ACCOUNTING CLARK
+> ACCOUNTING KING
+> ACCOUNTING MILLER
+> OPERATIONS
+>
+> val it : {dname:string, ename:string option} bag
+
+(* full join (fundamental)
+   A 'full join' keeps every row of both inputs, so both sides are options: a
+   matched pair is '(SOME, SOME)', an unmatched left row is '(NONE, SOME d)',
+   and an unmatched right row is '(SOME e, NONE)'. (Inputs are filtered so all
+   three cases appear in three rows.) *)
+from e in (from x in scott.emps where x.ename elem ["SMITH", "CLARK"])
+  full join d in (from y in scott.depts where y.deptno elem [10, 40])
+    on e.deptno = d.deptno
+  yield {dept = Option.map (fn d => d.dname) d,
+      emp = Option.map (fn e => e.ename) e};
+> dept       emp
+> ---------- -----
+>            SMITH
+> ACCOUNTING CLARK
+> OPERATIONS
+>
+> val it : {dept:string option, emp:string option} bag
 
 (* where -> join1 [()] on cond
    'where cond' is a 'join1' against the one-element pipeline '[()]'
@@ -384,6 +422,13 @@ Bag.filter (fn x => x mod 2 = 0) (bag [1, 2, 3, 4]);
 from x in bag [1, 2, 3, 4] where x mod 2 = 0;
 > val it = [2,4] : int bag
 
+(* notelem -> not elem
+   'x notelem xs' is just the negation of membership. *)
+from i in [1, 2, 3] where i notelem [2];
+> val it = [1,3] : int list
+from i in [1, 2, 3] where not (i elem [2]);
+> val it = [1,3] : int list
+
 (* current -> {current variables}
    'current' denotes the element currently
    flowing through a step. In a single-scan 'from' it equals the scan
@@ -470,9 +515,7 @@ not (Relational.nonEmpty (from e in scott.emps where not (e.sal > 0.0)));
    - 'skip n' and 'take n' slice an ordered pipeline (like SQL OFFSET and
      FETCH), keeping a contiguous run of elements.
    - 'order' sorts (a core operator).
-   - 'right join' and 'full join' are the mirror image and the union of
-     'left join'; each pads the unmatched rows of one or both inputs with
-     'NONE', following the same pattern as the 'left join' rule above. *)
+   - 'right join' and 'full join' (shown above) are fundamental. *)
 from e in scott.emps order e.sal skip 11 take 2 yield {e.ename, e.sal};
 > ename sal
 > ----- ----
@@ -481,20 +524,16 @@ from e in scott.emps order e.sal skip 11 take 2 yield {e.ename, e.sal};
 >
 > val it : {ename:string, sal:real} list
 
-(* todo: ordinal -> enumerate
-   'ordinal' (the position of the current element) is meant to desugar
-   into an 'enumerate' step that pairs each element with its position.
-   'enumerate' has no surface syntax, so only the sugared form runs
-   today: *)
-from e in scott.depts order e.dname yield {e.dname, ordinal};
-> dname      ordinal
-> ---------- -------
-> ACCOUNTING       0
-> OPERATIONS       1
-> RESEARCH         2
-> SALES            3
->
-> val it : {dname:string, `ordinal`:int} list
+(* ordinal -> enumerate
+   'enumerate' pairs each element with its position; it has no surface syntax,
+   so it cannot be written directly. But the sugar 'ordinal' exposes the
+   position, so yielding each element together with its 'ordinal' produces
+   exactly what 'enumerate' would -- a collection of (element, ordinal) pairs. *)
+from e in [{name = "Ann"}, {name = "Bob"}, {name = "Cy"}]
+  yield {e, ordinal};
+> val it =
+>   [{e={name="Ann"},`ordinal`=0},{e={name="Bob"},`ordinal`=1},
+>    {e={name="Cy"},`ordinal`=2}] : {e:{name:string}, `ordinal`:int} list
 
 (* unbounded -> join over each variable's extent
    A 'from' may bind a variable without a collection: 'i' and 'j' here are
