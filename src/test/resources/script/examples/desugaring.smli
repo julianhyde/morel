@@ -186,27 +186,48 @@ from e in scott.emps where e.deptno = 10 yield e.ename;
 
 (* join -> join1 ...
    A 'from' with several scans is one 'join1' per scan; an 'on' condition
-   rides with its scan. The comma and the 'join' keyword are the same. *)
-from d in scott.depts, e in scott.depts on d.deptno = e.deptno;
-> d                          e
-> deptno dname      loc      deptno dname      loc
-> ------ ---------- -------- ------ ---------- --------
->     10 ACCOUNTING NEW YORK     10 ACCOUNTING NEW YORK
->     20 RESEARCH   DALLAS       20 RESEARCH   DALLAS
->     30 SALES      CHICAGO      30 SALES      CHICAGO
->     40 OPERATIONS BOSTON       40 OPERATIONS BOSTON
+   rides with its scan. The comma and the 'join' keyword are the same.
+   (Projected with 'yield', since the joined records are wide.) *)
+from d in scott.depts, e in scott.emps on d.deptno = e.deptno
+  yield {d.dname, e.ename};
+> dname      ename
+> ---------- ------
+> ACCOUNTING CLARK
+> ACCOUNTING KING
+> ACCOUNTING MILLER
+> RESEARCH   SMITH
+> RESEARCH   JONES
+> RESEARCH   SCOTT
+> RESEARCH   ADAMS
+> RESEARCH   FORD
+> SALES      ALLEN
+> SALES      WARD
+> SALES      MARTIN
+> SALES      BLAKE
+> SALES      TURNER
+> SALES      JAMES
 >
-> val it : {d:{deptno:int, dname:string, loc:string}, e:{deptno:int, dname:string, loc:string}} bag
-from d in scott.depts join e in scott.depts on d.deptno = e.deptno;
-> d                          e
-> deptno dname      loc      deptno dname      loc
-> ------ ---------- -------- ------ ---------- --------
->     10 ACCOUNTING NEW YORK     10 ACCOUNTING NEW YORK
->     20 RESEARCH   DALLAS       20 RESEARCH   DALLAS
->     30 SALES      CHICAGO      30 SALES      CHICAGO
->     40 OPERATIONS BOSTON       40 OPERATIONS BOSTON
+> val it : {dname:string, ename:string} bag
+from d in scott.depts join e in scott.emps on d.deptno = e.deptno
+  yield {d.dname, e.ename};
+> dname      ename
+> ---------- ------
+> ACCOUNTING CLARK
+> ACCOUNTING KING
+> ACCOUNTING MILLER
+> RESEARCH   SMITH
+> RESEARCH   JONES
+> RESEARCH   SCOTT
+> RESEARCH   ADAMS
+> RESEARCH   FORD
+> SALES      ALLEN
+> SALES      WARD
+> SALES      MARTIN
+> SALES      BLAKE
+> SALES      TURNER
+> SALES      JAMES
 >
-> val it : {d:{deptno:int, dname:string, loc:string}, e:{deptno:int, dname:string, loc:string}} bag
+> val it : {dname:string, ename:string} bag
 
 (* where -> join1 [()] on cond
    'where cond' is a 'join1' against '[()]' with 'on' condition 'cond'
