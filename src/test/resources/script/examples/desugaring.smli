@@ -246,12 +246,22 @@ from d in scott.depts, u in [()] on d.deptno = 10 yield d;
 > val it : {deptno:int, dname:string, loc:string} bag
 
 (* distinct -> coreGroup
-   'distinct' removes duplicates by grouping on every column and keeping
-   the keys. Grouping by the only column is exactly that. *)
+   When the row has at least one column, 'distinct' is 'coreGroup' over all of
+   them -- group by every column, keeping the keys. Grouping by the only column
+   here is exactly that. *)
 from e in scott.emps yield e.job distinct;
 > val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
 from e in scott.emps group e.job;
 > val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
+
+(*) But when the row has no columns, 'distinct' is NOT 'group {}'. 'distinct'
+(*) never increases the row count, so an empty input gives an empty result,
+(*) whereas 'group {}' always returns one (grand-total) row. (The zero-column
+(*) case desugars instead to '[()]' if the query has a row, else '[]'.)
+from e in scott.emps where false yield {} distinct;
+> val it = [] : unit bag
+from e in scott.emps where false group {};
+> val it = [()] : unit bag
 
 (* group -> coreGroup yield
    'group k compute {a = f over arg}' is 'coreGroup' (which pairs each key
