@@ -223,10 +223,14 @@ val es = [{id = 1, n = "a"}, {id = 1, n = "b"}];
 >
 > val es : {id:int, n:string} list
 from d in ds left join e in es on d.id = e.id;
-> val it =
->   [{d={c="x",id=1},e=SOME {id=1,n="a"}},{d={c="x",id=1},e=SOME {id=1,n="b"}},
->    {d={c="y",id=2},e=NONE}]
->   : {d:{c:string, id:int}, e:{id:int, n:string} option} list
+> d    e
+> c id id n
+> - -- -- -
+> x  1  1 a
+> x  1  1 b
+> y  2
+>
+> val it : {d:{c:string, id:int}, e:{id:int, n:string} option} list
 from d in ds
   yieldAll
     (let
@@ -235,10 +239,14 @@ from d in ds
        if List.null ms then [{d = d, e = NONE}]
        else from e in ms yield {d = d, e = SOME e}
      end);
-> val it =
->   [{d={c="x",id=1},e=SOME {id=1,n="a"}},{d={c="x",id=1},e=SOME {id=1,n="b"}},
->    {d={c="y",id=2},e=NONE}]
->   : {d:{c:string, id:int}, e:{id:int, n:string} option} list
+> d    e
+> c id id n
+> - -- -- -
+> x  1  1 a
+> x  1  1 b
+> y  2
+>
+> val it : {d:{c:string, id:int}, e:{id:int, n:string} option} list
 
 (* right join (fundamental)
    A 'right join' is the mirror of 'left join': it keeps every right row and
@@ -531,9 +539,14 @@ from e in scott.emps order e.sal skip 11 take 2 yield {e.ename, e.sal};
    exactly what 'enumerate' would -- a collection of (element, ordinal) pairs. *)
 from e in [{name = "Ann"}, {name = "Bob"}, {name = "Cy"}]
   yield {e, ordinal};
-> val it =
->   [{e={name="Ann"},`ordinal`=0},{e={name="Bob"},`ordinal`=1},
->    {e={name="Cy"},`ordinal`=2}] : {e:{name:string}, `ordinal`:int} list
+> e    ordinal
+> name
+> ---- -------
+> Ann        0
+> Bob        1
+> Cy         2
+>
+> val it : {e:{name:string}, `ordinal`:int} list
 
 (* unbounded -> join over each variable's extent
    A 'from' may bind a variable without a collection: 'i' and 'j' here are
