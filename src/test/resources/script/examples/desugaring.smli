@@ -54,7 +54,8 @@
  *
  * The examples draw on the 'scott' database -- 'scott.emps' and
  * 'scott.depts' -- and, where order or duplicates matter, on small
- * inline lists.
+ * inline lists. A closing section covers the base Standard ML
+ * desugarings (such as 'if' -> 'case' and 'fun' -> 'val rec').
  *)
 
 useSilently "../scott.smli";
@@ -531,5 +532,82 @@ from {deptno, ...} in scott.depts join i in [deptno] join j in [i + 1, i + 2];
 >     40 40 42
 >
 > val it : {deptno:int, i:int, j:int} bag
+
+(* ---------------------------------------------------------------- *)
+(* Standard ML desugarings                                          *)
+(* ---------------------------------------------------------------- *)
+
+(* The base language desugars too: Morel lowers surface Standard ML into a
+   smaller core. These are the main rewrites. *)
+
+(* if -> case
+   'if c then a else b' is 'case c of true => a | _ => b'. *)
+if 1 < 2 then "yes" else "no";
+> val it = "yes" : string
+case 1 < 2 of true => "yes" | _ => "no";
+> val it = "yes" : string
+
+(* fun -> val rec fn
+   'fun f x = e' is 'val rec f = fn x => e' (curried for more arguments;
+   multiple clauses become a 'case' on a tuple of the arguments). *)
+fun dbl x = x * 2;
+> val dbl = fn : int -> int
+val rec dbl = fn x => x * 2;
+> val dbl = fn : int -> int
+
+(* multi-arm fn -> fn case
+   A 'fn' with several arms is a one-argument 'fn' over a 'case': 'fn p1 => e1 |
+   p2 => e2' is 'fn v => case v of p1 => e1 | p2 => e2'. (This is also how 'fun'
+   gets its multiple clauses.) *)
+List.map (fn 0 => "zero" | _ => "other") [0, 1, 2];
+> val it = ["zero","other","other"] : string list
+List.map (fn v => case v of 0 => "zero" | _ => "other") [0, 1, 2];
+> val it = ["zero","other","other"] : string list
+
+(* tuple -> record
+   A tuple is a record with numeric labels: '(a, b)' is '{1 = a, 2 = b}'. *)
+(1, "a");
+> val it = (1,"a") : int * string
+{1 = 1, 2 = "a"};
+> val it = (1,"a") : int * string
+
+(* andalso -> if
+   'p andalso q' short-circuits: it is 'if p then q else false' (dually,
+   'p orelse q' is 'if p then true else q'). *)
+true andalso 1 < 2;
+> val it = true : bool
+if true then 1 < 2 else false;
+> val it = true : bool
+
+(* infix -> application
+   An infix operator applied to two arguments is a function applied to their
+   tuple: 'a + b' is 'op + (a, b)'. *)
+1 + 2;
+> val it = 3 : int
+op + (1, 2);
+> val it = 3 : int
+
+(* #label -> selector function
+   The field selector '#label' is a function that projects 'label' from a
+   record. *)
+#a {a = 1, b = 2};
+> val it = 1 : int
+(fn {a, ...} => a) {a = 1, b = 2};
+> val it = 1 : int
+
+(* list literal -> cons
+   '[a, b, c]' is 'a :: b :: c :: []' -- a chain of '::' ending in nil. *)
+[1, 2, 3];
+> val it = [1,2,3] : int list
+1 :: 2 :: 3 :: [];
+> val it = [1,2,3] : int list
+
+(* val pat -> case
+   A 'val' binding whose left side is a pattern binds the value, then matches
+   it: 'val (a, b) = e' is 'val v = e' followed by 'case v of (a, b) => ...'. *)
+let val (a, b) = (1, 2) in a + b end;
+> val it = 3 : int
+let val v = (1, 2) in case v of (a, b) => a + b end;
+> val it = 3 : int
 
 (*) End desugaring.smli
