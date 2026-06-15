@@ -2307,7 +2307,7 @@ public class Core {
           }
 
           // Convert built-ins to infix operators.
-          final Op op = Resolver.BUILT_IN_OP_MAP.get(builtIn);
+          final Op op = Resolver.toOp(builtIn);
           if (op != null) {
             return w.infix(left, args().get(0), op, args().get(1), right);
           }

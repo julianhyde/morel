@@ -2585,7 +2585,7 @@ class Generators {
               final Core.Exp eq =
                   core.equal(cache.typeSystem, caseExp.exp, excludeValue);
               final Core.Exp notEq =
-                  core.call(cache.typeSystem, BuiltIn.NOT, eq);
+                  core.call(cache.typeSystem, BuiltIn.BOOL_NOT, eq);
               substituted = core.andAlso(cache.typeSystem, substituted, notEq);
             }
             branches.add(substituted);
@@ -2616,7 +2616,8 @@ class Generators {
         for (Core.Exp excludeValue : excludeValues) {
           final Core.Exp eq =
               core.equal(cache.typeSystem, caseExp.exp, excludeValue);
-          final Core.Exp notEq = core.call(cache.typeSystem, BuiltIn.NOT, eq);
+          final Core.Exp notEq =
+              core.call(cache.typeSystem, BuiltIn.BOOL_NOT, eq);
           branchExp = core.andAlso(cache.typeSystem, branchExp, notEq);
         }
 

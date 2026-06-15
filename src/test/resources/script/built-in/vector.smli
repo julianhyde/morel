@@ -245,7 +245,7 @@ Vector.find (fn j => j mod 2 = 0) (Vector.fromList [3,5,7,8,9]);
 > val it = SOME 8 : int option
 Sys.plan ();
 > val it =
->   "apply2(fnValue Vector.find, match(j, apply2(fnValue =, apply2(fnValue mod, stack(offset 1, name j), constant(2)), constant(0))), apply(fnValue Vector.fromList, argCode tuple(constant(3), constant(5), constant(7), constant(8), constant(9))))"
+>   "apply2(fnValue Vector.find, match(j, apply2(fnValue =, apply2(fnValue Int.mod, stack(offset 1, name j), constant(2)), constant(0))), apply(fnValue Vector.fromList, argCode tuple(constant(3), constant(5), constant(7), constant(8), constant(9))))"
 >   : string
 
 (*) Vector.exists : ('a -> bool) -> 'a vector -> bool
@@ -255,7 +255,7 @@ Vector.`exists` (fn j => j mod 2 = 0) (Vector.fromList [3,5,7,8,9]);
 > val it = true : bool
 Sys.plan ();
 > val it =
->   "apply2(fnValue Vector.exists, match(j, apply2(fnValue =, apply2(fnValue mod, stack(offset 1, name j), constant(2)), constant(0))), apply(fnValue Vector.fromList, argCode tuple(constant(3), constant(5), constant(7), constant(8), constant(9))))"
+>   "apply2(fnValue Vector.exists, match(j, apply2(fnValue =, apply2(fnValue Int.mod, stack(offset 1, name j), constant(2)), constant(0))), apply(fnValue Vector.fromList, argCode tuple(constant(3), constant(5), constant(7), constant(8), constant(9))))"
 >   : string
 
 (*) Vector.all : ('a -> bool) -> 'a vector -> bool
@@ -265,7 +265,7 @@ Vector.all (fn j => j mod 2 = 0) (Vector.fromList [3,5,7,8,9]);
 > val it = false : bool
 Sys.plan ();
 > val it =
->   "apply2(fnValue Vector.all, match(j, apply2(fnValue =, apply2(fnValue mod, stack(offset 1, name j), constant(2)), constant(0))), apply(fnValue Vector.fromList, argCode tuple(constant(3), constant(5), constant(7), constant(8), constant(9))))"
+>   "apply2(fnValue Vector.all, match(j, apply2(fnValue =, apply2(fnValue Int.mod, stack(offset 1, name j), constant(2)), constant(0))), apply(fnValue Vector.fromList, argCode tuple(constant(3), constant(5), constant(7), constant(8), constant(9))))"
 >   : string
 
 (*) Vector.collate : ('a * 'a -> order) -> 'a vector * 'a vector -> order

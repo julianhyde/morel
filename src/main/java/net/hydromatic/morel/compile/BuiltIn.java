@@ -63,9 +63,6 @@ public enum BuiltIn {
   /** Literal "false", of type "bool". */
   FALSE("", "false", ts -> BOOL),
 
-  /** Function "not", of type "bool &rarr; bool". */
-  NOT("", "not", ts -> ts.fnType(BOOL, BOOL)),
-
   /**
    * Function "abs", of type "&alpha; &rarr; &alpha;" (where &alpha; must be
    * numeric).
@@ -75,9 +72,6 @@ public enum BuiltIn {
       "abs",
       PrimitiveType.INT,
       ts -> ts.forallType(1, h -> ts.fnType(h.get(0), h.get(0)))),
-
-  /** Infix operator "^", of type "string * string &rarr; string". */
-  OP_CARET("", "op ^", ts -> ts.fnType(ts.tupleType(STRING, STRING), STRING)),
 
   /**
    * Infix operator "::" (list cons), of type "&alpha; * &alpha; list &rarr;
@@ -93,9 +87,6 @@ public enum BuiltIn {
                   ts.fnType(
                       ts.tupleType(h.get(0), ts.listType(h.get(0))),
                       ts.listType(h.get(0))))),
-
-  /** Infix operator "div", of type "int * int &rarr; int". */
-  OP_DIV("", "op div", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /** Infix operator "=", of type "&alpha; * &alpha; &rarr; bool". */
   OP_EQ(
@@ -196,9 +187,6 @@ public enum BuiltIn {
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), h.get(0)))),
-
-  /** Infix operator "mod", of type "int * int &rarr; int". */
-  OP_MOD("", "op mod", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /**
    * Infix operator "+", of type "&alpha; * &alpha; &rarr; &alpha;" (where
@@ -4788,20 +4776,24 @@ public enum BuiltIn {
    * operator forms {@code o}/{@code op o} for {@code General.o}.
    */
   public static void forEachAlias(BiConsumer<String, BuiltIn> consumer) {
+    // lint: sort until '#}' where '##consumer' erase '.*,'
     consumer.accept("bag", BAG_FROM_LIST);
+    consumer.accept("not", BOOL_NOT);
     consumer.accept("chr", CHAR_CHR);
     consumer.accept("ord", CHAR_ORD);
     consumer.accept("before", GENERAL_BEFORE);
     consumer.accept("exnMessage", GENERAL_EXN_MESSAGE);
     consumer.accept("exnName", GENERAL_EXN_NAME);
     consumer.accept("ignore", GENERAL_IGNORE);
-    consumer.accept("op o", GENERAL_O);
     consumer.accept("o", GENERAL_O);
+    consumer.accept("op o", GENERAL_O);
+    consumer.accept("op div", INT_DIV);
+    consumer.accept("op mod", INT_MOD);
     consumer.accept("use", INTERACT_USE);
     consumer.accept("useSilently", INTERACT_USE_SILENTLY);
     consumer.accept("app", LIST_APP);
-    consumer.accept("op @", LIST_AT);
     consumer.accept("@", LIST_AT);
+    consumer.accept("op @", LIST_AT);
     consumer.accept("foldl", LIST_FOLDL);
     consumer.accept("foldr", LIST_FOLDR);
     consumer.accept("hd", LIST_HD);
@@ -4833,11 +4825,12 @@ public enum BuiltIn {
     consumer.accept("nonEmpty", RELATIONAL_NON_EMPTY);
     consumer.accept("only", RELATIONAL_ONLY);
     consumer.accept("sum", RELATIONAL_SUM);
-    consumer.accept("^", STRING_OP_CARET);
     consumer.accept("concat", STRING_CONCAT);
     consumer.accept("explode", STRING_EXPLODE);
     consumer.accept("fields", STRING_FIELDS);
     consumer.accept("implode", STRING_IMPLODE);
+    consumer.accept("^", STRING_OP_CARET);
+    consumer.accept("op ^", STRING_OP_CARET);
     consumer.accept("size", STRING_SIZE);
     consumer.accept("str", STRING_STR);
     consumer.accept("substring", STRING_SUBSTRING);

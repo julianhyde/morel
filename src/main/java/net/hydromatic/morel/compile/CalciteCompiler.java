@@ -95,7 +95,7 @@ public class CalciteCompiler extends Compiler {
    */
   static final Map<BuiltIn, SqlOperator> UNARY_OPERATORS =
       ImmutableMap.<BuiltIn, SqlOperator>builder()
-          .put(BuiltIn.NOT, SqlStdOperatorTable.NOT)
+          .put(BuiltIn.BOOL_NOT, SqlStdOperatorTable.NOT)
           .put(BuiltIn.LIST_NULL, SqlStdOperatorTable.EXISTS)
           .put(BuiltIn.RELATIONAL_NON_EMPTY, SqlStdOperatorTable.EXISTS)
           .put(BuiltIn.RELATIONAL_EMPTY, SqlStdOperatorTable.EXISTS)
@@ -125,8 +125,8 @@ public class CalciteCompiler extends Compiler {
           .put(BuiltIn.OP_TIMES, SqlStdOperatorTable.MULTIPLY)
           .put(BuiltIn.Z_TIMES_INT, SqlStdOperatorTable.MULTIPLY)
           .put(BuiltIn.Z_TIMES_REAL, SqlStdOperatorTable.MULTIPLY)
-          .put(BuiltIn.OP_DIV, SqlStdOperatorTable.DIVIDE)
-          .put(BuiltIn.OP_MOD, SqlStdOperatorTable.MOD)
+          .put(BuiltIn.INT_DIV, SqlStdOperatorTable.DIVIDE)
+          .put(BuiltIn.INT_MOD, SqlStdOperatorTable.MOD)
           .put(BuiltIn.Z_ANDALSO, SqlStdOperatorTable.AND)
           .put(BuiltIn.Z_ORELSE, SqlStdOperatorTable.OR)
           .build();

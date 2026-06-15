@@ -202,11 +202,11 @@ public class InlineTest {
     final String core1 =
         "val it = "
             + "from e in #emps scott "
-            + "where let val n = #empno e in op mod (n, 2) = 0 end yield #deptno e";
+            + "where let val n = #empno e in #mod Int (n, 2) = 0 end yield #deptno e";
     final String core2 =
         "val it = "
             + "from e in #emps scott "
-            + "where op mod (#empno e, 2) = 0 yield #deptno e";
+            + "where #mod Int (#empno e, 2) = 0 yield #deptno e";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -243,14 +243,14 @@ public class InlineTest {
             + "from e_1 in "
             + "(let val x = 1"
             + " in from e in #emps scott"
-            + " where op mod (#empno e, 2) = 0 "
+            + " where #mod Int (#empno e, 2) = 0 "
             + "end)"
             + " where #deptno e_1 = 10"
             + " yield #ename e_1";
     final String core2 =
         "val it = "
             + "from e in #emps scott "
-            + "where op mod (#empno e, 2) = 0 "
+            + "where #mod Int (#empno e, 2) = 0 "
             + "yield {e = e} "
             + "where #deptno e_1 = 10 "
             + "yield #ename e_1";
@@ -357,7 +357,7 @@ public class InlineTest {
             + "from e in #emps scott "
             + "yield {i = #deptno e} "
             + "where i > 10 "
-            + "yield op div (i, 10)";
+            + "yield #div Int (i, 10)";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(

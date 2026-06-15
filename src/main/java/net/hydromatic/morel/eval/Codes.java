@@ -1558,7 +1558,7 @@ public abstract class Codes {
   /** @see BuiltIn#INT_MIN_INT */
   private static final List INT_MIN_INT = optionSome(Integer.MIN_VALUE);
 
-  /** Implements {@link #INT_DIV} and {@link #OP_DIV}. */
+  /** Implements {@link #INT_DIV}. */
   private static class IntDiv
       extends BaseApplicable2<Integer, Integer, Integer> {
     IntDiv(BuiltIn builtIn) {
@@ -1574,7 +1574,7 @@ public abstract class Codes {
   /** @see BuiltIn#INT_MOD */
   private static final Applicable2 INT_MOD = new IntMod(BuiltIn.INT_MOD);
 
-  /** Implements {@link #INT_MOD} and {@link #OP_MOD}. */
+  /** Implements {@link #INT_MOD}. */
   private static class IntMod
       extends BaseApplicable2<Integer, Integer, Integer> {
     IntMod(BuiltIn builtIn) {
@@ -2668,24 +2668,6 @@ public abstract class Codes {
         }
       };
 
-  /** An applicable that negates a boolean value. */
-  private static final Applicable NOT =
-      new BaseApplicable1<Boolean, Boolean>(BuiltIn.NOT) {
-        @Override
-        public Boolean apply(Boolean b) {
-          return !(Boolean) b;
-        }
-      };
-
-  /** @see BuiltIn#OP_CARET */
-  private static final Applicable2 OP_CARET =
-      new BaseApplicable2<String, String, String>(BuiltIn.OP_CARET) {
-        @Override
-        public String apply(String a0, String a1) {
-          return a0 + a1;
-        }
-      };
-
   /** @see BuiltIn#OP_CONS */
   private static final Applicable2 OP_CONS =
       new BaseApplicable2<List, Object, Iterable>(BuiltIn.OP_CONS) {
@@ -2694,9 +2676,6 @@ public abstract class Codes {
           return ImmutableList.builder().add(e).addAll(iterable).build();
         }
       };
-
-  /** @see BuiltIn#OP_DIV */
-  private static final Applicable2 OP_DIV = new IntDiv(BuiltIn.OP_DIV);
 
   /** @see BuiltIn#OP_ELEM */
   private static final Applicable2 OP_ELEM =
@@ -2784,9 +2763,6 @@ public abstract class Codes {
                 Pos.ZERO);
         }
       };
-
-  /** @see BuiltIn#OP_MOD */
-  private static final Applicable2 OP_MOD = new IntMod(BuiltIn.OP_MOD);
 
   /** @see BuiltIn#OP_NE */
   private static final Applicable2 OP_NE =
@@ -5694,7 +5670,6 @@ public abstract class Codes {
       new Builder()
           .put(BuiltIn.TRUE, true)
           .put(BuiltIn.FALSE, false)
-          .put(BuiltIn.NOT, NOT)
           // lint: sort until '#.build\\(\\);' where '##\\.put'
           .put(BuiltIn.ABS, ABS)
           .put(BuiltIn.BAG_ALL, BAG_ALL)
@@ -5901,9 +5876,7 @@ public abstract class Codes {
           .put(BuiltIn.MATH_SQRT, MATH_SQRT)
           .put(BuiltIn.MATH_TAN, MATH_TAN)
           .put(BuiltIn.MATH_TANH, MATH_TANH)
-          .put(BuiltIn.OP_CARET, OP_CARET)
           .put(BuiltIn.OP_CONS, OP_CONS)
-          .put(BuiltIn.OP_DIV, OP_DIV)
           .put(BuiltIn.OP_ELEM, OP_ELEM)
           .put(BuiltIn.OP_EQ, OP_EQ)
           .put(BuiltIn.OP_GE, OP_GE)
@@ -5911,7 +5884,6 @@ public abstract class Codes {
           .put(BuiltIn.OP_LE, OP_LE)
           .put(BuiltIn.OP_LT, OP_LT)
           .put(BuiltIn.OP_MINUS, OP_MINUS)
-          .put(BuiltIn.OP_MOD, OP_MOD)
           .put(BuiltIn.OP_NE, OP_NE)
           .put(BuiltIn.OP_NEGATE, OP_NEGATE)
           .put(BuiltIn.OP_NOT_ELEM, OP_NOT_ELEM)
