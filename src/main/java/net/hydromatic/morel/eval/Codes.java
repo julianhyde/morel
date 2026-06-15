@@ -5244,7 +5244,7 @@ public abstract class Codes {
           if (value == null) {
             throw new AssertionError("no implementation for " + key);
           }
-          if (key.structure.isEmpty()) {
+          if (key.structure.equals("Top")) {
             valueMap.put(key.mlName, value);
           }
           for (String alias : key.aliases()) {
@@ -5529,7 +5529,7 @@ public abstract class Codes {
     BUILT_IN_VALUES.forEach(
         (key, value) -> {
           final Type type = key.typeFunction.apply(typeSystem);
-          if (key.structure.isEmpty()) {
+          if (key.structure.equals("Top")) {
             final Core.IdPat idPat =
                 core.idPat(type, key.mlName, typeSystem.nameGenerator::inc);
             hEnv[0] = hEnv[0].bind(idPat, value);

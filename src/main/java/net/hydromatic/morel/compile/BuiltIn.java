@@ -58,17 +58,17 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /** Built-in constants and functions. */
 public enum BuiltIn {
   /** Literal "true", of type "bool". */
-  TRUE("", "true", ts -> BOOL),
+  TRUE("Top", "true", ts -> BOOL),
 
   /** Literal "false", of type "bool". */
-  FALSE("", "false", ts -> BOOL),
+  FALSE("Top", "false", ts -> BOOL),
 
   /**
    * Function "abs", of type "&alpha; &rarr; &alpha;" (where &alpha; must be
    * numeric).
    */
   ABS(
-      "",
+      "Top",
       "abs",
       PrimitiveType.INT,
       ts -> ts.forallType(1, h -> ts.fnType(h.get(0), h.get(0)))),
@@ -78,7 +78,7 @@ public enum BuiltIn {
    * &alpha; list".
    */
   OP_CONS(
-      "",
+      "Top",
       "op ::",
       ts ->
           ts.forallType(
@@ -90,7 +90,7 @@ public enum BuiltIn {
 
   /** Infix operator "=", of type "&alpha; * &alpha; &rarr; bool". */
   OP_EQ(
-      "",
+      "Top",
       "op =",
       ts ->
           ts.forallType(
@@ -101,7 +101,7 @@ public enum BuiltIn {
    * &alpha; must be comparable).
    */
   OP_GE(
-      "",
+      "Top",
       "op >=",
       ts ->
           ts.forallType(
@@ -112,7 +112,7 @@ public enum BuiltIn {
    * &alpha; must be comparable).
    */
   OP_GT(
-      "",
+      "Top",
       "op >",
       ts ->
           ts.forallType(
@@ -123,7 +123,7 @@ public enum BuiltIn {
    * &alpha; must be comparable).
    */
   OP_LE(
-      "",
+      "Top",
       "op <=",
       ts ->
           ts.forallType(
@@ -134,7 +134,7 @@ public enum BuiltIn {
    * &alpha; must be comparable).
    */
   OP_LT(
-      "",
+      "Top",
       "op <",
       ts ->
           ts.forallType(
@@ -142,7 +142,7 @@ public enum BuiltIn {
 
   /** Infix operator "&lt;&gt;", of type "&alpha; * &alpha; &rarr; bool". */
   OP_NE(
-      "",
+      "Top",
       "op <>",
       ts ->
           ts.forallType(
@@ -153,7 +153,7 @@ public enum BuiltIn {
    * bool" and "&alpha; * &alpha; list &rarr; bool".
    */
   OP_ELEM(
-      "",
+      "Top",
       "op elem",
       ts ->
           ts.multi(
@@ -167,7 +167,7 @@ public enum BuiltIn {
    * bool". and "&alpha; * &alpha; list &rarr; bool".
    */
   OP_NOT_ELEM(
-      "",
+      "Top",
       "op notelem",
       ts ->
           ts.multi(
@@ -181,7 +181,7 @@ public enum BuiltIn {
    * &alpha; must be numeric).
    */
   OP_MINUS(
-      "",
+      "Top",
       "op -",
       PrimitiveType.INT,
       ts ->
@@ -193,7 +193,7 @@ public enum BuiltIn {
    * &alpha; must be numeric).
    */
   OP_PLUS(
-      "",
+      "Top",
       "op +",
       PrimitiveType.INT,
       ts ->
@@ -205,7 +205,7 @@ public enum BuiltIn {
    * be numeric).
    */
   OP_NEGATE(
-      "",
+      "Top",
       "op ~",
       PrimitiveType.INT,
       ts -> ts.forallType(1, h -> ts.fnType(h.get(0), h.get(0)))),
@@ -215,7 +215,7 @@ public enum BuiltIn {
    * &alpha; must be numeric).
    */
   OP_TIMES(
-      "",
+      "Top",
       "op *",
       PrimitiveType.INT,
       ts ->
@@ -4634,8 +4634,8 @@ public enum BuiltIn {
 
   /**
    * Name of the structure (e.g. "List", "String"), "$" for an internal
-   * built-in, or "" for a top-level built-in that belongs to no structure (e.g.
-   * {@code true}, {@code op +}).
+   * built-in, or "Top" for a top-level built-in that belongs to no structure
+   * (e.g. {@code true}, {@code op +}).
    */
   public final String structure;
 
@@ -4684,7 +4684,7 @@ public enum BuiltIn {
     final SortedMap<String, SortedMap<String, BuiltIn>> map = new TreeMap<>();
     forEachAlias(byMlName::put);
     for (BuiltIn builtIn : values()) {
-      if (builtIn.structure.isEmpty()) {
+      if (builtIn.structure.equals("Top")) {
         byMlName.put(builtIn.mlName, builtIn);
       } else if (builtIn.structure.equals("$")) {
         // ignore internal operators such as "list"

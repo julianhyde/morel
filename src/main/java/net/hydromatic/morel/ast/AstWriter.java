@@ -282,7 +282,7 @@ public class AstWriter {
       if (builtIn == BuiltIn.BOOL_NOT) {
         // The "not" prefix operator prints unqualified, not as "#not Bool".
         append("not");
-      } else if (!builtIn.structure.isEmpty()
+      } else if (!builtIn.structure.equals("Top")
           && !builtIn.structure.equals("$")) {
         // E.g. "#find List" for the List.find function
         append("#")

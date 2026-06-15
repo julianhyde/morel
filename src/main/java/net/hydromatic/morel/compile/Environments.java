@@ -104,7 +104,7 @@ public abstract class Environments {
           if ("$".equals(key.structure)) {
             return; // ignore Z_ANDALSO, Z_LIST, etc.
           }
-          if (!key.structure.isEmpty()
+          if (!key.structure.equals("Top")
               && excludeStructure.test(key.structure)) {
             return; // skip built-ins in excluded structures
           }
@@ -124,7 +124,7 @@ public abstract class Environments {
                 () -> typeSystem.nameGenerator.getPrefixed(overloadId.name);
             for (int i = 0; i < types.size(); i++) {
               Type type1 = types.get(i);
-              if (key.structure.isEmpty()) {
+              if (key.structure.equals("Top")) {
                 if (i == 0) {
                   bindings.add(Binding.over(overloadId, value));
                 }
@@ -140,7 +140,7 @@ public abstract class Environments {
               }
             }
           } else {
-            if (key.structure.isEmpty()) {
+            if (key.structure.equals("Top")) {
               bindings.add(
                   Binding.of(core.idPat(type, key.mlName, nameGen), value));
             }
