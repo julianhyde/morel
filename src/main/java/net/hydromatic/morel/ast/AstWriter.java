@@ -279,7 +279,7 @@ public class AstWriter {
       append(c.toString().replace("+", ""));
     } else if (value instanceof BuiltIn) {
       final BuiltIn builtIn = (BuiltIn) value;
-      if (builtIn.structure != null && !builtIn.structure.equals("$")) {
+      if (!builtIn.structure.isEmpty() && !builtIn.structure.equals("$")) {
         // E.g. "#find List" for the List.find function
         append("#")
             .append(builtIn.mlName)

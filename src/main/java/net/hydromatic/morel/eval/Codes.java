@@ -5268,11 +5268,11 @@ public abstract class Codes {
           if (value == null) {
             throw new AssertionError("no implementation for " + key);
           }
-          if (key.structure == null) {
+          if (key.structure.isEmpty()) {
             valueMap.put(key.mlName, value);
           }
-          if (key.alias != null) {
-            valueMap.put(key.alias, value);
+          for (String alias : key.aliases()) {
+            valueMap.put(alias, value);
           }
         });
     BuiltIn.forEachStructure(
@@ -5553,14 +5553,14 @@ public abstract class Codes {
     BUILT_IN_VALUES.forEach(
         (key, value) -> {
           final Type type = key.typeFunction.apply(typeSystem);
-          if (key.structure == null) {
+          if (key.structure.isEmpty()) {
             final Core.IdPat idPat =
                 core.idPat(type, key.mlName, typeSystem.nameGenerator::inc);
             hEnv[0] = hEnv[0].bind(idPat, value);
           }
-          if (key.alias != null) {
+          for (String alias : key.aliases()) {
             final Core.IdPat idPat =
-                core.idPat(type, key.alias, typeSystem.nameGenerator::inc);
+                core.idPat(type, alias, typeSystem.nameGenerator::inc);
             hEnv[0] = hEnv[0].bind(idPat, value);
           }
         });

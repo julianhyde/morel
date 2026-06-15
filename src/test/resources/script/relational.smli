@@ -1859,18 +1859,18 @@ from d in scott.depts yield d.deptno except [10, 15, 20];
 val orders = [{id=1, items=["beer"]}, {id=2, items=[]}];
 > val orders = [{id=1,items=["beer"]},{id=2,items=[]}]
 >   : {id:int, items:string list} list
-from `o` in orders
-  union `o`.items;
-> stdIn:2.9-2.12 Error: unbound variable or constructor: o
->   raised at: stdIn:2.9-2.12
-from `o` in orders
-  except `o`.items;
-> stdIn:2.10-2.13 Error: unbound variable or constructor: o
->   raised at: stdIn:2.10-2.13
-from `o` in orders
-  intersect `o`.items;
-> stdIn:2.13-2.16 Error: unbound variable or constructor: o
->   raised at: stdIn:2.13-2.16
+from r in orders
+  union r.items;
+> stdIn:2.9 Error: unbound variable or constructor: r
+>   raised at: stdIn:2.9
+from r in orders
+  except r.items;
+> stdIn:2.10 Error: unbound variable or constructor: r
+>   raised at: stdIn:2.10
+from r in orders
+  intersect r.items;
+> stdIn:2.13 Error: unbound variable or constructor: r
+>   raised at: stdIn:2.13
 
 (*) union followed by group
 from x in (from e in emps yield e.deptno)
