@@ -579,11 +579,11 @@ Interact.useSilently;
 > val it = fn : string -> unit
 
 (* Overloaded operators ------------------------------------------- *)
-(* The following 12 operators are overloaded over numeric types. Each is shown
- * with its default signature, then applied to "int" and to "real" arguments.
- * ("op /" is the exception: it is defined for "real" only.) *)
+(* Standard ML overloads twelve operators. Each is shown with its default
+ * signature, then applied to a value of each type for which it is defined.
+ * Morel does not implement the "word" type, so word instances are absent. *)
 
-(* "op +" : overloaded over int and real; default "int * int -> int". *)
+(* "op +" : numeric (int, real); default "int * int -> int". *)
 op +;
 > val it = fn : int * int -> int
 1 + 2;
@@ -591,7 +591,7 @@ op +;
 1.0 + 2.0;
 > val it = 3 : real
 
-(* "op -" : overloaded over int and real. *)
+(* "op -" : numeric (int, real). *)
 op -;
 > val it = fn : int * int -> int
 3 - 1;
@@ -599,7 +599,7 @@ op -;
 3.0 - 1.0;
 > val it = 2 : real
 
-(* "op *" : overloaded over int and real. *)
+(* "op *" : numeric (int, real). *)
 op *;
 > val it = fn : int * int -> int
 2 * 3;
@@ -607,7 +607,19 @@ op *;
 2.0 * 3.0;
 > val it = 6 : real
 
-(* "op /" : defined for real only; applying to int is a type error. *)
+(* "op div" : integer (int; word not implemented). *)
+op div;
+> val it = fn : int * int -> int
+7 div 2;
+> val it = 3 : int
+
+(* "op mod" : integer (int; word not implemented). *)
+op mod;
+> val it = fn : int * int -> int
+7 mod 2;
+> val it = 1 : int
+
+(* "op /" : real only; applying to int is a type error. *)
 op /;
 > val it = fn : real * real -> real
 3.0 / 2.0;
@@ -616,7 +628,7 @@ op /;
 > stdIn:1.1-1.6 Error: Cannot deduce type: conflict: int vs real
 >   raised at: stdIn:1.1-1.6
 
-(* "op ~" : overloaded over int and real. *)
+(* "op ~" : numeric (int, real). *)
 op ~;
 > val it = fn : int -> int
 ~ 5;
@@ -624,7 +636,7 @@ op ~;
 ~ 5.0;
 > val it = ~5 : real
 
-(* "abs" : a function (not an operator), overloaded over int and real. *)
+(* "abs" : a function (not an operator), numeric (int, real). *)
 abs;
 > val it = fn : 'a -> 'a
 abs ~5;
@@ -632,52 +644,52 @@ abs ~5;
 abs ~5.0;
 > val it = 5 : real
 
-(* "op <" : overloaded over int, real, and other comparable types. *)
+(* "op <" : numtext (int, real, string, char). *)
 op <;
 > val it = fn : 'a * 'a -> bool
 1 < 2;
 > val it = true : bool
 1.0 < 2.0;
 > val it = true : bool
-
-(* "op <=" : overloaded over comparable types. *)
-op <=;
-> val it = fn : 'a * 'a -> bool
-2 <= 2;
+"a" < "b";
 > val it = true : bool
-2.0 <= 2.0;
+#"a" < #"b";
 > val it = true : bool
 
-(* "op >" : overloaded over comparable types. *)
+(* "op >" : numtext (int, real, string, char). *)
 op >;
 > val it = fn : 'a * 'a -> bool
 2 > 1;
 > val it = true : bool
 2.0 > 1.0;
 > val it = true : bool
+"b" > "a";
+> val it = true : bool
+#"b" > #"a";
+> val it = true : bool
 
-(* "op >=" : overloaded over comparable types. *)
+(* "op <=" : numtext (int, real, string, char). *)
+op <=;
+> val it = fn : 'a * 'a -> bool
+2 <= 2;
+> val it = true : bool
+2.0 <= 2.0;
+> val it = true : bool
+"a" <= "a";
+> val it = true : bool
+#"a" <= #"a";
+> val it = true : bool
+
+(* "op >=" : numtext (int, real, string, char). *)
 op >=;
 > val it = fn : 'a * 'a -> bool
 2 >= 3;
 > val it = false : bool
 2.0 >= 3.0;
 > val it = false : bool
-
-(* "op =" : overloaded over equality types. *)
-op =;
-> val it = fn : 'a * 'a -> bool
-1 = 1;
-> val it = true : bool
-1.0 = 1.0;
-> val it = true : bool
-
-(* "op <>" : overloaded over equality types. *)
-op <>;
-> val it = fn : 'a * 'a -> bool
-1 <> 2;
-> val it = true : bool
-1.0 <> 2.0;
-> val it = true : bool
+"a" >= "b";
+> val it = false : bool
+#"a" >= #"b";
+> val it = false : bool
 
 (*) End built-in.smli
