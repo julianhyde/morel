@@ -34,26 +34,28 @@ General;
 (*) val exnMessage : exn -> string
 General.exnMessage;
 > val it = fn : exn -> string
-(* TODO
 General.exnMessage Bind;
-> val it = "nonexhaustive binding failure" : string
-General.exnMessage Divide;
-> val it = "division by zero" : string
+> val it = "Bind" : string
+General.exnMessage Div;
+> val it = "Div" : string
 General.exnMessage Overflow;
-> val it = "integer overflow" : string
-*)
+> val it = "Overflow" : string
+General.exnMessage Subscript;
+> val it = "subscript out of bounds" : string
+General.exnMessage (Fail "oops");
+> val it = "Fail: oops" : string
 
 (*) val exnName : exn -> string
 General.exnName;
 > val it = fn : exn -> string
-(* TODO
 General.exnName Bind;
 > val it = "Bind" : string
-General.exnName Divide;
-> val it = "Divide" : string
+General.exnName Div;
+> val it = "Div" : string
 General.exnName Overflow;
 > val it = "Overflow" : string
-*)
+General.exnName (Fail "x");
+> val it = "Fail" : string
 
 (*) op o - function composition
 General.`o`;

@@ -1404,19 +1404,29 @@ public abstract class Codes {
 
   /** @see BuiltIn#GENERAL_EXN_MESSAGE */
   private static final Applicable GENERAL_EXN_MESSAGE =
-      new BaseApplicable1<String, BuiltInExn>(BuiltIn.GENERAL_EXN_MESSAGE) {
+      new BaseApplicable1<String, List>(BuiltIn.GENERAL_EXN_MESSAGE) {
         @Override
-        public String apply(BuiltInExn arg) {
-          return arg.mlName();
+        public String apply(List arg) {
+          // An exception value is a tagged list whose first element is the
+          // constructor name; built-in exceptions may have a description.
+          final String name = (String) arg.get(0);
+          final BuiltInExn exn = BuiltInExn.forMlName(name);
+          if (exn != null && exn.description != null) {
+            return exn.description;
+          }
+          if (arg.size() > 1) {
+            return name + ": " + arg.get(1);
+          }
+          return name;
         }
       };
 
   /** @see BuiltIn#GENERAL_EXN_NAME */
   private static final Applicable GENERAL_EXN_NAME =
-      new BaseApplicable1<String, BuiltInExn>(BuiltIn.GENERAL_EXN_NAME) {
+      new BaseApplicable1<String, List>(BuiltIn.GENERAL_EXN_NAME) {
         @Override
-        public String apply(BuiltInExn arg) {
-          return arg.structure + "." + arg.mlName();
+        public String apply(List arg) {
+          return (String) arg.get(0);
         }
       };
 
