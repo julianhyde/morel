@@ -3295,17 +3295,6 @@ public abstract class Codes {
       };
     }
 
-    /** Spec kind + precision, after validation. */
-    private static class FmtSpec {
-      final String kind;
-      final int n;
-
-      FmtSpec(String kind, int n) {
-        this.kind = kind;
-        this.n = n;
-      }
-    }
-
     private FmtSpec parseSpec(List spec) {
       final String kind = (String) spec.get(0);
       if (kind.equals("EXACT")) {
