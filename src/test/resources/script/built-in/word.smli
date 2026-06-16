@@ -148,6 +148,16 @@ Word.fromString "  1a";
 Word.fromString "xyz";
 > val it = NONE : word option
 
+(*) fromString accepts an optional 0x / 0X / 0wx / 0wX prefix
+Word.fromString "0x1A";
+> val it = SOME 0w26 : word option
+Word.fromString "0wxFF";
+> val it = SOME 0w255 : word option
+Word.fromString "0X10";
+> val it = SOME 0w16 : word option
+Word.fromString "0xG";
+> val it = SOME 0w0 : word option
+
 (*) Postfix (method) syntax
 (0wxff).andb (0wx0f);
 > val it = 0w15 : word

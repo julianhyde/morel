@@ -5029,9 +5029,14 @@ public abstract class Codes {
   private static final Applicable1 WORD_FROM_LARGE_WORD =
       identity(BuiltIn.WORD_FROM_LARGE_WORD);
 
-  /** Matches an optional run of whitespace then hex digits. */
+  /**
+   * Matches optional whitespace, an optional {@code 0x}/{@code 0X}/{@code
+   * 0wx}/{@code 0wX} prefix, then one or more hex digits. The prefix is only
+   * consumed when followed by a hex digit (regex backtracking), so {@code
+   * "0xG"} parses as just {@code "0"}.
+   */
   static final Pattern WORD_HEX_PATTERN =
-      Pattern.compile("^\\s*([0-9a-fA-F]+)");
+      Pattern.compile("^\\s*(?:0[wW]?[xX])?([0-9a-fA-F]+)");
 
   /** @see BuiltIn#WORD_FROM_STRING */
   private static final Applicable WORD_FROM_STRING =
