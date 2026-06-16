@@ -1602,6 +1602,42 @@ public enum BuiltIn {
   INT_MOD("Int", "mod", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /**
+   * Operator "Int.&gt;=", of type "int * int &rarr; bool".
+   *
+   * <p>"i &ge; j" returns true if {@code i} is greater than or equal to {@code
+   * j}.
+   */
+  INT_OP_GE("Int", ">=", ts -> ts.fnType(ts.tupleType(INT, INT), BOOL)),
+
+  /**
+   * Operator "Int.&gt;", of type "int * int &rarr; bool".
+   *
+   * <p>"i &gt; j" returns true if {@code i} is greater than {@code j}.
+   */
+  INT_OP_GT("Int", ">", ts -> ts.fnType(ts.tupleType(INT, INT), BOOL)),
+
+  /**
+   * Operator "Int.&lt;=", of type "int * int &rarr; bool".
+   *
+   * <p>"i &le; j" returns true if {@code i} is less than or equal to {@code j}.
+   */
+  INT_OP_LE("Int", "<=", ts -> ts.fnType(ts.tupleType(INT, INT), BOOL)),
+
+  /**
+   * Operator "Int.&lt;", of type "int * int &rarr; bool".
+   *
+   * <p>"i &lt; j" returns true if {@code i} is less than {@code j}.
+   */
+  INT_OP_LT("Int", "<", ts -> ts.fnType(ts.tupleType(INT, INT), BOOL)),
+
+  /**
+   * Operator "Int.-", of type "int * int &rarr; int".
+   *
+   * <p>"i - j" returns the difference of {@code i} and {@code j}.
+   */
+  INT_OP_MINUS("Int", "-", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+
+  /**
    * Operator "Int.~", of type "int &rarr; int".
    *
    * <p>"~ i" returns the negation of {@code i}.
@@ -1614,6 +1650,13 @@ public enum BuiltIn {
    * <p>"i + j" returns the sum of {@code i} and {@code j}.
    */
   INT_OP_PLUS("Int", "+", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+
+  /**
+   * Operator "Int.*", of type "int * int &rarr; int".
+   *
+   * <p>"i * j" returns the product of {@code i} and {@code j}.
+   */
+  INT_OP_TIMES("Int", "*", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /** Constant "Int.precision", of type "int option". */
   INT_PRECISION("Int", "precision", ts -> ts.option(INT)),
@@ -4628,15 +4671,13 @@ public enum BuiltIn {
 
   /**
    * Sentinel returned by {@link net.hydromatic.morel.ast.Core.Exp#builtIn()}
-   * when an expression is not a call to a built-in. Never compiled or
-   * evaluated.
+   * when an expression is not a call to a built-in.
    */
   Z_VOID("$", "$void", ts -> UNIT);
 
   /**
-   * Name of the structure (e.g. "List", "String"), "$" for an internal
-   * built-in, or "Top" for a top-level built-in that belongs to no structure
-   * (e.g. {@code true}, {@code op +}).
+   * Name of the structure (e.g. "List"), "$" for an internal built-in, or "Top"
+   * for a top-level built-in that belongs to no structure.
    */
   public final String structure;
 

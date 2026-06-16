@@ -79,21 +79,17 @@ public class TypeSystem {
 
   /** Creates a binding of a type constructor value. */
   public Binding bindTyCon(DataType dataType, String tyConName) {
-    if (dataType.name.equals(BuiltIn.Datatype.PSEUDO_BOOL.mlName())) {
-      // 'true' and 'false' are the constructors of 'bool'. Unlike a regular
-      // datatype constructor, a 'bool' value has the primitive type 'bool' and
-      // is represented at runtime as a Java Boolean, not a tagged constructor
-      // value.
-      return Binding.of(
-          core.idPat(PrimitiveType.BOOL, tyConName, 0),
-          Boolean.parseBoolean(tyConName));
-    }
     final Type type = dataType.typeConstructors(this).get(tyConName);
     if (type == DummyType.INSTANCE) {
       Object o = ComparableSingletonList.of(tyConName);
       if (dataType.name.equals(BuiltIn.Datatype.VARIANT.mlName())) {
         // Nullary variant constructors: create proper variant instance.
         o = Variants.fromConstructor(tyConName, Unit.INSTANCE, this);
+      }
+      if (dataType.name.equals(BuiltIn.Datatype.PSEUDO_BOOL.mlName())) {
+        // Boolean constructors: bind primitive values 'true' and 'false'.
+        o = Boolean.parseBoolean(tyConName);
+        return Binding.of(core.idPat(PrimitiveType.BOOL, tyConName, 0), o);
       }
       return Binding.of(core.idPat(dataType, tyConName, 0), Codes.constant(o));
     } else {

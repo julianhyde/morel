@@ -1587,6 +1587,51 @@ public abstract class Codes {
     }
   }
 
+  /** @see BuiltIn#INT_OP_GE */
+  private static final Applicable2 INT_OP_GE =
+      new BaseApplicable2<Boolean, Integer, Integer>(BuiltIn.INT_OP_GE) {
+        @Override
+        public Boolean apply(Integer a0, Integer a1) {
+          return a0 >= a1;
+        }
+      };
+
+  /** @see BuiltIn#INT_OP_GT */
+  private static final Applicable2 INT_OP_GT =
+      new BaseApplicable2<Boolean, Integer, Integer>(BuiltIn.INT_OP_GT) {
+        @Override
+        public Boolean apply(Integer a0, Integer a1) {
+          return a0 > a1;
+        }
+      };
+
+  /** @see BuiltIn#INT_OP_LE */
+  private static final Applicable2 INT_OP_LE =
+      new BaseApplicable2<Boolean, Integer, Integer>(BuiltIn.INT_OP_LE) {
+        @Override
+        public Boolean apply(Integer a0, Integer a1) {
+          return a0 <= a1;
+        }
+      };
+
+  /** @see BuiltIn#INT_OP_LT */
+  private static final Applicable2 INT_OP_LT =
+      new BaseApplicable2<Boolean, Integer, Integer>(BuiltIn.INT_OP_LT) {
+        @Override
+        public Boolean apply(Integer a0, Integer a1) {
+          return a0 < a1;
+        }
+      };
+
+  /** @see BuiltIn#INT_OP_MINUS */
+  private static final Applicable2 INT_OP_MINUS =
+      new BaseApplicable2<Integer, Integer, Integer>(BuiltIn.INT_OP_MINUS) {
+        @Override
+        public Integer apply(Integer a0, Integer a1) {
+          return a0 - a1;
+        }
+      };
+
   /** @see BuiltIn#INT_OP_NEGATE */
   private static final Applicable1 INT_OP_NEGATE =
       new BaseApplicable1<Integer, Integer>(BuiltIn.INT_OP_NEGATE) {
@@ -1602,6 +1647,15 @@ public abstract class Codes {
         @Override
         public Integer apply(Integer a0, Integer a1) {
           return a0 + a1;
+        }
+      };
+
+  /** @see BuiltIn#INT_OP_TIMES */
+  private static final Applicable2 INT_OP_TIMES =
+      new BaseApplicable2<Integer, Integer, Integer>(BuiltIn.INT_OP_TIMES) {
+        @Override
+        public Integer apply(Integer a0, Integer a1) {
+          return a0 * a1;
         }
       };
 
@@ -5801,8 +5855,14 @@ public abstract class Codes {
           .put(BuiltIn.INT_MIN, INT_MIN)
           .put(BuiltIn.INT_MIN_INT, INT_MIN_INT)
           .put(BuiltIn.INT_MOD, INT_MOD)
+          .put(BuiltIn.INT_OP_GE, INT_OP_GE)
+          .put(BuiltIn.INT_OP_GT, INT_OP_GT)
+          .put(BuiltIn.INT_OP_LE, INT_OP_LE)
+          .put(BuiltIn.INT_OP_LT, INT_OP_LT)
+          .put(BuiltIn.INT_OP_MINUS, INT_OP_MINUS)
           .put(BuiltIn.INT_OP_NEGATE, INT_OP_NEGATE)
           .put(BuiltIn.INT_OP_PLUS, INT_OP_PLUS)
+          .put(BuiltIn.INT_OP_TIMES, INT_OP_TIMES)
           .put(BuiltIn.INT_PRECISION, INT_PRECISION)
           .put(BuiltIn.INT_QUOT, INT_QUOT)
           .put(BuiltIn.INT_REM, INT_REM)
