@@ -1492,30 +1492,33 @@ public abstract class Codes {
   /** @see BuiltIn#INT_DIV */
   private static final Applicable2 INT_DIV = new IntDiv(BuiltIn.INT_DIV);
 
+  /**
+   * Converts a {@code StringCvt.radix} value ("BIN", "OCT", "DEC", "HEX") to
+   * its numeric base (2, 8, 10, 16).
+   */
+  private static int radixToBase(List radix) {
+    switch ((String) radix.get(0)) {
+      case "BIN":
+        return 2;
+      case "OCT":
+        return 8;
+      case "DEC":
+        return 10;
+      case "HEX":
+        return 16;
+      default:
+        throw new AssertionError(radix);
+    }
+  }
+
   /** @see BuiltIn#INT_FMT */
   private static final Applicable2 INT_FMT =
       new BaseApplicable2<String, List, Integer>(BuiltIn.INT_FMT) {
         @Override
         public String apply(List radix, Integer i) {
-          final int base;
-          switch ((String) radix.get(0)) {
-            case "BIN":
-              base = 2;
-              break;
-            case "OCT":
-              base = 8;
-              break;
-            case "DEC":
-              base = 10;
-              break;
-            case "HEX":
-              base = 16;
-              break;
-            default:
-              throw new AssertionError(radix);
-          }
           // Use upper-case digits A..F for hex, prefix '-' with '~'.
-          final String s = Integer.toString(i, base).toUpperCase(Locale.ROOT);
+          final String s =
+              Integer.toString(i, radixToBase(radix)).toUpperCase(Locale.ROOT);
           return s.startsWith("-") ? "~" + s.substring(1) : s;
         }
       };
@@ -5194,24 +5197,8 @@ public abstract class Codes {
       new BaseApplicable2<String, List, Long>(BuiltIn.WORD_FMT) {
         @Override
         public String apply(List radix, Long w) {
-          final int base;
-          switch ((String) radix.get(0)) {
-            case "BIN":
-              base = 2;
-              break;
-            case "OCT":
-              base = 8;
-              break;
-            case "DEC":
-              base = 10;
-              break;
-            case "HEX":
-              base = 16;
-              break;
-            default:
-              throw new AssertionError(radix);
-          }
-          return Long.toUnsignedString(w, base).toUpperCase(Locale.ROOT);
+          return Long.toUnsignedString(w, radixToBase(radix))
+              .toUpperCase(Locale.ROOT);
         }
       };
 
