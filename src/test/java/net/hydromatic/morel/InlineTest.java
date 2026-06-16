@@ -62,8 +62,8 @@ public class InlineTest {
   void testInline() {
     final String ml = "fun f x = let val y = x + 1 in y + 2 end";
     final String plan =
-        "match(x, apply2(fnValue +, "
-            + "apply2(fnValue +, stack(offset 1, name x), constant(1)), "
+        "match(x, apply2(fnValue Int.+, "
+            + "apply2(fnValue Int.+, stack(offset 1, name x), constant(1)), "
             + "constant(2)))";
     ml(ml).assertPlan(isCode(plan));
   }
@@ -78,7 +78,7 @@ public class InlineTest {
             + "    succ x\n"
             + "  end";
     final String plan =
-        "match(x, apply2(fnValue +, stack(offset 1, name x), constant(1)))";
+        "match(x, apply2(fnValue Int.+, stack(offset 1, name x), constant(1)))";
     ml(ml).assertPlan(isCode(plan)).assertEval(whenAppliedTo(2, is(3)));
   }
 
@@ -433,7 +433,7 @@ public class InlineTest {
             hasToString(
                 "val it = "
                     + "let val v = (13, 5) "
-                    + "in case v of (x, y) => -:int (x, y) "
+                    + "in case v of (x, y) => #- Int (x, y) "
                     + "end"))
         .assertEval(is(8));
   }

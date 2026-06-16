@@ -42,7 +42,7 @@ fun print x = ignore x;
 > val it = 14 : int
 Sys.plan ();
 > val it =
->   "apply2(fnValue +, constant(2), apply2(fnValue *, constant(3), constant(4)))"
+>   "apply2(fnValue Int.+, constant(2), apply2(fnValue Int.*, constant(3), constant(4)))"
 >   : string
 14 div 3;
 > val it = 4 : int
@@ -57,7 +57,8 @@ from (i, j) in [(14, 3), (~14, 3), (14, ~3), (~14, ~3)]
 fn x => x + 1;
 > val it = fn : int -> int
 Sys.plan ();
-> val it = "match(x, apply2(fnValue +, stack(offset 1, name x), constant(1)))"
+> val it =
+>   "match(x, apply2(fnValue Int.+, stack(offset 1, name x), constant(1)))"
 >   : string
 
 val nan = Real.posInf / Real.posInf;

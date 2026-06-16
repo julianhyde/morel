@@ -2807,9 +2807,9 @@ public abstract class Codes {
         final Type resultType = ((TupleType) argType).argTypes.get(0);
         switch ((PrimitiveType) resultType) {
           case INT:
-            return core.functionLiteral(typeSystem, BuiltIn.Z_MINUS_INT);
+            return core.functionLiteral(typeSystem, BuiltIn.INT_OP_MINUS);
           case REAL:
-            return core.functionLiteral(typeSystem, BuiltIn.Z_MINUS_REAL);
+            return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_MINUS);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",
@@ -2832,9 +2832,9 @@ public abstract class Codes {
       (typeSystem, env, argType) -> {
         switch ((PrimitiveType) argType) {
           case INT:
-            return core.functionLiteral(typeSystem, BuiltIn.Z_NEGATE_INT);
+            return core.functionLiteral(typeSystem, BuiltIn.INT_OP_NEGATE);
           case REAL:
-            return core.functionLiteral(typeSystem, BuiltIn.Z_NEGATE_REAL);
+            return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_NEGATE);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",
@@ -2858,9 +2858,9 @@ public abstract class Codes {
         final Type resultType = ((TupleType) argType).argTypes.get(0);
         switch ((PrimitiveType) resultType) {
           case INT:
-            return core.functionLiteral(typeSystem, BuiltIn.Z_PLUS_INT);
+            return core.functionLiteral(typeSystem, BuiltIn.INT_OP_PLUS);
           case REAL:
-            return core.functionLiteral(typeSystem, BuiltIn.Z_PLUS_REAL);
+            return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_PLUS);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",
@@ -2875,9 +2875,9 @@ public abstract class Codes {
         final Type resultType = ((TupleType) argType).argTypes.get(0);
         switch ((PrimitiveType) resultType) {
           case INT:
-            return core.functionLiteral(typeSystem, BuiltIn.Z_TIMES_INT);
+            return core.functionLiteral(typeSystem, BuiltIn.INT_OP_TIMES);
           case REAL:
-            return core.functionLiteral(typeSystem, BuiltIn.Z_TIMES_REAL);
+            return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_TIMES);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",
@@ -5148,68 +5148,6 @@ public abstract class Codes {
   /** @see BuiltIn#Z_LIST */
   private static final Applicable1 Z_LIST = identity(BuiltIn.Z_LIST);
 
-  /** Implements {@link #OP_MINUS} for type {@code int}. */
-  private static final Applicable2 Z_MINUS_INT =
-      new BaseApplicable2<Integer, Integer, Integer>(BuiltIn.OP_MINUS) {
-        @Override
-        public Integer apply(Integer a0, Integer a1) {
-          return a0 - a1;
-        }
-      };
-
-  /** Implements {@link #OP_MINUS} for type {@code real}. */
-  private static final Applicable2 Z_MINUS_REAL =
-      new BaseApplicable2<Float, Float, Float>(BuiltIn.OP_MINUS) {
-        @Override
-        public Float apply(Float a0, Float a1) {
-          return a0 - a1;
-        }
-      };
-
-  /** Implements {@link #OP_NEGATE} for type {@code int}. */
-  private static final Applicable Z_NEGATE_INT =
-      new BaseApplicable1<Integer, Integer>(BuiltIn.OP_NEGATE) {
-        @Override
-        public Integer apply(Integer i) {
-          return -i;
-        }
-      };
-
-  /** Implements {@link #OP_NEGATE} for type {@code real}. */
-  private static final Applicable Z_NEGATE_REAL =
-      new BaseApplicable1<Float, Float>(BuiltIn.OP_NEGATE) {
-        @Override
-        public Float apply(Float f) {
-          if (Float.isNaN(f)) {
-            // ~nan -> nan
-            // nan (or any other value f such that isNan(f)) -> ~nan
-            return Float.floatToRawIntBits(f)
-                    == Float.floatToRawIntBits(NEGATIVE_NAN)
-                ? Float.NaN
-                : NEGATIVE_NAN;
-          }
-          return -f;
-        }
-      };
-
-  /** Implements {@link #OP_PLUS} for type {@code int}. */
-  private static final Applicable2 Z_PLUS_INT =
-      new BaseApplicable2<Integer, Integer, Integer>(BuiltIn.OP_PLUS) {
-        @Override
-        public Integer apply(Integer a0, Integer a1) {
-          return a0 + a1;
-        }
-      };
-
-  /** Implements {@link #OP_PLUS} for type {@code real}. */
-  private static final Applicable2 Z_PLUS_REAL =
-      new BaseApplicable2<Float, Float, Float>(BuiltIn.OP_PLUS) {
-        @Override
-        public Float apply(Float a0, Float a1) {
-          return a0 + a1;
-        }
-      };
-
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
   private static final Applicable Z_SUM_INT =
       new BaseApplicable1<Integer, List<? extends Number>>(BuiltIn.Z_SUM_INT) {
@@ -5261,24 +5199,6 @@ public abstract class Codes {
         @Override
         public Integer apply(List list) {
           return list.size() + 1000;
-        }
-      };
-
-  /** Implements {@link #OP_TIMES} for type {@code int}. */
-  private static final Applicable2 Z_TIMES_INT =
-      new BaseApplicable2<Integer, Integer, Integer>(BuiltIn.OP_TIMES) {
-        @Override
-        public Integer apply(Integer a0, Integer a1) {
-          return a0 * a1;
-        }
-      };
-
-  /** Implements {@link #OP_TIMES} for type {@code real}. */
-  private static final Applicable2 Z_TIMES_REAL =
-      new BaseApplicable2<Float, Float, Float>(BuiltIn.OP_TIMES) {
-        @Override
-        public Float apply(Float a0, Float a1) {
-          return a0 * a1;
         }
       };
 
@@ -6126,21 +6046,13 @@ public abstract class Codes {
           .put(BuiltIn.Z_ELEMENTS, Unit.INSTANCE)
           .put(BuiltIn.Z_EXTENT, Z_EXTENT)
           .put(BuiltIn.Z_LIST, Z_LIST)
-          .put(BuiltIn.Z_MINUS_INT, Z_MINUS_INT)
-          .put(BuiltIn.Z_MINUS_REAL, Z_MINUS_REAL)
-          .put(BuiltIn.Z_NEGATE_INT, Z_NEGATE_INT)
-          .put(BuiltIn.Z_NEGATE_REAL, Z_NEGATE_REAL)
           .put(BuiltIn.Z_NTH, Unit.INSTANCE)
           .put(BuiltIn.Z_ORDINAL, 0)
           .put(BuiltIn.Z_ORELSE, Unit.INSTANCE)
-          .put(BuiltIn.Z_PLUS_INT, Z_PLUS_INT)
-          .put(BuiltIn.Z_PLUS_REAL, Z_PLUS_REAL)
           .put(BuiltIn.Z_SUM_INT, Z_SUM_INT)
           .put(BuiltIn.Z_SUM_REAL, Z_SUM_REAL)
           .put(BuiltIn.Z_TEST_OVER_COUNT_BAG, Z_TEST_OVER_COUNT_BAG)
           .put(BuiltIn.Z_TEST_OVER_COUNT_LIST, Z_TEST_OVER_COUNT_LIST)
-          .put(BuiltIn.Z_TIMES_INT, Z_TIMES_INT)
-          .put(BuiltIn.Z_TIMES_REAL, Z_TIMES_REAL)
           .put(BuiltIn.Z_TY_CON, Unit.INSTANCE)
           .put(BuiltIn.Z_VOID, Unit.INSTANCE)
           .build();

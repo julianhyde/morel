@@ -4608,18 +4608,6 @@ public enum BuiltIn {
    */
   Z_LIST("$", "list", ts -> UNIT),
 
-  /** Internal minus operator "-", of type "int * int &rarr; int". */
-  Z_MINUS_INT("$", "-:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
-
-  /** Internal minus operator "-", of type "real * real &rarr; real". */
-  Z_MINUS_REAL("$", "-:real", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
-
-  /** Internal unary negation operator "~", of type "int &rarr; int". */
-  Z_NEGATE_INT("$", "~:int", ts -> ts.fnType(INT, INT)),
-
-  /** Internal unary negation operator "~", of type "real &rarr; real". */
-  Z_NEGATE_REAL("$", "~:real", ts -> ts.fnType(REAL, REAL)),
-
   /** Internal accessor of the {@code n}th field of a record. */
   Z_NTH("$", "nth", ts -> UNIT),
 
@@ -4631,12 +4619,6 @@ public enum BuiltIn {
 
   /** Internal operator "orelse", of type "bool * bool &rarr; bool". */
   Z_ORELSE("$", "orelse", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
-
-  /** Internal plus operator "+", of type "int * int &rarr; int". */
-  Z_PLUS_INT("$", "+:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
-
-  /** Internal plus operator "+", of type "real * real &rarr; real". */
-  Z_PLUS_REAL("$", "+:real", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
 
   /** Internal relational sum operator "sum", of type "int * int &rarr; int". */
   Z_SUM_INT("$", "sum:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
@@ -4659,12 +4641,6 @@ public enum BuiltIn {
    */
   Z_TEST_OVER_COUNT_LIST(
       "$", "testOverCount:list", ts -> ts.fnType(ts.listType(INT), INT)),
-
-  /** Internal times operator "*", of type "int * int &rarr; int". */
-  Z_TIMES_INT("$", "*:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
-
-  /** Internal times operator "*", of type "real * real &rarr; real". */
-  Z_TIMES_REAL("$", "*:real", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
 
   /** Internal function that constructs a datatype value. */
   Z_TY_CON("$", "tyCon", ts -> UNIT),

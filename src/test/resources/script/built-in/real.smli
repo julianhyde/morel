@@ -353,7 +353,7 @@ Real.signBit (~nan);
 > val it = false : bool
 Sys.plan ();
 > val it =
->   "apply(fnValue Real.signBit, argCode apply(fnValue ~, argCode constant(NaN)))"
+>   "apply(fnValue Real.signBit, argCode apply(fnValue Real.~, argCode constant(NaN)))"
 >   : string
 Real.signBit (~(~nan));
 > val it = true : bool

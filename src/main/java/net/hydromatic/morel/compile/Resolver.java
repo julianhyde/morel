@@ -921,7 +921,7 @@ public class Resolver {
       case ORELSE:
         return BuiltIn.Z_ORELSE;
       case PLUS:
-        return BuiltIn.Z_PLUS_REAL;
+        return BuiltIn.REAL_OP_PLUS;
       default:
         throw new AssertionError(op);
     }
@@ -955,8 +955,8 @@ public class Resolver {
         return Op.ANDALSO;
       case Z_ORELSE:
         return Op.ORELSE;
-      case Z_PLUS_INT:
-      case Z_PLUS_REAL:
+      case INT_OP_PLUS:
+      case REAL_OP_PLUS:
         return Op.PLUS;
       default:
         return null;
