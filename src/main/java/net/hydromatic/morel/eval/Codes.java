@@ -6341,18 +6341,24 @@ public abstract class Codes {
   /** Definitions of Morel built-in exceptions. */
   public enum BuiltInExn {
     // lint: sort until '##public ' where '##[A-Z]'
-    BIND("General", BuiltIn.Constructor.EXN_BIND, null),
+    BIND(
+        "General",
+        BuiltIn.Constructor.EXN_BIND,
+        "nonexhaustive binding failure"),
     CHR("General", BuiltIn.Constructor.EXN_CHR, null),
     DATE("Date", BuiltIn.Constructor.EXN_DATE, null),
-    DIV("General", BuiltIn.Constructor.EXN_DIV, null),
-    DOMAIN("General", BuiltIn.Constructor.EXN_DOMAIN, null),
+    DIV("General", BuiltIn.Constructor.EXN_DIV, "divide by zero"),
+    DOMAIN("General", BuiltIn.Constructor.EXN_DOMAIN, "domain error"),
     EMPTY("List", BuiltIn.Constructor.EXN_EMPTY, null),
     ERROR("Interact", BuiltIn.Constructor.EXN_ERROR, null), // not in basis
     FAIL("General", BuiltIn.Constructor.EXN_FAIL, null),
-    MATCH("General", BuiltIn.Constructor.EXN_MATCH, null),
+    MATCH(
+        "General",
+        BuiltIn.Constructor.EXN_MATCH,
+        "nonexhaustive match failure"),
     OPTION("Option", BuiltIn.Constructor.EXN_OPTION, null),
-    OVERFLOW("General", BuiltIn.Constructor.EXN_OVERFLOW, null),
-    SIZE("General", BuiltIn.Constructor.EXN_SIZE, null),
+    OVERFLOW("General", BuiltIn.Constructor.EXN_OVERFLOW, "overflow"),
+    SIZE("General", BuiltIn.Constructor.EXN_SIZE, "size"),
     SPAN("General", BuiltIn.Constructor.EXN_SPAN, null),
     SUBSCRIPT(
         "General",

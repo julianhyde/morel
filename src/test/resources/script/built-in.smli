@@ -244,7 +244,7 @@ Int.abs;
 abs ~3;
 > val it = 3 : int
 abs (valOf Int.minInt);
-> uncaught exception Overflow
+> uncaught exception Overflow [overflow]
 >   raised at: stdIn:1.1-1.22
 abs ~3.5;
 > val it = 3.5 : real

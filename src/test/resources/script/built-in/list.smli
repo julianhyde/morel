@@ -183,7 +183,7 @@ List.only [2];
 [2].only ();
 > val it = 2 : int
 List.only [1, 2, 3];
-> uncaught exception Size
+> uncaught exception Size [size]
 >   raised at: stdIn:1.1-1.20
 List.only [];
 > uncaught exception Empty
@@ -444,7 +444,7 @@ List.tabulate (1, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fact
 List.tabulate (0, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fact end);
 > val it = [] : int list
 List.tabulate (~1, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fact end);
-> uncaught exception Size
+> uncaught exception Size [size]
 >   raised at: stdIn:1.1-1.87
 Sys.plan ();
 > val it =

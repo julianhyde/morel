@@ -35,11 +35,11 @@ General;
 General.exnMessage;
 > val it = fn : exn -> string
 General.exnMessage Bind;
-> val it = "Bind" : string
+> val it = "nonexhaustive binding failure" : string
 General.exnMessage Div;
-> val it = "Div" : string
+> val it = "divide by zero" : string
 General.exnMessage Overflow;
-> val it = "Overflow" : string
+> val it = "overflow" : string
 General.exnMessage Subscript;
 > val it = "subscript out of bounds" : string
 General.exnMessage (Fail "oops");

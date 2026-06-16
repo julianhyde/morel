@@ -72,7 +72,7 @@ Bag.only (bag [2]);
 (bag [2]).only ();
 > val it = 2 : int
 Bag.only (bag [1, 2, 3]);
-> uncaught exception Size
+> uncaught exception Size [size]
 >   raised at: stdIn:1.1-1.24
 Bag.only (bag []);
 > uncaught exception Empty
@@ -362,7 +362,7 @@ Bag.tabulate (1, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fact 
 Bag.tabulate (0, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fact end);
 > val it = [] : int bag
 Bag.tabulate (~1, let fun fact n = if n = 0 then 1 else n * fact (n - 1) in fact end);
-> uncaught exception Size
+> uncaught exception Size [size]
 >   raised at: stdIn:1.1-1.86
 Sys.plan ();
 > val it =
