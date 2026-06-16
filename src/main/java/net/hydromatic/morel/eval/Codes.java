@@ -1492,25 +1492,6 @@ public abstract class Codes {
   /** @see BuiltIn#INT_DIV */
   private static final Applicable2 INT_DIV = new IntDiv(BuiltIn.INT_DIV);
 
-  /**
-   * Converts a {@code StringCvt.radix} value ("BIN", "OCT", "DEC", "HEX") to
-   * its numeric base (2, 8, 10, 16).
-   */
-  private static int radixToBase(List radix) {
-    switch ((String) radix.get(0)) {
-      case "BIN":
-        return 2;
-      case "OCT":
-        return 8;
-      case "DEC":
-        return 10;
-      case "HEX":
-        return 16;
-      default:
-        throw new AssertionError(radix);
-    }
-  }
-
   /** @see BuiltIn#INT_FMT */
   private static final Applicable2 INT_FMT =
       new BaseApplicable2<String, List, Integer>(BuiltIn.INT_FMT) {
@@ -1518,7 +1499,8 @@ public abstract class Codes {
         public String apply(List radix, Integer i) {
           // Use upper-case digits A..F for hex, prefix '-' with '~'.
           final String s =
-              Integer.toString(i, radixToBase(radix)).toUpperCase(Locale.ROOT);
+              Integer.toString(i, Radix.of(radix).base)
+                  .toUpperCase(Locale.ROOT);
           return s.startsWith("-") ? "~" + s.substring(1) : s;
         }
       };
@@ -5197,7 +5179,7 @@ public abstract class Codes {
       new BaseApplicable2<String, List, Long>(BuiltIn.WORD_FMT) {
         @Override
         public String apply(List radix, Long w) {
-          return Long.toUnsignedString(w, radixToBase(radix))
+          return Long.toUnsignedString(w, Radix.of(radix).base)
               .toUpperCase(Locale.ROOT);
         }
       };
