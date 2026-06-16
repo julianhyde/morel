@@ -117,7 +117,8 @@ public class Ast {
               || op == Op.CHAR_LITERAL_PAT
               || op == Op.INT_LITERAL_PAT
               || op == Op.REAL_LITERAL_PAT
-              || op == Op.STRING_LITERAL_PAT);
+              || op == Op.STRING_LITERAL_PAT
+              || op == Op.WORD_LITERAL_PAT);
     }
 
     @Override

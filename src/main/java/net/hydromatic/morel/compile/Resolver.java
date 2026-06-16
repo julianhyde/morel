@@ -508,6 +508,8 @@ public class Resolver {
             : core.realLiteral((Float) ((Ast.Literal) exp).value);
       case STRING_LITERAL:
         return core.stringLiteral((String) ((Ast.Literal) exp).value);
+      case WORD_LITERAL:
+        return core.wordLiteral((Long) ((Ast.Literal) exp).value);
       case UNIT_LITERAL:
         return core.unitLiteral();
       case ANNOTATED_EXP:
@@ -1077,6 +1079,7 @@ public class Resolver {
       case INT_LITERAL_PAT:
       case REAL_LITERAL_PAT:
       case STRING_LITERAL_PAT:
+      case WORD_LITERAL_PAT:
         return core.literalPat(pat.op, type, ((Ast.LiteralPat) pat).value);
 
       case WILDCARD_PAT:

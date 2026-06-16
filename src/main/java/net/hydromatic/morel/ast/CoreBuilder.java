@@ -115,6 +115,8 @@ public enum CoreBuilder {
                 : BigDecimal.valueOf(((Number) value).doubleValue()));
       case STRING:
         return stringLiteral((String) value);
+      case WORD:
+        return wordLiteral(((Number) value).longValue());
       case UNIT:
         return unitLiteral();
       default:
@@ -140,6 +142,14 @@ public enum CoreBuilder {
   /** Creates an {@code int} literal. */
   public Core.Literal intLiteral(BigDecimal value) {
     return new Core.Literal(Op.INT_LITERAL, PrimitiveType.INT, value);
+  }
+
+  /**
+   * Creates a {@code word} literal. The value holds the unsigned word as the
+   * bit pattern of a signed {@code long}.
+   */
+  public Core.Literal wordLiteral(long value) {
+    return new Core.Literal(Op.WORD_LITERAL, PrimitiveType.WORD, value);
   }
 
   /** Creates a {@code float} literal. */

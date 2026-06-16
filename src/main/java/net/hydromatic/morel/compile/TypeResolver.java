@@ -802,22 +802,18 @@ public class TypeResolver {
         return deduceExpType(env, ((Ast.AttributedExp) node).exp, v);
       case BOOL_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.BOOL));
-
       case CHAR_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.CHAR));
-
       case INT_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.INT));
-
       case INTERNAL_LITERAL:
         return reg(node, v, (Variable) ((Ast.Literal) node).value);
-
       case REAL_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.REAL));
-
       case STRING_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.STRING));
-
+      case WORD_LITERAL:
+        return reg(node, v, toTerm(PrimitiveType.WORD));
       case UNIT_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.UNIT));
 
@@ -2717,6 +2713,8 @@ public class TypeResolver {
         return PrimitiveType.REAL;
       case STRING_LITERAL:
         return PrimitiveType.STRING;
+      case WORD_LITERAL:
+        return PrimitiveType.WORD;
       case UNIT_LITERAL:
         return PrimitiveType.UNIT;
       case ID:
@@ -3680,6 +3678,9 @@ public class TypeResolver {
 
       case STRING_LITERAL_PAT:
         return reg(pat, v, toTerm(PrimitiveType.STRING));
+
+      case WORD_LITERAL_PAT:
+        return reg(pat, v, toTerm(PrimitiveType.WORD));
 
       case ID_PAT:
         final Ast.IdPat idPat = (Ast.IdPat) pat;

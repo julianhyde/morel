@@ -506,6 +506,10 @@ public class Compiler {
         final String stringValue = literal.unwrap(String.class);
         return Codes.constant(stringValue);
 
+      case WORD_LITERAL:
+        literal = (Core.Literal) expression;
+        return Codes.constant(literal.unwrap(Long.class));
+
       case UNIT_LITERAL:
         return Codes.constant(Unit.INSTANCE);
 

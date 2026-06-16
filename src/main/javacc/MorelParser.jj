@@ -216,6 +216,8 @@ Literal literal() :
   e = stringLiteral() { return e; }
 |
   e = charLiteral() { return e; }
+|
+  e = wordLiteral() { return e; }
 }
 
 /** Parses a literal expression followed by end-of-file. */
@@ -292,6 +294,21 @@ Literal charLiteral() : {}
 {
   <CHAR_LITERAL> {
     return ast.charLiteral(pos(), unquoteCharLiteral(token.image));
+  }
+}
+
+/** Parses a word literal, e.g. {@code 0w255} (decimal) or {@code 0wx1f}
+ * (hexadecimal). */
+Literal wordLiteral() : {}
+{
+  <WORD_LITERAL> {
+    return ast.wordLiteral(pos(),
+        Long.parseUnsignedLong(token.image.substring(2)));
+  }
+|
+  <WORD_HEX_LITERAL> {
+    return ast.wordLiteral(pos(),
+        Long.parseUnsignedLong(token.image.substring(3), 16));
   }
 }
 
@@ -2444,6 +2461,10 @@ AstNode statementEof() :
                      <DOUBLE_QUOTE> >
     |
     < CHAR_LITERAL: ("#") <QUOTED_STRING> >
+    |
+    < WORD_HEX_LITERAL: "0wx" (["0"-"9", "a"-"f", "A"-"F"])+ >
+    |
+    < WORD_LITERAL: "0w" (["0"-"9"])+ >
 }
 
 /* SEPARATORS */

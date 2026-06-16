@@ -167,6 +167,14 @@ public enum AstBuilder {
     return new Ast.Literal(pos, Op.INT_LITERAL, value);
   }
 
+  /**
+   * Creates a {@code word} literal. The value holds the unsigned word as the
+   * bit pattern of a signed {@code long}.
+   */
+  public Ast.Literal wordLiteral(Pos pos, long value) {
+    return new Ast.Literal(pos, Op.WORD_LITERAL, value);
+  }
+
   /** Creates a {@code float} literal. */
   public Ast.Literal realLiteral(Pos pos, BigDecimal value) {
     return new Ast.Literal(pos, Op.REAL_LITERAL, value);

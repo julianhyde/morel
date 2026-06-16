@@ -295,22 +295,11 @@ class Pretty {
       StringBuilder buf, PrimitiveType primitiveType, Object value) {
     String s;
     switch (primitiveType) {
-      case UNIT:
-        return buf.append("()");
+        // lint: sort where '#case' until '#default:'
       case CHAR:
         Character c = (Character) value;
         s = Parsers.charToString(c);
         return buf.append('#').append('"').append(s).append('"');
-      case STRING:
-        s = (String) value;
-        buf.append('"');
-        if (stringDepth >= 0 && s.length() > stringDepth) {
-          Parsers.stringToString(s.substring(0, stringDepth), buf);
-          buf.append('#');
-        } else {
-          Parsers.stringToString(s, buf);
-        }
-        return buf.append('"');
       case INT:
         int i = (Integer) value;
         if (i < 0) {
@@ -323,6 +312,20 @@ class Pretty {
         return buf.append(i);
       case REAL:
         return Codes.appendFloat(buf, (Float) value);
+      case STRING:
+        s = (String) value;
+        buf.append('"');
+        if (stringDepth >= 0 && s.length() > stringDepth) {
+          Parsers.stringToString(s.substring(0, stringDepth), buf);
+          buf.append('#');
+        } else {
+          Parsers.stringToString(s, buf);
+        }
+        return buf.append('"');
+      case UNIT:
+        return buf.append("()");
+      case WORD:
+        return buf.append("0w").append(Long.toUnsignedString((Long) value));
       default:
         return buf.append(value);
     }
