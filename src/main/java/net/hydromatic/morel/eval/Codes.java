@@ -3272,7 +3272,7 @@ public abstract class Codes {
 
     @Override
     public String apply(List spec, Float r) {
-      return FmtSpec.parse(spec, pos).format(new StringBuilder(), r).toString();
+      return FmtSpec.parse(spec, pos).format(r);
     }
 
     /**
@@ -3287,7 +3287,7 @@ public abstract class Codes {
         @Override
         public Applicable1<String, Float> apply(List spec) {
           final FmtSpec info = FmtSpec.parse(spec, pos);
-          return r -> info.format(new StringBuilder(), r).toString();
+          return info::format;
         }
       };
     }
