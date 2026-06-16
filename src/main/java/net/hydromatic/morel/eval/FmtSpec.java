@@ -78,26 +78,29 @@ class FmtSpec {
     return new FmtSpec(kind, n != null ? n : defaultN);
   }
 
-  /** Formats {@code r} according to this specification. */
-  String format(float r) {
-    if (Float.isNaN(r)) {
-      return "nan";
+  /**
+   * Formats {@code f} according to this specification, appending to {@code b},
+   * and returns {@code b}.
+   */
+  StringBuilder format(StringBuilder b, float f) {
+    if (Float.isNaN(f)) {
+      return b.append("nan");
     }
-    if (r == Float.POSITIVE_INFINITY) {
-      return "inf";
+    if (f == Float.POSITIVE_INFINITY) {
+      return b.append("inf");
     }
-    if (r == Float.NEGATIVE_INFINITY) {
-      return "~inf";
+    if (f == Float.NEGATIVE_INFINITY) {
+      return b.append("~inf");
     }
     switch (kind) {
       case "SCI":
-        return formatSci(r, n);
+        return b.append(formatSci(f, n));
       case "FIX":
-        return formatFix(r, n);
+        return b.append(formatFix(f, n));
       case "GEN":
-        return formatGen(r, n);
+        return b.append(formatGen(f, n));
       case "EXACT":
-        return formatExact(r);
+        return b.append(formatExact(f));
       default:
         throw new AssertionError();
     }
