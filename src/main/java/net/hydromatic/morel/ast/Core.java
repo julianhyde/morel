@@ -714,10 +714,10 @@ public class Core {
 
     /**
      * Returns the {@link BuiltIn} that this is a call to, or {@link
-     * BuiltIn#FALSE} if not a call.
+     * BuiltIn#Z_VOID} if not a call.
      */
     public BuiltIn builtIn() {
-      return BuiltIn.FALSE;
+      return BuiltIn.Z_VOID;
     }
 
     /** Returns whether this expression is a call to the given built-in. */

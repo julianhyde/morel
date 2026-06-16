@@ -57,12 +57,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Built-in constants and functions. */
 public enum BuiltIn {
-  /** Literal "true", of type "bool". */
-  TRUE("Top", "true", ts -> BOOL),
-
-  /** Literal "false", of type "bool". */
-  FALSE("Top", "false", ts -> BOOL),
-
   /**
    * Function "abs", of type "&alpha; &rarr; &alpha;" (where &alpha; must be
    * numeric).
@@ -4630,7 +4624,14 @@ public enum BuiltIn {
   Z_TIMES_REAL("$", "*:real", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
 
   /** Internal function that constructs a datatype value. */
-  Z_TY_CON("$", "tyCon", ts -> UNIT);
+  Z_TY_CON("$", "tyCon", ts -> UNIT),
+
+  /**
+   * Sentinel returned by {@link net.hydromatic.morel.ast.Core.Exp#builtIn()}
+   * when an expression is not a call to a built-in. Never compiled or
+   * evaluated.
+   */
+  Z_VOID("$", "$void", ts -> UNIT);
 
   /**
    * Name of the structure (e.g. "List", "String"), "$" for an internal
@@ -4931,7 +4932,10 @@ public enum BuiltIn {
     final DataType dataType =
         (DataType) (type instanceof DataType ? type : ((ForallType) type).type);
     ts.setBuiltIn(builtInType);
-    if (!builtInType.isInternal()) {
+    // Bind the constructors as values. Internal datatypes are skipped (their
+    // constructors exist only for exhaustiveness checking), except 'bool',
+    // whose 'true' and 'false' constructors are bound as primitive bool values.
+    if (builtInType == Datatype.PSEUDO_BOOL || !builtInType.isInternal()) {
       tyCons
           .leftList()
           .forEach(
@@ -5140,7 +5144,7 @@ public enum BuiltIn {
 
     /**
      * Analog of {@code bool} for checking that matches are exhaustive. Owns the
-     * {@code FALSE} and {@code TRUE} type constructors.
+     * {@code false} and {@code true} type constructors.
      */
     PSEUDO_BOOL(
         "$",
@@ -5327,8 +5331,8 @@ public enum BuiltIn {
   /** Built-in constructor of a datatype. */
   public enum Constructor {
     // lint: sort until '##public ' where '##[A-Z]'
-    BOOL_FALSE(Datatype.PSEUDO_BOOL, "FALSE"),
-    BOOL_TRUE(Datatype.PSEUDO_BOOL, "TRUE"),
+    BOOL_FALSE(Datatype.PSEUDO_BOOL, "false"),
+    BOOL_TRUE(Datatype.PSEUDO_BOOL, "true"),
     CONTINUOUS_SET_CONTINUOUS_SET(
         Datatype.CONTINUOUS_SET,
         "CONTINUOUS_SET",

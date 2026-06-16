@@ -5668,8 +5668,6 @@ public abstract class Codes {
 
   public static final ImmutableMap<BuiltIn, Object> BUILT_IN_VALUES =
       new Builder()
-          .put(BuiltIn.TRUE, true)
-          .put(BuiltIn.FALSE, false)
           // lint: sort until '#.build\\(\\);' where '##\\.put'
           .put(BuiltIn.ABS, ABS)
           .put(BuiltIn.BAG_ALL, BAG_ALL)
@@ -6084,6 +6082,7 @@ public abstract class Codes {
           .put(BuiltIn.Z_TIMES_INT, Z_TIMES_INT)
           .put(BuiltIn.Z_TIMES_REAL, Z_TIMES_REAL)
           .put(BuiltIn.Z_TY_CON, Unit.INSTANCE)
+          .put(BuiltIn.Z_VOID, Unit.INSTANCE)
           .build();
 
   @SuppressWarnings("TrivialFunctionalExpressionUsage")
