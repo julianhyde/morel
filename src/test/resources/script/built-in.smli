@@ -592,7 +592,7 @@ op +;
 1.0 + 2.0;
 > val it = 3 : real
 0w1 + 0w2;
-> val it = 0w3 : word
+> val it = 0wx3 : word
 
 (* "op -" : numeric (int, real, word). *)
 op -;
@@ -602,7 +602,7 @@ op -;
 3.0 - 1.0;
 > val it = 2 : real
 0w3 - 0w1;
-> val it = 0w2 : word
+> val it = 0wx2 : word
 
 (* "op *" : numeric (int, real, word). *)
 op *;
@@ -612,7 +612,7 @@ op *;
 2.0 * 3.0;
 > val it = 6 : real
 0w2 * 0w3;
-> val it = 0w6 : word
+> val it = 0wx6 : word
 
 (* "op div" : integer (int; word not yet implemented). *)
 op div;
@@ -643,7 +643,7 @@ op ~;
 ~ 5.0;
 > val it = ~5 : real
 ~ 0w1;
-> val it = 0w18446744073709551615 : word
+> val it = 0wxFFFFFFFFFFFFFFFF : word
 
 (* "abs" : a function (not an operator), numeric (int, real). *)
 abs;

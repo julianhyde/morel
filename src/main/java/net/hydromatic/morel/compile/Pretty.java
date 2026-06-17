@@ -26,6 +26,7 @@ import static net.hydromatic.morel.util.Static.endsWith;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
@@ -325,7 +326,11 @@ class Pretty {
       case UNIT:
         return buf.append("()");
       case WORD:
-        return buf.append("0w").append(Long.toUnsignedString((Long) value));
+        // Print in hexadecimal, like Standard ML (and Word.toString).
+        return buf.append("0wx")
+            .append(
+                Long.toUnsignedString((Long) value, 16)
+                    .toUpperCase(Locale.ROOT));
       default:
         return buf.append(value);
     }
