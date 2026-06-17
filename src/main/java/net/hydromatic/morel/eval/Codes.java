@@ -2829,6 +2829,8 @@ public abstract class Codes {
             return core.functionLiteral(typeSystem, BuiltIn.INT_OP_NEGATE);
           case REAL:
             return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_NEGATE);
+          case WORD:
+            return core.functionLiteral(typeSystem, BuiltIn.WORD_OP_NEGATE);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",

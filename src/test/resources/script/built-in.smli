@@ -635,13 +635,15 @@ op /;
 > stdIn:1.1-1.6 Error: Cannot deduce type: conflict: int vs real
 >   raised at: stdIn:1.1-1.6
 
-(* "op ~" : realint (int, real); word is not in this class (use Word.~). *)
+(* "op ~" : num (int, real, word). For word, '~' is the 2's complement. *)
 op ~;
 > val it = fn : int -> int
 ~ 5;
 > val it = ~5 : int
 ~ 5.0;
 > val it = ~5 : real
+~ 0w1;
+> val it = 0w18446744073709551615 : word
 
 (* "abs" : a function (not an operator), numeric (int, real). *)
 abs;

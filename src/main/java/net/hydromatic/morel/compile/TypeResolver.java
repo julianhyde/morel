@@ -295,12 +295,13 @@ public class TypeResolver {
               final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(name);
               if (builtIn != null && builtIn.preferredType != null) {
                 final Type type = typeMap.getType(apply);
-                // 'word' is in the 'num' class ('+', '-', '*') but not in
-                // 'realint' ('~', 'abs').
+                // 'word' is in the 'num' class ('+', '-', '*', '~') but not in
+                // 'realint' ('abs').
                 final boolean wordOk =
                     builtIn == BuiltIn.OP_PLUS
                         || builtIn == BuiltIn.OP_MINUS
-                        || builtIn == BuiltIn.OP_TIMES;
+                        || builtIn == BuiltIn.OP_TIMES
+                        || builtIn == BuiltIn.OP_NEGATE;
                 if (type != PrimitiveType.INT
                     && type != PrimitiveType.REAL
                     && !(wordOk && type == PrimitiveType.WORD)
