@@ -2802,6 +2802,8 @@ public abstract class Codes {
             return core.functionLiteral(typeSystem, BuiltIn.INT_OP_MINUS);
           case REAL:
             return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_MINUS);
+          case WORD:
+            return core.functionLiteral(typeSystem, BuiltIn.WORD_OP_MINUS);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",
@@ -2853,6 +2855,8 @@ public abstract class Codes {
             return core.functionLiteral(typeSystem, BuiltIn.INT_OP_PLUS);
           case REAL:
             return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_PLUS);
+          case WORD:
+            return core.functionLiteral(typeSystem, BuiltIn.WORD_OP_PLUS);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",
@@ -2870,6 +2874,8 @@ public abstract class Codes {
             return core.functionLiteral(typeSystem, BuiltIn.INT_OP_TIMES);
           case REAL:
             return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_TIMES);
+          case WORD:
+            return core.functionLiteral(typeSystem, BuiltIn.WORD_OP_TIMES);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",

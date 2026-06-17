@@ -186,4 +186,28 @@ classify 0w1;
 classify 0w9;
 > val it = "many" : string
 
+(*) Overloaded '+', '-', '*' resolve to the Word members and wrap; the
+(*) comparison operators are unsigned. ('~' and 'abs' are not defined for
+(*) word; use Word.~.)
+0w1 + 0w2;
+> val it = 0w3 : word
+0w2 * 0w3;
+> val it = 0w6 : word
+0wxffffffffffffffff < 0w1;
+> val it = false : bool
+0wx8000000000000000 >= 0w1;
+> val it = true : bool
+
+(*) Relational.compare is unsigned for word
+Relational.compare (0wxffffffffffffffff, 0w1);
+> val it = GREATER : order
+Relational.compare (0w3, 0w7);
+> val it = LESS : order
+
+(*) order and order DESC sort word values unsigned
+from x in [0wxffffffffffffffff, 0w7, 0w1] order x;
+> val it = [0w1,0w7,0w18446744073709551615] : word list
+from x in [0wxffffffffffffffff, 0w7, 0w1] order DESC x;
+> val it = [0w18446744073709551615,0w7,0w1] : word list
+
 (*) End word.smli

@@ -5070,6 +5070,27 @@ public enum BuiltIn {
     }
   }
 
+  /**
+   * Maps a comparison operator to its unsigned {@code Word} counterpart ({@link
+   * #OP_LT} to {@link #WORD_OP_LT}, and similarly {@code <=}, {@code >}, {@code
+   * >=}); returns {@code this} for any other built-in. Used to give {@code
+   * word} operands unsigned comparison semantics.
+   */
+  public BuiltIn toWord() {
+    switch (this) {
+      case OP_LT:
+        return WORD_OP_LT;
+      case OP_LE:
+        return WORD_OP_LE;
+      case OP_GT:
+        return WORD_OP_GT;
+      case OP_GE:
+        return WORD_OP_GE;
+      default:
+        return this;
+    }
+  }
+
   /** Built-in type. */
   public interface BuiltInType {
     String mlName();
