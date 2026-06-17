@@ -113,7 +113,8 @@ DESC (DESC "a");
 0;
 > val it = 0 : int
 (* "eqtype word" maps to "Word" *)
-(*) TODO word
+0w0;
+> val it = 0wx0 : word
 (* "type real" maps to "Real" *)
 1.5;
 > val it = 1.5 : real
@@ -591,8 +592,8 @@ op +;
 > val it = 3 : int
 1.0 + 2.0;
 > val it = 3 : real
-0w1 + 0w2;
-> val it = 0wx3 : word
+0wx8 + 0w9;
+> val it = 0wx11 : word
 
 (* "op -" : numeric (int, real, word). *)
 op -;
