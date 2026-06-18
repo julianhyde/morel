@@ -37,6 +37,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
@@ -326,6 +327,10 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      if (op == Op.WORD_LITERAL_PAT) {
+        return w.appendLiteral(
+            UnsignedLong.valueOf(((BigDecimal) value).toBigIntegerExact()));
+      }
       return w.appendLiteral(value);
     }
 
@@ -903,6 +908,10 @@ public class Core {
           v = number.byteValue();
         } else if (clazz == BigInteger.class && number instanceof BigDecimal) {
           v = ((BigDecimal) number).toBigIntegerExact();
+        } else if (clazz == UnsignedLong.class
+            && number instanceof BigDecimal) {
+          // Throws if the value is negative or exceeds 2^64 - 1.
+          v = UnsignedLong.valueOf(((BigDecimal) number).toBigIntegerExact());
         } else {
           v = value;
         }
@@ -998,6 +1007,8 @@ public class Core {
         case INTERNAL_LITERAL:
           // Print the value as if it were a string.
           return w.appendLiteral(((Wrapper) value).o.toString());
+        case WORD_LITERAL:
+          return w.appendLiteral(unwrap(UnsignedLong.class));
       }
       return w.appendLiteral(value);
     }

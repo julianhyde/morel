@@ -43,6 +43,8 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -825,6 +827,46 @@ public class TypeResolver {
     return deduceExpType(env, node, v);
   }
 
+  /**
+   * Checks that an {@code int} or {@code word} literal value fits its type,
+   * throwing a {@link TypeException} if not. {@code int} is signed 32-bit;
+   * {@code word} is unsigned 64-bit. {@code node} is an {@link Ast.Literal} or
+   * {@link Ast.LiteralPat}.
+   */
+  private static void checkLiteralRange(AstNode node, PrimitiveType type) {
+    final Comparable comparable =
+        node instanceof Ast.Literal
+            ? ((Ast.Literal) node).value
+            : ((Ast.LiteralPat) node).value;
+    final BigInteger i = ((BigDecimal) comparable).toBigInteger();
+    switch (type) {
+      case INT:
+        // 'int' is signed 32-bit; negatives are allowed and bitLength excludes
+        // the sign bit.
+        validateLiteralRange(type, i, true, 31, "" + i, node.pos);
+        return;
+      case WORD:
+        // 'word' is unsigned 64-bit; negatives are not allowed.
+        validateLiteralRange(type, i, false, 64, "0w" + i, node.pos);
+    }
+  }
+
+  private static void validateLiteralRange(
+      PrimitiveType type,
+      BigInteger i,
+      boolean signed,
+      int bits,
+      String text,
+      Pos pos) {
+    if (i.bitLength() > bits || !signed && i.signum() < 0) {
+      throw new TypeException(
+          format(
+              "literal '%s' is too large for type %s",
+              first(pos.text(), text), type),
+          pos);
+    }
+  }
+
   private Ast.Exp deduceExpType(TypeEnv env, Ast.Exp node, Variable v) {
     final List<Ast.Exp> args2;
     final Variable v2;
@@ -837,6 +879,7 @@ public class TypeResolver {
       case CHAR_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.CHAR));
       case INT_LITERAL:
+        checkLiteralRange(node, PrimitiveType.INT);
         return reg(node, v, toTerm(PrimitiveType.INT));
       case INTERNAL_LITERAL:
         return reg(node, v, (Variable) ((Ast.Literal) node).value);
@@ -844,10 +887,11 @@ public class TypeResolver {
         return reg(node, v, toTerm(PrimitiveType.REAL));
       case STRING_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.STRING));
-      case WORD_LITERAL:
-        return reg(node, v, toTerm(PrimitiveType.WORD));
       case UNIT_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.UNIT));
+      case WORD_LITERAL:
+        checkLiteralRange(node, PrimitiveType.WORD);
+        return reg(node, v, toTerm(PrimitiveType.WORD));
 
       case ANNOTATED_EXP:
         final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) node;
@@ -2745,10 +2789,10 @@ public class TypeResolver {
         return PrimitiveType.REAL;
       case STRING_LITERAL:
         return PrimitiveType.STRING;
-      case WORD_LITERAL:
-        return PrimitiveType.WORD;
       case UNIT_LITERAL:
         return PrimitiveType.UNIT;
+      case WORD_LITERAL:
+        return PrimitiveType.WORD;
       case ID:
         final Ast.Id id = (Ast.Id) exp;
         Type type = env.getTypeOpt(id.name);
@@ -3703,6 +3747,7 @@ public class TypeResolver {
         return reg(pat, v, toTerm(PrimitiveType.CHAR));
 
       case INT_LITERAL_PAT:
+        checkLiteralRange(pat, PrimitiveType.INT);
         return reg(pat, v, toTerm(PrimitiveType.INT));
 
       case REAL_LITERAL_PAT:
@@ -3712,6 +3757,7 @@ public class TypeResolver {
         return reg(pat, v, toTerm(PrimitiveType.STRING));
 
       case WORD_LITERAL_PAT:
+        checkLiteralRange(pat, PrimitiveType.WORD);
         return reg(pat, v, toTerm(PrimitiveType.WORD));
 
       case ID_PAT:

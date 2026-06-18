@@ -383,6 +383,12 @@ Sys.planEx "0";
 Sys.planEx "-1";
 > val it = "val aardvark = 1 + 2" : string
 
+(*) Word literals are unparsed in hexadecimal (e.g. "0wxAB") in the plan.
+val warthog = 0wxAB + 0w1;
+> val warthog = 0wxAC : word
+Sys.planEx "0";
+> val it = "val warthog = #+ Word (0wxAB, 0wx1)" : string
+
 (*) val set : string * 'a -> unit
 Sys.set;
 > val it = fn : string * 'a -> unit

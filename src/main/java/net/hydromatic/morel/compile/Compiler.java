@@ -34,6 +34,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.primitives.UnsignedLong;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -506,12 +507,12 @@ public class Compiler {
         final String stringValue = literal.unwrap(String.class);
         return Codes.constant(stringValue);
 
-      case WORD_LITERAL:
-        literal = (Core.Literal) expression;
-        return Codes.constant(literal.unwrap(Long.class));
-
       case UNIT_LITERAL:
         return Codes.constant(Unit.INSTANCE);
+
+      case WORD_LITERAL:
+        literal = (Core.Literal) expression;
+        return Codes.constant(literal.unwrap(UnsignedLong.class).longValue());
 
       case FN_LITERAL:
         literal = (Core.Literal) expression;

@@ -508,10 +508,10 @@ public class Resolver {
             : core.realLiteral((Float) ((Ast.Literal) exp).value);
       case STRING_LITERAL:
         return core.stringLiteral((String) ((Ast.Literal) exp).value);
-      case WORD_LITERAL:
-        return core.wordLiteral((Long) ((Ast.Literal) exp).value);
       case UNIT_LITERAL:
         return core.unitLiteral();
+      case WORD_LITERAL:
+        return core.wordLiteral((BigDecimal) ((Ast.Literal) exp).value);
       case ANNOTATED_EXP:
         return toCore(((Ast.AnnotatedExp) exp).exp);
       case ID:
