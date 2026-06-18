@@ -217,6 +217,30 @@ public enum BuiltIn {
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), h.get(0)))),
 
+  /**
+   * Infix operator "div", of type "&alpha; * &alpha; &rarr; &alpha;" (where
+   * &alpha; must be {@code int} or {@code word}).
+   */
+  OP_DIV(
+      "Top",
+      "op div",
+      PrimitiveType.INT,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), h.get(0)))),
+
+  /**
+   * Infix operator "mod", of type "&alpha; * &alpha; &rarr; &alpha;" (where
+   * &alpha; must be {@code int} or {@code word}).
+   */
+  OP_MOD(
+      "Top",
+      "op mod",
+      PrimitiveType.INT,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), h.get(0)))),
+
   // lint: sort until '##public' where '##[A-Z_]+\('
 
   /**
@@ -4861,8 +4885,6 @@ public enum BuiltIn {
     consumer.accept("ignore", GENERAL_IGNORE);
     consumer.accept("o", GENERAL_O);
     consumer.accept("op o", GENERAL_O);
-    consumer.accept("op div", INT_DIV);
-    consumer.accept("op mod", INT_MOD);
     consumer.accept("use", INTERACT_USE);
     consumer.accept("useSilently", INTERACT_USE_SILENTLY);
     consumer.accept("app", LIST_APP);

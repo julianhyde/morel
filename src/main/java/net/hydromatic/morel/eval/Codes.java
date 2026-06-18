@@ -2723,6 +2723,23 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#OP_DIV */
+  private static final Macro OP_DIV =
+      (typeSystem, env, argType) -> {
+        final Type resultType = ((TupleType) argType).argTypes.get(0);
+        switch ((PrimitiveType) resultType) {
+          case INT:
+            return core.functionLiteral(typeSystem, BuiltIn.INT_DIV);
+          case WORD:
+            return core.functionLiteral(typeSystem, BuiltIn.WORD_DIV);
+          default:
+            throw new CompileException(
+                "operator not defined for type '" + argType + "'",
+                false,
+                Pos.ZERO);
+        }
+      };
+
   /** @see BuiltIn#OP_ELEM */
   private static final Applicable2 OP_ELEM =
       new BaseApplicable2<Boolean, Object, List>(BuiltIn.OP_ELEM) {
@@ -2804,6 +2821,23 @@ public abstract class Codes {
             return core.functionLiteral(typeSystem, BuiltIn.REAL_OP_MINUS);
           case WORD:
             return core.functionLiteral(typeSystem, BuiltIn.WORD_OP_MINUS);
+          default:
+            throw new CompileException(
+                "operator not defined for type '" + argType + "'",
+                false,
+                Pos.ZERO);
+        }
+      };
+
+  /** @see BuiltIn#OP_MOD */
+  private static final Macro OP_MOD =
+      (typeSystem, env, argType) -> {
+        final Type resultType = ((TupleType) argType).argTypes.get(0);
+        switch ((PrimitiveType) resultType) {
+          case INT:
+            return core.functionLiteral(typeSystem, BuiltIn.INT_MOD);
+          case WORD:
+            return core.functionLiteral(typeSystem, BuiltIn.WORD_MOD);
           default:
             throw new CompileException(
                 "operator not defined for type '" + argType + "'",
@@ -6065,6 +6099,7 @@ public abstract class Codes {
           .put(BuiltIn.MATH_TAN, MATH_TAN)
           .put(BuiltIn.MATH_TANH, MATH_TANH)
           .put(BuiltIn.OP_CONS, OP_CONS)
+          .put(BuiltIn.OP_DIV, OP_DIV)
           .put(BuiltIn.OP_ELEM, OP_ELEM)
           .put(BuiltIn.OP_EQ, OP_EQ)
           .put(BuiltIn.OP_GE, OP_GE)
@@ -6072,6 +6107,7 @@ public abstract class Codes {
           .put(BuiltIn.OP_LE, OP_LE)
           .put(BuiltIn.OP_LT, OP_LT)
           .put(BuiltIn.OP_MINUS, OP_MINUS)
+          .put(BuiltIn.OP_MOD, OP_MOD)
           .put(BuiltIn.OP_NE, OP_NE)
           .put(BuiltIn.OP_NEGATE, OP_NEGATE)
           .put(BuiltIn.OP_NOT_ELEM, OP_NOT_ELEM)

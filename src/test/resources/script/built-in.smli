@@ -582,8 +582,8 @@ Interact.useSilently;
 (* Overloaded operators ------------------------------------------- *)
 (* Standard ML overloads twelve operators. Each is shown with its default
  * signature, then applied to a value of each type for which it is defined.
- * Word arithmetic wraps modulo 2^wordSize and word comparison is unsigned;
- * "op div" and "op mod" do not yet support word. *)
+ * Word arithmetic ("+", "-", "*", "div", "mod", "~") wraps modulo
+ * 2^wordSize, and word division and comparison are unsigned. *)
 
 (* "op +" : numeric (int, real, word); default "int * int -> int". *)
 op +;
@@ -615,17 +615,23 @@ op *;
 0w2 * 0w3;
 > val it = 0wx6 : word
 
-(* "op div" : integer (int; word not yet implemented). *)
+(* "op div" : wordint (int, word). Word division is unsigned. *)
 op div;
 > val it = fn : int * int -> int
 7 div 2;
 > val it = 3 : int
+0w17 div 0w5;
+> val it = 0wx3 : word
+0wxffffffffffffffff div 0w2;
+> val it = 0wx7FFFFFFFFFFFFFFF : word
 
-(* "op mod" : integer (int; word not yet implemented). *)
+(* "op mod" : wordint (int, word). *)
 op mod;
 > val it = fn : int * int -> int
 7 mod 2;
 > val it = 1 : int
+0w17 mod 0w5;
+> val it = 0wx2 : word
 
 (* "op /" : real only; applying to int is a type error. *)
 op /;

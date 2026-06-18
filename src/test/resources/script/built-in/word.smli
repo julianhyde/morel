@@ -186,15 +186,21 @@ classify 0w1;
 classify 0w9;
 > val it = "many" : string
 
-(*) Overloaded '+', '-', '*', '~' (num) resolve to the Word members and wrap;
-(*) the comparison operators (numtext) are unsigned. ('abs' is realint, not
-(*) defined for word.)
+(*) Overloaded '+', '-', '*', '~' (num) and 'div', 'mod' (wordint) resolve to
+(*) the Word members; arithmetic wraps and division and comparison are
+(*) unsigned. ('abs' is realint, not defined for word.)
 0w1 + 0w2;
 > val it = 0wx3 : word
 0w2 * 0w3;
 > val it = 0wx6 : word
 ~ 0w1;
 > val it = 0wxFFFFFFFFFFFFFFFF : word
+0w17 div 0w5;
+> val it = 0wx3 : word
+0w17 mod 0w5;
+> val it = 0wx2 : word
+0wxffffffffffffffff div 0w2;
+> val it = 0wx7FFFFFFFFFFFFFFF : word
 0wxffffffffffffffff < 0w1;
 > val it = false : bool
 0wx8000000000000000 >= 0w1;

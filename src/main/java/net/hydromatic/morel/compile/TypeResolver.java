@@ -47,6 +47,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -281,8 +282,40 @@ public class TypeResolver {
   }
 
   /**
+   * SML overload class {@code num}: types of {@code +}, {@code -}, {@code *},
+   * {@code ~}.
+   */
+  private static final EnumSet<PrimitiveType> NUM =
+      EnumSet.of(PrimitiveType.INT, PrimitiveType.REAL, PrimitiveType.WORD);
+
+  /** SML overload class {@code realint}: types of {@code abs}. */
+  private static final EnumSet<PrimitiveType> REALINT =
+      EnumSet.of(PrimitiveType.INT, PrimitiveType.REAL);
+
+  /** SML overload class {@code wordint}: types of {@code div}, {@code mod}. */
+  private static final EnumSet<PrimitiveType> WORDINT =
+      EnumSet.of(PrimitiveType.INT, PrimitiveType.WORD);
+
+  /**
+   * Returns the set of types for which an overloaded numeric operator is
+   * defined.
+   */
+  private static EnumSet<PrimitiveType> overloadDomain(BuiltIn builtIn) {
+    switch (builtIn) {
+      case OP_DIV:
+      case OP_MOD:
+        return WORDINT;
+      case ABS:
+        return REALINT;
+      default: // OP_PLUS, OP_MINUS, OP_TIMES, OP_NEGATE
+        return NUM;
+    }
+  }
+
+  /**
    * Checks that arithmetic operators ({@code +}, {@code -}, {@code *}, {@code
-   * ~}, {@code abs}) are applied to numeric (int or real) operands. Throws a
+   * ~}, {@code abs}, {@code div}, {@code mod}) are applied to operands of a
+   * type in their overload class (see {@link #overloadDomain}). Throws a
    * positioned {@link TypeException} otherwise, e.g. for "true + true".
    */
   private static void checkNumericOperators(Ast.Decl decl, TypeMap typeMap) {
@@ -295,17 +328,8 @@ public class TypeResolver {
               final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(name);
               if (builtIn != null && builtIn.preferredType != null) {
                 final Type type = typeMap.getType(apply);
-                // 'word' is in the 'num' class ('+', '-', '*', '~') but not in
-                // 'realint' ('abs').
-                final boolean wordOk =
-                    builtIn == BuiltIn.OP_PLUS
-                        || builtIn == BuiltIn.OP_MINUS
-                        || builtIn == BuiltIn.OP_TIMES
-                        || builtIn == BuiltIn.OP_NEGATE;
-                if (type != PrimitiveType.INT
-                    && type != PrimitiveType.REAL
-                    && !(wordOk && type == PrimitiveType.WORD)
-                    && !(type instanceof TypeVar)) {
+                if (!(type instanceof TypeVar)
+                    && !overloadDomain(builtIn).contains(type)) {
                   final String opName =
                       name.startsWith("op ") ? name.substring(3) : name;
                   throw new TypeException(
