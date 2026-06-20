@@ -86,11 +86,11 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.JavaVersion;
+import net.hydromatic.morel.util.Lindig;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MorelException;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
-import net.hydromatic.morel.util.Pretty;
 import org.apache.calcite.runtime.FlatLists;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -3118,213 +3118,213 @@ public abstract class Codes {
 
   /** @see BuiltIn#PP_ALIGN */
   private static final Applicable PP_ALIGN =
-      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PP_ALIGN) {
+      new BaseApplicable1<Lindig.Doc, Lindig.Doc>(BuiltIn.PP_ALIGN) {
         @Override
-        public Pretty.Doc apply(Pretty.Doc doc) {
-          return Pretty.align(doc);
+        public Lindig.Doc apply(Lindig.Doc doc) {
+          return Lindig.align(doc);
         }
       };
 
   /** @see BuiltIn#PP_BESIDE */
   private static final Applicable PP_BESIDE =
-      new BaseApplicable2<Pretty.Doc, Pretty.Doc, Pretty.Doc>(
+      new BaseApplicable2<Lindig.Doc, Lindig.Doc, Lindig.Doc>(
           BuiltIn.PP_BESIDE) {
         @Override
-        public Pretty.Doc apply(Pretty.Doc a, Pretty.Doc b) {
-          return Pretty.beside(a, b);
+        public Lindig.Doc apply(Lindig.Doc a, Lindig.Doc b) {
+          return Lindig.beside(a, b);
         }
       };
 
   /** @see BuiltIn#PP_BRACES */
   private static final Applicable PP_BRACES =
-      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PP_BRACES) {
+      new BaseApplicable1<Lindig.Doc, Lindig.Doc>(BuiltIn.PP_BRACES) {
         @Override
-        public Pretty.Doc apply(Pretty.Doc doc) {
-          return Pretty.braces(doc);
+        public Lindig.Doc apply(Lindig.Doc doc) {
+          return Lindig.braces(doc);
         }
       };
 
   /** @see BuiltIn#PP_BRACKETS */
   private static final Applicable PP_BRACKETS =
-      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PP_BRACKETS) {
+      new BaseApplicable1<Lindig.Doc, Lindig.Doc>(BuiltIn.PP_BRACKETS) {
         @Override
-        public Pretty.Doc apply(Pretty.Doc doc) {
-          return Pretty.brackets(doc);
+        public Lindig.Doc apply(Lindig.Doc doc) {
+          return Lindig.brackets(doc);
         }
       };
 
   /** @see BuiltIn#PP_CAT */
   private static final Applicable PP_CAT =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_CAT) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_CAT) {
         @Override
-        public Pretty.Doc apply(List docs) {
-          return Pretty.cat(docs);
+        public Lindig.Doc apply(List docs) {
+          return Lindig.cat(docs);
         }
       };
 
   /** @see BuiltIn#PP_EMPTY */
-  private static final Pretty.Doc PP_EMPTY = Pretty.EMPTY;
+  private static final Lindig.Doc PP_EMPTY = Lindig.EMPTY;
 
   /** @see BuiltIn#PP_ENCLOSE_SEP */
   private static final Applicable PP_ENCLOSE_SEP =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_ENCLOSE_SEP) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_ENCLOSE_SEP) {
         @Override
-        public Pretty.Doc apply(List args) {
-          return Pretty.encloseSep(
-              (Pretty.Doc) args.get(0),
-              (Pretty.Doc) args.get(1),
-              (Pretty.Doc) args.get(2),
+        public Lindig.Doc apply(List args) {
+          return Lindig.encloseSep(
+              (Lindig.Doc) args.get(0),
+              (Lindig.Doc) args.get(1),
+              (Lindig.Doc) args.get(2),
               (List) args.get(3));
         }
       };
 
   /** @see BuiltIn#PP_FILL_CAT */
   private static final Applicable PP_FILL_CAT =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_FILL_CAT) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_FILL_CAT) {
         @Override
-        public Pretty.Doc apply(List docs) {
-          return Pretty.fillCat(docs);
+        public Lindig.Doc apply(List docs) {
+          return Lindig.fillCat(docs);
         }
       };
 
   /** @see BuiltIn#PP_FILL_SEP */
   private static final Applicable PP_FILL_SEP =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_FILL_SEP) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_FILL_SEP) {
         @Override
-        public Pretty.Doc apply(List docs) {
-          return Pretty.fillSep(docs);
+        public Lindig.Doc apply(List docs) {
+          return Lindig.fillSep(docs);
         }
       };
 
   /** @see BuiltIn#PP_GROUP */
   private static final Applicable PP_GROUP =
-      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PP_GROUP) {
+      new BaseApplicable1<Lindig.Doc, Lindig.Doc>(BuiltIn.PP_GROUP) {
         @Override
-        public Pretty.Doc apply(Pretty.Doc doc) {
-          return Pretty.group(doc);
+        public Lindig.Doc apply(Lindig.Doc doc) {
+          return Lindig.group(doc);
         }
       };
 
   /** @see BuiltIn#PP_HANG */
   private static final Applicable PP_HANG =
-      new BaseApplicable2<Pretty.Doc, Integer, Pretty.Doc>(BuiltIn.PP_HANG) {
+      new BaseApplicable2<Lindig.Doc, Integer, Lindig.Doc>(BuiltIn.PP_HANG) {
         @Override
-        public Pretty.Doc apply(Integer indent, Pretty.Doc doc) {
-          return Pretty.hang(indent, doc);
+        public Lindig.Doc apply(Integer indent, Lindig.Doc doc) {
+          return Lindig.hang(indent, doc);
         }
       };
 
   /** @see BuiltIn#PP_HARD_LINE */
-  private static final Pretty.Doc PP_HARD_LINE = Pretty.HARD_LINE;
+  private static final Lindig.Doc PP_HARD_LINE = Lindig.HARD_LINE;
 
   /** @see BuiltIn#PP_HCAT */
   private static final Applicable PP_HCAT =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_HCAT) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_HCAT) {
         @Override
-        public Pretty.Doc apply(List docs) {
-          return Pretty.hcat(docs);
+        public Lindig.Doc apply(List docs) {
+          return Lindig.hcat(docs);
         }
       };
 
   /** @see BuiltIn#PP_HSEP */
   private static final Applicable PP_HSEP =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_HSEP) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_HSEP) {
         @Override
-        public Pretty.Doc apply(List docs) {
-          return Pretty.hsep(docs);
+        public Lindig.Doc apply(List docs) {
+          return Lindig.hsep(docs);
         }
       };
 
   /** @see BuiltIn#PP_INDENT */
   private static final Applicable PP_INDENT =
-      new BaseApplicable2<Pretty.Doc, Integer, Pretty.Doc>(BuiltIn.PP_INDENT) {
+      new BaseApplicable2<Lindig.Doc, Integer, Lindig.Doc>(BuiltIn.PP_INDENT) {
         @Override
-        public Pretty.Doc apply(Integer indent, Pretty.Doc doc) {
-          return Pretty.indent(indent, doc);
+        public Lindig.Doc apply(Integer indent, Lindig.Doc doc) {
+          return Lindig.indent(indent, doc);
         }
       };
 
   /** @see BuiltIn#PP_LINE */
-  private static final Pretty.Doc PP_LINE = Pretty.LINE;
+  private static final Lindig.Doc PP_LINE = Lindig.LINE;
 
   /** @see BuiltIn#PP_LINE_BREAK */
-  private static final Pretty.Doc PP_LINE_BREAK = Pretty.LINE_BREAK;
+  private static final Lindig.Doc PP_LINE_BREAK = Lindig.LINE_BREAK;
 
   /** @see BuiltIn#PP_NEST */
   private static final Applicable PP_NEST =
-      new BaseApplicable2<Pretty.Doc, Integer, Pretty.Doc>(BuiltIn.PP_NEST) {
+      new BaseApplicable2<Lindig.Doc, Integer, Lindig.Doc>(BuiltIn.PP_NEST) {
         @Override
-        public Pretty.Doc apply(Integer indent, Pretty.Doc doc) {
-          return Pretty.nest(indent, doc);
+        public Lindig.Doc apply(Integer indent, Lindig.Doc doc) {
+          return Lindig.nest(indent, doc);
         }
       };
 
   /** @see BuiltIn#PP_PARENS */
   private static final Applicable PP_PARENS =
-      new BaseApplicable1<Pretty.Doc, Pretty.Doc>(BuiltIn.PP_PARENS) {
+      new BaseApplicable1<Lindig.Doc, Lindig.Doc>(BuiltIn.PP_PARENS) {
         @Override
-        public Pretty.Doc apply(Pretty.Doc doc) {
-          return Pretty.parens(doc);
+        public Lindig.Doc apply(Lindig.Doc doc) {
+          return Lindig.parens(doc);
         }
       };
 
   /** @see BuiltIn#PP_PUNCTUATE */
   private static final Applicable PP_PUNCTUATE =
-      new BaseApplicable2<List, Pretty.Doc, List>(BuiltIn.PP_PUNCTUATE) {
+      new BaseApplicable2<List, Lindig.Doc, List>(BuiltIn.PP_PUNCTUATE) {
         @Override
-        public List apply(Pretty.Doc separator, List docs) {
-          return Pretty.punctuate(separator, docs);
+        public List apply(Lindig.Doc separator, List docs) {
+          return Lindig.punctuate(separator, docs);
         }
       };
 
   /** @see BuiltIn#PP_RENDER */
   private static final Applicable PP_RENDER =
-      new BaseApplicable2<String, Integer, Pretty.Doc>(BuiltIn.PP_RENDER) {
+      new BaseApplicable2<String, Integer, Lindig.Doc>(BuiltIn.PP_RENDER) {
         @Override
-        public String apply(Integer width, Pretty.Doc doc) {
-          return Pretty.render(width, doc);
+        public String apply(Integer width, Lindig.Doc doc) {
+          return Lindig.render(width, doc);
         }
       };
 
   /** @see BuiltIn#PP_SEP */
   private static final Applicable PP_SEP =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_SEP) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_SEP) {
         @Override
-        public Pretty.Doc apply(List docs) {
-          return Pretty.sep(docs);
+        public Lindig.Doc apply(List docs) {
+          return Lindig.sep(docs);
         }
       };
 
   /** @see BuiltIn#PP_SOFT_BREAK */
-  private static final Pretty.Doc PP_SOFT_BREAK = Pretty.SOFT_BREAK;
+  private static final Lindig.Doc PP_SOFT_BREAK = Lindig.SOFT_BREAK;
 
   /** @see BuiltIn#PP_SOFT_LINE */
-  private static final Pretty.Doc PP_SOFT_LINE = Pretty.SOFT_LINE;
+  private static final Lindig.Doc PP_SOFT_LINE = Lindig.SOFT_LINE;
 
   /** @see BuiltIn#PP_TEXT */
   private static final Applicable PP_TEXT =
-      new BaseApplicable1<Pretty.Doc, String>(BuiltIn.PP_TEXT) {
+      new BaseApplicable1<Lindig.Doc, String>(BuiltIn.PP_TEXT) {
         @Override
-        public Pretty.Doc apply(String s) {
-          return Pretty.text(s);
+        public Lindig.Doc apply(String s) {
+          return Lindig.text(s);
         }
       };
 
   /** @see BuiltIn#PP_VCAT */
   private static final Applicable PP_VCAT =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_VCAT) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_VCAT) {
         @Override
-        public Pretty.Doc apply(List docs) {
-          return Pretty.vcat(docs);
+        public Lindig.Doc apply(List docs) {
+          return Lindig.vcat(docs);
         }
       };
 
   /** @see BuiltIn#PP_VSEP */
   private static final Applicable PP_VSEP =
-      new BaseApplicable1<Pretty.Doc, List>(BuiltIn.PP_VSEP) {
+      new BaseApplicable1<Lindig.Doc, List>(BuiltIn.PP_VSEP) {
         @Override
-        public Pretty.Doc apply(List docs) {
-          return Pretty.vsep(docs);
+        public Lindig.Doc apply(List docs) {
+          return Lindig.vsep(docs);
         }
       };
 

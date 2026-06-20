@@ -35,10 +35,10 @@ Doc algebra reproduces its layouts; SML's per-construct quirks become
 
 Most of the machinery is on `281-fmt` or already in `main`:
 
-- `util.Pretty` (Java) — the full Doc algebra (`text`, `beside`, `nest`,
+- `util.Lindig` (Java) — the full Doc algebra (`text`, `beside`, `nest`,
   `group`, `align`, `hang`, `sep`, `cat`, `fillSep`, `encloseSep`,
   `parens`, `braces`, `brackets`, `punctuate`) plus `render(width, doc)`.
-- Morel `Pretty` structure (#339) — the same algebra exposed to Morel
+- Morel `PP` structure (#339) — the same algebra exposed to Morel
   code: a `Pretty.doc` datatype and ~30 builtins, including
   `Pretty.render`.
 - `AstToDoc` (Java) — converts a Morel AST to `Pretty.Doc`; the template
@@ -55,7 +55,7 @@ analog of `AstToDoc`, replacing the greedy `compile.Pretty`.
 
 | # | Component | Morel / Java | Status | Notes |
 |---|---|---|---|---|
-| 1 | Doc engine (algebra + `render`) | Java (`util.Pretty`), mirrored as the Morel `Pretty` structure | reuse `281-fmt` | host primitive; a Rust port mirrors it |
+| 1 | Doc engine (algebra + `render`) | Java (`util.Lindig`), mirrored as the Morel `PP` structure | reuse `281-fmt` | host primitive; a Rust port mirrors it |
 | 2 | Value reflection, `'a -> variant` | Java (host-specific, type-directed; `eval.Variant.of`) | mostly exists | the only code that touches raw Java objects |
 | 3 | `variant` universe datatype | Morel | exists (`main`) | the shared, typed bridge |
 | 4 | Value-to-Doc formatter (`variant -> Pretty.doc`): the policy for how each type maps to Docs and where to `group`/`nest` | Morel (recommended) | new | pure and host-independent, so shared by morel-java and morel-rust |
@@ -111,8 +111,8 @@ replaces all three offset patches.
 
 ## Phasing (each step shippable)
 
-0. **Land the `281-fmt` engine on `main`** — `util.Pretty`, the Morel
-   `Pretty` structure, and `PrettyTest`. Independent, tested, no
+0. **Land the `281-fmt` engine on `main`** — `util.Lindig`, the Morel
+   `PP` structure, and `LindigTest`. Independent, tested, no
    behavior change.
 1. **Bootstrap the value-to-Doc converter in Java** (fastest), wired
    into the classic-output path behind a flag; encode §1/§2/§3; verify
@@ -122,7 +122,7 @@ replaces all three offset patches.
    outputs once (instead of the 22/32-file churn per section).
 3. **Port the converter to Morel** (`variant -> Pretty.doc`) for the
    cross-engine goal; morel-rust then reuses the formatter via `variant`
-   plus the `Pretty` structure, and Java keeps only the engine and the
+   plus the `PP` structure, and Java keeps only the engine and the
    reflect.
 
 Tabular mode (`TabularPrinter`) is a separate layout and stays as-is for

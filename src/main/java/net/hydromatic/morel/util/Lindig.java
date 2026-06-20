@@ -26,18 +26,21 @@ import java.util.function.BinaryOperator;
 import java.util.function.IntFunction;
 
 /**
- * Pretty-printer based on Wadler's "prettier printer" algorithm.
+ * Pretty-printer that lays out a document within a line-width limit.
  *
  * <p>The {@link Doc} algebraic data type represents a set of possible layouts
- * for a document. The {@link #render(int, Doc)} method chooses the best layout
- * given a line-width limit.
+ * for a document; {@link #render(int, Doc)} chooses the best layout that fits a
+ * given line width.
  *
- * <p>This is the Wadler-Lindig variant with Leijen's {@code Column} and {@code
- * Nesting} extensions (which enable {@link #align(Doc)}). {@link #render(int,
- * Doc)} uses Lindig's strict, iterative formulation (Christian Lindig,
- * "Strictly Pretty", 2000): it lays out the document in a single pass over an
- * explicit work list, so it runs in time linear in the size of the document and
- * uses constant Java stack however deeply the document nests.
+ * <p>The design draws on a line of work on pretty-printing combinators: Oppen's
+ * original algorithm ("Prettyprinting", 1980); Wadler's functional
+ * reformulation ("A prettier printer"); and Leijen's {@code Column}, {@code
+ * Nesting}, and {@code FlatAlt} extensions (which enable {@link #align(Doc)}).
+ * The class is named after Christian Lindig, whose "Strictly Pretty" (2000)
+ * gives the strict, iterative rendering algorithm used here: {@link
+ * #render(int, Doc)} makes a single pass over an explicit work list, running in
+ * time linear in the size of the document and using constant Java stack however
+ * deeply the document nests.
  *
  * <p>This class has no dependency on Morel's AST.
  *
@@ -45,15 +48,15 @@ import java.util.function.IntFunction;
  *     href="https://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf">Wadler,
  *     "A prettier printer"</a>
  */
-public class Pretty {
-  private Pretty() {}
+public class Lindig {
+  private Lindig() {}
 
   // -- Doc algebraic type ---------------------------------------------------
 
   /**
    * A document that can be laid out in multiple ways.
    *
-   * <p>Instances are created via the static methods in {@link Pretty}.
+   * <p>Instances are created via the static methods in {@link Lindig}.
    */
   public abstract static class Doc {
     private Doc() {}
@@ -316,12 +319,12 @@ public class Pretty {
 
   /** Concatenates documents horizontally, separated by spaces. */
   public static Doc hsep(List<Doc> docs) {
-    return fold(docs, Pretty::withSpace);
+    return fold(docs, Lindig::withSpace);
   }
 
   /** Concatenates documents vertically, separated by line breaks. */
   public static Doc vsep(List<Doc> docs) {
-    return fold(docs, Pretty::withLine);
+    return fold(docs, Lindig::withLine);
   }
 
   /**
@@ -335,12 +338,12 @@ public class Pretty {
 
   /** Concatenates documents horizontally with no separator. */
   public static Doc hcat(List<Doc> docs) {
-    return fold(docs, Pretty::beside);
+    return fold(docs, Lindig::beside);
   }
 
   /** Concatenates documents vertically, separated by empty line breaks. */
   public static Doc vcat(List<Doc> docs) {
-    return fold(docs, Pretty::withLineBreak);
+    return fold(docs, Lindig::withLineBreak);
   }
 
   /**
@@ -356,7 +359,7 @@ public class Pretty {
    * separated by spaces.
    */
   public static Doc fillSep(List<Doc> docs) {
-    return fold(docs, Pretty::withSoftLine);
+    return fold(docs, Lindig::withSoftLine);
   }
 
   /**
@@ -364,7 +367,7 @@ public class Pretty {
    * separator.
    */
   public static Doc fillCat(List<Doc> docs) {
-    return fold(docs, Pretty::withSoftBreak);
+    return fold(docs, Lindig::withSoftBreak);
   }
 
   /**
@@ -614,4 +617,4 @@ public class Pretty {
   }
 }
 
-// End Pretty.java
+// End Lindig.java

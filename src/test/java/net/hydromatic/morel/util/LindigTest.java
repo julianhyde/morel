@@ -18,29 +18,29 @@
  */
 package net.hydromatic.morel.util;
 
-import static net.hydromatic.morel.util.Pretty.EMPTY;
-import static net.hydromatic.morel.util.Pretty.HARD_LINE;
-import static net.hydromatic.morel.util.Pretty.LINE;
-import static net.hydromatic.morel.util.Pretty.LINE_BREAK;
-import static net.hydromatic.morel.util.Pretty.align;
-import static net.hydromatic.morel.util.Pretty.beside;
-import static net.hydromatic.morel.util.Pretty.brackets;
-import static net.hydromatic.morel.util.Pretty.cat;
-import static net.hydromatic.morel.util.Pretty.encloseSep;
-import static net.hydromatic.morel.util.Pretty.fillSep;
-import static net.hydromatic.morel.util.Pretty.group;
-import static net.hydromatic.morel.util.Pretty.hang;
-import static net.hydromatic.morel.util.Pretty.hcat;
-import static net.hydromatic.morel.util.Pretty.hsep;
-import static net.hydromatic.morel.util.Pretty.indent;
-import static net.hydromatic.morel.util.Pretty.nest;
-import static net.hydromatic.morel.util.Pretty.parens;
-import static net.hydromatic.morel.util.Pretty.punctuate;
-import static net.hydromatic.morel.util.Pretty.render;
-import static net.hydromatic.morel.util.Pretty.sep;
-import static net.hydromatic.morel.util.Pretty.text;
-import static net.hydromatic.morel.util.Pretty.vcat;
-import static net.hydromatic.morel.util.Pretty.vsep;
+import static net.hydromatic.morel.util.Lindig.EMPTY;
+import static net.hydromatic.morel.util.Lindig.HARD_LINE;
+import static net.hydromatic.morel.util.Lindig.LINE;
+import static net.hydromatic.morel.util.Lindig.LINE_BREAK;
+import static net.hydromatic.morel.util.Lindig.align;
+import static net.hydromatic.morel.util.Lindig.beside;
+import static net.hydromatic.morel.util.Lindig.brackets;
+import static net.hydromatic.morel.util.Lindig.cat;
+import static net.hydromatic.morel.util.Lindig.encloseSep;
+import static net.hydromatic.morel.util.Lindig.fillSep;
+import static net.hydromatic.morel.util.Lindig.group;
+import static net.hydromatic.morel.util.Lindig.hang;
+import static net.hydromatic.morel.util.Lindig.hcat;
+import static net.hydromatic.morel.util.Lindig.hsep;
+import static net.hydromatic.morel.util.Lindig.indent;
+import static net.hydromatic.morel.util.Lindig.nest;
+import static net.hydromatic.morel.util.Lindig.parens;
+import static net.hydromatic.morel.util.Lindig.punctuate;
+import static net.hydromatic.morel.util.Lindig.render;
+import static net.hydromatic.morel.util.Lindig.sep;
+import static net.hydromatic.morel.util.Lindig.text;
+import static net.hydromatic.morel.util.Lindig.vcat;
+import static net.hydromatic.morel.util.Lindig.vsep;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -50,16 +50,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-import net.hydromatic.morel.util.Pretty.Doc;
+import net.hydromatic.morel.util.Lindig.Doc;
 import org.junit.jupiter.api.Test;
 
-/** Tests for {@link Pretty}. */
-class PrettyTest {
+/** Tests for {@link Lindig}. */
+class LindigTest {
 
   /** Converts a string of words into a list of text documents. */
   private static List<Doc> words(String s) {
     return Arrays.stream(s.split(" "))
-        .map(Pretty::text)
+        .map(Lindig::text)
         .collect(Collectors.toList());
   }
 
@@ -572,4 +572,4 @@ class PrettyTest {
   }
 }
 
-// End PrettyTest.java
+// End LindigTest.java
