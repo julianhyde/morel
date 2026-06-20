@@ -687,7 +687,9 @@ Sys.unset "printDepth";
  * Unlike the classic printer, it packs as many elements per line as fit
  * (a "fill"), treats each element as a unit so a list of records wraps
  * between records, and moves a value or its type to its own indented
- * line when it does not fit flat. These layouts match SML/NJ.
+ * line when it does not fit flat. These value layouts match SML/NJ; the
+ * "Divergences" section below shows where the Doc-based printer and
+ * SML/NJ's Oppen-based printer still differ.
  *)
 Sys.set ("output", "doc");
 > val it = () : unit
@@ -720,13 +722,13 @@ Sys.set ("lineWidth", 22);
 >       cc:int}
 
 (* A list of records wraps between records: each record stays intact,
- * and the type moves to its own line. *)
+ * and the value moves to its own line. *)
 [{a=1,b=2},{a=3,b=4}];
 > val it =
 >   [{a=1,b=2},
 >    {a=3,b=4}]
->   : {a:int,
->       b:int} list
+>   : {a:int, b:int}
+>     list
 
 (*) A value too wide to fit flat moves to its own line, indented by two.
 [10,20,30,40,50,60,70,80,90];
@@ -734,6 +736,40 @@ Sys.set ("lineWidth", 22);
 >   [10,20,30,40,50,
 >    60,70,80,90]
 >   : int list
+
+(* -------------------------------------------------------------------
+ * Divergences from SML/NJ.
+ *
+ * The Doc-based printer follows SML/NJ's Oppen-based layout closely but
+ * not exactly. Two systematic differences remain; we accept them rather
+ * than distort the Doc model to reproduce them.
+ *)
+
+(* 1. Fill boundary. The Doc printer packs an element whose last column
+ * equals the right margin; SML/NJ breaks one element sooner. At this
+ * width we fit five numbers on the first line; SML/NJ fits only four,
+ * breaking before "4057". *)
+Sys.set ("lineWidth", 30);
+> val it = () : unit
+[6376,6639,9575,1109,4057,4765];
+> val it =
+>   [6376,6639,9575,1109,4057,
+>    4765] : int list
+
+(* 2. Nested type layout. SML/NJ indents the fields of an inner record
+ * type more deeply and, when the element type fills the line, wraps the
+ * "list"/"bag" keyword onto its own line (leaving a trailing space on
+ * the previous line). We keep the type more compact: shallower field
+ * indentation, and the keyword stays beside the element type. *)
+Sys.set ("lineWidth", 22);
+> val it = () : unit
+[{aaa=1,bbb=2,ccc=3}];
+> val it =
+>   [{aaa=1,bbb=2,
+>     ccc=3}]
+>   : {aaa:int,
+>       bbb:int,
+>       ccc:int} list
 
 Sys.unset "output";
 > val it = () : unit

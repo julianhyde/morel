@@ -23,10 +23,12 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.parse.Parsers.appendId;
 import static net.hydromatic.morel.util.Lindig.EMPTY;
 import static net.hydromatic.morel.util.Lindig.HARD_LINE;
+import static net.hydromatic.morel.util.Lindig.LINE;
 import static net.hydromatic.morel.util.Lindig.align;
 import static net.hydromatic.morel.util.Lindig.beside;
 import static net.hydromatic.morel.util.Lindig.fill;
 import static net.hydromatic.morel.util.Lindig.flatten;
+import static net.hydromatic.morel.util.Lindig.group;
 import static net.hydromatic.morel.util.Lindig.nest;
 import static net.hydromatic.morel.util.Lindig.render;
 import static net.hydromatic.morel.util.Lindig.text;
@@ -855,18 +857,21 @@ class Pretty {
         if (op.wraps(leftPrec, rightPrec)) {
           return parenthesize(typeDoc(type, 0, 0));
         }
+        // A tuple type fills across lines like SML/NJ, breaking before "*": the
+        // "*" leads the continuation line. Each element after the first is
+        // prefixed with "* "; packed with a single space, the result reads
+        // "a * b * c".
         final List<Type> argTypes = ((TupleType) type).argTypes;
-        Doc product = null;
+        final List<Doc> productItems = new ArrayList<>();
         for (int i = 0; i < argTypes.size(); i++) {
           final int leftPrec1 = i == 0 ? leftPrec : op.right;
           final int rightPrec1 = i == argTypes.size() - 1 ? rightPrec : op.left;
           final Doc argDoc = typeDoc(argTypes.get(i), leftPrec1, rightPrec1);
-          product =
-              product == null
-                  ? argDoc
-                  : beside(product, beside(text(" * "), argDoc));
+          productItems.add(i == 0 ? argDoc : beside(text("* "), argDoc));
         }
-        return product;
+        // Continuation lines indent one column past the first element, as
+        // SML/NJ does (the same "+1" offset as a record type).
+        return align(nest(1, fill(text(" "), productItems)));
 
       case RECORD_TYPE:
       case PROGRESSIVE_RECORD_TYPE:
@@ -899,11 +904,19 @@ class Pretty {
         if (op.wraps(leftPrec, rightPrec)) {
           return parenthesize(typeDoc(type, 0, 0));
         }
+        // A function type may break before "->", which leads the
+        // continuation line.
         final FnType fnType = (FnType) type;
-        return beside(
-            typeDoc(fnType.paramType, leftPrec, op.left),
+        return align(
             beside(
-                text(" -> "), typeDoc(fnType.resultType, op.right, rightPrec)));
+                typeDoc(fnType.paramType, leftPrec, op.left),
+                group(
+                    beside(
+                        LINE,
+                        beside(
+                            text("-> "),
+                            typeDoc(
+                                fnType.resultType, op.right, rightPrec))))));
 
       default:
         return text(type.moniker());
@@ -918,7 +931,9 @@ class Pretty {
       return parenthesize(typeDoc(type, 0, 0));
     }
     final Doc elementDoc = typeDoc(type.elementType(), leftPrec, op.left);
-    return beside(elementDoc, text(" " + typeName));
+    // The "list"/"bag" keyword may break onto its own line when the element
+    // type does not leave room for it.
+    return align(beside(elementDoc, group(beside(LINE, text(typeName)))));
   }
 
   private static Doc parenthesize(Doc doc) {
