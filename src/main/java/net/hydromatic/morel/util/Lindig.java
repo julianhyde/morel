@@ -174,6 +174,30 @@ public class Lindig {
     }
   }
 
+  /**
+   * Choose {@code wide} if its first line fits the remaining space, otherwise
+   * {@code narrow}.
+   *
+   * <p>Unlike {@link Group}, the two alternatives may have different structure;
+   * {@code wide} is typically more flattened than {@code narrow}. This is what
+   * {@link #fill} needs: each gap lays the following element out flat for the
+   * fit-test but leaves it free to break in the real layout.
+   */
+  static final class Union extends Doc {
+    final Doc wide;
+    final Doc narrow;
+
+    Union(Doc wide, Doc narrow) {
+      this.wide = requireNonNull(wide);
+      this.narrow = requireNonNull(narrow);
+    }
+
+    @Override
+    public String toString() {
+      return "Union";
+    }
+  }
+
   /** Access the current column to produce a document. */
   static final class Column extends Doc {
     final IntFunction<Doc> fn;
@@ -288,6 +312,21 @@ public class Lindig {
   }
 
   /**
+   * Lays out {@code wide} if its first line fits the remaining space, otherwise
+   * {@code narrow}.
+   *
+   * <p>Unlike {@link #group(Doc)}, the alternatives may differ in structure,
+   * and the choice is the union's own — it is not forced flat by an enclosing
+   * flat layout. The caller must ensure {@code wide} is at least as flat as
+   * {@code narrow} (typically {@code wide} is {@link #flatten(Doc) flattened}),
+   * so that "fits" implies "is a valid layout". This is the primitive behind
+   * {@link #fill}.
+   */
+  public static Doc union(Doc wide, Doc narrow) {
+    return new Union(wide, narrow);
+  }
+
+  /**
    * Lays out {@code doc} with the nesting level set to the current column.
    *
    * <p>This is used to align sub-documents to the current position, e.g. to
@@ -368,6 +407,80 @@ public class Lindig {
    */
   public static Doc fillCat(List<Doc> docs) {
     return fold(docs, Lindig::withSoftBreak);
+  }
+
+  /**
+   * Packs documents onto as many lines as needed, putting as many as fit on
+   * each line, joined by {@code glue} when packed and by a line break
+   * otherwise.
+   *
+   * <p>Unlike {@link #fillSep} and {@link #fillCat}, each gap is decided by
+   * whether the <em>following</em> document, laid out flat, fits on the current
+   * line; a document is treated as an indivisible unit even if it contains its
+   * own line breaks. This matches the way an Oppen printer breaks an
+   * inconsistent block whose members are themselves blocks — for example a list
+   * of records, where each record stays together and the list wraps between
+   * records.
+   *
+   * @param glue separator inserted between two documents that share a line
+   *     (often a space, or {@link #EMPTY})
+   * @param docs documents to pack
+   */
+  public static Doc fill(Doc glue, List<Doc> docs) {
+    if (docs.isEmpty()) {
+      return EMPTY;
+    }
+    // The first element renders normally; each later element is preceded by a
+    // gap that is either `glue` (stay on the line) or a line break. The gap
+    // before element i is decided by whether element i, laid out flat, fits
+    // after `glue`; if it does the element is committed flat, otherwise it
+    // moves to a fresh line where it is free to break internally. Built
+    // right-to-left so each suffix is shared (linear, not exponential).
+    final int n = docs.size();
+    Doc tail = EMPTY;
+    for (int i = n - 1; i >= 1; i--) {
+      final Doc x = docs.get(i);
+      final Doc rest = tail;
+      tail =
+          new Union(
+              beside(glue, beside(flatten(x), rest)),
+              beside(HARD_LINE, beside(x, rest)));
+    }
+    return beside(docs.get(0), tail);
+  }
+
+  /**
+   * Returns the flattened form of {@code doc}: every soft line break takes its
+   * flat alternative and every {@link #group(Doc)} is laid out flat. A {@link
+   * #HARD_LINE} cannot be flattened and is left as a line break.
+   */
+  public static Doc flatten(Doc doc) {
+    if (doc instanceof Empty || doc instanceof Line) {
+      return doc;
+    } else if (doc instanceof Text) {
+      final Text t = (Text) doc;
+      return new Text(t.text, flatten(t.doc));
+    } else if (doc instanceof Cat) {
+      final Cat cat = (Cat) doc;
+      return new Cat(flatten(cat.a), flatten(cat.b));
+    } else if (doc instanceof Nest) {
+      final Nest nest = (Nest) doc;
+      return new Nest(nest.indent, flatten(nest.doc));
+    } else if (doc instanceof FlatAlt) {
+      return flatten(((FlatAlt) doc).flat);
+    } else if (doc instanceof Group) {
+      return flatten(((Group) doc).doc);
+    } else if (doc instanceof Union) {
+      return flatten(((Union) doc).wide);
+    } else if (doc instanceof Column) {
+      final Column c = (Column) doc;
+      return new Column(k -> flatten(c.fn.apply(k)));
+    } else if (doc instanceof Nesting) {
+      final Nesting nesting = (Nesting) doc;
+      return new Nesting(i -> flatten(nesting.fn.apply(i)));
+    } else {
+      throw new AssertionError("unknown Doc: " + doc);
+    }
   }
 
   /**
@@ -469,6 +582,15 @@ public class Lindig {
         final Item flat = new Item(i, Mode.FLAT, inner, next);
         item =
             fits(width, k, flat) ? flat : new Item(i, Mode.BREAK, inner, next);
+      } else if (d instanceof Union) {
+        // A union always makes its own decision (it is not forced flat by an
+        // enclosing flat layout), so the gaps of a fill break independently.
+        final Union u = (Union) d;
+        final Item wide = new Item(i, Mode.FLAT, u.wide, next);
+        item =
+            fits(width, k, wide)
+                ? wide
+                : new Item(i, Mode.BREAK, u.narrow, next);
       } else if (d instanceof Column) {
         item = new Item(i, mode, ((Column) d).fn.apply(k), next);
       } else if (d instanceof Nesting) {
@@ -570,6 +692,17 @@ public class Lindig {
           return true;
         }
         item = flat;
+      } else if (d instanceof Union) {
+        // A union always makes its own decision, even inside a flat layout: it
+        // takes its wide branch only if that branch's first line fits, and
+        // otherwise its narrow branch breaks, ending the current line. This is
+        // what makes a fill greedy: each gap is decided by whether the next
+        // element fits, independently of the elements that follow it.
+        final Item wide = new Item(i, Mode.FLAT, ((Union) d).wide, next);
+        if (!fits(width, col, wide)) {
+          return true;
+        }
+        item = wide;
       } else if (d instanceof Column) {
         item = new Item(i, mode, ((Column) d).fn.apply(col), next);
       } else if (d instanceof Nesting) {

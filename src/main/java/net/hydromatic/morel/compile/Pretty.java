@@ -21,14 +21,16 @@ package net.hydromatic.morel.compile;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.parse.Parsers.appendId;
-import static net.hydromatic.morel.util.Lindig.LINE;
-import static net.hydromatic.morel.util.Lindig.LINE_BREAK;
+import static net.hydromatic.morel.util.Lindig.EMPTY;
+import static net.hydromatic.morel.util.Lindig.HARD_LINE;
 import static net.hydromatic.morel.util.Lindig.align;
 import static net.hydromatic.morel.util.Lindig.beside;
-import static net.hydromatic.morel.util.Lindig.group;
+import static net.hydromatic.morel.util.Lindig.fill;
+import static net.hydromatic.morel.util.Lindig.flatten;
 import static net.hydromatic.morel.util.Lindig.nest;
 import static net.hydromatic.morel.util.Lindig.render;
 import static net.hydromatic.morel.util.Lindig.text;
+import static net.hydromatic.morel.util.Lindig.union;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
 import static net.hydromatic.morel.util.Static.endsWith;
 
@@ -702,22 +704,26 @@ class Pretty {
   /** Renders a binding using the Doc-based pretty-printer. */
   private StringBuilder prettyDoc(StringBuilder buf, TypedVal typedVal) {
     final StringBuilder prefix = new StringBuilder("val ");
-    appendId(prefix, typedVal.name).append(" = ");
+    appendId(prefix, typedVal.name).append(" =");
     final Doc valueDoc = valueDoc(typedVal.type, typedVal.o, 0);
-    final TypeVal typeVal =
-        new TypeVal("", typeSystem.unqualified(typedVal.type), "");
-    // Render the type via prettyRaw, which carries it under a neutral type so
-    // that a type's moniker is not mistaken for a value of that type.
-    final StringBuilder typeBuf = new StringBuilder();
-    prettyRaw(typeBuf, 0, new int[] {-1}, 0, typeVal);
-    // The " : type" is its own group with a break before it, so the value lays
-    // out on its own width; if "value : type" does not fit, the type moves to
-    // its own line, indented by 2.
-    final Doc typeDoc =
-        group(
-            nest(
-                2, beside(LINE, beside(text(": "), text(typeBuf.toString())))));
-    final Doc doc = beside(text(prefix.toString()), beside(valueDoc, typeDoc));
+    final Doc typeBody = typeDoc(typeSystem.unqualified(typedVal.type), 0, 0);
+    // The value stays on the "val ... =" line only if it fits there entirely
+    // flat; otherwise the whole value moves to its own line, indented by 2,
+    // where it is free to wrap. Likewise the type stays on the value's last
+    // line if it fits flat there, otherwise it moves to its own line. The
+    // "wide" alternative is flattened so the decision is made on the value (or
+    // type) as a whole, not deferred to its internal line breaks. This matches
+    // how SML/NJ lays out a binding.
+    final Doc valuePart =
+        union(
+            beside(text(" "), flatten(valueDoc)),
+            nest(2, beside(HARD_LINE, valueDoc)));
+    final Doc typePart =
+        union(
+            beside(text(" : "), flatten(typeBody)),
+            nest(2, beside(HARD_LINE, beside(text(": "), typeBody))));
+    final Doc doc =
+        beside(text(prefix.toString()), beside(valuePart, typePart));
     final int width = lineWidth < 0 ? Integer.MAX_VALUE : lineWidth - 2;
     return buf.append(render(width, doc));
   }
@@ -805,11 +811,118 @@ class Pretty {
     if (docs.isEmpty()) {
       return text(open + close);
     }
-    Doc body = docs.get(0);
-    for (int i = 1; i < docs.size(); i++) {
-      body = beside(body, beside(text(","), beside(LINE_BREAK, docs.get(i))));
+    // Elements fill across lines: as many as fit share a line, and each element
+    // is treated as a unit (a record in a list of records stays together, and
+    // the list wraps between records). There is no space after the comma, the
+    // way SML/NJ prints list, tuple, and record values. Continuation lines
+    // align under the first element.
+    final List<Doc> items = new ArrayList<>();
+    for (int i = 0; i < docs.size(); i++) {
+      items.add(
+          i < docs.size() - 1 ? beside(docs.get(i), text(",")) : docs.get(i));
     }
-    return group(beside(text(open), beside(align(body), text(close))));
+    return beside(text(open), beside(align(fill(EMPTY, items)), text(close)));
+  }
+
+  /**
+   * Builds a Doc for a type. Record types fill their fields across lines (as
+   * many per line as fit, aligned under the first field), the way SML/NJ wraps
+   * a wide record type; other composite types follow type-operator precedence,
+   * adding parentheses where needed.
+   */
+  private Doc typeDoc(Type type, int leftPrec, int rightPrec) {
+    while (type instanceof AliasType) {
+      type = ((AliasType) type).type;
+    }
+    final Op op = type.op();
+    switch (op) {
+      case DATA_TYPE:
+        if (type.isCollection()) {
+          return collectionTypeDoc(
+              type, leftPrec, rightPrec, BuiltIn.Eqtype.BAG.mlName());
+        }
+        // fall through
+      case ID:
+      case ALIAS_TYPE:
+      case TY_VAR:
+        return text(type.moniker());
+
+      case LIST:
+        return collectionTypeDoc(
+            type, leftPrec, rightPrec, BuiltIn.Eqtype.LIST.mlName());
+
+      case TUPLE_TYPE:
+        if (op.wraps(leftPrec, rightPrec)) {
+          return parenthesize(typeDoc(type, 0, 0));
+        }
+        final List<Type> argTypes = ((TupleType) type).argTypes;
+        Doc product = null;
+        for (int i = 0; i < argTypes.size(); i++) {
+          final int leftPrec1 = i == 0 ? leftPrec : op.right;
+          final int rightPrec1 = i == argTypes.size() - 1 ? rightPrec : op.left;
+          final Doc argDoc = typeDoc(argTypes.get(i), leftPrec1, rightPrec1);
+          product =
+              product == null
+                  ? argDoc
+                  : beside(product, beside(text(" * "), argDoc));
+        }
+        return product;
+
+      case RECORD_TYPE:
+      case PROGRESSIVE_RECORD_TYPE:
+        final RecordType recordType = (RecordType) type;
+        final List<Doc> fields = new ArrayList<>();
+        recordType.argNameTypes.forEach(
+            (name, fieldType) -> {
+              final StringBuilder b = new StringBuilder();
+              appendId(b, name).append(':');
+              fields.add(beside(text(b.toString()), typeDoc(fieldType, 0, 0)));
+            });
+        if (type.isProgressive()) {
+          fields.add(text("..."));
+        }
+        // Fields fill across lines, joined by ", " when packed, so as many as
+        // fit share a line. Unlike record values, SML/NJ indents continuation
+        // lines of a record type to one column past the first field (the "{"
+        // column plus two), so we align and then nest by one.
+        final List<Doc> fieldItems = new ArrayList<>();
+        for (int i = 0; i < fields.size(); i++) {
+          fieldItems.add(
+              i < fields.size() - 1
+                  ? beside(fields.get(i), text(","))
+                  : fields.get(i));
+        }
+        final Doc fieldsDoc = fill(text(" "), fieldItems);
+        return beside(text("{"), beside(align(nest(1, fieldsDoc)), text("}")));
+
+      case FUNCTION_TYPE:
+        if (op.wraps(leftPrec, rightPrec)) {
+          return parenthesize(typeDoc(type, 0, 0));
+        }
+        final FnType fnType = (FnType) type;
+        return beside(
+            typeDoc(fnType.paramType, leftPrec, op.left),
+            beside(
+                text(" -> "), typeDoc(fnType.resultType, op.right, rightPrec)));
+
+      default:
+        return text(type.moniker());
+    }
+  }
+
+  /** Builds a Doc for a "list" or "bag" type, e.g. {@code int list}. */
+  private Doc collectionTypeDoc(
+      Type type, int leftPrec, int rightPrec, String typeName) {
+    final Op op = Op.NAMED_TYPE;
+    if (op.wraps(leftPrec, rightPrec)) {
+      return parenthesize(typeDoc(type, 0, 0));
+    }
+    final Doc elementDoc = typeDoc(type.elementType(), leftPrec, op.left);
+    return beside(elementDoc, text(" " + typeName));
+  }
+
+  private static Doc parenthesize(Doc doc) {
+    return beside(text("("), beside(doc, text(")")));
   }
 }
 

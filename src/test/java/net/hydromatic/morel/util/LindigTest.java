@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.util;
 
+import static net.hydromatic.morel.Matchers.isLines;
 import static net.hydromatic.morel.util.Lindig.EMPTY;
 import static net.hydromatic.morel.util.Lindig.HARD_LINE;
 import static net.hydromatic.morel.util.Lindig.LINE;
@@ -84,22 +85,14 @@ class LindigTest {
   void testLine() {
     final Doc doc = beside(text("a"), beside(LINE, text("b")));
     // Without group, LINE always breaks.
-    assertThat(
-        render(80, doc),
-        is(
-            "a\n" //
-                + "b"));
+    assertThat(render(80, doc), isLines("a", "b"));
   }
 
   @Test
   void testHardLine() {
     final Doc doc = beside(text("a"), beside(HARD_LINE, text("b")));
     // HARD_LINE always breaks, even in a group.
-    assertThat(
-        render(80, group(doc)),
-        is(
-            "a\n" //
-                + "b"));
+    assertThat(render(80, group(doc)), isLines("a", "b"));
   }
 
   // -- group and flatten ----------------------------------------------------
@@ -113,11 +106,7 @@ class LindigTest {
   @Test
   void testGroupDoesNotFit() {
     final Doc doc = group(beside(text("a"), beside(LINE, text("b"))));
-    assertThat(
-        render(2, doc),
-        is(
-            "a\n" //
-                + "b"));
+    assertThat(render(2, doc), isLines("a", "b"));
   }
 
   // -- nest -----------------------------------------------------------------
@@ -129,14 +118,7 @@ class LindigTest {
         beside(
             text("{"),
             beside(nest(2, beside(LINE, body)), beside(LINE, text("}"))));
-    assertThat(
-        render(80, doc),
-        is(
-            "{\n" //
-                + "  x\n" //
-                + "  y\n" //
-                + "  z\n" //
-                + "}"));
+    assertThat(render(80, doc), isLines("{", "  x", "  y", "  z", "}"));
   }
 
   @Test
@@ -152,14 +134,7 @@ class LindigTest {
     // Fits on one line
     assertThat(render(80, doc), is("{x y z}"));
     // Does not fit — breaks and indents
-    assertThat(
-        render(6, doc),
-        is(
-            "{\n" //
-                + "  x\n" //
-                + "  y\n" //
-                + "  z\n" //
-                + "}"));
+    assertThat(render(6, doc), isLines("{", "  x", "  y", "  z", "}"));
   }
 
   // -- align ----------------------------------------------------------------
@@ -175,10 +150,7 @@ class LindigTest {
                         text("first"), text("second"), text("third")))));
     assertThat(
         render(80, doc),
-        is(
-            "prefix: first\n" //
-                + "        second\n"
-                + "        third"));
+        isLines("prefix: first", "        second", "        third"));
   }
 
   // -- hang -----------------------------------------------------------------
@@ -189,10 +161,7 @@ class LindigTest {
         hang(4, fillSep(words("the hang combinator indents these words")));
     assertThat(
         render(20, doc),
-        is(
-            "the hang combinator\n" //
-                + "    indents these\n"
-                + "    words"));
+        isLines("the hang combinator", "    indents these", "    words"));
   }
 
   // -- indent ---------------------------------------------------------------
@@ -203,11 +172,11 @@ class LindigTest {
         indent(4, fillSep(words("the indent combinator indents these words")));
     assertThat(
         render(24, doc),
-        is(
-            "    the indent\n" //
-                + "        combinator\n"
-                + "        indents these\n"
-                + "        words"));
+        isLines(
+            "    the indent",
+            "        combinator",
+            "        indents these",
+            "        words"));
   }
 
   // -- hsep, vsep, sep ------------------------------------------------------
@@ -219,12 +188,7 @@ class LindigTest {
 
   @Test
   void testVsep() {
-    assertThat(
-        render(80, vsep(words("a b c"))),
-        is(
-            "a\n" //
-                + "b\n" //
-                + "c"));
+    assertThat(render(80, vsep(words("a b c"))), isLines("a", "b", "c"));
   }
 
   @Test
@@ -234,12 +198,7 @@ class LindigTest {
 
   @Test
   void testSepBreaks() {
-    assertThat(
-        render(3, sep(words("a b c"))),
-        is(
-            "a\n" //
-                + "b\n" //
-                + "c"));
+    assertThat(render(3, sep(words("a b c"))), isLines("a", "b", "c"));
   }
 
   // -- hcat, vcat, cat ------------------------------------------------------
@@ -251,12 +210,7 @@ class LindigTest {
 
   @Test
   void testVcat() {
-    assertThat(
-        render(80, vcat(words("a b c"))),
-        is(
-            "a\n" //
-                + "b\n" //
-                + "c"));
+    assertThat(render(80, vcat(words("a b c"))), isLines("a", "b", "c"));
   }
 
   @Test
@@ -266,12 +220,7 @@ class LindigTest {
 
   @Test
   void testCatBreaks() {
-    assertThat(
-        render(2, cat(words("a b c"))),
-        is(
-            "a\n" //
-                + "b\n" //
-                + "c"));
+    assertThat(render(2, cat(words("a b c"))), isLines("a", "b", "c"));
   }
 
   // -- fillSep --------------------------------------------------------------
@@ -285,10 +234,47 @@ class LindigTest {
                     + " at a time fitting as many on each line as possible"));
     assertThat(
         render(40, doc),
-        is(
-            "the fill combinator lays out words one\n" //
-                + "at a time fitting as many on each line\n"
-                + "as possible"));
+        isLines(
+            "the fill combinator lays out words one",
+            "at a time fitting as many on each line",
+            "as possible"));
+  }
+
+  // -- fill -----------------------------------------------------------------
+
+  /** {@code fill} packs atoms onto as many lines as fit. */
+  @Test
+  void testFillAtoms() {
+    final List<Doc> docs =
+        ImmutableList.of(
+            text("1,"), text("2,"), text("3,"), text("4,"), text("5"));
+    final Doc doc = align(Lindig.fill(EMPTY, docs));
+    assertThat(render(80, doc), is("1,2,3,4,5"));
+    assertThat(render(4, doc), isLines("1,2,", "3,4,", "5"));
+  }
+
+  /**
+   * {@code fill} treats each element as an indivisible unit: a list of records
+   * wraps between records (not within one), which {@code fillSep} cannot do.
+   */
+  @Test
+  void testFillTreatsElementsAsUnits() {
+    // Each "record" is itself a group that could break internally.
+    final Doc r1 = group(brackets(fillSep(words("a b"))));
+    final Doc r2 = group(brackets(fillSep(words("c d"))));
+    final Doc r3 = group(brackets(fillSep(words("e f"))));
+    final Doc doc =
+        align(
+            Lindig.fill(
+                EMPTY,
+                ImmutableList.of(
+                    beside(r1, text(",")),
+                    beside(r2, text(",")),
+                    beside(r3, text("")))));
+    // Wide: all on one line.
+    assertThat(render(80, doc), is("[a b],[c d],[e f]"));
+    // Narrow: wraps between records, each record kept intact.
+    assertThat(render(8, doc), isLines("[a b],", "[c d],", "[e f]"));
   }
 
   // -- punctuate ------------------------------------------------------------
@@ -329,12 +315,7 @@ class LindigTest {
             text("]"),
             text(","),
             ImmutableList.of(text("alpha"), text("bravo"), text("charlie")));
-    assertThat(
-        render(15, doc),
-        is(
-            "[alpha,\n" //
-                + " bravo,\n"
-                + " charlie]"));
+    assertThat(render(15, doc), isLines("[alpha,", " bravo,", " charlie]"));
   }
 
   @Test
@@ -406,22 +387,12 @@ class LindigTest {
     assertThat(render(80, doc), is("aaa [bbb [ccc, ddd], eee]"));
 
     // Narrow: outer breaks, inner bbb group fits
-    assertThat(
-        render(20, doc),
-        is(
-            "aaa\n" //
-                + "  [bbb [ccc, ddd],\n"
-                + "  eee]"));
+    assertThat(render(20, doc), isLines("aaa", "  [bbb [ccc, ddd],", "  eee]"));
 
     // Very narrow: everything breaks
     assertThat(
         render(10, doc),
-        is(
-            "aaa\n" //
-                + "  [bbb\n"
-                + "    [ccc,\n"
-                + "    ddd],\n"
-                + "  eee]"));
+        isLines("aaa", "  [bbb", "    [ccc,", "    ddd],", "  eee]"));
   }
 
   /** SML-style let expression. */
@@ -456,13 +427,7 @@ class LindigTest {
     // Narrow: structured
     assertThat(
         render(20, doc),
-        is(
-            "let\n" //
-                + "  val x = 1;\n"
-                + "  val y = 2\n"
-                + "in\n"
-                + "  x + y\n"
-                + "end"));
+        isLines("let", "  val x = 1;", "  val y = 2", "in", "  x + y", "end"));
   }
 
   /** SML-style function with match arms using align. */
@@ -479,10 +444,7 @@ class LindigTest {
 
     // Narrow: arms on separate lines, | aligned
     assertThat(
-        render(20, doc),
-        is(
-            "fn 0 => 1\n" //
-                + "   | n => n * fact (n - 1)"));
+        render(20, doc), isLines("fn 0 => 1", "   | n => n * fact (n - 1)"));
   }
 
   /** Verify that multiple groups independently decide to break or not. */
@@ -495,20 +457,11 @@ class LindigTest {
     assertThat(render(80, outer), is("before alpha bravo charlie after"));
     // Medium: outer breaks, inner fits
     assertThat(
-        render(30, outer),
-        is(
-            "before\n" //
-                + "alpha bravo charlie\n"
-                + "after"));
+        render(30, outer), isLines("before", "alpha bravo charlie", "after"));
     // Narrow: everything breaks
     assertThat(
         render(10, outer),
-        is(
-            "before\n" //
-                + "alpha\n"
-                + "bravo\n"
-                + "charlie\n"
-                + "after"));
+        isLines("before", "alpha", "bravo", "charlie", "after"));
   }
 
   // -- Stack safety and scalability -----------------------------------------
