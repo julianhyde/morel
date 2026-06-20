@@ -361,6 +361,11 @@ class Pretty {
       DataType dataType,
       Object value) {
     if (!(value instanceof List)) {
+      if (dataType.name.equals("doc")) {
+        // A "doc" (pretty-printer document) is abstract; print it as "-",
+        // as Standard ML prints a value of an abstract type.
+        return buf.append('-');
+      }
       // Opaque value (e.g., "time" backed by Long): print directly.
       return buf.append(value);
     }
