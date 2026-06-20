@@ -21,9 +21,18 @@ package net.hydromatic.morel.compile;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.parse.Parsers.appendId;
+import static net.hydromatic.morel.util.Lindig.LINE;
+import static net.hydromatic.morel.util.Lindig.LINE_BREAK;
+import static net.hydromatic.morel.util.Lindig.align;
+import static net.hydromatic.morel.util.Lindig.beside;
+import static net.hydromatic.morel.util.Lindig.group;
+import static net.hydromatic.morel.util.Lindig.nest;
+import static net.hydromatic.morel.util.Lindig.render;
+import static net.hydromatic.morel.util.Lindig.text;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
 import static net.hydromatic.morel.util.Static.endsWith;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -43,6 +52,7 @@ import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
+import net.hydromatic.morel.util.Lindig.Doc;
 import net.hydromatic.morel.util.Ord;
 
 /** Prints values. */
@@ -79,6 +89,9 @@ class Pretty {
 
   /** Prints a value to a buffer. */
   StringBuilder pretty(StringBuilder buf, Type type, Object value) {
+    if (output == Prop.Output.DOC && value instanceof TypedVal) {
+      return prettyDoc(buf, (TypedVal) value);
+    }
     int lineEnd = lineWidth < 0 ? -1 : (buf.length() + lineWidth);
     return pretty1(buf, 0, new int[] {lineEnd}, 0, type, value);
   }
@@ -676,6 +689,127 @@ class Pretty {
       this.type = type;
       this.suffix = suffix;
     }
+  }
+
+  // -- Doc-based pretty-printer (output = "doc") ----------------------------
+  //
+  // An experimental printer that builds a "util.Lindig.Doc" for the value and
+  // lets that engine choose line breaks, rather than the greedy back-tracking
+  // of "pretty1". Leaf values (primitives, "fn", data-type constructors) are
+  // rendered by the classic printer; only the list/record/tuple structure
+  // becomes a Doc. Rendering at "lineWidth - 2" gives SML/NJ's right margin.
+
+  /** Renders a binding using the Doc-based pretty-printer. */
+  private StringBuilder prettyDoc(StringBuilder buf, TypedVal typedVal) {
+    final StringBuilder prefix = new StringBuilder("val ");
+    appendId(prefix, typedVal.name).append(" = ");
+    final Doc valueDoc = valueDoc(typedVal.type, typedVal.o, 0);
+    final TypeVal typeVal =
+        new TypeVal("", typeSystem.unqualified(typedVal.type), "");
+    // Render the type via prettyRaw, which carries it under a neutral type so
+    // that a type's moniker is not mistaken for a value of that type.
+    final StringBuilder typeBuf = new StringBuilder();
+    prettyRaw(typeBuf, 0, new int[] {-1}, 0, typeVal);
+    // The " : type" is its own group with a break before it, so the value lays
+    // out on its own width; if "value : type" does not fit, the type moves to
+    // its own line, indented by 2.
+    final Doc typeDoc =
+        group(
+            nest(
+                2, beside(LINE, beside(text(": "), text(typeBuf.toString())))));
+    final Doc doc = beside(text(prefix.toString()), beside(valueDoc, typeDoc));
+    final int width = lineWidth < 0 ? Integer.MAX_VALUE : lineWidth - 2;
+    return buf.append(render(width, doc));
+  }
+
+  /** Renders {@code value} on a single line using the classic printer. */
+  private String flatClassic(Object value, Type type) {
+    final StringBuilder b = new StringBuilder();
+    pretty1(b, 0, new int[] {-1}, 0, type, value);
+    return b.toString();
+  }
+
+  /** Builds a Doc for a value of the given type. */
+  private Doc valueDoc(Type type, Object value, int depth) {
+    while (type instanceof AliasType) {
+      type = ((AliasType) type).type;
+    }
+    if (value instanceof Variant) {
+      final Variant v = (Variant) value;
+      return valueDoc(v.type, v.value, depth);
+    }
+    if (printDepth >= 0 && depth > printDepth) {
+      return text("#");
+    }
+    switch (type.op()) {
+      case LIST:
+        final List<Object> list = toList(value);
+        if (list instanceof RelList || value instanceof TypedValue) {
+          return text(RelList.RELATION);
+        }
+        return seqDoc("[", "]", elementDocs(type.elementType(), list, depth));
+
+      case RECORD_TYPE:
+        final RecordType recordType = (RecordType) type;
+        final Iterator<Object> iterator = toList(value).iterator();
+        final List<Doc> fields = new ArrayList<>();
+        final int fieldDepth = depth + 1;
+        recordType.argNameTypes.forEach(
+            (name, fieldType) -> {
+              final StringBuilder b = new StringBuilder();
+              appendId(b, name).append('=');
+              fields.add(
+                  beside(
+                      text(b.toString()),
+                      valueDoc(fieldType, iterator.next(), fieldDepth)));
+            });
+        return seqDoc("{", "}", fields);
+
+      case TUPLE_TYPE:
+        final TupleType tupleType = (TupleType) type;
+        final List<Doc> elements = new ArrayList<>();
+        forEachIndexed(
+            toList(value),
+            tupleType.argTypes,
+            (ordinal, o, elementType) ->
+                elements.add(valueDoc(elementType, o, depth + 1)));
+        return seqDoc("(", ")", elements);
+
+      default:
+        return text(flatClassic(value, type));
+    }
+  }
+
+  /** Builds Docs for list elements, applying the {@code printLength} limit. */
+  private List<Doc> elementDocs(
+      Type elementType, List<Object> list, int depth) {
+    final List<Doc> docs = new ArrayList<>();
+    int i = 0;
+    for (Object o : list) {
+      if (printLength >= 0 && i >= printLength) {
+        docs.add(text("..."));
+        break;
+      }
+      docs.add(valueDoc(elementType, o, depth + 1));
+      ++i;
+    }
+    return docs;
+  }
+
+  /**
+   * Builds a Doc for a bracketed sequence (a list, record, or tuple). Renders
+   * flat as {@code (a,b,c)}, and when it does not fit, with each element on its
+   * own line, aligned under the first.
+   */
+  private Doc seqDoc(String open, String close, List<Doc> docs) {
+    if (docs.isEmpty()) {
+      return text(open + close);
+    }
+    Doc body = docs.get(0);
+    for (int i = 1; i < docs.size(); i++) {
+      body = beside(body, beside(text(","), beside(LINE_BREAK, docs.get(i))));
+    }
+    return group(beside(text(open), beside(align(body), text(close))));
   }
 }
 

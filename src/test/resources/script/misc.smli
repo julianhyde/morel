@@ -77,9 +77,9 @@ Sys.set ("output", "CLASSIC");
 Sys.set ("output", "ClasSic");
 > val it = () : unit
 Sys.set ("output", "classic ");
-> java.lang.RuntimeException: value must be one of: 'CLASSIC', 'TABULAR'
+> java.lang.RuntimeException: value must be one of: 'CLASSIC', 'TABULAR', 'DOC'
 Sys.set ("output", "bad");
-> java.lang.RuntimeException: value must be one of: 'CLASSIC', 'TABULAR'
+> java.lang.RuntimeException: value must be one of: 'CLASSIC', 'TABULAR', 'DOC'
 
 (*) After you unset a property with a default value, it reverts to the default.
 Sys.unset "output";
