@@ -679,6 +679,65 @@ x;
 
 Sys.unset "printDepth";
 > val it = () : unit
+
+(* -------------------------------------------------------------------
+ * Doc-based output mode.
+ *
+ * Output mode "doc" lays values out with the Doc-based pretty-printer.
+ * Unlike the classic printer, it packs as many elements per line as fit
+ * (a "fill"), treats each element as a unit so a list of records wraps
+ * between records, and moves a value or its type to its own indented
+ * line when it does not fit flat. These layouts match SML/NJ.
+ *)
+Sys.set ("output", "doc");
+> val it = () : unit
+
+(*) Values that fit stay on one line.
+Sys.set ("lineWidth", 80);
+> val it = () : unit
+[1,2,3];
+> val it = [1,2,3] : int list
+(1,true,"x");
+> val it = (1,true,"x") : int * bool * string
+{a=1,b=2,c=3};
+> val it = {a=1,b=2,c=3} : {a:int, b:int, c:int}
+
+(* A list of scalars fills: as many elements per line as fit, the rest
+ * wrapping aligned under the first element. *)
+Sys.set ("lineWidth", 22);
+> val it = () : unit
+[1,2,3,4,5,6,7,8,9];
+> val it =
+>   [1,2,3,4,5,6,7,8,
+>    9] : int list
+
+(*) A record value fills its fields the same way.
+{aa=111,bb=222,cc=333};
+> val it =
+>   {aa=111,bb=222,
+>    cc=333}
+>   : {aa:int, bb:int,
+>       cc:int}
+
+(* A list of records wraps between records: each record stays intact,
+ * and the type moves to its own line. *)
+[{a=1,b=2},{a=3,b=4}];
+> val it =
+>   [{a=1,b=2},
+>    {a=3,b=4}]
+>   : {a:int,
+>       b:int} list
+
+(*) A value too wide to fit flat moves to its own line, indented by two.
+[10,20,30,40,50,60,70,80,90];
+> val it =
+>   [10,20,30,40,50,
+>    60,70,80,90]
+>   : int list
+
+Sys.unset "output";
+> val it = () : unit
+
 Sys.unset "lineWidth";
 > val it = () : unit
 Sys.unset "matchStrict";
