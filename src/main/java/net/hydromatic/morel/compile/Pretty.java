@@ -709,7 +709,17 @@ class Pretty {
     final StringBuilder prefix = new StringBuilder("val ");
     appendId(prefix, typedVal.name).append(" =");
     final Doc valueDoc = valueDoc(typedVal.type, typedVal.o, 0);
-    final Doc typeBody = typeDoc(typeSystem.unqualified(typedVal.type), 0, 0);
+    // A "variant" value prints its declared type with a " variant" suffix,
+    // e.g. "INT 3 : int variant".
+    final Doc typeBody;
+    if (typedVal.o instanceof Variant) {
+      final Type type1 = ((Variant) typedVal.o).type;
+      typeBody =
+          beside(
+              typeDoc(typeSystem.unqualified(type1), 0, 0), text(" variant"));
+    } else {
+      typeBody = typeDoc(typeSystem.unqualified(typedVal.type), 0, 0);
+    }
     // The value stays on the "val ... =" line only if it fits there entirely
     // flat; otherwise the whole value moves to its own line, indented by 2,
     // where it is free to wrap. Likewise the type stays on the value's last

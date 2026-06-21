@@ -31,12 +31,13 @@ Sys.set ("now", "2024-01-01T00:00:00Z");
 
 Sys;
 > val it =
->   {clearEnv=fn,env=fn,file={},parseTree=fn,plan=fn,planEx=fn,set=fn,show=fn,
->    showAll=fn,unset=fn}
+>   {clearEnv=fn,env=fn,file={},parseTree=fn,plan=fn,planEx=fn,set=fn,
+>    show=fn,showAll=fn,unset=fn}
 >   : {clearEnv:unit -> unit, env:unit -> (string * string) list, file:{...},
->      parseTree:string -> string, plan:unit -> string, planEx:string -> string,
->      set:string * 'a -> unit, show:string -> string option,
->      showAll:unit -> (string * string option) list, unset:string -> unit}
+>       parseTree:string -> string, plan:unit -> string,
+>       planEx:string -> string, set:string * 'a -> unit,
+>       show:string -> string option,
+>       showAll:unit -> (string * string option) list, unset:string -> unit}
 
 (*) val env : unit -> string list
 Sys.env;
@@ -445,11 +446,12 @@ map
 >    ("inlinePassCount",SOME "5"),("lineWidth",SOME "78"),
 >    ("matchCoverageEnabled",SOME "true"),("matchStrict",SOME "false"),
 >    ("now",SOME "2024-01-01T00:00:00Z"),("optionalInt",NONE),
->    ("output",SOME "CLASSIC"),("printDepth",SOME "5"),
+>    ("output",SOME "DOC"),("printDepth",SOME "5"),
 >    ("printLength",SOME "999"),("productName",SOME "morel-java"),
 >    ("productVersion",SOME "?"),("relationalize",SOME "false"),
->    ("scriptDirectory",SOME "?"),("stringDepth",SOME "-1"),("stringFold",NONE),
->    ("timeZone",SOME "UTC")] : (string * string option) list
+>    ("scriptDirectory",SOME "?"),("stringDepth",SOME "-1"),
+>    ("stringFold",NONE),("timeZone",SOME "UTC")]
+>   : (string * string option) list
 List.length (Sys.showAll ());
 > val it = 20 : int
 List.length (showAll ());

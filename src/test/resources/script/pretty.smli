@@ -482,25 +482,29 @@ Sys.set ("matchStrict", true);
  * the element's '{' and breaks between the record's fields. *)
 val emps = [{comm=0,deptno=20,empno=7369,ename="SMITH",hiredate="1980-12-17",job="CLERK",mgr=7902,sal=800}];
 > val emps =
->   [{comm=0,deptno=20,empno=7369,ename="SMITH",hiredate="1980-12-17",job="CLERK",
->     mgr=7902,sal=800}]
->   : {comm:int, deptno:int, empno:int, ename:string, hiredate:string, job:string,
->      mgr:int, sal:int} list
+>   [{comm=0,deptno=20,empno=7369,ename="SMITH",hiredate="1980-12-17",
+>     job="CLERK",mgr=7902,sal=800}]
+>   : {comm:int, deptno:int, empno:int, ename:string, hiredate:string,
+>       job:string, mgr:int, sal:int} list
 
 (* The same 'glue', shown small: a one-element list that does not fit. '['
  * stays attached to '{', and ':' to the type, so the record and type wrap at
  * a field boundary. Without glue, '{' would drop onto a line of its own:
  *   [
- *    {aa=1,bb=2,cc=3,
- *     dd=4}] *)
+ *    {aa=1,bb=2,
+ *     cc=3,dd=4}] *)
 Sys.set ("lineWidth", 20);
-> val it = () : unit
+> val it = ()
+>   : unit
 [{aa=1,bb=2,cc=3,dd=4}];
 > val it =
->   [{aa=1,bb=2,cc=3,
->     dd=4}]
->   : {aa:int, bb:int,
->      cc:int, dd:int} list
+>   [{aa=1,bb=2,
+>     cc=3,dd=4}]
+>   : {aa:int,
+>       bb:int,
+>       cc:int,
+>       dd:int}
+>     list
 
 (* Line width: how values and types wrap as 'lineWidth' shrinks. *)
 Sys.set ("lineWidth", 100);
@@ -516,7 +520,7 @@ val z = {a=[1,2,3], b=[4,5], c=[6], d=()};
 val r = {x=x,y=y,z=z};
 > val r = {x=[[1,2,3],[4,5],[6],[]],y=([1,2,3],[4,5],[6],[]),z={a=[1,2,3],b=[4,5],c=[6],d=()}}
 >   : {x:int list list, y:int list * int list * int list * 'a list,
->      z:{a:int list, b:int list, c:int list, d:unit}}
+>       z:{a:int list, b:int list, c:int list, d:unit}}
 val f = fn s => String.size s;
 > val f = fn : string -> int
 Sys.set ("lineWidth", 40);
@@ -528,60 +532,61 @@ x;
 >   : int list list
 y;
 > val it = ([1,2,3],[4,5],[6],[])
->   : int list * int list * int list *
->     'a list
+>   : int list * int list * int list
+>      * 'a list
 z;
-> val it = {a=[1,2,3],b=[4,5],c=[6],d=()}
->   : {a:int list, b:int list, c:int list,
->      d:unit}
+> val it =
+>   {a=[1,2,3],b=[4,5],c=[6],d=()}
+>   : {a:int list, b:int list,
+>       c:int list, d:unit}
 r;
 > val it =
 >   {x=[[1,2,3],[4,5],[6],[]],
 >    y=([1,2,3],[4,5],[6],[]),
 >    z={a=[1,2,3],b=[4,5],c=[6],d=()}}
 >   : {x:int list list,
->      y:int list * int list * int list *
->        'a list,
->      z:{a:int list, b:int list,
->         c:int list, d:unit}}
+>       y:int list * int list
+>          * int list * 'a list,
+>       z:{a:int list, b:int list,
+>           c:int list, d:unit}}
 Sys.set ("lineWidth", 20);
-> val it = () : unit
+> val it = ()
+>   : unit
 20;
 > val it = 20 : int
 x;
 > val it =
->   [[1,2,3],[4,5],[6],
->    []]
+>   [[1,2,3],[4,5],
+>    [6],[]]
 >   : int list list
 y;
 > val it =
->   ([1,2,3],[4,5],[6],
->    [])
->   : int list *
->     int list *
->     int list *
->     'a list
+>   ([1,2,3],[4,5],
+>    [6],[])
+>   : int list
+>      * int list
+>      * int list
+>      * 'a list
 z;
 > val it =
->   {a=[1,2,3],b=[4,5],
->    c=[6],d=()}
+>   {a=[1,2,3],
+>    b=[4,5],c=[6],
+>    d=()}
 >   : {a:int list,
->      b:int list,
->      c:int list,
->      d:unit}
+>       b:int list,
+>       c:int list,
+>       d:unit}
 f;
 > val it = fn
 >   : string -> int
 Sys.set ("lineWidth", 1);
 > val it =
 >   ()
->   :
->     unit
+>   : unit
 1;
 > val it =
 >   1
->   :
->     int
+>   : int
 x;
 > val it =
 >   [[1,
@@ -591,18 +596,17 @@ x;
 >     5],
 >    [6],
 >    []]
->   :
->     int list list
+>   : int
+>     list
+>     list
 Sys.set ("lineWidth", 0);
 > val it =
 >   ()
->   :
->     unit
+>   : unit
 0;
 > val it =
 >   0
->   :
->     int
+>   : int
 x;
 > val it =
 >   [[1,
@@ -612,8 +616,9 @@ x;
 >     5],
 >    [6],
 >    []]
->   :
->     int list list
+>   : int
+>     list
+>     list
 Sys.set ("lineWidth", ~1);
 > val it = () : unit
 ~1;
@@ -625,57 +630,66 @@ x;
 Sys.set ("lineWidth", 70);
 > val it = () : unit
 val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[8],i={j=[9]}}]}]};
-> val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=#,h=#,i=#}]}]}
+> val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[#],i={j=#}}]}]}
 >   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", 6);
+> val it = () : unit
+x;
+> val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[8],i={j=[#]}}]}]}
+>   : {a:int, b:int list,
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
+Sys.set ("printDepth", 5);
 > val it = () : unit
 x;
 > val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[#],i={j=#}}]}]}
 >   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
-Sys.set ("printDepth", 5);
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
+Sys.set ("printDepth", 4);
 > val it = () : unit
 x;
 > val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=#,h=#,i=#}]}]}
 >   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
-Sys.set ("printDepth", 4);
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
+Sys.set ("printDepth", 3);
 > val it = () : unit
 x;
 > val it = {a=1,b=[2,3],c=[{d=4,e=[#,#],f=[#]}]}
 >   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
-Sys.set ("printDepth", 3);
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
+Sys.set ("printDepth", 2);
 > val it = () : unit
 x;
 > val it = {a=1,b=[2,3],c=[{d=#,e=#,f=#}]}
 >   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
-Sys.set ("printDepth", 2);
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
+Sys.set ("printDepth", 1);
 > val it = () : unit
 x;
 > val it = {a=1,b=[#,#],c=[#]}
 >   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
-Sys.set ("printDepth", 1);
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
+Sys.set ("printDepth", 0);
 > val it = () : unit
 x;
 > val it = {a=#,b=#,c=#}
 >   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
-Sys.set ("printDepth", 0);
-> val it = # : unit
-x;
-> val it = #
->   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", ~1);
 > val it = () : unit
 x;
 > val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[8],i={j=[9]}}]}]}
 >   : {a:int, b:int list,
->      c:{d:int, e:int list, f:{g:int, h:int list, i:{j:int list}} list} list}
+>       c:{d:int, e:int list,
+>           f:{g:int, h:int list, i:{j:int list}} list} list}
 
 Sys.unset "printDepth";
 > val it = () : unit

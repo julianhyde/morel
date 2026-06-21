@@ -85,7 +85,7 @@ Sys.set ("output", "bad");
 Sys.unset "output";
 > val it = () : unit
 Sys.show "output";
-> val it = SOME "CLASSIC" : string option
+> val it = SOME "DOC" : string option
 
 (*) After you unset a property with a default value, it reverts to the default.
 Sys.show "optionalInt";

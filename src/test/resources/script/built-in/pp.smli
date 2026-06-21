@@ -27,18 +27,18 @@ PP;
 > val it =
 >   {align=fn,beside=fn,braces=fn,brackets=fn,cat=fn,empty=-,encloseSep=fn,
 >    fillCat=fn,fillSep=fn,`group`=fn,hang=fn,hardLine=-,hcat=fn,hsep=fn,
->    indent=fn,line=-,lineBreak=-,nest=fn,parens=fn,punctuate=fn,render=fn,sep=fn,
->    softBreak=-,softLine=-,text=fn,vcat=fn,vsep=fn}
+>    indent=fn,line=-,lineBreak=-,nest=fn,parens=fn,punctuate=fn,render=fn,
+>    sep=fn,softBreak=-,softLine=-,text=fn,vcat=fn,vsep=fn}
 >   : {align:doc -> doc, beside:doc * doc -> doc, braces:doc -> doc,
->      brackets:doc -> doc, cat:doc list -> doc, empty:doc,
->      encloseSep:doc * doc * doc * doc list -> doc, fillCat:doc list -> doc,
->      fillSep:doc list -> doc, `group`:doc -> doc, hang:int * doc -> doc,
->      hardLine:doc, hcat:doc list -> doc, hsep:doc list -> doc,
->      indent:int * doc -> doc, line:doc, lineBreak:doc, nest:int * doc -> doc,
->      parens:doc -> doc, punctuate:doc * doc list -> doc list,
->      render:int * doc -> string, sep:doc list -> doc, softBreak:doc,
->      softLine:doc, text:string -> doc, vcat:doc list -> doc,
->      vsep:doc list -> doc}
+>       brackets:doc -> doc, cat:doc list -> doc, empty:doc,
+>       encloseSep:doc * doc * doc * doc list -> doc, fillCat:doc list -> doc,
+>       fillSep:doc list -> doc, `group`:doc -> doc, hang:int * doc -> doc,
+>       hardLine:doc, hcat:doc list -> doc, hsep:doc list -> doc,
+>       indent:int * doc -> doc, line:doc, lineBreak:doc,
+>       nest:int * doc -> doc, parens:doc -> doc,
+>       punctuate:doc * doc list -> doc list, render:int * doc -> string,
+>       sep:doc list -> doc, softBreak:doc, softLine:doc, text:string -> doc,
+>       vcat:doc list -> doc, vsep:doc list -> doc}
 
 (*) `text` builds a document; `render` lays it out.
 PP.render (80, PP.text "hello");
