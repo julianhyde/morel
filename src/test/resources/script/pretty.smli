@@ -718,7 +718,8 @@ Sys.set ("lineWidth", 22);
 > val it =
 >   {aa=111,bb=222,
 >    cc=333}
->   : {aa:int, bb:int,
+>   : {aa:int,
+>       bb:int,
 >       cc:int}
 
 (* A list of records wraps between records: each record stays intact,
@@ -741,22 +742,11 @@ Sys.set ("lineWidth", 22);
  * Divergences from SML/NJ.
  *
  * The Doc-based printer follows SML/NJ's Oppen-based layout closely but
- * not exactly. Two systematic differences remain; we accept them rather
- * than distort the Doc model to reproduce them.
+ * not exactly. One systematic difference remains; we accept it rather
+ * than distort the Doc model to reproduce it.
  *)
 
-(* 1. Fill boundary. The Doc printer packs an element whose last column
- * equals the right margin; SML/NJ breaks one element sooner. At this
- * width we fit five numbers on the first line; SML/NJ fits only four,
- * breaking before "4057". *)
-Sys.set ("lineWidth", 30);
-> val it = () : unit
-[6376,6639,9575,1109,4057,4765];
-> val it =
->   [6376,6639,9575,1109,4057,
->    4765] : int list
-
-(* 2. Nested type layout. SML/NJ indents the fields of an inner record
+(* Nested type layout. SML/NJ indents the fields of an inner record
  * type more deeply and, when the element type fills the line, wraps the
  * "list"/"bag" keyword onto its own line (leaving a trailing space on
  * the previous line). We keep the type more compact: shallower field

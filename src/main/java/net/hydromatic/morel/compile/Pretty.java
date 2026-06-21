@@ -701,7 +701,8 @@ class Pretty {
   // lets that engine choose line breaks, rather than the greedy back-tracking
   // of "pretty1". Leaf values (primitives, "fn", data-type constructors) are
   // rendered by the classic printer; only the list/record/tuple structure
-  // becomes a Doc. Rendering at "lineWidth - 2" gives SML/NJ's right margin.
+  // becomes a Doc. Rendering at "lineWidth - 3" matches SML/NJ's right margin
+  // (its Oppen printer breaks one column before ours would).
 
   /** Renders a binding using the Doc-based pretty-printer. */
   private StringBuilder prettyDoc(StringBuilder buf, TypedVal typedVal) {
@@ -726,7 +727,7 @@ class Pretty {
             nest(2, beside(HARD_LINE, beside(text(": "), typeBody))));
     final Doc doc =
         beside(text(prefix.toString()), beside(valuePart, typePart));
-    final int width = lineWidth < 0 ? Integer.MAX_VALUE : lineWidth - 2;
+    final int width = lineWidth < 0 ? Integer.MAX_VALUE : lineWidth - 3;
     return buf.append(render(width, doc));
   }
 
