@@ -33,7 +33,7 @@ Option;
 >   : {app:('a -> unit) -> 'a option -> unit,
 >       compose:('b -> 'c) * ('d -> 'b option) -> 'd -> 'c option,
 >       composePartial:('e -> 'f option) * ('g -> 'e option)
->                      -> 'g -> 'f option,
+>                       -> 'g -> 'f option,
 >       filter:('h -> bool) -> 'h -> 'h option, getOpt:'i option * 'i -> 'i,
 >       isSome:'j option -> bool, `join`:'k option option -> 'k option,
 >       map:('l -> 'm) -> 'l option -> 'm option,

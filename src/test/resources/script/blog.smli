@@ -592,8 +592,8 @@ fun mapReduce mapper reducer list =
     List.map (fn (key, values) => (key, reducer (key, values))) keyValuesList
   end;
 > val mapReduce = fn
->   : ('a -> ('b * 'c) list) -> ('b * 'c list -> 'd) -> 'a list -> ('b
->                                                                    * 'd) list
+>   : ('a -> ('b * 'c) list)
+>      -> ('b * 'c list -> 'd) -> 'a list -> ('b * 'd) list
 
 fun wc_mapper line =
   let
@@ -1215,8 +1215,8 @@ fun mapReduce mapper reducer list =
       (k, v) in (mapper e : 'b list)
     group k compute {c = (fn vs => reducer (k, vs)) over v};
 > val mapReduce = fn
->   : ('a -> ('b * 'c) list) -> ('b * 'c list -> 'd) -> 'a list -> {c:'d,
->                                                                    k:'b} list
+>   : ('a -> ('b * 'c) list)
+>      -> ('b * 'c list -> 'd) -> 'a list -> {c:'d, k:'b} list
 fun wc_mapper line =
   List.map (fn w => (w, 1)) (split line);
 > val wc_mapper = fn : string -> (string * int) list
@@ -1546,8 +1546,9 @@ fun clerks () =
   from e in scott.emps
     where e.job = "CLERK";
 > val clerks = fn
->   : unit -> {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
->               job:string, mgr:int, sal:real} bag
+>   : unit
+>      -> {comm:real, deptno:int, empno:int, ename:string, hiredate:string,
+>           job:string, mgr:int, sal:real} bag
 (* Query uses regular iteration. *)
 from e in clerks (),
     d in scott.depts
@@ -2291,9 +2292,9 @@ fun analyzeResults (emps: {deptno: int, sal: real} bag) =
       classification = if avgSal > 2000.0 then "High" else "Low"}
   end;
 > val analyzeResults = fn
->   : {deptno:int, sal:real} bag -> {averageSalary:real,
->                                     classification:string,
->                                     employeeCount:int}
+>   : {deptno:int, sal:real} bag
+>      -> {averageSalary:real, classification:string,
+>           employeeCount:int}
 
 (* Use the custom function to analyze employees in department 10. *)
 from e in scott.emps

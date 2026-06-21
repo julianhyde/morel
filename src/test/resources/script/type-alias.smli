@@ -23,42 +23,42 @@
 type myInt = int;
 > type myInt = int
 val x: myInt = 5;
-> val x = 5 : int
+> val x = 5 : myInt
 val x = 6 : myInt;
-> val x = 6 : int
+> val x = 6 : myInt
 val x = (6 : myInt) + 1;
 > val x = 7 : int
 
 (*) Deduce list type based on first element
 val list = [1: myInt];
-> val list = [1] : int list
+> val list = [1] : myInt list
 val list = [2: myInt, 3: myInt, 4];
-> val list = [2,3,4] : int list
+> val list = [2,3,4] : myInt list
 val list = [5, 6: myInt];
 > val list = [5,6] : int list
 val list = []: myInt list;
-> val list = [] : int list
+> val list = [] : myInt list
 val list = []: int list;
 > val list = [] : int list
 
 type intPair = int * int;
 > type intPair = int * int
 val x: intPair = (4, 5);
-> val x = (4,5) : int * int
+> val x = (4,5) : intPair
 val x2 = (4, 5): intPair;
-> val x2 = (4,5) : int * int
+> val x2 = (4,5) : intPair
 val x3 = (4, 5);
 > val x3 = (4,5) : int * int
 val y: int * int = x;
 > val y = (4,5) : int * int
 val z: intPair = y;
-> val z = (4,5) : int * int
+> val z = (4,5) : intPair
 
 (*) Define two aliases at once
 type myInt = int and myRealList = real list;
 > type myInt = int
 > type myRealList = real list
 val reals = [1.0, 2.0, 3.0]: myRealList;
-> val reals = [1,2,3] : real list
+> val reals = [1,2,3] : myRealList
 
 (*) End type-alias.smli

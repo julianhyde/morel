@@ -426,9 +426,8 @@ class Pretty {
    * adding parentheses where needed.
    */
   private Doc typeDoc(Type type, int leftPrec, int rightPrec) {
-    while (type instanceof AliasType) {
-      type = ((AliasType) type).type;
-    }
+    // Unlike a value (see valueDoc), a type keeps its alias: a value of type
+    // "myInt" (an alias for "int") prints its type as "myInt", not "int".
     final Op op = type.op();
     switch (op) {
       case DATA_TYPE:
@@ -497,19 +496,25 @@ class Pretty {
         if (op.wraps(leftPrec, rightPrec)) {
           return parenthesize(typeDoc(type, 0, 0));
         }
-        // A function type may break before "->", which leads the
-        // continuation line.
+        // A function type breaks before "->", which leads the continuation
+        // line (indented one column, like a record or tuple type). We must use
+        // an explicit union rather than "group": the result may contain a
+        // breakable structure (a tuple or collection type), and "group" would
+        // defer to that inner break and leave this "->" flat, cramming the
+        // whole type onto one line. Flattening the wide branch makes the fit
+        // test honest, so the outermost "->" that does not fit breaks first,
+        // matching SML/NJ.
         final FnType fnType = (FnType) type;
-        return align(
-            beside(
-                typeDoc(fnType.paramType, leftPrec, op.left),
-                group(
+        final Doc paramDoc = typeDoc(fnType.paramType, leftPrec, op.left);
+        final Doc resultDoc = typeDoc(fnType.resultType, op.right, rightPrec);
+        return union(
+            flatten(beside(paramDoc, beside(text(" -> "), resultDoc))),
+            align(
+                nest(
+                    1,
                     beside(
-                        LINE,
-                        beside(
-                            text("-> "),
-                            typeDoc(
-                                fnType.resultType, op.right, rightPrec))))));
+                        paramDoc,
+                        beside(HARD_LINE, beside(text("-> "), resultDoc))))));
 
       default:
         return text(type.moniker());
