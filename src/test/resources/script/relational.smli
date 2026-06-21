@@ -2056,8 +2056,8 @@ order deptno;
 >   [{deptno=10,existsId=true,existsStar=true,notExistsId=false,sumId=100},
 >    {deptno=20,existsId=true,existsStar=true,notExistsId=false,sumId=101},
 >    {deptno=30,existsId=true,existsStar=true,notExistsId=false,sumId=205}]
->   : {deptno:int, existsId:bool, existsStar:bool, notExistsId:bool,
->       sumId:int} list
+>   : {deptno:int, existsId:bool, existsStar:bool, notExistsId:bool, sumId:int}
+>     list
 
 (*) 'compute' with 'empty' and 'nonEmpty' as an aggregate functions
 from e in emps
@@ -2253,8 +2253,8 @@ order deptno;
 >           {d={deptno=30,name="Engineering"},
 >            e={deptno=30,id=103,name="Scooby"}}]}]
 >   : {deptno:int,
->       rows:{d:{deptno:int, name:string},
->              e:{deptno:int, id:int, name:string}} list} list
+>       rows:{d:{deptno:int, name:string}, e:{deptno:int, id:int, name:string}}
+>            list} list
 
 (*) Group followed by yield
 from e in emps

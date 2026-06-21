@@ -41,15 +41,13 @@ val nan = Real.posInf / Real.posInf;
 
 Math;
 > val it =
->   {acos=fn,asin=fn,atan=fn,atan2=fn,cos=fn,cosh=fn,e=2.7182817,exp=fn,
->    ln=fn,log10=fn,pi=3.1415927,pow=fn,sin=fn,sinh=fn,sqrt=fn,tan=fn,
->    tanh=fn}
+>   {acos=fn,asin=fn,atan=fn,atan2=fn,cos=fn,cosh=fn,e=2.7182817,exp=fn,ln=fn,
+>    log10=fn,pi=3.1415927,pow=fn,sin=fn,sinh=fn,sqrt=fn,tan=fn,tanh=fn}
 >   : {acos:real -> real, asin:real -> real, atan:real -> real,
->       atan2:real * real -> real, cos:real -> real, cosh:real -> real,
->       e:real, exp:real -> real, ln:real -> real, log10:real -> real,
->       pi:real, pow:real * real -> real, sin:real -> real,
->       sinh:real -> real, sqrt:real -> real, tan:real -> real,
->       tanh:real -> real}
+>       atan2:real * real -> real, cos:real -> real, cosh:real -> real, e:real,
+>       exp:real -> real, ln:real -> real, log10:real -> real, pi:real,
+>       pow:real * real -> real, sin:real -> real, sinh:real -> real,
+>       sqrt:real -> real, tan:real -> real, tanh:real -> real}
 
 (* "acos x" returns the arc cosine of x. acos is the inverse of cos.
    Its result is guaranteed to be in the closed interval [0, pi]. If
@@ -161,9 +159,9 @@ List.map (fn (x, y) => (x, y, Math.atan2 (x, y)))
 >    (~2.5,~0,~1.5707964),(3,inf,0),(~3,inf,~0),(4,~inf,3.1415927),
 >    (~4,~inf,~3.1415927),(inf,5,1.5707964),(~inf,5,~1.5707964),
 >    (inf,inf,0.7853982),(~inf,inf,~0.7853982),(inf,~inf,2.3561945),
->    (~inf,~inf,~2.3561945),(0,nan,nan),(1,nan,nan),(~1,nan,nan),
->    (inf,nan,nan),(~inf,nan,nan),(nan,0,nan),(nan,1,nan),(nan,~1,nan),
->    (nan,inf,nan),(nan,~inf,nan),(nan,nan,nan)] : (real * real * real) list
+>    (~inf,~inf,~2.3561945),(0,nan,nan),(1,nan,nan),(~1,nan,nan),(inf,nan,nan),
+>    (~inf,nan,nan),(nan,0,nan),(nan,1,nan),(nan,~1,nan),(nan,inf,nan),
+>    (nan,~inf,nan),(nan,nan,nan)] : (real * real * real) list
 
 (* "cos x" returns the cosine of x, measured in radians. If x is an infinity,
    returns NaN. *)

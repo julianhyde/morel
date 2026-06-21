@@ -537,8 +537,8 @@ val f : ('a -> (int * int) list) -> ('a -> (int * int) list) -> 'a -> (int * int
 fun r0 (a, b, c, d, e, f, g, h, i, j, k, l, m, n, `o`, p, q, r, s, t, u, v, w, x, y, z, aa, ab, ac) = {a=a,b=b,c=c};
 > val r0 = fn
 >   : 'a * 'b * 'c * 'd * 'e * 'f * 'g * 'h * 'i * 'j * 'k * 'l * 'm * 'n * 'o
->      * 'p * 'q * 'r * 's * 't * 'u * 'v * 'w * 'x * 'y * 'z * 'ba * 'bb
->      * 'bc -> {a:'a, b:'b, c:'c}
+>      * 'p * 'q * 'r * 's * 't * 'u * 'v * 'w * 'x * 'y * 'z * 'ba * 'bb * 'bc
+>     -> {a:'a, b:'b, c:'c}
 
 (*) Highly curried function with lots of type variables returns record type.
 fun r0 a b c d e f g h i j k l m n p q r s = {a=a,b=b,c=c};
@@ -726,15 +726,14 @@ fun quadratic_case () =
     (f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20)
   end;
 > val quadratic_case = fn
->   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list)
->              * ('d -> 'd option) * ('e -> 'e * 'e * 'e)
->              * ('f -> 'g -> 'f * 'g) * ('h -> {field:'h}) * ('i -> 'i)
->              * ('j -> 'j * 'j) * ('k -> 'k * 'k * 'k) * ('l -> 'l tree)
->              * ('m -> 'm tree) * ('n -> ('n,'o) either)
->              * ('p -> ('q,'p) either) * ('r -> 's -> 'r * ('s * 'r))
->              * ('t -> 'u -> 'u * 't * 't) * ('v -> 'w -> 'x -> 'v * 'w * 'x)
->              * ('y -> 'z -> 'y) * ('ba -> 'bb -> 'bb)
->              * ('bc -> ('bc -> 'bd) -> 'bd)
+>   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list) * ('d -> 'd option)
+>              * ('e -> 'e * 'e * 'e) * ('f -> 'g -> 'f * 'g)
+>              * ('h -> {field:'h}) * ('i -> 'i) * ('j -> 'j * 'j)
+>              * ('k -> 'k * 'k * 'k) * ('l -> 'l tree) * ('m -> 'm tree)
+>              * ('n -> ('n,'o) either) * ('p -> ('q,'p) either)
+>              * ('r -> 's -> 'r * ('s * 'r)) * ('t -> 'u -> 'u * 't * 't)
+>              * ('v -> 'w -> 'x -> 'v * 'w * 'x) * ('y -> 'z -> 'y)
+>              * ('ba -> 'bb -> 'bb) * ('bc -> ('bc -> 'bd) -> 'bd)
 >              * ('be -> ('bf -> 'bg) -> ('be -> 'bf) -> 'bg)
 
 (* Additional function to create nested applications. *)
@@ -755,10 +754,10 @@ fun nested_quadratic_case () =
     (g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10)
   end;
 > val nested_quadratic_case = fn
->   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list)
->              * ('d -> 'd option) * ('e -> 'e * 'e * 'e)
->              * ('f -> 'g -> 'f * 'g) * ('h -> {field:'h}) * ('i -> 'i)
->              * ('j -> 'j tree) * ('k -> 'k tree) * ('l -> ('l,'m) either)
+>   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list) * ('d -> 'd option)
+>              * ('e -> 'e * 'e * 'e) * ('f -> 'g -> 'f * 'g)
+>              * ('h -> {field:'h}) * ('i -> 'i) * ('j -> 'j tree)
+>              * ('k -> 'k tree) * ('l -> ('l,'m) either)
 
 (* Cross-chain dependencies for even more complexity. *)
 fun cross_chain () =
@@ -778,10 +777,10 @@ fun cross_chain () =
     (h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10)
   end;
 > val cross_chain = fn
->   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list)
->              * ('d -> 'd option) * ('e -> 'e * 'e * 'e)
->              * ('f -> 'g -> 'f * 'g) * ('h -> {field:'h}) * ('i -> 'i)
->              * ('j -> 'j * 'j) * ('k -> 'k * 'k * 'k) * ('l -> 'l tree)
+>   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list) * ('d -> 'd option)
+>              * ('e -> 'e * 'e * 'e) * ('f -> 'g -> 'f * 'g)
+>              * ('h -> {field:'h}) * ('i -> 'i) * ('j -> 'j * 'j)
+>              * ('k -> 'k * 'k * 'k) * ('l -> 'l tree)
 
 (* Test all the cases *)
 val all_cases = (quadratic_case(), nested_quadratic_case(), cross_chain());
@@ -790,23 +789,20 @@ val all_cases = (quadratic_case(), nested_quadratic_case(), cross_chain());
 >    (fn,fn,fn,fn,fn,fn,fn,fn,fn,fn,fn),(fn,fn,fn,fn,fn,fn,fn,fn,fn,fn,fn))
 >   : (('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list) * ('d -> 'd option)
 >       * ('e -> 'e * 'e * 'e) * ('f -> 'g -> 'f * 'g) * ('h -> {field:'h})
->       * ('i -> 'i) * ('j -> 'j * 'j) * ('k -> 'k * 'k * 'k)
->       * ('l -> 'l tree) * ('m -> 'm tree) * ('n -> ('n,'o) either)
->       * ('p -> ('q,'p) either) * ('r -> 's -> 'r * ('s * 'r))
->       * ('t -> 'u -> 'u * 't * 't) * ('v -> 'w -> 'x -> 'v * 'w * 'x)
->       * ('y -> 'z -> 'y) * ('ba -> 'bb -> 'bb)
->       * ('bc -> ('bc -> 'bd) -> 'bd)
+>       * ('i -> 'i) * ('j -> 'j * 'j) * ('k -> 'k * 'k * 'k) * ('l -> 'l tree)
+>       * ('m -> 'm tree) * ('n -> ('n,'o) either) * ('p -> ('q,'p) either)
+>       * ('r -> 's -> 'r * ('s * 'r)) * ('t -> 'u -> 'u * 't * 't)
+>       * ('v -> 'w -> 'x -> 'v * 'w * 'x) * ('y -> 'z -> 'y)
+>       * ('ba -> 'bb -> 'bb) * ('bc -> ('bc -> 'bd) -> 'bd)
 >       * ('be -> ('bf -> 'bg) -> ('be -> 'bf) -> 'bg))
 >      * (('bh -> 'bh) * ('bi -> 'bi * 'bi) * ('bj -> 'bj list)
 >          * ('bk -> 'bk option) * ('bl -> 'bl * 'bl * 'bl)
 >          * ('bm -> 'bn -> 'bm * 'bn) * ('bo -> {field:'bo}) * ('bp -> 'bp)
->          * ('bq -> 'bq tree) * ('br -> 'br tree)
->          * ('bs -> ('bs,'bt) either))
+>          * ('bq -> 'bq tree) * ('br -> 'br tree) * ('bs -> ('bs,'bt) either))
 >      * (('bu -> 'bu) * ('bv -> 'bv * 'bv) * ('bw -> 'bw list)
 >          * ('bx -> 'bx option) * ('by -> 'by * 'by * 'by)
 >          * ('bz -> 'ca -> 'bz * 'ca) * ('cb -> {field:'cb}) * ('cc -> 'cc)
->          * ('cd -> 'cd * 'cd) * ('ce -> 'ce * 'ce * 'ce)
->          * ('cf -> 'cf tree))
+>          * ('cd -> 'cd * 'cd) * ('ce -> 'ce * 'ce * 'ce) * ('cf -> 'cf tree))
 
 (* Function that creates a quadratic unification case. *)
 fun quadratic_case2 () =
@@ -858,15 +854,14 @@ fun quadratic_case2 () =
      f38, f39)
   end;
 > val quadratic_case2 = fn
->   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list)
->              * ('d -> 'd option) * ('e -> 'e * 'e * 'e)
->              * ('f -> 'g -> 'f * 'g) * ('h -> {field:'h}) * ('i -> 'i)
->              * ('j -> 'j * 'j) * ('k -> 'k * 'k * 'k) * ('l -> 'l tree)
->              * ('m -> 'm tree) * ('n -> ('n,'o) either)
->              * ('p -> ('q,'p) either) * ('r -> 's -> 'r * ('s * 'r))
->              * ('t -> 'u -> 'u * 't * 't) * ('v -> 'w -> 'x -> 'v * 'w * 'x)
->              * ('y -> 'z -> 'y) * ('ba -> 'bb -> 'bb)
->              * ('bc -> ('bc -> 'bd) -> 'bd)
+>   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list) * ('d -> 'd option)
+>              * ('e -> 'e * 'e * 'e) * ('f -> 'g -> 'f * 'g)
+>              * ('h -> {field:'h}) * ('i -> 'i) * ('j -> 'j * 'j)
+>              * ('k -> 'k * 'k * 'k) * ('l -> 'l tree) * ('m -> 'm tree)
+>              * ('n -> ('n,'o) either) * ('p -> ('q,'p) either)
+>              * ('r -> 's -> 'r * ('s * 'r)) * ('t -> 'u -> 'u * 't * 't)
+>              * ('v -> 'w -> 'x -> 'v * 'w * 'x) * ('y -> 'z -> 'y)
+>              * ('ba -> 'bb -> 'bb) * ('bc -> ('bc -> 'bd) -> 'bd)
 >              * ('be -> ('bf -> 'bg) -> ('be -> 'bf) -> 'bg)
 >              * ('bh -> ('bi -> 'bj) -> ('bh -> 'bi) -> 'bj)
 >              * ('bk -> ('bl -> 'bm) -> ('bk -> 'bl) -> 'bm)
@@ -946,15 +941,14 @@ fun quadratic_case3 () =
      f38, f39, f40, f41, f42, f43, f44, f45, f46, f47)
   end;
 > val quadratic_case3 = fn
->   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list)
->              * ('d -> 'd option) * ('e -> 'e * 'e * 'e)
->              * ('f -> 'g -> 'f * 'g) * ('h -> {field:'h}) * ('i -> 'i)
->              * ('j -> 'j * 'j) * ('k -> 'k * 'k * 'k) * ('l -> 'l tree)
->              * ('m -> 'm tree) * ('n -> ('n,'o) either)
->              * ('p -> ('q,'p) either) * ('r -> 's -> 'r * ('s * 'r))
->              * ('t -> 'u -> 'u * 't * 't) * ('v -> 'w -> 'x -> 'v * 'w * 'x)
->              * ('y -> 'z -> 'y) * ('ba -> 'bb -> 'bb)
->              * ('bc -> ('bc -> 'bd) -> 'bd)
+>   : unit -> ('a -> 'a) * ('b -> 'b * 'b) * ('c -> 'c list) * ('d -> 'd option)
+>              * ('e -> 'e * 'e * 'e) * ('f -> 'g -> 'f * 'g)
+>              * ('h -> {field:'h}) * ('i -> 'i) * ('j -> 'j * 'j)
+>              * ('k -> 'k * 'k * 'k) * ('l -> 'l tree) * ('m -> 'm tree)
+>              * ('n -> ('n,'o) either) * ('p -> ('q,'p) either)
+>              * ('r -> 's -> 'r * ('s * 'r)) * ('t -> 'u -> 'u * 't * 't)
+>              * ('v -> 'w -> 'x -> 'v * 'w * 'x) * ('y -> 'z -> 'y)
+>              * ('ba -> 'bb -> 'bb) * ('bc -> ('bc -> 'bd) -> 'bd)
 >              * ('be -> ('bf -> 'bg) -> ('be -> 'bf) -> 'bg)
 >              * ('bh -> 'bh * 'bh) * ('bi -> 'bi list) * ('bj -> 'bj option)
 >              * ('bk -> 'bk * 'bk * 'bk) * ('bl -> 'bm -> 'bl * 'bm)

@@ -35,9 +35,8 @@ Real;
 >    fromManExp=fn,fromString=fn,isFinite=fn,isNan=fn,isNormal=fn,max=fn,
 >    maxFinite=3.4028235E38,min=fn,minNormalPos=1.1754944E~38,minPos=1.4E~45,
 >    negInf=~inf,posInf=inf,precision=24,radix=2,realCeil=fn,realFloor=fn,
->    realMod=fn,realRound=fn,realTrunc=fn,rem=fn,round=fn,sameSign=fn,
->    sign=fn,signBit=fn,split=fn,toManExp=fn,toString=fn,trunc=fn,
->    unordered=fn,~=fn}
+>    realMod=fn,realRound=fn,realTrunc=fn,rem=fn,round=fn,sameSign=fn,sign=fn,
+>    signBit=fn,split=fn,toManExp=fn,toString=fn,trunc=fn,unordered=fn,~=fn}
 >   : {*:real * real -> real, +:real * real -> real, -:real * real -> real,
 >       /:real * real -> real, <:real * real -> bool, <=:real * real -> bool,
 >       <>:real * real -> bool, =:real * real -> bool, >:real * real -> bool,
@@ -665,8 +664,8 @@ List.map (fn x => (x, Real.toManExp x, Real.fromManExp (Real.toManExp x)))
    Real.posInf, Real.negInf, nan];
 > val it =
 >   [(1,{exp=1,man=0.5},1),(0,{exp=~126,man=0},0),(~0,{exp=~126,man=~0},~0),
->    (~1,{exp=1,man=~0.5},~1),(0.5,{exp=0,man=0.5},0.5),
->    (2,{exp=2,man=0.5},2),(1.23456E~5,{exp=~16,man=0.80908126},1.23456E~5),
+>    (~1,{exp=1,man=~0.5},~1),(0.5,{exp=0,man=0.5},0.5),(2,{exp=2,man=0.5},2),
+>    (1.23456E~5,{exp=~16,man=0.80908126},1.23456E~5),
 >    (1.23456E~6,{exp=~19,man=0.647265},1.23456E~6),
 >    (1.23456E~7,{exp=~22,man=0.517812},1.23456E~7),
 >    (~1.23456E~6,{exp=~19,man=~0.647265},~1.23456E~6),
@@ -702,11 +701,10 @@ List.map (fn x => (x, Real.fromManExp (Real.toManExp x)))
    Real.posInf, Real.negInf, nan];
 > val it =
 >   [(1,1),(0,0),(~0,~0),(~1,~1),(0.5,0.5),(2,2),(1.23456E~5,1.23456E~5),
->    (1.23456E~6,1.23456E~6),(1.23456E~7,1.23456E~7),
->    (~1.23456E~6,~1.23456E~6),(1.4E~45,1.4E~45),
->    (1.1754944E~38,1.1754944E~38),(3.4028235E38,3.4028235E38),
->    (~3.4028235E38,~3.4028235E38),(inf,inf),(~inf,~inf),(nan,nan)]
->   : (real * real) list
+>    (1.23456E~6,1.23456E~6),(1.23456E~7,1.23456E~7),(~1.23456E~6,~1.23456E~6),
+>    (1.4E~45,1.4E~45),(1.1754944E~38,1.1754944E~38),
+>    (3.4028235E38,3.4028235E38),(~3.4028235E38,~3.4028235E38),(inf,inf),
+>    (~inf,~inf),(nan,nan)] : (real * real) list
 
 (* "split r" returns {whole, frac}, where frac and whole are the fractional and
    integral parts of r, respectively. Specifically, whole is integral,
@@ -1259,10 +1257,10 @@ List.map (fn x => (x, Real.toString x))
 > val it =
 >   [(1,"1"),(0,"0"),(~0,"~0"),(~1,"~1"),(0.5,"0.5"),(2,"2"),
 >    (1.23456E~5,"1.23456E~5"),(1.23456E~6,"1.23456E~6"),
->    (1.23456E~7,"1.23456E~7"),(~1.23456E~6,"~1.23456E~6"),
->    (1.4E~45,"1.4E~45"),(1.1754944E~38,"1.1754944E~38"),
->    (3.4028235E38,"3.4028235E38"),(~3.4028235E38,"~3.4028235E38"),
->    (inf,"inf"),(~inf,"~inf"),(nan,"nan")] : (real * string) list
+>    (1.23456E~7,"1.23456E~7"),(~1.23456E~6,"~1.23456E~6"),(1.4E~45,"1.4E~45"),
+>    (1.1754944E~38,"1.1754944E~38"),(3.4028235E38,"3.4028235E38"),
+>    (~3.4028235E38,"~3.4028235E38"),(inf,"inf"),(~inf,"~inf"),(nan,"nan")]
+>   : (real * string) list
 
 (* "scan getc strm", "fromString s" scan a real value from character source. The
    first version reads from ARG/strm/ using reader getc, ignoring initial

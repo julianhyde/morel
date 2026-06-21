@@ -28,9 +28,8 @@ Sys.set ("stringDepth", ~1);
 
 General;
 > val it = {before=fn,exnMessage=fn,exnName=fn,ignore=fn,`o`=fn}
->   : {before:'a * unit -> 'a, exnMessage:exn -> string,
->       exnName:exn -> string, ignore:'b -> unit,
->       `o`:('c -> 'd) * ('e -> 'c) -> 'e -> 'd}
+>   : {before:'a * unit -> 'a, exnMessage:exn -> string, exnName:exn -> string,
+>       ignore:'b -> unit, `o`:('c -> 'd) * ('e -> 'c) -> 'e -> 'd}
 
 (*) val exnMessage : exn -> string
 General.exnMessage;

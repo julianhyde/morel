@@ -285,8 +285,7 @@ descendant(P,D) :- ancestor(D,P).
 >   {ancestor=[{a="Alice",d="Bob"},{a="Bob",d="Carol"},{a="Carol",d="Dan"},
 >              {a="Alice",d="Carol"},{a="Bob",d="Dan"},{a="Alice",d="Dan"}],
 >    descendant=[{d="Alice",p="Bob"},{d="Bob",p="Carol"},{d="Carol",p="Dan"},
->                {d="Alice",p="Carol"},{d="Bob",p="Dan"},
->                {d="Alice",p="Dan"}]}
+>                {d="Alice",p="Carol"},{d="Bob",p="Dan"},{d="Alice",p="Dan"}]}
 >   : {ancestor:{a:string, d:string} list,
 >       descendant:{d:string, p:string} list} variant
 

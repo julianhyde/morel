@@ -40,10 +40,10 @@ Date;
 >              second:int, year:int} -> date, day:date -> int,
 >       fmt:string -> date -> string, fromString:string -> date option,
 >       fromTimeLocal:time -> date, fromTimeUniv:time -> date,
->       hour:date -> int, isDst:date -> bool option,
->       localOffset:unit -> time, minute:date -> int, month:date -> month,
->       second:date -> int, toString:date -> string, toTime:date -> time,
->       weekDay:date -> weekday, year:date -> int, yearDay:date -> int}
+>       hour:date -> int, isDst:date -> bool option, localOffset:unit -> time,
+>       minute:date -> int, month:date -> month, second:date -> int,
+>       toString:date -> string, toTime:date -> time, weekDay:date -> weekday,
+>       year:date -> int, yearDay:date -> int}
 
 Date.fromString "Wed Mar 08 19:06:45 1995";
 > val it = SOME 1995-03-08T19:06:45Z : date option
