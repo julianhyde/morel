@@ -978,7 +978,7 @@ Real.fromString "nan";
 (* Side-by-side comparison of how each format handles a range of values.
  * To run in SML, prepend `open StringCvt;` (Morel exposes the constructors
  * at the top level). `Sys.set` is Morel-only; SML users will see the
- * record list in classic notation. *)
+ * record list in non-tabular notation. *)
 Sys.set ("output", "tabular");
 > val it = () : unit
 List.map (fn (Name, X) =>

@@ -181,7 +181,7 @@ public enum Prop {
       Output.class,
       true,
       Output.DOC,
-      "How values should be formatted. \"doc\" (the default) lays values out with a Doc-based pretty-printer that follows SML/NJ's line breaking; \"classic\" prints values in a compact nested format; \"tabular\" prints values in a table if their type is a list of records."),
+      "How values should be formatted. \"doc\" (the default) lays values out with a Doc-based pretty-printer that follows SML/NJ's line breaking; \"tabular\" prints values in a table if their type is a list of records."),
 
   /**
    * Integer property "printDepth" controls printing. The depth of nesting of
@@ -521,9 +521,7 @@ public enum Prop {
 
   /** Allowed values for {@link #OUTPUT} property. */
   public enum Output {
-    /** Classic output type, a compact nested format. */
-    CLASSIC,
-    /** Tabular output if the value is a list of records, otherwise classic. */
+    /** Tabular output if the value is a list of records, otherwise doc. */
     TABULAR,
     /**
      * Lays values out with a Doc-based pretty-printer that follows SML/NJ's

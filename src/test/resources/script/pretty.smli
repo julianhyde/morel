@@ -68,15 +68,15 @@ from e in scott.depts order DESC e.deptno;
 Sys.set ("output", "tabular");
 > val it = () : unit
 
-(* List of primitives uses classic style. *)
+(* A list of primitives is not a table, so it prints normally. *)
 [1,2,3];
 > val it = [1,2,3] : int list
 
-(* List of lists uses classic style. *)
+(* A list of lists is not a table, so it prints normally. *)
 [[1,2],[3,4]];
 > val it = [[1,2],[3,4]] : int list list
 
-(* Record uses classic style. *)
+(* A record is not a table, so it prints normally. *)
 {id=1, name="julian", employed=false};
 > val it = {employed=false,id=1,name="julian"}
 >   : {employed:bool, id:int, name:string}
@@ -150,14 +150,14 @@ Sys.set ("output", "tabular");
 
 (* A record-'option' field whose record is entirely options cannot be
  * tabulated -- 'NONE' would be indistinguishable from a 'SOME' whose every
- * field is 'NONE' -- so it falls back to classic style. *)
+ * field is 'NONE' -- so it prints normally (not as a table). *)
 [{id=1, addr=SOME {zip=SOME 94705}}, {id=2, addr=NONE}];
 > val it = [{addr=SOME {zip=SOME 94705},id=1},{addr=NONE,id=2}]
 >   : {addr:{zip:int option} option, id:int} list
 
 (* A doubly-'option' field (e.g. from a right join of a right join) is not
- * tabulated either: a blank cell cannot tell 'NONE' from 'SOME NONE'. Classic
- * style keeps all three states distinct. *)
+ * tabulated either: a blank cell cannot tell 'NONE' from 'SOME NONE'.
+ * Normal (non-tabular) style keeps all three states distinct. *)
 [{id=1, p=SOME (SOME 7)}, {id=2, p=SOME NONE}, {id=3, p=NONE}];
 > val it = [{id=1,p=SOME (SOME 7)},{id=2,p=SOME NONE},{id=3,p=NONE}]
 >   : {id:int, p:int option option} list
@@ -304,8 +304,8 @@ Sys.set ("stringDepth", 4);
 Sys.unset "stringDepth";
 > val it = () : unit
 
-(* printDepth=0 means classic would print the list's elements as `#`,
- * so tabular declines and lets classic render the `#`. *)
+(* printDepth=0 means the elements would print as `#`, so tabular
+ * declines and lets the Doc printer render the `#`. *)
 Sys.set ("printDepth", 0);
 > val it = # : unit
 
@@ -452,7 +452,7 @@ Sys.set ("stringFold", ~3);
 Sys.unset "stringFold";
 > val it = () : unit
 
-(* Word values render in hexadecimal in tabular mode, as in classic mode. *)
+(* Word values render in hexadecimal in tabular mode, as elsewhere. *)
 Sys.set ("output", "tabular");
 > val it = () : unit
 from i in [0w1, 0wxff, 0wxffffffffffffffff]
@@ -626,56 +626,56 @@ x;
 Sys.set ("lineWidth", 70);
 > val it = () : unit
 val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[8],i={j=[9]}}]}]};
-> val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[#],i={j=#}}]}]}
+> val x = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=#,h=#,i=#}]}]}
 >   : {a:int, b:int list,
 >       c:{d:int, e:int list,
 >           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", 6);
 > val it = () : unit
 x;
-> val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[8],i={j=[#]}}]}]}
+> val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[#],i={j=#}}]}]}
 >   : {a:int, b:int list,
 >       c:{d:int, e:int list,
 >           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", 5);
 > val it = () : unit
 x;
-> val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=7,h=[#],i={j=#}}]}]}
+> val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=#,h=#,i=#}]}]}
 >   : {a:int, b:int list,
 >       c:{d:int, e:int list,
 >           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", 4);
 > val it = () : unit
 x;
-> val it = {a=1,b=[2,3],c=[{d=4,e=[5,6],f=[{g=#,h=#,i=#}]}]}
+> val it = {a=1,b=[2,3],c=[{d=4,e=[#,#],f=[#]}]}
 >   : {a:int, b:int list,
 >       c:{d:int, e:int list,
 >           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", 3);
 > val it = () : unit
 x;
-> val it = {a=1,b=[2,3],c=[{d=4,e=[#,#],f=[#]}]}
+> val it = {a=1,b=[2,3],c=[{d=#,e=#,f=#}]}
 >   : {a:int, b:int list,
 >       c:{d:int, e:int list,
 >           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", 2);
 > val it = () : unit
 x;
-> val it = {a=1,b=[2,3],c=[{d=#,e=#,f=#}]}
+> val it = {a=1,b=[#,#],c=[#]}
 >   : {a:int, b:int list,
 >       c:{d:int, e:int list,
 >           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", 1);
 > val it = () : unit
 x;
-> val it = {a=1,b=[#,#],c=[#]}
+> val it = {a=#,b=#,c=#}
 >   : {a:int, b:int list,
 >       c:{d:int, e:int list,
 >           f:{g:int, h:int list, i:{j:int list}} list} list}
 Sys.set ("printDepth", 0);
-> val it = () : unit
+> val it = # : unit
 x;
-> val it = {a=#,b=#,c=#}
+> val it = #
 >   : {a:int, b:int list,
 >       c:{d:int, e:int list,
 >           f:{g:int, h:int list, i:{j:int list}} list} list}
@@ -693,11 +693,11 @@ Sys.unset "printDepth";
 (* -------------------------------------------------------------------
  * Doc-based output mode.
  *
- * Output mode "doc" lays values out with the Doc-based pretty-printer.
- * Unlike the classic printer, it packs as many elements per line as fit
- * (a "fill"), treats each element as a unit so a list of records wraps
- * between records, and moves a value or its type to its own indented
- * line when it does not fit flat. These value layouts match SML/NJ; the
+ * The default printer lays values out with a Doc engine: it packs as
+ * many elements per line as fit (a "fill"), treats each element as a
+ * unit so a list of records wraps between records, and moves a value or
+ * its type to its own indented line when it does not fit flat. These
+ * value layouts match SML/NJ; the
  * "Divergences" section below shows where the Doc-based printer and
  * SML/NJ's Oppen-based printer still differ.
  *)

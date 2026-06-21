@@ -467,7 +467,7 @@ val it = {a=1,b={a=2,b={a=3,b={a=4,b={a=#,b=#}}}}}
      b:{a:int, b:{a:int, b:{a:int, b:{a:int, b:{a:int, b:{a:int, b:unit}}}}}}}
 *)
 {a=1,b={a=2,b={a=3,b={a=4,b={a=5,b={a=6,b={a=7,b={}}}}}}}};
-> val it = {a=1,b={a=2,b={a=3,b={a=4,b={a=5,b={a=#,b=#}}}}}}
+> val it = {a=1,b={a=2,b={a=3,b={a=4,b={a=#,b=#}}}}}
 >   : {a:int,
 >       b:{a:int,
 >           b:{a:int, b:{a:int, b:{a:int, b:{a:int, b:{a:int, b:unit}}}}}}}

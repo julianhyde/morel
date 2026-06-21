@@ -70,16 +70,16 @@ List.last (Sys.env());
 (* -------------------------------------------------------------------
  * Setting properties whose values are enums
  *)
-Sys.set ("output", "classic");
+Sys.set ("output", "doc");
 > val it = () : unit
-Sys.set ("output", "CLASSIC");
+Sys.set ("output", "DOC");
 > val it = () : unit
-Sys.set ("output", "ClasSic");
+Sys.set ("output", "DoC");
 > val it = () : unit
-Sys.set ("output", "classic ");
-> java.lang.RuntimeException: value must be one of: 'CLASSIC', 'TABULAR', 'DOC'
+Sys.set ("output", "doc ");
+> java.lang.RuntimeException: value must be one of: 'TABULAR', 'DOC'
 Sys.set ("output", "bad");
-> java.lang.RuntimeException: value must be one of: 'CLASSIC', 'TABULAR', 'DOC'
+> java.lang.RuntimeException: value must be one of: 'TABULAR', 'DOC'
 
 (*) After you unset a property with a default value, it reverts to the default.
 Sys.unset "output";
@@ -102,15 +102,15 @@ Sys.show "optionalInt";
 > val it = NONE : string option
 
 (*) Setting the "output" property is case-insensitive
-Sys.set ("output", "classic");
+Sys.set ("output", "doc");
 > val it = () : unit
-Sys.set ("output", "CLASSIC");
+Sys.set ("output", "DOC");
 > val it = () : unit
-Sys.set ("output", "ClasSic");
+Sys.set ("output", "DoC");
 > val it = () : unit
 Sys.set ("output", "tabular");
 > val it = () : unit
-Sys.set ("output", "classic");
+Sys.set ("output", "doc");
 > val it = () : unit
 
 (* -------------------------------------------------------------------

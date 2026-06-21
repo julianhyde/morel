@@ -2291,9 +2291,9 @@ fun analyzeResults (emps: {deptno: int, sal: real} bag) =
       classification = if avgSal > 2000.0 then "High" else "Low"}
   end;
 > val analyzeResults = fn
->   : {deptno:int, sal:real} bag
->     -> {averageSalary:real, classification:string,
->         employeeCount:int}
+>   : {deptno:int, sal:real} bag -> {averageSalary:real,
+>                                     classification:string,
+>                                     employeeCount:int}
 
 (* Use the custom function to analyze employees in department 10. *)
 from e in scott.emps
@@ -2301,8 +2301,10 @@ from e in scott.emps
   yield {e.deptno, e.sal}
   into analyzeResults;
 > val it =
->   {averageSalary=2916.6667,classification="High",employeeCount=3}
->   : {averageSalary:real, classification:string, employeeCount:int}
+>   {averageSalary=2916.6667,classification="High",
+>    employeeCount=3}
+>   : {averageSalary:real, classification:string,
+>       employeeCount:int}
 
 (* Check whether all employees earn more than $2000. *)
 forall e in scott.emps
