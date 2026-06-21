@@ -784,9 +784,69 @@ class Pretty {
                 elements.add(valueDoc(elementType, o, depth + 1)));
         return seqDoc("(", ")", elements);
 
+      case FORALL_TYPE:
+        return valueDoc(((ForallType) type).type, value, depth + 1);
+
+      case DATA_TYPE:
+        return dataTypeDoc((DataType) type, value, depth);
+
       default:
         return text(flatClassic(value, type));
     }
+  }
+
+  /**
+   * Builds a Doc for a value of a data type: a "bag" or "vector" lays out like
+   * a list, an opaque value prints directly, and a constructor application
+   * prints its name followed by its (possibly parenthesized) argument.
+   */
+  private Doc dataTypeDoc(DataType dataType, Object value, int depth) {
+    if (!(value instanceof List)) {
+      // A "doc" (pretty-printer document) is abstract; print it as "-", as
+      // Standard ML prints a value of an abstract type. Other opaque values
+      // (e.g. "time" backed by Long) print directly.
+      return text(dataType.name.equals("doc") ? "-" : String.valueOf(value));
+    }
+    final List<Object> list = toList(value);
+    if (dataType.name.equals("vector")) {
+      return beside(
+          text("#"),
+          seqDoc("[", "]", elementDocs(dataType.arg(0), list, depth)));
+    }
+    if (dataType.isCollection()) {
+      // A bag prints like a list, distinguishable only by its type.
+      if (list instanceof RelList) {
+        return text(RelList.RELATION);
+      }
+      final Type elementType = dataType.elementType();
+      final List<Object> ordered = bagPrinter.order(list, elementType);
+      return seqDoc("[", "]", elementDocs(elementType, ordered, depth));
+    }
+    final String tyConName = (String) list.get(0);
+    if (list.size() < 2) {
+      return text(tyConName); // nullary constructor, e.g. "LESS"
+    }
+    Object arg = list.get(1);
+    if (arg instanceof Variant) {
+      arg = ((Variant) arg).value;
+    }
+    if (dataType.name.equals("continuous_set")
+        || dataType.name.equals("discrete_set")) {
+      arg = Codes.setToRangeList(arg);
+    }
+    final Type argType = dataType.typeConstructors(typeSystem).get(tyConName);
+    // Parens disambiguate when the arg is itself a multi-token constructor
+    // (e.g. "SOME (INL x)"). The arg is at the same conceptual level as the
+    // constructor, so its depth is not incremented.
+    final boolean needParentheses =
+        argType.op() == Op.DATA_TYPE
+            && arg instanceof List
+            && ((List<?>) arg).size() > 1;
+    Doc argDoc = valueDoc(argType, arg, depth);
+    if (needParentheses) {
+      argDoc = beside(text("("), beside(argDoc, text(")")));
+    }
+    return beside(text(tyConName), beside(text(" "), argDoc));
   }
 
   /** Builds Docs for list elements, applying the {@code printLength} limit. */
