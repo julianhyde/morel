@@ -333,7 +333,10 @@ public class Lindig {
    * align {@code |} in match arms or {@code ,} in tuples.
    */
   public static Doc align(Doc doc) {
-    return new Column(k -> new Nesting(i -> nest(k - i, doc)));
+    // The relative nesting "k - i" is negative when the current column k is
+    // left of the current indent i, so it must bypass the nonnegative check
+    // that the public "nest" applies to caller-supplied indents.
+    return new Column(k -> new Nesting(i -> nestUnchecked(k - i, doc)));
   }
 
   /**
