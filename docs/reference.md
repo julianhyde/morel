@@ -573,7 +573,7 @@ and unset using `Sys.unset name`.
 | matchStrict          | bool   | false   | Whether the script-test harness compares output verbatim, rather than modulo whitespace and bag-element order. |
 | now                  | string | null    | Overrides the current time. Value is an ISO-8601 string (e.g. '2024-01-01T00:00:00Z'). If not set, the system clock is used. |
 | optionalInt          | int    | null    | For testing. |
-| output               | enum   | doc     | How values should be formatted. "doc" (the default) lays values out with a Doc-based pretty-printer that follows SML/NJ's line breaking; "tabular" prints values in a table if their type is a list of records. |
+| output               | enum   | classic | How values should be formatted. "classic" (the default) prints values in a compact nested format; "tabular" prints values in a table if their type is a list of records. |
 | printDepth           | int    | 5       | When printing, the depth of nesting of recursive data structure at which ellipsis begins. |
 | printLength          | int    | 12      | When printing, the length of lists at which ellipsis begins. |
 | productName          | string | morel-java | Name of the Morel product. |

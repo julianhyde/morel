@@ -61,7 +61,7 @@ from e in (from x in scott.emps where x.job = "MANAGER")
 >
 > val it : {dname:string, manager:string option} bag
 
-Sys.set ("output", "doc");
+Sys.set ("output", "classic");
 > val it = () : unit
 
 (*) End scott-queries.smli

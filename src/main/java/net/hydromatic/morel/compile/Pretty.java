@@ -91,13 +91,13 @@ class Pretty {
     // In tabular mode, a value whose type is a list of records prints as a
     // table. The tabular printer may still decline at runtime (e.g. when
     // "printDepth" is too low to show the rows); then, and for every other
-    // value, we use the Doc-based pretty-printer.
+    // value, we use the classic printer.
     if (output == Prop.Output.TABULAR
         && TabularPrinter.canPrint(typedVal.type)
         && prettyTabular(buf, typedVal)) {
       return buf;
     }
-    return prettyDoc(buf, typedVal);
+    return prettyClassic(buf, typedVal);
   }
 
   private StringBuilder prettyPrimitive(
@@ -169,19 +169,16 @@ class Pretty {
     }
   }
 
-  // -- Doc-based pretty-printer ---------------------------------------------
+  // -- Classic (default) output ---------------------------------------------
   //
   // Builds a "util.Lindig.Doc" for the value and lets that engine choose line
   // breaks. Leaf values (primitives, "fn") are rendered directly by
   // "flatLeaf"; the list/record/tuple/data-type structure becomes a Doc.
-  // Rendering at "lineWidth - 1" matches SML/NJ's right margin
-  // (its Oppen printer allows one more column than ours before breaking). A
-  // fuzzer (see offset_sweep.py) confirms "lineWidth - 1" is optimal: it
-  // reproduces SML/NJ's layout for ~100% of values at widths >= 50, and the
-  // agreement falls off for any larger or smaller offset.
+  // Rendering at "lineWidth - 1" matches SML/NJ's right margin: its Oppen
+  // printer allows one more column than ours before breaking.
 
-  /** Renders a binding using the Doc-based pretty-printer. */
-  private StringBuilder prettyDoc(StringBuilder buf, TypedVal typedVal) {
+  /** Renders a binding in classic (the default, non-tabular) style. */
+  private StringBuilder prettyClassic(StringBuilder buf, TypedVal typedVal) {
     final StringBuilder prefix = new StringBuilder("val ");
     appendId(prefix, typedVal.name).append(" =");
     // The value is one level below the binding, so start at depth 1: at

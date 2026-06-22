@@ -305,7 +305,7 @@ Sys.unset "stringDepth";
 > val it = () : unit
 
 (* printDepth=0 means the elements would print as `#`, so tabular
- * declines and lets the Doc printer render the `#`. *)
+ * declines and lets the classic printer render the `#`. *)
 Sys.set ("printDepth", 0);
 > val it = # : unit
 
@@ -691,17 +691,16 @@ Sys.unset "printDepth";
 > val it = () : unit
 
 (* -------------------------------------------------------------------
- * Doc-based output mode.
+ * Value layout (the classic, default printer).
  *
- * The default printer lays values out with a Doc engine: it packs as
- * many elements per line as fit (a "fill"), treats each element as a
- * unit so a list of records wraps between records, and moves a value or
- * its type to its own indented line when it does not fit flat. These
- * value layouts match SML/NJ; the
- * "Divergences" section below shows where the Doc-based printer and
+ * The classic printer packs as many elements per line as fit (a
+ * "fill"), treats each element as a unit so a list of records wraps
+ * between records, and moves a value or its type to its own indented
+ * line when it does not fit flat. These value layouts match SML/NJ; the
+ * "Divergences" section below shows where the classic printer and
  * SML/NJ's Oppen-based printer still differ.
  *)
-Sys.set ("output", "doc");
+Sys.set ("output", "classic");
 > val it = () : unit
 
 (*) Values that fit stay on one line.
@@ -753,7 +752,7 @@ Sys.set ("lineWidth", 22);
  * With the right margin calibrated (the printer renders at 'lineWidth -
  * 1', matching SML/NJ's Oppen margin), value layouts now match SML/NJ
  * almost exactly. One systematic difference remains, in the type; we
- * accept it rather than distort the Doc model to reproduce SML/NJ's
+ * accept it rather than distort our layout to reproduce SML/NJ's
  * Oppen indentation.
  *)
 
