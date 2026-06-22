@@ -30,6 +30,16 @@
  * `beside`, `nest`, `group`, and the list operators `sep`, `cat`, `fillSep`,
  * and `fillCat`. A `group` lays its contents out on a single line if they
  * fit, and otherwise breaks them.
+ *
+ * The combinators follow Philip Wadler's
+ * [_A prettier printer_](https://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf),
+ * extended with the alignment and fill operators of Daan Leijen's
+ * [`wl-pprint`](https://hackage.haskell.org/package/wl-pprint) library. The
+ * renderer follows Christian Lindig's
+ * [_Strictly Pretty_](https://lindig.github.io/papers/strictly-pretty-2000.pdf),
+ * an eager implementation that suits a strict language such as Standard ML:
+ * it decides each `group` in a single forward pass, rather than relying on
+ * the laziness of Wadler's original Haskell version.
  *)
 signature PP =
 sig
