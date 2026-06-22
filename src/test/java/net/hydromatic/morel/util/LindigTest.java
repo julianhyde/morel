@@ -45,6 +45,7 @@ import static net.hydromatic.morel.util.Lindig.vsep;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
@@ -177,6 +178,25 @@ class LindigTest {
             "        combinator",
             "        indents these",
             "        words"));
+  }
+
+  @Test
+  void testNegativeIndentRejected() {
+    final IllegalArgumentException nestEx =
+        assertThrows(IllegalArgumentException.class, () -> nest(-1, text("x")));
+    assertThat(
+        nestEx.getMessage(), containsString("indent must be nonnegative"));
+
+    final IllegalArgumentException hangEx =
+        assertThrows(IllegalArgumentException.class, () -> hang(-1, text("x")));
+    assertThat(
+        hangEx.getMessage(), containsString("indent must be nonnegative"));
+
+    final IllegalArgumentException indentEx =
+        assertThrows(
+            IllegalArgumentException.class, () -> indent(-1, text("x")));
+    assertThat(
+        indentEx.getMessage(), containsString("indent must be nonnegative"));
   }
 
   // -- hsep, vsep, sep ------------------------------------------------------

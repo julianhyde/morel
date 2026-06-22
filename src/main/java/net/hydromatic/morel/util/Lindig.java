@@ -18,12 +18,15 @@
  */
 package net.hydromatic.morel.util;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.function.BinaryOperator;
 import java.util.function.IntFunction;
+import org.apache.calcite.avatica.util.Spaces;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Pretty-printer that lays out a document within a line-width limit.
@@ -32,21 +35,20 @@ import java.util.function.IntFunction;
  * for a document; {@link #render(int, Doc)} chooses the best layout that fits a
  * given line width.
  *
- * <p>The design draws on a line of work on pretty-printing combinators: Oppen's
- * original algorithm ("Prettyprinting", 1980); Wadler's functional
- * reformulation ("A prettier printer"); and Leijen's {@code Column}, {@code
+ * <p>The design draws on a line of work on pretty-printing combinators: <a
+ * href="https://dl.acm.org/doi/pdf/10.1145/357114.357115">Oppen's
+ * "Prettyprinting"</a> (1980), <a
+ * href="https://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf">
+ * Wadler's "A prettier printer"</a> (2002), and Leijen's {@code Column}, {@code
  * Nesting}, and {@code FlatAlt} extensions (which enable {@link #align(Doc)}).
- * The class is named after Christian Lindig, whose "Strictly Pretty" (2000)
- * gives the strict, iterative rendering algorithm used here: {@link
- * #render(int, Doc)} makes a single pass over an explicit work list, running in
- * time linear in the size of the document and using constant Java stack however
- * deeply the document nests.
+ * The class is named after Christian Lindig, whose <a
+ * href="https://lindig.github.io/papers/strictly-pretty-2000.pdf">"Strictly
+ * Pretty"</a> (2000) gives the strict, iterative rendering algorithm used here:
+ * {@link #render(int, Doc)} makes a single pass over an explicit work list,
+ * running in time linear in the size of the document and using constant Java
+ * stack however deeply the document nests.
  *
  * <p>This class has no dependency on Morel's AST.
- *
- * @see <a
- *     href="https://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf">Wadler,
- *     "A prettier printer"</a>
  */
 public class Lindig {
   private Lindig() {}
@@ -290,10 +292,8 @@ public class Lindig {
 
   /** Increases indentation of {@code doc} by {@code indent} spaces. */
   public static Doc nest(int indent, Doc doc) {
-    if (indent == 0) {
-      return doc;
-    }
-    return new Nest(indent, doc);
+    checkArgument(indent >= 0, "indent must be nonnegative: %s", indent);
+    return nestUnchecked(indent, doc);
   }
 
   /**
@@ -343,7 +343,8 @@ public class Lindig {
    * <p>Equivalent to {@code align(nest(indent, doc))}.
    */
   public static Doc hang(int indent, Doc doc) {
-    return align(nest(indent, doc));
+    checkArgument(indent >= 0, "indent must be nonnegative: %s", indent);
+    return align(nestUnchecked(indent, doc));
   }
 
   /**
@@ -351,7 +352,8 @@ public class Lindig {
    * lines to the first.
    */
   public static Doc indent(int indent, Doc doc) {
-    return beside(text(spaces(indent)), hang(indent, doc));
+    checkArgument(indent >= 0, "indent must be nonnegative: %s", indent);
+    return beside(text(Spaces.of(indent)), align(nestUnchecked(indent, doc)));
   }
 
   // -- List combinators -----------------------------------------------------
@@ -571,7 +573,7 @@ public class Lindig {
         item = new Item(i + nest.indent, mode, nest.doc, next);
       } else if (d instanceof Line) {
         final Doc rest = ((Line) d).doc;
-        b.append('\n').append(spaces(i));
+        b.append('\n').append(Spaces.of(i));
         k = i;
         item = rest instanceof Empty ? next : new Item(i, mode, rest, next);
       } else if (d instanceof FlatAlt) {
@@ -618,6 +620,13 @@ public class Lindig {
         }
         return result;
     }
+  }
+
+  private static Doc nestUnchecked(int indent, Doc doc) {
+    if (indent == 0) {
+      return doc;
+    }
+    return new Nest(indent, doc);
   }
 
   private static Doc withSpace(Doc a, Doc b) {
@@ -730,23 +739,14 @@ public class Lindig {
     final int indent;
     final Mode mode;
     final Doc doc;
-    final Item next;
+    final @Nullable Item next;
 
-    Item(int indent, Mode mode, Doc doc, Item next) {
+    Item(int indent, Mode mode, Doc doc, @Nullable Item next) {
       this.indent = indent;
       this.mode = mode;
       this.doc = doc;
       this.next = next;
     }
-  }
-
-  /** Returns a string of {@code n} spaces. */
-  private static String spaces(int n) {
-    final StringBuilder b = new StringBuilder(n);
-    for (int i = 0; i < n; i++) {
-      b.append(' ');
-    }
-    return b.toString();
   }
 }
 
