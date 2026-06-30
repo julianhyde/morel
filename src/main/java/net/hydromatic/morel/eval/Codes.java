@@ -5832,6 +5832,15 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#Z_TABLE_ELEMENTS */
+  private static final Applicable Z_TABLE_ELEMENTS =
+      new BaseApplicable1<Object, TableValue>(BuiltIn.Z_TABLE_ELEMENTS) {
+        @Override
+        public Object apply(TableValue t) {
+          return t.elements;
+        }
+      };
+
   /** Implements the bag variant of {@link BuiltIn#TEST_OVER_COUNT}. */
   private static final Applicable Z_TEST_OVER_COUNT_BAG =
       new BaseApplicable1<Integer, List>(BuiltIn.Z_TEST_OVER_COUNT_BAG) {
@@ -6779,6 +6788,7 @@ public abstract class Codes {
     b.add(BuiltIn.Z_ORELSE, Unit.INSTANCE);
     b.add(BuiltIn.Z_SUM_INT, Z_SUM_INT);
     b.add(BuiltIn.Z_SUM_REAL, Z_SUM_REAL);
+    b.add(BuiltIn.Z_TABLE_ELEMENTS, Z_TABLE_ELEMENTS);
     b.add(BuiltIn.Z_TEST_OVER_COUNT_BAG, Z_TEST_OVER_COUNT_BAG);
     b.add(BuiltIn.Z_TEST_OVER_COUNT_LIST, Z_TEST_OVER_COUNT_LIST);
     b.add(BuiltIn.Z_TY_CON, Unit.INSTANCE);

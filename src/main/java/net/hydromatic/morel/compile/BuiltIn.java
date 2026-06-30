@@ -5151,6 +5151,20 @@ public enum BuiltIn {
   Z_SUM_REAL("$", "sum:real", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
 
   /**
+   * Internal function "$tableElements", which returns the underlying collection
+   * (list or bag) of a table. The result collection type is set by the resolver
+   * to match the table's orderedness tag.
+   */
+  Z_TABLE_ELEMENTS(
+      "$",
+      "$tableElements",
+      ts ->
+          ts.forallType(
+              4,
+              h ->
+                  ts.fnType(ts.table(h.get(0), h.get(1), h.get(2)), h.get(3)))),
+
+  /**
    * Internal implementation of the bag variant of "Test.testOverCount". Returns
    * the count of the bag.
    */
