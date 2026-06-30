@@ -42,20 +42,20 @@ type, `'a` is the argument supplied when the measure is evaluated (usually
 
 <pre>
 type ('p, 'e, 'a, 'r) <a id='measure' href="#measure-impl">measure</a>
-type ('p, 'e) <a id='context' href="#context-impl">context</a>
+type ('p, 'e) <a id='cx' href="#cx-impl">cx</a>
 type ('p, 'e) <a id='table' href="#table-impl">table</a>
 
-val <a id='measure' href="#measure-impl">measure</a> : (('p, 'e) context -> 'r) -> ('p, 'e, unit, 'r) measure
-val <a id='measure_fn' href="#measure_fn-impl">measure_fn</a> : ('a * ('p, 'e) context -> 'r) -> ('p, 'e, 'a, 'r) measure
-val <a id='evaluate' href="#evaluate-impl">evaluate</a> : ('p, 'e, 'a, 'r) measure * 'a * ('p, 'e) context -> 'r
+val <a id='measure' href="#measure-impl">measure</a> : (('p, 'e) cx -> 'r) -> ('p, 'e, unit, 'r) measure
+val <a id='measure_fn' href="#measure_fn-impl">measure_fn</a> : ('a * ('p, 'e) cx -> 'r) -> ('p, 'e, 'a, 'r) measure
+val <a id='evaluate' href="#evaluate-impl">evaluate</a> : ('p, 'e, 'a, 'r) measure * 'a * ('p, 'e) cx -> 'r
 val <a id='eval' href="#eval-impl">eval</a> : ('p, 'e, 'a, 'r) measure * 'a -> 'r
 val <a id='restrict' href="#restrict-impl">restrict</a> : ('p, 'e, 'a, 'r) measure * string * ('e -> bool) -> ('p, 'e, 'a, 'r) measure
 val <a id='restrict_anon' href="#restrict_anon-impl">restrict_anon</a> : ('p, 'e, 'a, 'r) measure * ('e -> bool) -> ('p, 'e, 'a, 'r) measure
 val <a id='relax' href="#relax-impl">relax</a> : ('p, 'e, 'a, 'r) measure * string -> ('p, 'e, 'a, 'r) measure
 val <a id='override' href="#override-impl">override</a> : ('p, 'e, 'a, 'r) measure * ('e -> 'b) * 'b -> ('p, 'e, 'a, 'r) measure
-val <a id='test' href="#test-impl">test</a> : ('p, 'e) context * 'e -> bool
-val <a id='paramOf' href="#paramOf-impl">paramOf</a> : ('p, 'e) context -> 'p
-val <a id='toString' href="#toString-impl">toString</a> : ('p, 'e) context -> string
+val <a id='test' href="#test-impl">test</a> : ('p, 'e) cx * 'e -> bool
+val <a id='paramOf' href="#paramOf-impl">paramOf</a> : ('p, 'e) cx -> 'p
+val <a id='toString' href="#toString-impl">toString</a> : ('p, 'e) cx -> string
 val <a id='table' href="#table-impl">table</a> : 'e bag * 'p -> ('p, 'e) table
 val <a id='elements' href="#elements-impl">elements</a> : ('p, 'e) table -> 'e bag
 val <a id='param' href="#param-impl">param</a> : ('p, 'e) table -> 'p
@@ -65,10 +65,10 @@ val <a id='param' href="#param-impl">param</a> : ('p, 'e) table -> 'p
 <h3><code><strong>type</strong> ('p, 'e, 'a, 'r) measure</code></h3>
 
 is the type of a measure: an expression of type `'r` evaluated in a
-     `('p, 'e) context` given an argument of type `'a`.
+     `('p, 'e) cx` given an argument of type `'a`.
 
-<a id="context-impl"></a>
-<h3><code><strong>type</strong> ('p, 'e) context</code></h3>
+<a id="cx-impl"></a>
+<h3><code><strong>type</strong> ('p, 'e) cx</code></h3>
 
 is the type of a context: the constraints, and the parameter, under
      which a measure is evaluated.
