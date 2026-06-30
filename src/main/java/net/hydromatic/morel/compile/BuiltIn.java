@@ -4195,14 +4195,20 @@ public enum BuiltIn {
   /** Function "Sys.unset", aka "unset", of type "string &rarr; unit". */
   SYS_UNSET("Sys", "unset", ts -> ts.fnType(STRING, UNIT)),
 
-  /** Function "Table.elements", of type "('p, 'e) table &rarr; 'e bag". */
+  /**
+   * Function "Table.elements", of type "('p, 'e, unordered) table &rarr; 'e
+   * bag".
+   */
   TABLE_ELEMENTS(
       "Table",
       "elements",
       true,
       ts ->
           ts.forallType(
-              2, h -> ts.fnType(ts.table(h.get(0), h.get(1)), h.bag(1)))),
+              2,
+              h ->
+                  ts.fnType(
+                      ts.table(h.get(0), h.get(1), ts.unordered()), h.bag(1)))),
 
   /**
    * Function "Table.eval", of type "('p, 'e, 'a, 'r) measure * 'a &rarr; 'r".
@@ -4274,6 +4280,21 @@ public enum BuiltIn {
                       ts.measure(h.get(0), h.get(1), h.get(2), h.get(3))))),
 
   /**
+   * Function "Table.orderedTable", of type "'e list * 'p &rarr; ('p, 'e,
+   * ordered) table".
+   */
+  TABLE_ORDERED_TABLE(
+      "Table",
+      "orderedTable",
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(h.list(1), h.get(0)),
+                      ts.table(h.get(0), h.get(1), ts.ordered())))),
+
+  /**
    * Function "Table.override", of type "('p, 'e, 'a, 'r) measure * ('e &rarr;
    * 'b) * 'b &rarr; ('p, 'e, 'a, 'r) measure".
    */
@@ -4292,14 +4313,16 @@ public enum BuiltIn {
                     m);
               })),
 
-  /** Function "Table.param", of type "('p, 'e) table &rarr; 'p". */
+  /** Function "Table.param", of type "('p, 'e, 'o) table &rarr; 'p". */
   TABLE_PARAM(
       "Table",
       "param",
       true,
       ts ->
           ts.forallType(
-              2, h -> ts.fnType(ts.table(h.get(0), h.get(1)), h.get(0)))),
+              3,
+              h ->
+                  ts.fnType(ts.table(h.get(0), h.get(1), h.get(2)), h.get(0)))),
 
   /** Function "Table.paramOf", of type "('p, 'e) context &rarr; 'p". */
   TABLE_PARAM_OF(
@@ -4362,7 +4385,10 @@ public enum BuiltIn {
                 return ts.fnType(ts.tupleType(m, ts.fnType(h.get(1), BOOL)), m);
               })),
 
-  /** Function "Table.table", of type "'e bag * 'p &rarr; ('p, 'e) table". */
+  /**
+   * Function "Table.table", of type "'e bag * 'p &rarr; ('p, 'e, unordered)
+   * table".
+   */
   TABLE_TABLE(
       "Table",
       "table",
@@ -4372,7 +4398,7 @@ public enum BuiltIn {
               h ->
                   ts.fnType(
                       ts.tupleType(h.bag(1), h.get(0)),
-                      ts.table(h.get(0), h.get(1))))),
+                      ts.table(h.get(0), h.get(1), ts.unordered())))),
 
   /** Function "Table.test", of type "('p, 'e) context * 'e &rarr; bool". */
   TABLE_TEST(
@@ -5753,7 +5779,7 @@ public enum BuiltIn {
                 .tyCon(Constructor.STRING_CVT_REALFMT_SCI)),
 
     /** The type of a table, {@code Table.table}. */
-    TABLE("Table", "table", false, 2, h -> h),
+    TABLE("Table", "table", false, 3, h -> h),
 
     /** The orderedness tag of an unordered (bag-backed) collection. */
     UNORDERED(

@@ -44,9 +44,10 @@ sig
       which a measure is evaluated. *)
   type ('p, 'e) cx
 
-  (** is the type of a table: a bag of elements of type `'e` together with a
-      parameter of type `'p`. *)
-  type ('p, 'e) table
+  (** is the type of a table: a collection of elements of type `'e` together
+      with a parameter of type `'p`. `'o` is the orderedness tag (`ordered`
+      for a list-backed table, `unordered` for a bag-backed one). *)
+  type ('p, 'e, 'o) table
 
   (** is a measure whose value is `f c` when evaluated in context `c`. *)
   val measure : (('p, 'e) cx -> 'r) -> ('p, 'e, unit, 'r) measure
@@ -100,16 +101,22 @@ sig
   val toString : ('p, 'e) cx -> string
       [@@prototype "toString c"] [@@method]
 
-  (** is a table with the given `elements` and `param`. *)
-  val table : 'e bag * 'p -> ('p, 'e) table
+  (** is an unordered (bag-backed) table with the given `elements` and
+      `param`. *)
+  val table : 'e bag * 'p -> ('p, 'e, unordered) table
       [@@prototype "table (elements, param)"]
 
-  (** is the bag of elements of table `t`. *)
-  val `elements` : ('p, 'e) table -> 'e bag
+  (** is an ordered (list-backed) table with the given `elements` and
+      `param`. *)
+  val orderedTable : 'e list * 'p -> ('p, 'e, ordered) table
+      [@@prototype "orderedTable (elements, param)"]
+
+  (** is the bag of elements of unordered table `t`. *)
+  val `elements` : ('p, 'e, unordered) table -> 'e bag
       [@@prototype "elements t"] [@@method]
 
   (** is the parameter of table `t`. *)
-  val param : ('p, 'e) table -> 'p
+  val param : ('p, 'e, 'o) table -> 'p
       [@@prototype "param t"] [@@method]
 
 end

@@ -31,24 +31,25 @@ Sys.set ("stringDepth", ~1);
 
 Table;
 > val it =
->   {`elements`=fn,eval=fn,evaluate=fn,measure=fn,measure_fn=fn,override=fn,
->    param=fn,paramOf=fn,relax=fn,restrict=fn,restrict_anon=fn,table=fn,
->    test=fn,toString=fn}
->   : {`elements`:('a,'b) table -> 'b bag,
+>   {`elements`=fn,eval=fn,evaluate=fn,measure=fn,measure_fn=fn,
+>    orderedTable=fn,override=fn,param=fn,paramOf=fn,relax=fn,restrict=fn,
+>    restrict_anon=fn,table=fn,test=fn,toString=fn}
+>   : {`elements`:('a,'b,unordered) table -> 'b bag,
 >       eval:('c,'d,'e,'f) measure * 'e -> 'f,
 >       evaluate:('g,'h,'i,'j) measure * 'i * ('g,'h) cx -> 'j,
 >       measure:(('k,'l) cx -> 'm) -> ('k,'l,unit,'m) measure,
 >       measure_fn:('n * ('o,'p) cx -> 'q) -> ('o,'p,'n,'q) measure,
->       override:('r,'s,'t,'u) measure * ('s -> 'v) * 'v
->                 -> ('r,'s,'t,'u) measure, param:('w,'x) table -> 'w,
->       paramOf:('y,'z) cx -> 'y,
->       relax:('ba,'bb,'bc,'bd) measure * string -> ('ba,'bb,'bc,'bd) measure,
->       restrict:('be,'bf,'bg,'bh) measure * string * ('bf -> bool)
->                 -> ('be,'bf,'bg,'bh) measure,
->       restrict_anon:('bi,'bj,'bk,'bl) measure * ('bj -> bool)
->                      -> ('bi,'bj,'bk,'bl) measure,
->       table:'bm bag * 'bn -> ('bn,'bm) table,
->       test:('bo,'bp) cx * 'bp -> bool, toString:('bq,'br) cx -> string}
+>       orderedTable:'r list * 's -> ('s,'r,ordered) table,
+>       override:('t,'u,'v,'w) measure * ('u -> 'x) * 'x
+>                 -> ('t,'u,'v,'w) measure, param:('y,'z,'ba) table -> 'y,
+>       paramOf:('bb,'bc) cx -> 'bb,
+>       relax:('bd,'be,'bf,'bg) measure * string -> ('bd,'be,'bf,'bg) measure,
+>       restrict:('bh,'bi,'bj,'bk) measure * string * ('bi -> bool)
+>                 -> ('bh,'bi,'bj,'bk) measure,
+>       restrict_anon:('bl,'bm,'bn,'bo) measure * ('bm -> bool)
+>                      -> ('bl,'bm,'bn,'bo) measure,
+>       table:'bp bag * 'bq -> ('bq,'bp,unordered) table,
+>       test:('br,'bs) cx * 'bs -> bool, toString:('bt,'bu) cx -> string}
 
 (*) A measure with no argument (the common case): unit argument type.
 val count1 = Table.measure (fn c => 1);
@@ -64,7 +65,7 @@ val firstThree = Table.measure (fn c => [1, 2, 3]);
 
 (*) Build a table from a bag and a parameter record containing a measure.
 val t = Table.table (bag [{units = 10}, {units = 4}], {n = count1});
-> val t = table : ({n:('a,'b,unit,int) measure},{units:int}) table
+> val t = table : ({n:('a,'b,unit,int) measure},{units:int},unordered) table
 
 (* The elements and parameter are recoverable, each in prefix then postfix
    form. ('elements' is a reserved word, so write it with backticks.) *)

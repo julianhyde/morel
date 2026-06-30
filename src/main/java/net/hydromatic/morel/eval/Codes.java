@@ -4826,6 +4826,15 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#TABLE_ORDERED_TABLE */
+  private static final Applicable TABLE_ORDERED_TABLE =
+      new BaseApplicable1<TableValue, List>(BuiltIn.TABLE_ORDERED_TABLE) {
+        @Override
+        public TableValue apply(List tuple) {
+          return new TableValue(tuple.get(0), tuple.get(1));
+        }
+      };
+
   /** @see BuiltIn#TABLE_OVERRIDE */
   private static final Applicable TABLE_OVERRIDE =
       notImplemented(BuiltIn.TABLE_OVERRIDE);
@@ -6678,6 +6687,7 @@ public abstract class Codes {
     b.add(BuiltIn.TABLE_EVALUATE, TABLE_EVALUATE);
     b.add(BuiltIn.TABLE_MEASURE, TABLE_MEASURE);
     b.add(BuiltIn.TABLE_MEASURE_FN, TABLE_MEASURE_FN);
+    b.add(BuiltIn.TABLE_ORDERED_TABLE, TABLE_ORDERED_TABLE);
     b.add(BuiltIn.TABLE_OVERRIDE, TABLE_OVERRIDE);
     b.add(BuiltIn.TABLE_PARAM, TABLE_PARAM);
     b.add(BuiltIn.TABLE_PARAM_OF, TABLE_PARAM_OF);
