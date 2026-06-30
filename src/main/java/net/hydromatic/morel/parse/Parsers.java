@@ -113,6 +113,7 @@ public final class Parsers {
           "through",
           "type",
           "typeof",
+          "type_string",
           "union",
           "unorder",
           "val",

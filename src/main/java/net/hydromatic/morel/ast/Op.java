@@ -33,6 +33,7 @@ public enum Op {
   ELEMENTS(" elements ", Assoc.ATOM),
   ORDINAL(" ordinal ", Assoc.ATOM),
   RECORD_SELECTOR(Assoc.ATOM),
+  TYPE_STRING("type_string ", 9),
 
   // literals
   BOOL_LITERAL(Assoc.ATOM),

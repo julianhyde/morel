@@ -1184,6 +1184,40 @@ public class Ast {
   }
 
   /**
+   * Parse tree node of the {@code type_string} operator, which evaluates to a
+   * string containing the inferred type of its operand expression. The operand
+   * is not evaluated. E.g. {@code type_string (1 + 2)} is {@code "int"}.
+   */
+  public static class TypeString extends Exp {
+    public final Exp exp;
+
+    /** Creates a TypeString. */
+    TypeString(Pos pos, Exp exp) {
+      super(pos, Op.TYPE_STRING);
+      this.exp = requireNonNull(exp);
+    }
+
+    @Override
+    public TypeString accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(op.padded).append(exp, op.right, right);
+    }
+
+    public TypeString copy(Exp exp) {
+      return exp == this.exp ? this : new TypeString(pos, exp);
+    }
+  }
+
+  /**
    * Parse tree node of the "elements" reference.
    *
    * <p>{@code elements} references the elements in the current group.

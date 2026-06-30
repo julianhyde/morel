@@ -1267,7 +1267,7 @@ public class LintTest {
           && image.charAt(0) == '"'
           && image.charAt(image.length() - 1) == '"') {
         final String word = image.substring(1, image.length() - 1);
-        if (word.matches("[a-z]+")) {
+        if (word.matches("[a-z][a-z_]*")) {
           fromGrammar.add(word);
         }
       }

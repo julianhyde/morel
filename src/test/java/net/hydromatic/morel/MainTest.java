@@ -372,6 +372,10 @@ public class MainTest {
             "let val v : typeof x = (y = false) in v orelse true end")
         .assertParseEquivalent(
             "let val v : typeof x = y = false in v orelse true end");
+
+    // 'type_string' is an expression operator of precedence 9, so the operand
+    // of '+' (precedence 6) needs parentheses.
+    ml("type_string (1 + 2)").assertParseSame();
   }
 
   /**

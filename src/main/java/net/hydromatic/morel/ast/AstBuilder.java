@@ -199,6 +199,10 @@ public enum AstBuilder {
     return new Ast.Current(pos);
   }
 
+  public Ast.TypeString typeString(Pos pos, Ast.Exp exp) {
+    return new Ast.TypeString(pos, exp);
+  }
+
   public Ast.Elements elements(Pos pos) {
     return new Ast.Elements(pos);
   }

@@ -520,6 +520,8 @@ public class Resolver {
         return toCore((Ast.OpSection) exp);
       case CURRENT:
         return toCore((Ast.Current) exp);
+      case TYPE_STRING:
+        return toCore((Ast.TypeString) exp);
       case ELEMENTS:
         return toCore((Ast.Elements) exp);
       case ORDINAL:
@@ -582,6 +584,13 @@ public class Resolver {
 
   private Core.Exp toCore(Ast.Current ignoredCurrent) {
     return requireNonNull(this.current);
+  }
+
+  private Core.Exp toCore(Ast.TypeString typeString) {
+    // Render the operand's inferred type to a string. The operand is not
+    // converted to Core, so it is never evaluated.
+    final Type type = typeMap.getType(typeString.exp);
+    return core.stringLiteral(type.moniker());
   }
 
   private Core.Exp toCore(Ast.Ordinal ordinal) {
