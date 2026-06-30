@@ -622,6 +622,21 @@ public class TypeSystem {
     return apply(optionType, type);
   }
 
+  /** Creates a "measure" type. */
+  public Type measure(Type p, Type e, Type a, Type r) {
+    return apply(lookup(BuiltIn.Datatype.MEASURE), p, e, a, r);
+  }
+
+  /** Creates a "context" type. */
+  public Type context(Type p, Type e) {
+    return apply(lookup(BuiltIn.Datatype.CONTEXT), p, e);
+  }
+
+  /** Creates a "table" type. */
+  public Type table(Type p, Type e) {
+    return apply(lookup(BuiltIn.Datatype.TABLE), p, e);
+  }
+
   /**
    * Creates a "continuous_set" type.
    *

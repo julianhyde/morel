@@ -129,6 +129,59 @@ public abstract class Codes {
     };
   }
 
+  /**
+   * Returns an applicable that throws when applied. Used for {@code Table}
+   * members whose evaluation requires a context, which is not yet available.
+   */
+  private static Applicable notImplemented(BuiltIn builtIn) {
+    return new BaseApplicable1<Object, Object>(builtIn) {
+      @Override
+      public Object apply(Object a0) {
+        throw new UnsupportedOperationException(
+            builtIn.structure + "." + builtIn.mlName + ": not implemented");
+      }
+    };
+  }
+
+  /** Runtime value of a {@code measure}; an opaque boxed function. */
+  static class MeasureValue {
+    /**
+     * The user function: {@code context -> 'r} (unit form) or {@code 'a *
+     * context -> 'r}.
+     */
+    final Object fn;
+    /**
+     * Whether {@link #fn} takes an explicit argument (was {@code measure_fn}).
+     */
+    final boolean hasArg;
+
+    MeasureValue(Object fn, boolean hasArg) {
+      this.fn = fn;
+      this.hasArg = hasArg;
+    }
+
+    @Override
+    public String toString() {
+      return "measure";
+    }
+  }
+
+  /** Runtime value of a {@code table}; an opaque (elements, param) pair. */
+  static class TableValue {
+    final Object elements;
+    final Object param;
+
+    TableValue(Object elements, Object param) {
+      this.elements = elements;
+      this.param = param;
+    }
+
+    @Override
+    public String toString() {
+      return "table";
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // The following section contains fields that implement built-in functions and
   // values. They are in alphabetical order.
@@ -4705,6 +4758,87 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#TABLE_ELEMENTS */
+  private static final Applicable TABLE_ELEMENTS =
+      new BaseApplicable1<Object, TableValue>(BuiltIn.TABLE_ELEMENTS) {
+        @Override
+        public Object apply(TableValue t) {
+          return t.elements;
+        }
+      };
+
+  /** @see BuiltIn#TABLE_EVAL */
+  private static final Applicable TABLE_EVAL =
+      notImplemented(BuiltIn.TABLE_EVAL);
+
+  /** @see BuiltIn#TABLE_EVALUATE */
+  private static final Applicable TABLE_EVALUATE =
+      notImplemented(BuiltIn.TABLE_EVALUATE);
+
+  /** @see BuiltIn#TABLE_MEASURE */
+  private static final Applicable TABLE_MEASURE =
+      new BaseApplicable1<MeasureValue, Object>(BuiltIn.TABLE_MEASURE) {
+        @Override
+        public MeasureValue apply(Object f) {
+          return new MeasureValue(f, false);
+        }
+      };
+
+  /** @see BuiltIn#TABLE_MEASURE_FN */
+  private static final Applicable TABLE_MEASURE_FN =
+      new BaseApplicable1<MeasureValue, Object>(BuiltIn.TABLE_MEASURE_FN) {
+        @Override
+        public MeasureValue apply(Object f) {
+          return new MeasureValue(f, true);
+        }
+      };
+
+  /** @see BuiltIn#TABLE_OVERRIDE */
+  private static final Applicable TABLE_OVERRIDE =
+      notImplemented(BuiltIn.TABLE_OVERRIDE);
+
+  /** @see BuiltIn#TABLE_PARAM */
+  private static final Applicable TABLE_PARAM =
+      new BaseApplicable1<Object, TableValue>(BuiltIn.TABLE_PARAM) {
+        @Override
+        public Object apply(TableValue t) {
+          return t.param;
+        }
+      };
+
+  /** @see BuiltIn#TABLE_PARAM_OF */
+  private static final Applicable TABLE_PARAM_OF =
+      notImplemented(BuiltIn.TABLE_PARAM_OF);
+
+  /** @see BuiltIn#TABLE_RELAX */
+  private static final Applicable TABLE_RELAX =
+      notImplemented(BuiltIn.TABLE_RELAX);
+
+  /** @see BuiltIn#TABLE_RESTRICT */
+  private static final Applicable TABLE_RESTRICT =
+      notImplemented(BuiltIn.TABLE_RESTRICT);
+
+  /** @see BuiltIn#TABLE_RESTRICT_ANON */
+  private static final Applicable TABLE_RESTRICT_ANON =
+      notImplemented(BuiltIn.TABLE_RESTRICT_ANON);
+
+  /** @see BuiltIn#TABLE_TABLE */
+  private static final Applicable TABLE_TABLE =
+      new BaseApplicable1<TableValue, List>(BuiltIn.TABLE_TABLE) {
+        @Override
+        public TableValue apply(List tuple) {
+          return new TableValue(tuple.get(0), tuple.get(1));
+        }
+      };
+
+  /** @see BuiltIn#TABLE_TEST */
+  private static final Applicable TABLE_TEST =
+      notImplemented(BuiltIn.TABLE_TEST);
+
+  /** @see BuiltIn#TABLE_TO_STRING */
+  private static final Applicable TABLE_TO_STRING =
+      notImplemented(BuiltIn.TABLE_TO_STRING);
+
   /** @see BuiltIn#TEST_BAG_SUM */
   private static final Macro TEST_BAG_SUM = RELATIONAL_SUM;
 
@@ -6476,6 +6610,20 @@ public abstract class Codes {
     b.add(BuiltIn.SYS_SHOW, SYS_SHOW);
     b.add(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL);
     b.add(BuiltIn.SYS_UNSET, SYS_UNSET);
+    b.add(BuiltIn.TABLE_ELEMENTS, TABLE_ELEMENTS);
+    b.add(BuiltIn.TABLE_EVAL, TABLE_EVAL);
+    b.add(BuiltIn.TABLE_EVALUATE, TABLE_EVALUATE);
+    b.add(BuiltIn.TABLE_MEASURE, TABLE_MEASURE);
+    b.add(BuiltIn.TABLE_MEASURE_FN, TABLE_MEASURE_FN);
+    b.add(BuiltIn.TABLE_OVERRIDE, TABLE_OVERRIDE);
+    b.add(BuiltIn.TABLE_PARAM, TABLE_PARAM);
+    b.add(BuiltIn.TABLE_PARAM_OF, TABLE_PARAM_OF);
+    b.add(BuiltIn.TABLE_RELAX, TABLE_RELAX);
+    b.add(BuiltIn.TABLE_RESTRICT, TABLE_RESTRICT);
+    b.add(BuiltIn.TABLE_RESTRICT_ANON, TABLE_RESTRICT_ANON);
+    b.add(BuiltIn.TABLE_TABLE, TABLE_TABLE);
+    b.add(BuiltIn.TABLE_TEST, TABLE_TEST);
+    b.add(BuiltIn.TABLE_TO_STRING, TABLE_TO_STRING);
     b.add(BuiltIn.TEST_BAG_SUM, TEST_BAG_SUM);
     b.add(BuiltIn.TEST_FOO, TEST_FOO);
     b.add(BuiltIn.TEST_LIST_SUM, TEST_LIST_SUM);
