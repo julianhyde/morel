@@ -664,6 +664,49 @@ public class TypeResolver {
   }
 
   /**
+   * Constrains a query's element type {@code v} and collection type {@code c}
+   * given a source collection {@code c0} of element type {@code v0}. The source
+   * may be a {@code list}, a {@code bag}, or a {@code table}; a table's
+   * orderedness tag decides whether the query is ordered (list) or unordered
+   * (bag). This collapses a table to ordinary list/bag at the scan boundary, so
+   * downstream steps (union, join) see only list/bag.
+   */
+  private void isSourceMatchingInput(
+      Variable c0, Variable v0, Variable c, Variable v) {
+    final Variable pVar = unifier.variable();
+    final Term orderedT = toTerm(typeSystem.ordered(), Subst.EMPTY);
+    final Term unorderedT = toTerm(typeSystem.unordered(), Subst.EMPTY);
+    final String tableCon = BuiltIn.Datatype.TABLE.mlName();
+    final PairList<Term, Constraint.Action> termActions = PairList.of();
+    termActions.add(listTerm(v0), sourceAction(c, listTerm(v)));
+    termActions.add(bagTerm(v0), sourceAction(c, bagTerm(v)));
+    termActions.add(
+        unifier.apply(tableCon, pVar, v0, orderedT),
+        sourceAction(c, listTerm(v)));
+    termActions.add(
+        unifier.apply(tableCon, pVar, v0, unorderedT),
+        sourceAction(c, bagTerm(v)));
+    constraints.add(unifier.constraint(c0, termActions));
+    // The query collection is itself a list or bag of 'v'. (We cannot run the
+    // reverse direction onto 'c0' as the list/bag case does, because a table
+    // source's collection type is the table, not a list or bag.)
+    isCollectionOf(c, v);
+  }
+
+  /**
+   * Returns a constraint action that commits the matched term and then equates
+   * the given pairs of terms.
+   */
+  private static Constraint.Action sourceAction(Term... pairs) {
+    return (actualArg, term, consumer) -> {
+      consumer.accept(actualArg, term);
+      for (int i = 0; i + 1 < pairs.length; i += 2) {
+        consumer.accept(pairs[i], pairs[i + 1]);
+      }
+    };
+  }
+
+  /**
    * How the input collection of an aggregate function links to that function's
    * parameter.
    */
@@ -1572,7 +1615,9 @@ public class TypeResolver {
           //     share the same orderedness,
           //   * c0 matches the type deduced for "[(1, true), (2, false)]"
           //   * v is a record type composed of the fields "{i, j}"
-          sameOrderedness(c0, v0, c, v);
+          // The source may also be a table, in which case its orderedness tag
+          // decides whether the query is a list or a bag.
+          isSourceMatchingInput(c0, v0, c, v);
         } else {
           // Consider processing the second step in
           //   "from i in [1, 2],

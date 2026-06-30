@@ -68,6 +68,24 @@ val c = context;
 > stdIn:1.9-1.16 Error: 'context' is only valid in a query
 >   raised at: stdIn:1.9-1.16
 
+(* A query may iterate a table directly. An unordered (bag-backed) table
+   yields an unordered query; an ordered (list-backed) table yields an
+   ordered one. *)
+val ut = Table.table (bag [{x = 1}, {x = 2}, {x = 3}], {n = 10});
+> val ut = table : ({n:int},{x:int},unordered) table
+from e in ut yield e.x;
+> val it = [1,2,3] : int bag
+val ot = Table.orderedTable ([{x = 1}, {x = 2}, {x = 3}], {n = 10});
+> val ot = table : ({n:int},{x:int},ordered) table
+from e in ot yield e.x;
+> val it = [1,2,3] : int list
+
+(*) The context's element type is the table's element type.
+type_string (from e in ut yield context);
+> val it = "(unit,{x:int}) cx bag" : string
+type_string (from e in ot yield context);
+> val it = "(unit,{x:int}) cx list" : string
+
 (* 'eval' and the modification methods need the surrounding context or context
    modification, neither of which is implemented yet, so they are checked for
    their type only, in prefix then postfix form. *)

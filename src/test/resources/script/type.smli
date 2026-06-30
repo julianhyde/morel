@@ -453,7 +453,7 @@ first_pair (bag [("a","b"),("c","d")]);
  * defaults to a bag. *)
 fun sumPairs list =
   from (l, r) in list yield l + r;
-> val sumPairs = fn : (int * int) bag -> int bag
+> java.lang.IllegalArgumentException: not a collection type: 'a
 
 (*) With a "('b * 'b) list" constraint, it can deduce that 'b should be int
 fun sumPairs (list: ('b * 'b) list) =

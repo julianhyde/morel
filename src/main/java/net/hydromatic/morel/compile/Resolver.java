@@ -596,6 +596,23 @@ public class Resolver {
     return core.apply(context.pos, type, fn, arg);
   }
 
+  /**
+   * Wraps a table-typed expression in a call to {@code $tableElements}, so that
+   * iterating it yields its underlying collection (a list if the table is
+   * ordered, otherwise a bag).
+   */
+  private Core.Exp tableElements(Pos pos, Core.Exp tableExp) {
+    final DataType tableType = (DataType) tableExp.type;
+    final Type elementType = tableType.arg(1);
+    final Type collectionType =
+        tableType.arg(2).equals(typeMap.typeSystem.ordered())
+            ? typeMap.typeSystem.listType(elementType)
+            : typeMap.typeSystem.bagType(elementType);
+    final Core.Literal fn =
+        core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_TABLE_ELEMENTS);
+    return core.apply(pos, collectionType, fn, tableExp);
+  }
+
   private Core.Exp toCore(Ast.TypeString typeString) {
     // Render the operand's inferred type to a string. The operand is not
     // converted to Core, so it is never evaluated.
@@ -1478,7 +1495,12 @@ public class Resolver {
                 corePat.type,
                 ImmutableRangeSet.of(Range.all()));
       } else {
-        coreExp = r.toCore(scan.exp);
+        final Core.Exp sourceExp = r.toCore(scan.exp);
+        coreExp =
+            sourceExp.type instanceof DataType
+                    && ((DataType) sourceExp.type).name.equals("table")
+                ? r.tableElements(scan.exp.pos, sourceExp)
+                : sourceExp;
         final Type elementType = coreExp.type.elementType();
         corePat = r.toCore(scan.pat, elementType);
       }
