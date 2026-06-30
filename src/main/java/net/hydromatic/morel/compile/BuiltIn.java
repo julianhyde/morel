@@ -4195,6 +4195,207 @@ public enum BuiltIn {
   /** Function "Sys.unset", aka "unset", of type "string &rarr; unit". */
   SYS_UNSET("Sys", "unset", ts -> ts.fnType(STRING, UNIT)),
 
+  /** Function "Table.elements", of type "('p, 'e) table &rarr; 'e bag". */
+  TABLE_ELEMENTS(
+      "Table",
+      "elements",
+      true,
+      ts ->
+          ts.forallType(
+              2, h -> ts.fnType(ts.table(h.get(0), h.get(1)), h.bag(1)))),
+
+  /**
+   * Function "Table.eval", of type "('p, 'e, 'a, 'r) measure * 'a &rarr; 'r".
+   */
+  TABLE_EVAL(
+      "Table",
+      "eval",
+      true,
+      ts ->
+          ts.forallType(
+              4,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(
+                          ts.measure(h.get(0), h.get(1), h.get(2), h.get(3)),
+                          h.get(2)),
+                      h.get(3)))),
+
+  /**
+   * Function "Table.evaluate", of type "('p, 'e, 'a, 'r) measure * 'a * ('p,
+   * 'e) context &rarr; 'r".
+   */
+  TABLE_EVALUATE(
+      "Table",
+      "evaluate",
+      true,
+      ts ->
+          ts.forallType(
+              4,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(
+                          ts.measure(h.get(0), h.get(1), h.get(2), h.get(3)),
+                          h.get(2),
+                          ts.context(h.get(0), h.get(1))),
+                      h.get(3)))),
+
+  /**
+   * Function "Table.measure", of type "(('p, 'e) context &rarr; 'r) &rarr; ('p,
+   * 'e, unit, 'r) measure".
+   */
+  TABLE_MEASURE(
+      "Table",
+      "measure",
+      ts ->
+          ts.forallType(
+              3,
+              h ->
+                  ts.fnType(
+                      ts.fnType(ts.context(h.get(0), h.get(1)), h.get(2)),
+                      ts.measure(h.get(0), h.get(1), UNIT, h.get(2))))),
+
+  /**
+   * Function "Table.measure_fn", of type "('a * ('p, 'e) context &rarr; 'r)
+   * &rarr; ('p, 'e, 'a, 'r) measure".
+   */
+  TABLE_MEASURE_FN(
+      "Table",
+      "measure_fn",
+      ts ->
+          ts.forallType(
+              4,
+              h ->
+                  ts.fnType(
+                      ts.fnType(
+                          ts.tupleType(
+                              h.get(2), ts.context(h.get(0), h.get(1))),
+                          h.get(3)),
+                      ts.measure(h.get(0), h.get(1), h.get(2), h.get(3))))),
+
+  /**
+   * Function "Table.override", of type "('p, 'e, 'a, 'r) measure * ('e &rarr;
+   * 'b) * 'b &rarr; ('p, 'e, 'a, 'r) measure".
+   */
+  TABLE_OVERRIDE(
+      "Table",
+      "override",
+      true,
+      ts ->
+          ts.forallType(
+              5,
+              h -> {
+                final Type m =
+                    ts.measure(h.get(0), h.get(1), h.get(2), h.get(3));
+                return ts.fnType(
+                    ts.tupleType(m, ts.fnType(h.get(1), h.get(4)), h.get(4)),
+                    m);
+              })),
+
+  /** Function "Table.param", of type "('p, 'e) table &rarr; 'p". */
+  TABLE_PARAM(
+      "Table",
+      "param",
+      true,
+      ts ->
+          ts.forallType(
+              2, h -> ts.fnType(ts.table(h.get(0), h.get(1)), h.get(0)))),
+
+  /** Function "Table.paramOf", of type "('p, 'e) context &rarr; 'p". */
+  TABLE_PARAM_OF(
+      "Table",
+      "paramOf",
+      true,
+      ts ->
+          ts.forallType(
+              2, h -> ts.fnType(ts.context(h.get(0), h.get(1)), h.get(0)))),
+
+  /**
+   * Function "Table.relax", of type "('p, 'e, 'a, 'r) measure * string &rarr;
+   * ('p, 'e, 'a, 'r) measure".
+   */
+  TABLE_RELAX(
+      "Table",
+      "relax",
+      true,
+      ts ->
+          ts.forallType(
+              4,
+              h -> {
+                final Type m =
+                    ts.measure(h.get(0), h.get(1), h.get(2), h.get(3));
+                return ts.fnType(ts.tupleType(m, STRING), m);
+              })),
+
+  /**
+   * Function "Table.restrict", of type "('p, 'e, 'a, 'r) measure * string * ('e
+   * &rarr; bool) &rarr; ('p, 'e, 'a, 'r) measure".
+   */
+  TABLE_RESTRICT(
+      "Table",
+      "restrict",
+      true,
+      ts ->
+          ts.forallType(
+              4,
+              h -> {
+                final Type m =
+                    ts.measure(h.get(0), h.get(1), h.get(2), h.get(3));
+                return ts.fnType(
+                    ts.tupleType(m, STRING, ts.fnType(h.get(1), BOOL)), m);
+              })),
+
+  /**
+   * Function "Table.restrict_anon", of type "('p, 'e, 'a, 'r) measure * ('e
+   * &rarr; bool) &rarr; ('p, 'e, 'a, 'r) measure".
+   */
+  TABLE_RESTRICT_ANON(
+      "Table",
+      "restrict_anon",
+      true,
+      ts ->
+          ts.forallType(
+              4,
+              h -> {
+                final Type m =
+                    ts.measure(h.get(0), h.get(1), h.get(2), h.get(3));
+                return ts.fnType(ts.tupleType(m, ts.fnType(h.get(1), BOOL)), m);
+              })),
+
+  /** Function "Table.table", of type "'e bag * 'p &rarr; ('p, 'e) table". */
+  TABLE_TABLE(
+      "Table",
+      "table",
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(h.bag(1), h.get(0)),
+                      ts.table(h.get(0), h.get(1))))),
+
+  /** Function "Table.test", of type "('p, 'e) context * 'e &rarr; bool". */
+  TABLE_TEST(
+      "Table",
+      "test",
+      true,
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(ts.context(h.get(0), h.get(1)), h.get(1)),
+                      BOOL))),
+
+  /** Function "Table.toString", of type "('p, 'e) context &rarr; string". */
+  TABLE_TO_STRING(
+      "Table",
+      "toString",
+      true,
+      ts ->
+          ts.forallType(
+              2, h -> ts.fnType(ts.context(h.get(0), h.get(1)), STRING))),
+
   /**
    * Test-only aggregate "Test.bagSum", of type "&alpha; bag &rarr; &alpha;".
    * Accepts ONLY bag.
@@ -5357,6 +5558,9 @@ public enum BuiltIn {
   public enum Datatype implements BuiltInType {
     // lint: sort until '##private ' where '##[A-Z]'
 
+    /** The type of a dimensional context, {@code Table.context}. */
+    CONTEXT("Table", "context", false, 2, h -> h),
+
     CONTINUOUS_SET(
         "Range",
         "continuous_set",
@@ -5440,6 +5644,9 @@ public enum BuiltIn {
                 .tyCon(Constructor.EXN_SUBSCRIPT)
                 .tyCon(Constructor.EXN_UNEQUAL_LENGTHS)
                 .tyCon(Constructor.EXN_UNORDERED)),
+
+    /** The type of a measure, {@code Table.measure}. */
+    MEASURE("Table", "measure", false, 4, h -> h),
 
     OPTION(
         "Option",
@@ -5526,6 +5733,9 @@ public enum BuiltIn {
                 .tyCon(Constructor.STRING_CVT_REALFMT_FIX)
                 .tyCon(Constructor.STRING_CVT_REALFMT_GEN)
                 .tyCon(Constructor.STRING_CVT_REALFMT_SCI)),
+
+    /** The type of a table, {@code Table.table}. */
+    TABLE("Table", "table", false, 2, h -> h),
 
     /**
      * Universal value representation for embedded language interoperability.
