@@ -52,25 +52,25 @@ Table;
 
 (*) A measure with no argument (the common case): unit argument type.
 val count1 = Table.measure (fn c => 1);
-> val count1 = - : ('a,'b,unit,int) measure
+> val count1 = measure : ('a,'b,unit,int) measure
 
 (*) A measure whose body reads an argument.
 val plus = Table.measure_fn (fn (a, c) => a + 1);
-> val plus = - : ('a,'b,int,int) measure
+> val plus = measure : ('a,'b,int,int) measure
 
 (*) A measure may return any type, e.g. a list.
 val firstThree = Table.measure (fn c => [1, 2, 3]);
-> val firstThree = - : ('a,'b,unit,int list) measure
+> val firstThree = measure : ('a,'b,unit,int list) measure
 
 (*) Build a table from a bag and a parameter record containing a measure.
 val t = Table.table (bag [{units = 10}, {units = 4}], {n = count1});
-> val t = - : ({n:('a,'b,unit,int) measure},{units:int}) table
+> val t = table : ({n:('a,'b,unit,int) measure},{units:int}) table
 
 (* The bag and the parameter are recoverable; 'elements' is a
    reserved word, so write it with backticks. *)
 Table.`elements` t;
 > val it = [{units=10},{units=4}] : {units:int} bag
 Table.param t;
-> val it = {n=-} : {n:('a,'b,unit,int) measure}
+> val it = {n=measure} : {n:('a,'b,unit,int) measure}
 
 (*) End table.smli
