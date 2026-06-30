@@ -368,6 +368,24 @@ Current current() : {}
   }
 }
 
+/** Parses a {@code type_string} expression, e.g.
+ * "{@code type_string (1 + 2)}" evaluates to the string "{@code int}".
+ *
+ * <p>Like {@code typeof}, the operand is parsed at expression precedence 9,
+ * so "{@code type_string x . y}" does not require parentheses but
+ * "{@code type_string (x + y)}" does. */
+Exp typeString() :
+{
+  final Span span;
+  final Exp exp;
+}
+{
+  <TYPE_STRING> { span = Span.of(pos()); }
+  exp = expression9() {
+    return ast.typeString(span.end(this), exp);
+  }
+}
+
 /** Parses the {@code elements} keyword. */
 Elements elements() : {}
 {
@@ -1316,6 +1334,8 @@ Exp atom() :
   e = opSection() { return e; }
 |
   e = current() { return e; }
+|
+  e = typeString() { return e; }
 |
   e = elements() { return e; }
 |
@@ -2425,6 +2445,7 @@ AstNode statementEof() :
 | < TAKE: "take" >
 | < THROUGH: "through" >
 | < TYPEOF: "typeof" >
+| < TYPE_STRING: "type_string" >
 | < UNION: "union" >
 | < UNORDER: "unorder" >
 | < WHERE: "where" >

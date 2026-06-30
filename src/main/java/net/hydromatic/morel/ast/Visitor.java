@@ -38,6 +38,10 @@ public class Visitor {
 
   protected void visit(Ast.Current current) {}
 
+  protected void visit(Ast.TypeString typeString) {
+    typeString.exp.accept(this);
+  }
+
   protected void visit(Ast.Elements elements) {}
 
   protected void visit(Ast.Ordinal ordinal) {}

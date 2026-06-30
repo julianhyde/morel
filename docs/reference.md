@@ -79,6 +79,7 @@ In Morel but not Standard ML:
   `elements`,
   `ordinal` nilary operators
 * `typeof` type operator
+* `type_string` expression operator
 * <code><i>lab</i> =</code> is optional in <code><i>exprow</i></code>
 * <code><i>record</i>.<i>lab</i></code> as an alternative to
   <code>#<i>lab</i> <i>record</i></code>;
@@ -196,6 +197,7 @@ In Standard ML but not in Morel:
                                 conditional
     | <b>case</b> <i>exp</i> <b>of</b> <i>match</i>         case analysis
     | <b>raise</b> <i>exp</i>                 exception raising
+    | <b>type_string</b> <i>exp</i>           type of <i>exp</i> as a string (<i>exp</i> is not evaluated)
     | <b>fn</b> <i>match</i>                  function
     | <b>current</b>                   current element (only valid in a query step)
     | <b>elements</b>                  elements of current group (only valid in compute)

@@ -986,24 +986,15 @@ public class TypeResolver {
         return reg(opSection, v, opTerm);
 
       case ORDINAL:
-        final Ast.Ordinal ordinal = (Ast.Ordinal) node;
-        checkInQuery(env, ordinal);
-        final Triple step = last(stepStack.rightList());
-        validations.add(
-            resolved -> {
-              requireNonNull(step.c);
-              Type stepType = resolved.typeMap.termToType(step.c);
-              if (stepType.op() != Op.LIST) {
-                throw new TypeException(
-                    "cannot use 'ordinal' in unordered query", ordinal.pos);
-              }
-            });
-        return reg(ordinal, v, toTerm(PrimitiveType.INT));
+        return deduceOrdinalType(env, (Ast.Ordinal) node, v);
 
       case CURRENT:
         final Ast.Current current = (Ast.Current) node;
         final Term term2 = checkInQuery(env, current);
         return reg(current, v, term2);
+
+      case TYPE_STRING:
+        return deduceTypeStringType(env, (Ast.TypeString) node, v);
 
       case ELEMENTS:
         final Ast.Elements elements = (Ast.Elements) node;
@@ -1103,6 +1094,35 @@ public class TypeResolver {
   private Term checkInQuery(TypeEnv env, Ast.Exp node) {
     return env.get(
         typeSystem, BuiltIn.Z_CURRENT.mlName, TypeEnv.onlyValidInQuery(node));
+  }
+
+  /** Deduces the type of an {@code ordinal} keyword: {@code int}. */
+  private Ast.Exp deduceOrdinalType(
+      TypeEnv env, Ast.Ordinal ordinal, Variable v) {
+    checkInQuery(env, ordinal);
+    final Triple step = last(stepStack.rightList());
+    validations.add(
+        resolved -> {
+          requireNonNull(step.c);
+          Type stepType = resolved.typeMap.termToType(step.c);
+          if (stepType.op() != Op.LIST) {
+            throw new TypeException(
+                "cannot use 'ordinal' in unordered query", ordinal.pos);
+          }
+        });
+    return reg(ordinal, v, toTerm(PrimitiveType.INT));
+  }
+
+  /**
+   * Deduces the type of a {@code type_string} expression: {@code string}. The
+   * operand is type-checked (so its type appears in the type map for the
+   * resolver to render) but never evaluated.
+   */
+  private Ast.Exp deduceTypeStringType(
+      TypeEnv env, Ast.TypeString typeString, Variable v) {
+    final Variable vOperand = unifier.variable();
+    final Ast.Exp operand = deduceExpType(env, typeString.exp, vOperand);
+    return reg(typeString.copy(operand), v, toTerm(PrimitiveType.STRING));
   }
 
   /**
