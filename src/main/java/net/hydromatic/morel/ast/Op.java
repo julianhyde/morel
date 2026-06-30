@@ -29,6 +29,7 @@ public enum Op {
   // identifiers
   ID(Assoc.ATOM),
   OP_SECTION(Assoc.ATOM),
+  CONTEXT(" context ", Assoc.ATOM),
   CURRENT(" current ", Assoc.ATOM),
   ELEMENTS(" elements ", Assoc.ATOM),
   ORDINAL(" ordinal ", Assoc.ATOM),

@@ -178,6 +178,27 @@ public abstract class Codes {
     }
   }
 
+  /** Runtime value of a {@code cx} (context). */
+  static class ContextValue {
+    /** The parameter in force. */
+    final Object param;
+    /** Predicate on base elements; null means "match all". */
+    final @Nullable Applicable predicate;
+
+    ContextValue(Object param, @Nullable Applicable predicate) {
+      this.param = param;
+      this.predicate = predicate;
+    }
+
+    /** The match-all context, with a unit parameter. */
+    static final ContextValue MATCH_ALL = new ContextValue(Unit.INSTANCE, null);
+
+    @Override
+    public String toString() {
+      return "cx";
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // The following section contains fields that implement built-in functions and
   // values. They are in alphabetical order.
@@ -4758,7 +4779,19 @@ public abstract class Codes {
 
   /** @see BuiltIn#TABLE_EVALUATE */
   private static final Applicable TABLE_EVALUATE =
-      notImplemented(BuiltIn.TABLE_EVALUATE);
+      new ApplicableImpl(BuiltIn.TABLE_EVALUATE) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final List tuple = (List) arg;
+          final MeasureValue m = (MeasureValue) tuple.get(0);
+          final Object a = tuple.get(1);
+          final Object c = tuple.get(2);
+          final Applicable fn = (Applicable) m.fn;
+          return m.hasArg
+              ? fn.apply(stack, ImmutableList.of(a, c))
+              : fn.apply(stack, c);
+        }
+      };
 
   /** @see BuiltIn#TABLE_MEASURE */
   private static final Applicable TABLE_MEASURE =
@@ -4793,7 +4826,12 @@ public abstract class Codes {
 
   /** @see BuiltIn#TABLE_PARAM_OF */
   private static final Applicable TABLE_PARAM_OF =
-      notImplemented(BuiltIn.TABLE_PARAM_OF);
+      new BaseApplicable1<Object, ContextValue>(BuiltIn.TABLE_PARAM_OF) {
+        @Override
+        public Object apply(ContextValue c) {
+          return c.param;
+        }
+      };
 
   /** @see BuiltIn#TABLE_RELAX */
   private static final Applicable TABLE_RELAX =
@@ -4818,11 +4856,27 @@ public abstract class Codes {
 
   /** @see BuiltIn#TABLE_TEST */
   private static final Applicable TABLE_TEST =
-      notImplemented(BuiltIn.TABLE_TEST);
+      new ApplicableImpl(BuiltIn.TABLE_TEST) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final List tuple = (List) arg;
+          final ContextValue c = (ContextValue) tuple.get(0);
+          final Object e = tuple.get(1);
+          return c.predicate == null
+              ? Boolean.TRUE
+              : c.predicate.apply(stack, e);
+        }
+      };
 
   /** @see BuiltIn#TABLE_TO_STRING */
   private static final Applicable TABLE_TO_STRING =
-      notImplemented(BuiltIn.TABLE_TO_STRING);
+      new BaseApplicable1<String, ContextValue>(BuiltIn.TABLE_TO_STRING) {
+        @Override
+        public String apply(ContextValue c) {
+          // Contexts carry no constraints yet, so render the empty set.
+          return "{}";
+        }
+      };
 
   /** @see BuiltIn#TEST_BAG_SUM */
   private static final Macro TEST_BAG_SUM = RELATIONAL_SUM;
@@ -5706,6 +5760,15 @@ public abstract class Codes {
         @Override
         public Long apply(Long a0, Long a1) {
           return a0 ^ a1;
+        }
+      };
+
+  /** @see BuiltIn#Z_CONTEXT */
+  private static final Applicable Z_CONTEXT =
+      new BaseApplicable1<ContextValue, Object>(BuiltIn.Z_CONTEXT) {
+        @Override
+        public ContextValue apply(Object unitArg) {
+          return ContextValue.MATCH_ALL;
         }
       };
 
@@ -6696,6 +6759,7 @@ public abstract class Codes {
     b.add(BuiltIn.WORD_WORD_SIZE, WORD_WORD_SIZE);
     b.add(BuiltIn.WORD_XORB, WORD_XORB);
     b.add(BuiltIn.Z_ANDALSO, Unit.INSTANCE);
+    b.add(BuiltIn.Z_CONTEXT, Z_CONTEXT);
     b.add(BuiltIn.Z_CURRENT, Unit.INSTANCE);
     b.add(BuiltIn.Z_ELEMENTS, Unit.INSTANCE);
     b.add(BuiltIn.Z_EXTENT, Z_EXTENT);

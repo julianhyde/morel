@@ -88,6 +88,10 @@ public class Shuttle {
     return current;
   }
 
+  protected Ast.Context visit(Ast.Context context) {
+    return context;
+  }
+
   protected Ast.TypeString visit(Ast.TypeString typeString) {
     return typeString.copy(typeString.exp.accept(this));
   }

@@ -1184,6 +1184,34 @@ public class Ast {
   }
 
   /**
+   * Parse tree node of the "context" reference.
+   *
+   * <p>{@code context} is the dimensional context in which a measure is
+   * evaluated. Like {@code current}, it is only valid within a query.
+   */
+  public static class Context extends Exp {
+    /** Creates a Context. */
+    Context(Pos pos) {
+      super(pos, Op.CONTEXT);
+    }
+
+    @Override
+    public Context accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.id("context");
+    }
+  }
+
+  /**
    * Parse tree node of the {@code type_string} operator, which evaluates to a
    * string containing the inferred type of its operand expression. The operand
    * is not evaluated. E.g. {@code type_string (1 + 2)} is {@code "int"}.

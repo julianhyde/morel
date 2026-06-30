@@ -64,6 +64,7 @@ public final class Parsers {
           "as",
           "case",
           "compute",
+          "context",
           "current",
           "datatype",
           "distinct",
