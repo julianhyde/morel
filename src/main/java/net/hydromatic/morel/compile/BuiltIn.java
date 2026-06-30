@@ -5558,8 +5558,8 @@ public enum BuiltIn {
   public enum Datatype implements BuiltInType {
     // lint: sort until '##private ' where '##[A-Z]'
 
-    /** The type of a dimensional context, {@code Table.context}. */
-    CONTEXT("Table", "context", false, 2, h -> h),
+    /** The type of a dimensional context, {@code Table.cx}. */
+    CONTEXT("Table", "cx", false, 2, h -> h),
 
     CONTINUOUS_SET(
         "Range",

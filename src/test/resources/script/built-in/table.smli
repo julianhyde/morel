@@ -36,20 +36,19 @@ Table;
 >    test=fn,toString=fn}
 >   : {`elements`:('a,'b) table -> 'b bag,
 >       eval:('c,'d,'e,'f) measure * 'e -> 'f,
->       evaluate:('g,'h,'i,'j) measure * 'i * ('g,'h) context -> 'j,
->       measure:(('k,'l) context -> 'm) -> ('k,'l,unit,'m) measure,
->       measure_fn:('n * ('o,'p) context -> 'q) -> ('o,'p,'n,'q) measure,
+>       evaluate:('g,'h,'i,'j) measure * 'i * ('g,'h) cx -> 'j,
+>       measure:(('k,'l) cx -> 'm) -> ('k,'l,unit,'m) measure,
+>       measure_fn:('n * ('o,'p) cx -> 'q) -> ('o,'p,'n,'q) measure,
 >       override:('r,'s,'t,'u) measure * ('s -> 'v) * 'v
 >                 -> ('r,'s,'t,'u) measure, param:('w,'x) table -> 'w,
->       paramOf:('y,'z) context -> 'y,
+>       paramOf:('y,'z) cx -> 'y,
 >       relax:('ba,'bb,'bc,'bd) measure * string -> ('ba,'bb,'bc,'bd) measure,
 >       restrict:('be,'bf,'bg,'bh) measure * string * ('bf -> bool)
 >                 -> ('be,'bf,'bg,'bh) measure,
 >       restrict_anon:('bi,'bj,'bk,'bl) measure * ('bj -> bool)
 >                      -> ('bi,'bj,'bk,'bl) measure,
 >       table:'bm bag * 'bn -> ('bn,'bm) table,
->       test:('bo,'bp) context * 'bp -> bool,
->       toString:('bq,'br) context -> string}
+>       test:('bo,'bp) cx * 'bp -> bool, toString:('bq,'br) cx -> string}
 
 (*) A measure with no argument (the common case): unit argument type.
 val count1 = Table.measure (fn c => 1);

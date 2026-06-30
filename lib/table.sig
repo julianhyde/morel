@@ -37,28 +37,28 @@ signature TABLE =
 sig
 
   (** is the type of a measure: an expression of type `'r` evaluated in a
-      `('p, 'e) context` given an argument of type `'a`. *)
+      `('p, 'e) cx` given an argument of type `'a`. *)
   type ('p, 'e, 'a, 'r) measure
 
   (** is the type of a context: the constraints, and the parameter, under
       which a measure is evaluated. *)
-  type ('p, 'e) context
+  type ('p, 'e) cx
 
   (** is the type of a table: a bag of elements of type `'e` together with a
       parameter of type `'p`. *)
   type ('p, 'e) table
 
   (** is a measure whose value is `f c` when evaluated in context `c`. *)
-  val measure : (('p, 'e) context -> 'r) -> ('p, 'e, unit, 'r) measure
+  val measure : (('p, 'e) cx -> 'r) -> ('p, 'e, unit, 'r) measure
       [@@prototype "measure f"]
 
   (** is a measure whose value is `f (a, c)` when evaluated with argument `a`
       in context `c`. *)
-  val measure_fn : ('a * ('p, 'e) context -> 'r) -> ('p, 'e, 'a, 'r) measure
+  val measure_fn : ('a * ('p, 'e) cx -> 'r) -> ('p, 'e, 'a, 'r) measure
       [@@prototype "measure_fn f"]
 
   (** evaluates measure `m` with argument `a` in context `c`. *)
-  val evaluate : ('p, 'e, 'a, 'r) measure * 'a * ('p, 'e) context -> 'r
+  val evaluate : ('p, 'e, 'a, 'r) measure * 'a * ('p, 'e) cx -> 'r
       [@@prototype "evaluate (m, a, c)"] [@@method]
 
   (** evaluates measure `m` with argument `a` in the current context. *)
@@ -89,15 +89,15 @@ sig
       [@@prototype "override (m, proj, value)"] [@@method]
 
   (** is whether context `c` admits element `e`. *)
-  val test : ('p, 'e) context * 'e -> bool
+  val test : ('p, 'e) cx * 'e -> bool
       [@@prototype "test (c, e)"] [@@method]
 
   (** is the current parameter of context `c`. *)
-  val paramOf : ('p, 'e) context -> 'p
+  val paramOf : ('p, 'e) cx -> 'p
       [@@prototype "paramOf c"] [@@method]
 
   (** is a canonical string describing the constraints of context `c`. *)
-  val toString : ('p, 'e) context -> string
+  val toString : ('p, 'e) cx -> string
       [@@prototype "toString c"] [@@method]
 
   (** is a table with the given `elements` and `param`. *)
