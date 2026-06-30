@@ -43,7 +43,7 @@ type, `'a` is the argument supplied when the measure is evaluated (usually
 <pre>
 type ('p, 'e, 'a, 'r) <a id='measure' href="#measure-impl">measure</a>
 type ('p, 'e) <a id='cx' href="#cx-impl">cx</a>
-type ('p, 'e) <a id='table' href="#table-impl">table</a>
+type ('p, 'e, 'o) <a id='table' href="#table-impl">table</a>
 
 val <a id='measure' href="#measure-impl">measure</a> : (('p, 'e) cx -> 'r) -> ('p, 'e, unit, 'r) measure
 val <a id='measure_fn' href="#measure_fn-impl">measure_fn</a> : ('a * ('p, 'e) cx -> 'r) -> ('p, 'e, 'a, 'r) measure
@@ -56,9 +56,10 @@ val <a id='override' href="#override-impl">override</a> : ('p, 'e, 'a, 'r) measu
 val <a id='test' href="#test-impl">test</a> : ('p, 'e) cx * 'e -> bool
 val <a id='paramOf' href="#paramOf-impl">paramOf</a> : ('p, 'e) cx -> 'p
 val <a id='toString' href="#toString-impl">toString</a> : ('p, 'e) cx -> string
-val <a id='table' href="#table-impl">table</a> : 'e bag * 'p -> ('p, 'e) table
-val <a id='elements' href="#elements-impl">elements</a> : ('p, 'e) table -> 'e bag
-val <a id='param' href="#param-impl">param</a> : ('p, 'e) table -> 'p
+val <a id='table' href="#table-impl">table</a> : 'e bag * 'p -> ('p, 'e, unordered) table
+val <a id='orderedTable' href="#orderedTable-impl">orderedTable</a> : 'e list * 'p -> ('p, 'e, ordered) table
+val <a id='elements' href="#elements-impl">elements</a> : ('p, 'e, unordered) table -> 'e bag
+val <a id='param' href="#param-impl">param</a> : ('p, 'e, 'o) table -> 'p
 </pre>
 
 <a id="measure-impl"></a>
@@ -74,10 +75,11 @@ is the type of a context: the constraints, and the parameter, under
      which a measure is evaluated.
 
 <a id="table-impl"></a>
-<h3><code><strong>type</strong> ('p, 'e) table</code></h3>
+<h3><code><strong>type</strong> ('p, 'e, 'o) table</code></h3>
 
-is the type of a table: a bag of elements of type `'e` together with a
-     parameter of type `'p`.
+is the type of a table: a collection of elements of type `'e` together
+     with a parameter of type `'p`. `'o` is the orderedness tag (`ordered`
+     for a list-backed table, `unordered` for a bag-backed one).
 
 <a id="measure-impl"></a>
 <h3><code>measure</code></h3>
@@ -141,12 +143,19 @@ is the type of a table: a bag of elements of type `'e` together with a
 <a id="table-impl"></a>
 <h3><code>table</code></h3>
 
-`table (elements, param)` is a table with the given `elements` and `param`.
+`table (elements, param)` is an unordered (bag-backed) table with the given `elements` and
+     `param`.
+
+<a id="orderedTable-impl"></a>
+<h3><code>orderedTable</code></h3>
+
+`orderedTable (elements, param)` is an ordered (list-backed) table with the given `elements` and
+     `param`.
 
 <a id="elements-impl"></a>
 <h3><code>elements</code></h3>
 
-`elements t` (or `t.elements ()`) is the bag of elements of table `t`.
+`elements t` (or `t.elements ()`) is the bag of elements of unordered table `t`.
 
 <a id="param-impl"></a>
 <h3><code>param</code></h3>

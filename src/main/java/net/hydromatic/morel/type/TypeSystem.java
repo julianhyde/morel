@@ -633,8 +633,18 @@ public class TypeSystem {
   }
 
   /** Creates a "table" type. */
-  public Type table(Type p, Type e) {
-    return apply(lookup(BuiltIn.Datatype.TABLE), p, e);
+  public Type table(Type p, Type e, Type o) {
+    return apply(lookup(BuiltIn.Datatype.TABLE), p, e, o);
+  }
+
+  /** Returns the "ordered" built-in data type (an orderedness tag). */
+  public Type ordered() {
+    return lookup(BuiltIn.Datatype.ORDERED);
+  }
+
+  /** Returns the "unordered" built-in data type (an orderedness tag). */
+  public Type unordered() {
+    return lookup(BuiltIn.Datatype.UNORDERED);
   }
 
   /**
