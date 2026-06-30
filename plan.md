@@ -112,8 +112,10 @@ them back when their phase arrives.
   its own evaluation context (`measure (fn ctx => toString ctx)`); convenience
   over the `toString` primitive.
 - **`of : 'e list -> (unit,'e) table`** — paramless one-liner table.
-- **Table-definition sugar** and **`orders.sum_units`** disjoint-field sugar
-  (#401 future work).
+- **Table-definition sugar** and the **table-value** field sugar
+  `orders.sum_units` (shorthand for `orders.param.sum_units`; #401 future work).
+  The *range-variable* disjoint-field sugar `e.sum_units` is now its own phase
+  (Phase 3), not deferred.
 
 ## 2. Key technical problems and the components each adds
 
@@ -205,13 +207,13 @@ needs a constraint/FD engine and is deferred.
 ## 4. Phases — each fully runnable and testable
 
 Critical path: **Spike K → Phase 1 → Phase 2** gets a real demoable feature
-(grouped measures) fastest; **Spike R** runs in parallel and gates Phase 4.
+(grouped measures) fastest; **Spike R** runs in parallel and gates Phase 5.
 
 **Spike K (before Phase 2).** Confirm the `current`/`ordinal` threading
 carries a context value with no new mechanism. The probe strongly implies yes;
 cheap to verify.
 
-**Spike R (before Phase 4).** Prove the recursive nominal param type
+**Spike R (before Phase 5).** Prove the recursive nominal param type
 round-trips through `TypeSystem`/`Pretty` as #401's examples claim. We have
 empirical evidence; confirm in the real type system, since the param-reading
 story and the printed types depend on it.
@@ -225,45 +227,63 @@ against the whole table → grand totals; `.smli` checks abbreviated type
 printing. Interpreted only; param simple (no recursion).
 
 **Phase 2 — `context` keyword + propagation for scan/where/group
-(current-row = base-row).** The headline:
-`from e in orders group {e.prod_color} compute {e.sum_units.eval()}`. No
+(current-row = base-row).** The headline query, in *desugared* form (the
+`e.sum_units` sugar arrives in Phase 3):
+`from e in orders group {e.prod_color}
+   compute {units = eval (#sum_units (paramOf context), ())}`. No
 yield-before-measure, no joins, single table. Core of P3's tractable case plus
 all of P4. `toString` reaches group-key and `where` (`?`) items; the oracle
 goes live across the propagation grid.
 
-**Phase 3 — Context modifiers (narrow only).** The four methods + `at {}`
+**Phase 3 — Param fields on range variables (virtual disjoint-field sugar).**
+When `from e in T` ranges over a table `T : ('p,'e) table` whose row type `'e`
+and param type `'p` are records with **disjoint** field sets, expose the param
+fields (including measures) on the range variable, so `e.sum_units` resolves to
+the param's `sum_units`. This is **virtual**: it desugars to a param-via-context
+access (`#sum_units (paramOf context)`), not a physical merge into the row, so
+the base rows are untouched and the measure is still evaluated in the current
+context. *The work lands in type resolution:* `TypeResolver` must give `e` a
+record type unioning `'e`'s and `'p`'s fields, route each `e.f` to the row (if
+`f ∈ 'e`) or to the context (if `f ∈ 'p`), and reject a name in both.
+*Runnable:* the canonical `from e in orders group {e.prod_color} compute
+{units = e.sum_units.eval ()}` now reads as designed; each Phase 2 desugared
+test gets a sugary twin asserting identical results and `toString`.
+Independent of Spike R (exposing param fields as values does not require
+measures that read param).
+
+**Phase 4 — Context modifiers (narrow only).** The four methods + `at {}`
 sugar + label derivation + **modifier-sequence** testing. `relax` = exact
 label match; no FD reasoning. *Runnable:* percent-of-total,
 what-if-by-override, and override→relax→override sequences. `toString` reaches
 labeled-filter (`label: ?`) items and the collapse/replace normalization.
 
-**Phase 4 — Param recursion.** Measures reading siblings/globals
+**Phase 5 — Param recursion.** Measures reading siblings/globals
 (`forecast`/`uplift`, the what-if example); the nominal recursive param type.
 *Runnable:* the full sensitivity table.
 
-**Phase 5 — Full propagation.** `yield` re-keying, joins, multi-range-variable
+**Phase 6 — Full propagation.** `yield` re-keying, joins, multi-range-variable
 labels, `distinct` — the base-expression algebra in general, plus the totality
 argument. *Runnable:* `override bonus=20` where `bonus = units*2`; joined-table
 contexts.
 
-**Phase 6 — FD-aware contexts.** The wide `relax`,
+**Phase 7 — FD-aware contexts.** The wide `relax`,
 override-of-derived-expressions, and the `year`/`month` and `sub(x,0)`/`x`
 interactions. Its core is a shared **constraint engine** that knows declared
 function properties (monotonicity, functional dependence) — the *same* engine
 the period-over-period "gleaned year" approach needs, so wide-relax and
 predicate-gleaning PoP are one component. Interpreted first.
 
-**Phase 7 — Calcite pushdown.** Static context-unwinding to relational
-algebra; re-run the entire Phase 2–6 grid under Calcite, asserting equality
+**Phase 8 — Calcite pushdown.** Static context-unwinding to relational
+algebra; re-run the entire Phase 2–7 grid under Calcite, asserting equality
 with interpreted. No new surface area.
 
-**Phase 8 — Ergonomics.** The deferred items from §1: combinators + context
-`rows`, `describe`, `of`, table-definition sugar, disjoint-field sugar,
-`evalAt`. Each independently shippable.
+**Phase 9 — Ergonomics.** The deferred items from §1: combinators + context
+`rows`, `describe`, `of`, table-definition sugar, the table-value
+`orders.sum_units` sugar, `evalAt`. Each independently shippable.
 
 Period-over-period (see `discussion.md`) rides on top as a *library pattern*
-over Phases 3–4 (offset as argument or param), not a new phase; add it as
-worked examples once Phase 4 lands.
+over Phases 4–5 (offset as argument or param), not a new phase; add it as
+worked examples once Phase 5 lands.
 
 ## 5. Specification work, and when
 
@@ -282,13 +302,19 @@ Three kinds, staggered.
   identity; measure-over-base is grain-independent). The laws become
   property/differential tests.
 
-- **Phase 3 (decide before coding)** — lock in **narrow** `relax` as the spec,
+- **Phase 3 — the disjoint-field rule**: param fields are exposed on a range
+  variable only when the row and param field sets are disjoint; `e.f` for a
+  param field `f` desugars to `#f (paramOf context)`. State the
+  name-in-both error and that the desugaring is purely a resolver rewrite
+  (no change to base rows or runtime values).
+
+- **Phase 4 (decide before coding)** — lock in **narrow** `relax` as the spec,
   and the `at {}` clause grammar.
 
-- **Phase 5 (extend)** — propagation spec grows to cover `yield`/`join` and
+- **Phase 6 (extend)** — propagation spec grows to cover `yield`/`join` and
   states the totality argument.
 
-- **Phase 6 (write at the start)** — the **wide/FD** `relax` semantics plus the
+- **Phase 7 (write at the start)** — the **wide/FD** `relax` semantics plus the
   declared-property registry (which functions are monotone, which determine
   which), authored jointly with the PoP "approach 5" inference rules in
   `discussion.md`, since they consume the same facts.
@@ -356,6 +382,6 @@ where (p.units > 3)                            {?}
 ```
 
 `toString` lands in Phase 1 (empty + equality forms), gains `?` items in
-Phase 2, gains labeled filters and collapse/replace in Phase 3, needs no format
-change for the FD phase (label appearance/disappearance under wide-relax is
-already expressible), and is the differential oracle in Phase 7.
+Phase 2, gains labeled filters and collapse/replace in Phase 4, needs no format
+change for the FD phase (Phase 7; label appearance/disappearance under
+wide-relax is already expressible), and is the differential oracle in Phase 8.
