@@ -281,9 +281,11 @@ with interpreted. No new surface area.
 `rows`, `describe`, `of`, table-definition sugar, the table-value
 `orders.sum_units` sugar, `evalAt`. Each independently shippable.
 
-Period-over-period (see `discussion.md`) rides on top as a *library pattern*
-over Phases 4–5 (offset as argument or param), not a new phase; add it as
-worked examples once Phase 5 lands.
+Period-over-period (see [discussion #405]) rides on top as a *library
+pattern* over Phases 4–5 (offset as argument or param), not a new phase; add
+it as worked examples once Phase 5 lands.
+
+[discussion #405]: https://github.com/hydromatic/morel/discussions/405
 
 ## 5. Specification work, and when
 
@@ -317,7 +319,7 @@ Three kinds, staggered.
 - **Phase 7 (write at the start)** — the **wide/FD** `relax` semantics plus the
   declared-property registry (which functions are monotone, which determine
   which), authored jointly with the PoP "approach 5" inference rules in
-  `discussion.md`, since they consume the same facts.
+  [discussion #405], since they consume the same facts.
 
 ## 6. `Table.toString` — the portable context-rendering spec
 
