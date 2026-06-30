@@ -303,19 +303,11 @@ class Pretty {
    */
   private Doc dataTypeDoc(DataType dataType, Object value, int depth) {
     if (!(value instanceof List)) {
-      // A "doc" (pretty-printer document), "measure", "context", and "table"
-      // are abstract; print them as "-", as Standard ML prints a value of an
-      // abstract type. Other opaque values (e.g. "time" backed by Long) print
-      // directly.
-      switch (dataType.name) {
-        case "doc":
-        case "measure":
-        case "context":
-        case "table":
-          return text("-");
-        default:
-          return text(String.valueOf(value));
-      }
+      // A "doc" (pretty-printer document) is abstract; print it as "-", as
+      // Standard ML prints a value of an abstract type. Other opaque values
+      // print directly via toString: "time" (backed by Long) as its instant,
+      // and "measure"/"cx"/"table" as the type name.
+      return text(dataType.name.equals("doc") ? "-" : String.valueOf(value));
     }
     final List<Object> list = toList(value);
     if (dataType.name.equals("vector")) {
