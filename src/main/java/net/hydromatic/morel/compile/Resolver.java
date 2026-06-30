@@ -518,6 +518,8 @@ public class Resolver {
         return toCore((Ast.Id) exp);
       case OP_SECTION:
         return toCore((Ast.OpSection) exp);
+      case CONTEXT:
+        return toCore((Ast.Context) exp);
       case CURRENT:
         return toCore((Ast.Current) exp);
       case TYPE_STRING:
@@ -584,6 +586,14 @@ public class Resolver {
 
   private Core.Exp toCore(Ast.Current ignoredCurrent) {
     return requireNonNull(this.current);
+  }
+
+  private Core.Exp toCore(Ast.Context context) {
+    final Type type = typeMap.getType(context);
+    final Core.Literal fn =
+        core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_CONTEXT);
+    final Core.Tuple arg = core.tuple(typeMap.typeSystem);
+    return core.apply(context.pos, type, fn, arg);
   }
 
   private Core.Exp toCore(Ast.TypeString typeString) {

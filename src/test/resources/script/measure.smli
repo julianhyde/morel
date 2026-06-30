@@ -18,24 +18,63 @@
  *
  * Tests for measures and their context-dependent methods.
  *
- * Evaluating a measure requires a context, which is not yet
- * available, so each measure and context method is exercised here
- * for its type only, in both prefix and postfix form (the postfix
- * call directly after the prefix one). 'type_string' type-checks
- * the call without evaluating it, so the not-yet-implemented
- * methods do not raise. Behavioral tests will be added when
- * contexts arrive.
+ * The 'context' keyword provides the match-all base context within a
+ * query. Evaluating a measure, and the accessors 'test', 'paramOf',
+ * and 'toString', work against it. Context modification (the
+ * 'restrict', 'relax', 'override' methods) and 'eval' are later
+ * phases, so they are checked for their type only.
  *)
+val data = bag [1, 2, 3];
+> val data = [1,2,3] : int bag
+val sumM = Table.measure
+  (fn c => from r in data where Table.test (c, r) compute sum over r);
+> val sumM = measure : ('a,int,unit,int) measure
+
+(* Evaluate the measure against the base context, in prefix then postfix
+   form. The base context matches every element, so each row gets the total
+   of the whole bag. *)
+from e in data yield Table.evaluate (sumM, (), context);
+> val it = [6,6,6] : int bag
+from e in data yield sumM.evaluate ((), context);
+> val it = [6,6,6] : int bag
+
+(*) The base context has no constraints, so 'toString' renders the empty set.
+from e in data yield Table.toString context;
+> val it = ["{}","{}","{}"] : string bag
+from e in data yield context.toString ();
+> val it = ["{}","{}","{}"] : string bag
+
+(*) Its parameter is unit.
+from e in data yield Table.paramOf context;
+> val it = [(),(),()] : unit bag
+from e in data yield context.paramOf ();
+> val it = [(),(),()] : unit bag
+
+(*) 'test' admits every base element.
+from e in data yield Table.test (context, e);
+> val it = [true,true,true] : bool bag
+from e in data yield context.test e;
+> val it = [true,true,true] : bool bag
+
+(*) The keyword's type depends on the query's element type.
+from e in data yield type_string context;
+> val it = ["(unit,int) cx","(unit,int) cx","(unit,int) cx"] : string bag
+
+(*) 'context' is only valid in a query.
+context;
+> stdIn:1.1-1.8 Error: 'context' is only valid in a query
+>   raised at: stdIn:1.1-1.8
+val c = context;
+> stdIn:1.9-1.16 Error: 'context' is only valid in a query
+>   raised at: stdIn:1.9-1.16
+
+(* 'eval' and the modification methods need the surrounding context or context
+   modification, neither of which is implemented yet, so they are checked for
+   their type only, in prefix then postfix form. *)
 val count1 = Table.measure (fn c => 1);
 > val count1 = measure : ('a,'b,unit,int) measure
 val plus = Table.measure_fn (fn (a, c) => a + 1);
 > val plus = measure : ('a,'b,int,int) measure
-
-(*) evaluate
-type_string (fn (c: (unit, int) cx) => Table.evaluate (count1, (), c));
-> val it = "(unit,int) cx -> int" : string
-type_string (fn (c: (unit, int) cx) => count1.evaluate ((), c));
-> val it = "(unit,int) cx -> int" : string
 
 (*) eval (a non-unit argument avoids the postfix nullary-method ambiguity)
 type_string (Table.eval (plus, 5));
@@ -66,23 +105,5 @@ type_string (Table.override (count1, fn e => e, 0));
 > val it = "('a,int,unit,int) measure" : string
 type_string (count1.override (fn e => e, 0));
 > val it = "('a,int,unit,int) measure" : string
-
-(* test: the postfix form 'c.test e' needs a concrete context value (a
-   binary method does not resolve on a lambda parameter), so only the prefix
-   form is tested until contexts can be constructed. *)
-type_string (fn (c: (unit, int) cx) => Table.test (c, 0));
-> val it = "(unit,int) cx -> bool" : string
-
-(*) paramOf
-type_string (fn (c: (unit, int) cx) => Table.paramOf c);
-> val it = "(unit,int) cx -> unit" : string
-type_string (fn (c: (unit, int) cx) => c.paramOf ());
-> val it = "(unit,int) cx -> unit" : string
-
-(*) toString
-type_string (fn (c: (unit, int) cx) => Table.toString c);
-> val it = "(unit,int) cx -> string" : string
-type_string (fn (c: (unit, int) cx) => c.toString ());
-> val it = "(unit,int) cx -> string" : string
 
 (*) End measure.smli

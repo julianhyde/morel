@@ -1031,6 +1031,9 @@ public class TypeResolver {
         final Term term2 = checkInQuery(env, current);
         return reg(current, v, term2);
 
+      case CONTEXT:
+        return deduceContextType(env, (Ast.Context) node, v);
+
       case TYPE_STRING:
         return deduceTypeStringType(env, (Ast.TypeString) node, v);
 
@@ -1149,6 +1152,22 @@ public class TypeResolver {
           }
         });
     return reg(ordinal, v, toTerm(PrimitiveType.INT));
+  }
+
+  /**
+   * Deduces the type of a {@code context} keyword: {@code (unit, 'e) cx}, where
+   * {@code 'e} is the current element type. (The parameter is {@code unit}
+   * until per-source param typing arrives in a later phase.)
+   */
+  private Ast.Exp deduceContextType(
+      TypeEnv env, Ast.Context context, Variable v) {
+    final Term elemTerm = checkInQuery(env, context);
+    final Term contextTerm =
+        unifier.apply(
+            BuiltIn.Datatype.CONTEXT.mlName(),
+            toTerm(PrimitiveType.UNIT),
+            elemTerm);
+    return reg(context, v, contextTerm);
   }
 
   /**

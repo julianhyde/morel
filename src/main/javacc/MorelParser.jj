@@ -360,6 +360,14 @@ OpSection opSection() : {
   }
 }
 
+/** Parses the {@code context} keyword. */
+Context context() : {}
+{
+  <CONTEXT> {
+    return ast.context(pos());
+  }
+}
+
 /** Parses the {@code current} keyword. */
 Current current() : {}
 {
@@ -873,6 +881,7 @@ JAVACODE boolean isAtomStart() {
       || kind == FROM
       || kind == EXISTS
       || kind == FORALL
+      || kind == CONTEXT
       || kind == CURRENT
       || kind == ELEMENTS
       || kind == ORDINAL;
@@ -1332,6 +1341,8 @@ Exp atom() :
   e = identifier() { return e; }
 |
   e = opSection() { return e; }
+|
+  e = context() { return e; }
 |
   e = current() { return e; }
 |
@@ -2420,6 +2431,7 @@ AstNode statementEof() :
 
 // The following are relational extensions:
 | < COMPUTE: "compute" >
+| < CONTEXT: "context" >
 | < CURRENT: "current" >
 | < DISTINCT: "distinct" >
 | < ELEM: "elem" >

@@ -38,6 +38,8 @@ public class Visitor {
 
   protected void visit(Ast.Current current) {}
 
+  protected void visit(Ast.Context context) {}
+
   protected void visit(Ast.TypeString typeString) {
     typeString.exp.accept(this);
   }

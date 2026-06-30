@@ -5060,6 +5060,16 @@ public enum BuiltIn {
   Z_ANDALSO("$", "andalso", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
   /**
+   * Internal function "$context", of type "unit &rarr; (unit, 'e) cx". It
+   * implements the {@code context} keyword by returning the match-all base
+   * context. (Per-step context construction is a later phase.)
+   */
+  Z_CONTEXT(
+      "$",
+      "$context",
+      ts -> ts.forallType(1, h -> ts.fnType(UNIT, ts.context(UNIT, h.get(0))))),
+
+  /**
    * Internal value "$current", of type "unit". It is used to implement the
    * {@code current} keyword and its type is not necessarily {@code unit}. This
    * enum member is mainly to provide a single definition for the name.
