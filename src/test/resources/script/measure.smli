@@ -1,0 +1,88 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Tests for measures and their context-dependent methods.
+ *
+ * Evaluating a measure requires a context, which is not yet
+ * available, so each measure and context method is exercised here
+ * for its type only, in both prefix and postfix form (the postfix
+ * call directly after the prefix one). 'type_string' type-checks
+ * the call without evaluating it, so the not-yet-implemented
+ * methods do not raise. Behavioral tests will be added when
+ * contexts arrive.
+ *)
+val count1 = Table.measure (fn c => 1);
+> val count1 = measure : ('a,'b,unit,int) measure
+val plus = Table.measure_fn (fn (a, c) => a + 1);
+> val plus = measure : ('a,'b,int,int) measure
+
+(*) evaluate
+type_string (fn (c: (unit, int) cx) => Table.evaluate (count1, (), c));
+> val it = "(unit,int) cx -> int" : string
+type_string (fn (c: (unit, int) cx) => count1.evaluate ((), c));
+> val it = "(unit,int) cx -> int" : string
+
+(*) eval (a non-unit argument avoids the postfix nullary-method ambiguity)
+type_string (Table.eval (plus, 5));
+> val it = "int" : string
+type_string (plus.eval 5);
+> val it = "int" : string
+
+(*) restrict
+type_string (Table.restrict (count1, "r", fn e => true));
+> val it = "('a,'b,unit,int) measure" : string
+type_string (count1.restrict ("r", fn e => true));
+> val it = "('a,'b,unit,int) measure" : string
+
+(*) restrict_anon
+type_string (Table.restrict_anon (count1, fn e => true));
+> val it = "('a,'b,unit,int) measure" : string
+type_string (count1.restrict_anon (fn e => true));
+> val it = "('a,'b,unit,int) measure" : string
+
+(*) relax
+type_string (Table.relax (count1, "r"));
+> val it = "('a,'b,unit,int) measure" : string
+type_string (count1.relax "r");
+> val it = "('a,'b,unit,int) measure" : string
+
+(*) override
+type_string (Table.override (count1, fn e => e, 0));
+> val it = "('a,int,unit,int) measure" : string
+type_string (count1.override (fn e => e, 0));
+> val it = "('a,int,unit,int) measure" : string
+
+(* test: the postfix form 'c.test e' needs a concrete context value (a
+   binary method does not resolve on a lambda parameter), so only the prefix
+   form is tested until contexts can be constructed. *)
+type_string (fn (c: (unit, int) cx) => Table.test (c, 0));
+> val it = "(unit,int) cx -> bool" : string
+
+(*) paramOf
+type_string (fn (c: (unit, int) cx) => Table.paramOf c);
+> val it = "(unit,int) cx -> unit" : string
+type_string (fn (c: (unit, int) cx) => c.paramOf ());
+> val it = "(unit,int) cx -> unit" : string
+
+(*) toString
+type_string (fn (c: (unit, int) cx) => Table.toString c);
+> val it = "(unit,int) cx -> string" : string
+type_string (fn (c: (unit, int) cx) => c.toString ());
+> val it = "(unit,int) cx -> string" : string
+
+(*) End measure.smli

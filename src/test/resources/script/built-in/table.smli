@@ -66,11 +66,15 @@ val firstThree = Table.measure (fn c => [1, 2, 3]);
 val t = Table.table (bag [{units = 10}, {units = 4}], {n = count1});
 > val t = table : ({n:('a,'b,unit,int) measure},{units:int}) table
 
-(* The bag and the parameter are recoverable; 'elements' is a
-   reserved word, so write it with backticks. *)
+(* The elements and parameter are recoverable, each in prefix then postfix
+   form. ('elements' is a reserved word, so write it with backticks.) *)
 Table.`elements` t;
 > val it = [{units=10},{units=4}] : {units:int} bag
+t.`elements` ();
+> val it = [{units=10},{units=4}] : {units:int} bag
 Table.param t;
+> val it = {n=measure} : {n:('a,'b,unit,int) measure}
+t.param ();
 > val it = {n=measure} : {n:('a,'b,unit,int) measure}
 
 (*) End table.smli
