@@ -5776,8 +5776,8 @@ public abstract class Codes {
   private static final Applicable Z_CONTEXT =
       new BaseApplicable1<ContextValue, Object>(BuiltIn.Z_CONTEXT) {
         @Override
-        public ContextValue apply(Object unitArg) {
-          return ContextValue.MATCH_ALL;
+        public ContextValue apply(Object param) {
+          return new ContextValue(param, null);
         }
       };
 

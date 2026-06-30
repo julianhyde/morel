@@ -85,6 +85,12 @@ public class Resolver {
   final Environment env;
   final @Nullable Session session;
   final Core.@Nullable Exp current;
+  /**
+   * The parameter of the query's source table, for the {@code context} keyword;
+   * null outside a table query (treated as unit).
+   */
+  final Core.@Nullable Exp contextParam;
+
   final AggregateResolver aggregateResolver;
   final Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads;
 
@@ -110,6 +116,7 @@ public class Resolver {
       Environment env,
       @Nullable Session session,
       Core.@Nullable Exp current,
+      Core.@Nullable Exp contextParam,
       AggregateResolver aggregateResolver) {
     this.typeMap = typeMap;
     this.nameGenerator = nameGenerator;
@@ -118,6 +125,7 @@ public class Resolver {
     this.env = env;
     this.session = session;
     this.current = current;
+    this.contextParam = contextParam;
     this.aggregateResolver = aggregateResolver;
   }
 
@@ -133,6 +141,7 @@ public class Resolver {
         new HashMap<>(),
         env,
         session,
+        null,
         null,
         AggregateResolver.UNSUPPORTED);
   }
@@ -150,6 +159,7 @@ public class Resolver {
         env,
         session,
         current,
+        contextParam,
         aggregateResolver);
   }
 
@@ -173,6 +183,23 @@ public class Resolver {
         env,
         session,
         current,
+        contextParam,
+        aggregateResolver);
+  }
+
+  private Resolver withContextParam(Core.@Nullable Exp contextParam) {
+    if (contextParam == this.contextParam) {
+      return this;
+    }
+    return new Resolver(
+        typeMap,
+        nameGenerator,
+        variantIdMap,
+        resolvedOverloads,
+        env,
+        session,
+        current,
+        contextParam,
         aggregateResolver);
   }
 
@@ -215,6 +242,7 @@ public class Resolver {
             innerEnv,
             session,
             current,
+            contextParam,
             AggregateResolver.UNSUPPORTED);
     final AggregateResolver aggregateResolver =
         new AggregateResolverImpl(
@@ -227,6 +255,7 @@ public class Resolver {
         outerEnv,
         session,
         current,
+        contextParam,
         aggregateResolver);
   }
 
@@ -592,8 +621,9 @@ public class Resolver {
     final Type type = typeMap.getType(context);
     final Core.Literal fn =
         core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_CONTEXT);
-    final Core.Tuple arg = core.tuple(typeMap.typeSystem);
-    return core.apply(context.pos, type, fn, arg);
+    final Core.Exp paramExp =
+        contextParam != null ? contextParam : core.unitLiteral();
+    return core.apply(context.pos, type, fn, paramExp);
   }
 
   /**
@@ -611,6 +641,15 @@ public class Resolver {
     final Core.Literal fn =
         core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_TABLE_ELEMENTS);
     return core.apply(pos, collectionType, fn, tableExp);
+  }
+
+  /** Returns the parameter of a table-typed expression. */
+  private Core.Exp tableParam(Pos pos, Core.Exp tableExp) {
+    final DataType tableType = (DataType) tableExp.type;
+    final Type paramType = tableType.arg(0);
+    final Core.Literal fn =
+        core.functionLiteral(typeMap.typeSystem, BuiltIn.TABLE_PARAM);
+    return core.apply(pos, paramType, fn, tableExp);
   }
 
   private Core.Exp toCore(Ast.TypeString typeString) {
@@ -1409,6 +1448,12 @@ public class Resolver {
             typeMap.typeSystem,
             () -> env.bindAll(aggregateResolver.bindings()));
 
+    /**
+     * The parameter of the source table, if this query iterates a table; passed
+     * to the {@code context} keyword. Null for a list/bag query.
+     */
+    private Core.@Nullable Exp sourceParam;
+
     Core.Exp run(Ast.Query query) {
       if (query.isInto()) {
         // Translate "from ... into f" as if they had written "f (from ...)"
@@ -1473,7 +1518,9 @@ public class Resolver {
         stepEnv.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         f = core.record(typeMap.typeSystem, nameExps);
       }
-      return withEnv(stepEnv.bindings).withCurrent(f);
+      return withEnv(stepEnv.bindings)
+          .withCurrent(f)
+          .withContextParam(sourceParam);
     }
 
     @Override
@@ -1496,11 +1543,13 @@ public class Resolver {
                 ImmutableRangeSet.of(Range.all()));
       } else {
         final Core.Exp sourceExp = r.toCore(scan.exp);
-        coreExp =
-            sourceExp.type instanceof DataType
-                    && ((DataType) sourceExp.type).name.equals("table")
-                ? r.tableElements(scan.exp.pos, sourceExp)
-                : sourceExp;
+        if (sourceExp.type instanceof DataType
+            && ((DataType) sourceExp.type).name.equals("table")) {
+          sourceParam = r.tableParam(scan.exp.pos, sourceExp);
+          coreExp = r.tableElements(scan.exp.pos, sourceExp);
+        } else {
+          coreExp = sourceExp;
+        }
         final Type elementType = coreExp.type.elementType();
         corePat = r.toCore(scan.pat, elementType);
       }

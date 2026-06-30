@@ -131,6 +131,12 @@ public class TypeResolver {
   private final Deque<AggFrame> aggregateTripleStack = new ArrayDeque<>();
 
   /**
+   * Internal name under which a query step binds its source's parameter type,
+   * for use by the {@code context} keyword.
+   */
+  private static final String CONTEXT_PARAM_NAME = "$contextParam";
+
+  /**
    * Names of user-defined functions whose first parameter is named {@code self}
    * (curried form); these can be invoked as methods.
    */
@@ -670,16 +676,20 @@ public class TypeResolver {
    * orderedness tag decides whether the query is ordered (list) or unordered
    * (bag). This collapses a table to ordinary list/bag at the scan boundary, so
    * downstream steps (union, join) see only list/bag.
+   *
+   * <p>{@code pVar} is bound to the source's parameter type -- the table's
+   * parameter for a table source, otherwise {@code unit} -- so that the {@code
+   * context} keyword can be typed.
    */
   private void isSourceMatchingInput(
-      Variable c0, Variable v0, Variable c, Variable v) {
-    final Variable pVar = unifier.variable();
+      Variable c0, Variable v0, Variable c, Variable v, Variable pVar) {
+    final Term unitT = toTerm(PrimitiveType.UNIT);
     final Term orderedT = toTerm(typeSystem.ordered(), Subst.EMPTY);
     final Term unorderedT = toTerm(typeSystem.unordered(), Subst.EMPTY);
     final String tableCon = BuiltIn.Datatype.TABLE.mlName();
     final PairList<Term, Constraint.Action> termActions = PairList.of();
-    termActions.add(listTerm(v0), sourceAction(c, listTerm(v)));
-    termActions.add(bagTerm(v0), sourceAction(c, bagTerm(v)));
+    termActions.add(listTerm(v0), sourceAction(c, listTerm(v), pVar, unitT));
+    termActions.add(bagTerm(v0), sourceAction(c, bagTerm(v), pVar, unitT));
     termActions.add(
         unifier.apply(tableCon, pVar, v0, orderedT),
         sourceAction(c, listTerm(v)));
@@ -1205,11 +1215,15 @@ public class TypeResolver {
   private Ast.Exp deduceContextType(
       TypeEnv env, Ast.Context context, Variable v) {
     final Term elemTerm = checkInQuery(env, context);
+    final Term paramTerm =
+        env.has(CONTEXT_PARAM_NAME)
+            ? env.get(
+                typeSystem,
+                CONTEXT_PARAM_NAME,
+                name -> new IllegalStateException(name))
+            : toTerm(PrimitiveType.UNIT);
     final Term contextTerm =
-        unifier.apply(
-            BuiltIn.Datatype.CONTEXT.mlName(),
-            toTerm(PrimitiveType.UNIT),
-            elemTerm);
+        unifier.apply(BuiltIn.Datatype.CONTEXT.mlName(), paramTerm, elemTerm);
     return reg(context, v, contextTerm);
   }
 
@@ -1586,6 +1600,7 @@ public class TypeResolver {
 
     final Variable v = fieldVar(fieldVars, true);
     final Variable c;
+    Variable contextParamVar = null;
     switch (sourceKind) {
       case NONE:
         c = toVariable(bagTerm(v));
@@ -1617,7 +1632,8 @@ public class TypeResolver {
           //   * v is a record type composed of the fields "{i, j}"
           // The source may also be a table, in which case its orderedness tag
           // decides whether the query is a list or a bag.
-          isSourceMatchingInput(c0, v0, c, v);
+          contextParamVar = unifier.variable();
+          isSourceMatchingInput(c0, v0, c, v, contextParamVar);
         } else {
           // Consider processing the second step in
           //   "from i in [1, 2],
@@ -1638,6 +1654,11 @@ public class TypeResolver {
               p.c, unifier.variable(), c0, unifier.variable(), c, v);
           isCollectionOf(c0, v0);
         }
+    }
+
+    // Make the source's parameter type available to the 'context' keyword.
+    if (contextParamVar != null) {
+      outEnv = outEnv.bind(CONTEXT_PARAM_NAME, contextParamVar);
     }
 
     steps.add(scan.copy(pat, scanExp3, scanCondition2));

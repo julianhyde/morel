@@ -5086,14 +5086,17 @@ public enum BuiltIn {
   Z_ANDALSO("$", "andalso", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
   /**
-   * Internal function "$context", of type "unit &rarr; (unit, 'e) cx". It
+   * Internal function "$context", of type "'p &rarr; ('p, 'e) cx". It
    * implements the {@code context} keyword by returning the match-all base
-   * context. (Per-step context construction is a later phase.)
+   * context with the given parameter. (Per-step constraint construction is a
+   * later phase.)
    */
   Z_CONTEXT(
       "$",
       "$context",
-      ts -> ts.forallType(1, h -> ts.fnType(UNIT, ts.context(UNIT, h.get(0))))),
+      ts ->
+          ts.forallType(
+              2, h -> ts.fnType(h.get(0), ts.context(h.get(0), h.get(1))))),
 
   /**
    * Internal value "$current", of type "unit". It is used to implement the

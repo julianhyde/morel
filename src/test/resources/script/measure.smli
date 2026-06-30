@@ -80,11 +80,22 @@ val ot = Table.orderedTable ([{x = 1}, {x = 2}, {x = 3}], {n = 10});
 from e in ot yield e.x;
 > val it = [1,2,3] : int list
 
-(*) The context's element type is the table's element type.
+(* The context's type carries the table's parameter and element types; the
+   orderedness flows to the query collection. *)
 type_string (from e in ut yield context);
-> val it = "(unit,{x:int}) cx bag" : string
+> val it = "({n:int},{x:int}) cx bag" : string
 type_string (from e in ot yield context);
-> val it = "(unit,{x:int}) cx list" : string
+> val it = "({n:int},{x:int}) cx list" : string
+
+(*) 'paramOf' on a table query's context returns the table's parameter.
+from e in ut yield Table.paramOf context;
+> val it = [{n=10},{n=10},{n=10}] : {n:int} bag
+from e in ut yield context.paramOf ();
+> val it = [{n=10},{n=10},{n=10}] : {n:int} bag
+
+(*) A non-table source has a unit parameter.
+from e in [1, 2, 3] yield Table.paramOf context;
+> val it = [(),(),()] : unit list
 
 (* 'eval' and the modification methods need the surrounding context or context
    modification, neither of which is implemented yet, so they are checked for
