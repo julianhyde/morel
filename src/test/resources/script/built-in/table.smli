@@ -1,0 +1,77 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Unit tests for the built-in `Table` structure.
+ *
+ * These tests cover construction and type-printing only.
+ * Evaluating a measure requires a context, which is not yet
+ * available, so those tests are deferred.
+ *)
+Sys.set ("lineWidth", 78);
+> val it = () : unit
+Sys.set ("printLength", 999);
+> val it = () : unit
+Sys.set ("stringDepth", ~1);
+> val it = () : unit
+
+Table;
+> val it =
+>   {`elements`=fn,eval=fn,evaluate=fn,measure=fn,measure_fn=fn,override=fn,
+>    param=fn,paramOf=fn,relax=fn,restrict=fn,restrict_anon=fn,table=fn,
+>    test=fn,toString=fn}
+>   : {`elements`:('a,'b) table -> 'b bag,
+>       eval:('c,'d,'e,'f) measure * 'e -> 'f,
+>       evaluate:('g,'h,'i,'j) measure * 'i * ('g,'h) context -> 'j,
+>       measure:(('k,'l) context -> 'm) -> ('k,'l,unit,'m) measure,
+>       measure_fn:('n * ('o,'p) context -> 'q) -> ('o,'p,'n,'q) measure,
+>       override:('r,'s,'t,'u) measure * ('s -> 'v) * 'v
+>                 -> ('r,'s,'t,'u) measure, param:('w,'x) table -> 'w,
+>       paramOf:('y,'z) context -> 'y,
+>       relax:('ba,'bb,'bc,'bd) measure * string -> ('ba,'bb,'bc,'bd) measure,
+>       restrict:('be,'bf,'bg,'bh) measure * string * ('bf -> bool)
+>                 -> ('be,'bf,'bg,'bh) measure,
+>       restrict_anon:('bi,'bj,'bk,'bl) measure * ('bj -> bool)
+>                      -> ('bi,'bj,'bk,'bl) measure,
+>       table:'bm bag * 'bn -> ('bn,'bm) table,
+>       test:('bo,'bp) context * 'bp -> bool,
+>       toString:('bq,'br) context -> string}
+
+(*) A measure with no argument (the common case): unit argument type.
+val count1 = Table.measure (fn c => 1);
+> val count1 = - : ('a,'b,unit,int) measure
+
+(*) A measure whose body reads an argument.
+val plus = Table.measure_fn (fn (a, c) => a + 1);
+> val plus = - : ('a,'b,int,int) measure
+
+(*) A measure may return any type, e.g. a list.
+val firstThree = Table.measure (fn c => [1, 2, 3]);
+> val firstThree = - : ('a,'b,unit,int list) measure
+
+(*) Build a table from a bag and a parameter record containing a measure.
+val t = Table.table (bag [{units = 10}, {units = 4}], {n = count1});
+> val t = - : ({n:('a,'b,unit,int) measure},{units:int}) table
+
+(* The bag and the parameter are recoverable; 'elements' is a
+   reserved word, so write it with backticks. *)
+Table.`elements` t;
+> val it = [{units=10},{units=4}] : {units:int} bag
+Table.param t;
+> val it = {n=-} : {n:('a,'b,unit,int) measure}
+
+(*) End table.smli
