@@ -121,6 +121,7 @@ License.
     <maven-javadoc-plugin.additionalOptions>-html5</maven-javadoc-plugin.additionalOptions>
     <maven-javadoc-plugin.excludePackageNames>net.hydromatic.morel.parse</maven-javadoc-plugin.excludePackageNames>
     <maven-javadoc-plugin.link>https://docs.oracle.com/javase/11/docs/api/</maven-javadoc-plugin.link>
+    <git-commit-id.skip>false</git-commit-id.skip>
   </properties>
 
   <!-- Environment settings. -->
@@ -488,6 +489,7 @@ License.
           </execution>
         </executions>
         <configuration>
+          <skip>${git-commit-id.skip}</skip>
           <dateFormat>yyyy-MM-dd'T'HH:mm:ssZ</dateFormat>
           <verbose>false</verbose>
           <skipPoms>false</skipPoms>
