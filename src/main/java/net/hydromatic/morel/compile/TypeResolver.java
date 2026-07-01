@@ -640,7 +640,6 @@ public class TypeResolver {
     constraints.add(unifier.constraint(arg, result, argResults));
   }
 
-  /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
   /**
    * Adds a constraint that {@code c} is a collection of {@code v}. The
    * orderedness is left to be determined; if nothing else constrains it, the
@@ -651,16 +650,14 @@ public class TypeResolver {
   }
 
   /**
-   * Adds a constraint that {@code c1} is a bag or list of {@code v1}; if it is
-   * a list then {@code c2} is a list of {@code v2}, otherwise {@code c2} is a
-   * bag of {@code v2}.
+   * Adds a constraint that {@code c1} and {@code c2} are collections (of {@code
+   * v1} and {@code v2}) with the same orderedness. With the unified
+   * representation the element/orderedness relationship is intrinsic to the
+   * collection term, so this is plain unification on a shared orderedness
+   * variable rather than a deferred list/bag disjunction.
    */
-  private void isListOrBagMatchingInput(
+  private void sameOrderedness(
       Variable c1, Variable v1, Variable c2, Variable v2) {
-    // c1 and c2 are collections of v1 and v2 that share the same orderedness.
-    // With the unified representation the element/orderedness relationship is
-    // intrinsic to the collection term, so this is plain unification on a
-    // shared orderedness variable rather than a deferred list/bag disjunction.
     final Variable o = unifier.variable();
     equiv(c1, collectionTerm(v1, o));
     equiv(c2, collectionTerm(v2, o));
@@ -672,9 +669,8 @@ public class TypeResolver {
    * <p>Returns -2 if the function is a user-defined named function whose type
    * is not yet available (use {@code isCollectionOf}); -1 if the function is
    * overloaded, polymorphic, or its collection kind is unknown (use {@code
-   * isListOrBagMatchingInput} to link to the input's ordering); 0 if the
-   * function's parameter type is a bag; or 1 if the function's parameter type
-   * is a list.
+   * sameOrderedness} to link to the input's ordering); 0 if the function's
+   * parameter type is a bag; or 1 if the function's parameter type is a list.
    *
    * <p>Uses {@code getTypeOpt}, not {@code getType}, to avoid re-registering
    * the function expression with its raw type (which would overwrite the
@@ -1365,7 +1361,7 @@ public class TypeResolver {
               // Overloaded or polymorphic: use deduceApplyFnType for
               // dispatch, linked to input ordering.
               final Variable intoCArg = unifier.variable();
-              isListOrBagMatchingInput(intoCArg, p.v, p.c, p.v);
+              sameOrderedness(intoCArg, p.v, p.c, p.v);
               final Variable intoVFn = unifier.variable();
               intoExp =
                   deduceApplyFnType(p.env, into.exp, intoVFn, intoCArg, rv);
@@ -1524,7 +1520,7 @@ public class TypeResolver {
         // c is "{i:int, b:bool} list" or "bag" - collection type of the query
         // v is "{i:int, b:bool}" - the element type of the query
         c = unifier.variable();
-        isListOrBagMatchingInput(p.c, p.v, c, v);
+        sameOrderedness(p.c, p.v, c, v);
         break;
       default:
         c = unifier.variable();
@@ -1541,7 +1537,7 @@ public class TypeResolver {
           //   * c0 is either list(v0) or bag(v0)
           //   * c0 matches the type deduced for "[(1, true), (2, false)]"
           //   * v is a record type composed of the fields "{i, j}"
-          isListOrBagMatchingInput(c0, v0, c, v);
+          sameOrderedness(c0, v0, c, v);
         } else {
           // Consider processing the second step in
           //   "from i in [1, 2],
@@ -1735,7 +1731,7 @@ public class TypeResolver {
     //   map: 'a -> 'b -> 'a list -> 'b list
     //   map: 'a -> 'b -> 'a bag -> 'b bag
     final Variable c6 = unifier.variable();
-    isListOrBagMatchingInput(c6, v6, requireNonNull(p.c), p.v);
+    sameOrderedness(c6, v6, requireNonNull(p.c), p.v);
 
     if (yieldExp2.op == Op.RECORD) {
       final Ast.Record record2 = (Ast.Record) yieldExp2;
@@ -1853,7 +1849,7 @@ public class TypeResolver {
 
       // Output is ordered iff input is ordered.
       final Variable c2 = unifier.variable();
-      isListOrBagMatchingInput(c2, v2, requireNonNull(p.c), p.v);
+      sameOrderedness(c2, v2, requireNonNull(p.c), p.v);
       return Triple.of(p.rootEnv, p.rootEnv.bindAll(bindings), v2, c2);
     } else {
       steps.add(((Ast.Compute) group).copy(compute2));
@@ -3177,7 +3173,7 @@ public class TypeResolver {
         // For overloaded, polymorphic, or non-Id aggregates,
         // link the collection type to the input ordering so the unifier
         // selects the correct variant or adapts to the input.
-        isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
+        sameOrderedness(cArg, vArg, p.c, p.v);
         break;
     }
 
