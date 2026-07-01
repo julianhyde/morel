@@ -32,6 +32,12 @@ sig
    *)
   datatype 'a descending = DESC of 'a
 
+  (** is the orderedness tag of an ordered (list-backed) collection. *)
+  datatype ordered = ORDERED
+
+  (** is the orderedness tag of an unordered (bag-backed) collection. *)
+  datatype unordered = UNORDERED
+
   (**
    * returns `LESS`, `EQUAL`, or `GREATER` according to
    * whether its first argument is less than, equal to, or greater than the

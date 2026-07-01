@@ -193,10 +193,17 @@ public class TypeMap {
               transformEager(sequence.terms, term -> term.accept(this));
           return typeMap.typeSystem.tupleType(argTypes);
 
-        case TypeResolver.LIST_TY_CON:
-          assert sequence.terms.size() == 1;
+        case TypeResolver.COLLECTION_TY_CON:
+          assert sequence.terms.size() == 2;
           final Type elementType = sequence.terms.get(0).accept(this);
-          return typeMap.typeSystem.listType(elementType);
+          final Unifier.Term ordTerm = sequence.terms.get(1);
+          final boolean ordered =
+              ordTerm instanceof Unifier.Sequence
+                  && ((Unifier.Sequence) ordTerm)
+                      .operator.equals(TypeResolver.ORDERED);
+          return ordered
+              ? typeMap.typeSystem.listType(elementType)
+              : typeMap.typeSystem.bag(elementType);
 
         case "bool":
         case "char":

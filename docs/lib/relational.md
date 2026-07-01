@@ -32,6 +32,8 @@ extend Standard ML with relational-algebra capabilities.
 
 <pre>
 datatype 'a <a id='descending' href="#descending-impl">descending</a> = DESC of 'a
+datatype <a id='ordered' href="#ordered-impl">ordered</a> = ORDERED
+datatype <a id='unordered' href="#unordered-impl">unordered</a> = UNORDERED
 
 val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 val <a id='count' href="#count-impl">count</a> : 'a bag -> int
@@ -49,6 +51,16 @@ val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
 
 wraps a value so that it sorts in descending order when used with
 `Relational.compare`.
+
+<a id="ordered-impl"></a>
+<h3><code><strong>datatype</strong> ordered</code></h3>
+
+is the orderedness tag of an ordered (list-backed) collection.
+
+<a id="unordered-impl"></a>
+<h3><code><strong>datatype</strong> unordered</code></h3>
+
+is the orderedness tag of an unordered (bag-backed) collection.
 
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>

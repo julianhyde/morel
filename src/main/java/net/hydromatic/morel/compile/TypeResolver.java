@@ -151,6 +151,20 @@ public class TypeResolver {
   static final String ARG_TY_CON = "$arg";
   static final String OVERLOAD_TY_CON = BuiltIn.Datatype.OVERLOAD.mlName();
   static final String LIST_TY_CON = "list";
+
+  /**
+   * Internal term constructor for collections: {@code collection(element,
+   * orderedness)}, where orderedness is {@link #ORDERED} (a list) or {@link
+   * #UNORDERED} (a bag). Distinct from any user-facing type name.
+   */
+  static final String COLLECTION_TY_CON = "$collection";
+
+  /** Orderedness atom for a list. */
+  static final String ORDERED = "ordered";
+
+  /** Orderedness atom for a bag. */
+  static final String UNORDERED = "unordered";
+
   static final String OPTION_TY_CON = BuiltIn.Datatype.OPTION.mlName();
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
@@ -628,6 +642,11 @@ public class TypeResolver {
 
   /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
   private void mayBeBagOrList(Variable c, Variable v) {
+    // Two alternatives (list, bag) keep the constraint ambiguous, so it stays
+    // deferred until 'c' is otherwise determined -- leaving 'c' polymorphic
+    // when nothing else constrains it (e.g. the second operand of 'union' in a
+    // polymorphic function). Both alternatives are now collection terms that
+    // differ only in orderedness.
     final Sequence list = listTerm(v);
     final Sequence bag = bagTerm(v);
     PairList<Term, Constraint.Action> termActions =
@@ -2623,11 +2642,19 @@ public class TypeResolver {
       final TermVariable tv = terms.get(i);
       if (tv.variable.equals(v)) {
         if (tv.term instanceof Sequence) {
-          final String op = ((Sequence) tv.term).operator;
-          // Skip structural operators that are not type constructors.
-          if (!op.equals(FN_TY_CON)
+          final Sequence seq = (Sequence) tv.term;
+          final String op = seq.operator;
+          if (op.equals(COLLECTION_TY_CON)) {
+            // Resolve a collection term to "list" or "bag" by its orderedness,
+            // so overload and method resolution can distinguish the two.
+            final String collOp = collectionTermOp(seq, visited);
+            if (collOp != null) {
+              return collOp;
+            }
+          } else if (!op.equals(FN_TY_CON)
               && !op.equals(TUPLE_TY_CON)
               && !op.startsWith(RECORD_TY_CON)) {
+            // Skip structural operators that are not type constructors.
             return op;
           }
         } else if (tv.term instanceof Variable) {
@@ -2637,6 +2664,41 @@ public class TypeResolver {
             return op;
           }
         }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * If {@code seq} is a collection term, returns {@link #LIST_TY_CON} or {@link
+   * #BAG_TY_CON} according to its orderedness, or null if the orderedness is
+   * not yet determined.
+   */
+  private @Nullable String collectionTermOp(
+      Sequence seq, Set<Variable> visited) {
+    Term ord = seq.terms.get(1);
+    // Follow variable links to a concrete orderedness atom, if any.
+    while (ord instanceof Variable && visited.add((Variable) ord)) {
+      Term next = null;
+      for (int i = terms.size() - 1; i >= 0; i--) {
+        final TermVariable tv = terms.get(i);
+        if (tv.variable.equals(ord)) {
+          next = tv.term;
+          break;
+        }
+      }
+      if (next == null) {
+        break;
+      }
+      ord = next;
+    }
+    if (ord instanceof Sequence) {
+      final String op = ((Sequence) ord).operator;
+      if (op.equals(ORDERED)) {
+        return LIST_TY_CON;
+      }
+      if (op.equals(UNORDERED)) {
+        return BAG_TY_CON;
       }
     }
     return null;
@@ -2881,7 +2943,7 @@ public class TypeResolver {
    * peeled so far (outermost first). Defers if a layer is not yet resolved.
    */
   private void resolveSafeField(
-      List<String> functors,
+      List<Sequence> functors,
       String fieldName,
       Term term,
       Variable vResult,
@@ -2900,13 +2962,12 @@ public class TypeResolver {
       return; // not a record or functor; reported by the post-pass
     }
     final Sequence seq = (Sequence) t;
-    if (isSafeNavFunctor(seq.operator) && seq.terms.size() == 1) {
-      // Tunnel through this functor layer.
+    if (isSafeNavFunctor(seq.operator) && !seq.terms.isEmpty()) {
+      // Tunnel through this functor layer. The element is always the first
+      // term; any further terms (e.g. a collection's orderedness) are retained
+      // so the layer can be reconstructed exactly when re-wrapping.
       resolveSafeField(
-          ImmutableList.<String>builder()
-              .addAll(functors)
-              .add(seq.operator)
-              .build(),
+          ImmutableList.<Sequence>builder().addAll(functors).add(seq).build(),
           fieldName,
           seq.terms.get(0),
           vResult,
@@ -2919,10 +2980,14 @@ public class TypeResolver {
     if (fieldType == null) {
       return; // not a record, or no such field; reported by the post-pass
     }
-    // Re-wrap the field type in the functor layers (innermost layer first).
+    // Re-wrap the field type in the functor layers (innermost layer first),
+    // preserving each layer's non-element terms (e.g. orderedness).
     Term result = fieldType;
     for (int i = functors.size() - 1; i >= 0; i--) {
-      result = unifier.apply(functors.get(i), result);
+      final Sequence layer = functors.get(i);
+      final List<Term> args = new ArrayList<>(layer.terms);
+      args.set(0, result);
+      result = unifier.apply(layer.operator, args);
     }
     termPairs.accept(substitution.resolve(vResult), result);
   }
@@ -2932,10 +2997,13 @@ public class TypeResolver {
    * navigation {@code ?.} projects fields.
    */
   private static boolean isSafeNavFunctor(String op) {
+    // Accepts both term operators (a collection term is "$collection") and
+    // type-constructor names (a bag/list type is "bag"/"list").
     return op.equals("option")
         || op.equals("vector")
         || op.equals(LIST_TY_CON)
-        || op.equals(BAG_TY_CON);
+        || op.equals(BAG_TY_CON)
+        || op.equals(COLLECTION_TY_CON);
   }
 
   /**
@@ -3530,6 +3598,10 @@ public class TypeResolver {
           if (namedType.name.equals(LIST_TY_CON) && typeTerms2.size() == 1) {
             // TODO: make 'list' a regular generic type
             term = listTerm(typeTerms2.right(0));
+          } else if (namedType.name.equals(BAG_TY_CON)
+              && typeTerms2.size() == 1) {
+            // Build a collection term so it matches bags from other sources.
+            term = bagTerm(typeTerms2.right(0));
           } else if (typeTerms2.isEmpty()) {
             term = unifier.apply(namedType.name);
           } else {
@@ -4026,12 +4098,17 @@ public class TypeResolver {
     return v;
   }
 
+  /** Creates a collection term {@code collection(elem, orderedness)}. */
+  private Sequence collectionTerm(Term elem, Term orderedness) {
+    return unifier.apply(COLLECTION_TY_CON, elem, orderedness);
+  }
+
   private Sequence listTerm(Term term) {
-    return unifier.apply(LIST_TY_CON, term);
+    return collectionTerm(term, unifier.atom(ORDERED));
   }
 
   private Sequence bagTerm(Term term) {
-    return unifier.apply(BAG_TY_CON, term);
+    return collectionTerm(term, unifier.atom(UNORDERED));
   }
 
   private Sequence optionTerm(Term term) {
