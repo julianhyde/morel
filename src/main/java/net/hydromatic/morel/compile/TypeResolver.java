@@ -642,16 +642,10 @@ public class TypeResolver {
 
   /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
   private void mayBeBagOrList(Variable c, Variable v) {
-    // Two alternatives (list, bag) keep the constraint ambiguous, so it stays
-    // deferred until 'c' is otherwise determined -- leaving 'c' polymorphic
-    // when nothing else constrains it (e.g. the second operand of 'union' in a
-    // polymorphic function). Both alternatives are now collection terms that
-    // differ only in orderedness.
-    final Sequence list = listTerm(v);
-    final Sequence bag = bagTerm(v);
-    PairList<Term, Constraint.Action> termActions =
-        copyOf(list, Constraint.equiv(c, list), bag, Constraint.equiv(c, bag));
-    constraints.add(unifier.constraint(c, termActions));
+    // 'c' is a collection of 'v' with orderedness to be determined. If nothing
+    // else constrains the orderedness it defaults to a bag when the type is
+    // read back.
+    equiv(c, collectionTerm(v, unifier.variable()));
   }
 
   /**
