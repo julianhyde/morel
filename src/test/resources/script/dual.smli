@@ -518,4 +518,16 @@ List.`intersect` [[1, 1, 2, 3], [1, 1, 5]];
 List.concat [[1, 2], [3], [4, 5]];
 > val it = [1,2,3,4,5] : int list
 
+(*) Collections of collections
+[[1, 2], [3]];
+> val it = [[1,2],[3]] : int list list
+[bag [1, 2], bag [3]];
+> val it = [[1,2],[3]] : int bag list
+from l in [[1, 2], [3]];
+> val it = [[1,2],[3]] : int list list
+from l in [[1, 2], [3]] yield List.length l;
+> val it = [2,1] : int list
+Bag.concat [bag [1, 2], bag [3]];
+> val it = [1,2,3] : int bag
+
 (*) End dual.smli
