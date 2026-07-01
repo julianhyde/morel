@@ -661,14 +661,13 @@ public class TypeResolver {
    */
   private void isListOrBagMatchingInput(
       Variable c1, Variable v1, Variable c2, Variable v2) {
-    Sequence list1 = listTerm(v1);
-    Sequence bag1 = bagTerm(v1);
-    Sequence list2 = listTerm(v2);
-    Sequence bag2 = bagTerm(v2);
-    constraints.add(
-        unifier.constraint(c2, c1, copyOf(list2, list1, bag2, bag1)));
-    constraints.add(
-        unifier.constraint(c1, c2, copyOf(list1, list2, bag1, bag2)));
+    // c1 and c2 are collections of v1 and v2 that share the same orderedness.
+    // With the unified representation the element/orderedness relationship is
+    // intrinsic to the collection term, so this is plain unification on a
+    // shared orderedness variable rather than a deferred list/bag disjunction.
+    final Variable o = unifier.variable();
+    equiv(c1, collectionTerm(v1, o));
+    equiv(c2, collectionTerm(v2, o));
   }
 
   /**

@@ -199,6 +199,12 @@ public class MartelliUnifier extends Unifier {
   private static String render(Term term) {
     if (term instanceof Sequence) {
       final Sequence seq = (Sequence) term;
+      final String ord = orderednessAtom(seq);
+      if (ord != null) {
+        // A bare orderedness atom surfaces when two collections are unified on
+        // a shared orderedness variable and clash; render it as "list"/"bag".
+        return ord.equals(ORDERED_OP) ? "list" : "bag";
+      }
       if (seq.operator.equals(COLLECTION_OP) && seq.terms.size() == 2) {
         final String kind =
             ORDERED_OP.equals(orderednessAtom(seq.terms.get(1)))
