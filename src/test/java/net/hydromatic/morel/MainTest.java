@@ -2531,11 +2531,11 @@ public class MainTest {
         .assertEval(is(1));
 
     ml("fn (a: int list, b) => from i in a union b")
-        .assertType("int list * 'a -> 'b");
+        .assertType("int list * int bag -> int bag");
     ml("fn (a: int list, b) => from i in a intersect b")
-        .assertType("int list * 'a -> 'b");
+        .assertType("int list * int bag -> int bag");
     ml("fn (a: int list, b) => from i in a except b")
-        .assertType("int list * 'a -> 'b");
+        .assertType("int list * int bag -> int bag");
 
     ml("from d in [{a=1,b=true},{a=2,b=false}]\n"
             + " yield d.a\n"
