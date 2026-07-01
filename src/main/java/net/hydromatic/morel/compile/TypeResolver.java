@@ -792,21 +792,34 @@ public class TypeResolver {
    */
   private void isListIfBothAreLists(
       Term c0, Variable v0, Term c1, Variable v1, Variable c, Variable v) {
-    final Sequence list0 = listTerm(v0);
-    final Sequence list1 = listTerm(v1);
-    final Sequence bag0 = bagTerm(v0);
-    final Sequence bag1 = bagTerm(v1);
-    final Sequence listResult = listTerm(v);
-    final Sequence bagResult = bagTerm(v);
-    final Constraint.Action listAction = Constraint.equiv(c, listResult);
-    final Constraint.Action bagAction = Constraint.equiv(c, bagResult);
+    // Each of c0, c1, c is a collection; the result orderedness is the meet of
+    // the two input orderednesses (a list only if both inputs are lists,
+    // otherwise a bag).
+    final Variable o0 = unifier.variable();
+    final Variable o1 = unifier.variable();
+    final Variable o = unifier.variable();
+    equiv(toVariable(c0), collectionTerm(v0, o0));
+    equiv(toVariable(c1), collectionTerm(v1, o1));
+    equiv(c, collectionTerm(v, o));
+    meetOrderedness(o, o0, o1);
+  }
+
+  /**
+   * Adds a constraint that orderedness {@code o} is the meet of {@code o0} and
+   * {@code o1}: ordered if both are ordered, otherwise unordered.
+   */
+  private void meetOrderedness(Variable o, Variable o0, Variable o1) {
+    final Term ordered = unifier.atom(ORDERED);
+    final Term unordered = unifier.atom(UNORDERED);
+    final Constraint.Action orderedAction = Constraint.equiv(o, ordered);
+    final Constraint.Action unorderedAction = Constraint.equiv(o, unordered);
     final PairList<Term, Constraint.Action> termActions = PairList.of();
-    termActions.add(argTerm(list0, list1), listAction);
-    termActions.add(argTerm(list0, bag1), bagAction);
-    termActions.add(argTerm(bag0, list1), bagAction);
-    termActions.add(argTerm(bag0, bag1), bagAction);
+    termActions.add(argTerm(ordered, ordered), orderedAction);
+    termActions.add(argTerm(ordered, unordered), unorderedAction);
+    termActions.add(argTerm(unordered, ordered), unorderedAction);
+    termActions.add(argTerm(unordered, unordered), unorderedAction);
     constraints.add(
-        unifier.constraint(toVariable(argTerm(c0, c1)), termActions));
+        unifier.constraint(toVariable(argTerm(o0, o1)), termActions));
   }
 
   /**
