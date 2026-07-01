@@ -448,9 +448,10 @@ first_pair (bag [("a","b"),("c","d")]);
 > stdIn:1.1-1.38 Error: Cannot deduce type: conflict: bag(T11) vs list(tuple(T13, T13))
 >   raised at: stdIn:1.1-1.38
 
-(* Function that uses its argument in a query and therefore requires
- * it to be a list or a bag. With no other constraints, the argument
- * defaults to a bag. *)
+(* Function that uses its argument in a query. Because the argument
+ * could be a list, a bag, or a table, with no other constraints its
+ * type cannot be deduced. *)
+(*) TODO With no constraints, 'IllegalArgumentException' is not a great error
 fun sumPairs list =
   from (l, r) in list yield l + r;
 > java.lang.IllegalArgumentException: not a collection type: 'a
