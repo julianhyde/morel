@@ -97,6 +97,24 @@ from e in ut yield context.paramOf ();
 from e in [1, 2, 3] yield Table.paramOf context;
 > val it = [(),(),()] : unit list
 
+(* 'context' is valid in a 'compute' clause, where it denotes the base
+   context. Constraining it to the group's key is a later phase, so for now
+   it is match-all: 'toString' renders '{}' and 'test' admits every row. *)
+val prods =
+  bag [{color = "red", units = 10}, {color = "red", units = 4},
+       {color = "blue", units = 7}];
+> val prods =
+>   [{color="red",units=10},{color="red",units=4},{color="blue",units=7}]
+>   : {color:string, units:int} bag
+from e in prods group {e.color} compute {c = Table.toString context};
+> val it = [{c="{}",color="red"},{c="{}",color="blue"}]
+>   : {c:string, color:string} bag
+from e in prods
+  group {e.color}
+  compute {t = Table.test (context, {color = "green", units = 0})};
+> val it = [{color="red",t=true},{color="blue",t=true}]
+>   : {color:string, t:bool} bag
+
 (* 'eval' and the modification methods need the surrounding context or context
    modification, neither of which is implemented yet, so they are checked for
    their type only, in prefix then postfix form. *)

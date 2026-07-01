@@ -1972,10 +1972,23 @@ public class TypeResolver {
     // leak into the step's output environment (which would let 'elements' be
     // referenced, and crash, in a following step such as 'yield').
     final Term elementsTerm = requireNonNull(p.c);
-    final TypeEnv groupEnv =
+    // Bind 'current' to the base (input) element type so that 'context' is
+    // valid inside the compute clause, referring to the base rows; and carry
+    // the context parameter through so a table source's parameter is visible.
+    final TypeEnv groupEnv0 =
         p.rootEnv
             .bindAll(bindings)
-            .bind(BuiltIn.Z_ELEMENTS.mlName, elementsTerm);
+            .bind(BuiltIn.Z_ELEMENTS.mlName, elementsTerm)
+            .bind(BuiltIn.Z_CURRENT.mlName, p.v);
+    final TypeEnv groupEnv =
+        p.env.has(CONTEXT_PARAM_NAME)
+            ? groupEnv0.bind(
+                CONTEXT_PARAM_NAME,
+                p.env.get(
+                    typeSystem,
+                    CONTEXT_PARAM_NAME,
+                    name -> new IllegalStateException(name)))
+            : groupEnv0;
     compute.args.forEach(
         (id, exp) -> {
           final Variable v8 = unifier.variable();
