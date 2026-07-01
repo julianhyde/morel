@@ -5458,6 +5458,14 @@ public enum BuiltIn {
                 .tyCon(Constructor.ORDER_EQUAL)
                 .tyCon(Constructor.ORDER_GREATER)),
 
+    /** The orderedness tag of an ordered (list-backed) collection. */
+    ORDERED(
+        "Relational",
+        "ordered",
+        false,
+        0,
+        h -> h.tyCon(Constructor.ORDERED_ORDERED)),
+
     /**
      * The type of the value created by an {@code over} declaration.
      *
@@ -5526,6 +5534,14 @@ public enum BuiltIn {
                 .tyCon(Constructor.STRING_CVT_REALFMT_FIX)
                 .tyCon(Constructor.STRING_CVT_REALFMT_GEN)
                 .tyCon(Constructor.STRING_CVT_REALFMT_SCI)),
+
+    /** The orderedness tag of an unordered (bag-backed) collection. */
+    UNORDERED(
+        "Relational",
+        "unordered",
+        false,
+        0,
+        h -> h.tyCon(Constructor.UNORDERED_UNORDERED)),
 
     /**
      * Universal value representation for embedded language interoperability.
@@ -5720,6 +5736,7 @@ public enum BuiltIn {
     ORDER_EQUAL(Datatype.ORDER, "EQUAL"),
     ORDER_GREATER(Datatype.ORDER, "GREATER"),
     ORDER_LESS(Datatype.ORDER, "LESS"),
+    ORDERED_ORDERED(Datatype.ORDERED, "ORDERED"),
     RANGE_ALL(Datatype.RANGE, "ALL"),
     RANGE_AT_LEAST(Datatype.RANGE, "AT_LEAST", h -> h.get(0)),
     RANGE_AT_MOST(Datatype.RANGE, "AT_MOST", h -> h.get(0)),
@@ -5759,6 +5776,7 @@ public enum BuiltIn {
         Datatype.STRING_CVT_REALFMT,
         "SCI",
         h -> Keys.apply(Keys.name("option"), ImmutableList.of(INT.key()))),
+    UNORDERED_UNORDERED(Datatype.UNORDERED, "UNORDERED"),
     VARIANT_BAG(Datatype.VARIANT, "BAG", h -> Keys.list(Keys.name("variant"))),
     VARIANT_BOOL(Datatype.VARIANT, "BOOL", h -> BOOL.key()),
     VARIANT_CHAR(Datatype.VARIANT, "CHAR", h -> CHAR.key()),
