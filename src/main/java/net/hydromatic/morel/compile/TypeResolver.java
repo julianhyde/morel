@@ -641,10 +641,12 @@ public class TypeResolver {
   }
 
   /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
-  private void mayBeBagOrList(Variable c, Variable v) {
-    // 'c' is a collection of 'v' with orderedness to be determined. If nothing
-    // else constrains the orderedness it defaults to a bag when the type is
-    // read back.
+  /**
+   * Adds a constraint that {@code c} is a collection of {@code v}. The
+   * orderedness is left to be determined; if nothing else constrains it, the
+   * collection defaults to a bag when the type is read back.
+   */
+  private void isCollectionOf(Variable c, Variable v) {
     equiv(c, collectionTerm(v, unifier.variable()));
   }
 
@@ -668,7 +670,7 @@ public class TypeResolver {
    * Returns the collection kind for an aggregate function.
    *
    * <p>Returns -2 if the function is a user-defined named function whose type
-   * is not yet available (use {@code mayBeBagOrList}); -1 if the function is
+   * is not yet available (use {@code isCollectionOf}); -1 if the function is
    * overloaded, polymorphic, or its collection kind is unknown (use {@code
    * isListOrBagMatchingInput} to link to the input's ordering); 0 if the
    * function's parameter type is a bag; or 1 if the function's parameter type
@@ -687,7 +689,7 @@ public class TypeResolver {
       Type type = env.getTypeOpt(id.name);
       if (type == null) {
         // Type not available (user-defined function in current compilation
-        // unit). Don't link to input ordering; instead use mayBeBagOrList
+        // unit). Don't link to input ordering; instead use isCollectionOf
         // so the function's own type (from deduceApplyFnType) can determine
         // the collection kind without conflicting with the input ordering.
         return -2;
@@ -832,10 +834,10 @@ public class TypeResolver {
       throw new IllegalArgumentException("no args");
     }
     Term arg0 = args.get(0);
-    mayBeBagOrList(toVariable(arg0), v);
-    mayBeBagOrList(c, v);
+    isCollectionOf(toVariable(arg0), v);
+    isCollectionOf(c, v);
     for (Term arg : skip(args)) {
-      mayBeBagOrList(toVariable(arg), v);
+      isCollectionOf(toVariable(arg), v);
       isListIfBothAreLists(arg0, v, arg, v, c, v);
     }
   }
@@ -1389,7 +1391,7 @@ public class TypeResolver {
         final Variable c18 = unifier.variable();
 
         // Input collection (p.c) is either a bag of p.v or a list of p.v.
-        mayBeBagOrList(requireNonNull(p.c), p.v);
+        isCollectionOf(requireNonNull(p.c), p.v);
 
         final List<PatTerm> termMap = new ArrayList<>();
         pat =
@@ -1397,7 +1399,7 @@ public class TypeResolver {
                 p.rootEnv, through.pat, termMap::add, null, v18, t -> t);
         final Variable v17 = toVariable(fnTerm(p.c, c18));
         final Ast.Exp throughExp = deduceExpType(p.env, through.exp, v17);
-        mayBeBagOrList(c18, v18);
+        isCollectionOf(c18, v18);
         // Register the rewritten node (the one added to 'steps', which the
         // resolver later looks up), not only the original: type resolution may
         // have rewritten the expression (e.g. 'List.map ...'), giving a new
@@ -1558,7 +1560,7 @@ public class TypeResolver {
           //   * v is a record type composed of the fields "{i, j}"
           isListIfBothAreLists(
               p.c, unifier.variable(), c0, unifier.variable(), c, v);
-          mayBeBagOrList(c0, v0);
+          isCollectionOf(c0, v0);
         }
     }
 
@@ -1785,7 +1787,7 @@ public class TypeResolver {
     final Ast.Exp exp = deduceExpType(p.env, yieldAll.exp, c0);
     reg(yieldAll.exp, c0);
     // "e" must evaluate to a list or a bag (of element type "elem").
-    mayBeBagOrList(c0, elem);
+    isCollectionOf(c0, elem);
     // The output is a list if both the input and "e" are lists, and a bag if
     // either is a bag -- the same rule as a comma-join scan.
     final Variable c = unifier.variable();
@@ -3156,10 +3158,10 @@ public class TypeResolver {
     switch (collectionKind) {
       case -2:
         // User-defined named function whose type is not yet available.
-        // Use mayBeBagOrList so the function's own type (from
+        // Use isCollectionOf so the function's own type (from
         // deduceApplyFnType) can determine the collection kind without
         // conflicting with the input ordering.
-        mayBeBagOrList(cArg, vArg);
+        isCollectionOf(cArg, vArg);
         break;
       case 0:
         // For non-overloaded bag-only aggregates (e.g., sum, count),
