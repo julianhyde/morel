@@ -148,6 +148,13 @@ public class MartelliUnifier extends Unifier {
         continue;
       }
 
+      // All queues are drained. If a constraint carries a default and is still
+      // unresolved, apply it now (e.g. an otherwise-unconstrained query source
+      // defaults to a bag) and keep going.
+      if (work.applyNextDefault()) {
+        continue;
+      }
+
       final long duration = System.nanoTime() - start;
       if (false) {
         System.out.printf(
@@ -318,6 +325,24 @@ public class MartelliUnifier extends Unifier {
       add(left.apply(result), right.apply(result));
     }
 
+    /**
+     * If any constraint carries a default and is still unresolved (more than
+     * one candidate remains), unifies its arg with that default and returns
+     * true. Applied one at a time, so that a default can in turn resolve other
+     * constraints.
+     */
+    boolean applyNextDefault() {
+      for (MutableConstraint c : constraintQueue) {
+        if (c.defaultArg != null && c.termActions.size() > 1) {
+          final Term d = c.defaultArg;
+          c.defaultArg = null;
+          add(c.arg, d);
+          return true;
+        }
+      }
+      return false;
+    }
+
     void add(Term left, Term right) {
       switch (Kind.of(left, right)) {
         case DELETE:
@@ -448,18 +473,26 @@ public class MartelliUnifier extends Unifier {
     final Variable v;
     Term arg;
     final PairList<Term, Constraint.Action> termActions;
+    /** Default to apply if still unresolved at the end; null once applied. */
+    @Nullable Term defaultArg;
 
     /** Creates a MutableConstraint. */
     MutableConstraint(
-        Variable arg, PairList<Term, Constraint.Action> termActions) {
+        Variable arg,
+        PairList<Term, Constraint.Action> termActions,
+        @Nullable Term defaultArg) {
       this.v = requireNonNull(arg);
       this.arg = requireNonNull(arg);
       this.termActions = termActions;
+      this.defaultArg = defaultArg;
       checkArgument(!termActions.isEmpty());
     }
 
     MutableConstraint(Constraint constraint) {
-      this(constraint.arg, PairList.copyOf(constraint.termActions));
+      this(
+          constraint.arg,
+          PairList.copyOf(constraint.termActions),
+          constraint.defaultArg);
     }
 
     @Override

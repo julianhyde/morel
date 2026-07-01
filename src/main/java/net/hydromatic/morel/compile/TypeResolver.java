@@ -696,7 +696,10 @@ public class TypeResolver {
     termActions.add(
         unifier.apply(tableCon, pVar, v0, unorderedT),
         sourceAction(c, bagTerm(v)));
-    constraints.add(unifier.constraint(c0, termActions));
+    // If nothing else determines the source (e.g. it is an unconstrained
+    // function parameter), default it to a bag rather than leaving its type
+    // undeducible.
+    constraints.add(unifier.constraint(c0, termActions, bagTerm(v0)));
     // The query collection is itself a list or bag of 'v'. (We cannot run the
     // reverse direction onto 'c0' as the list/bag case does, because a table
     // source's collection type is the table, not a list or bag.)

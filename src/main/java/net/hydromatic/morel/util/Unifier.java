@@ -37,6 +37,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Given pairs of terms, finds a substitution to minimize those pairs of terms.
@@ -158,6 +159,18 @@ public abstract class Unifier {
   public Constraint constraint(
       Variable arg, PairList<Term, Constraint.Action> termActions) {
     return new Constraint(arg, termActions);
+  }
+
+  /**
+   * Creates a Constraint with a default: if the constraint is still unresolved
+   * when unification would otherwise complete, {@code arg} is unified with
+   * {@code defaultArg}.
+   */
+  public Constraint constraint(
+      Variable arg,
+      PairList<Term, Constraint.Action> termActions,
+      Term defaultArg) {
+    return new Constraint(arg, termActions, defaultArg);
   }
 
   /** Creates an atom with a unique name. */
@@ -665,10 +678,27 @@ public abstract class Unifier {
     public final Variable arg;
     public final PairList<Term, Action> termActions;
 
+    /**
+     * If not null, the term to unify {@link #arg} with if this constraint is
+     * still unresolved (more than one candidate remains) when unification would
+     * otherwise complete. Lets a constraint supply a default, e.g. an
+     * otherwise-unconstrained query source defaults to a bag.
+     */
+    public final @Nullable Term defaultArg;
+
     /** Creates a Constraint. */
     Constraint(Variable arg, PairList<Term, Action> termActions) {
+      this(arg, termActions, null);
+    }
+
+    /** Creates a Constraint with a default. */
+    Constraint(
+        Variable arg,
+        PairList<Term, Action> termActions,
+        @Nullable Term defaultArg) {
       this.arg = requireNonNull(arg);
       this.termActions = termActions.immutable();
+      this.defaultArg = defaultArg;
       checkArgument(!termActions.isEmpty());
     }
 
