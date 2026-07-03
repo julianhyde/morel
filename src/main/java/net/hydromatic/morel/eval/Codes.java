@@ -60,8 +60,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -177,66 +175,6 @@ public abstract class Codes {
     @Override
     public String toString() {
       return "table";
-    }
-  }
-
-  /** Runtime value of a {@code cx} (context). */
-  static class ContextValue {
-    /** The parameter in force. */
-    final Object param;
-    /**
-     * The modifiers applied to the base context, in application order; empty
-     * means "match all".
-     */
-    final List<Modifier.Applied> modifiers;
-
-    ContextValue(Object param, List<Modifier.Applied> modifiers) {
-      this.param = param;
-      this.modifiers = modifiers;
-    }
-
-    /** The match-all context, with a unit parameter. */
-    static final ContextValue MATCH_ALL =
-        new ContextValue(Unit.INSTANCE, ImmutableList.of());
-
-    /**
-     * The modifiers in force after §6 folding. For now only equality
-     * constraints arise, so no folding (override-replaces, relax-removes) is
-     * needed yet.
-     */
-    private List<Modifier.Applied> active() {
-      return modifiers;
-    }
-
-    /** Whether a base element satisfies every active constraint. */
-    boolean test(Object element) {
-      for (Modifier.Applied a : active()) {
-        if (!a.test(element)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    /**
-     * Renders the context per the portable {@code Table.toString} spec: the
-     * active items, sorted and comma-separated, wrapped in braces; "{@code {}}"
-     * when empty. Anonymous filters collapse to a single "{@code ?}".
-     */
-    String render(TypeSystem typeSystem) {
-      final SortedSet<String> items = new TreeSet<>();
-      for (Modifier.Applied a : active()) {
-        final String item = a.item(typeSystem);
-        if (item != null) {
-          items.add(item);
-        }
-      }
-      return items.isEmpty() ? "{}" : "{" + String.join(", ", items) + "}";
-    }
-
-    @Override
-    public String toString() {
-      return "cx";
     }
   }
 
