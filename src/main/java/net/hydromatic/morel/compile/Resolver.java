@@ -59,6 +59,7 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.eval.Modifier;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.AliasType;
@@ -90,6 +91,12 @@ public class Resolver {
    * null outside a table query (treated as unit).
    */
   final Core.@Nullable Exp contextParam;
+  /**
+   * The group keys in force for the enclosing {@code compute} clause, from
+   * which the {@code context} keyword builds an equality-constrained context;
+   * null outside a group's compute clause.
+   */
+  final @Nullable ContextKeys contextKeys;
 
   final AggregateResolver aggregateResolver;
   final Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads;
@@ -117,6 +124,7 @@ public class Resolver {
       @Nullable Session session,
       Core.@Nullable Exp current,
       Core.@Nullable Exp contextParam,
+      @Nullable ContextKeys contextKeys,
       AggregateResolver aggregateResolver) {
     this.typeMap = typeMap;
     this.nameGenerator = nameGenerator;
@@ -126,7 +134,24 @@ public class Resolver {
     this.session = session;
     this.current = current;
     this.contextParam = contextParam;
+    this.contextKeys = contextKeys;
     this.aggregateResolver = aggregateResolver;
+  }
+
+  /**
+   * The group keys of a {@code compute} clause, from which {@code context}
+   * builds an equality-constrained context: the modifier templates (one per
+   * projected key) and a Core expression yielding the runtime key values (a
+   * single value, or a tuple of values in the modifiers' order).
+   */
+  static class ContextKeys {
+    final List<Modifier> modifiers;
+    final Core.Exp keysExp;
+
+    ContextKeys(List<Modifier> modifiers, Core.Exp keysExp) {
+      this.modifiers = modifiers;
+      this.keysExp = keysExp;
+    }
   }
 
   /** Creates a root Resolver. */
@@ -141,6 +166,7 @@ public class Resolver {
         new HashMap<>(),
         env,
         session,
+        null,
         null,
         null,
         AggregateResolver.UNSUPPORTED);
@@ -160,6 +186,7 @@ public class Resolver {
         session,
         current,
         contextParam,
+        contextKeys,
         aggregateResolver);
   }
 
@@ -184,6 +211,7 @@ public class Resolver {
         session,
         current,
         contextParam,
+        contextKeys,
         aggregateResolver);
   }
 
@@ -200,6 +228,24 @@ public class Resolver {
         session,
         current,
         contextParam,
+        contextKeys,
+        aggregateResolver);
+  }
+
+  private Resolver withContextKeys(@Nullable ContextKeys contextKeys) {
+    if (contextKeys == this.contextKeys) {
+      return this;
+    }
+    return new Resolver(
+        typeMap,
+        nameGenerator,
+        variantIdMap,
+        resolvedOverloads,
+        env,
+        session,
+        current,
+        contextParam,
+        contextKeys,
         aggregateResolver);
   }
 
@@ -243,6 +289,7 @@ public class Resolver {
             session,
             current,
             contextParam,
+            contextKeys,
             AggregateResolver.UNSUPPORTED);
     final AggregateResolver aggregateResolver =
         new AggregateResolverImpl(
@@ -256,6 +303,7 @@ public class Resolver {
         session,
         current,
         contextParam,
+        contextKeys,
         aggregateResolver);
   }
 
@@ -623,7 +671,56 @@ public class Resolver {
         core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_CONTEXT);
     final Core.Exp paramExp =
         contextParam != null ? contextParam : core.unitLiteral();
-    return core.apply(context.pos, type, fn, paramExp);
+    final Core.Exp base = core.apply(context.pos, type, fn, paramExp);
+    if (contextKeys == null || contextKeys.modifiers.isEmpty()) {
+      return base;
+    }
+    // In a group's compute clause, layer the group-key equality modifiers onto
+    // the base context, plugging in the runtime key values.
+    final Core.Literal keysFn =
+        core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_CONTEXT_KEYS);
+    final Core.Exp modifiersLit =
+        core.internalLiteral(ImmutableList.copyOf(contextKeys.modifiers));
+    final Core.Exp arg =
+        core.tuple(typeMap.typeSystem, base, contextKeys.keysExp, modifiersLit);
+    return core.apply(context.pos, type, keysFn, arg);
+  }
+
+  /**
+   * Builds the {@link ContextKeys} for a group's compute clause from its group
+   * keys: one equality {@link Modifier} per projected key ({@code e.field}),
+   * together with a Core expression yielding the runtime key values. Returns
+   * null if no group key is a simple field projection.
+   */
+  private @Nullable ContextKeys buildContextKeys(
+      PairList<Core.IdPat, Core.Exp> groupExps) {
+    final List<Modifier> modifiers = new ArrayList<>();
+    final List<Core.Exp> keyExps = new ArrayList<>();
+    groupExps.forEach(
+        (keyIdPat, keyExp) -> {
+          if (keyExp instanceof Core.Apply) {
+            final Core.Apply apply = (Core.Apply) keyExp;
+            if (apply.fn instanceof Core.RecordSelector
+                && apply.arg instanceof Core.Id
+                && apply.arg.type instanceof RecordLikeType) {
+              final int slot = ((Core.RecordSelector) apply.fn).slot;
+              final Core.Id id = (Core.Id) apply.arg;
+              final String field =
+                  ((RecordLikeType) id.type).argNames().get(slot);
+              final String label = id.idPat.name + "." + field;
+              modifiers.add(new Modifier.Equality(label, keyExp.type, slot));
+              keyExps.add(core.id(keyIdPat));
+            }
+          }
+        });
+    if (modifiers.isEmpty()) {
+      return null;
+    }
+    final Core.Exp keysExp =
+        keyExps.size() == 1
+            ? keyExps.get(0)
+            : core.tuple(typeMap.typeSystem, keyExps.toArray(new Core.Exp[0]));
+    return new ContextKeys(modifiers, keysExp);
   }
 
   /**
@@ -1731,12 +1828,17 @@ public class Resolver {
             r.withAggregateResolver(
                 env, fromBuilder.stepEnv(), groupExps.leftList(), aggregates);
         groupExps.forEach((id, exp) -> postExps.add(id.name, core.id(id)));
+        final ContextKeys contextKeys = buildContextKeys(groupExps);
+        final Resolver computeResolver =
+            contextKeys == null
+                ? aggregateResolver
+                : aggregateResolver.withContextKeys(contextKeys);
         group
             .compute()
             .args
             .forEach(
                 (id, exp) ->
-                    postExps.add(id.name, aggregateResolver.toCore(exp, id)));
+                    postExps.add(id.name, computeResolver.toCore(exp, id)));
       }
       final SortedMap<Core.IdPat, Core.Exp> groupMap =
           groupExps.toImmutableSortedMap();

@@ -60,6 +60,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -182,16 +184,55 @@ public abstract class Codes {
   static class ContextValue {
     /** The parameter in force. */
     final Object param;
-    /** Predicate on base elements; null means "match all". */
-    final @Nullable Applicable predicate;
+    /**
+     * The modifiers applied to the base context, in application order; empty
+     * means "match all".
+     */
+    final List<Modifier.Applied> modifiers;
 
-    ContextValue(Object param, @Nullable Applicable predicate) {
+    ContextValue(Object param, List<Modifier.Applied> modifiers) {
       this.param = param;
-      this.predicate = predicate;
+      this.modifiers = modifiers;
     }
 
     /** The match-all context, with a unit parameter. */
-    static final ContextValue MATCH_ALL = new ContextValue(Unit.INSTANCE, null);
+    static final ContextValue MATCH_ALL =
+        new ContextValue(Unit.INSTANCE, ImmutableList.of());
+
+    /**
+     * The modifiers in force after §6 folding. For now only equality
+     * constraints arise, so no folding (override-replaces, relax-removes) is
+     * needed yet.
+     */
+    private List<Modifier.Applied> active() {
+      return modifiers;
+    }
+
+    /** Whether a base element satisfies every active constraint. */
+    boolean test(Object element) {
+      for (Modifier.Applied a : active()) {
+        if (!a.test(element)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    /**
+     * Renders the context per the portable {@code Table.toString} spec: the
+     * active items, sorted and comma-separated, wrapped in braces; "{@code {}}"
+     * when empty. Anonymous filters collapse to a single "{@code ?}".
+     */
+    String render(TypeSystem typeSystem) {
+      final SortedSet<String> items = new TreeSet<>();
+      for (Modifier.Applied a : active()) {
+        final String item = a.item(typeSystem);
+        if (item != null) {
+          items.add(item);
+        }
+      }
+      return items.isEmpty() ? "{}" : "{" + String.join(", ", items) + "}";
+    }
 
     @Override
     public String toString() {
@@ -4871,19 +4912,17 @@ public abstract class Codes {
           final List tuple = (List) arg;
           final ContextValue c = (ContextValue) tuple.get(0);
           final Object e = tuple.get(1);
-          return c.predicate == null
-              ? Boolean.TRUE
-              : c.predicate.apply(stack, e);
+          return c.test(e);
         }
       };
 
   /** @see BuiltIn#TABLE_TO_STRING */
   private static final Applicable TABLE_TO_STRING =
-      new BaseApplicable1<String, ContextValue>(BuiltIn.TABLE_TO_STRING) {
+      new ApplicableImpl(BuiltIn.TABLE_TO_STRING) {
         @Override
-        public String apply(ContextValue c) {
-          // Contexts carry no constraints yet, so render the empty set.
-          return "{}";
+        public Object apply(Stack stack, Object arg) {
+          final ContextValue c = (ContextValue) arg;
+          return c.render(stack.session.typeSystem);
         }
       };
 
@@ -5777,7 +5816,36 @@ public abstract class Codes {
       new BaseApplicable1<ContextValue, Object>(BuiltIn.Z_CONTEXT) {
         @Override
         public ContextValue apply(Object param) {
-          return new ContextValue(param, null);
+          return new ContextValue(param, ImmutableList.of());
+        }
+      };
+
+  /** @see BuiltIn#Z_CONTEXT_KEYS */
+  private static final Applicable Z_CONTEXT_KEYS =
+      new ApplicableImpl(BuiltIn.Z_CONTEXT_KEYS) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final List tuple = (List) arg;
+          final ContextValue base = (ContextValue) tuple.get(0);
+          final Object keys = tuple.get(1);
+          @SuppressWarnings("unchecked")
+          final List<Modifier> modifiers = (List<Modifier>) tuple.get(2);
+          // A single key arrives as the bare value; several arrive as a tuple
+          // (a list of values, in the modifiers' order).
+          @SuppressWarnings("unchecked")
+          final List<Object> keyValues =
+              modifiers.size() == 1
+                  ? ImmutableList.of(keys)
+                  : (List<Object>) keys;
+          final ImmutableList.Builder<Modifier.Applied> b =
+              ImmutableList.builder();
+          b.addAll(base.modifiers);
+          for (int i = 0; i < modifiers.size(); i++) {
+            b.add(
+                new Modifier.Applied(
+                    modifiers.get(i), ImmutableList.of(keyValues.get(i))));
+          }
+          return new ContextValue(base.param, b.build());
         }
       };
 
@@ -6779,6 +6847,7 @@ public abstract class Codes {
     b.add(BuiltIn.WORD_XORB, WORD_XORB);
     b.add(BuiltIn.Z_ANDALSO, Unit.INSTANCE);
     b.add(BuiltIn.Z_CONTEXT, Z_CONTEXT);
+    b.add(BuiltIn.Z_CONTEXT_KEYS, Z_CONTEXT_KEYS);
     b.add(BuiltIn.Z_CURRENT, Unit.INSTANCE);
     b.add(BuiltIn.Z_ELEMENTS, Unit.INSTANCE);
     b.add(BuiltIn.Z_EXTENT, Z_EXTENT);

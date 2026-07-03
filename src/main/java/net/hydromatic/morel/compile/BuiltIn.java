@@ -5099,6 +5099,25 @@ public enum BuiltIn {
               2, h -> ts.fnType(h.get(0), ts.context(h.get(0), h.get(1))))),
 
   /**
+   * Internal function "$contextKeys", of type "(('p, 'e) cx * 'k * unit) &rarr;
+   * ('p, 'e) cx". It layers modifiers (carried as an internal literal in the
+   * third, {@code unit}-typed argument) onto a base context, plugging in the
+   * runtime key values (the second argument). Implements group-key constraint
+   * propagation.
+   */
+  Z_CONTEXT_KEYS(
+      "$",
+      "$contextKeys",
+      ts ->
+          ts.forallType(
+              3,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(
+                          ts.context(h.get(0), h.get(1)), h.get(2), UNIT),
+                      ts.context(h.get(0), h.get(1))))),
+
+  /**
    * Internal value "$current", of type "unit". It is used to implement the
    * {@code current} keyword and its type is not necessarily {@code unit}. This
    * enum member is mainly to provide a single definition for the name.
