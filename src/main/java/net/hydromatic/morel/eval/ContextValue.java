@@ -53,9 +53,9 @@ class ContextValue {
   }
 
   /** Whether a base element satisfies every active constraint. */
-  boolean test(Object element) {
+  boolean test(Stack stack, Object element) {
     for (Modifier.Applied a : active()) {
-      if (!a.test(element)) {
+      if (!a.test(stack, element)) {
         return false;
       }
     }

@@ -4850,7 +4850,7 @@ public abstract class Codes {
           final List tuple = (List) arg;
           final ContextValue c = (ContextValue) tuple.get(0);
           final Object e = tuple.get(1);
-          return c.test(e);
+          return c.test(stack, e);
         }
       };
 

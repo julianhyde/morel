@@ -139,18 +139,18 @@ public class Resolver {
   }
 
   /**
-   * The group keys of a {@code compute} clause, from which {@code context}
-   * builds an equality-constrained context: the modifier templates (one per
-   * projected key) and a Core expression yielding the runtime key values (a
-   * single value, or a tuple of values in the modifiers' order).
+   * The context modifiers accumulated for a {@code context} keyword: the
+   * modifier templates (a {@code where}'s anonymous filter, or a group key's
+   * equality) together with a Core expression yielding each one's runtime
+   * parameter (a predicate function, or a key value), in the same order.
    */
   static class ContextKeys {
     final List<Modifier> modifiers;
-    final Core.Exp keysExp;
+    final List<Core.Exp> paramExps;
 
-    ContextKeys(List<Modifier> modifiers, Core.Exp keysExp) {
+    ContextKeys(List<Modifier> modifiers, List<Core.Exp> paramExps) {
       this.modifiers = modifiers;
-      this.keysExp = keysExp;
+      this.paramExps = paramExps;
     }
   }
 
@@ -675,14 +675,20 @@ public class Resolver {
     if (contextKeys == null || contextKeys.modifiers.isEmpty()) {
       return base;
     }
-    // In a group's compute clause, layer the group-key equality modifiers onto
-    // the base context, plugging in the runtime key values.
+    // Layer the accumulated modifiers (where-filters and group-key equalities)
+    // onto the base context, plugging in each modifier's runtime parameter.
     final Core.Literal keysFn =
         core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_CONTEXT_KEYS);
     final Core.Exp modifiersLit =
         core.internalLiteral(ImmutableList.copyOf(contextKeys.modifiers));
+    final List<Core.Exp> paramExps = contextKeys.paramExps;
+    final Core.Exp paramsExp =
+        paramExps.size() == 1
+            ? paramExps.get(0)
+            : core.tuple(
+                typeMap.typeSystem, paramExps.toArray(new Core.Exp[0]));
     final Core.Exp arg =
-        core.tuple(typeMap.typeSystem, base, contextKeys.keysExp, modifiersLit);
+        core.tuple(typeMap.typeSystem, base, paramsExp, modifiersLit);
     return core.apply(context.pos, type, keysFn, arg);
   }
 
@@ -716,11 +722,83 @@ public class Resolver {
     if (modifiers.isEmpty()) {
       return null;
     }
-    final Core.Exp keysExp =
-        keyExps.size() == 1
-            ? keyExps.get(0)
-            : core.tuple(typeMap.typeSystem, keyExps.toArray(new Core.Exp[0]));
-    return new ContextKeys(modifiers, keysExp);
+    return new ContextKeys(modifiers, keyExps);
+  }
+
+  /**
+   * Builds the predicate function {@code fn e => pred} that is the runtime
+   * parameter of a {@code where} step's anonymous context filter. Returns null
+   * if the step is not over a single variable (the context then omits it).
+   */
+  private Core.@Nullable Exp whereFilterFn(
+      Core.StepEnv stepEnv, Core.Exp pred) {
+    if (!stepEnv.atom) {
+      return null;
+    }
+    final Core.IdPat elementPat = (Core.IdPat) stepEnv.bindings.get(0).id;
+    final FnType fnType =
+        typeMap.typeSystem.fnType(elementPat.type, PrimitiveType.BOOL);
+    return core.fn(fnType, elementPat, pred);
+  }
+
+  /**
+   * Renders a {@code where} predicate as text with dotted field access (e.g.
+   * "e.units > 5" rather than the "#units e" selector form the AST unparses
+   * to). Because it walks the tree rather than rewriting text, string and
+   * character literals are left intact (a textual rewrite could corrupt a
+   * literal such as {@code "#foo bar"}).
+   */
+  private static String predicateText(Ast.Exp exp) {
+    if (exp instanceof Ast.InfixCall) {
+      final Ast.InfixCall call = (Ast.InfixCall) exp;
+      return predicateText(call.a0) + call.op.padded + predicateText(call.a1);
+    }
+    if (exp instanceof Ast.Apply) {
+      final Ast.Apply apply = (Ast.Apply) exp;
+      if (apply.fn instanceof Ast.RecordSelector
+          && !((Ast.RecordSelector) apply.fn).safe) {
+        // Field access "#f x" renders as "x.f".
+        return predicateText(apply.arg)
+            + "."
+            + ((Ast.RecordSelector) apply.fn).name;
+      }
+      if (apply.fn instanceof Ast.Id && apply.arg instanceof Ast.Tuple) {
+        // An infix operator applied to a pair, "op (a, b)", renders as "a op
+        // b".
+        final Op op = Op.BY_OP_NAME.get(((Ast.Id) apply.fn).name);
+        final List<Ast.Exp> args = ((Ast.Tuple) apply.arg).args;
+        if (op != null && op.left > 0 && args.size() == 2) {
+          return predicateText(args.get(0))
+              + op.padded
+              + predicateText(args.get(1));
+        }
+      }
+      return predicateText(apply.fn) + " " + predicateText(apply.arg);
+    }
+    return exp.toString();
+  }
+
+  /**
+   * Combines two sets of context modifiers (accumulated filters, then a group's
+   * keys), or returns whichever is non-null.
+   */
+  private @Nullable ContextKeys combineContextKeys(
+      @Nullable ContextKeys a, @Nullable ContextKeys b) {
+    if (a == null) {
+      return b;
+    }
+    if (b == null) {
+      return a;
+    }
+    return new ContextKeys(
+        ImmutableList.<Modifier>builder()
+            .addAll(a.modifiers)
+            .addAll(b.modifiers)
+            .build(),
+        ImmutableList.<Core.Exp>builder()
+            .addAll(a.paramExps)
+            .addAll(b.paramExps)
+            .build());
   }
 
   /**
@@ -1551,6 +1629,28 @@ public class Resolver {
      */
     private Core.@Nullable Exp sourceParam;
 
+    /**
+     * Anonymous-filter modifiers accumulated from the {@code where} steps seen
+     * so far, and the predicate functions that are their runtime parameters, in
+     * the same order. The {@code context} keyword layers these onto the base
+     * context.
+     */
+    private final List<Modifier> filterMods = new ArrayList<>();
+
+    private final List<Core.Exp> filterParamExps = new ArrayList<>();
+
+    /**
+     * The context modifiers accumulated so far (from {@code where} steps), or
+     * null if there are none.
+     */
+    private @Nullable ContextKeys contextKeysSoFar() {
+      return filterMods.isEmpty()
+          ? null
+          : new ContextKeys(
+              ImmutableList.copyOf(filterMods),
+              ImmutableList.copyOf(filterParamExps));
+    }
+
     Core.Exp run(Ast.Query query) {
       if (query.isInto()) {
         // Translate "from ... into f" as if they had written "f (from ...)"
@@ -1617,7 +1717,8 @@ public class Resolver {
       }
       return withEnv(stepEnv.bindings)
           .withCurrent(f)
-          .withContextParam(sourceParam);
+          .withContextParam(sourceParam)
+          .withContextKeys(contextKeysSoFar());
     }
 
     @Override
@@ -1667,8 +1768,18 @@ public class Resolver {
 
     @Override
     protected void visit(Ast.Where where) {
-      final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      fromBuilder.where(r.toCore(where.exp));
+      final Core.StepEnv stepEnv = fromBuilder.stepEnv();
+      final Resolver r = withStepEnv(stepEnv);
+      final Core.Exp pred = r.toCore(where.exp);
+      fromBuilder.where(pred);
+      // Accumulate the predicate as a filter, so that a later `context`
+      // reflects
+      // this `where`, rendering its source text (e.g. "e.units > 5").
+      final Core.Exp filterFn = whereFilterFn(stepEnv, pred);
+      if (filterFn != null) {
+        filterMods.add(new Modifier.Filter(predicateText(where.exp)));
+        filterParamExps.add(filterFn);
+      }
     }
 
     @Override
@@ -1828,7 +1939,10 @@ public class Resolver {
             r.withAggregateResolver(
                 env, fromBuilder.stepEnv(), groupExps.leftList(), aggregates);
         groupExps.forEach((id, exp) -> postExps.add(id.name, core.id(id)));
-        final ContextKeys contextKeys = buildContextKeys(groupExps);
+        // The context in the compute clause carries the accumulated `where`
+        // filters plus this group's key equalities.
+        final ContextKeys contextKeys =
+            combineContextKeys(contextKeysSoFar(), buildContextKeys(groupExps));
         final Resolver computeResolver =
             contextKeys == null
                 ? aggregateResolver

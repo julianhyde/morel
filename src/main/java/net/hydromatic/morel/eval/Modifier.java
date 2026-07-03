@@ -62,9 +62,11 @@ public abstract class Modifier {
 
   /**
    * Whether a base element satisfies this modifier, given its runtime {@code
-   * params}.
+   * params}. The {@code stack} is needed by modifiers whose parameter is a
+   * predicate closure (a filter).
    */
-  public abstract boolean test(Object element, List<Object> params);
+  public abstract boolean test(
+      Stack stack, Object element, List<Object> params);
 
   /**
    * The §6 constraint item that this modifier contributes (for example {@code
@@ -84,8 +86,8 @@ public abstract class Modifier {
       this.params = params;
     }
 
-    public boolean test(Object element) {
-      return modifier.test(element, params);
+    public boolean test(Stack stack, Object element) {
+      return modifier.test(stack, element, params);
     }
 
     public @Nullable String item(TypeSystem typeSystem) {
@@ -110,7 +112,7 @@ public abstract class Modifier {
     }
 
     @Override
-    public boolean test(Object element, List<Object> params) {
+    public boolean test(Stack stack, Object element, List<Object> params) {
       final Object fieldValue = ((List<?>) element).get(fieldIndex);
       return Objects.equals(fieldValue, params.get(0));
     }
@@ -118,6 +120,31 @@ public abstract class Modifier {
     @Override
     public @Nullable String item(List<Object> params, TypeSystem typeSystem) {
       return label + " = " + renderValue(typeSystem, valueType, params.get(0));
+    }
+  }
+
+  /**
+   * A filter constraint, contributed by a {@code where}. Its single parameter
+   * is a predicate closure on base elements; it renders as the predicate's
+   * source text (for example {@code "e.units > 5"}).
+   */
+  public static final class Filter extends Modifier {
+    public final String text;
+
+    public Filter(String text) {
+      super(Kind.ANON_FILTER, null, 1);
+      this.text = text;
+    }
+
+    @Override
+    public boolean test(Stack stack, Object element, List<Object> params) {
+      final Applicable predicate = (Applicable) params.get(0);
+      return (Boolean) predicate.apply(stack, element);
+    }
+
+    @Override
+    public @Nullable String item(List<Object> params, TypeSystem typeSystem) {
+      return text;
     }
   }
 }

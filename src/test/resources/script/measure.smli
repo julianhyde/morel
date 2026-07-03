@@ -124,6 +124,36 @@ from e in prods group {e.color, e.units} compute {c = context.toString ()};
 >    {c="{e.color = \"blue\", e.units = 7}",color="blue",units=7}]
 >   : {c:string, color:string, units:int} bag
 
+(* A 'where' before the measure adds a filter to the context: 'toString'
+   renders the predicate, and 'test' applies it. *)
+from e in prods where e.units > 5 yield context.toString ();
+> val it = ["{e.units > 5}","{e.units > 5}"] : string bag
+from e in prods
+  where e.units > 5
+  yield context.test {color = "x", units = 1};
+> val it = [false,false] : bool bag
+from e in prods
+  where e.units > 5
+  yield context.test {color = "x", units = 9};
+> val it = [true,true] : bool bag
+
+(*) A 'where' filter and a group key both appear, sorted.
+from e in prods
+  where e.units > 5
+  group {e.color}
+  compute {c = context.toString ()};
+> val it =
+>   [{c="{e.color = \"red\", e.units > 5}",color="red"},
+>    {c="{e.color = \"blue\", e.units > 5}",color="blue"}]
+>   : {c:string, color:string} bag
+
+(* A string literal in the predicate is rendered verbatim, even one that
+   contains a '#word word' pattern that looks like a field selector. *)
+from e in prods where e.color <> "#x y" yield context.toString ();
+> val it =
+>   ["{e.color <> \"#x y\"}","{e.color <> \"#x y\"}","{e.color <> \"#x y\"}"]
+>   : string bag
+
 (* 'eval' and the modification methods need the surrounding context or context
    modification, neither of which is implemented yet, so they are checked for
    their type only, in prefix then postfix form. *)
