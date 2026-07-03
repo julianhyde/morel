@@ -154,19 +154,27 @@ from e in prods where e.color <> "#x y" yield context.toString ();
 >   ["{e.color <> \"#x y\"}","{e.color <> \"#x y\"}","{e.color <> \"#x y\"}"]
 >   : string bag
 
-(* 'eval' and the modification methods need the surrounding context or context
-   modification, neither of which is implemented yet, so they are checked for
-   their type only, in prefix then postfix form. *)
+(* 'eval' evaluates a measure against the surrounding context. In a group the
+   context is constrained to the group's key, so the measure sees only that
+   group's rows and computes a per-group total. 'eval (m, a)' is sugar for
+   'evaluate (m, a, context)'; the postfix form 'm.eval a' works too. *)
+val sumU =
+  Table.measure
+    (fn c => from r in prods where Table.test (c, r) compute sum over r.units);
+> val sumU = measure : ('a,{color:string, units:int},unit,int) measure
+from e in prods group {e.color} compute {total = Table.eval (sumU, ())};
+> val it = [{color="red",total=14},{color="blue",total=7}]
+>   : {color:string, total:int} bag
+from e in prods group {e.color} compute {total = sumU.eval ()};
+> val it = [{color="red",total=14},{color="blue",total=7}]
+>   : {color:string, total:int} bag
+
+(* The modification methods need context modification, which is not implemented
+   yet, so they are checked for their type only, in prefix then postfix form. *)
 val count1 = Table.measure (fn c => 1);
 > val count1 = measure : ('a,'b,unit,int) measure
 val plus = Table.measure_fn (fn (a, c) => a + 1);
 > val plus = measure : ('a,'b,int,int) measure
-
-(*) eval (a non-unit argument avoids the postfix nullary-method ambiguity)
-type_string (Table.eval (plus, 5));
-> val it = "int" : string
-type_string (plus.eval 5);
-> val it = "int" : string
 
 (*) restrict
 type_string (Table.restrict (count1, "r", fn e => true));

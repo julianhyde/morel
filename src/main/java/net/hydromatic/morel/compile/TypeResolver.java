@@ -2255,6 +2255,23 @@ public class TypeResolver {
           && fnApply.arg instanceof Ast.Id) {
         final String name = ((Ast.RecordSelector) fnApply.fn).name;
         final Ast.Id receiverId = (Ast.Id) fnApply.arg;
+        // Desugar `Table.eval (m, a)` to `Table.evaluate (m, a, context)`,
+        // injecting the surrounding (constrained) context. The postfix form
+        // `m.eval a` reduces to `Table.eval (m, a)`, so it is covered too.
+        if (name.equals("eval")
+            && receiverId.name.equals("Table")
+            && apply.arg instanceof Ast.Tuple
+            && ((Ast.Tuple) apply.arg).args.size() == 2) {
+          final Pos pos = apply.pos;
+          final List<Ast.Exp> args = ((Ast.Tuple) apply.arg).args;
+          final Ast.Exp evaluateFn =
+              ast.apply(ast.recordSelector(pos, "evaluate"), receiverId);
+          final Ast.Exp newArg =
+              ast.tuple(
+                  pos,
+                  ImmutableList.of(args.get(0), args.get(1), ast.context(pos)));
+          return deduceExpType(env, ast.apply(evaluateFn, newArg), v);
+        }
         final Type receiverType = env.getTypeOpt(receiverId.name);
         // Intercept only when the receiver is a known non-record type and
         // 'name' is a method.
@@ -2375,11 +2392,11 @@ public class TypeResolver {
     }
 
     // Desugar the postfix call to a regular application.
-    if (postfixApp.arg.op == Op.UNIT_LITERAL) {
-      // x.f () → f x  (curried, no extra argument)
+    if (postfixApp.arg.op == Op.UNIT_LITERAL && !isTuple) {
+      // x.f () → f x  (nullary method: "()" marks "no extra argument")
       return deduceExpType(env, ast.apply(fnExp, receiver2), v);
     } else if (isTuple) {
-      // x.f y → f (x, y)  or  x.f (a, b) → f (x, a, b)
+      // x.f y → f (x, y)  or  x.f (a, b) → f (x, a, b)  or  x.f () → f (x, ())
       final List<Ast.Exp> elems = new ArrayList<>();
       elems.add(receiver2);
       if (postfixApp.arg instanceof Ast.Tuple) {
