@@ -22,6 +22,9 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.eval.Render.renderBool;
+import static net.hydromatic.morel.eval.Render.renderInt;
+import static net.hydromatic.morel.eval.Render.renderReal;
 import static net.hydromatic.morel.eval.Slots.maxOf;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -85,7 +88,6 @@ import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
-import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.Lindig;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MorelException;
@@ -98,12 +100,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /** Helpers for {@link Code}. */
 @SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class Codes {
-  /** Converts a {@code float} to a String per the JDK. */
-  static final Function<Float, String> FLOAT_TO_STRING =
-      JavaVersion.CURRENT.compareTo(JavaVersion.of(19)) >= 0
-          ? f -> Float.toString(f)
-          : Codes::floatToString0;
-
   /** A special value that represents Standard ML "~NaN". */
   public static final float NEGATIVE_NAN =
       Float.intBitsToFloat(Float.floatToRawIntBits(Float.NaN) ^ 0x8000_0000);
@@ -327,7 +323,7 @@ public abstract class Codes {
       new BaseApplicable1<String, Boolean>(BuiltIn.BOOL_TO_STRING) {
         @Override
         public String apply(Boolean b) {
-          return b.toString();
+          return renderBool(b);
         }
       };
 
@@ -1703,20 +1699,9 @@ public abstract class Codes {
       new BaseApplicable1<String, Integer>(BuiltIn.INT_TO_STRING) {
         @Override
         public String apply(Integer f) {
-          return intToString(f);
+          return renderInt(f);
         }
       };
-
-  /**
-   * Converts a Java {@code int} value to the format expected of Standard ML
-   * {@code int} values.
-   */
-  public static String intToString(int i) {
-    // Java's formatting is reasonably close to ML's formatting,
-    // if we replace minus signs.
-    final String s = Integer.toString(i);
-    return s.replace('-', '~');
-  }
 
   /** @see BuiltIn#INTERACT_USE */
   private static final Applicable INTERACT_USE =
@@ -3997,7 +3982,7 @@ public abstract class Codes {
         public String apply(Float f) {
           // Java's formatting is reasonably close to ML's formatting,
           // if we replace minus signs.
-          return floatToString(f);
+          return renderReal(f);
         }
       };
 
@@ -6602,72 +6587,6 @@ public abstract class Codes {
     final Map<String, Object> map = new HashMap<>();
     populateBuiltIns(map);
     return EvalEnvs.copyOf(map);
-  }
-
-  public static StringBuilder appendFloat(StringBuilder buf, float f) {
-    return buf.append(floatToString(f));
-  }
-
-  /**
-   * Converts a Java {@code float} to the format expected of Standard ML {@code
-   * real} values.
-   *
-   * <p>Matches Standard ML's {@code Real.toString}, which drops the trailing
-   * ".0" from whole-number reals (so {@code 1.0} prints as "1" and {@code
-   * 1.0e10} prints as "1E10").
-   */
-  public static String floatToString(float f) {
-    if (Float.isFinite(f)) {
-      return stripTrailingZero(FLOAT_TO_STRING.apply(f)).replace('-', '~');
-    } else if (f == Float.POSITIVE_INFINITY) {
-      return "inf";
-    } else if (f == Float.NEGATIVE_INFINITY) {
-      return "~inf";
-    } else if (Float.isNaN(f)) {
-      return "nan";
-    } else {
-      throw new AssertionError("unknown float " + f);
-    }
-  }
-
-  /**
-   * If the mantissa part of the given Java float string ends with ".0", removes
-   * those two characters. For example, "1.0" becomes "1" and "1.0E10" becomes
-   * "1E10". Leaves strings like "1.5" and "1.5E10" unchanged.
-   */
-  private static String stripTrailingZero(String s) {
-    int e = s.indexOf('E');
-    int mantissaEnd = e < 0 ? s.length() : e;
-    if (mantissaEnd >= 2
-        && s.charAt(mantissaEnd - 1) == '0'
-        && s.charAt(mantissaEnd - 2) == '.') {
-      return s.substring(0, mantissaEnd - 2) + s.substring(mantissaEnd);
-    }
-    return s;
-  }
-
-  private static String floatToString0(float f) {
-    String s = Float.toString(f);
-    int lastDigit = s.indexOf("E");
-    if (lastDigit < 0) {
-      lastDigit = s.length();
-    }
-    if (s.equals("1.17549435E-38")) {
-      return "1.1754944E-38";
-    }
-    if (s.equals("1.23456795E12")) {
-      return "1.234568E12";
-    }
-    if (s.equals("1.23456791E11")) {
-      return "1.2345679E11";
-    }
-    if (s.equals("1.23456788E10")) {
-      return "1.2345679E10";
-    }
-    if (s.equals("1.23456792E8")) {
-      return "1.2345679E8";
-    }
-    return s;
   }
 
   /**

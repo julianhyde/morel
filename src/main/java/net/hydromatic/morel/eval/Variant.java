@@ -20,10 +20,9 @@ package net.hydromatic.morel.eval;
 
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
-import static net.hydromatic.morel.eval.Codes.appendFloat;
-import static net.hydromatic.morel.eval.Codes.floatToString;
-import static net.hydromatic.morel.eval.Codes.intToString;
 import static net.hydromatic.morel.eval.Codes.optionSome;
+import static net.hydromatic.morel.eval.Render.renderInt;
+import static net.hydromatic.morel.eval.Render.renderReal;
 import static net.hydromatic.morel.parse.Parsers.charToString;
 import static net.hydromatic.morel.parse.Parsers.stringToString;
 import static net.hydromatic.morel.util.Static.skip;
@@ -623,10 +622,10 @@ public class Variant extends AbstractImmutableList<Object> {
           return "BOOL " + value;
         case INT:
           final int intVal = (Integer) value;
-          return "INT " + intToString(intVal);
+          return "INT " + renderInt(intVal);
         case REAL:
           final float realVal = (Float) value;
-          return "REAL " + floatToString(realVal);
+          return "REAL " + renderReal(realVal);
         case CHAR:
           final char ch = (Character) value;
           return "CHAR #\"" + charToString(ch) + "\"";
@@ -659,11 +658,11 @@ public class Variant extends AbstractImmutableList<Object> {
           return buf.append("BOOL ").append(value);
         case INT:
           final int intVal = (Integer) value;
-          return buf.append("INT ").append(intToString(intVal));
+          return buf.append("INT ").append(renderInt(intVal));
         case REAL:
           buf.append("REAL ");
           final float realVal = (Float) value;
-          return appendFloat(buf, realVal);
+          return renderReal(buf, realVal);
         case CHAR:
           final char ch = (Character) value;
           return buf.append("CHAR #\"").append(charToString(ch)).append("\"");

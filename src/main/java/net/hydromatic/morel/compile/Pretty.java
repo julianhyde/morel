@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.eval.Render.renderPrimitive;
 import static net.hydromatic.morel.parse.Parsers.appendId;
 import static net.hydromatic.morel.util.Lindig.EMPTY;
 import static net.hydromatic.morel.util.Lindig.HARD_LINE;
@@ -37,7 +38,6 @@ import static net.hydromatic.morel.util.Pair.forEachIndexed;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
@@ -102,46 +102,18 @@ class Pretty {
 
   private StringBuilder prettyPrimitive(
       StringBuilder buf, PrimitiveType primitiveType, Object value) {
-    String s;
-    switch (primitiveType) {
-        // lint: sort where '#case' until '#default:'
-      case CHAR:
-        Character c = (Character) value;
-        s = Parsers.charToString(c);
-        return buf.append('#').append('"').append(s).append('"');
-      case INT:
-        int i = (Integer) value;
-        if (i < 0) {
-          if (i == Integer.MIN_VALUE) {
-            return buf.append("~2147483648");
-          }
-          buf.append('~');
-          i = -i;
-        }
-        return buf.append(i);
-      case REAL:
-        return Codes.appendFloat(buf, (Float) value);
-      case STRING:
-        s = (String) value;
+    // A string is the one leaf whose rendering depends on a pretty-printing
+    // property: "stringDepth" truncates a long string, appending '#'. Every
+    // other primitive (and an untruncated string) is rendered by Render.
+    if (primitiveType == PrimitiveType.STRING) {
+      final String s = (String) value;
+      if (stringDepth >= 0 && s.length() > stringDepth) {
         buf.append('"');
-        if (stringDepth >= 0 && s.length() > stringDepth) {
-          Parsers.stringToString(s.substring(0, stringDepth), buf);
-          buf.append('#');
-        } else {
-          Parsers.stringToString(s, buf);
-        }
-        return buf.append('"');
-      case UNIT:
-        return buf.append("()");
-      case WORD:
-        // Print in hexadecimal, like Standard ML (and Word.toString).
-        return buf.append("0wx")
-            .append(
-                Long.toUnsignedString((Long) value, 16)
-                    .toUpperCase(Locale.ROOT));
-      default:
-        return buf.append(value);
+        Parsers.stringToString(s.substring(0, stringDepth), buf);
+        return buf.append('#').append('"');
+      }
     }
+    return renderPrimitive(buf, primitiveType, value);
   }
 
   @SuppressWarnings("unchecked")

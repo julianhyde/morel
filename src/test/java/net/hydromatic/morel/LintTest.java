@@ -208,6 +208,7 @@ public class LintTest {
                     || line.contains("Ord.forEachIndexed")
                     || line.contains("Pair.forEach")
                     || line.contains("Preconditions.")
+                    || line.contains("Render.")
                     || line.contains("Static."))
                 && line.filename().endsWith(".java")
                 && !line.startsWith("import static")

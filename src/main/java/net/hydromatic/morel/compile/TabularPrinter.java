@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.compile;
 
+import static net.hydromatic.morel.eval.Render.renderReal;
+
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
@@ -27,7 +29,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.function.BiFunction;
-import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -274,7 +275,7 @@ class TabularPrinter {
    */
   private static String stringifyScalar(Object value, int stringDepth) {
     if (value instanceof Float) {
-      return Codes.floatToString((Float) value);
+      return renderReal((Float) value);
     }
     if (value instanceof Long) {
       // The only Long-backed primitive type is 'word'; print it in hexadecimal,

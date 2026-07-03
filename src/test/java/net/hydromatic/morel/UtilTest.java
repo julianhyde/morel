@@ -78,6 +78,7 @@ import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Render;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TypeSystem;
@@ -448,7 +449,7 @@ public class UtilTest {
     Function<String, String> fn =
         s -> {
           float f = Float.parseFloat(s);
-          return Codes.floatToString(f);
+          return Render.renderReal(f);
         };
     assertThat(fn.apply("1.17549435E-38"), is("1.1754944E~38"));
     assertThat(fn.apply("1.1754944E-38"), is("1.1754944E~38"));

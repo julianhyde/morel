@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.eval;
 
+import static net.hydromatic.morel.eval.Render.FLOAT_TO_STRING;
 import static net.hydromatic.morel.util.Static.padRightTo;
 
 import java.math.BigDecimal;
@@ -118,7 +119,7 @@ class FmtSpec {
 
   /** Formats {@code abs} as a non-negative BigDecimal with the bits of r. */
   private static BigDecimal toBigDecimal(float r) {
-    return new BigDecimal(Codes.FLOAT_TO_STRING.apply(Math.abs(r)));
+    return new BigDecimal(FLOAT_TO_STRING.apply(Math.abs(r)));
   }
 
   private static StringBuilder formatFix(StringBuilder sb, float r, int n) {
