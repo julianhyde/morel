@@ -60,6 +60,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Modifier;
+import net.hydromatic.morel.eval.Modifiers;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.AliasType;
@@ -139,18 +140,16 @@ public class Resolver {
   }
 
   /**
-   * The context modifiers accumulated for a {@code context} keyword: the
-   * modifier templates (a {@code where}'s anonymous filter, or a group key's
-   * equality) together with a Core expression yielding each one's runtime
-   * parameter (a predicate function, or a key value), in the same order.
+   * The context modifiers accumulated for a {@code context} keyword: each
+   * modifier template (a {@code where}'s anonymous filter, or a group key's
+   * equality) paired with the Core expressions yielding its runtime parameters
+   * (a key value, or a predicate's hole values and closure).
    */
   static class ContextKeys {
-    final List<Modifier> modifiers;
-    final List<Core.Exp> paramExps;
+    final PairList<Modifier, List<Core.Exp>> pairs;
 
-    ContextKeys(List<Modifier> modifiers, List<Core.Exp> paramExps) {
-      this.modifiers = modifiers;
-      this.paramExps = paramExps;
+    ContextKeys(PairList<Modifier, List<Core.Exp>> pairs) {
+      this.pairs = pairs;
     }
   }
 
@@ -672,16 +671,20 @@ public class Resolver {
     final Core.Exp paramExp =
         contextParam != null ? contextParam : core.unitLiteral();
     final Core.Exp base = core.apply(context.pos, type, fn, paramExp);
-    if (contextKeys == null || contextKeys.modifiers.isEmpty()) {
+    if (contextKeys == null || contextKeys.pairs.isEmpty()) {
       return base;
     }
     // Layer the accumulated modifiers (where-filters and group-key equalities)
-    // onto the base context, plugging in each modifier's runtime parameter.
+    // onto the base context, plugging in each modifier's runtime parameters.
+    // The modifier templates travel as a literal; their parameter expressions
+    // are flattened, in modifier order, into the runtime tuple.
     final Core.Literal keysFn =
         core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_CONTEXT_KEYS);
     final Core.Exp modifiersLit =
-        core.internalLiteral(ImmutableList.copyOf(contextKeys.modifiers));
-    final List<Core.Exp> paramExps = contextKeys.paramExps;
+        core.internalLiteral(
+            ImmutableList.copyOf(contextKeys.pairs.leftList()));
+    final List<Core.Exp> paramExps = new ArrayList<>();
+    contextKeys.pairs.rightList().forEach(paramExps::addAll);
     final Core.Exp paramsExp =
         paramExps.size() == 1
             ? paramExps.get(0)
@@ -700,8 +703,7 @@ public class Resolver {
    */
   private @Nullable ContextKeys buildContextKeys(
       PairList<Core.IdPat, Core.Exp> groupExps) {
-    final List<Modifier> modifiers = new ArrayList<>();
-    final List<Core.Exp> keyExps = new ArrayList<>();
+    final PairList<Modifier, List<Core.Exp>> pairs = PairList.of();
     groupExps.forEach(
         (keyIdPat, keyExp) -> {
           if (keyExp instanceof Core.Apply) {
@@ -714,15 +716,16 @@ public class Resolver {
               final String field =
                   ((RecordLikeType) id.type).argNames().get(slot);
               final String label = id.idPat.name + "." + field;
-              modifiers.add(new Modifier.Equality(label, keyExp.type, slot));
-              keyExps.add(core.id(keyIdPat));
+              pairs.add(
+                  Modifiers.equality(label, keyExp.type, slot),
+                  ImmutableList.of(core.id(keyIdPat)));
             }
           }
         });
-    if (modifiers.isEmpty()) {
+    if (pairs.isEmpty()) {
       return null;
     }
-    return new ContextKeys(modifiers, keyExps);
+    return new ContextKeys(pairs);
   }
 
   /**
@@ -742,40 +745,74 @@ public class Resolver {
   }
 
   /**
-   * Renders a {@code where} predicate as text with dotted field access (e.g.
-   * "e.units > 5" rather than the "#units e" selector form the AST unparses
-   * to). Because it walks the tree rather than rewriting text, string and
-   * character literals are left intact (a textual rewrite could corrupt a
-   * literal such as {@code "#foo bar"}).
+   * Builds a rendering-template format string for a filter predicate:
+   * sub-expressions that reference the element variable {@code elementVar}
+   * (field accesses like {@code e.units}, operators) become literal text with
+   * dotted field access, appended to {@code format}, while sub-expressions that
+   * do not (literals, captured variables) become {@code {i}} placeholders and
+   * have their AST appended to {@code holes}. Walking the tree (rather than
+   * rewriting text) leaves string and character literals intact.
    */
-  private static String predicateText(Ast.Exp exp) {
+  private static void buildTemplate(
+      Ast.Exp exp,
+      String elementVar,
+      StringBuilder format,
+      List<Ast.Exp> holes) {
+    if (!referencesVar(exp, elementVar)) {
+      // An element-free sub-expression becomes a hole {i} filled at runtime.
+      format.append('{').append(holes.size()).append('}');
+      holes.add(exp);
+      return;
+    }
     if (exp instanceof Ast.InfixCall) {
       final Ast.InfixCall call = (Ast.InfixCall) exp;
-      return predicateText(call.a0) + call.op.padded + predicateText(call.a1);
+      buildTemplate(call.a0, elementVar, format, holes);
+      format.append(call.op.padded);
+      buildTemplate(call.a1, elementVar, format, holes);
+      return;
     }
     if (exp instanceof Ast.Apply) {
       final Ast.Apply apply = (Ast.Apply) exp;
       if (apply.fn instanceof Ast.RecordSelector
           && !((Ast.RecordSelector) apply.fn).safe) {
         // Field access "#f x" renders as "x.f".
-        return predicateText(apply.arg)
-            + "."
-            + ((Ast.RecordSelector) apply.fn).name;
+        buildTemplate(apply.arg, elementVar, format, holes);
+        format.append('.').append(((Ast.RecordSelector) apply.fn).name);
+        return;
       }
       if (apply.fn instanceof Ast.Id && apply.arg instanceof Ast.Tuple) {
-        // An infix operator applied to a pair, "op (a, b)", renders as "a op
-        // b".
+        // An infix operator applied to a pair, "op (a, b)", renders "a op b".
         final Op op = Op.BY_OP_NAME.get(((Ast.Id) apply.fn).name);
         final List<Ast.Exp> args = ((Ast.Tuple) apply.arg).args;
         if (op != null && op.left > 0 && args.size() == 2) {
-          return predicateText(args.get(0))
-              + op.padded
-              + predicateText(args.get(1));
+          buildTemplate(args.get(0), elementVar, format, holes);
+          format.append(op.padded);
+          buildTemplate(args.get(1), elementVar, format, holes);
+          return;
         }
       }
-      return predicateText(apply.fn) + " " + predicateText(apply.arg);
+      buildTemplate(apply.fn, elementVar, format, holes);
+      format.append(' ');
+      buildTemplate(apply.arg, elementVar, format, holes);
+      return;
     }
-    return exp.toString();
+    // A leaf that references the element (e.g. the range variable itself).
+    format.append(exp);
+  }
+
+  /** Whether an expression references the identifier {@code var}. */
+  private static boolean referencesVar(Ast.Exp exp, String var) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.Id id) {
+            if (id.name.equals(var)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
   }
 
   /**
@@ -790,15 +827,10 @@ public class Resolver {
     if (b == null) {
       return a;
     }
-    return new ContextKeys(
-        ImmutableList.<Modifier>builder()
-            .addAll(a.modifiers)
-            .addAll(b.modifiers)
-            .build(),
-        ImmutableList.<Core.Exp>builder()
-            .addAll(a.paramExps)
-            .addAll(b.paramExps)
-            .build());
+    final PairList<Modifier, List<Core.Exp>> pairs = PairList.of();
+    pairs.addAll(a.pairs);
+    pairs.addAll(b.pairs);
+    return new ContextKeys(pairs);
   }
 
   /**
@@ -1631,24 +1663,21 @@ public class Resolver {
 
     /**
      * Anonymous-filter modifiers accumulated from the {@code where} steps seen
-     * so far, and the predicate functions that are their runtime parameters, in
-     * the same order. The {@code context} keyword layers these onto the base
-     * context.
+     * so far, each paired with the Core expressions for its runtime parameters
+     * (hole values and predicate closure). The {@code context} keyword layers
+     * these onto the base context.
      */
-    private final List<Modifier> filterMods = new ArrayList<>();
-
-    private final List<Core.Exp> filterParamExps = new ArrayList<>();
+    private final PairList<Modifier, List<Core.Exp>> filterPairs =
+        PairList.of();
 
     /**
      * The context modifiers accumulated so far (from {@code where} steps), or
      * null if there are none.
      */
     private @Nullable ContextKeys contextKeysSoFar() {
-      return filterMods.isEmpty()
+      return filterPairs.isEmpty()
           ? null
-          : new ContextKeys(
-              ImmutableList.copyOf(filterMods),
-              ImmutableList.copyOf(filterParamExps));
+          : new ContextKeys(filterPairs.immutable());
     }
 
     Core.Exp run(Ast.Query query) {
@@ -1774,11 +1803,25 @@ public class Resolver {
       fromBuilder.where(pred);
       // Accumulate the predicate as a filter, so that a later `context`
       // reflects
-      // this `where`, rendering its source text (e.g. "e.units > 5").
+      // this `where`. The predicate becomes a template (e.g. "e.units > 5")
+      // whose element-free sub-expressions are holes filled at runtime; params
+      // are [hole values..., predicate closure].
       final Core.Exp filterFn = whereFilterFn(stepEnv, pred);
       if (filterFn != null) {
-        filterMods.add(new Modifier.Filter(predicateText(where.exp)));
-        filterParamExps.add(filterFn);
+        final String elementVar =
+            ((Core.IdPat) stepEnv.bindings.get(0).id).name;
+        final StringBuilder format = new StringBuilder();
+        final List<Ast.Exp> holeAsts = new ArrayList<>();
+        buildTemplate(where.exp, elementVar, format, holeAsts);
+        // Keys (the predicate's holes) come first, then the closure that `test`
+        // applies.
+        final List<Core.Exp> holeExps = transformEager(holeAsts, r::toCore);
+        final List<Core.Exp> block = new ArrayList<>(holeExps);
+        block.add(filterFn);
+        filterPairs.add(
+            Modifiers.filter(
+                format.toString(), transform(holeExps, Core.Exp::type)),
+            block);
       }
     }
 

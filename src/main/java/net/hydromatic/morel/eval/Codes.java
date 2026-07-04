@@ -5754,7 +5754,7 @@ public abstract class Codes {
       new BaseApplicable1<ContextValue, Object>(BuiltIn.Z_CONTEXT) {
         @Override
         public ContextValue apply(Object param) {
-          return new ContextValue(param, ImmutableList.of());
+          return new ContextValue(param, PairList.of());
         }
       };
 
@@ -5768,22 +5768,27 @@ public abstract class Codes {
           final Object keys = tuple.get(1);
           @SuppressWarnings("unchecked")
           final List<Modifier> modifiers = (List<Modifier>) tuple.get(2);
-          // A single key arrives as the bare value; several arrive as a tuple
-          // (a list of values, in the modifiers' order).
-          @SuppressWarnings("unchecked")
-          final List<Object> keyValues =
-              modifiers.size() == 1
-                  ? ImmutableList.of(keys)
-                  : (List<Object>) keys;
-          final ImmutableList.Builder<Modifier.Applied> b =
-              ImmutableList.builder();
-          b.addAll(base.modifiers);
-          for (int i = 0; i < modifiers.size(); i++) {
-            b.add(
-                new Modifier.Applied(
-                    modifiers.get(i), ImmutableList.of(keyValues.get(i))));
+          // Each modifier consumes 'paramCount' values from the flat parameter
+          // list, in modifier order. A single value arrives bare; several
+          // arrive
+          // as a tuple (a list).
+          int totalParams = 0;
+          for (Modifier modifier : modifiers) {
+            totalParams += modifier.paramCount();
           }
-          return new ContextValue(base.param, b.build());
+          @SuppressWarnings("unchecked")
+          final List<Object> paramValues =
+              totalParams == 1 ? ImmutableList.of(keys) : (List<Object>) keys;
+          final PairList<Modifier, List<Object>> pairs = PairList.of();
+          pairs.addAll(base.modifiers);
+          int p = 0;
+          for (Modifier modifier : modifiers) {
+            final int n = modifier.paramCount();
+            pairs.add(
+                modifier, ImmutableList.copyOf(paramValues.subList(p, p + n)));
+            p += n;
+          }
+          return new ContextValue(base.param, pairs);
         }
       };
 

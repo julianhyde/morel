@@ -20,6 +20,7 @@ package net.hydromatic.morel.eval;
 
 import static net.hydromatic.morel.eval.Render.renderValue;
 
+import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.Objects;
 import net.hydromatic.morel.type.Type;
@@ -32,32 +33,44 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * <p>A modifier separates its compile-time structure (this object) from its
  * runtime data (zero or more parameter values in their native format, supplied
- * when the context is materialized). Everything needed to {@link #test
- * evaluate} a base element and to {@link #item render} the §6 constraint string
- * is stored here, so a modifier is self-contained.
+ * when the context is materialized).
+ *
+ * <p>Rendering is uniform: {@link #format} is a text template whose {@code {i}}
+ * placeholders index the first {@link #keyTypes}{@code .size()} parameters (the
+ * "keys"), each rendered by its type. For example an equality has format {@code
+ * "e.color = {0}"}, and a {@code where} filter {@code "e.units > {0}"}. A
+ * modifier may consume further parameters beyond its keys (a filter's last
+ * parameter is the predicate closure, used only by {@link #test}). Construct
+ * modifiers through {@link Modifiers}.
  */
 public abstract class Modifier {
-  /** The kind of a modifier, which determines its §6 canonicalization. */
-  public enum Kind {
-    EQUALITY,
-    LABELED_FILTER,
-    ANON_FILTER,
-    RELAX
-  }
-
-  public final Kind kind;
   /**
    * The label this modifier acts on ({@code "e.color"}), or null if it is
-   * anonymous (an {@code where}/{@code restrict_anon} filter).
+   * anonymous (a {@code where}/{@code restrict_anon} filter).
    */
   public final @Nullable String label;
-  /** The number of runtime parameters this modifier consumes. */
-  public final int paramCount;
+  /**
+   * The rendering template, with {@code {i}} placeholders indexing the key
+   * parameters (for example {@code "e.color = {0}"}).
+   */
+  public final String format;
+  /** The type of each key, used to render the corresponding placeholder. */
+  public final List<Type> keyTypes;
 
-  protected Modifier(Kind kind, @Nullable String label, int paramCount) {
-    this.kind = kind;
+  protected Modifier(
+      @Nullable String label, String format, List<Type> keyTypes) {
     this.label = label;
-    this.paramCount = paramCount;
+    this.format = format;
+    this.keyTypes = keyTypes;
+  }
+
+  /**
+   * The number of runtime parameters this modifier consumes. The keys are the
+   * first parameters; a subclass with test-only parameters (a filter's closure)
+   * overrides to add them.
+   */
+  public int paramCount() {
+    return keyTypes.size();
   }
 
   /**
@@ -69,45 +82,38 @@ public abstract class Modifier {
       Stack stack, Object element, List<Object> params);
 
   /**
-   * The §6 constraint item that this modifier contributes (for example {@code
-   * "e.color = \"red\""} or {@code "?"}), or null if it contributes none (for
-   * example {@link Kind#RELAX}).
+   * The constraint item that this modifier contributes, rendered by
+   * substituting each {@code {i}} placeholder in {@link #format} with key
+   * {@code i}.
    */
-  public abstract @Nullable String item(
-      List<Object> params, TypeSystem typeSystem);
-
-  /** A modifier with its runtime parameter values plugged in. */
-  public static final class Applied {
-    public final Modifier modifier;
-    public final List<Object> params;
-
-    public Applied(Modifier modifier, List<Object> params) {
-      this.modifier = modifier;
-      this.params = params;
+  public String item(List<Object> params, TypeSystem typeSystem) {
+    final StringBuilder buf = new StringBuilder();
+    int i = 0;
+    while (i < format.length()) {
+      final char c = format.charAt(i);
+      if (c == '{') {
+        final int j = format.indexOf('}', i);
+        final int k = Integer.parseInt(format.substring(i + 1, j));
+        renderValue(buf, typeSystem, keyTypes.get(k), params.get(k));
+        i = j + 1;
+      } else {
+        buf.append(c);
+        i++;
+      }
     }
-
-    public boolean test(Stack stack, Object element) {
-      return modifier.test(stack, element, params);
-    }
-
-    public @Nullable String item(TypeSystem typeSystem) {
-      return modifier.item(params, typeSystem);
-    }
+    return buf.toString();
   }
 
   /**
    * An equality constraint, contributed by a group key or an {@code override}.
-   * Its single parameter is the constrained value; {@link #fieldIndex} locates
-   * the corresponding field within a base element (a record), and {@link
-   * #valueType} renders the value.
+   * Its single parameter (also its one key) is the constrained value; {@link
+   * #fieldIndex} locates the corresponding field within a base element.
    */
-  public static final class Equality extends Modifier {
-    public final Type valueType;
-    public final int fieldIndex;
+  static final class Equality extends Modifier {
+    final int fieldIndex;
 
-    public Equality(String label, Type valueType, int fieldIndex) {
-      super(Kind.EQUALITY, label, 1);
-      this.valueType = valueType;
+    Equality(String label, Type valueType, int fieldIndex) {
+      super(label, label + " = {0}", ImmutableList.of(valueType));
       this.fieldIndex = fieldIndex;
     }
 
@@ -116,35 +122,27 @@ public abstract class Modifier {
       final Object fieldValue = ((List<?>) element).get(fieldIndex);
       return Objects.equals(fieldValue, params.get(0));
     }
-
-    @Override
-    public @Nullable String item(List<Object> params, TypeSystem typeSystem) {
-      return label + " = " + renderValue(typeSystem, valueType, params.get(0));
-    }
   }
 
   /**
-   * A filter constraint, contributed by a {@code where}. Its single parameter
-   * is a predicate closure on base elements; it renders as the predicate's
-   * source text (for example {@code "e.units > 5"}).
+   * A filter constraint, contributed by a {@code where} (anonymous) or a {@code
+   * restrict} (labeled). Its keys are the predicate template's holes; its last
+   * parameter, after the keys, is the predicate closure used by {@link #test}.
    */
-  public static final class Filter extends Modifier {
-    public final String text;
+  static final class Filter extends Modifier {
+    Filter(@Nullable String label, String format, List<Type> keyTypes) {
+      super(label, format, keyTypes);
+    }
 
-    public Filter(String text) {
-      super(Kind.ANON_FILTER, null, 1);
-      this.text = text;
+    @Override
+    public int paramCount() {
+      return keyTypes.size() + 1;
     }
 
     @Override
     public boolean test(Stack stack, Object element, List<Object> params) {
-      final Applicable predicate = (Applicable) params.get(0);
+      final Applicable predicate = (Applicable) params.get(params.size() - 1);
       return (Boolean) predicate.apply(stack, element);
-    }
-
-    @Override
-    public @Nullable String item(List<Object> params, TypeSystem typeSystem) {
-      return text;
     }
   }
 }
