@@ -52,6 +52,14 @@ public class Modifiers {
       String label, String format, List<Type> keyTypes) {
     return new Modifier.Filter(label, label + ": " + format, keyTypes);
   }
+
+  /**
+   * Creates a relax directive (a {@code relax}) that removes any modifier on
+   * {@code label} from the context.
+   */
+  public static Modifier relax(String label) {
+    return new Modifier.Relax(label);
+  }
 }
 
 // End Modifiers.java

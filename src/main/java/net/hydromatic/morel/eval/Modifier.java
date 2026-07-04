@@ -145,6 +145,23 @@ public abstract class Modifier {
       return (Boolean) predicate.apply(stack, element);
     }
   }
+
+  /**
+   * A {@code relax} directive: it removes any modifier on its label from the
+   * context when a measure is evaluated. It is never rendered or tested (it is
+   * applied as a removal, not added to a context), so {@link #format} and
+   * {@link #test} are unused placeholders.
+   */
+  static final class Relax extends Modifier {
+    Relax(String label) {
+      super(label, "", ImmutableList.of());
+    }
+
+    @Override
+    public boolean test(Stack stack, Object element, List<Object> params) {
+      return true;
+    }
+  }
 }
 
 // End Modifier.java

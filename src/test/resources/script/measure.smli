@@ -20,9 +20,9 @@
  *
  * The 'context' keyword provides the match-all base context within a
  * query. Evaluating a measure ('eval', 'evaluate'), the accessors
- * ('test', 'paramOf', 'toString'), and the 'restrict'/'restrict_anon'
- * filters all work against it. The remaining methods ('relax',
- * 'override') are a later phase, checked for their type only.
+ * ('test', 'paramOf', 'toString'), and the modifiers ('restrict',
+ * 'restrict_anon', 'relax') all work against it. Only 'override' is
+ * a later phase, checked for its type only.
  *)
 val data = bag [1, 2, 3];
 > val data = [1,2,3] : int bag
@@ -170,9 +170,9 @@ from e in prods group {e.color} compute {total = sumU.eval ()};
 >   : {color:string, total:int} bag
 
 (* 'restrict' and 'restrict_anon' add a filter to the context a measure sees,
-   narrowing which base rows it aggregates; 'restrict' labels the filter. The
-   remaining methods ('relax', 'override') need context removal/replacement,
-   which is not implemented yet, so they are checked for their type only. *)
+   narrowing which base rows it aggregates; 'restrict' labels the filter.
+   'override' needs context replacement, not implemented yet, so it is checked
+   for its type only. *)
 val count1 = Table.measure (fn c => 1);
 > val count1 = measure : ('a,'b,unit,int) measure
 val plus = Table.measure_fn (fn (a, c) => a + 1);
@@ -197,11 +197,18 @@ from e in prods group {e.color}
 >    {color="blue",s="{big: e.units > 5, e.color = \"blue\"}"}]
 >   : {color:string, s:string} bag
 
-(*) relax
-type_string (Table.relax (count1, "r"));
-> val it = "('a,'b,unit,int) measure" : string
-type_string (count1.relax "r");
-> val it = "('a,'b,unit,int) measure" : string
+(* 'relax' removes a modifier (by label) from the context. Relaxing a group key
+   lets the measure see all rows again, so 'whole' is the grand total (21)
+   against each group's 'part' - the basis of a percent-of-total. *)
+from e in prods
+  group {e.color}
+  compute {part = sumU.eval (), whole = (sumU.relax "e.color").eval ()};
+> val it = [{color="red",part=14,whole=21},{color="blue",part=7,whole=21}]
+>   : {color:string, part:int, whole:int} bag
+(*) 'toString' confirms the relaxed context is empty.
+from e in prods group {e.color} compute {s = (ctxS.relax "e.color").eval ()};
+> val it = [{color="red",s="{}"},{color="blue",s="{}"}]
+>   : {color:string, s:string} bag
 
 (*) override
 type_string (Table.override (count1, fn e => e, 0));

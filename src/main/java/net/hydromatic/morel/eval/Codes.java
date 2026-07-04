@@ -4774,10 +4774,10 @@ public abstract class Codes {
           final List tuple = (List) arg;
           final MeasureValue m = (MeasureValue) tuple.get(0);
           final Object a = tuple.get(1);
-          // A restrict adds its filters to the surrounding context before the
+          // A restrict/relax modifies the surrounding context before the
           // measure sees it.
           final ContextValue c =
-              ((ContextValue) tuple.get(2)).plusAll(m.extraModifiers);
+              ((ContextValue) tuple.get(2)).applyAll(m.extraModifiers);
           final Applicable fn = (Applicable) m.fn;
           return m.hasArg
               ? fn.apply(stack, ImmutableList.of(a, c))
@@ -5820,6 +5820,21 @@ public abstract class Codes {
   /** @see BuiltIn#Z_LIST */
   private static final Applicable1 Z_LIST = identity(BuiltIn.Z_LIST);
 
+  /** @see BuiltIn#Z_RELAX */
+  private static final Applicable Z_RELAX =
+      new ApplicableImpl(BuiltIn.Z_RELAX) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final List tuple = (List) arg;
+          final MeasureValue m = (MeasureValue) tuple.get(0);
+          final Modifier modifier = (Modifier) tuple.get(1);
+          final PairList<Modifier, List<Object>> extra = PairList.of();
+          extra.addAll(m.extraModifiers);
+          extra.add(modifier, ImmutableList.of());
+          return new MeasureValue(m.fn, m.hasArg, extra);
+        }
+      };
+
   /** @see BuiltIn#Z_RESTRICT */
   private static final Applicable Z_RESTRICT =
       new ApplicableImpl(BuiltIn.Z_RESTRICT) {
@@ -6832,6 +6847,7 @@ public abstract class Codes {
     b.add(BuiltIn.Z_NTH, Unit.INSTANCE);
     b.add(BuiltIn.Z_ORDINAL, 0);
     b.add(BuiltIn.Z_ORELSE, Unit.INSTANCE);
+    b.add(BuiltIn.Z_RELAX, Z_RELAX);
     b.add(BuiltIn.Z_RESTRICT, Z_RESTRICT);
     b.add(BuiltIn.Z_SUM_INT, Z_SUM_INT);
     b.add(BuiltIn.Z_SUM_REAL, Z_SUM_REAL);

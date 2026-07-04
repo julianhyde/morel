@@ -5165,6 +5165,25 @@ public enum BuiltIn {
   Z_ORELSE("$", "orelse", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
   /**
+   * Internal function "$relax", of type "(('p, 'e, 'a, 'r) measure * unit)
+   * &rarr; ('p, 'e, 'a, 'r) measure". It returns a measure that removes a
+   * modifier (a relax directive carried as an internal literal in the second,
+   * {@code unit}-typed argument) from its context when evaluated. Implements
+   * {@code relax}.
+   */
+  Z_RELAX(
+      "$",
+      "$relax",
+      ts ->
+          ts.forallType(
+              4,
+              h -> {
+                final Type m =
+                    ts.measure(h.get(0), h.get(1), h.get(2), h.get(3));
+                return ts.fnType(ts.tupleType(m, UNIT), m);
+              })),
+
+  /**
    * Internal function "$restrict", of type "(('p, 'e, 'a, 'r) measure * 'k *
    * unit) &rarr; ('p, 'e, 'a, 'r) measure". It returns a measure that adds a
    * filter modifier (carried as an internal literal in the third, {@code

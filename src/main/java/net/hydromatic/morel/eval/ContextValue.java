@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.eval;
 
+import static java.util.Objects.requireNonNull;
+
 import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -45,24 +47,48 @@ class ContextValue {
       new ContextValue(Unit.INSTANCE, PairList.of());
 
   /**
-   * Returns a context with further modifiers (each paired with its runtime
-   * parameter values) appended, as a {@code restrict} adds filters. Returns
-   * this context unchanged if there are none.
+   * Returns a context with a modifier and its runtime parameter values appended
+   * (a {@code restrict} adds a filter).
    */
-  ContextValue plusAll(PairList<Modifier, List<Object>> extra) {
-    if (extra.isEmpty()) {
-      return this;
-    }
+  ContextValue plus(Modifier modifier, List<Object> params) {
     final PairList<Modifier, List<Object>> newModifiers = PairList.of();
     newModifiers.addAll(modifiers);
-    newModifiers.addAll(extra);
+    newModifiers.add(modifier, params);
+    return new ContextValue(param, newModifiers);
+  }
+
+  /** Returns a context with any modifier on {@code label} removed (a relax). */
+  ContextValue minus(String label) {
+    final PairList<Modifier, List<Object>> newModifiers = PairList.of();
+    modifiers.forEach(
+        (modifier, params) -> {
+          if (!label.equals(modifier.label)) {
+            newModifiers.add(modifier, params);
+          }
+        });
     return new ContextValue(param, newModifiers);
   }
 
   /**
-   * The modifiers in force after folding. For now only equality and filter
-   * constraints arise, so no folding (override-replaces, relax-removes) is
-   * needed yet.
+   * Returns a context with a measure's deferred modifiers applied in order: a
+   * relax removes its label, any other modifier is appended.
+   */
+  ContextValue applyAll(PairList<Modifier, List<Object>> ops) {
+    ContextValue c = this;
+    for (int i = 0; i < ops.size(); i++) {
+      final Modifier modifier = ops.left(i);
+      c =
+          modifier instanceof Modifier.Relax
+              ? c.minus(requireNonNull(modifier.label))
+              : c.plus(modifier, ops.right(i));
+    }
+    return c;
+  }
+
+  /**
+   * The modifiers in force after folding. Relax removals are already applied
+   * when the measure is evaluated (see {@link #applyAll}), so no folding is
+   * needed here yet; override's replace-by-label will fold here.
    */
   private PairList<Modifier, List<Object>> active() {
     return modifiers;

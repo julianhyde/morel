@@ -950,9 +950,9 @@ public class Resolver {
   }
 
   private Core.Apply toCore(Ast.Apply apply) {
-    final Core.@Nullable Apply restrict = restrictToCore(apply);
-    if (restrict != null) {
-      return restrict;
+    final Core.@Nullable Apply measureMod = measureModToCore(apply);
+    if (measureMod != null) {
+      return measureMod;
     }
     final Core.Exp coreArg = toCore(apply.arg);
     Type type = typeMap.getType(apply);
@@ -990,25 +990,43 @@ public class Resolver {
   }
 
   /**
-   * Lowers {@code Table.restrict (m, label, pred)} and {@code
-   * Table.restrict_anon (m, pred)} to a {@code $restrict} call: a measure that
-   * adds a labeled or anonymous filter to its context when evaluated. The
+   * Lowers a measure-modifier call to its internal builtin: {@code
+   * Table.restrict (m, label, pred)} / {@code Table.restrict_anon (m, pred)} to
+   * {@code $restrict} (adds a labeled or anonymous filter to the context), and
+   * {@code Table.relax (m, label)} to {@code $relax} (removes a label). A
    * predicate's template is captured at compile time, like a {@code where}
-   * filter. Returns null if the call is not a restrict, or if its predicate is
-   * not a simple {@code fn e => body} (or its label is not a literal), in which
+   * filter. Returns null if the call is not one of these, or if a predicate is
+   * not a simple {@code fn e => body} (or a label is not a literal), in which
    * case it lowers normally.
    */
-  private Core.@Nullable Apply restrictToCore(Ast.Apply apply) {
+  private Core.@Nullable Apply measureModToCore(Ast.Apply apply) {
     if (!(apply.fn instanceof Ast.Apply)) {
       return null;
     }
     final Ast.Apply fnApply = (Ast.Apply) apply.fn;
     if (!(fnApply.fn instanceof Ast.RecordSelector)
         || !(fnApply.arg instanceof Ast.Id)
-        || !((Ast.Id) fnApply.arg).name.equals("Table")) {
+        || !((Ast.Id) fnApply.arg).name.equals("Table")
+        || !(apply.arg instanceof Ast.Tuple)) {
       return null;
     }
+    final List<Ast.Exp> args = ((Ast.Tuple) apply.arg).args;
     final String member = ((Ast.RecordSelector) fnApply.fn).name;
+    if (member.equals("relax")) {
+      // Table.relax (m, label) → $relax (m, relaxLiteral).
+      if (args.get(1).op != Op.STRING_LITERAL) {
+        return null;
+      }
+      final String relaxLabel = (String) ((Ast.Literal) args.get(1)).value;
+      return core.apply(
+          apply.pos,
+          typeMap.getType(apply),
+          core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_RELAX),
+          core.tuple(
+              typeMap.typeSystem,
+              toCore(args.get(0)),
+              core.internalLiteral(Modifiers.relax(relaxLabel))));
+    }
     final boolean anon;
     if (member.equals("restrict_anon")) {
       anon = true;
@@ -1017,10 +1035,6 @@ public class Resolver {
     } else {
       return null;
     }
-    if (!(apply.arg instanceof Ast.Tuple)) {
-      return null;
-    }
-    final List<Ast.Exp> args = ((Ast.Tuple) apply.arg).args;
     final Ast.Exp predAst = anon ? args.get(1) : args.get(2);
 
     // The labeled form takes a string-literal label.
