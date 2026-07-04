@@ -5164,6 +5164,26 @@ public enum BuiltIn {
   /** Internal operator "orelse", of type "bool * bool &rarr; bool". */
   Z_ORELSE("$", "orelse", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
+  /**
+   * Internal function "$restrict", of type "(('p, 'e, 'a, 'r) measure * 'k *
+   * unit) &rarr; ('p, 'e, 'a, 'r) measure". It returns a measure that adds a
+   * filter modifier (carried as an internal literal in the third, {@code
+   * unit}-typed argument) to its context when evaluated, plugging in the
+   * runtime parameter values (the second argument). Implements {@code restrict}
+   * and {@code restrict_anon}.
+   */
+  Z_RESTRICT(
+      "$",
+      "$restrict",
+      ts ->
+          ts.forallType(
+              5,
+              h -> {
+                final Type m =
+                    ts.measure(h.get(0), h.get(1), h.get(2), h.get(3));
+                return ts.fnType(ts.tupleType(m, h.get(4), UNIT), m);
+              })),
+
   /** Internal relational sum operator "sum", of type "int * int &rarr; int". */
   Z_SUM_INT("$", "sum:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 

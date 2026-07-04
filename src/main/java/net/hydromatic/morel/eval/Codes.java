@@ -151,9 +151,19 @@ public abstract class Codes {
      */
     final boolean hasArg;
 
-    MeasureValue(Object fn, boolean hasArg) {
+    /**
+     * Modifiers this measure adds to its context when evaluated (accumulated by
+     * {@code restrict}), each paired with its runtime parameter values.
+     */
+    final PairList<Modifier, List<Object>> extraModifiers;
+
+    MeasureValue(
+        Object fn,
+        boolean hasArg,
+        PairList<Modifier, List<Object>> extraModifiers) {
       this.fn = fn;
       this.hasArg = hasArg;
+      this.extraModifiers = extraModifiers;
     }
 
     @Override
@@ -4764,7 +4774,10 @@ public abstract class Codes {
           final List tuple = (List) arg;
           final MeasureValue m = (MeasureValue) tuple.get(0);
           final Object a = tuple.get(1);
-          final Object c = tuple.get(2);
+          // A restrict adds its filters to the surrounding context before the
+          // measure sees it.
+          final ContextValue c =
+              ((ContextValue) tuple.get(2)).plusAll(m.extraModifiers);
           final Applicable fn = (Applicable) m.fn;
           return m.hasArg
               ? fn.apply(stack, ImmutableList.of(a, c))
@@ -4777,7 +4790,7 @@ public abstract class Codes {
       new BaseApplicable1<MeasureValue, Object>(BuiltIn.TABLE_MEASURE) {
         @Override
         public MeasureValue apply(Object f) {
-          return new MeasureValue(f, false);
+          return new MeasureValue(f, false, PairList.of());
         }
       };
 
@@ -4786,7 +4799,7 @@ public abstract class Codes {
       new BaseApplicable1<MeasureValue, Object>(BuiltIn.TABLE_MEASURE_FN) {
         @Override
         public MeasureValue apply(Object f) {
-          return new MeasureValue(f, true);
+          return new MeasureValue(f, true, PairList.of());
         }
       };
 
@@ -5807,6 +5820,27 @@ public abstract class Codes {
   /** @see BuiltIn#Z_LIST */
   private static final Applicable1 Z_LIST = identity(BuiltIn.Z_LIST);
 
+  /** @see BuiltIn#Z_RESTRICT */
+  private static final Applicable Z_RESTRICT =
+      new ApplicableImpl(BuiltIn.Z_RESTRICT) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final List tuple = (List) arg;
+          final MeasureValue m = (MeasureValue) tuple.get(0);
+          final Object rawParams = tuple.get(1);
+          final Modifier modifier = (Modifier) tuple.get(2);
+          @SuppressWarnings("unchecked")
+          final List<Object> params =
+              modifier.paramCount() == 1
+                  ? ImmutableList.of(rawParams)
+                  : (List<Object>) rawParams;
+          final PairList<Modifier, List<Object>> extra = PairList.of();
+          extra.addAll(m.extraModifiers);
+          extra.add(modifier, params);
+          return new MeasureValue(m.fn, m.hasArg, extra);
+        }
+      };
+
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
   private static final Applicable Z_SUM_INT =
       new BaseApplicable1<Integer, List<? extends Number>>(BuiltIn.Z_SUM_INT) {
@@ -6798,6 +6832,7 @@ public abstract class Codes {
     b.add(BuiltIn.Z_NTH, Unit.INSTANCE);
     b.add(BuiltIn.Z_ORDINAL, 0);
     b.add(BuiltIn.Z_ORELSE, Unit.INSTANCE);
+    b.add(BuiltIn.Z_RESTRICT, Z_RESTRICT);
     b.add(BuiltIn.Z_SUM_INT, Z_SUM_INT);
     b.add(BuiltIn.Z_SUM_REAL, Z_SUM_REAL);
     b.add(BuiltIn.Z_TABLE_ELEMENTS, Z_TABLE_ELEMENTS);

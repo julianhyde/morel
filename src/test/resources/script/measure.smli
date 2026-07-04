@@ -19,10 +19,10 @@
  * Tests for measures and their context-dependent methods.
  *
  * The 'context' keyword provides the match-all base context within a
- * query. Evaluating a measure, and the accessors 'test', 'paramOf',
- * and 'toString', work against it. Context modification (the
- * 'restrict', 'relax', 'override' methods) and 'eval' are later
- * phases, so they are checked for their type only.
+ * query. Evaluating a measure ('eval', 'evaluate'), the accessors
+ * ('test', 'paramOf', 'toString'), and the 'restrict'/'restrict_anon'
+ * filters all work against it. The remaining methods ('relax',
+ * 'override') are a later phase, checked for their type only.
  *)
 val data = bag [1, 2, 3];
 > val data = [1,2,3] : int bag
@@ -169,24 +169,33 @@ from e in prods group {e.color} compute {total = sumU.eval ()};
 > val it = [{color="red",total=14},{color="blue",total=7}]
 >   : {color:string, total:int} bag
 
-(* The modification methods need context modification, which is not implemented
-   yet, so they are checked for their type only, in prefix then postfix form. *)
+(* 'restrict' and 'restrict_anon' add a filter to the context a measure sees,
+   narrowing which base rows it aggregates; 'restrict' labels the filter. The
+   remaining methods ('relax', 'override') need context removal/replacement,
+   which is not implemented yet, so they are checked for their type only. *)
 val count1 = Table.measure (fn c => 1);
 > val count1 = measure : ('a,'b,unit,int) measure
 val plus = Table.measure_fn (fn (a, c) => a + 1);
 > val plus = measure : ('a,'b,int,int) measure
 
-(*) restrict
-type_string (Table.restrict (count1, "r", fn e => true));
-> val it = "('a,'b,unit,int) measure" : string
-type_string (count1.restrict ("r", fn e => true));
-> val it = "('a,'b,unit,int) measure" : string
+(* 'restrict_anon' narrows the sum: within each group only rows with units > 5
+   count, so red loses its units = 4 row (14 becomes 10). *)
+val bigU = sumU.restrict_anon (fn e => e.units > 5);
+> val bigU = measure : ('a,{color:string, units:int},unit,int) measure
+from e in prods group {e.color} compute {total = bigU.eval ()};
+> val it = [{color="red",total=10},{color="blue",total=7}]
+>   : {color:string, total:int} bag
 
-(*) restrict_anon
-type_string (Table.restrict_anon (count1, fn e => true));
-> val it = "('a,'b,unit,int) measure" : string
-type_string (count1.restrict_anon (fn e => true));
-> val it = "('a,'b,unit,int) measure" : string
+(* 'toString' shows the added filter: 'restrict_anon' renders just the
+   predicate, 'restrict' renders 'label: predicate'. *)
+val ctxS = Table.measure (fn c => Table.toString c);
+> val ctxS = measure : ('a,'b,unit,string) measure
+from e in prods group {e.color}
+  compute {s = (ctxS.restrict ("big", fn e => e.units > 5)).eval ()};
+> val it =
+>   [{color="red",s="{big: e.units > 5, e.color = \"red\"}"},
+>    {color="blue",s="{big: e.units > 5, e.color = \"blue\"}"}]
+>   : {color:string, s:string} bag
 
 (*) relax
 type_string (Table.relax (count1, "r"));

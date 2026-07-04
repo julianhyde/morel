@@ -950,6 +950,10 @@ public class Resolver {
   }
 
   private Core.Apply toCore(Ast.Apply apply) {
+    final Core.@Nullable Apply restrict = restrictToCore(apply);
+    if (restrict != null) {
+      return restrict;
+    }
     final Core.Exp coreArg = toCore(apply.arg);
     Type type = typeMap.getType(apply);
     final Core.Exp coreFn;
@@ -983,6 +987,93 @@ public class Resolver {
       coreFn = fnToCore(apply.fn, typeMap.getType(apply.arg));
     }
     return core.apply(apply.pos, type, coreFn, coreArg);
+  }
+
+  /**
+   * Lowers {@code Table.restrict (m, label, pred)} and {@code
+   * Table.restrict_anon (m, pred)} to a {@code $restrict} call: a measure that
+   * adds a labeled or anonymous filter to its context when evaluated. The
+   * predicate's template is captured at compile time, like a {@code where}
+   * filter. Returns null if the call is not a restrict, or if its predicate is
+   * not a simple {@code fn e => body} (or its label is not a literal), in which
+   * case it lowers normally.
+   */
+  private Core.@Nullable Apply restrictToCore(Ast.Apply apply) {
+    if (!(apply.fn instanceof Ast.Apply)) {
+      return null;
+    }
+    final Ast.Apply fnApply = (Ast.Apply) apply.fn;
+    if (!(fnApply.fn instanceof Ast.RecordSelector)
+        || !(fnApply.arg instanceof Ast.Id)
+        || !((Ast.Id) fnApply.arg).name.equals("Table")) {
+      return null;
+    }
+    final String member = ((Ast.RecordSelector) fnApply.fn).name;
+    final boolean anon;
+    if (member.equals("restrict_anon")) {
+      anon = true;
+    } else if (member.equals("restrict")) {
+      anon = false;
+    } else {
+      return null;
+    }
+    if (!(apply.arg instanceof Ast.Tuple)) {
+      return null;
+    }
+    final List<Ast.Exp> args = ((Ast.Tuple) apply.arg).args;
+    final Ast.Exp predAst = anon ? args.get(1) : args.get(2);
+
+    // The labeled form takes a string-literal label.
+    final String label;
+    if (anon) {
+      label = null;
+    } else if (args.get(1).op == Op.STRING_LITERAL) {
+      label = (String) ((Ast.Literal) args.get(1)).value;
+    } else {
+      return null;
+    }
+
+    // The predicate must be a simple `fn e => body`.
+    if (!(predAst instanceof Ast.Fn)) {
+      return null;
+    }
+    final Ast.Fn fn = (Ast.Fn) predAst;
+    if (fn.matchList.size() != 1
+        || !(fn.matchList.get(0).pat instanceof Ast.IdPat)) {
+      return null;
+    }
+    final String elementVar = ((Ast.IdPat) fn.matchList.get(0).pat).name;
+
+    // Capture the predicate template; keys (holes) come first, then the closure
+    // that `test` applies.
+    final StringBuilder format = new StringBuilder();
+    final List<Ast.Exp> holeAsts = new ArrayList<>();
+    buildTemplate(fn.matchList.get(0).exp, elementVar, format, holeAsts);
+    final List<Core.Exp> holeExps = transformEager(holeAsts, this::toCore);
+    final List<Core.Exp> block = new ArrayList<>(holeExps);
+    block.add(toCore(predAst));
+    final List<Type> keyTypes = transform(holeExps, Core.Exp::type);
+    final Modifier modifier =
+        anon
+            ? Modifiers.filter(format.toString(), keyTypes)
+            : Modifiers.labeledFilter(label, format.toString(), keyTypes);
+
+    // Rewrite to $restrict (m, paramsBlock, modifierLiteral).
+    final Core.Exp paramsExp =
+        block.size() == 1
+            ? block.get(0)
+            : core.tuple(typeMap.typeSystem, block.toArray(new Core.Exp[0]));
+    final Core.Exp arg =
+        core.tuple(
+            typeMap.typeSystem,
+            toCore(args.get(0)),
+            paramsExp,
+            core.internalLiteral(modifier));
+    return core.apply(
+        apply.pos,
+        typeMap.getType(apply),
+        core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_RESTRICT),
+        arg);
   }
 
   /**

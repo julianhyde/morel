@@ -45,6 +45,21 @@ class ContextValue {
       new ContextValue(Unit.INSTANCE, PairList.of());
 
   /**
+   * Returns a context with further modifiers (each paired with its runtime
+   * parameter values) appended, as a {@code restrict} adds filters. Returns
+   * this context unchanged if there are none.
+   */
+  ContextValue plusAll(PairList<Modifier, List<Object>> extra) {
+    if (extra.isEmpty()) {
+      return this;
+    }
+    final PairList<Modifier, List<Object>> newModifiers = PairList.of();
+    newModifiers.addAll(modifiers);
+    newModifiers.addAll(extra);
+    return new ContextValue(param, newModifiers);
+  }
+
+  /**
    * The modifiers in force after folding. For now only equality and filter
    * constraints arise, so no folding (override-replaces, relax-removes) is
    * needed yet.
