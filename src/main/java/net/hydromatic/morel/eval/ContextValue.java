@@ -86,12 +86,35 @@ class ContextValue {
   }
 
   /**
-   * The modifiers in force after folding. Relax removals are already applied
-   * when the measure is evaluated (see {@link #applyAll}), so no folding is
-   * needed here yet; override's replace-by-label will fold here.
+   * The modifiers in force after folding: one equality per label, a later
+   * equality (an {@code override}) superseding an earlier one (a group key or
+   * override) on the same label. Relax removals were already applied when the
+   * measure was evaluated (see {@link #applyAll}).
    */
   private PairList<Modifier, List<Object>> active() {
-    return modifiers;
+    final PairList<Modifier, List<Object>> result = PairList.of();
+    for (int i = 0; i < modifiers.size(); i++) {
+      if (modifiers.left(i) instanceof Modifier.Equality
+          && supersededLater(i)) {
+        continue;
+      }
+      result.add(modifiers.left(i), modifiers.right(i));
+    }
+    return result;
+  }
+
+  /**
+   * Whether a later equality has the same label as the modifier at {@code i}.
+   */
+  private boolean supersededLater(int i) {
+    final String label = requireNonNull(modifiers.left(i).label);
+    for (int j = i + 1; j < modifiers.size(); j++) {
+      if (modifiers.left(j) instanceof Modifier.Equality
+          && label.equals(modifiers.left(j).label)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Whether a base element satisfies every active constraint. */

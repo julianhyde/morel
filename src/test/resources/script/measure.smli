@@ -21,8 +21,7 @@
  * The 'context' keyword provides the match-all base context within a
  * query. Evaluating a measure ('eval', 'evaluate'), the accessors
  * ('test', 'paramOf', 'toString'), and the modifiers ('restrict',
- * 'restrict_anon', 'relax') all work against it. Only 'override' is
- * a later phase, checked for its type only.
+ * 'restrict_anon', 'relax', 'override') all work against it.
  *)
 val data = bag [1, 2, 3];
 > val data = [1,2,3] : int bag
@@ -170,13 +169,7 @@ from e in prods group {e.color} compute {total = sumU.eval ()};
 >   : {color:string, total:int} bag
 
 (* 'restrict' and 'restrict_anon' add a filter to the context a measure sees,
-   narrowing which base rows it aggregates; 'restrict' labels the filter.
-   'override' needs context replacement, not implemented yet, so it is checked
-   for its type only. *)
-val count1 = Table.measure (fn c => 1);
-> val count1 = measure : ('a,'b,unit,int) measure
-val plus = Table.measure_fn (fn (a, c) => a + 1);
-> val plus = measure : ('a,'b,int,int) measure
+   narrowing which base rows it aggregates; 'restrict' labels the filter. *)
 
 (* 'restrict_anon' narrows the sum: within each group only rows with units > 5
    count, so red loses its units = 4 row (14 becomes 10). *)
@@ -210,10 +203,33 @@ from e in prods group {e.color} compute {s = (ctxS.relax "e.color").eval ()};
 > val it = [{color="red",s="{}"},{color="blue",s="{}"}]
 >   : {color:string, s:string} bag
 
-(*) override
-type_string (Table.override (count1, fn e => e, 0));
-> val it = "('a,int,unit,int) measure" : string
-type_string (count1.override (fn e => e, 0));
-> val it = "('a,int,unit,int) measure" : string
+(* 'override' replaces the equality on a projected label - a what-if. Overriding
+   the group key makes the measure see that group: the sum for "blue" (7),
+   whatever the row's actual color. *)
+from e in prods
+  group {e.color}
+  compute {ctx = (ctxS.override (fn e => e.color, "blue")).eval (),
+           blue = (sumU.override (fn e => e.color, "blue")).eval ()};
+> val it =
+>   [{blue=7,color="red",ctx="{e.color = \"blue\"}"},
+>    {blue=7,color="blue",ctx="{e.color = \"blue\"}"}]
+>   : {blue:int, color:string, ctx:string} bag
+
+(* A later override on the same label wins, whether reached by the fold
+   ('override; override') or by relaxing in between ('override; relax;
+   override'). Both give "green". *)
+from e in prods
+  group {e.color}
+  compute {
+    folded = ((ctxS.override (fn e => e.color, "red"))
+                .override (fn e => e.color, "green")).eval (),
+    relaxed = (((ctxS.override (fn e => e.color, "red")).relax "e.color")
+                .override (fn e => e.color, "green")).eval ()};
+> val it =
+>   [{color="red",folded="{e.color = \"green\"}",
+>     relaxed="{e.color = \"green\"}"},
+>    {color="blue",folded="{e.color = \"green\"}",
+>     relaxed="{e.color = \"green\"}"}]
+>   : {color:string, folded:string, relaxed:string} bag
 
 (*) End measure.smli

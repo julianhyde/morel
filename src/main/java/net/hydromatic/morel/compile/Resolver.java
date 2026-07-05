@@ -1027,6 +1027,36 @@ public class Resolver {
               toCore(args.get(0)),
               core.internalLiteral(Modifiers.relax(relaxLabel))));
     }
+    if (member.equals("override")) {
+      // Table.override (m, proj, value) → $restrict (m, value, equality), where
+      // proj is a simple field projection `fn e => e.field`.
+      final Core.Exp projCore = toCore(args.get(1));
+      if (!(projCore instanceof Core.Fn)
+          || !(((Core.Fn) projCore).exp instanceof Core.Apply)) {
+        return null;
+      }
+      final Core.Apply projApply = (Core.Apply) ((Core.Fn) projCore).exp;
+      if (!(projApply.fn instanceof Core.RecordSelector)
+          || !(projApply.arg instanceof Core.Id)
+          || !(projApply.arg.type instanceof RecordLikeType)) {
+        return null;
+      }
+      final int slot = ((Core.RecordSelector) projApply.fn).slot;
+      final Core.Id id = (Core.Id) projApply.arg;
+      final String field = ((RecordLikeType) id.type).argNames().get(slot);
+      final String label = id.idPat.name + "." + field;
+      return core.apply(
+          apply.pos,
+          typeMap.getType(apply),
+          core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_RESTRICT),
+          core.tuple(
+              typeMap.typeSystem,
+              toCore(args.get(0)),
+              toCore(args.get(2)),
+              core.internalLiteral(
+                  Modifiers.equality(
+                      label, typeMap.getType(args.get(2)), slot))));
+    }
     final boolean anon;
     if (member.equals("restrict_anon")) {
       anon = true;
