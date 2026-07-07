@@ -1022,10 +1022,15 @@ void atEntry(List<Ast.AtEntry> entries) :
     entries.add(ast.atRestrict(label.name, e));
   }
 |
-  // "id.field = value" (override) or a bare predicate (restrict_anon). An
-  // equality whose left side is a field projection is an override.
+  // "id.field = value" (override) or a bare predicate (restrict_anon). Only an
+  // equality whose left side is a field projection is an override; any other
+  // equality (e.g. "1 = 1") is an ordinary boolean predicate.
   e = expression() {
-    if (e instanceof Ast.InfixCall && e.op == Op.EQ) {
+    if (e instanceof Ast.InfixCall
+        && e.op == Op.EQ
+        && ((Ast.InfixCall) e).a0 instanceof Ast.Apply
+        && ((Ast.Apply) ((Ast.InfixCall) e).a0).fn
+            instanceof Ast.RecordSelector) {
       final Ast.InfixCall eq = (Ast.InfixCall) e;
       entries.add(ast.atOverride(eq.a0, eq.a1));
     } else {

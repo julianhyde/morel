@@ -2302,7 +2302,7 @@ public class TypeResolver {
   private Ast.Exp deduceAtType(TypeEnv env, Ast.At at, Variable v) {
     Ast.Exp acc = at.receiver;
     for (Ast.AtEntry entry : at.entries) {
-      acc = desugarAtEntry(at.pos, acc, entry);
+      acc = desugarAtEntry(env, at.pos, acc, entry);
     }
     return deduceExpType(env, acc, v);
   }
@@ -2317,14 +2317,15 @@ public class TypeResolver {
   /**
    * Desugars one {@code at} entry, applying its modifier to {@code receiver}.
    */
-  private Ast.Exp desugarAtEntry(Pos pos, Ast.Exp receiver, Ast.AtEntry entry) {
+  private Ast.Exp desugarAtEntry(
+      TypeEnv env, Pos pos, Ast.Exp receiver, Ast.AtEntry entry) {
     switch (entry.kind) {
       case OVERRIDE:
         return tableCall(
             pos,
             "override",
             receiver,
-            elementFn(pos, entry.exp),
+            elementFn(env, pos, entry.exp),
             requireNonNull(entry.value));
       case RESTRICT:
         return tableCall(
@@ -2332,7 +2333,7 @@ public class TypeResolver {
             "restrict",
             receiver,
             ast.stringLiteral(pos, requireNonNull(entry.label)),
-            elementFn(pos, entry.exp));
+            elementFn(env, pos, entry.exp));
       case RELAX:
         return tableCall(
             pos,
@@ -2342,16 +2343,16 @@ public class TypeResolver {
       case RESTRICT_ANON:
       default:
         return tableCall(
-            pos, "restrict_anon", receiver, elementFn(pos, entry.exp));
+            pos, "restrict_anon", receiver, elementFn(env, pos, entry.exp));
     }
   }
 
   /**
    * Wraps {@code body} in {@code fn <element> => body}, where the element
-   * pattern is inferred from the field projections in {@code body}.
+   * pattern is inferred from the range variables that {@code body} references.
    */
-  private Ast.Exp elementFn(Pos pos, Ast.Exp body) {
-    return ast.fn(pos, ast.match(pos, elementPat(pos, body), body));
+  private Ast.Exp elementFn(TypeEnv env, Pos pos, Ast.Exp body) {
+    return ast.fn(pos, ast.match(pos, elementPat(env, pos, body), body));
   }
 
   /** Derives the label {@code "id.field"} of a {@code relax id.field} entry. */
@@ -2370,41 +2371,43 @@ public class TypeResolver {
   }
 
   /**
-   * Builds the element pattern for a measure predicate or projection by
-   * collecting the range variables whose fields it projects. A single variable
-   * yields an id pattern {@code e}; several (a join) yield a flexible record
-   * pattern {@code {d, e, ...}}.
+   * Builds the element pattern for a measure predicate or projection. The
+   * element is referenced by the query's range variables, which are the
+   * identifiers in {@code exp} that are not bound in the surrounding
+   * environment (group keys, modules, and other in-scope names are bound, and
+   * so are excluded). A single range variable yields an id pattern {@code e};
+   * several (a join) yield a flexible record pattern {@code {d, e, ...}}. This
+   * assumes an entry is a simple expression over the element, not one that
+   * introduces its own bindings.
    */
-  private Ast.Pat elementPat(Pos pos, Ast.Exp exp) {
+  private Ast.Pat elementPat(TypeEnv env, Pos pos, Ast.Exp exp) {
     final Set<String> names = new LinkedHashSet<>();
     exp.accept(
         new Visitor() {
           @Override
-          protected void visit(Ast.Apply apply) {
-            if (apply.fn instanceof Ast.RecordSelector
-                && apply.arg instanceof Ast.Id) {
-              names.add(((Ast.Id) apply.arg).name);
+          protected void visit(Ast.Id id) {
+            if (env.getTypeOpt(id.name) == null) {
+              names.add(id.name);
             }
-            super.visit(apply);
           }
         });
-    if (names.isEmpty()) {
-      throw new CompileException(
-          "'at' entry must project a field of the query's element, "
-              + "e.g. 'e.field'",
-          false,
-          exp.pos);
+    switch (names.size()) {
+      case 0:
+        throw new CompileException(
+            "'at' entry must reference the query element, e.g. 'e' or 'e.field'",
+            false,
+            exp.pos);
+      case 1:
+        return ast.idPat(pos, names.iterator().next());
+      default:
+        // A join: bind each range variable via a flexible record pattern
+        // '{d, e, ...}'. (Evaluation of joins is deferred.)
+        final Map<String, Ast.Pat> patMap = new LinkedHashMap<>();
+        for (String name : names) {
+          patMap.put(name, ast.idPat(pos, name));
+        }
+        return ast.recordPat(pos, true, patMap);
     }
-    if (names.size() == 1) {
-      return ast.idPat(pos, names.iterator().next());
-    }
-    // A join: bind each range variable via a flexible record pattern
-    // '{d, e, ...}'. (Evaluation of joins is deferred.)
-    final Map<String, Ast.Pat> patMap = new LinkedHashMap<>();
-    for (String name : names) {
-      patMap.put(name, ast.idPat(pos, name));
-    }
-    return ast.recordPat(pos, true, patMap);
   }
 
   private Ast.Apply deduceApplyType(TypeEnv env, Ast.Apply apply, Variable v) {

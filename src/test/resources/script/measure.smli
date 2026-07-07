@@ -281,6 +281,17 @@ from e in prods
 >    {color="blue",folded="{e.color = \"green\"}"}]
 >   : {color:string, folded:string} bag
 
+(* 'at' works on a scalar element too - the range variable is referenced
+   directly, without a field - so 'sumM' (over the bag [1, 2, 3]) restricted to
+   elements > 1 sums 2 + 3 = 5. *)
+from e in data group {} compute {total = (sumM at {e > 1}).eval ()};
+> val it = [{total=5}] : {total:int} bag
+
+(* An entry that does not reference the query element is an error. *)
+from e in data group {} compute {total = (sumM at {1 = 1}).eval ()};
+> stdIn:1.52-1.57 Error: 'at' entry must reference the query element, e.g. 'e' or 'e.field'
+>   raised at: stdIn:1.52-1.57
+
 (* Filter on an aggregate by reusing an ordinary 'count' measure - one with no
    job- or department-specific logic - and letting the context do the filtering.
    For each job, count that job's employees in departments that have fewer than

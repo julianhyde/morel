@@ -80,6 +80,7 @@ In Morel but not Standard ML:
   `ordinal` nilary operators
 * `typeof` type operator
 * `type_string` expression operator
+* `at` measure context-modifier
 * <code><i>lab</i> =</code> is optional in <code><i>exprow</i></code>
 * <code><i>record</i>.<i>lab</i></code> as an alternative to
   <code>#<i>lab</i> <i>record</i></code>;
@@ -190,6 +191,8 @@ In Standard ML but not in Morel:
                                 local declaration (n ≥ 1)
     | <i>exp</i> <b>.</b> <i>lab</i> <b>()</b>              postfix call (no argument)
     | <i>exp<sub>1</sub></i> <b>.</b> <i>lab</i> <i>exp<sub>2</sub></i>            postfix call (with argument)
+    | <i>exp</i> <b>at</b> <b>{</b> <i>atEntry<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>atEntry<sub>n</sub></i> <b>}</b>
+                                measure context-modifier (n &ge; 1)
     | <i>exp</i> <b>:</b> <i>type</i>                type annotation
     | <i>exp<sub>1</sub></i> <b>andalso</b> <i>exp<sub>2</sub></i>         conjunction
     | <i>exp<sub>1</sub></i> <b>orelse</b> <i>exp<sub>2</sub></i>          disjunction
@@ -242,6 +245,10 @@ In Standard ML but not in Morel:
     | <b>compute</b> <i>exp</i>               compute step
 <i>groupKey</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i>
 <i>agg</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i> [ <b>of</b> <i>exp</i> ]
+<i>atEntry</i> &rarr; <i>id</i> <b>.</b> <i>lab</i> <b>=</b> <i>exp</i>          override
+    | <i>id</i> <b>:</b> <i>exp</i>                 restrict (labeled filter)
+    | <b>relax</b> <i>id</i> <b>.</b> <i>lab</i>            relax
+    | <i>exp</i>                       restrict (anonymous filter)
 </pre>
 
 ### Patterns
