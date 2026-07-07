@@ -179,17 +179,12 @@ from e in prods group {e.color} compute {total = sumU.eval ()};
    The element is named by the query's range variable ('e' here). *)
 
 (* A bare predicate narrows the sum: within each group only rows with units > 5
-   count, so red loses its units = 4 row (14 becomes 10). 'sumU at {P}' is
-   exactly 'sumU.restrict_anon (fn e => P)'; both forms agree. *)
+   count, so red loses its units = 4 row (14 becomes 10). *)
 val bigU = sumU at {e.units > 5};
 > val bigU = measure : ('a,{color:string, units:int},unit,int) measure
-from e in prods
-  group {e.color}
-  compute {viaAt = bigU.eval (),
-           viaMethod = (sumU.restrict_anon (fn e => e.units > 5)).eval ()};
-> val it =
->   [{color="red",viaAt=10,viaMethod=10},{color="blue",viaAt=7,viaMethod=7}]
->   : {color:string, viaAt:int, viaMethod:int} bag
+from e in prods group {e.color} compute {total = bigU.eval ()};
+> val it = [{color="red",total=10},{color="blue",total=7}]
+>   : {color:string, total:int} bag
 
 (* 'toString' shows the added filter: a bare predicate renders just the
    predicate; 'label: pred' renders 'label: predicate'. *)
@@ -253,6 +248,59 @@ from e in data group {} compute {total = (sumM at {e > 1}).eval ()};
 from e in data group {} compute {total = (sumM at {1 = 1}).eval ()};
 > stdIn:1.52-1.57 Error: 'at' entry must reference the query element, e.g. 'e' or 'e.field'
 >   raised at: stdIn:1.52-1.57
+
+(* --- The 'at' sugar and its desugared methods ------------------- *)
+
+(* Every 'at' entry desugars to a context-modifier method. This section repeats
+   a query for each entry form, first as 'at' sugar and then as the method it
+   desugars to, so the raw methods - and that the two forms agree - stay
+   visible. *)
+
+(*) A bare predicate desugars to 'restrict_anon'.
+from e in prods group {e.color}
+  compute {total = (sumU at {e.units > 5}).eval ()};
+> val it = [{color="red",total=10},{color="blue",total=7}]
+>   : {color:string, total:int} bag
+from e in prods group {e.color}
+  compute {total = (sumU.restrict_anon (fn e => e.units > 5)).eval ()};
+> val it = [{color="red",total=10},{color="blue",total=7}]
+>   : {color:string, total:int} bag
+
+(*) 'label: pred' desugars to a labeled 'restrict'.
+from e in prods group {e.color}
+  compute {s = (ctxS at {big: e.units > 5}).eval ()};
+> val it =
+>   [{color="red",s="{big: e.units > 5, e.color = \"red\"}"},
+>    {color="blue",s="{big: e.units > 5, e.color = \"blue\"}"}]
+>   : {color:string, s:string} bag
+from e in prods group {e.color}
+  compute {s = (ctxS.restrict ("big", fn e => e.units > 5)).eval ()};
+> val it =
+>   [{color="red",s="{big: e.units > 5, e.color = \"red\"}"},
+>    {color="blue",s="{big: e.units > 5, e.color = \"blue\"}"}]
+>   : {color:string, s:string} bag
+
+(*) 'relax e.field' desugars to 'relax'.
+from e in prods group {e.color}
+  compute {whole = (sumU at {relax e.color}).eval ()};
+> val it = [{color="red",whole=21},{color="blue",whole=21}]
+>   : {color:string, whole:int} bag
+from e in prods group {e.color}
+  compute {whole = (sumU.relax "e.color").eval ()};
+> val it = [{color="red",whole=21},{color="blue",whole=21}]
+>   : {color:string, whole:int} bag
+
+(*) 'e.field = value' desugars to 'override'.
+from e in prods group {e.color}
+  compute {blue = (sumU at {e.color = "blue"}).eval ()};
+> val it = [{blue=7,color="red"},{blue=7,color="blue"}]
+>   : {blue:int, color:string} bag
+from e in prods group {e.color}
+  compute {blue = (sumU.override (fn e => e.color, "blue")).eval ()};
+> val it = [{blue=7,color="red"},{blue=7,color="blue"}]
+>   : {blue:int, color:string} bag
+
+(* ---------------------------------------------------------------- *)
 
 (* Filter on an aggregate by reusing an ordinary 'count' measure - one with no
    job- or department-specific logic - and letting the context do the filtering.
