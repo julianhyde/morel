@@ -232,6 +232,55 @@ from e in prods
 >     relaxed="{e.color = \"green\"}"}]
 >   : {color:string, folded:string, relaxed:string} bag
 
+(* The 'at {...}' sugar applies the same context modifiers as the postfix
+   methods, but reads left-to-right. Each entry desugars to one modifier: a bare
+   predicate to 'restrict_anon', 'label: pred' to a labeled 'restrict', 'relax
+   e.field' to 'relax', and 'e.field = value' to 'override'. *)
+
+(* A bare predicate is a 'restrict_anon': red loses its units = 4 row, as with
+   'bigU' above. *)
+from e in prods group {e.color}
+  compute {total = (sumU at {e.units > 5}).eval ()};
+> val it = [{color="red",total=10},{color="blue",total=7}]
+>   : {color:string, total:int} bag
+
+(*) A 'label: pred' entry is a labeled 'restrict'.
+from e in prods group {e.color}
+  compute {s = (ctxS at {big: e.units > 5}).eval ()};
+> val it =
+>   [{color="red",s="{big: e.units > 5, e.color = \"red\"}"},
+>    {color="blue",s="{big: e.units > 5, e.color = \"blue\"}"}]
+>   : {color:string, s:string} bag
+
+(* 'relax e.field' removes the group-key modifier, so 'whole' is the grand
+   total against each group's 'part'. *)
+from e in prods
+  group {e.color}
+  compute {part = sumU.eval (), whole = (sumU at {relax e.color}).eval ()};
+> val it = [{color="red",part=14,whole=21},{color="blue",part=7,whole=21}]
+>   : {color:string, part:int, whole:int} bag
+
+(* 'e.field = value' is an 'override' - a what-if that makes each group see the
+   "blue" rows. *)
+from e in prods
+  group {e.color}
+  compute {ctx = (ctxS at {e.color = "blue"}).eval (),
+           blue = (sumU at {e.color = "blue"}).eval ()};
+> val it =
+>   [{blue=7,color="red",ctx="{e.color = \"blue\"}"},
+>    {blue=7,color="blue",ctx="{e.color = \"blue\"}"}]
+>   : {blue:int, color:string, ctx:string} bag
+
+(* Entries within one 'at' apply left-to-right, so a later override on the same
+   label wins. *)
+from e in prods
+  group {e.color}
+  compute {folded = (ctxS at {e.color = "red", e.color = "green"}).eval ()};
+> val it =
+>   [{color="red",folded="{e.color = \"green\"}"},
+>    {color="blue",folded="{e.color = \"green\"}"}]
+>   : {color:string, folded:string} bag
+
 (* Filter on an aggregate by reusing an ordinary 'count' measure - one with no
    job- or department-specific logic - and letting the context do the filtering.
    For each job, count that job's employees in departments that have fewer than

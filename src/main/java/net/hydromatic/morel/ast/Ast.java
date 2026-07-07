@@ -3747,6 +3747,112 @@ public class Ast {
           : ast.aggregate(pos, aggregate, argument);
     }
   }
+
+  /** Kind of an entry in an {@link At} expression. */
+  public enum AtEntryKind {
+    /** {@code id.field = value}; desugars to {@code override}. */
+    OVERRIDE,
+    /** {@code label: pred}; desugars to a labeled {@code restrict}. */
+    RESTRICT,
+    /** {@code relax id.field}; desugars to {@code relax}. */
+    RELAX,
+    /** {@code pred}; desugars to {@code restrict_anon}. */
+    RESTRICT_ANON
+  }
+
+  /**
+   * Entry in an {@link At} expression. Each entry applies one context modifier
+   * to the measure.
+   */
+  public static class AtEntry {
+    public final AtEntryKind kind;
+    /** Label of a {@link AtEntryKind#RESTRICT} entry; null otherwise. */
+    public final @Nullable String label;
+
+    /**
+     * For {@link AtEntryKind#OVERRIDE} and {@link AtEntryKind#RELAX}, the field
+     * projection {@code id.field}; for {@link AtEntryKind#RESTRICT} and {@link
+     * AtEntryKind#RESTRICT_ANON}, the boolean predicate.
+     */
+    public final Exp exp;
+
+    /** Value of a {@link AtEntryKind#OVERRIDE} entry; null otherwise. */
+    public final @Nullable Exp value;
+
+    AtEntry(
+        AtEntryKind kind,
+        @Nullable String label,
+        Exp exp,
+        @Nullable Exp value) {
+      this.kind = kind;
+      this.label = label;
+      this.exp = requireNonNull(exp);
+      this.value = value;
+    }
+
+    AstWriter unparse(AstWriter w) {
+      switch (kind) {
+        case OVERRIDE:
+          return w.append(exp, 0, 0)
+              .append(" = ")
+              .append(requireNonNull(value), 0, 0);
+        case RESTRICT:
+          return w.append(requireNonNull(label)).append(": ").append(exp, 0, 0);
+        case RELAX:
+          return w.append("relax ").append(exp, 0, 0);
+        case RESTRICT_ANON:
+        default:
+          return w.append(exp, 0, 0);
+      }
+    }
+  }
+
+  /**
+   * Application of measure context-modifiers using {@code at} syntax.
+   *
+   * <p>For example, {@code m at {e.color = "blue", big: e.units > 5}} applies
+   * an {@code override} and a labeled {@code restrict} to measure {@code m}.
+   * Each entry desugars to a call of {@code Table.override}, {@code
+   * Table.restrict}, {@code Table.restrict_anon}, or {@code Table.relax},
+   * chained left-to-right.
+   */
+  public static class At extends Exp {
+    public final Exp receiver;
+    public final List<AtEntry> entries;
+
+    At(Pos pos, Exp receiver, ImmutableList<AtEntry> entries) {
+      super(pos, Op.AT_MODIFIER);
+      this.receiver = requireNonNull(receiver);
+      this.entries = requireNonNull(entries);
+    }
+
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(receiver, left, op.left).append(" at {");
+      for (int i = 0; i < entries.size(); i++) {
+        if (i > 0) {
+          w.append(", ");
+        }
+        entries.get(i).unparse(w);
+      }
+      return w.append("}");
+    }
+
+    public At copy(Exp receiver, List<AtEntry> entries) {
+      return this.receiver.equals(receiver) && this.entries.equals(entries)
+          ? this
+          : new At(pos, receiver, ImmutableList.copyOf(entries));
+    }
+  }
 }
 
 // End Ast.java

@@ -53,6 +53,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -1089,6 +1090,9 @@ public class TypeResolver {
 
       case CONTEXT:
         return deduceContextType(env, (Ast.Context) node, v);
+
+      case AT_MODIFIER:
+        return deduceAtType(env, (Ast.At) node, v);
 
       case TYPE_STRING:
         return deduceTypeStringType(env, (Ast.TypeString) node, v);
@@ -2285,6 +2289,122 @@ public class TypeResolver {
       }
     }
     return deduceApplyType(env, apply, v);
+  }
+
+  /**
+   * Desugars an {@code at} expression into a left-to-right chain of measure
+   * context-modifier calls ({@code Table.override}, {@code Table.restrict},
+   * {@code Table.restrict_anon}, {@code Table.relax}) and types the result.
+   * Each predicate or projection is wrapped in {@code fn <element> => ...},
+   * where the element pattern is inferred from the range variables whose fields
+   * the entry projects.
+   */
+  private Ast.Exp deduceAtType(TypeEnv env, Ast.At at, Variable v) {
+    Ast.Exp acc = at.receiver;
+    for (Ast.AtEntry entry : at.entries) {
+      acc = desugarAtEntry(at.pos, acc, entry);
+    }
+    return deduceExpType(env, acc, v);
+  }
+
+  /** Builds a call {@code Table.<method> (<args>)} in AST form. */
+  private Ast.Exp tableCall(Pos pos, String method, Ast.Exp... args) {
+    final Ast.Exp fn =
+        ast.apply(ast.recordSelector(pos, method), ast.id(pos, "Table"));
+    return ast.apply(fn, ast.tuple(pos, ImmutableList.copyOf(args)));
+  }
+
+  /**
+   * Desugars one {@code at} entry, applying its modifier to {@code receiver}.
+   */
+  private Ast.Exp desugarAtEntry(Pos pos, Ast.Exp receiver, Ast.AtEntry entry) {
+    switch (entry.kind) {
+      case OVERRIDE:
+        return tableCall(
+            pos,
+            "override",
+            receiver,
+            elementFn(pos, entry.exp),
+            requireNonNull(entry.value));
+      case RESTRICT:
+        return tableCall(
+            pos,
+            "restrict",
+            receiver,
+            ast.stringLiteral(pos, requireNonNull(entry.label)),
+            elementFn(pos, entry.exp));
+      case RELAX:
+        return tableCall(
+            pos,
+            "relax",
+            receiver,
+            ast.stringLiteral(pos, relaxLabel(entry.exp)));
+      case RESTRICT_ANON:
+      default:
+        return tableCall(
+            pos, "restrict_anon", receiver, elementFn(pos, entry.exp));
+    }
+  }
+
+  /**
+   * Wraps {@code body} in {@code fn <element> => body}, where the element
+   * pattern is inferred from the field projections in {@code body}.
+   */
+  private Ast.Exp elementFn(Pos pos, Ast.Exp body) {
+    return ast.fn(pos, ast.match(pos, elementPat(pos, body), body));
+  }
+
+  /** Derives the label {@code "id.field"} of a {@code relax id.field} entry. */
+  private String relaxLabel(Ast.Exp proj) {
+    if (proj instanceof Ast.Apply) {
+      final Ast.Apply apply = (Ast.Apply) proj;
+      if (apply.fn instanceof Ast.RecordSelector
+          && apply.arg instanceof Ast.Id) {
+        return ((Ast.Id) apply.arg).name
+            + "."
+            + ((Ast.RecordSelector) apply.fn).name;
+      }
+    }
+    throw new CompileException(
+        "'relax' requires a field projection 'id.field'", false, proj.pos);
+  }
+
+  /**
+   * Builds the element pattern for a measure predicate or projection by
+   * collecting the range variables whose fields it projects. A single variable
+   * yields an id pattern {@code e}; several (a join) yield a flexible record
+   * pattern {@code {d, e, ...}}.
+   */
+  private Ast.Pat elementPat(Pos pos, Ast.Exp exp) {
+    final Set<String> names = new LinkedHashSet<>();
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.Apply apply) {
+            if (apply.fn instanceof Ast.RecordSelector
+                && apply.arg instanceof Ast.Id) {
+              names.add(((Ast.Id) apply.arg).name);
+            }
+            super.visit(apply);
+          }
+        });
+    if (names.isEmpty()) {
+      throw new CompileException(
+          "'at' entry must project a field of the query's element, "
+              + "e.g. 'e.field'",
+          false,
+          exp.pos);
+    }
+    if (names.size() == 1) {
+      return ast.idPat(pos, names.iterator().next());
+    }
+    // A join: bind each range variable via a flexible record pattern
+    // '{d, e, ...}'. (Evaluation of joins is deferred.)
+    final Map<String, Ast.Pat> patMap = new LinkedHashMap<>();
+    for (String name : names) {
+      patMap.put(name, ast.idPat(pos, name));
+    }
+    return ast.recordPat(pos, true, patMap);
   }
 
   private Ast.Apply deduceApplyType(TypeEnv env, Ast.Apply apply, Variable v) {

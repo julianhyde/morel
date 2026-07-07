@@ -267,6 +267,19 @@ public class Shuttle {
     return app.copy(app.receiver.accept(this), app.arg.accept(this));
   }
 
+  protected Ast.Exp visit(Ast.At at) {
+    final List<Ast.AtEntry> entries = new ArrayList<>();
+    for (Ast.AtEntry entry : at.entries) {
+      entries.add(
+          new Ast.AtEntry(
+              entry.kind,
+              entry.label,
+              entry.exp.accept(this),
+              entry.value == null ? null : entry.value.accept(this)));
+    }
+    return at.copy(at.receiver.accept(this), entries);
+  }
+
   protected Ast.Exp visit(Ast.RecordSelector recordSelector) {
     return recordSelector; // leaf
   }

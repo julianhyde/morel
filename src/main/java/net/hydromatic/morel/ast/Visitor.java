@@ -184,6 +184,16 @@ public class Visitor {
     app.arg.accept(this);
   }
 
+  protected void visit(Ast.At at) {
+    at.receiver.accept(this);
+    for (Ast.AtEntry entry : at.entries) {
+      entry.exp.accept(this);
+      if (entry.value != null) {
+        entry.value.accept(this);
+      }
+    }
+  }
+
   protected void visit(Ast.RecordSelector recordSelector) {}
 
   protected void visit(Ast.Match match) {

@@ -162,6 +162,7 @@ public enum Op {
   VAL_BIND,
   APPLY(" ", 8),
   POSTFIX_APP(" ", 8),
+  AT_MODIFIER(" at ", 8),
   CASE,
   FROM,
   EXISTS,

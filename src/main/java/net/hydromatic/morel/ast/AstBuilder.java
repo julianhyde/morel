@@ -574,6 +574,26 @@ public enum AstBuilder {
     return new Ast.PostfixApp(pos, receiver, methodName, arg);
   }
 
+  public Ast.At at(Pos pos, Ast.Exp receiver, List<Ast.AtEntry> entries) {
+    return new Ast.At(pos, receiver, ImmutableList.copyOf(entries));
+  }
+
+  public Ast.AtEntry atOverride(Ast.Exp proj, Ast.Exp value) {
+    return new Ast.AtEntry(Ast.AtEntryKind.OVERRIDE, null, proj, value);
+  }
+
+  public Ast.AtEntry atRestrict(String label, Ast.Exp pred) {
+    return new Ast.AtEntry(Ast.AtEntryKind.RESTRICT, label, pred, null);
+  }
+
+  public Ast.AtEntry atRelax(Ast.Exp proj) {
+    return new Ast.AtEntry(Ast.AtEntryKind.RELAX, null, proj, null);
+  }
+
+  public Ast.AtEntry atRestrictAnon(Ast.Exp pred) {
+    return new Ast.AtEntry(Ast.AtEntryKind.RESTRICT_ANON, null, pred, null);
+  }
+
   public Ast.Exp ifThenElse(
       Pos pos, Ast.Exp condition, Ast.Exp ifTrue, Ast.Exp ifFalse) {
     return new Ast.If(pos, condition, ifTrue, ifFalse);

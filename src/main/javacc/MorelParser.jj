@@ -335,7 +335,7 @@ String identifierOrSymbol() : {}
   | <CARET> { return "^"; }
   | <TILDE> { return "~"; }
   | <CONS> { return "::"; }
-  | <AT> { return "@"; }
+  | <STRUDEL> { return "@"; }
   | <EQ> { return "="; }
   | <NE> { return "<>"; }
   | <LT> { return "<"; }
@@ -907,18 +907,26 @@ Exp expression9() :
   Id id;
   String fieldName;
   boolean safe = false;
+  List<Ast.AtEntry> entries = null;
   final List<Attribute> attrs = new ArrayList<Attribute>();
 }
 {
   e = atom()
   (
+    // The loop-entry lookahead decides ENTER/EXIT inline (it references 'e'), so
+    // JavaCC does not auto-generate a syntactic lookahead that would hoist 'e'
+    // into a static method. Inside, the ".f"/"?.f" and "at {}" branches are
+    // distinguished purely by their leading token.
+    //
     // When parsing a function argument (inArg=true), skip the
     // DOT chain for non-identifier receivers such as tuple literals. For
     // example, in "CLOSED (3,7).contains 5", the "(3,7)" is a non-Id atom
     // being passed as an argument; suppressing the DOT here lets expression8
     // attach ".contains 5" to the full "CLOSED (3,7)" application instead.
-    LOOKAHEAD({ (getToken(1).kind == DOT || getToken(1).kind == QDOT)
-                && !(inArg && !isId(e)) })
+    LOOKAHEAD({ ((getToken(1).kind == DOT || getToken(1).kind == QDOT)
+                 && !(inArg && !isId(e)))
+                || getToken(1).kind == AT })
+  (
     // ".f" is a plain field projection or postfix method call; "?.f" is a
     // safe-navigation projection through the receiver's functor.
     ( <DOT> { safe = false; } | <QDOT> { safe = true; } )
@@ -967,6 +975,14 @@ Exp expression9() :
         e = ast.apply(s, e);
       }
     )
+  |
+    // "e at {entry, ...}" -- postfix measure context-modifiers. Same precedence
+    // as ".f", so it chains with field projections and postfix method calls.
+    <AT>
+    { entries = new ArrayList<Ast.AtEntry>(); }
+    <LBRACE> atEntry(entries) ( <COMMA> atEntry(entries) )* <RBRACE>
+    { e = ast.at(pos(), e, entries); }
+  )
   )*
   ( expAttribute(attrs) )*
   {
@@ -974,6 +990,47 @@ Exp expression9() :
       e = ast.attributedExp(e.pos.plus(pos()), e, attrs);
     }
     return e;
+  }
+}
+
+/** Parses one entry of an {@code at} expression, and adds it to {@code
+ *  entries}. The four forms are:
+ *  <ul>
+ *  <li>{@code relax id.field} &rarr; {@code relax};
+ *  <li>{@code label: pred} &rarr; labeled {@code restrict};
+ *  <li>{@code id.field = value} &rarr; {@code override};
+ *  <li>{@code pred} &rarr; {@code restrict_anon}.
+ *  </ul>
+ */
+void atEntry(List<Ast.AtEntry> entries) :
+{
+  Exp e;
+  Id label;
+}
+{
+  // "relax id.field". "relax" is an ordinary identifier, not a keyword, so we
+  // recognize it by image.
+  LOOKAHEAD({ getToken(1).kind == IDENTIFIER
+              && "relax".equals(getToken(1).image) })
+  <IDENTIFIER> e = expression9() {
+    entries.add(ast.atRelax(e));
+  }
+|
+  // "label: pred". The ":" distinguishes it from a bare predicate.
+  LOOKAHEAD(<IDENTIFIER> <COLON>)
+  label = identifier() <COLON> e = expression() {
+    entries.add(ast.atRestrict(label.name, e));
+  }
+|
+  // "id.field = value" (override) or a bare predicate (restrict_anon). An
+  // equality whose left side is a field projection is an override.
+  e = expression() {
+    if (e instanceof Ast.InfixCall && e.op == Op.EQ) {
+      final Ast.InfixCall eq = (Ast.InfixCall) e;
+      entries.add(ast.atOverride(eq.a0, eq.a1));
+    } else {
+      entries.add(ast.atRestrictAnon(e));
+    }
   }
 }
 
@@ -1153,7 +1210,7 @@ Exp expression5() :
 {
   e = expression6() { Folder.start(list, e); }
   (
-    <AT> e = expression6() { Folder.at(list, e); }
+    <STRUDEL> e = expression6() { Folder.at(list, e); }
   |
     <CONS> e = expression6() { Folder.cons(list, e); }
   )*
@@ -2430,6 +2487,7 @@ AstNode statementEof() :
 | < VAL: "val" >
 
 // The following are relational extensions:
+| < AT: "at" >
 | < COMPUTE: "compute" >
 | < CONTEXT: "context" >
 | < CURRENT: "current" >
@@ -2540,7 +2598,9 @@ AstNode statementEof() :
     | < SLASH: "/" >
     | < TILDE: "~" >
     | < CONS: "::" >
-    | < AT: "@" >
+    // The "@" operator (SML list append). Named STRUDEL after the name for the
+    // "@" symbol used in Israel, freeing the token name AT for the "at" keyword.
+    | < STRUDEL: "@" >
     | < ELLIPSIS: "..." >
     | < DOT_DOT: ".." >
     | < DOT_DOT_CARET: "..^" >
