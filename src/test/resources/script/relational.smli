@@ -296,6 +296,17 @@ from i in [10, 20]
   yieldAll [i + ordinal + current, i + ordinal + current];
 > val it = [20,20,41,41] : int list
 
+(* A binder ('yieldAll r in e') names each flattened element 'r', a
+ * scan-variable-like name that combines with a following 'join'. *)
+from i in [1,2] yieldAll r in [i, i*10];
+> val it = [1,10,2,20] : int list
+from row in [{items=[1,2]},{items=[3]}] yieldAll r in row.items yield r + 1;
+> val it = [2,3,4] : int list
+from i in [1,2] yieldAll r in [i, i*10] join u in [3,4];
+> val it =
+>   [{r=1,u=3},{r=1,u=4},{r=10,u=3},{r=10,u=4},{r=2,u=3},{r=2,u=4},{r=20,u=3},
+>    {r=20,u=4}] : {r:int, u:int} list
+
 (* 'yieldAll' over a correlated subquery (the LATERAL/flatMap case):
  * the subquery references the outer row. This works because
  * 'yieldAll' desugars to a scan, '<prior>, v in e yield v'. *)
@@ -993,6 +1004,29 @@ from e in emps
   yield {d = d};
 > val it = [{d=20},{d=30},{d=30}] : {d:int} list
 
+(* A binder ('yield r = e') names the whole output row 'r', a
+ * scan-variable-like name: the output type is unwrapped, fields are
+ * reached through 'r', 'current' equals 'r', and bare field names are
+ * not in scope. *)
+from i in [{a=1,b=2}] yield r = i;
+> val it = [{a=1,b=2}] : {a:int, b:int} list
+from i in [{a=1,b=2}] yield r = i yield r.a;
+> val it = [1] : int list
+from i in [{a=1,b=2}] yield r = i where a > 0;
+> stdIn:1.41 Error: unbound variable or constructor: a
+>   raised at: stdIn:1.41
+from i in [{a=1,b=2}] yield r = i where current.a > 0;
+> val it = [{a=1,b=2}] : {a:int, b:int} list
+(*) A record expression becomes one named row, not scattered fields.
+from i in [{a=1,b=2}] yield r = {c=i.a, d=i.b} where r.c > 0 yield r.d;
+> val it = [2] : int list
+(*) The binder combines with a following 'join' into a record.
+from i in [1,2] yield r = i + 1 join u in [3,4];
+> val it = [{r=2,u=3},{r=2,u=4},{r=3,u=3},{r=3,u=4}] : {r:int, u:int} list
+(*) Equality is still available via parentheses.
+from i in [1,2,3] yield (i = 2);
+> val it = [false,true,false] : bool list
+
 (*) singleton record 'yield' followed by singleton 'group'
 from e in emps
   yield {d = e.deptno}
@@ -1071,6 +1105,36 @@ from e in emps
   group d compute {c = count over ()}
   order d;
 > val it = [{c=1,d=10},{c=1,d=20},{c=2,d=30}] : {c:int, d:int} list
+
+(* A binder ('group g = {keys} compute {aggs}') names the whole group
+ * row -- the union of the key and computed fields -- 'g'. *)
+from i in [1,2,3] group g = {x=i} compute {c = count over ()} order g.x;
+> val it = [{c=1,x=1},{c=1,x=2},{c=1,x=3}] : {c:int, x:int} list
+from i in [1,2,3] group g = {x=i} order g.x;
+> val it = [{x=1},{x=2},{x=3}] : {x:int} list
+from i in [1,2,3] group g = {} compute {c = count over ()};
+> val it = [{c=3}] : {c:int} list
+from i in [1,2,3]
+  group g = {x=i} compute {c = count over ()}
+  where g.c >= 1
+  order g.x;
+> val it = [{c=1,x=1},{c=1,x=2},{c=1,x=3}] : {c:int, x:int} list
+(*) A 'join' followed by a 'group' with a binder.
+from e in emps, d in depts
+  where e.deptno = d.deptno
+  group g = {dept = d.name} compute {total = sum over e.id}
+  order g.dept;
+> val it =
+>   [{dept="Engineering",total=205},{dept="HR",total=101},
+>    {dept="Sales",total=100}] : {dept:string, total:int} list
+(* A 'yield' binder before a 'group': the aggregate arguments in
+ * 'compute' reference fields through the binder 'r'. *)
+from e in emps
+  yield r = {dept = e.deptno, eid = e.id}
+  group g = {r.dept} compute {total = sum over r.eid}
+  order g.dept;
+> val it = [{dept=10,total=100},{dept=20,total=101},{dept=30,total=205}]
+>   : {dept:int, total:int} list
 
 (* a singleton compute expression does not need a derivable label
    if group key is empty *)
