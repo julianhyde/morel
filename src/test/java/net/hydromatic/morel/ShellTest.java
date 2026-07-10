@@ -42,6 +42,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+import net.hydromatic.morel.compile.Tracer;
+import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.ForeignValue;
 import org.hamcrest.Matcher;
@@ -572,8 +574,10 @@ public class ShellTest {
             final Map<Prop, Object> propMap = new LinkedHashMap<>();
             Prop.DIRECTORY.set(propMap, getFile());
             Prop.SCRIPT_DIRECTORY.set(propMap, getFile());
+            final Tracer tracer = Tracers.empty();
             final Main main =
-                new Main(argList, reader, writer, valueMap, propMap, false);
+                new Main(
+                    argList, reader, writer, valueMap, propMap, false, tracer);
             main.run();
             assertThat(writer.toString(), matcher);
             return this;

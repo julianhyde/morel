@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.str;
 
 import com.google.common.collect.ArrayListMultimap;
@@ -82,6 +83,7 @@ public class Main {
   final TypeSystem typeSystem = new TypeSystem();
   final boolean idempotent;
   final Session session;
+  final Tracer tracer;
 
   /**
    * Command-line entry point.
@@ -186,7 +188,8 @@ public class Main {
         new OutputStreamWriter(out),
         valueMap,
         propMap,
-        idempotent);
+        idempotent,
+        Tracers.empty());
   }
 
   /** Creates a Main. */
@@ -196,12 +199,14 @@ public class Main {
       Writer out,
       Map<String, ForeignValue> valueMap,
       Map<Prop, Object> propMap,
-      boolean idempotent) {
+      boolean idempotent,
+      Tracer tracer) {
     this.out = buffer(out);
     this.echo = argList.contains("--echo");
     this.valueMap = ImmutableMap.copyOf(valueMap);
     this.session = new Session(propMap, typeSystem);
     this.idempotent = idempotent;
+    this.tracer = requireNonNull(tracer, "tracer");
     if (idempotent) {
       StripResult result = stripAndCaptureOutLines(in);
       this.in =
@@ -723,7 +728,7 @@ public class Main {
 
       try {
         final Environment env = env0.bindAll(bindingMap.values());
-        final Tracer tracer = Tracers.empty();
+        final Tracer tracer = main.tracer;
         final CompiledStatement compiled =
             Compiles.prepareStatement(
                 main.typeSystem,
@@ -745,6 +750,11 @@ public class Main {
           compiled.getBindings(typeOnlyConsumer);
         } else {
           compiled.eval(main.session, env, outLines, bindings::add);
+          // Give the tracer a chance to inspect the plan of this statement
+          // (e.g. to assert that a query was pushed down to Calcite).
+          if (main.session.code != null) {
+            tracer.onPlan(main.session.code);
+          }
         }
 
         if (expectedOutput != null) {

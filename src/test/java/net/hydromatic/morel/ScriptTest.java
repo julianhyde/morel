@@ -36,6 +36,13 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.stream.Stream;
+import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.compile.Tracer;
+import net.hydromatic.morel.compile.Tracers;
+import net.hydromatic.morel.eval.Code;
+import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Prop;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -162,6 +169,64 @@ public class ScriptTest {
   @Test
   void testTypeInference() throws Exception {
     checkRun("script/type-inference.smli");
+  }
+
+  /**
+   * Runs {@code dual.smli} a second time, in Calcite ("hybrid") mode, asserting
+   * that each query is pushed down to Calcite.
+   *
+   * <p>The ordinary {@link #test} run (via {@link #checkRun}) already exercises
+   * {@code dual.smli} in local mode; both runs check the output against the
+   * same golden file, since the results are identical (the script runner
+   * tolerates reordered bag elements). This run additionally installs a tracer
+   * that fails if a query's plan contains no Calcite node.
+   */
+  @Test
+  void testScriptDual() throws Exception {
+    Script.create(
+            "script/dual.smli",
+            null,
+            false,
+            ImmutableMap.of(Prop.HYBRID, true),
+            requireCalciteTracer())
+        .run();
+  }
+
+  /**
+   * Returns a tracer that fails if a statement's plan is not (even partly)
+   * pushed down to Calcite. Statements that cannot be pushed down -- a call to
+   * the {@code Sys} structure such as {@code Sys.set} -- are exempt (the "deny
+   * list").
+   */
+  private static Tracer requireCalciteTracer() {
+    // Capture the fully-inlined core (pass -1) of each statement, then check
+    // its plan when code is generated.
+    final Core.Decl[] lastCore = {null};
+    return Tracers.withOnPlan(
+        Tracers.withOnCore(Tracers.empty(), -1, d -> lastCore[0] = d),
+        code -> assertPushedDown(lastCore[0], code));
+  }
+
+  private static void assertPushedDown(Core.@Nullable Decl decl, Code code) {
+    if (!(decl instanceof Core.NonRecValDecl)) {
+      return; // not an expression statement; nothing to push down
+    }
+    final Core.Exp exp = ((Core.NonRecValDecl) decl).exp;
+    final BuiltIn builtIn = exp.builtIn();
+    if (builtIn != null && "Sys".equals(builtIn.structure)) {
+      return; // e.g. Sys.set; cannot be pushed down
+    }
+    // A pushed-down plan contains a "calcite(...)" node (possibly nested inside
+    // a "globalMarshal(...)" wrapper).
+    final String plan = Codes.describe(code);
+    if (!plan.contains("calcite(")) {
+      throw new AssertionError(
+          "query was not pushed down to Calcite: "
+              + exp
+              + "\n" //
+              + "  plan: "
+              + plan);
+    }
   }
 }
 

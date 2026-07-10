@@ -38,6 +38,8 @@ import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.hydromatic.morel.compile.Tracer;
+import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.ForeignValue;
@@ -59,6 +61,12 @@ public class Script {
   private final boolean idempotent;
   private final boolean loadDictionary;
 
+  /** Property overrides applied before running (e.g. {@code hybrid=true}). */
+  private final Map<Prop, Object> propOverrides;
+
+  /** Tracer installed on {@link Main} (e.g. to assert Calcite push-down). */
+  private final Tracer tracer;
+
   /** Internal constructor. */
   private Script(
       File inFile,
@@ -66,13 +74,17 @@ public class Script {
       boolean noInput,
       boolean echo,
       boolean idempotent,
-      boolean loadDictionary) {
+      boolean loadDictionary,
+      Map<Prop, Object> propOverrides,
+      Tracer tracer) {
     this.inFile = requireNonNull(inFile, "inFile");
     this.outFile = requireNonNull(outFile, "outFile");
     this.noInput = noInput;
     this.echo = echo;
     this.idempotent = idempotent;
     this.loadDictionary = loadDictionary;
+    this.propOverrides = ImmutableMap.copyOf(propOverrides);
+    this.tracer = requireNonNull(tracer, "tracer");
   }
 
   /**
@@ -81,12 +93,17 @@ public class Script {
    * <p>This is the entry point for {@link ScriptTest}.
    */
   public static Script create(String path) throws IOException {
-    return create(path, null, false);
+    return create(path, null, false, ImmutableMap.of(), Tracers.empty());
   }
 
   /** Creates a Script. */
   public static Script create(
-      String path, @Nullable File directory, boolean echo) throws IOException {
+      String path,
+      @Nullable File directory,
+      boolean echo,
+      Map<Prop, Object> propOverrides,
+      Tracer tracer)
+      throws IOException {
     final File inFile;
     final File outFile;
     final File f = new File(path);
@@ -121,11 +138,18 @@ public class Script {
             || inFile
                 .getPath()
                 .matches(
-                    ".*/(blog|dummy|dummy2|foreign|hybrid|logic|pretty"
+                    ".*/(blog|dual|dummy|dummy2|foreign|hybrid|logic|pretty"
                         + "|such-that)\\.(sml|smli)");
 
     return new Script(
-        inFile, outFile, noInput, echo, idempotent, loadDictionary);
+        inFile,
+        outFile,
+        noInput,
+        echo,
+        idempotent,
+        loadDictionary,
+        propOverrides,
+        tracer);
   }
 
   /**
@@ -171,7 +195,9 @@ public class Script {
         path = arg;
       }
     }
-    final Script t = create(path, directory, echo);
+    final Map<Prop, Object> propOverrides = ImmutableMap.of();
+    final Tracer tracer = Tracers.empty();
+    final Script t = create(path, directory, echo, propOverrides, tracer);
     t.run();
   }
 
@@ -195,6 +221,7 @@ public class Script {
       Prop.SCRIPT_DIRECTORY.set(propMap, scriptDirectory);
       Prop.DIRECTORY.set(propMap, directory);
     }
+    propMap.putAll(propOverrides);
     final Map<String, ForeignValue> dictionary =
         loadDictionary
             ? Calcite.withDataSets(BuiltInDataSet.DICTIONARY).foreignValues()
@@ -214,7 +241,10 @@ public class Script {
                     new PrintWriter(System.out, true))
                 : TestUtils.printWriter(outFile)) {
       final List<String> argList = ImmutableList.of("--echo");
-      new Main(argList, reader, writer, dictionary, propMap, idempotent).run();
+      final Main main =
+          new Main(
+              argList, reader, writer, dictionary, propMap, idempotent, tracer);
+      main.run();
     }
 
     final String inName =
