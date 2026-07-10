@@ -1780,9 +1780,15 @@ public class TypeResolver {
         elem);
     steps.add(yieldAll.copy(exp));
     final TypeEnvHolder envs = new TypeEnvHolder(p.rootEnv);
-    envs.bind(Op.CURRENT.opName, elem);
+    // A binder ("yieldAll r in e") names each element 'r'; otherwise the
+    // element is visible only as "current".
+    final Ast.Id label =
+        yieldAll.binder != null
+            ? yieldAll.binder
+            : ast.id(Pos.ZERO, Op.CURRENT.opName);
+    envs.bind(label.name, elem);
     fieldVars.clear();
-    fieldVars.add(ast.id(Pos.ZERO, Op.CURRENT.opName), elem);
+    fieldVars.add(label, elem);
     return Triple.of(p.rootEnv, envs.typeEnv, elem, c);
   }
 
@@ -1828,6 +1834,14 @@ public class TypeResolver {
             : compute.copy(compute.with, args2.immutable());
 
     final Variable v2 = fieldVar(fieldVars, group.isAtom());
+    if (group.binder != null) {
+      // A binder ("group g = {..} compute {..}") names the whole group row
+      // (keys and computed fields) 'g', an atom; expose only 'g' downstream.
+      bindings.clear();
+      bindings.add(group.binder.name, v2);
+      fieldVars.clear();
+      fieldVars.add(group.binder, v2);
+    }
     if (group.op == Op.GROUP) {
       steps.add(group.copy(group2, compute2));
 

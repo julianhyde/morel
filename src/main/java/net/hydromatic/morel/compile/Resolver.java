@@ -1588,8 +1588,15 @@ public class Resolver {
       final Resolver r = withStepEnv(fromBuilder.stepEnv());
       final Core.Exp coreExp = r.toCore(yieldAll.exp);
       final Type elementType = coreExp.type.elementType();
+      // A binder ("yieldAll r in e") names the element 'r'; otherwise a fresh
+      // name is generated.
       final Core.IdPat pat =
-          core.idPat(elementType, typeMap.typeSystem.nameGenerator::get);
+          yieldAll.binder != null
+              ? core.idPat(
+                  elementType,
+                  yieldAll.binder.name,
+                  typeMap.typeSystem.nameGenerator::inc)
+              : core.idPat(elementType, typeMap.typeSystem.nameGenerator::get);
       fromBuilder.scan(pat, coreExp);
       fromBuilder.yield_(core.id(pat));
     }
@@ -1675,7 +1682,12 @@ public class Resolver {
       } else {
         yieldExp = core.record(typeMap.typeSystem, postExps);
       }
-      fromBuilder.yield_(yieldExp);
+      if (group.binder != null) {
+        // "group g = ..." names the whole group row 'g', an atom.
+        fromBuilder.yield_(group.binder.name, yieldExp);
+      } else {
+        fromBuilder.yield_(yieldExp);
+      }
     }
 
     @Override

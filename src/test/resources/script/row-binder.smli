@@ -16,9 +16,10 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Tests row binders on 'yield' (issue #387). A binder names the whole
- * output row as a single scan-variable-like name; the row's fields
- * are reached through the name, and 'current' equals the name.
+ * Tests row binders on 'yield', 'yieldAll' and 'group' (issue #387).
+ * A binder names the whole output row as a single scan-variable-like
+ * name; the row's fields are reached through the name, and 'current'
+ * equals the name.
  *)
 
 (*) Bind the row; output type is unwrapped, field access via 'r'.
@@ -47,5 +48,31 @@ from i in [1,2] yield r = i + 1 join u in [3,4];
 (*) Equality still available via parentheses.
 from i in [1,2,3] yield (i = 2);
 > val it = [false,true,false] : bool list
+
+(*) yieldAll binder names each flattened element.
+from i in [1,2] yieldAll r in [i, i*10];
+> val it = [1,10,2,20] : int list
+from row in [{items=[1,2]},{items=[3]}] yieldAll r in row.items yield r + 1;
+> val it = [2,3,4] : int list
+(* yieldAll binder combines with a following join. This also fixes the
+ * crash that an unnamed 'yieldAll' followed by 'join' currently throws. *)
+from i in [1,2] yieldAll r in [i, i*10] join u in [3,4];
+> val it =
+>   [{r=1,u=3},{r=1,u=4},{r=10,u=3},{r=10,u=4},{r=2,u=3},{r=2,u=4},{r=20,u=3},
+>    {r=20,u=4}] : {r:int, u:int} list
+
+(*) group binder names the whole row (keys union computed fields) 'g'.
+from i in [1,2,3] group g = {x=i} compute {c = count over ()} order g.x;
+> val it = [{c=1,x=1},{c=1,x=2},{c=1,x=3}] : {c:int, x:int} list
+from i in [1,2,3] group g = {x=i} order g.x;
+> val it = [{x=1},{x=2},{x=3}] : {x:int} list
+from i in [1,2,3] group g = {} compute {c = count over ()};
+> val it = [{c=3}] : {c:int} list
+(*) A following step reaches keys and aggregates through 'g'.
+from i in [1,2,3]
+  group g = {x=i} compute {c = count over ()}
+  where g.c >= 1
+  order g.x;
+> val it = [{c=1,x=1},{c=1,x=2},{c=1,x=3}] : {c:int, x:int} list
 
 (*) End row-binder.smli

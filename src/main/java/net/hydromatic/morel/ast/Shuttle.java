@@ -425,7 +425,8 @@ public class Shuttle {
   }
 
   protected AstNode visit(Ast.YieldAll yieldAll) {
-    return ast.yieldAll(yieldAll.pos, yieldAll.exp.accept(this));
+    return ast.yieldAll(
+        yieldAll.pos, yieldAll.binder, yieldAll.exp.accept(this));
   }
 
   protected AstNode visit(Ast.Into into) {
@@ -441,7 +442,7 @@ public class Shuttle {
   }
 
   protected AstNode visit(Ast.Group group) {
-    return ast.group(group.pos, group.group, group.aggregate);
+    return ast.group(group.pos, group.binder, group.group, group.aggregate);
   }
 
   protected Ast.Aggregate visit(Ast.Aggregate aggregate) {

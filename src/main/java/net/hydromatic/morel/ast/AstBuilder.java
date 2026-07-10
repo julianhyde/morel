@@ -727,7 +727,12 @@ public enum AstBuilder {
   }
 
   public Ast.Group group(Pos pos, Ast.Exp groupExp, Ast.Exp aggregate) {
-    return new Ast.Group(pos, Op.GROUP, groupExp, aggregate);
+    return new Ast.Group(pos, Op.GROUP, null, groupExp, aggregate);
+  }
+
+  public Ast.Group group(
+      Pos pos, Ast.@Nullable Id binder, Ast.Exp groupExp, Ast.Exp aggregate) {
+    return new Ast.Group(pos, Op.GROUP, binder, groupExp, aggregate);
   }
 
   public Ast.FromStep where(Pos pos, Ast.Exp exp) {
@@ -778,7 +783,11 @@ public enum AstBuilder {
   }
 
   public Ast.FromStep yieldAll(Pos pos, Ast.Exp exp) {
-    return new Ast.YieldAll(pos, exp);
+    return new Ast.YieldAll(pos, null, exp);
+  }
+
+  public Ast.FromStep yieldAll(Pos pos, Ast.@Nullable Id binder, Ast.Exp exp) {
+    return new Ast.YieldAll(pos, binder, exp);
   }
 
   public Ast.FromStep into(Pos pos, Ast.Exp exp) {

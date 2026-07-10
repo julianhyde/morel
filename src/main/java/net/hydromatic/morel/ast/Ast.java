@@ -3367,16 +3367,24 @@ public class Ast {
 
   /** A {@code yieldAll} step in a {@code from} expression. */
   public static class YieldAll extends FromStep {
+    /** The binder, or null. E.g. {@code r} in {@code yieldAll r in exp}. */
+    public final @Nullable Id binder;
+
     public final Exp exp;
 
-    YieldAll(Pos pos, Exp exp) {
+    YieldAll(Pos pos, @Nullable Id binder, Exp exp) {
       super(pos, Op.YIELD_ALL);
+      this.binder = binder;
       this.exp = exp;
     }
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(" yieldAll ").append(exp, 0, 0);
+      w.append(" yieldAll ");
+      if (binder != null) {
+        w.append(binder, 0, 0).append(" in ");
+      }
+      return w.append(exp, 0, 0);
     }
 
     @Override
@@ -3390,7 +3398,7 @@ public class Ast {
     }
 
     public YieldAll copy(Exp exp) {
-      return this.exp.equals(exp) ? this : new YieldAll(pos, exp);
+      return this.exp.equals(exp) ? this : new YieldAll(pos, binder, exp);
     }
   }
 
@@ -3490,13 +3498,22 @@ public class Ast {
 
   /** A {@code group} step in a {@code from} expression. */
   public static class Group extends FromStep {
+    /** The binder, or null. E.g. {@code g} in {@code group g = {..}}. */
+    public final @Nullable Id binder;
+
     public final Exp group;
 
     /** The {@code compute} clause, or null if there is none. */
     public final @Nullable Exp aggregate;
 
-    Group(Pos pos, Op op, Exp group, @Nullable Exp aggregate) {
+    Group(
+        Pos pos,
+        Op op,
+        @Nullable Id binder,
+        Exp group,
+        @Nullable Exp aggregate) {
       super(pos, op);
+      this.binder = binder;
       this.group = requireNonNull(group);
       this.aggregate = aggregate;
       checkArgument(op == Op.GROUP || op == Op.COMPUTE);
@@ -3519,6 +3536,9 @@ public class Ast {
     AstWriter unparse(AstWriter w, int left, int right) {
       if (op == Op.GROUP) {
         w.append(" group ");
+        if (binder != null) {
+          w.append(binder, 0, 0).append(" = ");
+        }
         w.append(group, 0, 0);
       }
       if (aggregate != null) {
@@ -3543,7 +3563,7 @@ public class Ast {
       return this.group.equals(groupExp)
               && Objects.equals(this.aggregate, aggregate)
           ? this
-          : ast.group(pos, groupExp, aggregate);
+          : ast.group(pos, binder, groupExp, aggregate);
     }
 
     /**
@@ -3580,7 +3600,7 @@ public class Ast {
    */
   public static class Compute extends Group {
     Compute(Pos pos, Exp aggregate) {
-      super(pos, Op.COMPUTE, Record.EMPTY, requireNonNull(aggregate));
+      super(pos, Op.COMPUTE, null, Record.EMPTY, requireNonNull(aggregate));
     }
 
     @Override
