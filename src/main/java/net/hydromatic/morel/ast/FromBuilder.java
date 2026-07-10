@@ -432,12 +432,25 @@ public class FromBuilder {
   }
 
   public FromBuilder yield_(Core.Exp exp) {
-    boolean atom = exp.op != Op.TUPLE || exp.type.op() != Op.RECORD_TYPE;
-    return yield_(false, exp, atom);
+    return yield_(null, exp);
   }
 
-  public FromBuilder yield_(boolean uselessIfLast, Core.Exp exp, boolean atom) {
-    return yield_(uselessIfLast, null, exp, atom);
+  /** Yields {@code exp} with optional binder. */
+  public FromBuilder yield_(@Nullable String binder, Core.Exp exp) {
+    final boolean atom;
+    final Core.StepEnv env;
+    if (binder == null) {
+      atom = exp.op != Op.TUPLE || exp.type.op() != Op.RECORD_TYPE;
+      env = null;
+    } else {
+      final Core.IdPat binderId =
+          core.idPat(exp.type, binder, typeSystem.nameGenerator::inc);
+      atom = true;
+      env =
+          Core.StepEnv.of(
+              ImmutableList.of(Binding.of(binderId)), atom, stepEnv().ordered);
+    }
+    return yield_(false, env, exp, atom);
   }
 
   /**
@@ -510,7 +523,12 @@ public class FromBuilder {
             && ((Core.Id) exp).idPat.equals(bindings.get(0).id)
             // After 'yield {x = something}', 'yield x' may seem trivial, but
             // it converts a singleton record to an atom, so don't remove it.
-            && (steps.isEmpty() || last(steps).env.atom)) {
+            && (steps.isEmpty() || last(steps).env.atom)
+            // A binder ('yield r = i') renames the row via env2, so it is not
+            // the identity even though exp is the input binding; keep it.
+            && (env2 == null
+                || env2.bindings.size() == 1
+                    && env2.bindings.get(0).id.equals(bindings.get(0).id))) {
           return this;
         }
     }

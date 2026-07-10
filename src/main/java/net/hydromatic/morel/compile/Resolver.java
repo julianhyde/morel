@@ -1541,8 +1541,9 @@ public class Resolver {
     @Override
     protected void visit(Ast.Yield yield) {
       final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      Core.Exp exp = r.toCore(yield.exp);
-      fromBuilder.yield_(exp);
+      final Core.Exp exp = r.toCore(yield.exp);
+      final String binder = yield.binder == null ? null : yield.binder.name;
+      fromBuilder.yield_(binder, exp);
     }
 
     @Override
@@ -1583,8 +1584,16 @@ public class Resolver {
       final Resolver r = withStepEnv(fromBuilder.stepEnv());
       final Core.Exp coreExp = r.toCore(yieldAll.exp);
       final Type elementType = coreExp.type.elementType();
-      final Core.IdPat pat =
-          core.idPat(elementType, typeMap.typeSystem.nameGenerator::get);
+      final Core.IdPat pat;
+      if (yieldAll.binder == null) {
+        pat = core.idPat(elementType, typeMap.typeSystem.nameGenerator::get);
+      } else {
+        pat =
+            core.idPat(
+                elementType,
+                yieldAll.binder.name,
+                typeMap.typeSystem.nameGenerator::inc);
+      }
       fromBuilder.scan(pat, coreExp);
       fromBuilder.yield_(core.id(pat));
     }
@@ -1670,7 +1679,8 @@ public class Resolver {
       } else {
         yieldExp = core.record(typeMap.typeSystem, postExps);
       }
-      fromBuilder.yield_(yieldExp);
+      final String binder = group.binder == null ? null : group.binder.name;
+      fromBuilder.yield_(binder, yieldExp);
     }
 
     @Override
