@@ -770,7 +770,11 @@ public enum AstBuilder {
   }
 
   public Ast.FromStep yield(Pos pos, Ast.Exp exp) {
-    return new Ast.Yield(pos, exp);
+    return new Ast.Yield(pos, null, exp);
+  }
+
+  public Ast.FromStep yield(Pos pos, Ast.@Nullable Id binder, Ast.Exp exp) {
+    return new Ast.Yield(pos, binder, exp);
   }
 
   public Ast.FromStep yieldAll(Pos pos, Ast.Exp exp) {

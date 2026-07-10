@@ -1542,7 +1542,12 @@ public class Resolver {
     protected void visit(Ast.Yield yield) {
       final Resolver r = withStepEnv(fromBuilder.stepEnv());
       Core.Exp exp = r.toCore(yield.exp);
-      fromBuilder.yield_(exp);
+      if (yield.binder != null) {
+        // "yield r = e" binds the whole row to the atom 'r'.
+        fromBuilder.yield_(yield.binder.name, exp);
+      } else {
+        fromBuilder.yield_(exp);
+      }
     }
 
     @Override

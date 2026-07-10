@@ -421,7 +421,7 @@ public class Shuttle {
   }
 
   protected AstNode visit(Ast.Yield yield) {
-    return ast.yield(yield.pos, yield.exp.accept(this));
+    return ast.yield(yield.pos, yield.binder, yield.exp.accept(this));
   }
 
   protected AstNode visit(Ast.YieldAll yieldAll) {

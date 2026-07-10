@@ -757,6 +757,27 @@ public class Compiler {
     return Codes.apply2(applicable2, argCodes.left(0), argCodes.left(1));
   }
 
+  /**
+   * Whether a yielded record's field names exactly match the step's binding
+   * names. True for an ordinary record yield (fields scattered into like-named
+   * bindings) and for the from-flattening rename {@code {e2 = ...}}; false for
+   * a row binder {@code yield r = {c = ...}}, whose whole record is bound to
+   * the single name {@code r}.
+   */
+  private static boolean fieldsMatchBindings(
+      Core.Tuple tuple, List<Binding> bindings) {
+    final List<String> fieldNames = ((RecordLikeType) tuple.type()).argNames();
+    if (fieldNames.size() != bindings.size()) {
+      return false;
+    }
+    for (Binding binding : bindings) {
+      if (!fieldNames.contains(binding.id.name)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   protected Code compileFrom(Context cx, Core.From from) {
     Supplier<RowSink> rowSinkFactory =
         createRowSinkFactory(
@@ -967,7 +988,9 @@ public class Compiler {
           // Note that we don't use nextFactory.
           final Code yieldCode = compileRow(cx, yield.exp);
           return () -> RowSinks.collect(yieldCode);
-        } else if (yield.exp instanceof Core.Tuple) {
+        } else if (yield.exp instanceof Core.Tuple
+            && fieldsMatchBindings(
+                (Core.Tuple) yield.exp, yield.env.bindings)) {
           final Core.Tuple tuple = (Core.Tuple) yield.exp;
           final RecordLikeType recordType = tuple.type();
           final Map<String, Code> codeMap =

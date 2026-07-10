@@ -1,0 +1,51 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Tests row binders on 'yield' (issue #387). A binder names the whole
+ * output row as a single scan-variable-like name; the row's fields
+ * are reached through the name, and 'current' equals the name.
+ *)
+
+(*) Bind the row; output type is unwrapped, field access via 'r'.
+from i in [{a=1,b=2}] yield r = i;
+> val it = [{a=1,b=2}] : {a:int, b:int} list
+(*) Access fields through the binder.
+from i in [{a=1,b=2}] yield r = i yield r.a;
+> val it = [1] : int list
+(*) Bare field names are not in scope.
+from i in [{a=1,b=2}] yield r = i where a > 0;
+> stdIn:1.41 Error: unbound variable or constructor: a
+>   raised at: stdIn:1.41
+(*) 'current' equals the binder.
+from i in [{a=1,b=2}] yield r = i where current.a > 0;
+> val it = [{a=1,b=2}] : {a:int, b:int} list
+from i in [{a=1,b=2}] yield r = i yield current.a;
+> val it = [1] : int list
+(*) A record expression becomes a single named row (not scattered).
+from i in [{a=1,b=2}] yield r = {c = i.a + i.b};
+> val it = [{c=3}] : {c:int} list
+from i in [{a=1,b=2}] yield r = {c=i.a, d=i.b} where r.c > 0 yield r.d;
+> val it = [2] : int list
+(*) The binder combines with a following join into a record.
+from i in [1,2] yield r = i + 1 join u in [3,4];
+> val it = [{r=2,u=3},{r=2,u=4},{r=3,u=3},{r=3,u=4}] : {r:int, u:int} list
+(*) Equality still available via parentheses.
+from i in [1,2,3] yield (i = 2);
+> val it = [false,true,false] : bool list
+
+(*) End row-binder.smli

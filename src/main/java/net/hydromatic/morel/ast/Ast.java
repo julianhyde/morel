@@ -3330,16 +3330,24 @@ public class Ast {
 
   /** A {@code yield} step in a {@code from} expression. */
   public static class Yield extends FromStep {
+    /** The binder, or null. E.g. {@code r} in {@code yield r = exp}. */
+    public final @Nullable Id binder;
+
     public final Exp exp;
 
-    Yield(Pos pos, Exp exp) {
+    Yield(Pos pos, @Nullable Id binder, Exp exp) {
       super(pos, Op.YIELD);
+      this.binder = binder;
       this.exp = exp;
     }
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(" yield ").append(exp, 0, 0);
+      w.append(" yield ");
+      if (binder != null) {
+        w.append(binder, 0, 0).append(" = ");
+      }
+      return w.append(exp, 0, 0);
     }
 
     @Override
@@ -3353,7 +3361,7 @@ public class Ast {
     }
 
     public Yield copy(Exp exp) {
-      return this.exp.equals(exp) ? this : new Yield(pos, exp);
+      return this.exp.equals(exp) ? this : new Yield(pos, binder, exp);
     }
   }
 

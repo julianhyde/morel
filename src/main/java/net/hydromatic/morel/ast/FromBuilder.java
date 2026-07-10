@@ -436,6 +436,15 @@ public class FromBuilder {
     return yield_(false, exp, atom);
   }
 
+  /**
+   * Adds a yield step that binds the whole row to a single name {@code name}
+   * (an atom), as produced by a {@code yield r = e} binder.
+   */
+  public FromBuilder yield_(String name, Core.Exp exp) {
+    addStep(core.yield_(typeSystem, name, exp, stepEnv().ordered));
+    return this;
+  }
+
   public FromBuilder yield_(boolean uselessIfLast, Core.Exp exp, boolean atom) {
     return yield_(uselessIfLast, null, exp, atom);
   }
@@ -510,7 +519,12 @@ public class FromBuilder {
             && ((Core.Id) exp).idPat.equals(bindings.get(0).id)
             // After 'yield {x = something}', 'yield x' may seem trivial, but
             // it converts a singleton record to an atom, so don't remove it.
-            && (steps.isEmpty() || last(steps).env.atom)) {
+            && (steps.isEmpty() || last(steps).env.atom)
+            // A binder ('yield r = i') renames the row via env2, so it is not
+            // the identity even though exp is the input binding; keep it.
+            && (env2 == null
+                || env2.bindings.size() == 1
+                    && env2.bindings.get(0).id.equals(bindings.get(0).id))) {
           return this;
         }
     }

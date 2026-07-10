@@ -721,6 +721,18 @@ public enum CoreBuilder {
   }
 
   /** Derives bindings, then calls {@link #yield_(Core.StepEnv, Core.Exp)}. */
+  /**
+   * Creates an atom yield whose single binding has the given {@code name}, as
+   * produced by a {@code yield r = e} binder.
+   */
+  public Core.Yield yield_(
+      TypeSystem typeSystem, String name, Core.Exp exp, boolean ordered) {
+    final Core.NamedPat idPat = getIdPat(typeSystem, exp, name);
+    return yield_(
+        Core.StepEnv.of(ImmutableList.of(Binding.of(idPat)), true, ordered),
+        exp);
+  }
+
   public Core.Yield yield_(
       TypeSystem typeSystem, Core.Exp exp, boolean atom, boolean ordered) {
     final List<Core.NamedPat> idPats = new ArrayList<>();

@@ -1710,7 +1710,7 @@ public class TypeResolver {
     final Variable c6 = unifier.variable();
     isListOrBagMatchingInput(c6, v6, requireNonNull(p.c), p.v);
 
-    if (yieldExp2.op == Op.RECORD) {
+    if (yield.binder == null && yieldExp2.op == Op.RECORD) {
       final Ast.Record record2 = (Ast.Record) yieldExp2;
       Term term = map.get(yieldExp2);
       if (record2.with != null) {
@@ -1728,12 +1728,19 @@ public class TypeResolver {
             });
       }
     } else {
-      String label =
-          requireNonNull(
-              first(ast.implicitLabelOpt(yield.exp), Op.CURRENT.opName));
-      envs.bind(label, v6);
+      // A binder ("yield r = e") names the whole row 'r', an atom; otherwise
+      // use the expression's implicit label, or "current".
+      final Ast.Id label =
+          yield.binder != null
+              ? yield.binder
+              : ast.id(
+                  Pos.ZERO,
+                  requireNonNull(
+                      first(
+                          ast.implicitLabelOpt(yield.exp), Op.CURRENT.opName)));
+      envs.bind(label.name, v6);
       fieldVars.clear();
-      fieldVars.add(ast.id(Pos.ZERO, label), v6);
+      fieldVars.add(label, v6);
     }
     return Triple.of(p.rootEnv, envs.typeEnv, v6, c6);
   }

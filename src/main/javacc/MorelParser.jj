@@ -690,6 +690,7 @@ void fromStep(List<FromStep> steps) :
   final Exp takeExp;
   final Exp requireExp;
   final Exp yieldExp;
+  final Id yieldBinder;
   final Exp groupExp;
   final Pat pat;
   final Exp aggregate;
@@ -777,8 +778,15 @@ void fromStep(List<FromStep> steps) :
     steps.add(ast.where(span.end(this), filterExp));
   }
 |
-  <YIELD> { span = Span.of(pos()); } yieldExp = expression() {
-    steps.add(ast.yield(span.end(this), yieldExp));
+  <YIELD> { span = Span.of(pos()); }
+  (
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <EQ>)
+    yieldBinder = identifier() <EQ>
+  |
+    { yieldBinder = null; }
+  )
+  yieldExp = expression() {
+    steps.add(ast.yield(span.end(this), yieldBinder, yieldExp));
   }
 |
   <YIELDALL> { span = Span.of(pos()); } yieldExp = expression() {
