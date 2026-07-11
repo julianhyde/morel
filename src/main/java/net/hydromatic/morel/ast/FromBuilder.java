@@ -432,21 +432,25 @@ public class FromBuilder {
   }
 
   public FromBuilder yield_(Core.Exp exp) {
-    boolean atom = exp.op != Op.TUPLE || exp.type.op() != Op.RECORD_TYPE;
-    return yield_(false, exp, atom);
+    return yield_(null, exp);
   }
 
-  /**
-   * Adds a yield step that binds the whole row to a single name {@code name}
-   * (an atom), as produced by a {@code yield r = e} binder.
-   */
-  public FromBuilder yield_(String name, Core.Exp exp) {
-    addStep(core.yield_(typeSystem, name, exp, stepEnv().ordered));
-    return this;
-  }
-
-  public FromBuilder yield_(boolean uselessIfLast, Core.Exp exp, boolean atom) {
-    return yield_(uselessIfLast, null, exp, atom);
+  /** Yields {@code exp} with optional binder. */
+  public FromBuilder yield_(@Nullable String binder, Core.Exp exp) {
+    final boolean atom;
+    final Core.StepEnv env;
+    if (binder == null) {
+      atom = exp.op != Op.TUPLE || exp.type.op() != Op.RECORD_TYPE;
+      env = null;
+    } else {
+      final Core.IdPat binderId =
+          core.idPat(exp.type, binder, typeSystem.nameGenerator::inc);
+      atom = true;
+      env =
+          Core.StepEnv.of(
+              ImmutableList.of(Binding.of(binderId)), atom, stepEnv().ordered);
+    }
+    return yield_(false, env, exp, atom);
   }
 
   /**

@@ -758,15 +758,15 @@ public class Compiler {
   }
 
   /**
-   * Whether a yielded record's field names exactly match the step's binding
-   * names. True for an ordinary record yield (fields scattered into like-named
-   * bindings) and for the from-flattening rename {@code {e2 = ...}}; false for
-   * a row binder {@code yield r = {c = ...}}, whose whole record is bound to
-   * the single name {@code r}.
+   * Returns whether a yielded record's field names exactly match the step's
+   * binding names. True for an ordinary record yield (fields scattered into
+   * like-named bindings) and for the from-flattening rename {@code {e2 = ...}};
+   * false for a row binder {@code yield r = {c = ...}}, whose whole record is
+   * bound to the single name {@code r}.
    */
   private static boolean fieldsMatchBindings(
       Core.Tuple tuple, List<Binding> bindings) {
-    final List<String> fieldNames = ((RecordLikeType) tuple.type()).argNames();
+    final List<String> fieldNames = tuple.type().argNames();
     if (fieldNames.size() != bindings.size()) {
       return false;
     }

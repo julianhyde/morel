@@ -1728,21 +1728,30 @@ public class TypeResolver {
             });
       }
     } else {
-      // A binder ("yield r = e") names the whole row 'r', an atom; otherwise
-      // use the expression's implicit label, or "current".
-      final Ast.Id label =
-          yield.binder != null
-              ? yield.binder
-              : ast.id(
-                  Pos.ZERO,
-                  requireNonNull(
-                      first(
-                          ast.implicitLabelOpt(yield.exp), Op.CURRENT.opName)));
+      final Ast.Id label = getLabel(yield.binder, yield.exp);
       envs.bind(label.name, v6);
       fieldVars.clear();
       fieldVars.add(label, v6);
     }
     return Triple.of(p.rootEnv, envs.typeEnv, v6, c6);
+  }
+
+  /** Derives the row label. */
+  private static Ast.Id getLabel(
+      Ast.@Nullable Id binder, Ast.@Nullable Exp exp) {
+    if (binder != null) {
+      // A binder ("yield r = e" or "yieldAll r in e") names the whole row 'r'.
+      return binder;
+    }
+    if (exp != null) {
+      final String implicitLabelOpt = ast.implicitLabelOpt(exp);
+      if (implicitLabelOpt != null) {
+        // In "yield a.b" the row is implicitly named "b".
+        return ast.id(Pos.ZERO, implicitLabelOpt);
+      }
+    }
+    // Otherwise the label is "current".
+    return ast.id(Pos.ZERO, requireNonNull(Op.CURRENT.opName));
   }
 
   /**
@@ -1780,12 +1789,7 @@ public class TypeResolver {
         elem);
     steps.add(yieldAll.copy(exp));
     final TypeEnvHolder envs = new TypeEnvHolder(p.rootEnv);
-    // A binder ("yieldAll r in e") names each element 'r'; otherwise the
-    // element is visible only as "current".
-    final Ast.Id label =
-        yieldAll.binder != null
-            ? yieldAll.binder
-            : ast.id(Pos.ZERO, Op.CURRENT.opName);
+    final Ast.Id label = getLabel(yieldAll.binder, null);
     envs.bind(label.name, elem);
     fieldVars.clear();
     fieldVars.add(label, elem);

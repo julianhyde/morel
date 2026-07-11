@@ -690,7 +690,7 @@ void fromStep(List<FromStep> steps) :
   final Exp takeExp;
   final Exp requireExp;
   final Exp yieldExp;
-  final Id yieldBinder;
+  final Id binder;
   final Exp groupExp;
   final Pat pat;
   final Exp aggregate;
@@ -721,9 +721,9 @@ void fromStep(List<FromStep> steps) :
   <GROUP> { span = Span.of(pos()); }
   (
     LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <EQ>)
-    yieldBinder = identifier() <EQ>
+    binder = identifier() <EQ>
   |
-    { yieldBinder = null; }
+    { binder = null; }
   )
   groupExp = expression()
   (
@@ -732,7 +732,7 @@ void fromStep(List<FromStep> steps) :
     { aggregate = null; }
   )
   {
-    steps.add(ast.group(span.end(this), yieldBinder, groupExp, aggregate));
+    steps.add(ast.group(span.end(this), binder, groupExp, aggregate));
   }
 |
   <COMPUTE> { span = Span.of(pos()); } aggregate = expression() {
@@ -787,23 +787,23 @@ void fromStep(List<FromStep> steps) :
   <YIELD> { span = Span.of(pos()); }
   (
     LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <EQ>)
-    yieldBinder = identifier() <EQ>
+    binder = identifier() <EQ>
   |
-    { yieldBinder = null; }
+    { binder = null; }
   )
   yieldExp = expression() {
-    steps.add(ast.yield(span.end(this), yieldBinder, yieldExp));
+    steps.add(ast.yield(span.end(this), binder, yieldExp));
   }
 |
   <YIELDALL> { span = Span.of(pos()); }
   (
     LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <IN>)
-    yieldBinder = identifier() <IN>
+    binder = identifier() <IN>
   |
-    { yieldBinder = null; }
+    { binder = null; }
   )
   yieldExp = expression() {
-    steps.add(ast.yieldAll(span.end(this), yieldBinder, yieldExp));
+    steps.add(ast.yieldAll(span.end(this), binder, yieldExp));
   }
 }
 
