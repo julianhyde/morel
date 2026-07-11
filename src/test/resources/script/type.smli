@@ -308,7 +308,7 @@ fun foo3 list = (length list, type_string {b = list, a = 1});
 foo3 [true, false];
 > val it = (2,"{a:int, b:'a list}") : int * string
 
-(* Function with unit arg------------------------------------------ *)
+(* Function with unit arg ----------------------------------------- *)
 fun one () = 1;
 > val one = fn : unit -> int
 one ();
