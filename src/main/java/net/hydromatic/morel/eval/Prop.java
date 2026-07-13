@@ -61,6 +61,24 @@ public enum Prop {
           + "shell."),
 
   /**
+   * String property "colorScheme" selects the color scheme used for syntax
+   * highlighting in the shell.
+   *
+   * <p>Its value is a built-in scheme ("dark", "light" or "none"), "auto" (the
+   * default), or the name of a user-defined scheme. "auto" chooses "none" when
+   * the terminal does not support color, otherwise "light" or "dark" based on
+   * the terminal's background.
+   */
+  COLOR_SCHEME(
+      "colorScheme",
+      String.class,
+      true,
+      "auto",
+      "Color scheme for syntax highlighting in the shell: a built-in scheme "
+          + "('dark', 'light' or 'none'), 'auto' (the default), or a "
+          + "user-defined scheme."),
+
+  /**
    * File property "directory" is the path of the directory that the {@code
    * file} variable maps to in this connection.
    *

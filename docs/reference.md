@@ -567,6 +567,7 @@ and unset using `Sys.unset name`.
 | Name                 | Type   | Default | Description |
 | -------------------- | ------ | ------- | ----------- |
 | banner               | string | Morel version ... | Startup banner message displayed when launching the Morel shell. |
+| colorScheme          | string | auto    | Color scheme for syntax highlighting in the shell: a built-in scheme ('dark', 'light' or 'none'), 'auto' (the default), or a user-defined scheme. |
 | directory            | file   |         | Path of the directory that the 'file' variable maps to in this connection. |
 | excludeStructures    | string | ^Test$  | Regular expression that controls which built-in structures are excluded from the environment. |
 | hybrid               | bool   | false   | Whether to try to create a hybrid execution plan that uses Apache Calcite relational algebra. |
@@ -619,3 +620,36 @@ Each line in the history file consists of a Unix timestamp, a colon, and
 the text of a command. If the file cannot be created — for example, if
 the home directory is not writable — the shell prints a warning and
 continues without saving history for that session.
+
+### Color schemes
+
+In an interactive terminal, the shell highlights the code you type,
+coloring each token according to its category: keyword, symbol, numeric,
+constant, string, comment, and type variable. (Plain identifiers are left
+in the terminal's default color.)
+
+The color scheme is chosen by the [`colorScheme`](#properties) property,
+whose value is one of:
+
+* `dark` — colors tuned for a dark terminal background;
+* `light` — colors tuned for a light terminal background;
+* `none` — no highlighting;
+* `auto` (the default) — `none` if the terminal does not support color
+  (if standard output is not a terminal, `NO_COLOR` is set, or `TERM` is
+  `dumb`), otherwise `light` or `dark` according to the terminal's
+  background, as reported by the `COLORFGBG` environment variable.
+
+Choose a scheme at startup with the `--color-scheme` flag:
+
+```bash
+$ ./morel --color-scheme=light
+```
+
+or at any time from within the shell:
+
+```
+- Sys.set ("colorScheme", "none");
+```
+
+A future release will let you define your own schemes as properties files
+in `~/.morel/color-schemes/`.

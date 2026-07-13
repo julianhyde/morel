@@ -177,6 +177,9 @@ public class Shell {
       if (arg.startsWith("--eval=")) {
         c = c.withEval(arg.substring("--eval=".length()));
       }
+      if (arg.startsWith("--color-scheme=")) {
+        c = c.withColorScheme(arg.substring("--color-scheme=".length()));
+      }
     }
 
     return c.withValueMap(ImmutableMap.copyOf(valueMapBuilder));
@@ -337,11 +340,21 @@ public class Shell {
     if (config.banner) {
       terminal.writer().println(JavaVersion.banner(this.terminal));
     }
+    final TypeSystem typeSystem = new TypeSystem();
+    final Map<Prop, Object> map = new LinkedHashMap<>();
+    Prop.DIRECTORY.set(map, config.directory);
+    Prop.SCRIPT_DIRECTORY.set(map, config.directory);
+    if (config.colorScheme != null) {
+      Prop.COLOR_SCHEME.set(map, config.colorScheme);
+    }
+    final Session session = new Session(map, typeSystem);
+
     final LineReaderBuilder lineReaderBuilder =
         LineReaderBuilder.builder()
             .appName("morel")
             .terminal(terminal)
             .parser(parser)
+            .highlighter(new ShellHighlighter(session, terminal))
             .variable(LineReader.SECONDARY_PROMPT_PATTERN, equalsPrompt);
     final Path historyFile = historyFile();
     if (historyFile != null) {
@@ -351,11 +364,6 @@ public class Shell {
     LineReader lineReader = lineReaderBuilder.build();
 
     pause();
-    final TypeSystem typeSystem = new TypeSystem();
-    final Map<Prop, Object> map = new LinkedHashMap<>();
-    Prop.DIRECTORY.set(map, config.directory);
-    Prop.SCRIPT_DIRECTORY.set(map, config.directory);
-    final Session session = new Session(map, typeSystem);
     Environment env = Environments.env(typeSystem, session, config.valueMap);
     final LineFn lineFn =
         new TerminalLineFn(minusPrompt, equalsPrompt, lineReader);
@@ -418,6 +426,8 @@ public class Shell {
     Config withMaxUseDepth(int maxUseDepth);
 
     Config withEval(@Nullable String eval);
+
+    Config withColorScheme(@Nullable String colorScheme);
   }
 
   /** Implementation of {@link Config}. */
@@ -432,6 +442,7 @@ public class Shell {
     private final Runnable pauseFn;
     private final int maxUseDepth;
     private final @Nullable String eval;
+    private final @Nullable String colorScheme;
 
     static final ConfigImpl DEFAULT =
         new ConfigImpl(
@@ -444,6 +455,7 @@ public class Shell {
             new File(""),
             Runnables.doNothing(),
             -1,
+            null,
             null);
 
     private ConfigImpl(
@@ -456,7 +468,8 @@ public class Shell {
         File directory,
         Runnable pauseFn,
         int maxUseDepth,
-        @Nullable String eval) {
+        @Nullable String eval,
+        @Nullable String colorScheme) {
       this.banner = banner;
       this.dumb = dumb;
       this.system = system;
@@ -467,6 +480,7 @@ public class Shell {
       this.pauseFn = requireNonNull(pauseFn, "pauseFn");
       this.maxUseDepth = maxUseDepth;
       this.eval = eval;
+      this.colorScheme = colorScheme;
     }
 
     @Override
@@ -484,7 +498,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -502,7 +517,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -520,7 +536,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -538,7 +555,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -556,7 +574,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -576,7 +595,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -594,7 +614,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -612,7 +633,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -630,7 +652,8 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
     }
 
     @Override
@@ -648,7 +671,27 @@ public class Shell {
           directory,
           pauseFn,
           maxUseDepth,
-          eval);
+          eval,
+          colorScheme);
+    }
+
+    @Override
+    public ConfigImpl withColorScheme(@Nullable String colorScheme) {
+      if (Objects.equals(this.colorScheme, colorScheme)) {
+        return this;
+      }
+      return new ConfigImpl(
+          banner,
+          dumb,
+          system,
+          echo,
+          help,
+          valueMap,
+          directory,
+          pauseFn,
+          maxUseDepth,
+          eval,
+          colorScheme);
     }
   }
 

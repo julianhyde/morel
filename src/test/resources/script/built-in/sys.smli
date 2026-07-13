@@ -441,7 +441,7 @@ map
       then SOME "?" else v))
   (Sys.showAll ());
 > val it =
->   [("banner",SOME "?"),("directory",SOME "?"),
+>   [("banner",SOME "?"),("colorScheme",SOME "auto"),("directory",SOME "?"),
 >    ("excludeStructures",SOME "^Test$"),("hybrid",SOME "true"),
 >    ("inlinePassCount",SOME "5"),("lineWidth",SOME "78"),
 >    ("matchCoverageEnabled",SOME "true"),("matchStrict",SOME "false"),
@@ -453,9 +453,9 @@ map
 >    ("stringFold",NONE),("timeZone",SOME "UTC")]
 >   : (string * string option) list
 List.length (Sys.showAll ());
-> val it = 20 : int
+> val it = 21 : int
 List.length (showAll ());
-> val it = 20 : int
+> val it = 21 : int
 Sys.plan ();
 > val it =
 >   "apply(fnValue List.length, argCode apply(fnValue Sys.showAll, argCode constant([])))"
