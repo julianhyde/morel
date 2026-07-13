@@ -79,6 +79,19 @@ public class ShellHighlighterTest {
         is(ColorScheme.DARK.style(Category.CONSTANT)));
   }
 
+  /** Word, real and scientific literals are styled as numeric. */
+  @Test
+  void testHighlightNumbers() throws IOException {
+    final ShellHighlighter h = highlighter("dark");
+    final AttributedStyle numeric = ColorScheme.DARK.style(Category.NUMERIC);
+    assertThat(h.highlight(null, "0w7").styleAt(0), is(numeric)); // word
+    assertThat(h.highlight(null, "0wx1F").styleAt(2), is(numeric)); // word hex
+    assertThat(h.highlight(null, "1.5").styleAt(0), is(numeric)); // real
+    // the '.' is part of the real literal, not a separate symbol
+    assertThat(h.highlight(null, "1.5").styleAt(1), is(numeric));
+    assertThat(h.highlight(null, "1e~7").styleAt(3), is(numeric)); // scientific
+  }
+
   /** The "none" scheme applies no styling. */
   @Test
   void testHighlightNone() throws IOException {

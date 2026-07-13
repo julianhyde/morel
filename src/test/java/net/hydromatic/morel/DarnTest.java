@@ -532,6 +532,14 @@ public class DarnTest {
     assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
   }
 
+  /** Word, real and scientific literals are highlighted as numbers. */
+  @Test
+  void testHighlightRougeNumbers() {
+    final String code = "0w7 0wx1F 1.5 1e~7 42";
+    final String expected = "mi{0w7} mi{0wx1F} mi{1.5} mi{1e~7} mi{42}";
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
+  }
+
   @Test
   void testGenerateHtmlLinesHtmlEscape() {
     String highlighted =
