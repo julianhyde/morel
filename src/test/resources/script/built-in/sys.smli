@@ -48,7 +48,7 @@ Sys;
 (*) val colorSchemes : unit -> {...} list
 Sys.colorSchemes ();
 > val it =
->   [{comment="italic bright-black",constant="yellow",error="underline red",
+>   [{comment="italic 245",constant="yellow",error="underline red",
 >     identifier="",keyword="bold cyan",name="dark",numeric="yellow",
 >     string="green",symbol="cyan",typeVar="magenta"},
 >    {comment="italic bright-black",constant="magenta",error="underline red",
