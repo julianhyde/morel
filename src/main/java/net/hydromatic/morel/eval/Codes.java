@@ -84,6 +84,7 @@ import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.Lindig;
@@ -4563,6 +4564,31 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#SYS_COLOR_SCHEMES */
+  private static final Applicable SYS_COLOR_SCHEMES =
+      new ApplicableImpl(BuiltIn.SYS_COLOR_SCHEMES) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final ImmutableList.Builder<List> list = ImmutableList.builder();
+          for (ColorScheme scheme : ColorScheme.builtIns()) {
+            // Fields in record (alphabetical) order.
+            list.add(
+                ImmutableList.of(
+                    scheme.spec(ColorScheme.Category.COMMENT),
+                    scheme.spec(ColorScheme.Category.CONSTANT),
+                    scheme.spec(ColorScheme.Category.ERROR),
+                    scheme.spec(ColorScheme.Category.IDENTIFIER),
+                    scheme.spec(ColorScheme.Category.KEYWORD),
+                    scheme.name(),
+                    scheme.spec(ColorScheme.Category.NUMERIC),
+                    scheme.spec(ColorScheme.Category.STRING),
+                    scheme.spec(ColorScheme.Category.SYMBOL),
+                    scheme.spec(ColorScheme.Category.TYPE_VAR)));
+          }
+          return list.build();
+        }
+      };
+
   /** @see BuiltIn#SYS_ENV */
   private static Core.Exp sysEnv(
       TypeSystem typeSystem, Environment env, Type argType) {
@@ -6465,6 +6491,7 @@ public abstract class Codes {
     b.add(BuiltIn.STRING_TOKENS, STRING_TOKENS);
     b.add(BuiltIn.STRING_TRANSLATE, STRING_TRANSLATE);
     b.add(BuiltIn.SYS_CLEAR_ENV, SYS_CLEAR_ENV);
+    b.add(BuiltIn.SYS_COLOR_SCHEMES, SYS_COLOR_SCHEMES);
     b.add(BuiltIn.SYS_ENV, (Macro) Codes::sysEnv);
     // Value of Sys.file comes from Session.file, but initial value must
     // be a List because it has (progressive) record type.

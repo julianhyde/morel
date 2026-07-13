@@ -4123,6 +4123,32 @@ public enum BuiltIn {
   /** Function "Sys.clearEnv", of type "unit &rarr; unit". */
   SYS_CLEAR_ENV("Sys", "clearEnv", ts -> ts.fnType(UNIT, UNIT)),
 
+  /**
+   * Function "Sys.colorSchemes", of type "unit &rarr; {...} list". Returns the
+   * built-in syntax-highlighting color schemes, each as a record whose {@code
+   * name} field is the scheme name and whose remaining fields are the style of
+   * each token category.
+   */
+  SYS_COLOR_SCHEMES(
+      "Sys",
+      "colorSchemes",
+      ts ->
+          ts.fnType(
+              UNIT,
+              ts.listType(
+                  ts.recordType(
+                      RecordType.map(
+                          "comment", STRING,
+                          "constant", STRING,
+                          "error", STRING,
+                          "identifier", STRING,
+                          "keyword", STRING,
+                          "name", STRING,
+                          "numeric", STRING,
+                          "string", STRING,
+                          "symbol", STRING,
+                          "typeVar", STRING))))),
+
   /** Function "Sys.env", aka "env", of type "unit &rarr; string list". */
   SYS_ENV(
       "Sys",

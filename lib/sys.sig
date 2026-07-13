@@ -29,6 +29,17 @@ sig
   (** restores the environment to the initial environment. *)
   val clearEnv : unit -> unit [@@prototype "clearEnv ()"]
 
+  (**
+   * returns the built-in syntax-highlighting color schemes. Each scheme is a
+   * record whose `name` field is the scheme name and whose remaining fields
+   * give the style of each token category.
+   *)
+  val colorSchemes : unit ->
+      {comment:string, constant:string, error:string, identifier:string,
+       keyword:string, name:string, numeric:string, string:string,
+       symbol:string, typeVar:string} list
+      [@@prototype "colorSchemes ()"]
+
   (** prints the environment. *)
   val env : unit -> (string * string) list [@@prototype "env ()"]
 
