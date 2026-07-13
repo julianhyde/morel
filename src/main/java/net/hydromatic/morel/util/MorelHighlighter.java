@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.util;
 
+import static net.hydromatic.morel.util.Characters.scanNumber;
+
 import com.google.common.collect.ImmutableSet;
 import java.util.Set;
 import java.util.function.Function;
@@ -511,8 +513,8 @@ public class MorelHighlighter {
 
       } else if (Character.isDigit(c)) {
         // Numeric literal: integer, word (0w7, 0wx1F), real (1.5) or
-        // scientific (1e~7).
-        int end = scanNumber(s, i, n);
+        // scientific (1e~7). A leading '~' is emitted separately.
+        int end = scanNumber(s, i, n, false);
         sink.n(i, end);
         i = end;
 
@@ -617,65 +619,6 @@ public class MorelHighlighter {
       }
     }
     return i;
-  }
-
-  /**
-   * Scans a numeric literal starting at {@code start} (a digit) and returns the
-   * end index. Handles integer, word ({@code 0w7}, {@code 0wx1F}), real ({@code
-   * 1.5}) and scientific ({@code 1e~7}) literals. A leading {@code ~} (negative
-   * sign) is not consumed here; it is emitted separately.
-   */
-  private static int scanNumber(String s, int start, int n) {
-    int i = start;
-    // Word literal: 0w<digits> or 0wx<hex>.
-    if (i + 1 < n && s.charAt(i) == '0' && s.charAt(i + 1) == 'w') {
-      if (i + 2 < n && (s.charAt(i + 2) == 'x' || s.charAt(i + 2) == 'X')) {
-        int k = i + 3;
-        while (k < n && isHexDigit(s.charAt(k))) {
-          k++;
-        }
-        if (k > i + 3) {
-          return k;
-        }
-      } else {
-        int k = i + 2;
-        while (k < n && Character.isDigit(s.charAt(k))) {
-          k++;
-        }
-        if (k > i + 2) {
-          return k;
-        }
-      }
-    }
-    // Integer part.
-    while (i < n && Character.isDigit(s.charAt(i))) {
-      i++;
-    }
-    // Fractional part: '.' followed by at least one digit.
-    if (i + 1 < n && s.charAt(i) == '.' && Character.isDigit(s.charAt(i + 1))) {
-      i += 2;
-      while (i < n && Character.isDigit(s.charAt(i))) {
-        i++;
-      }
-    }
-    // Exponent: [eE] ~? digits.
-    if (i < n && (s.charAt(i) == 'e' || s.charAt(i) == 'E')) {
-      int j = i + 1;
-      if (j < n && s.charAt(j) == '~') {
-        j++;
-      }
-      if (j < n && Character.isDigit(s.charAt(j))) {
-        i = j + 1;
-        while (i < n && Character.isDigit(s.charAt(i))) {
-          i++;
-        }
-      }
-    }
-    return i;
-  }
-
-  private static boolean isHexDigit(char c) {
-    return Character.isDigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F';
   }
 
   /** Scans a string literal {@code "..."} and returns end index. */

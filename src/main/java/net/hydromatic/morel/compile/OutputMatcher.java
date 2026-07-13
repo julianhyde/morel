@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static java.lang.Character.isDigit;
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.util.Characters.scanNumber;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
@@ -482,45 +483,24 @@ public class OutputMatcher {
 
     String consumeNumber() {
       skipSpaces();
-      int start = pos;
-      // Word literal: "0w" + decimal digits, or "0wx" + hex digits.
-      // Canonicalize to "0w" + unsigned decimal so that different
-      // representations of the same value (e.g. 0wxFF and 0w255) match, but
+      final int start = pos;
+      pos = scanNumber(s, pos, s.length(), true);
+      // Word literal: canonicalize "0w255" / "0wxFF" to "0w" + unsigned
+      // decimal, so that different representations of the same value match but
       // different values do not.
-      if (pos + 1 < s.length()
-          && s.charAt(pos) == '0'
-          && s.charAt(pos + 1) == 'w') {
-        pos += 2;
+      if (start + 1 < pos
+          && s.charAt(start) == '0'
+          && s.charAt(start + 1) == 'w') {
+        int digitsStart = start + 2;
         int radix = 10;
-        if (pos < s.length()
-            && (s.charAt(pos) == 'x' || s.charAt(pos) == 'X')) {
-          pos++;
+        if (digitsStart < pos
+            && (s.charAt(digitsStart) == 'x' || s.charAt(digitsStart) == 'X')) {
           radix = 16;
-        }
-        final int digitsStart = pos;
-        while (pos < s.length() && isHexDigit(s.charAt(pos))) {
-          pos++;
+          digitsStart++;
         }
         final String digits = s.substring(digitsStart, pos);
         return "0w"
             + Long.toUnsignedString(Long.parseUnsignedLong(digits, radix));
-      }
-      if (pos < s.length() && s.charAt(pos) == '~') {
-        pos++; // negative sign
-      }
-      while (pos < s.length()
-          && (isDigit(s.charAt(pos)) || s.charAt(pos) == '.')) {
-        pos++;
-      }
-      // Handle 'E' in real literals
-      if (pos < s.length() && (s.charAt(pos) == 'E' || s.charAt(pos) == 'e')) {
-        pos++;
-        if (pos < s.length() && s.charAt(pos) == '~') {
-          pos++;
-        }
-        while (pos < s.length() && isDigit(s.charAt(pos))) {
-          pos++;
-        }
       }
       return s.substring(start, pos);
     }
@@ -529,10 +509,6 @@ public class OutputMatcher {
       while (pos < s.length() && s.charAt(pos) == ' ') {
         pos++;
       }
-    }
-
-    private static boolean isHexDigit(char c) {
-      return isDigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F';
     }
   }
 
