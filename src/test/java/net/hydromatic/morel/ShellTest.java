@@ -232,6 +232,19 @@ public class ShellTest {
   }
 
   /**
+   * Tests that a statement containing a type variable (e.g. {@code 'a}) is
+   * recognized as complete. The single quote must not be treated as an opening
+   * string quote, which would make the shell wait for a closing quote.
+   */
+  @Test
+  void testTypeVariableIsComplete() {
+    assumeNotInCi();
+    fixture()
+        .withInputString("fn x: 'a => x;\n")
+        .assertOutput(containsString("val it = fn : 'a -> 'a"));
+  }
+
+  /**
    * Tests {@link Shell} with a line that is a comment, another that is empty,
    * and another that has only a semicolon; all are treated as empty.
    */

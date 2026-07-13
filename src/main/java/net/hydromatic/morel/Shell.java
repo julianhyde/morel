@@ -307,6 +307,9 @@ public class Shell {
     final Parser parser =
         new DefaultParser() {
           {
+            // Only double quotes delimit a literal; a single quote is part of
+            // an identifier or type variable (e.g. 'a), not a quote.
+            setQuoteChars(new char[] {'"'});
             setEofOnUnclosedQuote(true);
             setEofOnUnclosedBracket(
                 DefaultParser.Bracket.CURLY,
