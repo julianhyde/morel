@@ -84,6 +84,8 @@ import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Characters;
+import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.Lindig;
@@ -420,55 +422,55 @@ public abstract class Codes {
 
   /** @see BuiltIn#CHAR_IS_ALPHA */
   private static final Applicable CHAR_IS_ALPHA =
-      new CharPredicate(BuiltIn.CHAR_IS_ALPHA, CharPredicate::isAlpha);
+      new CharPredicate(BuiltIn.CHAR_IS_ALPHA, Characters::isAlpha);
 
   /** @see BuiltIn#CHAR_IS_ALPHA_NUM */
   private static final Applicable CHAR_IS_ALPHA_NUM =
-      new CharPredicate(BuiltIn.CHAR_IS_ALPHA_NUM, CharPredicate::isAlphaNum);
+      new CharPredicate(BuiltIn.CHAR_IS_ALPHA_NUM, Characters::isAlphaNum);
 
   /** @see BuiltIn#CHAR_IS_ASCII */
   private static final Applicable CHAR_IS_ASCII =
-      new CharPredicate(BuiltIn.CHAR_IS_ASCII, CharPredicate::isAscii);
+      new CharPredicate(BuiltIn.CHAR_IS_ASCII, Characters::isAscii);
 
   /** @see BuiltIn#CHAR_IS_CNTRL */
   private static final Applicable CHAR_IS_CNTRL =
-      new CharPredicate(BuiltIn.CHAR_IS_CNTRL, CharPredicate::isCntrl);
+      new CharPredicate(BuiltIn.CHAR_IS_CNTRL, Characters::isCntrl);
 
   /** @see BuiltIn#CHAR_IS_DIGIT */
   private static final Applicable CHAR_IS_DIGIT =
-      new CharPredicate(BuiltIn.CHAR_IS_DIGIT, CharPredicate::isDigit);
+      new CharPredicate(BuiltIn.CHAR_IS_DIGIT, Characters::isDigit);
 
   /** @see BuiltIn#CHAR_IS_GRAPH */
   private static final Applicable CHAR_IS_GRAPH =
-      new CharPredicate(BuiltIn.CHAR_IS_GRAPH, CharPredicate::isGraph);
+      new CharPredicate(BuiltIn.CHAR_IS_GRAPH, Characters::isGraph);
 
   /** @see BuiltIn#CHAR_IS_HEX_DIGIT */
   private static final Applicable CHAR_IS_HEX_DIGIT =
-      new CharPredicate(BuiltIn.CHAR_IS_HEX_DIGIT, CharPredicate::isHexDigit);
+      new CharPredicate(BuiltIn.CHAR_IS_HEX_DIGIT, Characters::isHexDigit);
 
   /** @see BuiltIn#CHAR_IS_LOWER */
   private static final Applicable CHAR_IS_LOWER =
-      new CharPredicate(BuiltIn.CHAR_IS_LOWER, CharPredicate::isLower);
+      new CharPredicate(BuiltIn.CHAR_IS_LOWER, Characters::isLower);
 
   /** @see BuiltIn#CHAR_IS_OCT_DIGIT */
   private static final Applicable CHAR_IS_OCT_DIGIT =
-      new CharPredicate(BuiltIn.CHAR_IS_OCT_DIGIT, CharPredicate::isOctDigit);
+      new CharPredicate(BuiltIn.CHAR_IS_OCT_DIGIT, Characters::isOctDigit);
 
   /** @see BuiltIn#CHAR_IS_PRINT */
   private static final Applicable CHAR_IS_PRINT =
-      new CharPredicate(BuiltIn.CHAR_IS_PRINT, CharPredicate::isPrint);
+      new CharPredicate(BuiltIn.CHAR_IS_PRINT, Characters::isPrint);
 
   /** @see BuiltIn#CHAR_IS_PUNCT */
   private static final Applicable CHAR_IS_PUNCT =
-      new CharPredicate(BuiltIn.CHAR_IS_PUNCT, CharPredicate::isPunct);
+      new CharPredicate(BuiltIn.CHAR_IS_PUNCT, Characters::isPunct);
 
   /** @see BuiltIn#CHAR_IS_SPACE */
   private static final Applicable CHAR_IS_SPACE =
-      new CharPredicate(BuiltIn.CHAR_IS_SPACE, CharPredicate::isSpace);
+      new CharPredicate(BuiltIn.CHAR_IS_SPACE, Characters::isSpace);
 
   /** @see BuiltIn#CHAR_IS_UPPER */
   private static final Applicable CHAR_IS_UPPER =
-      new CharPredicate(BuiltIn.CHAR_IS_UPPER, CharPredicate::isUpper);
+      new CharPredicate(BuiltIn.CHAR_IS_UPPER, Characters::isUpper);
 
   /** @see BuiltIn#CHAR_MAX_CHAR */
   private static final Character CHAR_MAX_CHAR = 255;
@@ -4563,6 +4565,40 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#SYS_COLOR_SCHEMES */
+  private static final Applicable SYS_COLOR_SCHEMES =
+      new ApplicableImpl(BuiltIn.SYS_COLOR_SCHEMES) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final ImmutableList.Builder<List> list = ImmutableList.builder();
+          for (ColorScheme scheme : ColorScheme.builtIns()) {
+            // Fields in record (alphabetical) order.
+            list.add(
+                ImmutableList.of(
+                    scheme.spec(ColorScheme.Category.COMMENT),
+                    scheme.spec(ColorScheme.Category.CONSTANT),
+                    scheme.spec(ColorScheme.Category.ERROR),
+                    scheme.spec(ColorScheme.Category.IDENTIFIER),
+                    scheme.spec(ColorScheme.Category.KEYWORD),
+                    scheme.name(),
+                    scheme.spec(ColorScheme.Category.NUMERIC),
+                    scheme.spec(ColorScheme.Category.STRING),
+                    scheme.spec(ColorScheme.Category.SYMBOL),
+                    scheme.spec(ColorScheme.Category.TYPE_VAR)));
+          }
+          return list.build();
+        }
+      };
+
+  /** @see BuiltIn#SYS_DEDUCE_COLOR_SCHEME */
+  private static final Applicable SYS_DEDUCE_COLOR_SCHEME =
+      new ApplicableImpl(BuiltIn.SYS_DEDUCE_COLOR_SCHEME) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          return stack.session.colorScheme().name();
+        }
+      };
+
   /** @see BuiltIn#SYS_ENV */
   private static Core.Exp sysEnv(
       TypeSystem typeSystem, Environment env, Type argType) {
@@ -6465,6 +6501,8 @@ public abstract class Codes {
     b.add(BuiltIn.STRING_TOKENS, STRING_TOKENS);
     b.add(BuiltIn.STRING_TRANSLATE, STRING_TRANSLATE);
     b.add(BuiltIn.SYS_CLEAR_ENV, SYS_CLEAR_ENV);
+    b.add(BuiltIn.SYS_COLOR_SCHEMES, SYS_COLOR_SCHEMES);
+    b.add(BuiltIn.SYS_DEDUCE_COLOR_SCHEME, SYS_DEDUCE_COLOR_SCHEME);
     b.add(BuiltIn.SYS_ENV, (Macro) Codes::sysEnv);
     // Value of Sys.file comes from Session.file, but initial value must
     // be a List because it has (progressive) record type.
@@ -7889,58 +7927,6 @@ public abstract class Codes {
     @Override
     public Boolean apply(Character c) {
       return predicate.test(c);
-    }
-
-    static boolean isGraph(char c) {
-      return c >= '!' && c <= '~';
-    }
-
-    static boolean isPrint(char c) {
-      return isGraph(c) || c == ' ';
-    }
-
-    static boolean isCntrl(char c) {
-      return isAscii(c) && !isPrint(c);
-    }
-
-    static boolean isSpace(char c) {
-      return c >= '\t' && c <= '\r' || c == ' ';
-    }
-
-    static boolean isAscii(char c) {
-      return c <= 127;
-    }
-
-    static boolean isUpper(char c) {
-      return 'A' <= c && c <= 'Z';
-    }
-
-    static boolean isLower(char c) {
-      return 'a' <= c && c <= 'z';
-    }
-
-    static boolean isDigit(char c) {
-      return '0' <= c && c <= '9';
-    }
-
-    static boolean isAlpha(char c) {
-      return isUpper(c) || isLower(c);
-    }
-
-    static boolean isAlphaNum(char c) {
-      return isAlpha(c) || isDigit(c);
-    }
-
-    static boolean isHexDigit(char c) {
-      return isDigit(c) || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F';
-    }
-
-    static boolean isOctDigit(char c) {
-      return '0' <= c && c <= '7';
-    }
-
-    static boolean isPunct(char c) {
-      return isGraph(c) && !isAlphaNum(c);
     }
   }
 

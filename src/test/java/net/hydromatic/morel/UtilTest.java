@@ -21,6 +21,7 @@ package net.hydromatic.morel;
 import static java.lang.String.format;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.eval.Codes.isNegative;
+import static net.hydromatic.morel.util.ColorScheme.rgbToLuma;
 import static net.hydromatic.morel.util.Ord.allMatchIndexed;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Static.allMatch;
@@ -35,6 +36,7 @@ import static org.apache.calcite.util.Util.range;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.hamcrest.Matchers.anEmptyMap;
+import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.emptyString;
 import static org.hamcrest.Matchers.greaterThan;
@@ -82,6 +84,7 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ArrayQueue;
+import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.Folder;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.Ord;
@@ -253,6 +256,22 @@ public class UtilTest {
    * Tests {@link Static#last(List)}, {@link Static#skip(List)}, {@link
    * Static#skipLast(List)}.
    */
+  /** Tests {@link ColorScheme#rgbToLuma(String)}. */
+  @Test
+  void testRgbToLuma() {
+    // white background -> luma 1
+    assertThat(rgbToLuma("rgb:ffff/ffff/ffff"), closeTo(1.0, 1e-6));
+    // black background -> luma 0
+    assertThat(rgbToLuma("rgb:0000/0000/0000"), closeTo(0.0, 1e-6));
+    // two hex digits per channel also works
+    assertThat(rgbToLuma("rgb:ff/ff/ff"), closeTo(1.0, 1e-6));
+    // an OSC 11 prefix, and trailing non-hex chars, are ignored
+    assertThat(rgbToLuma("]11;rgb:eeee/eeee/eeeeX"), closeTo(0.933, 0.01));
+    // null, or no "rgb:", cannot be parsed
+    assertThat(rgbToLuma(null), nullValue());
+    assertThat(rgbToLuma("no rgb here"), nullValue());
+  }
+
   @Test
   void testLast() {
     final List<Integer> list = Arrays.asList(1, 7, 3);

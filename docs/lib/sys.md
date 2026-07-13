@@ -32,6 +32,8 @@ environment.
 
 <pre>
 val <a id='clearEnv' href="#clearEnv-impl">clearEnv</a> : unit -> unit
+val <a id='colorSchemes' href="#colorSchemes-impl">colorSchemes</a> : unit -> {comment: string, constant: string, error: string, identifier: string, keyword: string, name: string, numeric: string, string: string, symbol: string, typeVar: string} list
+val <a id='deduceColorScheme' href="#deduceColorScheme-impl">deduceColorScheme</a> : unit -> string
 val <a id='env' href="#env-impl">env</a> : unit -> (string * string) list
 val <a id='file' href="#file-impl">file</a> : {}
 val <a id='parseTree' href="#parseTree-impl">parseTree</a> : string -> string
@@ -47,6 +49,20 @@ val <a id='unset' href="#unset-impl">unset</a> : string -> unit
 <h3><code>clearEnv</code></h3>
 
 `clearEnv ()` restores the environment to the initial environment.
+
+<a id="colorSchemes-impl"></a>
+<h3><code>colorSchemes</code></h3>
+
+`colorSchemes ()` returns the built-in syntax-highlighting color schemes. Each scheme is a
+record whose `name` field is the scheme name and whose remaining fields
+give the style of each token category.
+
+<a id="deduceColorScheme-impl"></a>
+<h3><code>deduceColorScheme</code></h3>
+
+`deduceColorScheme ()` returns the name of the color scheme in effect for syntax highlighting:
+the `colorScheme` property if it names a built-in scheme, otherwise the
+scheme deduced from the terminal's background.
 
 <a id="env-impl"></a>
 <h3><code>env</code></h3>

@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.util;
 
+import static net.hydromatic.morel.util.Characters.scanNumber;
+
 import com.google.common.collect.ImmutableSet;
 import java.util.Set;
 import java.util.function.Function;
@@ -510,11 +512,9 @@ public class MorelHighlighter {
         i = end;
 
       } else if (Character.isDigit(c)) {
-        // Integer literal
-        int end = i + 1;
-        while (end < n && Character.isDigit(s.charAt(end))) {
-          end++;
-        }
+        // Numeric literal: integer, word (0w7, 0wx1F), real (1.5) or
+        // scientific (1e~7). A leading '~' is emitted separately.
+        int end = scanNumber(s, i, n, false);
         sink.n(i, end);
         i = end;
 
@@ -600,8 +600,22 @@ public class MorelHighlighter {
     }
   }
 
-  /** Scans a nested SML comment {@code (* ... *)} and returns end index. */
+  /**
+   * Scans a comment starting at {@code start} and returns the end index. A
+   * {@code (*)} begins a line comment, which runs to the end of the line; any
+   * other {@code (*} begins a block comment, which may nest and runs to the
+   * matching {@code *)} (or the end of input).
+   */
   private static int scanComment(String s, int start, int n) {
+    // "(*)" is a line comment: it runs to the end of the line.
+    if (start + 2 < n && s.charAt(start + 2) == ')') {
+      int i = start + 3;
+      while (i < n && s.charAt(i) != '\n') {
+        i++;
+      }
+      return i;
+    }
+    // Otherwise "(*" is a block comment, which may nest.
     int depth = 0;
     int i = start;
     while (i < n) {

@@ -547,7 +547,7 @@ Exception:
 | [Relational](lib/relational.md) | Relational algebra operations for Morel queries.<br>[`descending`](lib/relational.md#descending-impl), [`compare`](lib/relational.md#compare-impl), [`count`](lib/relational.md#count-impl), [`empty`](lib/relational.md#empty-impl), [`iterate`](lib/relational.md#iterate-impl), [`max`](lib/relational.md#max-impl), [`min`](lib/relational.md#min-impl), [`nonEmpty`](lib/relational.md#nonEmpty-impl), [`only`](lib/relational.md#only-impl), [`sum`](lib/relational.md#sum-impl) |
 | [String](lib/string.md) | String operations.<br>[`string`](lib/string.md#string-impl), [`char`](lib/string.md#char-impl), [`maxSize`](lib/string.md#maxSize-impl), [`size`](lib/string.md#size-impl), [`sub`](lib/string.md#sub-impl), [`extract`](lib/string.md#extract-impl), [`substring`](lib/string.md#substring-impl), [`^`](lib/string.md#^-impl), [`concat`](lib/string.md#concat-impl), [`concatWith`](lib/string.md#concatWith-impl), [`str`](lib/string.md#str-impl), [`implode`](lib/string.md#implode-impl), [`explode`](lib/string.md#explode-impl), [`map`](lib/string.md#map-impl), [`translate`](lib/string.md#translate-impl), [`tokens`](lib/string.md#tokens-impl), [`fields`](lib/string.md#fields-impl), [`isPrefix`](lib/string.md#isPrefix-impl), [`isSubstring`](lib/string.md#isSubstring-impl), [`isSuffix`](lib/string.md#isSuffix-impl), [`compare`](lib/string.md#compare-impl), [`collate`](lib/string.md#collate-impl), [`<`](lib/string.md#<-impl), [`<=`](lib/string.md#<=-impl), [`>`](lib/string.md#>-impl), [`>=`](lib/string.md#>=-impl), [`=`](lib/string.md#=-impl), [`<>`](lib/string.md#<>-impl) |
 | [StringCvt](lib/string-cvt.md) | String conversion utilities and types.<br>[`radix`](lib/string-cvt.md#radix-impl), [`realfmt`](lib/string-cvt.md#realfmt-impl), [`padLeft`](lib/string-cvt.md#padLeft-impl), [`padRight`](lib/string-cvt.md#padRight-impl) |
-| [Sys](lib/sys.md) | System interface utilities.<br>[`clearEnv`](lib/sys.md#clearEnv-impl), [`env`](lib/sys.md#env-impl), [`file`](lib/sys.md#file-impl), [`parseTree`](lib/sys.md#parseTree-impl), [`plan`](lib/sys.md#plan-impl), [`planEx`](lib/sys.md#planEx-impl), [`set`](lib/sys.md#set-impl), [`show`](lib/sys.md#show-impl), [`showAll`](lib/sys.md#showAll-impl), [`unset`](lib/sys.md#unset-impl) |
+| [Sys](lib/sys.md) | System interface utilities.<br>[`clearEnv`](lib/sys.md#clearEnv-impl), [`colorSchemes`](lib/sys.md#colorSchemes-impl), [`deduceColorScheme`](lib/sys.md#deduceColorScheme-impl), [`env`](lib/sys.md#env-impl), [`file`](lib/sys.md#file-impl), [`parseTree`](lib/sys.md#parseTree-impl), [`plan`](lib/sys.md#plan-impl), [`planEx`](lib/sys.md#planEx-impl), [`set`](lib/sys.md#set-impl), [`show`](lib/sys.md#show-impl), [`showAll`](lib/sys.md#showAll-impl), [`unset`](lib/sys.md#unset-impl) |
 | [Time](lib/time.md) | Time values and operations.<br>[`time`](lib/time.md#time-impl), [`Time`](lib/time.md#Time-impl), [`zeroTime`](lib/time.md#zeroTime-impl), [`fromReal`](lib/time.md#fromReal-impl), [`toReal`](lib/time.md#toReal-impl), [`toSeconds`](lib/time.md#toSeconds-impl), [`toMilliseconds`](lib/time.md#toMilliseconds-impl), [`toMicroseconds`](lib/time.md#toMicroseconds-impl), [`toNanoseconds`](lib/time.md#toNanoseconds-impl), [`fromSeconds`](lib/time.md#fromSeconds-impl), [`fromMilliseconds`](lib/time.md#fromMilliseconds-impl), [`fromMicroseconds`](lib/time.md#fromMicroseconds-impl), [`fromNanoseconds`](lib/time.md#fromNanoseconds-impl), [`+`](lib/time.md#+-impl), [`-`](lib/time.md#--impl), [`compare`](lib/time.md#compare-impl), [`<`](lib/time.md#<-impl), [`<=`](lib/time.md#<=-impl), [`>`](lib/time.md#>-impl), [`>=`](lib/time.md#>=-impl), [`now`](lib/time.md#now-impl), [`fmt`](lib/time.md#fmt-impl), [`toString`](lib/time.md#toString-impl), [`fromString`](lib/time.md#fromString-impl) |
 | [Variant](lib/variant.md) | Dynamically-typed variant values.<br>[`variant`](lib/variant.md#variant-impl), [`parse`](lib/variant.md#parse-impl), [`print`](lib/variant.md#print-impl) |
 | [Vector](lib/vector.md) | Immutable fixed-length arrays.<br>[`vector`](lib/vector.md#vector-impl), [`maxLen`](lib/vector.md#maxLen-impl), [`fromList`](lib/vector.md#fromList-impl), [`tabulate`](lib/vector.md#tabulate-impl), [`length`](lib/vector.md#length-impl), [`sub`](lib/vector.md#sub-impl), [`update`](lib/vector.md#update-impl), [`concat`](lib/vector.md#concat-impl), [`appi`](lib/vector.md#appi-impl), [`app`](lib/vector.md#app-impl), [`mapi`](lib/vector.md#mapi-impl), [`map`](lib/vector.md#map-impl), [`foldli`](lib/vector.md#foldli-impl), [`foldri`](lib/vector.md#foldri-impl), [`foldl`](lib/vector.md#foldl-impl), [`foldr`](lib/vector.md#foldr-impl), [`findi`](lib/vector.md#findi-impl), [`find`](lib/vector.md#find-impl), [`exists`](lib/vector.md#exists-impl), [`all`](lib/vector.md#all-impl), [`collate`](lib/vector.md#collate-impl) |
@@ -567,6 +567,7 @@ and unset using `Sys.unset name`.
 | Name                 | Type   | Default | Description |
 | -------------------- | ------ | ------- | ----------- |
 | banner               | string | Morel version ... | Startup banner message displayed when launching the Morel shell. |
+| colorScheme          | string | null    | Color scheme for syntax highlighting in the shell: a built-in scheme ('dark', 'light' or 'none'), or a user-defined scheme. If unset, the scheme is deduced from the environment. |
 | directory            | file   |         | Path of the directory that the 'file' variable maps to in this connection. |
 | excludeStructures    | string | ^Test$  | Regular expression that controls which built-in structures are excluded from the environment. |
 | hybrid               | bool   | false   | Whether to try to create a hybrid execution plan that uses Apache Calcite relational algebra. |
@@ -585,6 +586,7 @@ and unset using `Sys.unset name`.
 | scriptDirectory      | file   |         | Path of the directory where the 'use' command looks for scripts. When running a script, it is generally set to the directory that contains the script. |
 | stringDepth          | int    | 70      | When printing, the length of strings at which ellipsis begins. |
 | stringFold           | int    | null    | In tabular mode, the column width at which long strings are folded across multiple lines. If not set, folding is disabled. Legal values are 1 or greater. |
+| terminalBackground   | string | null    | The terminal's background color, of the form 'rgb:RRRR/GGGG/BBBB'. Set by the shell at startup; used to deduce the color scheme when 'colorScheme' is unset. |
 | timeZone             | string | null    | Overrides the local timezone. Value is a timezone ID (e.g. 'UTC' or 'America/New_York'). If not set, the JVM default timezone is used. |
 
 [//]: # (end:properties)
@@ -619,3 +621,43 @@ Each line in the history file consists of a Unix timestamp, a colon, and
 the text of a command. If the file cannot be created — for example, if
 the home directory is not writable — the shell prints a warning and
 continues without saving history for that session.
+
+### Color schemes
+
+In an interactive terminal, the shell highlights the code you type,
+coloring each token according to its category: keyword, symbol, numeric,
+constant, string, comment, and type variable. (Plain identifiers are left
+in the terminal's default color.)
+
+The color scheme is chosen by the [`colorScheme`](#properties) property,
+whose value is one of:
+
+* `dark` — colors tuned for a dark terminal background;
+* `light` — colors tuned for a light terminal background;
+* `none` — no highlighting;
+* the name of a user-defined scheme.
+
+If the property is unset (the default), the scheme is deduced from the
+environment by [`Sys.deduceColorScheme`](lib/sys.md#deduceColorScheme-impl):
+`none` if the terminal does not support color (if standard output is not a
+terminal, `NO_COLOR` is set, or `TERM` is `dumb`), otherwise `light` or
+`dark` according to the terminal's background. The shell determines the
+background by asking the terminal for its background color (the OSC 11
+escape sequence); outside the shell, or if the terminal does not answer, it
+falls back to the `COLORFGBG` environment variable, and otherwise to
+`dark`.
+
+Choose a scheme at startup with the `--color-scheme` flag:
+
+```bash
+$ ./morel --color-scheme=light
+```
+
+or at any time from within the shell:
+
+```
+- Sys.set ("colorScheme", "none");
+```
+
+A future release will let you define your own schemes as properties files
+in `~/.morel/color-schemes/`.

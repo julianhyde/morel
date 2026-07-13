@@ -532,6 +532,41 @@ public class DarnTest {
     assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
   }
 
+  /** Word, real and scientific literals are highlighted as numbers. */
+  @Test
+  void testHighlightRougeNumbers() {
+    final String code = "0w7 0wx1F 1.5 1e~7 42";
+    final String expected = "mi{0w7} mi{0wx1F} mi{1.5} mi{1e~7} mi{42}";
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
+  }
+
+  /**
+   * A {@code (*)} line comment ends at the newline, so the code on the next
+   * line is highlighted normally, not swallowed as part of the comment.
+   */
+  @Test
+  void testHighlightRougeLineComment() {
+    final String code =
+        "(*) End of line\n" //
+            + "val x = 1";
+    final String expected =
+        "c{(*}cm{) End of line}\n" //
+            + "kr{val} nv{x} p{=} mi{1}";
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
+  }
+
+  /** A {@code (* ... *)} block comment still spans to its close. */
+  @Test
+  void testHighlightRougeBlockComment() {
+    final String code =
+        "(* a\n" //
+            + "b *) c";
+    final String expected =
+        "c{(*}cm{ a\n" //
+            + "b *)} n{c}";
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
+  }
+
   @Test
   void testGenerateHtmlLinesHtmlEscape() {
     String highlighted =

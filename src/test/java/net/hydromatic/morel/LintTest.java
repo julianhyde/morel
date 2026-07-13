@@ -202,6 +202,7 @@ public class LintTest {
     b.add(
         line ->
             (line.contains("Assertions.")
+                    || line.contains("Characters.")
                     || line.contains("CoreMatchers.")
                     || line.contains("MatcherAssert.assertThat")
                     || line.contains("Objects.requireNonNull")
