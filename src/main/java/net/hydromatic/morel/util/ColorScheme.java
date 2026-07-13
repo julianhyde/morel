@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.util;
 
+import static net.hydromatic.morel.util.Characters.isHexDigit;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
@@ -162,6 +164,98 @@ public class ColorScheme {
       default:
         return null;
     }
+  }
+
+  /**
+   * Background luma (0 to 1) above which the background is considered light.
+   */
+  private static final double LIGHT_LUMA_THRESHOLD = 0.5;
+
+  /**
+   * Deduces a scheme from the terminal's background color, {@code background}
+   * (of the form {@code "rgb:RRRR/GGGG/BBBB"}, or null). Returns {@link #NONE}
+   * if {@code background} is null or cannot be parsed; otherwise {@link #LIGHT}
+   * if its luma (see {@link #rgbToLuma}) exceeds {@value
+   * #LIGHT_LUMA_THRESHOLD}, else {@link #DARK}.
+   *
+   * <p>Called when the {@code colorScheme} property is unset. The shell
+   * determines the background &mdash; including whether color is enabled at all
+   * &mdash; in {@code Shell.queryTerminalBackground}.
+   */
+  public static ColorScheme deduce(@Nullable String background) {
+    final Double luma = rgbToLuma(background);
+    if (luma == null) {
+      return NONE;
+    }
+    return luma > LIGHT_LUMA_THRESHOLD ? LIGHT : DARK;
+  }
+
+  /**
+   * Resolves the color scheme in effect, given the value of the {@code
+   * colorScheme} property, {@code name}, and the terminal's {@code background}.
+   *
+   * <p>If {@code name} names a built-in scheme ({@code "dark"}, {@code "light"}
+   * or {@code "none"}) it is used directly; otherwise (if {@code name} is null
+   * or names no built-in scheme) the scheme is deduced from {@code background}
+   * (see {@link #deduce}). This is the single source of truth shared by the
+   * shell's highlighter and {@code Sys.deduceColorScheme}.
+   */
+  public static ColorScheme resolve(
+      @Nullable String name, @Nullable String background) {
+    if (name != null) {
+      final ColorScheme scheme = builtIn(name);
+      if (scheme != null) {
+        return scheme;
+      }
+    }
+    return deduce(background);
+  }
+
+  /**
+   * Converts a terminal background color of the form {@code
+   * "rgb:RRRR/GGGG/BBBB"} (each channel 1 to 4 hexadecimal digits) to its luma
+   * (perceived luminance, in the range [0, 1]), or null if {@code rgb} is null
+   * or cannot be parsed.
+   */
+  public static @Nullable Double rgbToLuma(@Nullable String rgb) {
+    if (rgb == null) {
+      return null;
+    }
+    final int i = rgb.indexOf("rgb:");
+    if (i < 0) {
+      return null;
+    }
+    final String[] channels = rgb.substring(i + 4).split("/");
+    if (channels.length < 3) {
+      return null;
+    }
+    final double r = hexChannel(channels[0]);
+    final double g = hexChannel(channels[1]);
+    final double b = hexChannel(channels[2]);
+    if (r < 0 || g < 0 || b < 0) {
+      return null;
+    }
+    // Perceived luminance (ITU-R BT.601).
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  }
+
+  /**
+   * Parses a hexadecimal color channel (1 to 4 digits, ignoring any trailing
+   * non-hex characters) and returns its value normalized to [0, 1], or -1 if it
+   * cannot be parsed.
+   */
+  private static double hexChannel(String s) {
+    int end = 0;
+    while (end < s.length() && isHexDigit(s.charAt(end))) {
+      end++;
+    }
+    if (end == 0) {
+      return -1;
+    }
+    final String hex = s.substring(0, end);
+    final long value = Long.parseLong(hex, 16);
+    final long max = (1L << (hex.length() * 4)) - 1;
+    return (double) value / max;
   }
 
   /**

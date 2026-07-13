@@ -21,14 +21,12 @@ package net.hydromatic.morel;
 import com.google.common.collect.ImmutableSet;
 import java.util.Set;
 import java.util.regex.Pattern;
-import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.ColorScheme.Category;
 import net.hydromatic.morel.util.MorelHighlighter;
 import org.jline.reader.Highlighter;
 import org.jline.reader.LineReader;
-import org.jline.terminal.Terminal;
 import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStringBuilder;
 
@@ -36,11 +34,10 @@ import org.jline.utils.AttributedStringBuilder;
  * JLine {@link Highlighter} that colors Morel input in the shell.
  *
  * <p>Tokenizes the input with {@link MorelHighlighter} (a lenient, non-regex
- * lexer) and styles each token according to the current {@link ColorScheme}.
- * The scheme is read from the {@link Prop#COLOR_SCHEME} property on every
- * keystroke, so {@code Sys.set ("colorScheme", ...)} takes effect immediately.
- * A value of {@code "auto"} is resolved from the terminal and environment (see
- * {@link #resolveScheme()}).
+ * lexer) and styles each token according to the {@link ColorScheme} currently
+ * in effect. The scheme is read from the session on every keystroke (see {@link
+ * Session#colorScheme()}), so {@code Sys.set ("colorScheme", ...)} takes effect
+ * immediately.
  */
 public class ShellHighlighter implements Highlighter {
   /** Identifiers that are styled as constants rather than plain identifiers. */
@@ -48,16 +45,14 @@ public class ShellHighlighter implements Highlighter {
       ImmutableSet.of("true", "false", "nil", "NONE");
 
   private final Session session;
-  private final Terminal terminal;
 
-  ShellHighlighter(Session session, Terminal terminal) {
+  ShellHighlighter(Session session) {
     this.session = session;
-    this.terminal = terminal;
   }
 
   @Override
   public AttributedString highlight(LineReader reader, String buffer) {
-    final ColorScheme scheme = resolveScheme();
+    final ColorScheme scheme = session.colorScheme();
     if (scheme == ColorScheme.NONE) {
       return new AttributedString(buffer);
     }
@@ -65,58 +60,6 @@ public class ShellHighlighter implements Highlighter {
     MorelHighlighter.DEFAULT.highlightCode(
         buffer, new StyleSink(buffer, asb, scheme));
     return asb.toAttributedString();
-  }
-
-  /**
-   * Resolves the current value of {@link Prop#COLOR_SCHEME} to a scheme. A
-   * built-in name ({@code dark}, {@code light}, {@code none}) is used directly;
-   * {@code auto} (or an unknown name) is resolved from the environment.
-   */
-  private ColorScheme resolveScheme() {
-    final String name = Prop.COLOR_SCHEME.stringValue(session.map);
-    final ColorScheme scheme = ColorScheme.builtIn(name);
-    if (scheme != null) {
-      return scheme;
-    }
-    return autoScheme();
-  }
-
-  /**
-   * Resolves {@code auto}: {@code none} if color is disabled (dumb terminal,
-   * {@code NO_COLOR} set, or {@code TERM=dumb}); otherwise {@code light} if
-   * {@code COLORFGBG} indicates a light background, else {@code dark}.
-   */
-  private ColorScheme autoScheme() {
-    final String type = terminal.getType();
-    if (type == null || type.startsWith(Terminal.TYPE_DUMB)) {
-      return ColorScheme.NONE;
-    }
-    if (System.getenv("NO_COLOR") != null) {
-      return ColorScheme.NONE;
-    }
-    if ("dumb".equals(System.getenv("TERM"))) {
-      return ColorScheme.NONE;
-    }
-    return isLightBackground() ? ColorScheme.LIGHT : ColorScheme.DARK;
-  }
-
-  /**
-   * Returns whether {@code COLORFGBG} indicates a light background. The
-   * variable has the form {@code "fg;bg"} (e.g. {@code "0;15"}); a background
-   * of 7 or 15 (white or bright white) is treated as light.
-   */
-  private static boolean isLightBackground() {
-    final String colorFgBg = System.getenv("COLORFGBG");
-    if (colorFgBg == null) {
-      return false;
-    }
-    final String[] parts = colorFgBg.split(";");
-    try {
-      final int bg = Integer.parseInt(parts[parts.length - 1].trim());
-      return bg == 7 || bg == 15;
-    } catch (NumberFormatException e) {
-      return false;
-    }
   }
 
   @Override

@@ -34,6 +34,7 @@ import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.MorelException;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -136,6 +137,19 @@ public class Session {
     this.file =
         Suppliers.memoize(
             () -> Files.create(Prop.DIRECTORY.fileValue(this.map)));
+  }
+
+  /**
+   * Returns the color scheme in effect for syntax highlighting: the {@link
+   * Prop#COLOR_SCHEME} property if it names a built-in scheme, otherwise the
+   * scheme deduced from the terminal's background (the {@link
+   * Prop#TERMINAL_BACKGROUND} property). Shared by the shell's highlighter and
+   * {@code Sys.deduceColorScheme}.
+   */
+  public ColorScheme colorScheme() {
+    return ColorScheme.resolve(
+        (String) Prop.COLOR_SCHEME.get(map),
+        (String) Prop.TERMINAL_BACKGROUND.get(map));
   }
 
   /** Calls some code with a new value of {@link Shell}. */

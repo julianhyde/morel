@@ -4149,6 +4149,15 @@ public enum BuiltIn {
                           "symbol", STRING,
                           "typeVar", STRING))))),
 
+  /**
+   * Function "Sys.deduceColorScheme", of type "unit &rarr; string". Returns the
+   * name of the color scheme in effect: the {@code colorScheme} property if it
+   * names a built-in scheme, otherwise the scheme deduced from the terminal's
+   * background.
+   */
+  SYS_DEDUCE_COLOR_SCHEME(
+      "Sys", "deduceColorScheme", ts -> ts.fnType(UNIT, STRING)),
+
   /** Function "Sys.env", aka "env", of type "unit &rarr; string list". */
   SYS_ENV(
       "Sys",

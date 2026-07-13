@@ -19,6 +19,7 @@
 package net.hydromatic.morel;
 
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.util.Characters.isHexDigit;
 import static net.hydromatic.morel.util.Static.str;
 
 import com.google.common.collect.ImmutableList;
@@ -73,10 +74,12 @@ import org.jline.reader.ParsedLine;
 import org.jline.reader.Parser;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
+import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
+import org.jline.utils.NonBlockingReader;
 
 /** Command shell for ML, powered by JLine3. */
 public class Shell {
@@ -347,6 +350,11 @@ public class Shell {
     if (config.colorScheme != null) {
       Prop.COLOR_SCHEME.set(map, config.colorScheme);
     }
+    // Query the terminal's background now, while it is idle, and record it.
+    final String background = queryTerminalBackground(terminal);
+    if (background != null) {
+      Prop.TERMINAL_BACKGROUND.set(map, background);
+    }
     final Session session = new Session(map, typeSystem);
 
     final LineReaderBuilder lineReaderBuilder =
@@ -354,7 +362,7 @@ public class Shell {
             .appName("morel")
             .terminal(terminal)
             .parser(parser)
-            .highlighter(new ShellHighlighter(session, terminal))
+            .highlighter(new ShellHighlighter(session))
             .variable(LineReader.SECONDARY_PROMPT_PATTERN, equalsPrompt);
     final Path historyFile = historyFile();
     if (historyFile != null) {
@@ -380,6 +388,140 @@ public class Shell {
             config.directory);
     final Map<String, Binding> bindings = new LinkedHashMap<>();
     subShell.extracted(bindings);
+  }
+
+  /**
+   * Determines the terminal's background color, reading the {@code NO_COLOR},
+   * {@code TERM} and {@code COLORFGBG} environment variables, and delegates to
+   * {@link #queryTerminalBackground(Terminal, String, String, String)}.
+   *
+   * <p>This method is <b>the only one in the shell that reads the
+   * environment.</b> Because {@link System#getenv} returns process-wide mutable
+   * state, this method is not deterministic and is awkward to unit-test in
+   * isolation; the real logic lives in the sibling method, which takes the
+   * three environment values as parameters and never calls {@code getenv}. Keep
+   * new environment reads out of the rest of the shell and funnel them through
+   * here.
+   *
+   * @see #queryTerminalBackground(Terminal, String, String, String)
+   */
+  private static @Nullable String queryTerminalBackground(Terminal terminal) {
+    final @Nullable String noColor = System.getenv("NO_COLOR");
+    final @Nullable String term = System.getenv("TERM");
+    final @Nullable String colorFgBg = System.getenv("COLORFGBG");
+    return queryTerminalBackground(terminal, noColor, term, colorFgBg);
+  }
+
+  /**
+   * Determines the terminal's background color and returns it as an {@code
+   * "rgb:RRRR/GGGG/BBBB"} string (each channel 1 to 4 hexadecimal digits), or
+   * null if color is disabled or the background cannot be determined.
+   *
+   * <p>The environment is passed in as {@code noColor}, {@code term} and {@code
+   * colorFgBg} (the values of {@code NO_COLOR}, {@code TERM} and {@code
+   * COLORFGBG}); this method never calls {@link System#getenv}, so it is
+   * deterministic and testable. Its environment-reading sibling {@link
+   * #queryTerminalBackground(Terminal)} supplies the values in production.
+   *
+   * <p>Returns null if {@code noColor} is set, or the terminal is dumb ({@code
+   * term} is {@code "dumb"} or the terminal's type is dumb). Otherwise, it
+   * queries the terminal (OSC 11, see {@link #queryOsc11Background}); if the
+   * terminal does not answer, it falls back to the background implied by {@code
+   * colorFgBg}, defaulting to a dark background.
+   *
+   * <p>The result is stored in the {@link Prop#TERMINAL_BACKGROUND} property.
+   * When the {@code colorScheme} property is unset it is used to deduce the
+   * color scheme (see {@link
+   * net.hydromatic.morel.util.ColorScheme#deduce(String)}).
+   *
+   * <p>Must be called while the terminal is idle, before the line reader runs:
+   * the query does raw-mode terminal I/O, so it cannot run later, from the
+   * highlighter, while JLine owns the terminal.
+   */
+  static @Nullable String queryTerminalBackground(
+      Terminal terminal,
+      @Nullable String noColor,
+      @Nullable String term,
+      @Nullable String colorFgBg) {
+    if (noColor != null) {
+      return null;
+    }
+    final String type = terminal.getType();
+    if (type == null
+        || type.startsWith(Terminal.TYPE_DUMB)
+        || "dumb".equals(term)) {
+      return null;
+    }
+    final String rgb = queryOsc11Background(terminal);
+    if (rgb != null) {
+      return rgb;
+    }
+    // The terminal did not answer; fall back to the background implied by
+    // COLORFGBG (form "fg;bg", e.g. "0;15"), treating a background of 7 or 15
+    // (white or bright white) as light and everything else — including an
+    // absent or unparsable value — as dark.
+    if (colorFgBg != null) {
+      final String[] parts = colorFgBg.split(";");
+      try {
+        final int bg = Integer.parseInt(parts[parts.length - 1].trim());
+        if (bg == 7 || bg == 15) {
+          return "rgb:ffff/ffff/ffff";
+        }
+      } catch (NumberFormatException e) {
+        // fall through to the dark default
+      }
+    }
+    return "rgb:0000/0000/0000";
+  }
+
+  /**
+   * Queries the terminal for its background color using the OSC 11 escape
+   * sequence and returns the reply as an {@code "rgb:RRRR/GGGG/BBBB"} string,
+   * or null if the terminal does not support the query or does not respond
+   * promptly. Does raw-mode terminal I/O but does not read the environment.
+   */
+  private static @Nullable String queryOsc11Background(Terminal terminal) {
+    Attributes savedAttributes = null;
+    try {
+      savedAttributes = terminal.enterRawMode();
+      // Ask the terminal for its background color. The reply is
+      // "ESC ] 11 ; rgb:RRRR/GGGG/BBBB" terminated by BEL or ST (ESC \).
+      terminal.writer().write("\033]11;?\033\\");
+      terminal.writer().flush();
+      final NonBlockingReader reader = terminal.reader();
+      final StringBuilder buf = new StringBuilder();
+      while (buf.length() < 64) {
+        final int c = reader.read(200L);
+        if (c < 0 || c == 0x07) {
+          break; // timeout, end of stream, or BEL terminator
+        }
+        if (c == '\\'
+            && buf.length() > 0
+            && buf.charAt(buf.length() - 1) == '\033') {
+          break; // ST terminator (ESC \)
+        }
+        buf.append((char) c);
+      }
+      // Extract "rgb:RRRR/GGGG/BBBB", dropping the OSC prefix and terminator.
+      final String response = buf.toString();
+      final int i = response.indexOf("rgb:");
+      if (i < 0) {
+        return null;
+      }
+      int end = i + 4;
+      while (end < response.length()
+          && (response.charAt(end) == '/'
+              || isHexDigit(response.charAt(end)))) {
+        end++;
+      }
+      return response.substring(i, end);
+    } catch (IOException e) {
+      return null;
+    } finally {
+      if (savedAttributes != null) {
+        terminal.setAttributes(savedAttributes);
+      }
+    }
   }
 
   /**

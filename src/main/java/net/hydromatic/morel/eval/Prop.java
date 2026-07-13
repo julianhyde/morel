@@ -64,19 +64,18 @@ public enum Prop {
    * String property "colorScheme" selects the color scheme used for syntax
    * highlighting in the shell.
    *
-   * <p>Its value is a built-in scheme ("dark", "light" or "none"), "auto" (the
-   * default), or the name of a user-defined scheme. "auto" chooses "none" when
-   * the terminal does not support color, otherwise "light" or "dark" based on
-   * the terminal's background.
+   * <p>Its value is a built-in scheme ("dark", "light" or "none") or the name
+   * of a user-defined scheme. If unset (the default), the scheme is deduced
+   * from the environment (see {@code Sys.deduceColorScheme}).
    */
   COLOR_SCHEME(
       "colorScheme",
       String.class,
-      true,
-      "auto",
+      false,
+      null,
       "Color scheme for syntax highlighting in the shell: a built-in scheme "
-          + "('dark', 'light' or 'none'), 'auto' (the default), or a "
-          + "user-defined scheme."),
+          + "('dark', 'light' or 'none'), or a user-defined scheme. If unset, "
+          + "the scheme is deduced from the environment."),
 
   /**
    * File property "directory" is the path of the directory that the {@code
@@ -313,6 +312,21 @@ public enum Prop {
       "In tabular mode, the column width at which long strings are folded "
           + "across multiple lines. If not set, folding is disabled. "
           + "Legal values are 1 or greater."),
+
+  /**
+   * String property "terminalBackground" is the terminal's background color, of
+   * the form {@code "rgb:RRRR/GGGG/BBBB"} (each channel 1 to 4 hexadecimal
+   * digits). The shell sets it at startup by querying the terminal; it is used
+   * to deduce the color scheme when {@code colorScheme} is unset.
+   */
+  TERMINAL_BACKGROUND(
+      "terminalBackground",
+      String.class,
+      false,
+      null,
+      "The terminal's background color, of the form 'rgb:RRRR/GGGG/BBBB'. Set "
+          + "by the shell at startup; used to deduce the color scheme when "
+          + "'colorScheme' is unset."),
 
   /**
    * String property "timeZone" overrides the local timezone used by {@code

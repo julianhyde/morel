@@ -20,10 +20,10 @@ package net.hydromatic.morel;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.google.common.collect.ImmutableMap;
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.hydromatic.morel.eval.Prop;
@@ -31,26 +31,25 @@ import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.ColorScheme.Category;
-import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStyle;
 import org.junit.jupiter.api.Test;
 
 /** Tests {@link ShellHighlighter} and {@link ColorScheme}. */
 public class ShellHighlighterTest {
-  private static ShellHighlighter highlighter(String scheme)
-      throws IOException {
+  private static ShellHighlighter highlighter(@Nullable String scheme) {
     final Map<Prop, Object> map = new LinkedHashMap<>();
-    Prop.COLOR_SCHEME.set(map, scheme);
+    if (scheme != null) {
+      Prop.COLOR_SCHEME.set(map, scheme);
+    }
     final Session session = new Session(map, new TypeSystem());
-    final Terminal terminal = TerminalBuilder.builder().dumb(true).build();
-    return new ShellHighlighter(session, terminal);
+    return new ShellHighlighter(session);
   }
 
   /** Each token gets the style of its category in the active scheme. */
   @Test
-  void testHighlightDark() throws IOException {
+  void testHighlightDark() {
     // Indexes:               0123456789
     final AttributedString s =
         highlighter("dark").highlight(null, "fun f = 1;");
@@ -66,7 +65,7 @@ public class ShellHighlighterTest {
 
   /** Strings, comments and constants get their categories' styles. */
   @Test
-  void testHighlightTokens() throws IOException {
+  void testHighlightTokens() {
     final ShellHighlighter h = highlighter("dark");
     assertThat(
         h.highlight(null, "\"abc\"").styleAt(0),
@@ -81,7 +80,7 @@ public class ShellHighlighterTest {
 
   /** Word, real and scientific literals are styled as numeric. */
   @Test
-  void testHighlightNumbers() throws IOException {
+  void testHighlightNumbers() {
     final ShellHighlighter h = highlighter("dark");
     final AttributedStyle numeric = ColorScheme.DARK.style(Category.NUMERIC);
     assertThat(h.highlight(null, "0w7").styleAt(0), is(numeric)); // word
@@ -94,18 +93,21 @@ public class ShellHighlighterTest {
 
   /** The "none" scheme applies no styling. */
   @Test
-  void testHighlightNone() throws IOException {
+  void testHighlightNone() {
     final AttributedString s =
         highlighter("none").highlight(null, "fun f = 1;");
     assertThat(s.styleAt(0), is(AttributedStyle.DEFAULT));
     assertThat(s.styleAt(8), is(AttributedStyle.DEFAULT));
   }
 
-  /** "auto" resolves to "none" on a dumb terminal. */
+  /**
+   * When {@code colorScheme} is unset, the scheme is deduced from the
+   * environment; in a test (standard output is not a terminal) that is {@code
+   * none}, so nothing is styled.
+   */
   @Test
-  void testHighlightAutoDumb() throws IOException {
-    final AttributedString s =
-        highlighter("auto").highlight(null, "fun f = 1;");
+  void testHighlightUnsetDeduces() {
+    final AttributedString s = highlighter(null).highlight(null, "fun f = 1;");
     assertThat(s.styleAt(0), is(AttributedStyle.DEFAULT));
   }
 
@@ -115,7 +117,7 @@ public class ShellHighlighterTest {
     assertThat(ColorScheme.builtIn("dark"), is(ColorScheme.DARK));
     assertThat(ColorScheme.builtIn("light"), is(ColorScheme.LIGHT));
     assertThat(ColorScheme.builtIn("none"), is(ColorScheme.NONE));
-    assertThat(ColorScheme.builtIn("bogus"), is((ColorScheme) null));
+    assertThat(ColorScheme.builtIn("bogus"), nullValue());
     // dark keywords are bold cyan; light keywords are bold blue
     assertThat(
         ColorScheme.DARK.style(Category.KEYWORD),

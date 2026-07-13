@@ -40,6 +40,13 @@ sig
        symbol:string, typeVar:string} list
       [@@prototype "colorSchemes ()"]
 
+  (**
+   * returns the name of the color scheme in effect for syntax highlighting:
+   * the `colorScheme` property if it names a built-in scheme, otherwise the
+   * scheme deduced from the terminal's background.
+   *)
+  val deduceColorScheme : unit -> string [@@prototype "deduceColorScheme ()"]
+
   (** prints the environment. *)
   val env : unit -> (string * string) list [@@prototype "env ()"]
 

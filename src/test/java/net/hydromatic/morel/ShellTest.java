@@ -23,6 +23,7 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.TestUtils.findDirectory;
 import static net.hydromatic.morel.TestUtils.plus;
 import static org.hamcrest.CoreMatchers.anyOf;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.StringContains.containsString;
@@ -47,6 +48,8 @@ import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.ForeignValue;
 import org.hamcrest.Matcher;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
 import org.junit.jupiter.api.Test;
 
 /** Tests the Shell. */
@@ -90,6 +93,63 @@ public class ShellTest {
         .withArgList(argList)
         .withInputString("")
         .assertOutput(containsString("morel-java version"));
+  }
+
+  /**
+   * Builds a terminal that reads from empty input, so its OSC 11 background
+   * query gets no reply. The terminal's type is {@code type} (e.g. {@code
+   * "xterm"} for a color terminal or {@code "dumb"} for none).
+   */
+  private static Terminal terminal(String type) throws IOException {
+    return TerminalBuilder.builder()
+        .system(false)
+        .type(type)
+        .streams(
+            new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
+        .build();
+  }
+
+  /**
+   * Tests {@link Shell#queryTerminalBackground(Terminal, String, String,
+   * String)}, the environment-free method that decides the terminal's
+   * background color. The terminal here never answers the OSC 11 query, so the
+   * result comes from the {@code noColor}/{@code term}/{@code colorFgBg}
+   * arguments and the terminal type.
+   */
+  @Test
+  void testQueryTerminalBackground() throws IOException {
+    final Terminal xterm = terminal("xterm");
+    // NO_COLOR set: color is disabled, regardless of COLORFGBG.
+    assertThat(
+        Shell.queryTerminalBackground(xterm, "1", null, "0;15"), nullValue());
+    // TERM=dumb: color is disabled.
+    assertThat(
+        Shell.queryTerminalBackground(xterm, null, "dumb", "0;15"),
+        nullValue());
+    // A dumb terminal: color is disabled, even though TERM is not "dumb".
+    assertThat(
+        Shell.queryTerminalBackground(terminal("dumb"), null, "xterm", "0;15"),
+        nullValue());
+    // No OSC reply; COLORFGBG background is 15 (bright white), so light.
+    assertThat(
+        Shell.queryTerminalBackground(xterm, null, "xterm", "0;15"),
+        is("rgb:ffff/ffff/ffff"));
+    // COLORFGBG background is 7 (white), so light.
+    assertThat(
+        Shell.queryTerminalBackground(xterm, null, "xterm", "15;7"),
+        is("rgb:ffff/ffff/ffff"));
+    // COLORFGBG background is 0 (black), so dark.
+    assertThat(
+        Shell.queryTerminalBackground(xterm, null, "xterm", "15;0"),
+        is("rgb:0000/0000/0000"));
+    // COLORFGBG absent: default to dark.
+    assertThat(
+        Shell.queryTerminalBackground(xterm, null, "xterm", null),
+        is("rgb:0000/0000/0000"));
+    // COLORFGBG unparsable: default to dark.
+    assertThat(
+        Shell.queryTerminalBackground(xterm, null, "xterm", "bogus"),
+        is("rgb:0000/0000/0000"));
   }
 
   /** Tests {@link Shell} with -e (eval) option. */

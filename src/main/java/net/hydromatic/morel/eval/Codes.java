@@ -4590,6 +4590,15 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#SYS_DEDUCE_COLOR_SCHEME */
+  private static final Applicable SYS_DEDUCE_COLOR_SCHEME =
+      new ApplicableImpl(BuiltIn.SYS_DEDUCE_COLOR_SCHEME) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          return stack.session.colorScheme().name();
+        }
+      };
+
   /** @see BuiltIn#SYS_ENV */
   private static Core.Exp sysEnv(
       TypeSystem typeSystem, Environment env, Type argType) {
@@ -6493,6 +6502,7 @@ public abstract class Codes {
     b.add(BuiltIn.STRING_TRANSLATE, STRING_TRANSLATE);
     b.add(BuiltIn.SYS_CLEAR_ENV, SYS_CLEAR_ENV);
     b.add(BuiltIn.SYS_COLOR_SCHEMES, SYS_COLOR_SCHEMES);
+    b.add(BuiltIn.SYS_DEDUCE_COLOR_SCHEME, SYS_DEDUCE_COLOR_SCHEME);
     b.add(BuiltIn.SYS_ENV, (Macro) Codes::sysEnv);
     // Value of Sys.file comes from Session.file, but initial value must
     // be a List because it has (progressive) record type.
