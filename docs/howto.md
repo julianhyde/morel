@@ -78,6 +78,44 @@ and announce the release.
 
 Update the [github release list](https://github.com/hydromatic/morel/releases).
 
+## Manually verify a release (for committers)
+
+A few shell behaviors involve an interactive terminal and are not
+covered by the automated tests, so check them by hand before publishing
+a staged release. Run the following against the release artifact, or
+against a clean build (`./mvnw clean install`).
+
+Start the shell, and confirm that it reports the release version:
+
+```bash
+$ ./morel
+morel-java version x.y.0 (java version "21", JLine terminal, xterm-256color)
+```
+
+Execute a command, and confirm that the result is printed:
+
+```
+- "Hello, world!";
+val it = "Hello, world!" : string
+```
+
+Quit the shell (type `Ctrl-D`), and confirm that the command was saved
+to the history file:
+
+```bash
+$ cat ~/.morel/history
+```
+
+The file should contain the command you typed; each line is a Unix
+timestamp, a colon, and the command. If you have not run the shell
+before, confirm that the `~/.morel` directory and the `history` file
+were created.
+
+Start the shell again, press the up-arrow key, and confirm that the
+previous command is recalled. Execute another command, quit, and confirm
+that `~/.morel/history` has grown: the new command is appended, and the
+earlier history is preserved.
+
 ## Cleaning up after a failed release attempt (for committers)
 
 ```bash

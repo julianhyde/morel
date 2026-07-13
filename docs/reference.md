@@ -34,6 +34,7 @@ and then lists its built-in
 [functions](#built-in-functions).
 [Properties](#properties) affect the execution strategy and the
 behavior of the shell.
+The [shell](#the-shell) is Morel's interactive read-eval-print loop.
 
 Query expressions (`from`, `exists`, `forall`) are described in more
 detail in the [query reference](query.md).
@@ -587,3 +588,34 @@ and unset using `Sys.unset name`.
 | timeZone             | string | null    | Overrides the local timezone. Value is a timezone ID (e.g. 'UTC' or 'America/New_York'). If not set, the JVM default timezone is used. |
 
 [//]: # (end:properties)
+
+## The shell
+
+Morel includes an interactive shell (a read-eval-print loop, or REPL).
+Launch it by running `morel` with no arguments:
+
+```
+$ ./morel
+morel-java version 0.8.0 (java version "25", JLine terminal, xterm-256color)
+- "Hello, world!";
+val it = "Hello, world!" : string
+-
+```
+
+At the `-` prompt, type an expression or declaration followed by a
+semicolon, and Morel evaluates it and prints the result. A statement may
+span several lines; while it is incomplete, the prompt changes to `=`.
+Type `Ctrl-D` (or the `exit` command) to quit.
+
+### Command history
+
+The shell remembers the commands you type, so that you can recall and
+edit earlier commands using the up and down arrow keys. History is saved
+between sessions in the file `~/.morel/history`, and is reloaded when the
+shell starts. If the `~/.morel` directory does not exist, the shell
+creates it.
+
+Each line in the history file consists of a Unix timestamp, a colon, and
+the text of a command. If the file cannot be created — for example, if
+the home directory is not writable — the shell prints a warning and
+continues without saving history for that session.

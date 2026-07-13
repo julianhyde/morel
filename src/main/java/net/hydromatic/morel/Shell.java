@@ -32,6 +32,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -265,6 +268,25 @@ public class Shell {
         && (trimmedLine.isEmpty() || trimmedLine.equals(";"));
   }
 
+  /**
+   * Returns the file where command history is stored, {@code ~/.morel/history},
+   * creating the {@code ~/.morel} directory if necessary. Returns null (and
+   * prints a warning) if the directory cannot be created, in which case history
+   * is not persisted between sessions.
+   */
+  private @Nullable Path historyFile() {
+    final Path morelHome = Paths.get(System.getProperty("user.home"), ".morel");
+    try {
+      Files.createDirectories(morelHome);
+    } catch (IOException e) {
+      terminal
+          .writer()
+          .println("Warning: cannot create " + morelHome + ": " + e);
+      return null;
+    }
+    return morelHome.resolve("history");
+  }
+
   public void run() {
     if (config.help) {
       usage(terminal.writer()::println);
@@ -315,13 +337,18 @@ public class Shell {
     if (config.banner) {
       terminal.writer().println(JavaVersion.banner(this.terminal));
     }
-    LineReader lineReader =
+    final LineReaderBuilder lineReaderBuilder =
         LineReaderBuilder.builder()
             .appName("morel")
             .terminal(terminal)
             .parser(parser)
-            .variable(LineReader.SECONDARY_PROMPT_PATTERN, equalsPrompt)
-            .build();
+            .variable(LineReader.SECONDARY_PROMPT_PATTERN, equalsPrompt);
+    final Path historyFile = historyFile();
+    if (historyFile != null) {
+      // Persist command history across sessions in ~/.morel/history.
+      lineReaderBuilder.variable(LineReader.HISTORY_FILE, historyFile);
+    }
+    LineReader lineReader = lineReaderBuilder.build();
 
     pause();
     final TypeSystem typeSystem = new TypeSystem();
