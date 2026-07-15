@@ -149,7 +149,10 @@ public class FromBuilder {
         step,
         step.env.ordered);
     steps.add(step);
-    if (!bindings.equals(step.env.bindings)) {
+    // Refresh bindings if they differ, comparing types too for an atom step so
+    // that a row binder replaces a same-named input binding of a different
+    // type. (Binding equality alone ignores type.)
+    if (!Binding.listsEqual(bindings, step.env.bindings, step.env.atom)) {
       bindings.clear();
       bindings.addAll(step.env.bindings);
     }
@@ -555,7 +558,15 @@ public class FromBuilder {
     if (tuple.args.size() != env.bindings.size()) {
       return TupleType.OTHER;
     }
-    boolean identity = env2 == null || env.bindings.equals(env2.bindings);
+    // The output bindings (env2) must match the tuple's fields by name and
+    // type. A row binder whose name equals the record's sole field name
+    // ('yield g = {g = ...}') has a binding named like the field but typed as
+    // the whole record; Binding equality ignores type, so without the type
+    // check the binder would look like the identity and be dropped.
+    boolean identity =
+        env2 == null
+            || env.bindings.equals(env2.bindings)
+                && Binding.matchesFields(env2.bindings, tuple.type());
     for (Pair<Core.Exp, String> argName :
         Pair.zip(tuple.args, tuple.type().argNames())) {
       Core.Exp arg = argName.left;
