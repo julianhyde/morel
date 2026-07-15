@@ -540,6 +540,33 @@ public class DarnTest {
     assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
   }
 
+  /**
+   * A {@code (*)} line comment ends at the newline, so the code on the next
+   * line is highlighted normally, not swallowed as part of the comment.
+   */
+  @Test
+  void testHighlightRougeLineComment() {
+    final String code =
+        "(*) End of line\n" //
+            + "val x = 1";
+    final String expected =
+        "c{(*}cm{) End of line}\n" //
+            + "kr{val} nv{x} p{=} mi{1}";
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
+  }
+
+  /** A {@code (* ... *)} block comment still spans to its close. */
+  @Test
+  void testHighlightRougeBlockComment() {
+    final String code =
+        "(* a\n" //
+            + "b *) c";
+    final String expected =
+        "c{(*}cm{ a\n" //
+            + "b *)} n{c}";
+    assertThat(MorelHighlighter.DEFAULT.highlightRouge2(code), is(expected));
+  }
+
   @Test
   void testGenerateHtmlLinesHtmlEscape() {
     String highlighted =
