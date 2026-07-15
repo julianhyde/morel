@@ -43,6 +43,7 @@ import net.hydromatic.morel.compile.RefChecker;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
@@ -149,7 +150,8 @@ public class FromBuilder {
         step,
         step.env.ordered);
     steps.add(step);
-    if (!bindings.equals(step.env.bindings)) {
+    if (!bindings.equals(step.env.bindings)
+        || step.env.atom && !bindingsMatch(bindings, step.env.bindings)) {
       bindings.clear();
       bindings.addAll(step.env.bindings);
     }
@@ -555,7 +557,15 @@ public class FromBuilder {
     if (tuple.args.size() != env.bindings.size()) {
       return TupleType.OTHER;
     }
-    boolean identity = env2 == null || env.bindings.equals(env2.bindings);
+    // The output bindings (env2) must match the tuple's fields by name and
+    // type. A row binder whose name equals the record's sole field name
+    // ('yield g = {g = ...}') has a binding named like the field but typed as
+    // the whole record; Binding equality ignores type, so without the type
+    // check the binder would look like the identity and be dropped.
+    boolean identity =
+        env2 == null
+            || env.bindings.equals(env2.bindings)
+                && bindingsMatchFields(env2.bindings, tuple.type());
     for (Pair<Core.Exp, String> argName :
         Pair.zip(tuple.args, tuple.type().argNames())) {
       Core.Exp arg = argName.left;
@@ -568,6 +578,42 @@ public class FromBuilder {
       }
     }
     return identity ? TupleType.IDENTITY : TupleType.RENAME;
+  }
+
+  /**
+   * Returns whether two binding lists are equal, including types ({@link
+   * Binding} equality ignores type). A binder yield {@code g = {g = ...}} can
+   * produce a binding with the same name and ordinal as its input binding but a
+   * different type; {@link #addStep} must let it replace the input binding.
+   */
+  private static boolean bindingsMatch(
+      List<Binding> bindings, List<Binding> bindings2) {
+    if (!bindings.equals(bindings2)) {
+      return false;
+    }
+    for (Pair<Binding, Binding> pair : Pair.zip(bindings, bindings2)) {
+      if (!pair.left.id.type.equals(pair.right.id.type)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Returns whether each binding has the same name and type as a field of the
+   * record type. False for a row binder over a record with one field of the
+   * same name, whose binding's type is the whole record, not the field.
+   */
+  private static boolean bindingsMatchFields(
+      List<Binding> bindings, RecordLikeType recordType) {
+    final List<String> fieldNames = recordType.argNames();
+    for (Binding binding : bindings) {
+      final int i = fieldNames.indexOf(binding.id.name);
+      if (i < 0 || !binding.id.type.equals(recordType.argType(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private Core.Exp build(boolean simplify) {
