@@ -828,6 +828,23 @@ public class TypeResolver {
   }
 
   /**
+   * Checks that a character constant contains exactly one character, throwing a
+   * {@link TypeException} if not. The parser stores the content of an invalid
+   * constant (e.g. {@code #""} or {@code #"ab"}) as a {@link String} rather
+   * than a {@link Character}. {@code node} is an {@link Ast.Literal} or {@link
+   * Ast.LiteralPat}.
+   */
+  private static void checkCharLiteral(AstNode node) {
+    final Comparable value =
+        node instanceof Ast.Literal
+            ? ((Ast.Literal) node).value
+            : ((Ast.LiteralPat) node).value;
+    if (!(value instanceof Character)) {
+      throw new TypeException("character constant not length one", node.pos);
+    }
+  }
+
+  /**
    * Checks that an {@code int} or {@code word} literal value fits its type,
    * throwing a {@link TypeException} if not. {@code int} is signed 32-bit;
    * {@code word} is unsigned 64-bit. {@code node} is an {@link Ast.Literal} or
@@ -877,6 +894,7 @@ public class TypeResolver {
       case BOOL_LITERAL:
         return reg(node, v, toTerm(PrimitiveType.BOOL));
       case CHAR_LITERAL:
+        checkCharLiteral(node);
         return reg(node, v, toTerm(PrimitiveType.CHAR));
       case INT_LITERAL:
         checkLiteralRange(node, PrimitiveType.INT);
@@ -3789,6 +3807,7 @@ public class TypeResolver {
         return reg(pat, v, toTerm(PrimitiveType.BOOL));
 
       case CHAR_LITERAL_PAT:
+        checkCharLiteral(pat);
         return reg(pat, v, toTerm(PrimitiveType.CHAR));
 
       case INT_LITERAL_PAT:

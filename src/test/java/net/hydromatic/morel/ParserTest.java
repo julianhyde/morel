@@ -98,7 +98,7 @@ public class ParserTest {
   }
 
   private void assertUnquote(String s, char c) {
-    assertThat(unquoteCharLiteral("#" + s), is(c));
+    assertThat(unquoteCharLiteral("#" + s), is("" + c));
     assertThat(unquoteString(s), is("" + c));
   }
 
@@ -107,7 +107,8 @@ public class ParserTest {
     for (char c = 0; c < 255; c++) {
       String s = Parsers.charToString(c);
       String charLiteral = "#\"" + s + "\"";
-      assertThat("char: " + (int) c, unquoteCharLiteral(charLiteral), is(c));
+      assertThat(
+          "char: " + (int) c, unquoteCharLiteral(charLiteral), is("" + c));
 
       String stringLiteral = "\"" + s + "\"";
       assertThat("char: " + (int) c, unquoteString(stringLiteral), is("" + c));

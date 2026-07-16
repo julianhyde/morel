@@ -157,9 +157,17 @@ public enum AstBuilder {
     return new Ast.Literal(p, Op.BOOL_LITERAL, b);
   }
 
-  /** Creates a {@code char} literal. */
-  public Ast.Literal charLiteral(Pos p, char c) {
-    return new Ast.Literal(p, Op.CHAR_LITERAL, c);
+  /**
+   * Creates a {@code char} literal from its unquoted content. If the content is
+   * a single character the payload is a {@link Character}; otherwise (an empty
+   * or multi-character constant, which is invalid) the payload is the {@link
+   * String}, and {@link net.hydromatic.morel.compile.TypeResolver} reports that
+   * the constant is not length one.
+   */
+  public Ast.Literal charLiteral(Pos p, String content) {
+    final Comparable value =
+        content.length() == 1 ? Character.valueOf(content.charAt(0)) : content;
+    return new Ast.Literal(p, Op.CHAR_LITERAL, value);
   }
 
   /** Creates an {@code int} literal. */

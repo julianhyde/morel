@@ -156,19 +156,25 @@ public final class Parsers {
     return b.toString();
   }
 
-  /** Given quoted char literal {@code #"a"} returns {@code a}. */
-  public static char unquoteCharLiteral(String s) {
+  /**
+   * Given quoted char literal {@code #"a"} returns its unquoted content, {@code
+   * "a"}. The content is usually one character, but may be empty ({@code #""})
+   * or several ({@code #"ab"}); {@link
+   * net.hydromatic.morel.compile.TypeResolver} rejects a constant that is not
+   * exactly one character. Escape sequences are expanded as in a string.
+   */
+  public static String unquoteCharLiteral(String s) {
     checkArgument(s.length() >= 3);
     checkArgument(s.charAt(0) == '#');
     checkArgument(s.charAt(1) == '"');
     checkArgument(s.charAt(s.length() - 1) == '"');
     s = s.substring(2, s.length() - 1);
     final StringParser p = new StringParser(s);
-    char c = p.parseChar();
-    if (p.i != s.length()) {
-      throw new RuntimeException("Error: character literal not length 1");
+    final StringBuilder b = new StringBuilder();
+    while (p.i < p.s.length()) {
+      b.append(p.parseChar());
     }
-    return c;
+    return b.toString();
   }
 
   /** Given string {@code "a"} returns {@code a}. */
