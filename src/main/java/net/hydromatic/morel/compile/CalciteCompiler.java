@@ -167,8 +167,12 @@ public class CalciteCompiler extends Compiler {
     RelContext rx =
         new RelContext(
             env, null, calcite.relBuilder(), ImmutableSortedMap.of(), 0);
-    if (((RelCode) code).toRel(rx, false)) {
-      return calcite.code(rx.env, rx.relBuilder.build(), type);
+    try {
+      if (((RelCode) code).toRel(rx, false)) {
+        return calcite.code(rx.env, rx.relBuilder.build(), type);
+      }
+    } catch (RuntimeException | AssertionError e) {
+      // See the note in compileArg: fall back to local evaluation.
     }
     return code;
   }
@@ -187,8 +191,15 @@ public class CalciteCompiler extends Compiler {
       final RelBuilder relBuilder = calcite.relBuilder();
       final RelContext rx =
           new RelContext(cx.env, null, relBuilder, ImmutableSortedMap.of(), 0);
-      if (toRel3(rx, expression, false)) {
-        return calcite.code(rx.env, rx.relBuilder.build(), expression.type);
+      try {
+        if (toRel3(rx, expression, false)) {
+          return calcite.code(rx.env, rx.relBuilder.build(), expression.type);
+        }
+      } catch (RuntimeException | AssertionError e) {
+        // The query uses a type or construct the Calcite adapter cannot handle
+        // (e.g. a 'word' or 'option' value, whose Calcite representation Morel
+        // cannot marshal); fall back to evaluating it locally. (See the Calcite
+        // adapter limitations in the docs.)
       }
     }
     return code;
@@ -964,7 +975,19 @@ public class CalciteCompiler extends Compiler {
     }
   }
 
-  private RelContext group(RelContext cx, Core.Group group) {
+  private @Nullable RelContext group(RelContext cx, Core.Group group) {
+    // Calcite's native MIN and MAX order values differently from Morel for some
+    // types ('word', which it compares as a signed BIGINT) or not at all
+    // (tuples, records, lists, and datatypes such as 'option'). If a 'max' or
+    // 'min' is over such a type, decline to translate the query to Calcite, so
+    // that it runs locally. (See the Calcite adapter limitations in the docs.)
+    for (Core.Aggregate aggregate : group.aggregates.values()) {
+      final SqlAggFunction op = aggOp(aggregate.aggregate);
+      if ((op == SqlStdOperatorTable.MIN || op == SqlStdOperatorTable.MAX)
+          && !calciteOrders(aggregate.type)) {
+        return null;
+      }
+    }
     final List<Binding> bindings = new ArrayList<>();
     final List<RexNode> nodes = new ArrayList<>();
     final List<String> names = new ArrayList<>();
@@ -1044,6 +1067,33 @@ public class CalciteCompiler extends Compiler {
       }
     }
     throw new AssertionError("unknown aggregate function: " + aggregate);
+  }
+
+  /**
+   * Returns whether Calcite's native {@code MIN} and {@code MAX} aggregate
+   * functions order values of {@code type} the same way Morel does.
+   *
+   * <p>True for the scalar types {@code bool}, {@code char}, {@code int},
+   * {@code real} and {@code string}. False for {@code word} (Calcite compares
+   * it as a signed {@code BIGINT}) and for composite types -- tuples, records,
+   * lists, and datatypes such as {@code option} -- which Calcite cannot order
+   * the way Morel does, or at all. For those types {@code max} and {@code min}
+   * fall back to local evaluation.
+   */
+  private static boolean calciteOrders(Type type) {
+    if (type instanceof PrimitiveType) {
+      switch ((PrimitiveType) type) {
+        case BOOL:
+        case CHAR:
+        case INT:
+        case REAL:
+        case STRING:
+          return true;
+        default:
+          break;
+      }
+    }
+    return false;
   }
 
   private static EvalEnv evalEnvOf(Environment env) {

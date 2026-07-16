@@ -278,6 +278,35 @@ end;
 >    {empno=7369,ename="SMITH",level=3,mgr=7902}]
 >   : {empno:int, ename:string, level:int, mgr:int} bag
 
+(* 'max' and 'min' over a type that the Calcite adapter cannot order the way
+   Morel does -- 'word' (which Calcite compares as a signed integer) or a
+   composite type such as a tuple or 'option' -- run locally rather than being
+   pushed to Calcite, giving the right answer rather than crashing. 'Sys.plan'
+   confirms the plan has no 'calcite' node. See the Calcite adapter limitations
+   in 'docs/reference.md'. *)
+Sys.set ("hybrid", true);
+> val it = () : unit
+from w in [0w1, 0wxFFFFFFFFFFFFFFFF] compute max over w;
+> val it = 0wxFFFFFFFFFFFFFFFF : word
+Sys.plan ();
+> val it =
+>   "apply(fnValue Relational.only, argCode from(sink join(pat w, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink collect(get(name max))))))"
+>   : string
+from p in [(1, 2), (2, 1), (1, 9)] compute max over p;
+> val it = (2,1) : int * int
+Sys.plan ();
+> val it =
+>   "apply(fnValue Relational.only, argCode from(sink join(pat p, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink collect(get(name max))))))"
+>   : string
+from ox in [SOME 1, NONE, SOME 3] compute min over ox;
+> val it = NONE : int option
+Sys.plan ();
+> val it =
+>   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat ox, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink collect(get(name min)))))))"
+>   : string
+Sys.set ("hybrid", false);
+> val it = () : unit
+
 "end";
 > val it = "end" : string
 

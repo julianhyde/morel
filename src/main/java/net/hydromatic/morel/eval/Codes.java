@@ -78,6 +78,7 @@ import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
@@ -4077,26 +4078,53 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_MAX */
   private static final Applicable RELATIONAL_MAX =
-      new RelationalMinMax(BuiltIn.RELATIONAL_MAX, Pos.ZERO);
+      new RelationalMinMax(BuiltIn.RELATIONAL_MAX, Pos.ZERO, null);
 
   /** @see BuiltIn#RELATIONAL_MIN */
   private static final Applicable RELATIONAL_MIN =
-      new RelationalMinMax(BuiltIn.RELATIONAL_MIN, Pos.ZERO);
+      new RelationalMinMax(BuiltIn.RELATIONAL_MIN, Pos.ZERO, null);
 
   /**
-   * Implements {@link #RELATIONAL_MAX} and {@link #RELATIONAL_MIN}. Raises
-   * {@link BuiltInExn#EMPTY} on an empty collection, like {@code List.hd},
-   * rather than throwing a Java {@link java.util.NoSuchElementException}.
+   * Implements {@link #RELATIONAL_MAX} and {@link #RELATIONAL_MIN}.
+   *
+   * <p>Compares elements with {@link Comparators#comparatorFor} (as {@code
+   * order} and {@code distinct} do), rather than Java's {@link
+   * Ordering#natural}. Thus ordered types that Java would compare wrongly
+   * ({@code word}, which is unsigned; {@code real}, whose {@code NaN} and
+   * {@code ~0.0} differ) or not at all (tuples, records, lists, datatypes --
+   * represented as Java lists that are not {@code Comparable}) are compared
+   * correctly.
+   *
+   * <p>Raises {@link BuiltInExn#EMPTY} on an empty collection, like {@code
+   * List.hd}.
    */
   private static class RelationalMinMax
-      extends BasePositionedApplicable1<Object, List> {
-    RelationalMinMax(BuiltIn builtIn, Pos pos) {
+      extends BasePositionedApplicable1<Object, List> implements Typed {
+    /** Comparator for the element type; null until {@link #withType} is run. */
+    private final @Nullable Comparator comparator;
+
+    RelationalMinMax(
+        BuiltIn builtIn, Pos pos, @Nullable Comparator comparator) {
       super(builtIn, pos);
+      this.comparator = comparator;
     }
 
     @Override
     public Applicable withPos(Pos pos) {
-      return new RelationalMinMax(builtIn, pos);
+      return new RelationalMinMax(builtIn, pos, comparator);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type) {
+      // 'type' is 'elementType bag -> elementType' (perhaps wrapped in a
+      // ForallType if the function is used as a value); its result type is the
+      // element type.
+      final Type fnType =
+          type instanceof ForallType ? ((ForallType) type).type : type;
+      final Type elementType = ((FnType) fnType).resultType;
+      final Comparator comparator =
+          Comparators.comparatorFor(typeSystem, elementType);
+      return new RelationalMinMax(builtIn, pos, comparator);
     }
 
     @Override
@@ -4104,7 +4132,8 @@ public abstract class Codes {
       if (list.isEmpty()) {
         throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
       }
-      final Ordering<Comparable> ordering = Ordering.natural();
+      final Ordering ordering =
+          Ordering.from(requireNonNull(comparator, "comparator"));
       return builtIn == BuiltIn.RELATIONAL_MAX
           ? ordering.max(list)
           : ordering.min(list);

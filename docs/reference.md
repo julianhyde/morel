@@ -591,6 +591,16 @@ and unset using `Sys.unset name`.
 
 [//]: # (end:properties)
 
+### Apache Calcite adapter
+
+When the `hybrid` property is set, Morel tries to translate each query
+into [Apache Calcite](https://calcite.apache.org/) relational algebra,
+falling back to its own evaluator for any part it cannot translate.
+Limitations include:
+
+* `min` and `max` cannot be pushed down for `word` values or composite
+  values (tuples, records, lists, and datatypes such as `option`).
+
 ## The shell
 
 Morel includes an interactive shell (a read-eval-print loop, or REPL).
