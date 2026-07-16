@@ -757,33 +757,6 @@ public class Compiler {
     return Codes.apply2(applicable2, argCodes.left(0), argCodes.left(1));
   }
 
-  /**
-   * Returns whether a yielded record's fields exactly match the step's
-   * bindings, by name and type. True for an ordinary record yield (fields
-   * scattered into like-named bindings) and for the from-flattening rename
-   * {@code {e2 = ...}}; false for a row binder {@code yield r = {c = ...}},
-   * whose whole record is bound to the single name {@code r}.
-   *
-   * <p>Types must be compared as well as names: a binder whose name equals its
-   * record's sole field name ({@code yield r = {r = ...}}) has a binding whose
-   * name matches, but its type is the whole record, not the field.
-   */
-  private static boolean fieldsMatchBindings(
-      Core.Tuple tuple, List<Binding> bindings) {
-    final RecordLikeType recordType = tuple.type();
-    final List<String> fieldNames = recordType.argNames();
-    if (fieldNames.size() != bindings.size()) {
-      return false;
-    }
-    for (Binding binding : bindings) {
-      final int i = fieldNames.indexOf(binding.id.name);
-      if (i < 0 || !binding.id.type.equals(recordType.argType(i))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   protected Code compileFrom(Context cx, Core.From from) {
     Supplier<RowSink> rowSinkFactory =
         createRowSinkFactory(
@@ -994,44 +967,44 @@ public class Compiler {
           // Note that we don't use nextFactory.
           final Code yieldCode = compileRow(cx, yield.exp);
           return () -> RowSinks.collect(yieldCode);
-        } else if (yield.exp instanceof Core.Tuple
-            && fieldsMatchBindings(
-                (Core.Tuple) yield.exp, yield.env.bindings)) {
+        }
+        if (yield.exp instanceof Core.Tuple) {
           final Core.Tuple tuple = (Core.Tuple) yield.exp;
           final RecordLikeType recordType = tuple.type();
-          final Map<String, Code> codeMap =
-              compileRowMap(cx, Pair.zip(recordType.argNames(), tuple.args));
-          // Extend layout: assign yield output vars to stack slots in the same
-          // order as codeMap.keySet() (alphabetical) so that the push order in
-          // YieldRowSink.accept(Stack) matches the slot indices.
-          final Context cxYield =
-              yieldContext(cx, firstStep.env.bindings, codeMap.keySet());
-          final Supplier<RowSink> yieldNextFactory =
-              createRowSinkFactory(
-                  cxYield,
-                  cxFrom,
-                  yieldAllScope,
-                  firstStep.env,
-                  skip(steps),
-                  elementType);
-          return () -> RowSinks.yield(codeMap, yieldNextFactory.get());
-        } else {
-          final Binding binding = yield.env.bindings.get(0);
-          Map<String, Code> codeMap =
-              compileRowMap(cx, PairList.of(binding.id.name, yield.exp));
-          // Single yield output var: extend layout with one more stack slot.
-          final Context cxYield =
-              yieldContext(cx, firstStep.env.bindings, codeMap.keySet());
-          final Supplier<RowSink> yieldNextFactory =
-              createRowSinkFactory(
-                  cxYield,
-                  cxFrom,
-                  yieldAllScope,
-                  firstStep.env,
-                  skip(steps),
-                  elementType);
-          return () -> RowSinks.yield(codeMap, yieldNextFactory.get());
+          if (Binding.matchesFields(yield.env.bindings, recordType)) {
+            final Map<String, Code> codeMap =
+                compileRowMap(cx, Pair.zip(recordType.argNames(), tuple.args));
+            // Extend layout: assign yield output vars to stack slots in the
+            // same order as codeMap.keySet() (alphabetical) so that the push
+            // order in YieldRowSink.accept(Stack) matches the slot indices.
+            final Context cxYield =
+                yieldContext(cx, firstStep.env.bindings, codeMap.keySet());
+            final Supplier<RowSink> yieldNextFactory =
+                createRowSinkFactory(
+                    cxYield,
+                    cxFrom,
+                    yieldAllScope,
+                    firstStep.env,
+                    skip(steps),
+                    elementType);
+            return () -> RowSinks.yield(codeMap, yieldNextFactory.get());
+          }
         }
+        final Binding binding = yield.env.bindings.get(0);
+        Map<String, Code> codeMap =
+            compileRowMap(cx, PairList.of(binding.id.name, yield.exp));
+        // Single yield output var: extend layout with one more stack slot.
+        final Context cxYield =
+            yieldContext(cx, firstStep.env.bindings, codeMap.keySet());
+        final Supplier<RowSink> yieldNextFactory =
+            createRowSinkFactory(
+                cxYield,
+                cxFrom,
+                yieldAllScope,
+                firstStep.env,
+                skip(steps),
+                elementType);
+        return () -> RowSinks.yield(codeMap, yieldNextFactory.get());
 
       case ORDER:
         return compileOrderSink(

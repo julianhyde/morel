@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.Environment;
@@ -142,6 +143,50 @@ public class Binding {
   /** Returns whether this binding is an instance of an overloaded name. */
   public boolean isInst() {
     return kind == Kind.INST;
+  }
+
+  /**
+   * Returns whether {@code bindings} matches the fields of {@code recordType}
+   * exactly: there are as many fields as bindings, and each binding has the
+   * same name and type as a field. Type is compared as well as name because
+   * {@link Binding} equality ignores type; a row binder whose name equals its
+   * record's sole field name has a binding named like the field but typed as
+   * the whole record, not the field.
+   */
+  public static boolean matchesFields(
+      List<Binding> bindings, RecordLikeType recordType) {
+    if (bindings.size() != recordType.argNameTypes().size()) {
+      return false;
+    }
+    for (Binding binding : bindings) {
+      final Type fieldType = recordType.argNameTypes().get(binding.id.name);
+      if (!binding.id.type.equals(fieldType)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Returns whether two binding lists are equal. If {@code compareTypes}, also
+   * requires corresponding bindings to have equal types. {@link Binding}
+   * equality (via {@link Core.NamedPat}) compares name and ordinal but ignores
+   * type, so a row binder can give a binding the same name and ordinal as its
+   * input but a different type, which {@link List#equals} alone would miss.
+   */
+  public static boolean listsEqual(
+      List<Binding> bindings, List<Binding> bindings2, boolean compareTypes) {
+    if (!bindings.equals(bindings2)) {
+      return false;
+    }
+    if (compareTypes) {
+      for (int i = 0; i < bindings.size(); i++) {
+        if (!bindings.get(i).id.type.equals(bindings2.get(i).id.type)) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   @Override
