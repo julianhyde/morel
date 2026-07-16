@@ -2395,8 +2395,8 @@ public class Core {
     public final Exp aggregate;
     public final @Nullable Exp argument;
 
-    Aggregate(Type type, Exp aggregate, @Nullable Exp argument) {
-      super(Pos.ZERO, Op.AGGREGATE);
+    Aggregate(Pos pos, Type type, Exp aggregate, @Nullable Exp argument) {
+      super(pos, Op.AGGREGATE);
       this.type = type;
       this.aggregate = requireNonNull(aggregate);
       this.argument = argument;
@@ -2424,7 +2424,7 @@ public class Core {
     public Aggregate copy(Type type, Exp aggregate, @Nullable Exp argument) {
       return aggregate == this.aggregate && argument == this.argument
           ? this
-          : core.aggregate(type, aggregate, argument);
+          : core.aggregate(pos, type, aggregate, argument);
     }
   }
 

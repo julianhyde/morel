@@ -4077,21 +4077,39 @@ public abstract class Codes {
 
   /** @see BuiltIn#RELATIONAL_MAX */
   private static final Applicable RELATIONAL_MAX =
-      new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MAX) {
-        @Override
-        public Object apply(List list) {
-          return Ordering.natural().max(list);
-        }
-      };
+      new RelationalMinMax(BuiltIn.RELATIONAL_MAX, Pos.ZERO);
 
   /** @see BuiltIn#RELATIONAL_MIN */
   private static final Applicable RELATIONAL_MIN =
-      new BaseApplicable1<Object, List>(BuiltIn.RELATIONAL_MIN) {
-        @Override
-        public Object apply(List list) {
-          return Ordering.natural().min(list);
-        }
-      };
+      new RelationalMinMax(BuiltIn.RELATIONAL_MIN, Pos.ZERO);
+
+  /**
+   * Implements {@link #RELATIONAL_MAX} and {@link #RELATIONAL_MIN}. Raises
+   * {@link BuiltInExn#EMPTY} on an empty collection, like {@code List.hd},
+   * rather than throwing a Java {@link java.util.NoSuchElementException}.
+   */
+  private static class RelationalMinMax
+      extends BasePositionedApplicable1<Object, List> {
+    RelationalMinMax(BuiltIn builtIn, Pos pos) {
+      super(builtIn, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new RelationalMinMax(builtIn, pos);
+    }
+
+    @Override
+    public Object apply(List list) {
+      if (list.isEmpty()) {
+        throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
+      }
+      final Ordering<Comparable> ordering = Ordering.natural();
+      return builtIn == BuiltIn.RELATIONAL_MAX
+          ? ordering.max(list)
+          : ordering.min(list);
+    }
+  }
 
   /** @see BuiltIn#RELATIONAL_NON_EMPTY */
   private static final Applicable1 RELATIONAL_NON_EMPTY =

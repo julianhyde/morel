@@ -1372,6 +1372,35 @@ public class Resolver {
   }
 
   /**
+   * Returns the position of the first {@code max} or {@code min} aggregate call
+   * in a {@code compute} clause, or the clause's own position if there is none.
+   *
+   * <p>Used to position the {@code only} that wraps a scalar {@code compute}:
+   * an empty {@code max}/{@code min} raises {@code Empty} there, so that the
+   * Calcite path (whose {@code only} does not know which field of a record
+   * {@code compute} is empty) agrees with the local path (where the aggregate
+   * function raises the exception). A heuristic: we assume the empty aggregate
+   * is the first {@code max} or {@code min}.
+   */
+  private static Pos firstMinMaxPos(Ast.Exp compute) {
+    final Pos[] pos = {null};
+    compute.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.Aggregate aggregate) {
+            if (pos[0] == null && aggregate.aggregate.op == Op.ID) {
+              final String name = ((Ast.Id) aggregate.aggregate).name;
+              if (name.equals("max") || name.equals("min")) {
+                pos[0] = aggregate.pos;
+              }
+            }
+            super.visit(aggregate);
+          }
+        });
+    return pos[0] != null ? pos[0] : compute.pos;
+  }
+
+  /**
    * Visitor that converts a {@link Ast.From}, {@link Ast.Exists} or {@link
    * Ast.Forall} to {@link Core.From} by handling each subtype of {@link
    * Ast.FromStep} calling {@link FromBuilder} appropriately.
@@ -1425,7 +1454,15 @@ public class Resolver {
         checkArgument(last(query.steps).op == Op.REQUIRE);
         return core.empty(typeMap.typeSystem, query.pos, coreFrom);
       } else if (query.isCompute()) {
-        return core.only(typeMap.typeSystem, query.pos, coreFrom);
+        // Position the 'only' at the first 'max' or 'min' aggregate in the
+        // 'compute' clause (or the whole clause if there is none), so that an
+        // empty aggregate raises 'Empty' at the same position as the local
+        // path (where the aggregate function raises it). It is a heuristic:
+        // Calcite's 'only' does not know which field of a record 'compute' is
+        // empty, so we assume it is the first 'max' or 'min'.
+        final Ast.Compute compute = (Ast.Compute) last(query.steps);
+        final Pos aggPos = firstMinMaxPos(requireNonNull(compute.aggregate));
+        return core.only(typeMap.typeSystem, aggPos, coreFrom);
       } else {
         return coreFrom;
       }
@@ -1801,7 +1838,8 @@ public class Resolver {
         final Core.Exp converted =
             core.apply(Pos.ZERO, argType, converterLit, paramRef);
         final Core.Exp applied =
-            core.apply(Pos.ZERO, typeMap.getType(aggregate), aggFn, converted);
+            core.apply(
+                aggregate.pos, typeMap.getType(aggregate), aggFn, converted);
         final FnType wrappedType =
             typeMap.typeSystem.fnType(
                 inputCollType, typeMap.getType(aggregate));
@@ -1809,6 +1847,7 @@ public class Resolver {
       }
       final Core.Aggregate coreAggregate =
           core.aggregate(
+              aggregate.pos,
               typeMap.getType(aggregate),
               aggFn,
               inputResolver.toCore(aggregate.argument));
@@ -1832,6 +1871,7 @@ public class Resolver {
       final FnType fnType = typeMap.typeSystem.fnType(type, type);
       Core.Aggregate coreAggregate =
           core.aggregate(
+              elements.pos,
               type,
               core.functionLiteral(fnType, BuiltIn.FN_ID),
               inputResolver.current);

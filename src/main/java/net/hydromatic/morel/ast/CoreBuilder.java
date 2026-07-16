@@ -658,8 +658,8 @@ public enum CoreBuilder {
   }
 
   public Core.Aggregate aggregate(
-      Type type, Core.Exp aggregate, Core.@Nullable Exp argument) {
-    return new Core.Aggregate(type, aggregate, argument);
+      Pos pos, Type type, Core.Exp aggregate, Core.@Nullable Exp argument) {
+    return new Core.Aggregate(pos, type, aggregate, argument);
   }
 
   public Core.Order order(Core.StepEnv env, Core.Exp exp) {
