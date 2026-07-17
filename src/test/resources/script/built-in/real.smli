@@ -853,24 +853,53 @@ fun f x = (Real.floor x, Real.ceil x, Real.trunc x, Real.round x);
 > val f = fn : real -> int * int * int * int
 f 0.0;
 > val it = (0,0,0,0) : int * int * int * int
+f 0.5;
+> val it = (0,1,0,0) : int * int * int * int
+f 1.75;
+> val it = (1,2,1,2) : int * int * int * int
+f 2.25;
+> val it = (2,3,2,2) : int * int * int * int
+f 2.5;
+> val it = (2,3,2,2) : int * int * int * int
+f 3.5;
+> val it = (3,4,3,4) : int * int * int * int
 f ~2.0;
 > val it = (~2,~2,~2,~2) : int * int * int * int
 f ~1.75;
-> val it = (~2,~2,~1,~2) : int * int * int * int
+> val it = (~2,~1,~1,~2) : int * int * int * int
 f ~2.25;
-> val it = (~2,~2,~2,~2) : int * int * int * int
+> val it = (~3,~2,~2,~2) : int * int * int * int
 f ~2.5;
-> val it = (~2,~3,~2,~2) : int * int * int * int
+> val it = (~3,~2,~2,~2) : int * int * int * int
 f ~3.5;
-> val it = (~3,~4,~3,~3) : int * int * int * int
-f Real.negInf;
-> val it = (~2147483648,~2147483647,~2147483648,~2147483648)
->   : int * int * int * int
-f Real.posInf;
-> val it = (~2147483648,2147483647,2147483647,2147483647)
->   : int * int * int * int
-f nan;
-> val it = (0,0,0,0) : int * int * int * int
+> val it = (~4,~3,~3,~4) : int * int * int * int
+
+(* On an infinity the result is out of int range, so they raise Overflow;
+   on NaN they raise Domain. *)
+Real.floor Real.posInf;
+> uncaught exception Overflow [overflow]
+>   raised at: stdIn:1.1-1.23
+Real.ceil Real.negInf;
+> uncaught exception Overflow [overflow]
+>   raised at: stdIn:1.1-1.22
+Real.trunc Real.posInf;
+> uncaught exception Overflow [overflow]
+>   raised at: stdIn:1.1-1.23
+Real.round Real.posInf;
+> uncaught exception Overflow [overflow]
+>   raised at: stdIn:1.1-1.23
+Real.floor nan;
+> uncaught exception Domain [domain error]
+>   raised at: stdIn:1.1-1.15
+Real.ceil nan;
+> uncaught exception Domain [domain error]
+>   raised at: stdIn:1.1-1.14
+Real.trunc nan;
+> uncaught exception Domain [domain error]
+>   raised at: stdIn:1.1-1.15
+Real.round nan;
+> uncaught exception Domain [domain error]
+>   raised at: stdIn:1.1-1.15
 
 (* "toInt mode x", "toLargeInt mode x" convert the argument x to an integral
    type using the specified rounding mode. They raise Overflow if the result

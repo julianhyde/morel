@@ -3395,16 +3395,57 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_CEIL */
   private static final Applicable REAL_CEIL =
-      new BaseApplicable1<Integer, Float>(BuiltIn.REAL_CEIL) {
-        @Override
-        public Integer apply(Float f) {
-          if (f >= 0) {
-            return Math.round(f);
-          } else {
-            return -Math.round(-f);
-          }
-        }
-      };
+      new RealToInt(BuiltIn.REAL_CEIL, Pos.ZERO);
+
+  /**
+   * Implements {@link #REAL_FLOOR}, {@link #REAL_CEIL}, {@link #REAL_ROUND} and
+   * {@link #REAL_TRUNC}, which convert a {@code real} to the {@code int} that
+   * is respectively the largest integer not greater than the argument, the
+   * smallest integer not less than it, the nearest integer (ties to even), and
+   * the argument rounded toward zero.
+   *
+   * <p>Following the Standard ML Basis, they raise {@link BuiltInExn#DOMAIN} if
+   * the argument is {@code NaN}, and {@link BuiltInExn#OVERFLOW} if the result
+   * is out of {@code int} range (in particular, on an infinity).
+   */
+  private static class RealToInt
+      extends BasePositionedApplicable1<Integer, Float> {
+    RealToInt(BuiltIn builtIn, Pos pos) {
+      super(builtIn, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new RealToInt(builtIn, pos);
+    }
+
+    @Override
+    public Integer apply(Float f) {
+      if (Float.isNaN(f)) {
+        throw new MorelRuntimeException(BuiltInExn.DOMAIN, pos);
+      }
+      final double d;
+      switch (builtIn) {
+        case REAL_FLOOR:
+          d = Math.floor(f);
+          break;
+        case REAL_CEIL:
+          d = Math.ceil(f);
+          break;
+        case REAL_ROUND:
+          d = Math.rint(f);
+          break;
+        case REAL_TRUNC:
+        default:
+          d = f < 0 ? Math.ceil(f) : Math.floor(f);
+          break;
+      }
+      if (d < Integer.MIN_VALUE || d > Integer.MAX_VALUE) {
+        throw new MorelRuntimeException(BuiltInExn.OVERFLOW, pos);
+      }
+      return (int) d;
+    }
+  }
 
   /** @see BuiltIn#REAL_CHECK_FLOAT */
   private static final Applicable REAL_CHECK_FLOAT =
@@ -3502,16 +3543,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_FLOOR */
   private static final Applicable REAL_FLOOR =
-      new BaseApplicable1<Integer, Float>(BuiltIn.REAL_FLOOR) {
-        @Override
-        public Integer apply(Float f) {
-          if (f >= 0) {
-            return -Math.round(-f);
-          } else {
-            return Math.round(f);
-          }
-        }
-      };
+      new RealToInt(BuiltIn.REAL_FLOOR, Pos.ZERO);
 
   /** @see BuiltIn#REAL_FMT */
   private static final Applicable2 REAL_FMT = new RealFmt(Pos.ZERO);
@@ -3875,12 +3907,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_ROUND */
   private static final Applicable REAL_ROUND =
-      new BaseApplicable1<Integer, Float>(BuiltIn.REAL_ROUND) {
-        @Override
-        public Integer apply(Float f) {
-          return Math.round(f);
-        }
-      };
+      new RealToInt(BuiltIn.REAL_ROUND, Pos.ZERO);
 
   /** @see BuiltIn#REAL_SAME_SIGN */
   private static final Applicable2 REAL_SAME_SIGN =
@@ -4006,12 +4033,7 @@ public abstract class Codes {
 
   /** @see BuiltIn#REAL_TRUNC */
   private static final Applicable REAL_TRUNC =
-      new BaseApplicable1<Integer, Float>(BuiltIn.REAL_TRUNC) {
-        @Override
-        public Integer apply(Float f) {
-          return f.intValue();
-        }
-      };
+      new RealToInt(BuiltIn.REAL_TRUNC, Pos.ZERO);
 
   /** @see BuiltIn#REAL_UNORDERED */
   private static final Applicable2 REAL_UNORDERED =
