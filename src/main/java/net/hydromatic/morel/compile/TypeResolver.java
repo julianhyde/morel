@@ -151,6 +151,20 @@ public class TypeResolver {
   static final String ARG_TY_CON = "$arg";
   static final String OVERLOAD_TY_CON = BuiltIn.Datatype.OVERLOAD.mlName();
   static final String LIST_TY_CON = "list";
+
+  /**
+   * Internal term constructor for collections: {@code collection(element,
+   * orderedness)}, where orderedness is {@link #ORDERED} (a list) or {@link
+   * #UNORDERED} (a bag). Distinct from any user-facing type name.
+   */
+  static final String COLLECTION_TY_CON = "$collection";
+
+  /** Orderedness atom for a list. */
+  static final String ORDERED = "ordered";
+
+  /** Orderedness atom for a bag. */
+  static final String UNORDERED = "unordered";
+
   static final String OPTION_TY_CON = BuiltIn.Datatype.OPTION.mlName();
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
@@ -626,61 +640,72 @@ public class TypeResolver {
     constraints.add(unifier.constraint(arg, result, argResults));
   }
 
-  /** Adds a constraint that {@code c} is a bag or list of {@code v}. */
-  private void mayBeBagOrList(Variable c, Variable v) {
-    final Sequence list = listTerm(v);
-    final Sequence bag = bagTerm(v);
-    PairList<Term, Constraint.Action> termActions =
-        copyOf(list, Constraint.equiv(c, list), bag, Constraint.equiv(c, bag));
-    constraints.add(unifier.constraint(c, termActions));
-  }
-
   /**
-   * Adds a constraint that {@code c1} is a bag or list of {@code v1}; if it is
-   * a list then {@code c2} is a list of {@code v2}, otherwise {@code c2} is a
-   * bag of {@code v2}.
+   * Adds a constraint that {@code c} is a collection of {@code v}. The
+   * orderedness is left to be determined; if nothing else constrains it, the
+   * collection defaults to a bag when the type is read back.
    */
-  private void isListOrBagMatchingInput(
-      Variable c1, Variable v1, Variable c2, Variable v2) {
-    Sequence list1 = listTerm(v1);
-    Sequence bag1 = bagTerm(v1);
-    Sequence list2 = listTerm(v2);
-    Sequence bag2 = bagTerm(v2);
-    constraints.add(
-        unifier.constraint(c2, c1, copyOf(list2, list1, bag2, bag1)));
-    constraints.add(
-        unifier.constraint(c1, c2, copyOf(list1, list2, bag1, bag2)));
+  private void isCollectionOf(Variable c, Variable v) {
+    equiv(c, collectionTerm(v, unifier.variable()));
   }
 
   /**
-   * Returns the collection kind for an aggregate function.
-   *
-   * <p>Returns -2 if the function is a user-defined named function whose type
-   * is not yet available (use {@code mayBeBagOrList}); -1 if the function is
-   * overloaded, polymorphic, or its collection kind is unknown (use {@code
-   * isListOrBagMatchingInput} to link to the input's ordering); 0 if the
-   * function's parameter type is a bag; or 1 if the function's parameter type
-   * is a list.
+   * Adds a constraint that {@code c1} and {@code c2} are collections (of {@code
+   * v1} and {@code v2}) with the same orderedness. With the unified
+   * representation the element/orderedness relationship is intrinsic to the
+   * collection term, so this is plain unification on a shared orderedness
+   * variable rather than a deferred list/bag disjunction.
+   */
+  private void sameOrderedness(
+      Variable c1, Variable v1, Variable c2, Variable v2) {
+    final Variable o = unifier.variable();
+    equiv(c1, collectionTerm(v1, o));
+    equiv(c2, collectionTerm(v2, o));
+  }
+
+  /**
+   * How the input collection of an aggregate function links to that function's
+   * parameter.
+   */
+  private enum AggKind {
+    /**
+     * A user-defined named function whose type is not yet available; use {@link
+     * #isCollectionOf} so the function's own type can determine the kind
+     * without conflicting with the input ordering.
+     */
+    USER_UNKNOWN,
+    /**
+     * Overloaded, polymorphic, or otherwise unknown; use {@link
+     * #sameOrderedness} to link to the input's ordering.
+     */
+    POLYMORPHIC,
+    /** The function's parameter type is a bag. */
+    BAG,
+    /** The function's parameter type is a list. */
+    LIST
+  }
+
+  /**
+   * Returns how the input collection of an aggregate function {@code fn} links
+   * to that function's parameter.
    *
    * <p>Uses {@code getTypeOpt}, not {@code getType}, to avoid re-registering
    * the function expression with its raw type (which would overwrite the
    * instantiated type registered by {@code deduceApplyFnType}).
    */
-  private int collectionKind(TypeEnv env, Ast.Exp fn) {
+  private AggKind aggKind(TypeEnv env, Ast.Exp fn) {
     if (fn instanceof Ast.Id) {
       final Ast.Id id = (Ast.Id) fn;
       if (env.hasOverloaded(id.name)) {
-        return -1; // overloaded
+        return AggKind.POLYMORPHIC;
       }
       Type type = env.getTypeOpt(id.name);
       if (type == null) {
         // Type not available (user-defined function in current compilation
-        // unit). Don't link to input ordering; instead use mayBeBagOrList
-        // so the function's own type (from deduceApplyFnType) can determine
-        // the collection kind without conflicting with the input ordering.
-        return -2;
+        // unit).
+        return AggKind.USER_UNKNOWN;
       }
-      return collectionKindOfType(type);
+      return aggKindOfType(type);
     }
     // For qualified names (e.g., Relational.nonEmpty, Fn.id), try to
     // extract the type from the record structure.
@@ -692,14 +717,14 @@ public class TypeResolver {
           String fieldName = ((Ast.RecordSelector) apply.fn).name;
           Type fieldType = ((RecordType) argType).argNameTypes.get(fieldName);
           if (fieldType != null) {
-            return collectionKindOfType(fieldType);
+            return aggKindOfType(fieldType);
           }
         }
       }
     }
     // For anonymous functions and other non-Id expressions,
     // link to input ordering.
-    return -1;
+    return AggKind.POLYMORPHIC;
   }
 
   /**
@@ -752,10 +777,10 @@ public class TypeResolver {
     }
   }
 
-  /** Returns the collection kind for a function type. */
-  private static int collectionKindOfType(Type type) {
+  /** Returns the aggregate kind for a function type. */
+  private static AggKind aggKindOfType(Type type) {
     if (type instanceof MultiType) {
-      return -1; // overloaded
+      return AggKind.POLYMORPHIC;
     }
     if (type instanceof ForallType) {
       type = ((ForallType) type).type;
@@ -763,55 +788,68 @@ public class TypeResolver {
     if (type instanceof FnType) {
       final Type paramType = ((FnType) type).paramType;
       if (paramType instanceof ListType) {
-        return 1; // list
+        return AggKind.LIST;
       }
       if (paramType instanceof DataType
           && ((DataType) paramType).name.equals(BAG_TY_CON)) {
-        return 0; // bag
+        return AggKind.BAG;
       }
     }
-    return -1; // polymorphic or unknown
+    return AggKind.POLYMORPHIC;
   }
 
   /**
-   * Adds a constraint that {@code c0} is a bag or list (of {@code v0}), and
-   * {@code c1} is a bag or list (of {@code v1}); if both are lists then {@code
-   * c} is a list of {@code v}, otherwise {@code c} is a bag of {@code v}.
+   * Adds a constraint that {@code c} (of {@code v}) is the meet of collections
+   * {@code c0} (of {@code v0}) and {@code c1} (of {@code v1}): a list if both
+   * inputs are lists, otherwise a bag.
    */
-  private void isListIfBothAreLists(
+  private void meetCollections(
       Term c0, Variable v0, Term c1, Variable v1, Variable c, Variable v) {
-    final Sequence list0 = listTerm(v0);
-    final Sequence list1 = listTerm(v1);
-    final Sequence bag0 = bagTerm(v0);
-    final Sequence bag1 = bagTerm(v1);
-    final Sequence listResult = listTerm(v);
-    final Sequence bagResult = bagTerm(v);
-    final Constraint.Action listAction = Constraint.equiv(c, listResult);
-    final Constraint.Action bagAction = Constraint.equiv(c, bagResult);
-    final PairList<Term, Constraint.Action> termActions = PairList.of();
-    termActions.add(argTerm(list0, list1), listAction);
-    termActions.add(argTerm(list0, bag1), bagAction);
-    termActions.add(argTerm(bag0, list1), bagAction);
-    termActions.add(argTerm(bag0, bag1), bagAction);
-    constraints.add(
-        unifier.constraint(toVariable(argTerm(c0, c1)), termActions));
+    // Each of c0, c1, c is a collection; the result orderedness is the meet of
+    // the two input orderednesses (a list only if both inputs are lists,
+    // otherwise a bag).
+    final Variable o0 = unifier.variable();
+    final Variable o1 = unifier.variable();
+    final Variable o = unifier.variable();
+    equiv(toVariable(c0), collectionTerm(v0, o0));
+    equiv(toVariable(c1), collectionTerm(v1, o1));
+    equiv(c, collectionTerm(v, o));
+    meetOrderedness(o, o0, o1);
   }
 
   /**
-   * Adds a constraint that the terms in {@code args} are all a bag or list (of
-   * {@code v}); if all are lists then {@code c} is a list of {@code v},
-   * otherwise {@code c} is a bag of {@code v}.
+   * Adds a constraint that orderedness {@code o} is the meet of {@code o0} and
+   * {@code o1}: ordered if both are ordered, otherwise unordered.
    */
-  private void isListIfAllAreLists(List<Term> args, Variable c, Variable v) {
+  private void meetOrderedness(Variable o, Variable o0, Variable o1) {
+    final Term ordered = unifier.atom(ORDERED);
+    final Term unordered = unifier.atom(UNORDERED);
+    final Constraint.Action orderedAction = Constraint.equiv(o, ordered);
+    final Constraint.Action unorderedAction = Constraint.equiv(o, unordered);
+    final PairList<Term, Constraint.Action> termActions = PairList.of();
+    termActions.add(argTerm(ordered, ordered), orderedAction);
+    termActions.add(argTerm(ordered, unordered), unorderedAction);
+    termActions.add(argTerm(unordered, ordered), unorderedAction);
+    termActions.add(argTerm(unordered, unordered), unorderedAction);
+    constraints.add(
+        unifier.constraint(toVariable(argTerm(o0, o1)), termActions));
+  }
+
+  /**
+   * Adds a constraint that {@code c} (of {@code v}) is the meet of the
+   * collections in {@code args}: a list if all inputs are lists, otherwise a
+   * bag.
+   */
+  private void meetCollections(List<Term> args, Variable c, Variable v) {
     if (args.isEmpty()) {
       throw new IllegalArgumentException("no args");
     }
     Term arg0 = args.get(0);
-    mayBeBagOrList(toVariable(arg0), v);
-    mayBeBagOrList(c, v);
+    isCollectionOf(toVariable(arg0), v);
+    isCollectionOf(c, v);
     for (Term arg : skip(args)) {
-      mayBeBagOrList(toVariable(arg), v);
-      isListIfBothAreLists(arg0, v, arg, v, c, v);
+      isCollectionOf(toVariable(arg), v);
+      meetCollections(arg0, v, arg, v, c, v);
     }
   }
 
@@ -1287,7 +1325,7 @@ public class TypeResolver {
           args2.add(deduceExpType(p.rootEnv, arg, v15));
         }
         final Variable c4 = unifier.variable();
-        isListIfAllAreLists(terms, c4, p.v);
+        meetCollections(terms, c4, p.v);
         steps.add(setStep.copy(setStep.distinct, args2));
         return new Triple(p.rootEnv, p.env, p.v, c4);
 
@@ -1315,58 +1353,7 @@ public class TypeResolver {
         return deduceGroupStepType((Ast.Group) step, p, fieldVars, steps);
 
       case INTO:
-        // "into f" applies f to the entire input collection. We use
-        // collectionKind to determine how to link the function's parameter
-        // to the input, and deduceApplyFnType for overloaded dispatch.
-        final Ast.Into into = (Ast.Into) step;
-        requireNonNull(p.c);
-        final Variable rv = unifier.variable();
-        final int intoCK = collectionKind(p.env, into.exp);
-        final Ast.Exp intoExp;
-        switch (intoCK) {
-          case -2:
-            // User-defined function whose type is not yet available.
-            // Link directly to p.c to preserve record type propagation.
-            intoExp =
-                deduceExpType(p.env, into.exp, toVariable(fnTerm(p.c, rv)));
-            break;
-          case 0:
-            {
-              // Bag-only function: decouple from input ordering so that
-              // a bag function works with list input.
-              final Variable intoCArg0 = unifier.variable();
-              equiv(intoCArg0, bagTerm(p.v));
-              intoExp =
-                  deduceExpType(
-                      p.env, into.exp, toVariable(fnTerm(intoCArg0, rv)));
-              break;
-            }
-          case 1:
-            {
-              // List-only function: decouple from input ordering.
-              final Variable intoCArg1 = unifier.variable();
-              equiv(intoCArg1, listTerm(p.v));
-              intoExp =
-                  deduceExpType(
-                      p.env, into.exp, toVariable(fnTerm(intoCArg1, rv)));
-              break;
-            }
-          default:
-            {
-              // Overloaded or polymorphic: use deduceApplyFnType for
-              // dispatch, linked to input ordering.
-              final Variable intoCArg = unifier.variable();
-              isListOrBagMatchingInput(intoCArg, p.v, p.c, p.v);
-              final Variable intoVFn = unifier.variable();
-              intoExp =
-                  deduceApplyFnType(p.env, into.exp, intoVFn, intoCArg, rv);
-              reg(into.exp, intoVFn);
-              equiv(intoVFn, fnTerm(intoCArg, rv));
-              break;
-            }
-        }
-        steps.add(into.copy(intoExp));
-        return Triple.singleton(p.rootEnv, p.env, rv);
+        return deduceIntoStepType((Ast.Into) step, p, steps);
 
       case THROUGH:
         // from i in [1,2,3] through p in f
@@ -1382,7 +1369,7 @@ public class TypeResolver {
         final Variable c18 = unifier.variable();
 
         // Input collection (p.c) is either a bag of p.v or a list of p.v.
-        mayBeBagOrList(requireNonNull(p.c), p.v);
+        isCollectionOf(requireNonNull(p.c), p.v);
 
         final List<PatTerm> termMap = new ArrayList<>();
         pat =
@@ -1390,7 +1377,7 @@ public class TypeResolver {
                 p.rootEnv, through.pat, termMap::add, null, v18, t -> t);
         final Variable v17 = toVariable(fnTerm(p.c, c18));
         final Ast.Exp throughExp = deduceExpType(p.env, through.exp, v17);
-        mayBeBagOrList(c18, v18);
+        isCollectionOf(c18, v18);
         // Register the rewritten node (the one added to 'steps', which the
         // resolver later looks up), not only the original: type resolution may
         // have rewritten the expression (e.g. 'List.map ...'), giving a new
@@ -1411,6 +1398,59 @@ public class TypeResolver {
     }
   }
 
+  /**
+   * Deduces the type of an {@code into} step. "into f" applies {@code f} to the
+   * entire input collection; {@link #aggKind} decides how the function's
+   * parameter links to the input, and {@link #deduceApplyFnType} handles
+   * overloaded dispatch.
+   */
+  private Triple deduceIntoStepType(
+      Ast.Into into, Triple p, List<Ast.FromStep> steps) {
+    requireNonNull(p.c);
+    final Variable rv = unifier.variable();
+    final Ast.Exp intoExp;
+    switch (aggKind(p.env, into.exp)) {
+      case USER_UNKNOWN:
+        // User-defined function whose type is not yet available.
+        // Link directly to p.c to preserve record type propagation.
+        intoExp = deduceExpType(p.env, into.exp, toVariable(fnTerm(p.c, rv)));
+        break;
+      case BAG:
+        {
+          // Bag-only function: decouple from input ordering so that
+          // a bag function works with list input.
+          final Variable intoCArg0 = unifier.variable();
+          equiv(intoCArg0, bagTerm(p.v));
+          intoExp =
+              deduceExpType(p.env, into.exp, toVariable(fnTerm(intoCArg0, rv)));
+          break;
+        }
+      case LIST:
+        {
+          // List-only function: decouple from input ordering.
+          final Variable intoCArg1 = unifier.variable();
+          equiv(intoCArg1, listTerm(p.v));
+          intoExp =
+              deduceExpType(p.env, into.exp, toVariable(fnTerm(intoCArg1, rv)));
+          break;
+        }
+      default:
+        {
+          // Overloaded or polymorphic: use deduceApplyFnType for
+          // dispatch, linked to input ordering.
+          final Variable intoCArg = unifier.variable();
+          sameOrderedness(intoCArg, p.v, p.c, p.v);
+          final Variable intoVFn = unifier.variable();
+          intoExp = deduceApplyFnType(p.env, into.exp, intoVFn, intoCArg, rv);
+          reg(into.exp, intoVFn);
+          equiv(intoVFn, fnTerm(intoCArg, rv));
+          break;
+        }
+    }
+    steps.add(into.copy(intoExp));
+    return Triple.singleton(p.rootEnv, p.env, rv);
+  }
+
   private Triple deduceScanStepType(
       Ast.Scan scan,
       Triple p,
@@ -1421,7 +1461,7 @@ public class TypeResolver {
     final Variable v0 = unifier.variable();
     final Variable c0;
     final List<PatTerm> termMap = new ArrayList<>();
-    final CollectionType containerize;
+    final SourceKind sourceKind;
     requireNonNull(p.c);
     // The source of a 'right join' or 'full join' may have rows that match no
     // input row, so it must not depend on the query's input. We resolve it in
@@ -1439,20 +1479,20 @@ public class TypeResolver {
       scanExp3 = null;
       // If we're iterating over 'all values' of the type, we'd better not
       // commit to doing it in order.
-      containerize = CollectionType.BAG; // unordered
+      sourceKind = SourceKind.NONE;
       c0 = null;
     } else if (scan.exp.op == Op.FROM_EQ) {
       final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
       final Ast.Exp scanExp2 = deduceExpType(scanEnv, scanExp, v0);
       scanExp3 = ast.fromEq(scanExp2);
-      containerize = CollectionType.INHERIT; // retain source collection type
+      sourceKind = SourceKind.SCALAR;
       c0 = null;
       reg(scanExp, v0);
     } else {
       c0 = unifier.variable();
       scanExp3 = deduceExpType(scanEnv, scan.exp, c0);
       reg(scan.exp, c0);
-      containerize = CollectionType.BOTH; // retain source collection type
+      sourceKind = SourceKind.COLLECTION;
     }
     // Fields bound by earlier steps; if this is a 'right join' or 'full join'
     // they become optional downstream.
@@ -1502,11 +1542,11 @@ public class TypeResolver {
 
     final Variable v = fieldVar(fieldVars, true);
     final Variable c;
-    switch (containerize) {
-      case BAG:
+    switch (sourceKind) {
+      case NONE:
         c = toVariable(bagTerm(v));
         break;
-      case INHERIT:
+      case SCALAR:
         // Consider "from ... yield {i=1} join b = false".
         // p.c is "int list" or "int bag" - collection type from previous step
         // p.v is "int" - the element type of the input
@@ -1515,7 +1555,7 @@ public class TypeResolver {
         // c is "{i:int, b:bool} list" or "bag" - collection type of the query
         // v is "{i:int, b:bool}" - the element type of the query
         c = unifier.variable();
-        isListOrBagMatchingInput(p.c, p.v, c, v);
+        sameOrderedness(p.c, p.v, c, v);
         break;
       default:
         c = unifier.variable();
@@ -1527,12 +1567,11 @@ public class TypeResolver {
           // v is "{i:int, j:bool}" - the element type of the query
           //
           // Constraints:
-          //   * c and c0 have the same collection type (list or bag),
-          //   * c is either list(v) or bag(v)
-          //   * c0 is either list(v0) or bag(v0)
+          //   * c is a collection of v, c0 is a collection of v0, and the two
+          //     share the same orderedness,
           //   * c0 matches the type deduced for "[(1, true), (2, false)]"
           //   * v is a record type composed of the fields "{i, j}"
-          isListOrBagMatchingInput(c0, v0, c, v);
+          sameOrderedness(c0, v0, c, v);
         } else {
           // Consider processing the second step in
           //   "from i in [1, 2],
@@ -1545,13 +1584,13 @@ public class TypeResolver {
           // v is "{i:int, j:bool}" - the element type of the query
           //
           // Constraints:
-          //   * c is either list(v) or bag(v)
-          //   * c is a list if and p.c and c0 are both lists, otherwise bag
+          //   * c is a collection of v, and is the meet of p.c and c0 (a list
+          //     only if p.c and c0 are both lists, otherwise a bag),
           //   * c0 matches the type deduced for "[true, false]"
           //   * v is a record type composed of the fields "{i, j}"
-          isListIfBothAreLists(
+          meetCollections(
               p.c, unifier.variable(), c0, unifier.variable(), c, v);
-          mayBeBagOrList(c0, v0);
+          isCollectionOf(c0, v0);
         }
     }
 
@@ -1726,7 +1765,7 @@ public class TypeResolver {
     //   map: 'a -> 'b -> 'a list -> 'b list
     //   map: 'a -> 'b -> 'a bag -> 'b bag
     final Variable c6 = unifier.variable();
-    isListOrBagMatchingInput(c6, v6, requireNonNull(p.c), p.v);
+    sameOrderedness(c6, v6, requireNonNull(p.c), p.v);
 
     if (yield.binder == null && yieldExp2.op == Op.RECORD) {
       final Ast.Record record2 = (Ast.Record) yieldExp2;
@@ -1794,11 +1833,11 @@ public class TypeResolver {
     final Ast.Exp exp = deduceExpType(p.env, yieldAll.exp, c0);
     reg(yieldAll.exp, c0);
     // "e" must evaluate to a list or a bag (of element type "elem").
-    mayBeBagOrList(c0, elem);
+    isCollectionOf(c0, elem);
     // The output is a list if both the input and "e" are lists, and a bag if
     // either is a bag -- the same rule as a comma-join scan.
     final Variable c = unifier.variable();
-    isListIfBothAreLists(
+    meetCollections(
         requireNonNull(p.c),
         unifier.variable(),
         c0,
@@ -1869,7 +1908,7 @@ public class TypeResolver {
 
       // Output is ordered iff input is ordered.
       final Variable c2 = unifier.variable();
-      isListOrBagMatchingInput(c2, v2, requireNonNull(p.c), p.v);
+      sameOrderedness(c2, v2, requireNonNull(p.c), p.v);
       return Triple.of(p.rootEnv, p.rootEnv.bindAll(bindings), v2, c2);
     } else {
       steps.add(((Ast.Compute) group).copy(compute2));
@@ -2666,11 +2705,19 @@ public class TypeResolver {
       final TermVariable tv = terms.get(i);
       if (tv.variable.equals(v)) {
         if (tv.term instanceof Sequence) {
-          final String op = ((Sequence) tv.term).operator;
-          // Skip structural operators that are not type constructors.
-          if (!op.equals(FN_TY_CON)
+          final Sequence seq = (Sequence) tv.term;
+          final String op = seq.operator;
+          if (op.equals(COLLECTION_TY_CON)) {
+            // Resolve a collection term to "list" or "bag" by its orderedness,
+            // so overload and method resolution can distinguish the two.
+            final String collOp = collectionTermOp(seq, visited);
+            if (collOp != null) {
+              return collOp;
+            }
+          } else if (!op.equals(FN_TY_CON)
               && !op.equals(TUPLE_TY_CON)
               && !op.startsWith(RECORD_TY_CON)) {
+            // Skip structural operators that are not type constructors.
             return op;
           }
         } else if (tv.term instanceof Variable) {
@@ -2680,6 +2727,41 @@ public class TypeResolver {
             return op;
           }
         }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * If {@code seq} is a collection term, returns {@link #LIST_TY_CON} or {@link
+   * #BAG_TY_CON} according to its orderedness, or null if the orderedness is
+   * not yet determined.
+   */
+  private @Nullable String collectionTermOp(
+      Sequence seq, Set<Variable> visited) {
+    Term ord = seq.terms.get(1);
+    // Follow variable links to a concrete orderedness atom, if any.
+    while (ord instanceof Variable && visited.add((Variable) ord)) {
+      Term next = null;
+      for (int i = terms.size() - 1; i >= 0; i--) {
+        final TermVariable tv = terms.get(i);
+        if (tv.variable.equals(ord)) {
+          next = tv.term;
+          break;
+        }
+      }
+      if (next == null) {
+        break;
+      }
+      ord = next;
+    }
+    if (ord instanceof Sequence) {
+      final String op = ((Sequence) ord).operator;
+      if (op.equals(ORDERED)) {
+        return LIST_TY_CON;
+      }
+      if (op.equals(UNORDERED)) {
+        return BAG_TY_CON;
       }
     }
     return null;
@@ -2924,7 +3006,7 @@ public class TypeResolver {
    * peeled so far (outermost first). Defers if a layer is not yet resolved.
    */
   private void resolveSafeField(
-      List<String> functors,
+      List<Sequence> functors,
       String fieldName,
       Term term,
       Variable vResult,
@@ -2943,13 +3025,12 @@ public class TypeResolver {
       return; // not a record or functor; reported by the post-pass
     }
     final Sequence seq = (Sequence) t;
-    if (isSafeNavFunctor(seq.operator) && seq.terms.size() == 1) {
-      // Tunnel through this functor layer.
+    if (isSafeNavFunctor(seq.operator) && !seq.terms.isEmpty()) {
+      // Tunnel through this functor layer. The element is always the first
+      // term; any further terms (e.g. a collection's orderedness) are retained
+      // so the layer can be reconstructed exactly when re-wrapping.
       resolveSafeField(
-          ImmutableList.<String>builder()
-              .addAll(functors)
-              .add(seq.operator)
-              .build(),
+          ImmutableList.<Sequence>builder().addAll(functors).add(seq).build(),
           fieldName,
           seq.terms.get(0),
           vResult,
@@ -2962,10 +3043,14 @@ public class TypeResolver {
     if (fieldType == null) {
       return; // not a record, or no such field; reported by the post-pass
     }
-    // Re-wrap the field type in the functor layers (innermost layer first).
+    // Re-wrap the field type in the functor layers (innermost layer first),
+    // preserving each layer's non-element terms (e.g. orderedness).
     Term result = fieldType;
     for (int i = functors.size() - 1; i >= 0; i--) {
-      result = unifier.apply(functors.get(i), result);
+      final Sequence layer = functors.get(i);
+      final List<Term> args = new ArrayList<>(layer.terms);
+      args.set(0, result);
+      result = unifier.apply(layer.operator, args);
     }
     termPairs.accept(substitution.resolve(vResult), result);
   }
@@ -2975,10 +3060,13 @@ public class TypeResolver {
    * navigation {@code ?.} projects fields.
    */
   private static boolean isSafeNavFunctor(String op) {
+    // Accepts both term operators (a collection term is "$collection") and
+    // type-constructor names (a bag/list type is "bag"/"list").
     return op.equals("option")
         || op.equals("vector")
         || op.equals(LIST_TY_CON)
-        || op.equals(BAG_TY_CON);
+        || op.equals(BAG_TY_CON)
+        || op.equals(COLLECTION_TY_CON);
   }
 
   /**
@@ -3121,22 +3209,17 @@ public class TypeResolver {
     final Sequence fnType = fnTerm(cArg, v);
     equiv(vAgg, fnType);
 
-    final int collectionKind = collectionKind(p.env, aggregate.aggregate);
-    switch (collectionKind) {
-      case -2:
-        // User-defined named function whose type is not yet available.
-        // Use mayBeBagOrList so the function's own type (from
-        // deduceApplyFnType) can determine the collection kind without
-        // conflicting with the input ordering.
-        mayBeBagOrList(cArg, vArg);
+    switch (aggKind(p.env, aggregate.aggregate)) {
+      case USER_UNKNOWN:
+        isCollectionOf(cArg, vArg);
         break;
-      case 0:
+      case BAG:
         // For non-overloaded bag-only aggregates (e.g., sum, count),
         // directly set the collection kind. This avoids a conflict when
         // the input ordering differs from the function's parameter type.
         equiv(cArg, bagTerm(vArg));
         break;
-      case 1:
+      case LIST:
         // Non-overloaded list-only aggregate.
         equiv(cArg, listTerm(vArg));
         break;
@@ -3144,7 +3227,7 @@ public class TypeResolver {
         // For overloaded, polymorphic, or non-Id aggregates,
         // link the collection type to the input ordering so the unifier
         // selects the correct variant or adapts to the input.
-        isListOrBagMatchingInput(cArg, vArg, p.c, p.v);
+        sameOrderedness(cArg, vArg, p.c, p.v);
         break;
     }
 
@@ -3573,6 +3656,10 @@ public class TypeResolver {
           if (namedType.name.equals(LIST_TY_CON) && typeTerms2.size() == 1) {
             // TODO: make 'list' a regular generic type
             term = listTerm(typeTerms2.right(0));
+          } else if (namedType.name.equals(BAG_TY_CON)
+              && typeTerms2.size() == 1) {
+            // Build a collection term so it matches bags from other sources.
+            term = bagTerm(typeTerms2.right(0));
           } else if (typeTerms2.isEmpty()) {
             term = unifier.apply(namedType.name);
           } else {
@@ -4070,12 +4157,17 @@ public class TypeResolver {
     return v;
   }
 
+  /** Creates a collection term {@code collection(elem, orderedness)}. */
+  private Sequence collectionTerm(Term elem, Term orderedness) {
+    return unifier.apply(COLLECTION_TY_CON, elem, orderedness);
+  }
+
   private Sequence listTerm(Term term) {
-    return unifier.apply(LIST_TY_CON, term);
+    return collectionTerm(term, unifier.atom(ORDERED));
   }
 
   private Sequence bagTerm(Term term) {
-    return unifier.apply(BAG_TY_CON, term);
+    return collectionTerm(term, unifier.atom(UNORDERED));
   }
 
   private Sequence optionTerm(Term term) {
@@ -4816,10 +4908,25 @@ public class TypeResolver {
     }
   }
 
-  private enum CollectionType {
-    BAG,
-    INHERIT,
-    BOTH
+  /**
+   * The shape of a scan's source, which determines the query's collection type.
+   */
+  private enum SourceKind {
+    /**
+     * No source expression (e.g. {@code from p}, iterating all values of a
+     * type); the query is an unordered bag.
+     */
+    NONE,
+    /**
+     * A scalar equality (e.g. {@code from i = x}); the query inherits the
+     * input's orderedness.
+     */
+    SCALAR,
+    /**
+     * A collection (e.g. {@code from i in e}); the query matches the source
+     * (first scan) or melds with the input (join).
+     */
+    COLLECTION
   }
 
   private static class PatTerm {

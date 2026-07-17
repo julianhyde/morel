@@ -1530,7 +1530,8 @@ from (parent, child) in parents
 >   [{child="arwen",parent="elrond"},{child="elladan",parent="elrond"},
 >    {child="elrohir",parent="elrond"}] : {child:string, parent:string} list
 
-(*) TODO Fix the IllegalArgumentException
+(* A recursive relation is not supported; it is now reported as a type
+ * error rather than throwing IllegalArgumentException. *)
 fun ancestors () =
   from (x, y) in parents
     union
@@ -1538,7 +1539,8 @@ fun ancestors () =
         (y2, z) in ancestors ()
       where y = y2
       yield (x, z));
-> java.lang.IllegalArgumentException: not a collection type: 'a
+> stdIn:1.1-7.20 Error: Cannot deduce type: conflict: tuple(T45, T46) vs record:x:y(T7, T8)
+>   raised at: stdIn:1.1-7.20
 
 (* Morel "forwards" relation *)
 (* Relation defined using algebra. *)

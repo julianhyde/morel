@@ -84,7 +84,17 @@ public class MartelliUnifier extends Unifier {
         if (!left.operator.equals(right.operator)
             || left.terms.size() != right.terms.size()) {
           tracer.onConflict(left, right);
-          return failure("conflict: " + left + " vs " + right);
+          return failure("conflict: " + render(left) + " vs " + render(right));
+        }
+
+        // Two collections that differ only in orderedness (list vs bag) share
+        // the same operator, so they would otherwise decompose and report a
+        // conflict on the internal orderedness atom. Report the parent terms
+        // instead -- and before their elements are unified -- so the message
+        // reads "T list vs T bag".
+        if (isOrderednessConflict(left, right)) {
+          tracer.onConflict(left, right);
+          return failure("conflict: " + render(left) + " vs " + render(right));
         }
 
         // decompose
@@ -147,6 +157,73 @@ public class MartelliUnifier extends Unifier {
       }
       return SubstitutionResult.create(result);
     }
+  }
+
+  // Collection terms are represented as "$collection(element, orderedness)",
+  // where orderedness is the atom "ordered" (a list) or "unordered" (a bag).
+  // These constants mirror those in TypeResolver, and let error messages render
+  // a collection as "element list"/"element bag" instead of leaking internals.
+  private static final String COLLECTION_OP = "$collection";
+  private static final String ORDERED_OP = "ordered";
+  private static final String UNORDERED_OP = "unordered";
+
+  /**
+   * Whether {@code left} and {@code right} are collection terms whose
+   * orderedness atoms are both concrete and differ (i.e. one is a list and the
+   * other a bag).
+   */
+  private static boolean isOrderednessConflict(Sequence left, Sequence right) {
+    if (!left.operator.equals(COLLECTION_OP) || left.terms.size() != 2) {
+      return false;
+    }
+    final String o1 = orderednessAtom(left.terms.get(1));
+    final String o2 = orderednessAtom(right.terms.get(1));
+    return o1 != null && o2 != null && !o1.equals(o2);
+  }
+
+  private static @Nullable String orderednessAtom(Term term) {
+    if (term instanceof Sequence) {
+      final String op = ((Sequence) term).operator;
+      if (op.equals(ORDERED_OP) || op.equals(UNORDERED_OP)) {
+        return op;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Renders a term for an error message, printing a collection term {@code
+   * collection(e, ordered)} as {@code list(e)} and {@code $collection(e,
+   * $unordered)} as {@code bag(e)}.
+   */
+  private static String render(Term term) {
+    if (term instanceof Sequence) {
+      final Sequence seq = (Sequence) term;
+      final String ord = orderednessAtom(seq);
+      if (ord != null) {
+        // A bare orderedness atom surfaces when two collections are unified on
+        // a shared orderedness variable and clash; render it as "list"/"bag".
+        return ord.equals(ORDERED_OP) ? "list" : "bag";
+      }
+      if (seq.operator.equals(COLLECTION_OP) && seq.terms.size() == 2) {
+        final String kind =
+            ORDERED_OP.equals(orderednessAtom(seq.terms.get(1)))
+                ? "list"
+                : "bag";
+        return kind + "(" + render(seq.terms.get(0)) + ")";
+      }
+      if (!seq.terms.isEmpty()) {
+        final StringBuilder b = new StringBuilder(seq.operator).append('(');
+        for (int i = 0; i < seq.terms.size(); i++) {
+          if (i > 0) {
+            b.append(", ");
+          }
+          b.append(render(seq.terms.get(i)));
+        }
+        return b.append(')').toString();
+      }
+    }
+    return term.toString();
   }
 
   private void act(
