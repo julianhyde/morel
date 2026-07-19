@@ -25,7 +25,9 @@ Sys.set ("printLength", 999);
 > val it = () : unit
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
-val nan = Real.posInf / Real.posInf;
+(* Force the sign bit positive with 'abs': the sign of a raw NaN is not
+   specified by IEEE 754, and (in particular in Morel-Go) varies by platform. *)
+val nan = abs (Real.posInf / Real.posInf);
 > val nan = nan : real
 
 Real;
@@ -346,18 +348,11 @@ Real.signBit Real.posInf;
 > val it = false : bool
 Real.signBit Real.negInf;
 > val it = true : bool
-(*) In SMLNJ and Mlton, nan is negative; we do the same
+(* 'nan' is positive (it is 'abs (...)'), so its sign bit is not set. We do not
+   test '~nan': IEEE 754 says negation flips the sign bit even for a NaN, but
+   the JVM does not guarantee it, so Morel does not rely on '~nan's sign. *)
 Real.signBit nan;
-> val it = true : bool
-(*) In SMLNJ and Mlton, ~nan is positive; we do the same
-Real.signBit (~nan);
 > val it = false : bool
-Sys.plan ();
-> val it =
->   "apply(fnValue Real.signBit, argCode apply(fnValue Real.~, argCode constant(NaN)))"
->   : string
-Real.signBit (~(~nan));
-> val it = true : bool
 
 (* "sameSign (r1, r2)" returns true if and only if signBit r1 equals
    signBit r2. *)
@@ -367,10 +362,11 @@ Real.sameSign (2.0, 3.5);
 > val it = true : bool
 Real.sameSign (~2.0, Real.negInf);
 > val it = true : bool
+(*) 'nan' is positive (it is 'abs (...)'), so it has the same sign as 2.0.
 Real.sameSign (2.0, nan);
-> val it = false : bool
-Real.sameSign (~2.0, nan);
 > val it = true : bool
+Real.sameSign (~2.0, nan);
+> val it = false : bool
 Real.sameSign (nan, nan);
 > val it = true : bool
 Sys.plan ();
@@ -384,12 +380,11 @@ Real.copySign (2.0, Real.posInf);
 > val it = 2 : real
 Real.copySign (2.0, Real.negInf);
 > val it = ~2 : real
+(*) 'nan' is positive (it is 'abs (...)'), so it copies a positive sign.
 Real.copySign (2.0, nan);
-> val it = ~2 : real
-Real.copySign (~3.5, ~nan);
-> val it = 3.5 : real
+> val it = 2 : real
 Real.copySign (~3.5, nan);
-> val it = ~3.5 : real
+> val it = 3.5 : real
 Real.copySign (2.0, ~0.0);
 > val it = ~2 : real
 Sys.plan ();

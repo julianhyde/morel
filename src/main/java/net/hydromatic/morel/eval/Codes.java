@@ -107,10 +107,6 @@ public abstract class Codes {
           ? f -> Float.toString(f)
           : Codes::floatToString0;
 
-  /** A special value that represents Standard ML "~NaN". */
-  public static final float NEGATIVE_NAN =
-      Float.intBitsToFloat(Float.floatToRawIntBits(Float.NaN) ^ 0x8000_0000);
-
   private Codes() {}
 
   /**
@@ -3513,8 +3509,8 @@ public abstract class Codes {
         @Override
         public Float apply(Float f0, Float f1) {
           if (Float.isNaN(f1)) {
-            // Emulate SMLNJ/Mlton behavior that nan is negative,
-            // ~nan is positive.
+            // 'Math.copySign' is free to treat a NaN sign argument as positive,
+            // so extract the raw sign bit ourselves for a deterministic result.
             f1 = isNegative(f1) ? -1.0f : 1.0f;
           }
           return Math.copySign(f0, f1);
@@ -3533,11 +3529,9 @@ public abstract class Codes {
 
     @Override
     public Float apply(Float a0, Float a1) {
-      final float v = a0 / a1;
-      if (Float.isNaN(v)) {
-        return Float.NaN; // normalize NaN
-      }
-      return v;
+      // Do not normalize the sign of a NaN result; IEEE 754 leaves it
+      // unspecified, so callers must not rely on it.
+      return a0 / a1;
     }
   }
 
@@ -3805,12 +3799,9 @@ public abstract class Codes {
       new BaseApplicable1<Float, Float>(BuiltIn.REAL_OP_NEGATE) {
         @Override
         public Float apply(Float f) {
-          if (Float.isNaN(f)) {
-            return Float.floatToRawIntBits(f)
-                    == Float.floatToRawIntBits(NEGATIVE_NAN)
-                ? Float.NaN
-                : NEGATIVE_NAN;
-          }
+          // '-f' negates. IEEE 754 says negation flips the sign bit even for a
+          // NaN, but the JVM is not required to, so Morel does not rely on the
+          // sign of a negated NaN.
           return -f;
         }
       };
@@ -3924,14 +3915,10 @@ public abstract class Codes {
    */
   @VisibleForTesting
   public static boolean isNegative(float f) {
-    final boolean negative =
-        (Float.floatToRawIntBits(f) & 0x8000_0000) == 0x8000_0000;
-    if (Float.isNaN(f)) {
-      // Standard ML/NJ and Mlton treat nan as negative,
-      // and ~nan as positive. Let's do the same.
-      return !negative;
-    }
-    return negative;
+    // Return the raw sign bit, even for a NaN (we no longer invert it to make a
+    // NaN look negative). The sign of a NaN produced by arithmetic is
+    // unspecified, so callers must not assume it; 'abs' forces a definite sign.
+    return (Float.floatToRawIntBits(f) & 0x8000_0000) == 0x8000_0000;
   }
 
   /** @see BuiltIn#REAL_SIGN */

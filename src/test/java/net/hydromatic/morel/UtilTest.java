@@ -509,13 +509,27 @@ public class UtilTest {
     assertThat(isNegative(-10.25f), is(true));
     assertThat(isNegative(Float.NEGATIVE_INFINITY), is(true));
 
-    // The standard basis library is unclear, but in SMLNJ and Mlton
-    // nan is negative, and we do the same.
-    assertThat(isNegative(Float.NaN), is(true));
-    // In SMLNJ and Mlton ~nan is positive, and we do the same.
-    assertThat(isNegative(Codes.NEGATIVE_NAN), is(false));
+    // IEEE 754 says that if an operation yields a NaN value its sign is not
+    // specified. Such operations tend to yield different results on different
+    // platforms (e.g. Apple Silicon vs AMD64).
+    //
+    // Java's Float.NaN is a particular set of bits and is positive on all
+    // platforms.
+    //
+    // In SMLNJ and Mlton the nan value resulting from posInf / posInf is
+    // negative on all platforms that I've tested, but I don't want Morel to
+    // make the same guarantees.
     assertThat(Float.isNaN(Float.NaN), is(true));
-    assertThat(Float.isNaN(Codes.NEGATIVE_NAN), is(true));
+    assertThat(isNegative(Float.NaN), is(false));
+    @SuppressWarnings("PointlessArithmeticExpression")
+    float nan = Float.POSITIVE_INFINITY / Float.POSITIVE_INFINITY;
+    assertThat(Float.isNaN(nan), is(true));
+    float posNan = Math.abs(nan);
+    assertThat(Float.isNaN(posNan), is(true));
+    assertThat(isNegative(posNan), is(false));
+    float negNan = -posNan;
+    assertThat(Float.isNaN(negNan), is(true));
+    assertThat(isNegative(negNan), is(true));
   }
 
   /** Tests {@link Codes#parseReal(String, boolean)}. */

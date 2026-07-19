@@ -36,7 +36,7 @@ Sys.set ("printLength", 999);
 > val it = () : unit
 Sys.set ("stringDepth", ~1);
 > val it = () : unit
-val nan = Real.posInf / Real.posInf;
+val nan = abs (Real.posInf / Real.posInf);
 > val nan = nan : real
 
 Math;
