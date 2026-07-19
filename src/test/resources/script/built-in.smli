@@ -61,7 +61,7 @@ Sys.plan ();
 >   "match(x, apply2(fnValue Int.+, stack(offset 1, name x), constant(1)))"
 >   : string
 
-val nan = Real.posInf / Real.posInf;
+val nan = abs (Real.posInf / Real.posInf);
 > val nan = nan : real
 
 (* Datatypes ------------------------------------------------------ *)
