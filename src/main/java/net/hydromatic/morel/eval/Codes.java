@@ -3385,6 +3385,9 @@ public abstract class Codes {
       new BaseApplicable1<Float, Float>(BuiltIn.REAL_ABS) {
         @Override
         public Float apply(Float f) {
+          if (f.isNaN()) {
+            return isNegative(f) ? -f : f;
+          }
           return Math.abs(f);
         }
       };
