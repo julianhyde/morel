@@ -718,7 +718,16 @@ public class TypeSystem {
       fromType = ((QualifiedType) fromType).type;
     }
     if (toType instanceof QualifiedType) {
-      toType = ((QualifiedType) toType).type;
+      final QualifiedType q = (QualifiedType) toType;
+      // The value of a qualified binding is dictionary-abstracted: it has one
+      // extra (curried) parameter per predicate. Strip those before comparing
+      // to the body. Also accept a value that is already the plain body (the
+      // milestone-1 placeholder path).
+      Type f = fromType;
+      for (int i = 0; i < q.predicates.size() && f instanceof FnType; i++) {
+        f = ((FnType) f).resultType;
+      }
+      return canAssign(f, q.type) || canAssign(fromType, q.type);
     }
     return fromType.equals(toType)
         // A type that still contains a type variable is compatible with any

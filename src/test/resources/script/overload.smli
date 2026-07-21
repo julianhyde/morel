@@ -60,15 +60,17 @@ val inst third = fn (x, y, z) => z;
 val demo = fn r => (second r, first r);
 > val demo = fn : (second : 'a -> 'b, first : 'a -> 'c) => 'a -> 'b * 'c
 
-(* Applying 'demo' resolves the constraints at each call site. Evaluation
-   requires dictionary passing (hydromatic/morel#426 milestone 2); for now the
-   application type-checks but raises when evaluated.
+(* Applying 'demo' resolves the constraints at each call site (the instances
+ * are supplied as dictionaries) and evaluates. *)
 demo (3,"four",5);
 > val it = ("four",3) : string * int
-
 demo (3,"four");
 > val it = ("four",3) : string * int
-*)
+
+(* 'demo' is generalized, so it can be used at two different types in one
+ * expression. *)
+(demo (3,"four",5), demo (3,"four"));
+> val it = (("four",3),("four",3)) : (string * int) * (string * int)
 
 (* -------------------------------------------------------------------
  * A single overloaded name applied to an argument of unknown type also
