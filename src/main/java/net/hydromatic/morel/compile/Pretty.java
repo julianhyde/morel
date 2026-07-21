@@ -49,6 +49,7 @@ import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.QualifiedType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
@@ -257,6 +258,9 @@ class Pretty {
    * for a value whose type is a primitive or a function.
    */
   private String flatLeaf(Object value, Type type) {
+    if (type instanceof QualifiedType) {
+      type = ((QualifiedType) type).type;
+    }
     if (type.op() == Op.FUNCTION_TYPE) {
       return "fn";
     }
@@ -271,6 +275,11 @@ class Pretty {
   private Doc valueDoc(Type type, Object value, int depth) {
     while (type instanceof AliasType) {
       type = ((AliasType) type).type;
+    }
+    if (type instanceof QualifiedType) {
+      // A value's type may be qualified (e.g. an overloaded closure); render
+      // the value as if it had the underlying (unqualified) type.
+      type = ((QualifiedType) type).type;
     }
     if (value instanceof Variant) {
       final Variant v = (Variant) value;

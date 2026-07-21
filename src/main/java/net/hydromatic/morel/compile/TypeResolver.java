@@ -87,6 +87,7 @@ import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.MultiType;
 import net.hydromatic.morel.type.ParameterizedType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.QualifiedType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -94,6 +95,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
+import net.hydromatic.morel.type.TypeVisitor;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.MapList;
 import net.hydromatic.morel.util.MartelliUnifier;
@@ -108,6 +110,7 @@ import net.hydromatic.morel.util.Unifier.Failure;
 import net.hydromatic.morel.util.Unifier.Result;
 import net.hydromatic.morel.util.Unifier.Sequence;
 import net.hydromatic.morel.util.Unifier.Substitution;
+import net.hydromatic.morel.util.Unifier.SubstitutionResult;
 import net.hydromatic.morel.util.Unifier.Term;
 import net.hydromatic.morel.util.Unifier.TermTerm;
 import net.hydromatic.morel.util.Unifier.Variable;
@@ -295,6 +298,34 @@ public class TypeResolver {
         checkNoUnresolvedFieldRefs(node2, typeMap);
       }
       checkNumericOperators(node2, typeMap);
+
+      // Turn any overload constraint that was never resolved (its argument
+      // type never became concrete) into a predicate of a qualified type.
+      final List<Constraint> residualConstraints =
+          result instanceof SubstitutionResult
+              ? ((SubstitutionResult) result).residualConstraints
+              : ImmutableList.of();
+      if (!residualConstraints.isEmpty()) {
+        final List<QualifiedType.Predicate> predicates = new ArrayList<>();
+        for (Constraint c : residualConstraints) {
+          final Type argType = typeMap.termToType(c.arg);
+          final Type resultType = typeMap.termToType(requireNonNull(c.result));
+          final Type predType = typeSystem.fnType(argType, resultType);
+          final List<Type> candidates = new ArrayList<>();
+          if (c.argResults != null) {
+            c.argResults.forEach(
+                (argTerm, resultTerm) ->
+                    candidates.add(
+                        typeSystem.fnType(
+                            typeMap.termToType(argTerm),
+                            typeMap.termToType(resultTerm))));
+          }
+          predicates.add(
+              new QualifiedType.Predicate(
+                  requireNonNull(c.name), predType, candidates));
+        }
+        typeMap.setPredicates(predicates);
+      }
       return Resolved.of(env, decl, node2, typeMap);
     }
   }
@@ -639,7 +670,33 @@ public class TypeResolver {
    */
   private void constrain(
       Variable arg, Variable result, PairList<Term, Term> argResults) {
-    constraints.add(unifier.constraint(arg, result, argResults));
+    constrain(null, arg, result, argResults);
+  }
+
+  /**
+   * As {@link #constrain(Variable, Variable, PairList)}, but records the name
+   * of the overloaded function. If the constraint cannot be resolved (its
+   * argument type never becomes concrete), the name is used to form a predicate
+   * of a qualified type, and in error messages.
+   */
+  private void constrain(
+      @Nullable String name,
+      Variable arg,
+      Variable result,
+      PairList<Term, Term> argResults) {
+    constraints.add(unifier.constraint(name, arg, result, argResults));
+  }
+
+  /**
+   * Returns the name of a user-declared overload ({@code over}/{@code inst}),
+   * or null if {@code fn} is not an identifier or names a built-in overload.
+   * Only user overloads can generalize to a qualified type.
+   */
+  private static @Nullable String overloadName(TypeEnv env, Ast.Exp fn) {
+    if (fn instanceof Ast.Id && env.hasOverloaded(((Ast.Id) fn).name)) {
+      return ((Ast.Id) fn).name;
+    }
+    return null;
   }
 
   /**
@@ -2803,7 +2860,12 @@ public class TypeResolver {
         argResults.add(
             toTerm(fnType.paramType, subst), toTerm(fnType.resultType, subst));
       }
-      constrain(vArg, vResult, argResults);
+      // A user-declared overload ('over'/'inst') that reaches here as a
+      // MultiType (e.g. a top-level overloaded name used in a later
+      // declaration) can still yield a qualified type, so pass its name. A
+      // built-in overloaded operator (e.g. '+') is not 'hasOverloaded', so its
+      // name stays null and it continues to resolve or default as before.
+      constrain(overloadName(env, fn), vArg, vResult, argResults);
       return reg(fn, vFn);
     }
 
@@ -2844,7 +2906,7 @@ public class TypeResolver {
         argResults.add(inst.vArg, inst.vResult);
       }
     }
-    constrain(vArg, vResult, argResults);
+    constrain(id.name, vArg, vResult, argResults);
     return reg(id, vFn);
   }
 
@@ -2883,7 +2945,7 @@ public class TypeResolver {
         argResults.add(
             toTerm(fnType.paramType, subst), toTerm(fnType.resultType, subst));
       }
-      constrain(vArg, vResult, argResults);
+      constrain(overloadName(env, fn), vArg, vResult, argResults);
       overloaded.set(true);
       return reg(fn, vFn);
     }
@@ -2925,7 +2987,7 @@ public class TypeResolver {
         argResults.add(inst.vArg, inst.vResult);
       }
     }
-    constrain(vArg, vResult, argResults);
+    constrain(id.name, vArg, vResult, argResults);
     return reg(id, vFn);
   }
 
@@ -4474,9 +4536,53 @@ public class TypeResolver {
         // structure, so it works if we just return the first type.
         final MultiType multiType = (MultiType) type;
         return toTerm(multiType.types.get(0), subst);
+      case QUALIFIED_TYPE:
+        // Instantiating a qualified type: re-create each predicate's overload
+        // constraint (with fresh variables for each candidate instance), so
+        // that it is resolved or re-deferred at this use site. The predicate's
+        // own variables are shared with the body via 'subst'.
+        final QualifiedType qualifiedType = (QualifiedType) type;
+        for (QualifiedType.Predicate predicate : qualifiedType.predicates) {
+          final FnType predFn = (FnType) predicate.type;
+          final Variable argVar = toVariable(toTerm(predFn.paramType, subst));
+          final Variable resultVar =
+              toVariable(toTerm(predFn.resultType, subst));
+          final PairList<Term, Term> argResults = PairList.of();
+          for (Type candidate : predicate.candidates) {
+            final FnType candFn = (FnType) candidate;
+            final Subst candSubst = freshSubst(candidate);
+            argResults.add(
+                toTerm(candFn.paramType, candSubst),
+                toTerm(candFn.resultType, candSubst));
+          }
+          constrain(predicate.name, argVar, resultVar, argResults);
+        }
+        return toTerm(qualifiedType.type, subst);
       default:
         throw new AssertionError("unknown type: " + type.moniker());
     }
+  }
+
+  /**
+   * Returns a substitution that maps each type variable in {@code type} to a
+   * fresh unifier variable, so that a stored (closed) type can be instantiated
+   * with variables that do not clash with any others.
+   */
+  private Subst freshSubst(Type type) {
+    final Set<Integer> ordinals = new LinkedHashSet<>();
+    type.accept(
+        new TypeVisitor<Void>() {
+          @Override
+          public Void visit(TypeVar typeVar) {
+            ordinals.add(typeVar.ordinal);
+            return null;
+          }
+        });
+    Subst s = Subst.EMPTY;
+    for (int ordinal : ordinals) {
+      s = s.plus(typeSystem.typeVariable(ordinal), unifier.variable());
+    }
+    return s;
   }
 
   /** Empty type environment. */

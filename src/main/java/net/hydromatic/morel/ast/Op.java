@@ -120,6 +120,7 @@ public enum Op {
   EXPRESSION_TYPE("typeof ", 9),
   FORALL_TYPE,
   MULTI_TYPE,
+  QUALIFIED_TYPE,
 
   // annotated expression "e: t"
   ANNOTATED_EXP(" : ", 0),

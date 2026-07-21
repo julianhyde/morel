@@ -69,6 +69,7 @@ public class ForallType extends BaseType {
         return typeSystem.typeFor(key);
 
       case FUNCTION_TYPE:
+      case QUALIFIED_TYPE:
         return type.substitute(typeSystem, types);
 
       default:

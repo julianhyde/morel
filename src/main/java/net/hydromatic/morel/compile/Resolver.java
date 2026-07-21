@@ -68,11 +68,14 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.QualifiedType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypeVar;
+import net.hydromatic.morel.type.TypeVisitor;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
@@ -410,14 +413,66 @@ public class Resolver {
       pat0 = patExp.pat;
       exp = patExp.exp;
     }
-    final Core.NamedPat pat;
+    final Core.NamedPat pat0Named;
     if (pat0 instanceof Core.NamedPat) {
-      pat = (Core.NamedPat) pat0;
+      pat0Named = (Core.NamedPat) pat0;
     } else {
-      pat = core.asPat(exp.type, "it", nameGenerator, pat0);
+      pat0Named = core.asPat(exp.type, "it", nameGenerator, pat0);
     }
+    final Core.NamedPat pat = qualify(pat0Named);
 
     return new ResolvedValDecl(rec, ImmutableList.copyOf(patExps), pat, exp);
+  }
+
+  /**
+   * If the type resolver deduced overload predicates for this declaration, and
+   * they constrain the type variables of {@code pat}, wraps {@code pat}'s type
+   * in a {@link QualifiedType}. This is what makes an echoed binding print with
+   * a qualified type, e.g. {@code val demo = fn : {foo : 'a -> 'b} => 'a ->
+   * 'b}.
+   */
+  private Core.NamedPat qualify(Core.NamedPat pat) {
+    final List<QualifiedType.Predicate> predicates = typeMap.getPredicates();
+    if (predicates.isEmpty() || pat.type instanceof QualifiedType) {
+      return pat;
+    }
+    final Set<Integer> patVars = typeVarOrdinals(pat.type);
+    if (patVars.isEmpty()) {
+      return pat;
+    }
+    final List<QualifiedType.Predicate> matching = new ArrayList<>();
+    for (QualifiedType.Predicate predicate : predicates) {
+      if (!disjoint(typeVarOrdinals(predicate.type), patVars)) {
+        matching.add(predicate);
+      }
+    }
+    if (matching.isEmpty()) {
+      return pat;
+    }
+    return pat.withType(typeMap.typeSystem.qualifiedType(matching, pat.type));
+  }
+
+  /** Returns the ordinals of the type variables that occur in a type. */
+  private static Set<Integer> typeVarOrdinals(Type type) {
+    final Set<Integer> ordinals = new HashSet<>();
+    type.accept(
+        new TypeVisitor<Void>() {
+          @Override
+          public Void visit(TypeVar typeVar) {
+            ordinals.add(typeVar.ordinal);
+            return null;
+          }
+        });
+    return ordinals;
+  }
+
+  private static boolean disjoint(Set<Integer> a, Set<Integer> b) {
+    for (Integer i : a) {
+      if (b.contains(i)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -830,7 +885,11 @@ public class Resolver {
         }
       }
       if (matchingBindings.size() != 1) {
-        throw new AssertionError(matchingBindings);
+        // The argument type is not concrete, so we cannot select an instance:
+        // this is an overloaded application inside a qualified-typed value.
+        // Milestone 2 will pass the instance as a dictionary; for now emit a
+        // placeholder that fails only if the value is actually applied.
+        return unresolvedOverload(fn, argType);
       }
       return CoreBuilder.core.id(matchingBindings.get(0));
     } else if (top != null && top.isInst()) {
@@ -842,13 +901,58 @@ public class Resolver {
         }
       }
       if (matchingIds.size() != 1) {
-        throw new AssertionError(
-            "zero or more than one matching bindings: " + matchingIds);
+        return unresolvedOverload(fn, argType);
       }
       return core.id(getIdPat(fn, matchingIds.get(0)));
     } else {
       return toCore(fn);
     }
+  }
+
+  /**
+   * Builds a placeholder for an overloaded application whose argument type is
+   * not concrete (so no instance can be selected statically). The placeholder
+   * is a function {@code fn v => raise (Fail "...")} of the same type as the
+   * overloaded function at this site; it type-checks and compiles, but raises
+   * if it is ever applied.
+   *
+   * <p>This supports Milestone 1 of hydromatic/morel#426, where a value with a
+   * qualified type can be declared and its type echoed, but not yet evaluated.
+   * Milestone 2 will replace this with dictionary passing.
+   */
+  private Core.Exp unresolvedOverload(Ast.Exp fn, Type argType) {
+    final TypeSystem typeSystem = typeMap.typeSystem;
+    final Type fnType0 = typeMap.getType(fn);
+    final FnType fnType =
+        fnType0 instanceof FnType
+            ? (FnType) fnType0
+            : typeSystem.fnType(argType, typeMap.getType(fn));
+    final String name = fn instanceof Ast.Id ? ((Ast.Id) fn).name : "?";
+    // Reference the 'Fail of string' constructor at its *function* type,
+    // 'string -> exn'. (A constructor Core.Id is matched by name and ordinal,
+    // not type, so this resolves to the same runtime value; but the function
+    // type keeps the Inliner from mistaking it for a string value.)
+    final Type exnType =
+        typeSystem.lookup(BuiltIn.Constructor.EXN_FAIL.datatype);
+    final Core.Id failCon =
+        core.id(
+            core.idPat(
+                typeSystem.fnType(PrimitiveType.STRING, exnType),
+                BuiltIn.Constructor.EXN_FAIL.constructor,
+                0));
+    final Core.Exp failExn =
+        core.apply(
+            Pos.ZERO,
+            exnType,
+            failCon,
+            core.stringLiteral(
+                "overloaded '"
+                    + name
+                    + "' cannot yet be applied at an abstract type"));
+    final Core.Exp raiseExp = core.raise(Pos.ZERO, fnType.resultType, failExn);
+    final Core.IdPat param =
+        core.idPat(fnType.paramType, () -> nameGenerator.getPrefixed("v"));
+    return core.fn(fnType, param, raiseExp);
   }
 
   static @Nullable Object valueOf(Environment env, Core.Exp exp) {
