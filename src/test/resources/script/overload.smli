@@ -96,6 +96,33 @@ end;
 >   raised at: stdIn:1.1-6.4
 
 (* -------------------------------------------------------------------
+ * A qualified value can be aliased, and can be used inside another
+ * qualified value; the dictionaries are forwarded. *)
+over inc;
+> over inc
+val inst inc = fn i: int => i + 1;
+> val inc = fn : int -> int
+val inst inc = fn b: bool => not b;
+> val inc = fn : bool -> bool
+val useInc = fn r => inc r;
+> val useInc = fn : {inc : 'a -> 'b} => 'a -> 'b
+
+(*) Alias of a qualified value; dictionaries are supplied at its use sites.
+val aliasInc = useInc;
+> val aliasInc = fn : {inc : 'a -> 'b} => 'a -> 'b
+aliasInc 7;
+> val it = 8 : int
+aliasInc false;
+> val it = true : bool
+
+(* A qualified value used (at an abstract type) inside another qualified
+ * value forwards its dictionary. *)
+val etaInc = fn x => useInc x;
+> val etaInc = fn : {inc : 'a -> 'b} => 'a -> 'b
+etaInc 100;
+> val it = 101 : int
+
+(* -------------------------------------------------------------------
  * Two overloads, bool -> bool and int -> int. We call with bool argument,
  * expect bool result. *)
 let

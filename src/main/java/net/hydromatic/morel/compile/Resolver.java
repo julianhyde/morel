@@ -415,7 +415,13 @@ public class Resolver {
             if (matching.isEmpty()) {
               coreExp = toCore(exp);
             } else {
-              coreExp = toCoreWithDictionaries(matching, exp);
+              // A bare reference to another qualified value is already
+              // dictionary-abstracted, so alias it rather than wrapping it
+              // again (dictionaries are supplied at this binding's use sites).
+              coreExp =
+                  exp.op == Op.ID
+                      ? toCore(exp)
+                      : toCoreWithDictionaries(matching, exp);
               corePat =
                   ((Core.NamedPat) corePat)
                       .withType(
@@ -886,10 +892,17 @@ public class Resolver {
     for (QualifiedType.Predicate p : qType.predicates) {
       final Type predArgType = substitute(((FnType) p.type).paramType, subst);
       final Core.IdPat instId = selectInstanceId(p.name, predArgType);
-      if (instId == null) {
-        return null;
+      if (instId != null) {
+        dicts.add(core.id(instId));
+      } else {
+        // The instance is not concrete here (we are inside another qualified
+        // value); forward the enclosing dictionary parameter for this name.
+        final Core.IdPat dictParam = dictionaryParams.get(p.name);
+        if (dictParam == null) {
+          return null;
+        }
+        dicts.add(core.id(dictParam));
       }
-      dicts.add(core.id(instId));
     }
     return dicts;
   }
