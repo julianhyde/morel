@@ -755,4 +755,16 @@ fn p => let val g = fn x => (x, p) in (g 1, g 2) end;
 let val notval = (fn x => x) 1 in notval end;
 > val it = 1 : int
 
+(* Recursive ('fun') bindings are also generalized: within the definition the
+ * name is monomorphic, but it is generalized for use in the body. *)
+Sys.set ("printDepth", ~1);
+> val it = () : unit
+let fun d x = (x, [x]) in (d 1, d (d "x")) end;
+> val it = ((1,[1]),(("x",["x"]),[("x",["x"])]))
+>   : (int * int list) * ((string * string list) * (string * string list) list)
+let fun sz [] = 0 | sz (hd :: tl) = 1 + sz tl in (sz [1], sz ["a","b"], sz []) end;
+> val it = (1,2,0) : int * int * int
+let fun id x = x in (id 1, id true, (id id) "a", id id) end;
+> val it = (1,true,"a",fn) : int * bool * string * ('a -> 'a)
+
 (*) End type-inference.smli

@@ -34,6 +34,7 @@ import static net.hydromatic.morel.util.Static.splitQuoted;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.first;
+import static org.apache.calcite.util.Util.intersects;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableCollection;
@@ -3307,16 +3308,17 @@ public class TypeResolver {
       return bindAll(env, termMap);
     }
 
-    // Solve the constraints accumulated so far, structurally (no actions, so
-    // there are no side effects and we can run it as often as we like).
+    // Solve the constraints accumulated so far. Actions (e.g. flex-record
+    // field resolution) affect only this local solve, so it is side-effect
+    // free and we can run it as often as we like. A binding whose type is
+    // determined by such an action -- a flex/progressive record whose fields
+    // are supplied by how the binding is used -- is left un-generalized (see
+    // overlapsAction), because our generalization creates fresh variables that
+    // would not carry the action.
     final List<TermTerm> termPairs = new ArrayList<>();
     terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
     final Result result =
-        unifier.unify(
-            termPairs,
-            ImmutableMap.of(),
-            ImmutableList.of(),
-            Tracers.nullTracer());
+        unifier.unify(termPairs, actionMap, constraints, Tracers.nullTracer());
     if (!(result instanceof Substitution)) {
       return bindAll(env, termMap);
     }
@@ -3340,8 +3342,17 @@ public class TypeResolver {
         continue;
       }
       final Term resolved = subst.resolve(term);
-      final Set<Variable> genVars = new LinkedHashSet<>();
-      collectVars(resolved, genVars);
+      final Set<Variable> bindingVars = new LinkedHashSet<>();
+      collectVars(resolved, bindingVars);
+      if (overlapsAction(bindingVars, subst)) {
+        // The binding's type is determined in part by a field-resolution action
+        // (a flex/progressive record whose fields come from how it is used).
+        // Generalizing creates fresh variables that would not carry that
+        // action, so bind it monomorphically.
+        env2 = env2.bind(name, term);
+        continue;
+      }
+      final Set<Variable> genVars = new LinkedHashSet<>(bindingVars);
       genVars.removeAll(envVars);
       if (genVars.isEmpty()) {
         // Monomorphic.
@@ -3365,6 +3376,25 @@ public class TypeResolver {
     return env2;
   }
 
+  /**
+   * Returns whether any of {@code bindingVars} is the target of a pending
+   * field-resolution action (i.e. a flex/progressive record whose fields are
+   * supplied later). A binding whose type depends on such an action cannot be
+   * generalized by copying its term, because the copy's fresh variables would
+   * not carry the action.
+   */
+  private boolean overlapsAction(
+      Set<Variable> bindingVars, Substitution subst) {
+    for (Variable actionVar : actionMap.keySet()) {
+      final Set<Variable> actionVars = new HashSet<>();
+      collectVars(subst.resolve(actionVar), actionVars);
+      if (intersects(actionVars, bindingVars)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Collects the variables that occur in a term. */
   private static void collectVars(Term term, Set<Variable> vars) {
     if (term instanceof Variable) {
@@ -3378,24 +3408,59 @@ public class TypeResolver {
 
   /**
    * Returns the names bound by {@code decl} that may be generalized: names
-   * bound (by an {@code IdPat}) to a syntactic value, in a non-recursive,
-   * non-instance value declaration. The value restriction (only generalizing
-   * syntactic values) keeps generalization sound.
+   * bound (by an {@code IdPat}) to a syntactic value, in a non-instance value
+   * declaration. The value restriction (only generalizing syntactic values)
+   * keeps generalization sound. Recursive ({@code fun}) bindings may be
+   * generalized: within the definition the name is monomorphic (recursion is
+   * not polymorphic), but it is generalized for use in the body.
    */
   private static Set<String> generalizableNames(Ast.Decl decl) {
     final Set<String> names = new HashSet<>();
     if (decl instanceof Ast.ValDecl) {
       final Ast.ValDecl valDecl = (Ast.ValDecl) decl;
-      if (valDecl.rec || valDecl.inst) {
+      if (valDecl.inst) {
         return names;
       }
       for (Ast.ValBind valBind : valDecl.valBinds) {
-        if (valBind.pat instanceof Ast.IdPat && isValueExp(valBind.exp)) {
+        if (valBind.pat instanceof Ast.IdPat
+            && isValueExp(valBind.exp)
+            && !containsQuery(valBind.exp)) {
           names.add(((Ast.IdPat) valBind.pat).name);
         }
       }
     }
     return names;
+  }
+
+  /**
+   * Returns whether an expression contains a relational query ({@code from},
+   * {@code exists}, {@code forall}). Such an expression compiles to a
+   * stack-based plan that our term-copy generalization does not preserve, so
+   * bindings that contain one are not generalized.
+   */
+  private static boolean containsQuery(Ast.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.From from) {
+            found[0] = true;
+            super.visit(from);
+          }
+
+          @Override
+          protected void visit(Ast.Exists exists) {
+            found[0] = true;
+            super.visit(exists);
+          }
+
+          @Override
+          protected void visit(Ast.Forall forall) {
+            found[0] = true;
+            super.visit(forall);
+          }
+        });
+    return found[0];
   }
 
   /** Returns whether an expression is a syntactic value. */
