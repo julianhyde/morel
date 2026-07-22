@@ -37,6 +37,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Given pairs of terms, finds a substitution to minimize those pairs of terms.
@@ -124,6 +125,20 @@ public abstract class Unifier {
       Unifier.Variable arg,
       Unifier.Variable result,
       PairList<Unifier.Term, Unifier.Term> argResults) {
+    return constraint(null, arg, result, argResults);
+  }
+
+  /**
+   * As {@link #constraint(Variable, Variable, PairList)}, but the constraint
+   * remembers the name of the overloaded function (for error messages and for
+   * forming a qualified type if the constraint cannot be resolved) and its
+   * result variable.
+   */
+  public Constraint constraint(
+      @Nullable String name,
+      Unifier.Variable arg,
+      Unifier.Variable result,
+      PairList<Unifier.Term, Unifier.Term> argResults) {
     PairList<Term, Constraint.Action> termActions = PairList.of();
     argResults.forEach(
         (arg0, result0) ->
@@ -144,7 +159,7 @@ public abstract class Unifier {
                     return "equiv(" + result + ", " + result0 + ")";
                   }
                 }));
-    return constraint(arg, termActions);
+    return new Constraint(name, arg, result, termActions, argResults);
   }
 
   /**
@@ -162,7 +177,7 @@ public abstract class Unifier {
    */
   public Constraint constraint(
       Variable arg, PairList<Term, Constraint.Action> termActions) {
-    return new Constraint(arg, termActions);
+    return new Constraint(null, arg, null, termActions, null);
   }
 
   /** Creates an atom with a unique name. */
@@ -271,8 +286,17 @@ public abstract class Unifier {
    */
   public static final class SubstitutionResult extends Substitution
       implements Result {
-    private SubstitutionResult(Map<Variable, Term> resultMap) {
+    /**
+     * Overload constraints that were still unresolved when unification finished
+     * (their argument type never became concrete). These become the predicates
+     * of a qualified type.
+     */
+    public final List<Constraint> residualConstraints;
+
+    private SubstitutionResult(
+        Map<Variable, Term> resultMap, List<Constraint> residualConstraints) {
       super(ImmutableSortedMap.copyOf(resultMap));
+      this.residualConstraints = ImmutableList.copyOf(residualConstraints);
     }
 
     /** Empty substitution result. */
@@ -281,12 +305,20 @@ public abstract class Unifier {
 
     /** Creates a substitution result from a map. */
     public static SubstitutionResult create(Map<Variable, Term> resultMap) {
-      return new SubstitutionResult(ImmutableSortedMap.copyOf(resultMap));
+      return create(resultMap, ImmutableList.of());
+    }
+
+    /** Creates a substitution result with residual overload constraints. */
+    public static SubstitutionResult create(
+        Map<Variable, Term> resultMap, List<Constraint> residualConstraints) {
+      return new SubstitutionResult(
+          ImmutableSortedMap.copyOf(resultMap), residualConstraints);
     }
 
     /** Creates a substitution result with one (variable, term) entry. */
     public static SubstitutionResult create(Variable v, Term t) {
-      return new SubstitutionResult(ImmutableSortedMap.of(v, t));
+      return new SubstitutionResult(
+          ImmutableSortedMap.of(v, t), ImmutableList.of());
     }
   }
 
@@ -667,13 +699,40 @@ public abstract class Unifier {
    * }</pre>
    */
   public static final class Constraint {
+    /**
+     * Name of the overloaded function that gave rise to this constraint, or
+     * null if the constraint did not arise from overloading.
+     */
+    public final @Nullable String name;
+
     public final Variable arg;
+
+    /** Result variable, or null if this constraint has no name. */
+    public final @Nullable Variable result;
+
     public final PairList<Term, Action> termActions;
 
+    /**
+     * The candidate (argument, result) type-term pairs, one per overload
+     * instance; null if this constraint has no name. Retained so that, if the
+     * constraint becomes a predicate of a qualified type, the candidate
+     * instance types can be recorded and the constraint re-created at each use
+     * of the scheme.
+     */
+    public final @Nullable PairList<Term, Term> argResults;
+
     /** Creates a Constraint. */
-    Constraint(Variable arg, PairList<Term, Action> termActions) {
+    Constraint(
+        @Nullable String name,
+        Variable arg,
+        @Nullable Variable result,
+        PairList<Term, Action> termActions,
+        @Nullable PairList<Term, Term> argResults) {
+      this.name = name;
       this.arg = requireNonNull(arg);
+      this.result = result;
       this.termActions = termActions.immutable();
+      this.argResults = argResults == null ? null : argResults.immutable();
       checkArgument(!termActions.isEmpty());
     }
 

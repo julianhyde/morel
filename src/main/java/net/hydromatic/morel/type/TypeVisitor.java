@@ -81,6 +81,17 @@ public class TypeVisitor<R> {
     return forallType.type.accept(this);
   }
 
+  /** Visits a {@link QualifiedType}. */
+  public R visit(QualifiedType qualifiedType) {
+    // Visit the predicate types (so their variables are seen, e.g. for
+    // quantification) and the body. Do not visit the predicates' candidate
+    // instance types: they belong to a separate variable scope.
+    for (QualifiedType.Predicate predicate : qualifiedType.predicates) {
+      predicate.type.accept(this);
+    }
+    return qualifiedType.type.accept(this);
+  }
+
   /** Visits a {@link DummyType}. */
   public R visit(DummyType dummyType) {
     return null;

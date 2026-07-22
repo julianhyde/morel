@@ -67,6 +67,11 @@ public class TypeShuttle extends TypeVisitor<Type> {
   }
 
   @Override
+  public QualifiedType visit(QualifiedType qualifiedType) {
+    return qualifiedType.copy(typeSystem, t -> t.accept(this));
+  }
+
+  @Override
   public DummyType visit(DummyType dummyType) {
     return dummyType.copy(typeSystem, t -> t.accept(this));
   }

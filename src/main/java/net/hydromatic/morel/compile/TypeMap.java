@@ -23,6 +23,7 @@ import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import java.util.ArrayList;
@@ -35,6 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.QualifiedType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
@@ -60,6 +62,13 @@ public class TypeMap {
    * sufficient.
    */
   private final Map<String, TypeVar> typeVars = new HashMap<>();
+
+  /**
+   * Overload predicates for this declaration (empty unless a value's type is
+   * qualified). Attached to the relevant bound pattern's type by {@link
+   * Resolver}.
+   */
+  private List<QualifiedType.Predicate> predicates = ImmutableList.of();
 
   TypeMap(
       TypeSystem typeSystem,
@@ -92,6 +101,15 @@ public class TypeMap {
 
   Type termToType(Unifier.Term term) {
     return term.accept(new TermToTypeConverter(this));
+  }
+
+  /** Returns the overload predicates deduced for this declaration. */
+  public List<QualifiedType.Predicate> getPredicates() {
+    return predicates;
+  }
+
+  void setPredicates(List<QualifiedType.Predicate> predicates) {
+    this.predicates = ImmutableList.copyOf(predicates);
   }
 
   /** Returns an AST node's data type. */

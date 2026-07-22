@@ -120,6 +120,18 @@ public class TypeUnifier {
             return false;
         }
 
+      case FUNCTION_TYPE:
+        switch (type2.op()) {
+          case FUNCTION_TYPE:
+            final FnType fn1 = (FnType) type1;
+            final FnType fn2 = (FnType) type2;
+            return tryUnify(fn1.paramType, fn2.paramType)
+                && tryUnify(fn1.resultType, fn2.resultType);
+
+          default:
+            return false;
+        }
+
       case ID:
         primitiveType1 = (PrimitiveType) type1;
         switch (type2.op()) {

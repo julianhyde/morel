@@ -153,6 +153,12 @@ public class Keys {
     return new MultiTypeKey(ImmutableList.copyOf(keys));
   }
 
+  /** Returns a key that identifies a {@link QualifiedType}. */
+  public static Type.Key qualified(
+      List<QualifiedType.Predicate> predicates, Type type) {
+    return new QualifiedTypeKey(ImmutableList.copyOf(predicates), type);
+  }
+
   /** Converts a map of types to a map of keys. */
   public static SortedMap<String, Type.Key> toKeys(
       SortedMap<String, ? extends Type> nameTypes) {
@@ -683,6 +689,56 @@ public class Keys {
     @Override
     public Type toType(TypeSystem typeSystem) {
       return new MultiType(typeSystem.typesFor(args));
+    }
+  }
+
+  /** Key that identifies a {@link QualifiedType}. */
+  private static class QualifiedTypeKey extends Type.Key {
+    final ImmutableList<QualifiedType.Predicate> predicates;
+    final Type type;
+
+    QualifiedTypeKey(
+        ImmutableList<QualifiedType.Predicate> predicates, Type type) {
+      super(Op.QUALIFIED_TYPE);
+      this.predicates = requireNonNull(predicates);
+      this.type = requireNonNull(type);
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(predicates, type);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj == this
+          || obj instanceof QualifiedTypeKey
+              && ((QualifiedTypeKey) obj).predicates.equals(predicates)
+              && ((QualifiedTypeKey) obj).type.equals(type);
+    }
+
+    @Override
+    public StringBuilder describe(StringBuilder buf, int left, int right) {
+      // A single predicate is rendered in braces, "{foo : 'a -> 'b}";
+      // multiple predicates in parentheses, "(first : ..., second : ...)".
+      final boolean single = predicates.size() == 1;
+      buf.append(single ? '{' : '(');
+      int i = 0;
+      for (QualifiedType.Predicate p : predicates) {
+        if (i++ > 0) {
+          buf.append(", ");
+        }
+        appendId(buf, p.name).append(" : ");
+        TypeSystem.unparse(buf, p.type.key(), 0, 0);
+      }
+      buf.append(single ? '}' : ')');
+      buf.append(" => ");
+      return TypeSystem.unparse(buf, type.key(), 0, 0);
+    }
+
+    @Override
+    public Type toType(TypeSystem typeSystem) {
+      return new QualifiedType(predicates, type);
     }
   }
 

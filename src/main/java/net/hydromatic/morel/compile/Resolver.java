@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
@@ -68,11 +69,15 @@ import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.QualifiedType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeShuttle;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypeVar;
+import net.hydromatic.morel.type.TypeVisitor;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
@@ -87,6 +92,17 @@ public class Resolver {
   final Core.@Nullable Exp current;
   final AggregateResolver aggregateResolver;
   final Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads;
+
+  /**
+   * Dictionary parameters in scope while compiling the body of a qualified
+   * (overload-constrained) value. Maps an overloaded name to the {@link
+   * Core.IdPat} of the dictionary parameter that supplies its instance. An
+   * overloaded application whose argument type is not concrete compiles to a
+   * reference to this parameter rather than to a specific instance
+   * (hydromatic/morel#426 milestone 2, dictionary passing). Shared across
+   * sub-resolvers so that nested lambdas see the parameters.
+   */
+  final Map<String, Core.IdPat> dictionaryParams;
 
   /**
    * Contains variable declarations whose type at the point they are used is
@@ -107,6 +123,7 @@ public class Resolver {
       NameGenerator nameGenerator,
       Map<Pair<Core.NamedPat, Type>, Core.NamedPat> variantIdMap,
       Map<String, Pair<Core.IdPat, List<Core.IdPat>>> resolvedOverloads,
+      Map<String, Core.IdPat> dictionaryParams,
       Environment env,
       @Nullable Session session,
       Core.@Nullable Exp current,
@@ -115,6 +132,7 @@ public class Resolver {
     this.nameGenerator = nameGenerator;
     this.variantIdMap = variantIdMap;
     this.resolvedOverloads = resolvedOverloads;
+    this.dictionaryParams = dictionaryParams;
     this.env = env;
     this.session = session;
     this.current = current;
@@ -129,6 +147,7 @@ public class Resolver {
     return new Resolver(
         typeMap,
         nameGenerator,
+        new HashMap<>(),
         new HashMap<>(),
         new HashMap<>(),
         env,
@@ -147,6 +166,7 @@ public class Resolver {
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
+        dictionaryParams,
         env,
         session,
         current,
@@ -170,6 +190,7 @@ public class Resolver {
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
+        dictionaryParams,
         env,
         session,
         current,
@@ -212,6 +233,7 @@ public class Resolver {
             nameGenerator,
             variantIdMap,
             resolvedOverloads,
+            dictionaryParams,
             innerEnv,
             session,
             current,
@@ -224,6 +246,7 @@ public class Resolver {
         nameGenerator,
         variantIdMap,
         resolvedOverloads,
+        dictionaryParams,
         outerEnv,
         session,
         current,
@@ -382,8 +405,31 @@ public class Resolver {
                 corePat = ((Core.NamedPat) corePat).withType(realType);
               }
             }
-            patExps.add(
-                new PatExp(corePat, toCore(exp), pat.pos.plus(exp.pos)));
+            // If this binding is qualified (uses an overloaded name at an
+            // abstract type), compile its value with dictionary parameters and
+            // give the pattern a qualified type.
+            final List<QualifiedType.Predicate> matching =
+                !inst && corePat instanceof Core.NamedPat
+                    ? matchingPredicates(corePat.type)
+                    : ImmutableList.of();
+            final Core.Exp coreExp;
+            if (matching.isEmpty()) {
+              coreExp = toCore(exp);
+            } else {
+              // A bare reference to another qualified value is already
+              // dictionary-abstracted, so alias it rather than wrapping it
+              // again (dictionaries are supplied at this binding's use sites).
+              coreExp =
+                  exp.op == Op.ID
+                      ? toCore(exp)
+                      : toCoreWithDictionaries(matching, exp);
+              corePat =
+                  ((Core.NamedPat) corePat)
+                      .withType(
+                          typeMap.typeSystem.qualifiedType(
+                              matching, corePat.type));
+            }
+            patExps.add(new PatExp(corePat, coreExp, pat.pos.plus(exp.pos)));
           });
       patExps.forEach(
           x -> Compiles.acceptBinding(typeMap.typeSystem, x.pat, bindings));
@@ -410,14 +456,108 @@ public class Resolver {
       pat0 = patExp.pat;
       exp = patExp.exp;
     }
-    final Core.NamedPat pat;
+    final Core.NamedPat pat0Named;
     if (pat0 instanceof Core.NamedPat) {
-      pat = (Core.NamedPat) pat0;
+      pat0Named = (Core.NamedPat) pat0;
     } else {
-      pat = core.asPat(exp.type, "it", nameGenerator, pat0);
+      pat0Named = core.asPat(exp.type, "it", nameGenerator, pat0);
     }
+    final Core.NamedPat pat = qualify(pat0Named);
 
     return new ResolvedValDecl(rec, ImmutableList.copyOf(patExps), pat, exp);
+  }
+
+  /**
+   * If the type resolver deduced overload predicates for this declaration, and
+   * they constrain the type variables of {@code pat}, wraps {@code pat}'s type
+   * in a {@link QualifiedType}. This is what makes an echoed binding print with
+   * a qualified type, e.g. {@code val demo = fn : {foo : 'a -> 'b} => 'a ->
+   * 'b}.
+   */
+  private Core.NamedPat qualify(Core.NamedPat pat) {
+    final List<QualifiedType.Predicate> matching = matchingPredicates(pat.type);
+    if (matching.isEmpty()) {
+      return pat;
+    }
+    return pat.withType(typeMap.typeSystem.qualifiedType(matching, pat.type));
+  }
+
+  /**
+   * Returns the deduced overload predicates whose type variables occur in
+   * {@code patType} (so they belong on this binding), or empty if there are
+   * none or {@code patType} is already qualified.
+   */
+  private List<QualifiedType.Predicate> matchingPredicates(Type patType) {
+    final List<QualifiedType.Predicate> predicates = typeMap.getPredicates();
+    if (predicates.isEmpty() || patType instanceof QualifiedType) {
+      return ImmutableList.of();
+    }
+    final Set<Integer> patVars = typeVarOrdinals(patType);
+    if (patVars.isEmpty()) {
+      return ImmutableList.of();
+    }
+    final List<QualifiedType.Predicate> matching = new ArrayList<>();
+    for (QualifiedType.Predicate predicate : predicates) {
+      if (!disjoint(typeVarOrdinals(predicate.type), patVars)) {
+        matching.add(predicate);
+      }
+    }
+    return matching;
+  }
+
+  /**
+   * Compiles the value of a qualified binding, introducing one dictionary
+   * parameter per predicate. Inside {@code exp}, an overloaded name used at an
+   * abstract type compiles to a reference to its dictionary parameter (see
+   * {@link #fnToCore}); the compiled value is wrapped in one curried lambda per
+   * predicate, so at a use site the caller supplies the instances as ordinary
+   * arguments (see {@link #dictionaryArgsForUse}).
+   */
+  private Core.Exp toCoreWithDictionaries(
+      List<QualifiedType.Predicate> predicates, Ast.Exp exp) {
+    final List<Core.IdPat> dictPats = new ArrayList<>();
+    for (QualifiedType.Predicate p : predicates) {
+      final Core.IdPat dictPat =
+          core.idPat(p.type, () -> nameGenerator.getPrefixed("dict"));
+      dictPats.add(dictPat);
+      dictionaryParams.put(p.name, dictPat);
+    }
+    Core.Exp coreExp = toCore(exp);
+    for (QualifiedType.Predicate p : predicates) {
+      dictionaryParams.remove(p.name);
+    }
+    // Wrap in one curried lambda per predicate; the first predicate is the
+    // outermost parameter, matching the argument order at the use site.
+    for (int i = dictPats.size() - 1; i >= 0; i--) {
+      final Core.IdPat dictPat = dictPats.get(i);
+      final FnType fnType =
+          typeMap.typeSystem.fnType(dictPat.type, coreExp.type);
+      coreExp = core.fn(fnType, dictPat, coreExp);
+    }
+    return coreExp;
+  }
+
+  /** Returns the ordinals of the type variables that occur in a type. */
+  private static Set<Integer> typeVarOrdinals(Type type) {
+    final Set<Integer> ordinals = new HashSet<>();
+    type.accept(
+        new TypeVisitor<Void>() {
+          @Override
+          public Void visit(TypeVar typeVar) {
+            ordinals.add(typeVar.ordinal);
+            return null;
+          }
+        });
+    return ordinals;
+  }
+
+  private static boolean disjoint(Set<Integer> a, Set<Integer> b) {
+    for (Integer i : a) {
+      if (b.contains(i)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -707,9 +847,104 @@ public class Resolver {
         type = ((FnType) coreFn.type).resultType;
       }
     } else {
-      coreFn = fnToCore(apply.fn, typeMap.getType(apply.arg));
+      Core.Exp fn = fnToCore(apply.fn, typeMap.getType(apply.arg));
+      // If the function is a qualified-typed binding, supply its dictionaries
+      // (the resolved instances) before the real argument (milestone 2).
+      final List<Core.Exp> dicts = dictionaryArgsForUse(apply.fn);
+      if (dicts != null) {
+        for (Core.Exp dict : dicts) {
+          fn = core.apply(apply.pos, type, fn, dict);
+        }
+      }
+      coreFn = fn;
     }
     return core.apply(apply.pos, type, coreFn, coreArg);
+  }
+
+  /**
+   * If {@code fn} names a qualified-typed binding, returns the dictionary
+   * arguments to pass at this use site — one per predicate, each the instance
+   * selected by the (now concrete) type — in predicate order. Returns null if
+   * {@code fn} is not qualified or an instance cannot be selected (in which
+   * case the value keeps its milestone-1 placeholder behavior).
+   */
+  private @Nullable List<Core.Exp> dictionaryArgsForUse(Ast.Exp fn) {
+    if (!(fn instanceof Ast.Id)) {
+      return null;
+    }
+    final Binding top = env.getTop(((Ast.Id) fn).name);
+    if (top == null) {
+      return null;
+    }
+    Type schemeType = top.id.type;
+    while (schemeType instanceof ForallType) {
+      schemeType = ((ForallType) schemeType).type;
+    }
+    if (!(schemeType instanceof QualifiedType)) {
+      return null;
+    }
+    final QualifiedType qType = (QualifiedType) schemeType;
+    final Type useType = typeMap.getType(fn);
+    final Map<Integer, Type> subst = qType.type.unifyWith(useType);
+    if (subst == null) {
+      return null;
+    }
+    final List<Core.Exp> dicts = new ArrayList<>();
+    for (QualifiedType.Predicate p : qType.predicates) {
+      final Type predArgType = substitute(((FnType) p.type).paramType, subst);
+      final Core.IdPat instId = selectInstanceId(p.name, predArgType);
+      if (instId != null) {
+        dicts.add(core.id(instId));
+      } else {
+        // The instance is not concrete here (we are inside another qualified
+        // value); forward the enclosing dictionary parameter for this name.
+        final Core.IdPat dictParam = dictionaryParams.get(p.name);
+        if (dictParam == null) {
+          return null;
+        }
+        dicts.add(core.id(dictParam));
+      }
+    }
+    return dicts;
+  }
+
+  /**
+   * Selects the unique overload instance of {@code name} callable with an
+   * argument of {@code argType}, or null if not exactly one matches.
+   */
+  private Core.@Nullable IdPat selectInstanceId(String name, Type argType) {
+    // Instances of an overload declared in the current compilation unit are in
+    // 'resolvedOverloads'; instances from an enclosing environment are reached
+    // via the overload id. (Mirrors the two branches of fnToCore.)
+    final List<Core.IdPat> instances;
+    if (resolvedOverloads.containsKey(name)) {
+      instances = requireNonNull(resolvedOverloads.get(name).right);
+    } else {
+      final Binding top = env.getTop(name);
+      if (top == null || top.overloadId == null) {
+        return null;
+      }
+      instances = env.getOverloads(top.overloadId);
+    }
+    final List<Core.IdPat> matching = new ArrayList<>();
+    for (Core.IdPat idPat : instances) {
+      if (idPat.type.canCallArgOf(argType)) {
+        matching.add(idPat);
+      }
+    }
+    return matching.size() == 1 ? matching.get(0) : null;
+  }
+
+  /** Applies a type-variable substitution to a type. */
+  private Type substitute(Type type, Map<Integer, Type> subst) {
+    return type.accept(
+        new TypeShuttle(typeMap.typeSystem) {
+          @Override
+          public Type visit(TypeVar typeVar) {
+            final Type t = subst.get(typeVar.ordinal);
+            return t != null ? t : typeVar;
+          }
+        });
   }
 
   /**
@@ -805,6 +1040,14 @@ public class Resolver {
    * argument type.
    */
   private Core.Exp fnToCore(Ast.Exp fn, Type argType) {
+    // Inside the body of a qualified value, an overloaded name resolves to the
+    // dictionary parameter that carries its instance (milestone 2).
+    if (fn instanceof Ast.Id) {
+      final Core.IdPat dictPat = dictionaryParams.get(((Ast.Id) fn).name);
+      if (dictPat != null) {
+        return core.id(dictPat);
+      }
+    }
     // The comparison operators '<', '<=', '>', '>=' are polymorphic, but word
     // comparison must be unsigned, so route word operands to the Word structure
     // members (which use Long.compareUnsigned).
@@ -830,7 +1073,11 @@ public class Resolver {
         }
       }
       if (matchingBindings.size() != 1) {
-        throw new AssertionError(matchingBindings);
+        // The argument type is not concrete, so we cannot select an instance:
+        // this is an overloaded application inside a qualified-typed value.
+        // Milestone 2 will pass the instance as a dictionary; for now emit a
+        // placeholder that fails only if the value is actually applied.
+        return unresolvedOverload(fn, argType);
       }
       return CoreBuilder.core.id(matchingBindings.get(0));
     } else if (top != null && top.isInst()) {
@@ -842,13 +1089,54 @@ public class Resolver {
         }
       }
       if (matchingIds.size() != 1) {
-        throw new AssertionError(
-            "zero or more than one matching bindings: " + matchingIds);
+        return unresolvedOverload(fn, argType);
       }
       return core.id(getIdPat(fn, matchingIds.get(0)));
     } else {
       return toCore(fn);
     }
+  }
+
+  /**
+   * Builds a placeholder for an overloaded application whose argument type is
+   * not concrete (so no instance can be selected statically). The placeholder
+   * is a function {@code fn v => raise (Fail "...")} of the same type as the
+   * overloaded function at this site; it type-checks and compiles, but raises
+   * if it is ever applied.
+   *
+   * <p>This supports Milestone 1 of hydromatic/morel#426, where a value with a
+   * qualified type can be declared and its type echoed, but not yet evaluated.
+   * Milestone 2 will replace this with dictionary passing.
+   */
+  private Core.Exp unresolvedOverload(Ast.Exp fn, Type argType) {
+    final TypeSystem typeSystem = typeMap.typeSystem;
+    final Type fnType0 = typeMap.getType(fn);
+    final FnType fnType =
+        fnType0 instanceof FnType
+            ? (FnType) fnType0
+            : typeSystem.fnType(argType, typeMap.getType(fn));
+    final String name = fn instanceof Ast.Id ? ((Ast.Id) fn).name : "?";
+    // Reference the 'Fail of string' constructor at its *function* type,
+    // 'string -> exn'. (A constructor Core.Id is matched by name and ordinal,
+    // not type, so this resolves to the same runtime value; but the function
+    // type keeps the Inliner from mistaking it for a string value.)
+    final Type exnType =
+        typeSystem.lookup(BuiltIn.Constructor.EXN_FAIL.datatype);
+    final Core.Id failCon =
+        core.id(
+            core.idPat(
+                typeSystem.fnType(PrimitiveType.STRING, exnType),
+                BuiltIn.Constructor.EXN_FAIL.constructor,
+                0));
+    final String msg =
+        "overloaded '%s' cannot yet be applied at an abstract type";
+    final Core.Exp failExn =
+        core.apply(
+            Pos.ZERO, exnType, failCon, core.stringLiteral(format(msg, name)));
+    final Core.Exp raiseExp = core.raise(Pos.ZERO, fnType.resultType, failExn);
+    final Core.IdPat param =
+        core.idPat(fnType.paramType, () -> nameGenerator.getPrefixed("v"));
+    return core.fn(fnType, param, raiseExp);
   }
 
   static @Nullable Object valueOf(Environment env, Core.Exp exp) {

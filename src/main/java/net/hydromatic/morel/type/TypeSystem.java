@@ -460,6 +460,13 @@ public class TypeSystem {
     return (ForallType) typeFor(key);
   }
 
+  /** Creates a qualified type (a type with overload constraints). */
+  public QualifiedType qualifiedType(
+      List<QualifiedType.Predicate> predicates, Type type) {
+    final Key key = Keys.qualified(predicates, type);
+    return (QualifiedType) typeFor(key);
+  }
+
   /** Creates a multi-type from an array of types. */
   public MultiType multi(Type... types) {
     return multi(ImmutableList.copyOf(types));
@@ -704,6 +711,23 @@ public class TypeSystem {
   public static boolean canAssign(Type fromType, Type toType) {
     while (fromType instanceof ForallType) {
       fromType = ((ForallType) fromType).type;
+    }
+    // A qualified type is assignment-compatible with its body: the predicates
+    // are constraints on the same underlying type, not a different type.
+    if (fromType instanceof QualifiedType) {
+      fromType = ((QualifiedType) fromType).type;
+    }
+    if (toType instanceof QualifiedType) {
+      final QualifiedType q = (QualifiedType) toType;
+      // The value of a qualified binding is dictionary-abstracted: it has one
+      // extra (curried) parameter per predicate. Strip those before comparing
+      // to the body. Also accept a value that is already the plain body (the
+      // milestone-1 placeholder path).
+      Type f = fromType;
+      for (int i = 0; i < q.predicates.size() && f instanceof FnType; i++) {
+        f = ((FnType) f).resultType;
+      }
+      return canAssign(f, q.type) || canAssign(fromType, q.type);
     }
     return fromType.equals(toType)
         // A type that still contains a type variable is compatible with any

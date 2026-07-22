@@ -155,7 +155,17 @@ public class MartelliUnifier extends Unifier {
                 + " (%,d nanos per iteration)%n",
             termPairs.size(), iteration, duration, duration / (iteration + 1));
       }
-      return SubstitutionResult.create(result);
+      // Any overload constraint that still has more than one candidate never
+      // had its argument type pinned down; surface it so that it can become a
+      // predicate of a qualified type.
+      final List<Constraint> residualConstraints = new ArrayList<>();
+      for (MutableConstraint constraint : work.constraintQueue) {
+        if (constraint.constraint.name != null
+            && constraint.termActions.size() > 1) {
+          residualConstraints.add(constraint.constraint);
+        }
+      }
+      return SubstitutionResult.create(result, residualConstraints);
     }
   }
 
@@ -406,6 +416,13 @@ public class MartelliUnifier extends Unifier {
         if (changeCount > 0) {
           switch (constraint.termActions.size()) {
             case 0:
+              final Constraint c = constraint.constraint;
+              if (c.name != null) {
+                return failure(
+                    format(
+                        "no instance of '%s' matches argument type '%s'",
+                        c.name, render(constraint.arg)));
+              }
               return failure("no valid overloads");
             case 1:
               Term term1 = constraint.termActions.left(0);
@@ -445,13 +462,17 @@ public class MartelliUnifier extends Unifier {
 
   /** As {@link Constraint}, but mutable. */
   private static class MutableConstraint {
+    final Constraint constraint;
     final Variable v;
     Term arg;
     final PairList<Term, Constraint.Action> termActions;
 
     /** Creates a MutableConstraint. */
     MutableConstraint(
-        Variable arg, PairList<Term, Constraint.Action> termActions) {
+        Constraint constraint,
+        Variable arg,
+        PairList<Term, Constraint.Action> termActions) {
+      this.constraint = requireNonNull(constraint);
       this.v = requireNonNull(arg);
       this.arg = requireNonNull(arg);
       this.termActions = termActions;
@@ -459,7 +480,7 @@ public class MartelliUnifier extends Unifier {
     }
 
     MutableConstraint(Constraint constraint) {
-      this(constraint.arg, PairList.copyOf(constraint.termActions));
+      this(constraint, constraint.arg, PairList.copyOf(constraint.termActions));
     }
 
     @Override
