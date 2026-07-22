@@ -706,11 +706,26 @@ public class TypeSystem {
       fromType = ((ForallType) fromType).type;
     }
     return fromType.equals(toType)
+        // A type that still contains a type variable is compatible with any
+        // type on the other side. This arises when a generalized local binding
+        // is used or inlined at a (more) concrete type (let-polymorphism): the
+        // Core carries the still-polymorphic type, or an alpha-variant of it,
+        // while the surrounding context is more concrete. The real type check
+        // has already happened in TypeResolver.
+        || hasTypeVar(fromType)
+        || hasTypeVar(toType)
         || fromType instanceof RecordType && toType.isProgressive()
         || toType.containsAlias()
         || fromType instanceof ListType
             && toType instanceof ListType
             && canAssign(fromType.elementType(), toType.elementType());
+  }
+
+  /** Returns whether a type contains a {@link TypeVar}. */
+  private static boolean hasTypeVar(Type type) {
+    final VariableCollector collector = new VariableCollector();
+    type.accept(collector);
+    return !collector.vars.isEmpty();
   }
 
   /** Visitor that finds all {@link TypeVar} instances within a {@link Type}. */
