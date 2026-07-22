@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
@@ -1127,15 +1128,11 @@ public class Resolver {
                 typeSystem.fnType(PrimitiveType.STRING, exnType),
                 BuiltIn.Constructor.EXN_FAIL.constructor,
                 0));
+    final String msg =
+        "overloaded '%s' cannot yet be applied at an abstract type";
     final Core.Exp failExn =
         core.apply(
-            Pos.ZERO,
-            exnType,
-            failCon,
-            core.stringLiteral(
-                "overloaded '"
-                    + name
-                    + "' cannot yet be applied at an abstract type"));
+            Pos.ZERO, exnType, failCon, core.stringLiteral(format(msg, name)));
     final Core.Exp raiseExp = core.raise(Pos.ZERO, fnType.resultType, failExn);
     final Core.IdPat param =
         core.idPat(fnType.paramType, () -> nameGenerator.getPrefixed("v"));

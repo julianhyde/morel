@@ -419,11 +419,9 @@ public class MartelliUnifier extends Unifier {
               final Constraint c = constraint.constraint;
               if (c.name != null) {
                 return failure(
-                    "no instance of '"
-                        + c.name
-                        + "' matches argument type '"
-                        + render(constraint.arg)
-                        + "'");
+                    format(
+                        "no instance of '%s' matches argument type '%s'",
+                        c.name, render(constraint.arg)));
               }
               return failure("no valid overloads");
             case 1:
