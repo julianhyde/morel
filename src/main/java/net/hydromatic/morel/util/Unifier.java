@@ -95,6 +95,11 @@ public abstract class Unifier {
         });
   }
 
+  /** Returns a snapshot of all variables created so far. */
+  public List<Variable> variables() {
+    return new ArrayList<>(variableMap.values());
+  }
+
   /** Creates an atom, or returns an existing one with the same name. */
   public Term atom(String name) {
     return atomMap.computeIfAbsent(name, Sequence::new);

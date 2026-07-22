@@ -53,6 +53,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -991,8 +992,13 @@ public class TypeResolver {
         TypeEnv env2 = env;
         final List<Ast.Decl> decls = new ArrayList<>();
         for (Ast.Decl decl : let.decls) {
-          decls.add(deduceDeclType(env2, decl, termMap));
-          env2 = bindAll(env2, termMap);
+          // Snapshot the variables that exist before this declaration; any
+          // variable the declaration introduces that is not reachable from one
+          // of these is local, and can be generalized (let-polymorphism).
+          final List<Variable> priorVars = unifier.variables();
+          final Ast.Decl decl2 = deduceDeclType(env2, decl, termMap);
+          decls.add(decl2);
+          env2 = bindDeclGeneralized(env2, termMap, priorVars, decl2);
           termMap.clear();
         }
         final Ast.Exp e2 = deduceExpType(env2, let.exp, v);
@@ -3277,6 +3283,137 @@ public class TypeResolver {
       env = env.bind(entry.getKey().name, entry.getValue());
     }
     return env;
+  }
+
+  /**
+   * Binds the declarations of a {@code let} into the environment, generalizing
+   * value bindings so that they can be used polymorphically in the body
+   * (Hindley-Milner let-polymorphism).
+   *
+   * <p>Generalization works at the term level: we solve the constraints so far,
+   * find which of the binding's type variables are local (not reachable from
+   * any variable that existed before the declaration), and bind a factory that,
+   * on each use, copies the binding's (resolved) type term with fresh variables
+   * for those local variables. Non-value bindings (the value restriction) and
+   * overload instances are bound monomorphically, exactly as before.
+   */
+  private TypeEnv bindDeclGeneralized(
+      TypeEnv env,
+      PairList<Ast.IdPat, Term> termMap,
+      List<Variable> priorVars,
+      Ast.Decl decl) {
+    final Set<String> valueNames = generalizableNames(decl);
+    if (valueNames.isEmpty()) {
+      return bindAll(env, termMap);
+    }
+
+    // Solve the constraints accumulated so far, structurally (no actions, so
+    // there are no side effects and we can run it as often as we like).
+    final List<TermTerm> termPairs = new ArrayList<>();
+    terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
+    final Result result =
+        unifier.unify(
+            termPairs,
+            ImmutableMap.of(),
+            ImmutableList.of(),
+            Tracers.nullTracer());
+    if (!(result instanceof Substitution)) {
+      return bindAll(env, termMap);
+    }
+    final Substitution subst = (Substitution) result;
+
+    // Compute the type variables that are free in the enclosing environment:
+    // everything reachable by resolving a variable that existed before this
+    // declaration. A binding variable is generalizable only if it is not one
+    // of these.
+    final Set<Variable> envVars = new HashSet<>();
+    for (Variable v : priorVars) {
+      collectVars(subst.resolve(v), envVars);
+    }
+
+    TypeEnv env2 = env;
+    for (Map.Entry<Ast.IdPat, Term> entry : termMap) {
+      final String name = entry.getKey().name;
+      final Term term = entry.getValue();
+      if (!valueNames.contains(name)) {
+        env2 = env2.bind(name, term);
+        continue;
+      }
+      final Term resolved = subst.resolve(term);
+      final Set<Variable> genVars = new LinkedHashSet<>();
+      collectVars(resolved, genVars);
+      genVars.removeAll(envVars);
+      if (genVars.isEmpty()) {
+        // Monomorphic.
+        env2 = env2.bind(name, term);
+      } else {
+        // Bind a factory that instantiates the scheme with fresh variables for
+        // the generalizable variables on each use.
+        env2 =
+            env2.bind(
+                name,
+                Kind.VAL,
+                ts -> {
+                  final Map<Variable, Term> fresh = new HashMap<>();
+                  for (Variable g : genVars) {
+                    fresh.put(g, unifier.variable());
+                  }
+                  return resolved.apply(fresh);
+                });
+      }
+    }
+    return env2;
+  }
+
+  /** Collects the variables that occur in a term. */
+  private static void collectVars(Term term, Set<Variable> vars) {
+    if (term instanceof Variable) {
+      vars.add((Variable) term);
+    } else if (term instanceof Sequence) {
+      for (Term t : ((Sequence) term).terms) {
+        collectVars(t, vars);
+      }
+    }
+  }
+
+  /**
+   * Returns the names bound by {@code decl} that may be generalized: names
+   * bound (by an {@code IdPat}) to a syntactic value, in a non-recursive,
+   * non-instance value declaration. The value restriction (only generalizing
+   * syntactic values) keeps generalization sound.
+   */
+  private static Set<String> generalizableNames(Ast.Decl decl) {
+    final Set<String> names = new HashSet<>();
+    if (decl instanceof Ast.ValDecl) {
+      final Ast.ValDecl valDecl = (Ast.ValDecl) decl;
+      if (valDecl.rec || valDecl.inst) {
+        return names;
+      }
+      for (Ast.ValBind valBind : valDecl.valBinds) {
+        if (valBind.pat instanceof Ast.IdPat && isValueExp(valBind.exp)) {
+          names.add(((Ast.IdPat) valBind.pat).name);
+        }
+      }
+    }
+    return names;
+  }
+
+  /** Returns whether an expression is a syntactic value. */
+  private static boolean isValueExp(Ast.Exp exp) {
+    switch (exp.op) {
+      case FN:
+      case ID:
+      case BOOL_LITERAL:
+      case CHAR_LITERAL:
+      case INT_LITERAL:
+      case REAL_LITERAL:
+      case STRING_LITERAL:
+      case UNIT_LITERAL:
+      case WORD_LITERAL:
+        return true;
+      default:
+        return false;
+    }
   }
 
   private Ast.Decl deduceDeclType(

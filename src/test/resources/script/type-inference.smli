@@ -733,4 +733,26 @@ fun bar (x: 'a) : 'a option = SOME x;
 val myid: 'a -> 'a list = fn x => [x];
 > val myid = fn : 'a -> 'a list
 
+(* -------------------------------------------------------------------
+ * Let-polymorphism: a value bound in a local 'let' can be used at
+ * several types in the body.
+ *)
+let val id = fn x => x in (id 1, id true) end;
+> val it = (1,true) : int * bool
+let val pair = fn x => (x, x) in (pair 1, pair "a") end;
+> val it = ((1,1),("a","a")) : (int * int) * (string * string)
+let val k = fn x => fn y => x in (k 1 "a", k true 2) end;
+> val it = (1,true) : int * bool
+
+(* A local binding generalizes its own type variables, but not the type
+ * variables of an enclosing function's parameter: here 'x' generalizes
+ * but 'p' (hence 'a) does not. *)
+fn p => let val g = fn x => (x, p) in (g 1, g 2) end;
+> val it = fn : 'a -> (int * 'a) * (int * 'a)
+
+(* The value restriction: a binding whose right-hand side is not a
+ * syntactic value is not generalized. *)
+let val notval = (fn x => x) 1 in notval end;
+> val it = 1 : int
+
 (*) End type-inference.smli

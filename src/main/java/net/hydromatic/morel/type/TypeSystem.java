@@ -706,6 +706,13 @@ public class TypeSystem {
       fromType = ((ForallType) fromType).type;
     }
     return fromType.equals(toType)
+        // A type variable is compatible with any type on the other side. This
+        // arises when a generalized local binding is inlined at a concrete type
+        // (let-polymorphism): the Core carries the still-polymorphic type,
+        // while the surrounding context is concrete. The real type check has
+        // already happened in TypeResolver.
+        || fromType instanceof TypeVar
+        || toType instanceof TypeVar
         || fromType instanceof RecordType && toType.isProgressive()
         || toType.containsAlias()
         || fromType instanceof ListType
