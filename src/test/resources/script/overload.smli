@@ -72,6 +72,25 @@ demo (3,"four");
 (demo (3,"four",5), demo (3,"four"));
 > val it = (("four",3),("four",3)) : (string * int) * (string * int)
 
+(* The same, but defining and using 'demo' within a single 'let' (the exact
+ * example from "A Second Look at Overloading"); this combines
+ * let-polymorphism with qualified types. We clear the environment first so
+ * that 'first' and 'second' are not also overloaded at top level. *)
+Sys.clearEnv ();
+> val it = () : unit
+let
+  over first
+  over second
+  val inst first = fn (x, y) => x
+  val inst second = fn (x, y) => y
+  val inst first = fn (x, y, z) => x
+  val inst second = fn (x, y, z) => y
+  val demo = fn r => (second r, first r)
+in
+  (demo (3, "four", 5), demo (3, "four"))
+end;
+> val it = (("four",3),("four",3)) : (string * int) * (string * int)
+
 (* -------------------------------------------------------------------
  * A single overloaded name applied to an argument of unknown type also
  * yields a qualified type (hydromatic/morel#426). *)

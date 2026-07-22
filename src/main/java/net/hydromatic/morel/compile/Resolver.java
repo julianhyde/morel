@@ -912,12 +912,21 @@ public class Resolver {
    * argument of {@code argType}, or null if not exactly one matches.
    */
   private Core.@Nullable IdPat selectInstanceId(String name, Type argType) {
-    final Binding top = env.getTop(name);
-    if (top == null || top.overloadId == null) {
-      return null;
+    // Instances of an overload declared in the current compilation unit are in
+    // 'resolvedOverloads'; instances from an enclosing environment are reached
+    // via the overload id. (Mirrors the two branches of fnToCore.)
+    final List<Core.IdPat> instances;
+    if (resolvedOverloads.containsKey(name)) {
+      instances = requireNonNull(resolvedOverloads.get(name).right);
+    } else {
+      final Binding top = env.getTop(name);
+      if (top == null || top.overloadId == null) {
+        return null;
+      }
+      instances = env.getOverloads(top.overloadId);
     }
     final List<Core.IdPat> matching = new ArrayList<>();
-    for (Core.IdPat idPat : env.getOverloads(top.overloadId)) {
+    for (Core.IdPat idPat : instances) {
       if (idPat.type.canCallArgOf(argType)) {
         matching.add(idPat);
       }

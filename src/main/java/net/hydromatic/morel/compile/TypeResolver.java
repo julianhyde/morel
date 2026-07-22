@@ -3395,6 +3395,19 @@ public class TypeResolver {
       collectVars(subst.resolve(v), envVars);
     }
 
+    // Variables that still carry an unresolved overload constraint. A binding
+    // that mentions one is qualified; it is generalized (with dictionary
+    // passing) by the separate qualified-type machinery, not here.
+    final Set<Variable> constrainedVars = new HashSet<>();
+    if (result instanceof SubstitutionResult) {
+      for (Constraint c : ((SubstitutionResult) result).residualConstraints) {
+        collectVars(subst.resolve(c.arg), constrainedVars);
+        if (c.result != null) {
+          collectVars(subst.resolve(c.result), constrainedVars);
+        }
+      }
+    }
+
     TypeEnv env2 = env;
     for (Map.Entry<Ast.IdPat, Term> entry : termMap) {
       final String name = entry.getKey().name;
@@ -3419,9 +3432,25 @@ public class TypeResolver {
       if (genVars.isEmpty()) {
         // Monomorphic.
         env2 = env2.bind(name, term);
+      } else if (intersects(bindingVars, constrainedVars)) {
+        // Qualified binding: generalize as a 'forall ... => ...' scheme so
+        // that each use re-emits the overload constraints (and the resolver's
+        // dictionary passing applies). This is only possible when there are no
+        // free environment variables, because a scheme type cannot capture the
+        // enclosing unifier variables.
+        final Type scheme =
+            intersects(bindingVars, envVars)
+                ? null
+                : qualifiedScheme(resolved, bindingVars, subst, result);
+        if (scheme == null) {
+          env2 = env2.bind(name, term);
+        } else {
+          env2 = env2.bind(name, Kind.VAL, ts -> toTerm(scheme, Subst.EMPTY));
+        }
       } else {
-        // Bind a factory that instantiates the scheme with fresh variables for
-        // the generalizable variables on each use.
+        // Non-qualified: bind a factory that copies the resolved type term with
+        // fresh variables for the generalizable variables on each use. (Unlike
+        // a scheme, this keeps the free environment variables shared.)
         env2 =
             env2.bind(
                 name,
@@ -3436,6 +3465,52 @@ public class TypeResolver {
       }
     }
     return env2;
+  }
+
+  /**
+   * Builds a generalized qualified-type scheme ({@code forall ... {name : ...}
+   * => ...}) for a value binding whose type term is {@code resolved} and which
+   * carries unresolved overload constraints. Returns null if it has no such
+   * constraints.
+   */
+  private @Nullable Type qualifiedScheme(
+      Term resolved,
+      Set<Variable> bindingVars,
+      Substitution subst,
+      Result result) {
+    if (!(result instanceof SubstitutionResult)) {
+      return null;
+    }
+    final TypeMap tempTypeMap =
+        new TypeMap(typeSystem, map, subst, ImmutableMap.of());
+    final List<QualifiedType.Predicate> predicates = new ArrayList<>();
+    for (Constraint c : ((SubstitutionResult) result).residualConstraints) {
+      if (c.name == null || c.result == null) {
+        continue;
+      }
+      final Set<Variable> cVars = new HashSet<>();
+      collectVars(subst.resolve(c.arg), cVars);
+      if (!intersects(cVars, bindingVars)) {
+        continue;
+      }
+      final Type argType = tempTypeMap.termToType(c.arg);
+      final Type resultType = tempTypeMap.termToType(c.result);
+      final Type predType = typeSystem.fnType(argType, resultType);
+      final List<Type> candidates = new ArrayList<>();
+      if (c.argResults != null) {
+        c.argResults.forEach(
+            (a, r) ->
+                candidates.add(
+                    typeSystem.fnType(
+                        tempTypeMap.termToType(a), tempTypeMap.termToType(r))));
+      }
+      predicates.add(new QualifiedType.Predicate(c.name, predType, candidates));
+    }
+    if (predicates.isEmpty()) {
+      return null;
+    }
+    final Type body = tempTypeMap.termToType(resolved);
+    return typeSystem.ensureClosed(typeSystem.qualifiedType(predicates, body));
   }
 
   /**
