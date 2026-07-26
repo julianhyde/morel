@@ -1,0 +1,432 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Regression tests for bugs fixed in morel-go that morel-java's
+ * corpus does not yet pin. Go-local, like parse.smli: the pull
+ * never touches this file. Each entry names the bug and the
+ * upstream .smli file its statements belong in; a future
+ * "backswing" task in morel-java adopts them there, after which a
+ * pull returns them and they are deleted from here.
+ *)
+
+(* A closed range up to Int.maxInt must terminate: the enumeration
+ * once stepped past the bound, wrapping int32 and looping forever.
+ * Belongs in range.smli. *)
+[1 .. 5];
+> val it = [1,2,3,4,5] : int list
+[2147483646 .. 2147483647];
+> val it = [2147483646,2147483647] : int list
+
+(* A recursive type alias must be rejected, not loop forever
+ * expanding itself (it once overflowed the stack).
+ * Belongs in type-alias.smli. *)
+type t = t list;
+> type t = t list
+val x = [] : t;
+> stdIn:1.14 Error: recursive type alias: t
+>   raised at: stdIn:1.14
+
+(* A wildcard scan binds no variables, so each row is unit; a set
+ * operation once read row[0] and panicked, printing nothing.
+ * Belongs in relational.smli. *)
+from _ in [1,2] union [(),()];
+> val it = [(),(),(),()] : unit list
+
+(* An empty collection reveals no element type, so "sum" once
+ * returned the int zero for every type; a real sum then panicked
+ * when combined with a real. The zero must match the static
+ * element type. Belongs in relational.smli. *)
+sum (bag [] : real bag) + 1.5;
+> val it = 1.5 : real
+from r in (from e in ([] : {x:real} list) group {} compute s = sum over e.x) yield r + 1.5;
+> val it = [1.5] : real list
+
+(* An "into" function is applied to the whole query result in the
+ * enclosing scope, so a query variable is out of scope inside it:
+ * referencing one is an unbound-variable error, not a read of a
+ * leftover row slot. Belongs in relational.smli. *)
+from i in [1,2,3] into (fn l => i);
+> stdIn:1.33 Error: unbound variable or constructor: i
+>   raised at: stdIn:1.33
+
+(* A layered pattern "x as pat" matches exactly what pat matches, so
+ * it must not count as a wildcard for coverage: "l as h :: t" leaves
+ * [] uncovered (nonexhaustive), and an "as" clause before [] is not
+ * redundant. Belongs in match.smli. *)
+fun f (l as h :: t) = 1;
+> stdIn:1.5-1.24 Warning: match nonexhaustive
+>   raised at: stdIn:1.5-1.24
+> val f = fn : 'a list -> int
+fun g (l as h :: t) = 1 | g [] = 0;
+> val g = fn : 'a list -> int
+
+(* Sys.plan reports the last statement's plan. A "fun" is a recursive
+ * val binding, so its plan is that of its first bound function; it
+ * once returned "" and cleared the previous plan. A declaration with
+ * no bound expression (a datatype) leaves the previous plan in
+ * place. Belongs in built-in.smli. *)
+fun pf x = x + 1;
+> val pf = fn : int -> int
+Sys.plan ();
+> val it =
+>   "match(x, apply2(fnValue Int.+, stack(offset 1, name x), constant(1)))"
+>   : string
+1 + 2;
+> val it = 3 : int
+datatype color = RED | GREEN;
+> datatype color = RED | GREEN
+Sys.plan ();
+> val it = "apply2(fnValue Int.+, constant(1), constant(2))" : string
+
+(* "type_string" takes an operand of precedence 9 (an atom and its
+ * field selections), not a whole application, so "type_string f x"
+ * is "(type_string f) x" -- x applies to the resulting string, a
+ * type error -- rather than the type of "f x". Belongs in type.smli
+ * (beside the "type_string ("x" ^ "y") ^ "z"" precedence test). *)
+type_string String.size "abc";
+> stdIn:1.1-1.30 Error: Cannot deduce type: conflict: fn(T2, T0) vs string
+>   raised at: stdIn:1.1-1.30
+
+(* "ordinal" is the input row's position where a group key or an
+ * aggregate argument reads it, so the enumeration must advance per
+ * row -- the position once stuck at 0, collapsing every row into one
+ * group. Belongs in relational.smli. *)
+from i in [10,20,30] group k = ordinal mod 2;
+> val it = [0,1] : int list
+from i in [5,6,7] group {} compute s = sum over ordinal;
+> val it = [3] : int list
+
+(* Relational.iterate computes a fixed point (a transitive closure):
+ * from the initial rows, the update function's new rows are added
+ * each round until it produces none. This is the functional test
+ * that the type-assertion corpus lacked. Belongs in
+ * built-in/relational.smli. *)
+Relational.iterate (bag [1]) (fn (oldList, newList) => (from n in newList where n < 4 yield n + 1));
+> val it = [1,2,3,4] : int bag
+
+(*) Finite-type extent materialization; belongs in such-that.smli.
+from b where b orelse not b;
+> val it = [false,true] : bool bag
+
+(*) Datatype extent, constructors in name order; for such-that.smli.
+from ob where Option.getOpt (ob, false) orelse true;
+> val it = [NONE,SOME false,SOME true] : bool option bag
+
+(*) Tuple extent, a cartesian product; belongs in such-that.smli.
+from bc where bc = (true, ()) orelse true;
+> val it = [(false,()),(true,())] : (bool * unit) bag
+
+(*) A quantifier over a finite extent; belongs in such-that.smli.
+exists b where b;
+> val it = true : bool
+
+(*) A dependent point orders after its dependency; for such-that.smli.
+from x, y where x = 1 andalso y = x + 1;
+> val it = [{x=1,y=2}] : {x:int, y:int} bag
+
+(*) An unused unbounded variable is dropped; for such-that.smli.
+exists w, x where x = 3;
+> val it = true : bool
+
+(*) Collection inversion of "elem"; belongs in such-that.smli.
+from x where x elem [1,2,3] andalso x > 1;
+> val it = [2,3] : int bag
+from x where x elem [1,2,2,3];
+> val it = [1,2,2,3] : int bag
+from y where y elem [1,2] andalso y elem [2,3];
+> val it = [2] : int bag
+
+(*) A tuple elem grounds all its variables; for such-that.smli.
+from x, y where (x, y) elem [(1,10),(2,20)];
+> val it = [{x=1,y=10},{x=2,y=20}] : {x:int, y:int} bag
+from x where (x, 20) elem [(1,10),(2,20)];
+> val it = [2] : int bag
+
+(*) A bound variable joins in a projected scan; such-that.smli.
+from x in [1,2,3], y where (x, y) elem [(1,10),(2,20)];
+> val it = [{x=1,y=10},{x=2,y=20}] : {x:int, y:int} bag
+from x in [1,2], y where y elem [x, x+1];
+> val it = [{x=1,y=1},{x=1,y=2},{x=2,y=2},{x=2,y=3}] : {x:int, y:int} bag
+
+
+(* Grounding must not delete a conjunct whose generator was cached
+ * but never scanned (4-Clique returned rows with x = y).
+ * Belongs in fixed-point.smli. *)
+val ps = [(1,2),(2,1),(1,3),(3,1),(2,3),(3,2)];
+> val ps = [(1,2),(2,1),(1,3),(3,1),(2,3),(3,2)] : (int * int) list
+from x, y, z, w where (x, y) elem ps andalso (y, z) elem ps andalso (x, z) elem ps andalso (x, w) elem ps andalso (y, w) elem ps andalso (z, w) elem ps;
+> val it = [] : {w:int, x:int, y:int, z:int} bag
+
+(* -------------------------------------------------------------------
+ * Statements retired from Go kernel-session tests. Not bug pins:
+ * each group pins behavior that the upstream corpus does not yet
+ * cover. Adopt each group in the file named by its comment; a
+ * later pull returns them and they are deleted from here.
+ *)
+
+(* Rebinding a name can change its type; "it" tracks the latest
+ * value. Belongs in it.smli. *)
+val x = 2;
+> val x = 2 : int
+x;
+> val it = 2 : int
+it;
+> val it = 2 : int
+val x = "b";
+> val x = "b" : string
+x;
+> val it = "b" : string
+
+(* A function value bound to "it" can be applied from "it".
+ * Belongs in it.smli. *)
+(fn x => x + 1) o (fn x => x * 2);
+> val it = fn : int -> int
+it 5;
+> val it = 11 : int
+
+(* A "let" body can use earlier declarations of the same "let".
+ * Belongs in misc.smli. *)
+let val x = 1 in x end;
+> val it = 1 : int
+let val x = 1 val y = x in y end;
+> val it = 1 : int
+let val s = "morel" in size s end;
+> val it = 5 : int
+
+(* "case" with constant, variable, and wildcard patterns over int
+ * and string scrutinees. Belongs in match.smli. *)
+case 3 of 0 => "zero" | _ => "nonzero";
+> val it = "nonzero" : string
+case 0 of 0 => "zero" | _ => "nonzero";
+> val it = "zero" : string
+case 42 of n => n;
+> val it = 42 : int
+case 7 of 0 => 0 | n => n;
+> val it = 7 : int
+case "a" of "a" => 1 | _ => 2;
+> val it = 1 : int
+val n = 5;
+> val n = 5 : int
+case n of 5 => true | _ => false;
+> val it = true : bool
+
+(* List patterns in "case". Belongs in match.smli. *)
+case [1] of [x] => x | _ => 0;
+> val it = 1 : int
+case [1, 2] of [x] => x | _ => 0;
+> val it = 0 : int
+
+(* Multi-clause "fn" expressions. Belongs in match.smli. *)
+val h = fn 0 => "zero" | _ => "other";
+> val h = fn : int -> string
+h 0;
+> val it = "zero" : string
+h 5;
+> val it = "other" : string
+(fn 1 => true | n => false) 3;
+> val it = false : bool
+
+(* Nested-tuple and record "val" patterns; a pattern that binds
+ * nothing. Belongs in match.smli. *)
+val (a, (b, c)) = (1, (2, 3));
+> val a = 1 : int
+> val b = 2 : int
+> val c = 3 : int
+val {a=p, b=q} = {a=4, b=5};
+> val p = 4 : int
+> val q = 5 : int
+val _ = 9;
+let val (i, j) = (2, 3) in (j, i) end;
+> val it = (3,2) : int * int
+
+(* A polymorphic function is reusable at several types; lambdas
+ * apply directly, including to unit and via wildcard. Belongs in
+ * closure.smli. *)
+val f = fn x => x;
+> val f = fn : 'a -> 'a
+f 3;
+> val it = 3 : int
+f "a";
+> val it = "a" : string
+(fn x => x) 5;
+> val it = 5 : int
+val g = fn s => size s;
+> val g = fn : string -> int
+g "abc";
+> val it = 3 : int
+(fn () => 3) ();
+> val it = 3 : int
+(fn _ => 9) 1;
+> val it = 9 : int
+
+(* Captured variables outlive their scope, across statements.
+ * Belongs in closure.smli. *)
+val k = let val a = 7 in fn x => a end;
+> val k = fn : 'a -> int
+k 100;
+> val it = 7 : int
+val add = fn x => fn y => x;
+> val add = fn : 'a -> 'b -> 'a
+add 1 2;
+> val it = 1 : int
+val p = add true;
+> val p = fn : 'a -> bool
+p ();
+> val it = true : bool
+val t = let val a = 4 in fn x => fn y => a end;
+> val t = fn : 'a -> 'b -> int
+t 1 2;
+> val it = 4 : int
+case (fn x => x) of f => f 8;
+> val it = 8 : int
+
+(* Curried functions and partial application across statements.
+ * Belongs in closure.smli. *)
+fun add x y = x + y;
+> val add = fn : int -> int -> int
+add 3 4;
+> val it = 7 : int
+val inc = add 1;
+> val inc = fn : int -> int
+inc 10;
+> val it = 11 : int
+
+(* "val rec", top-level and in "let", singly and mutually
+ * recursive. Belongs in misc.smli. *)
+val rec r = fn 0 => 1 | _ => r 0;
+> val r = fn : int -> int
+r 9;
+> val it = 1 : int
+let val rec g = fn 0 => 2 | _ => g 0 in g 7 end;
+> val it = 2 : int
+let val rec fm = fn () => gm 0 and gm = fn 0 => 6 | _ => fm () in fm () end;
+> val it = 6 : int
+
+(* Escaping closures and recursive references that cross statement
+ * boundaries. Belongs in closure.smli. *)
+fun a x = fn () => b x and b x = x + 1;
+> val a = fn : int -> unit -> int
+> val b = fn : int -> int
+val g = a 41;
+> val g = fn : unit -> int
+g ();
+> val it = 42 : int
+fun countdown n = if n = 0 then (fn () => 0) else (fn () => countdown (n - 1) ());
+> val countdown = fn : int -> unit -> int
+(countdown 3) ();
+> val it = 0 : int
+val rec f = (fn g => g) (fn x => if x = 0 then 1 else f (x - 1));
+> val f = fn : int -> int
+f 3;
+> val it = 1 : int
+fun outer n = let fun inner 0 = n | inner k = inner (k - 1) in fn () => inner 5 end;
+> val outer = fn : 'a -> unit -> 'a
+(outer 7) ();
+> val it = 7 : int
+val fs = [fn x => x + 1, fn x => x * 2];
+> val fs = [fn,fn] : (int -> int) list
+hd fs 10;
+> val it = 11 : int
+fn x => x + 1;
+> val it = fn : int -> int
+it 5;
+> val it = 6 : int
+fun isEven 0 = true | isEven n = isOdd (n - 1) and isOdd 0 = false | isOdd n = isEven (n - 1);
+> val isEven = fn : int -> bool
+> val isOdd = fn : int -> bool
+val checker = isOdd;
+> val checker = fn : int -> bool
+checker 9;
+> val it = true : bool
+isEven 10;
+> val it = true : bool
+
+(* A cons chain is right-associative; structural equality on
+ * tuples and lists; record fields print in alphabetical order
+ * regardless of input order. Belongs in simple.smli. *)
+1 :: 2 :: nil;
+> val it = [1,2] : int list
+(1, 2) = (1, 3);
+> val it = false : bool
+[1, 2] = [1, 2];
+> val it = true : bool
+{b=2, a=1};
+> val it = {a=1,b=2} : {a:int, b:int}
+
+(* Datatype values: constructor-argument parenthesization,
+ * negative arguments, constructors as function values, case
+ * dispatch, and equality. Belongs in datatype.smli. *)
+SOME (SOME 4);
+> val it = SOME (SOME 4) : int option option
+SOME [1, 2];
+> val it = SOME [1,2] : int list option
+SOME ~1;
+> val it = SOME ~1 : int option
+SOME "a";
+> val it = SOME "a" : string option
+datatype color = RED | GREEN | BLUE;
+> datatype color = RED | GREEN | BLUE
+SOME RED;
+> val it = SOME RED : color option
+case RED of RED => 1 | _ => 2;
+> val it = 1 : int
+case GREEN of RED => 1 | _ => 2;
+> val it = 2 : int
+case SOME 3 of NONE => 0 | SOME n => n + 1;
+> val it = 4 : int
+map SOME [1, 2];
+> val it = [SOME 1,SOME 2] : int option list
+SOME 1 = SOME 1;
+> val it = true : bool
+SOME 1 = SOME 2;
+> val it = false : bool
+SOME 1 = NONE;
+> val it = false : bool
+LESS = EQUAL;
+> val it = false : bool
+
+(* "div" and "mod" round toward negative infinity;
+ * "Int.fromString" accepts a numeric prefix. Belongs in
+ * built-in/int.smli. *)
+~7 div 2;
+> val it = ~4 : int
+7 mod ~2;
+> val it = ~1 : int
+Int.fromString "83a";
+> val it = SOME 83 : int option
+Int.fromString "bad";
+> val it = NONE : int option
+
+(* Division by zero raises Div. Belongs in exception.smli. *)
+7 div 0;
+> uncaught exception Div [divide by zero]
+>   raised at: stdIn:1.1-1.8
+
+(* "round" goes to nearest even on ties; "Real.fromString"
+ * accepts a numeric prefix. Belongs in built-in/real.smli. *)
+round 2.5;
+> val it = 2 : int
+round 3.5;
+> val it = 4 : int
+Real.fromString "2.5x";
+> val it = SOME 2.5 : real option
+
+(* ln e is slightly below 1 in 32-bit floats. Belongs in
+ * built-in/math.smli. *)
+Math.ln Math.e;
+> val it = 0.99999994 : real
