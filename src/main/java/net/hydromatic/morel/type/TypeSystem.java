@@ -300,6 +300,16 @@ public class TypeSystem {
   }
 
   /**
+   * Returns the name under which a type is displayed once a later declaration
+   * has taken over its name, following Standard ML. Two types that have been
+   * displaced from the same name are both displayed this way; Standard ML does
+   * not tell them apart either.
+   */
+  public static String shadowName(String name) {
+    return "?." + name;
+  }
+
+  /**
    * Converts a regular type to an internal type. Throws if the type is not
    * known.
    */

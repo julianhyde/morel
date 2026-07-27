@@ -3681,6 +3681,18 @@ public class TypeResolver {
 
   private Ast.Decl deduceTypeDeclType(
       TypeEnv env, Ast.TypeDecl typeDecl, PairList<Ast.IdPat, Term> termMap) {
+    // The bindings in a 'type ... and ...' group are simultaneous, so every
+    // name the group binds is displaced throughout it, not just in the body
+    // of its own binding. Resolve them all before converting any body.
+    final Map<String, Type.Key> displacedKeys = new LinkedHashMap<>();
+    typeDecl.binds.forEach(
+        bind -> {
+          final Type.Key key = displacedKey(bind.name.name);
+          if (key != null) {
+            displacedKeys.put(bind.name.name, key);
+          }
+        });
+
     final List<Type.Key> keys = new ArrayList<>();
     for (Ast.TypeBind bind : typeDecl.binds) {
       // Check that every type-constructor reference in the body has the right
@@ -3688,7 +3700,7 @@ public class TypeResolver {
       checkTypeConstructorArities(typeSystem, bind.type);
       // The body may not use a type variable that is not in the head.
       checkBoundTyVars(bind.tyVars, ImmutableList.of(bind.type));
-      final KeyBuilder keyBuilder = new KeyBuilder();
+      final KeyBuilder keyBuilder = new KeyBuilder(displacedKeys);
       bind.tyVars.forEach(keyBuilder::toTypeKey);
 
       keys.add(
@@ -3701,6 +3713,31 @@ public class TypeResolver {
 
     map.put(typeDecl, toTerm(PrimitiveType.UNIT));
     return typeDecl;
+  }
+
+  /**
+   * Returns the key to use for a reference to {@code name} in the body of a
+   * {@code type} declaration that binds {@code name}, or null if {@code name}
+   * is not currently bound (in which case {@link #checkTypeConstructorArities}
+   * has already reported it).
+   */
+  private Type.@Nullable Key displacedKey(String name) {
+    final Type type = typeSystem.lookupOpt(name);
+    if (type == null) {
+      return null;
+    }
+    if (type instanceof AliasType) {
+      // A type alias is transparent, so expand it. Standard ML displays
+      // 'type t = int; type t = t list' as 'type t = int list'.
+      return ((AliasType) type).type.key();
+    }
+    // A datatype is generative, so it cannot be expanded. Wrap it in an alias
+    // that renders '?.d', as Standard ML does. The wrapper holds the
+    // datatype's own key rather than its name, so that shadowing the same name
+    // twice gives two distinct types, both displayed '?.d' -- again as in
+    // Standard ML, which does not tell them apart either.
+    return Keys.alias(
+        TypeSystem.shadowName(name), type.key(), ImmutableList.of());
   }
 
   private Ast.Decl deduceDataTypeDeclType(
@@ -3845,6 +3882,32 @@ public class TypeResolver {
   private static class KeyBuilder {
     final Map<String, Integer> tyVarMap = new HashMap<>();
 
+    /**
+     * Keys to use for names that the declaration being converted is about to
+     * rebind, resolved from the environment before the declaration. Left as
+     * names, they would later find the new definition and be self-referential.
+     *
+     * @see TypeResolver#displacedKey(String)
+     */
+    final ImmutableMap<String, Type.Key> displacedKeys;
+
+    KeyBuilder() {
+      this(ImmutableMap.of());
+    }
+
+    KeyBuilder(Map<String, Type.Key> displacedKeys) {
+      this.displacedKeys = ImmutableMap.copyOf(displacedKeys);
+    }
+
+    /**
+     * Converts a type name into a key, using the displaced definition if the
+     * declaration being converted is about to rebind the name.
+     */
+    Type.Key nameKey(String name) {
+      final Type.Key key = displacedKeys.get(name);
+      return key != null ? key : Keys.name(name);
+    }
+
     /** Converts an AST type into a type key. */
     Type.Key toTypeKey(Ast.Type type) {
       if (type instanceof Ast.CompositeType) {
@@ -3893,9 +3956,9 @@ public class TypeResolver {
             return Keys.list(typeList.get(0));
           }
           if (typeList.isEmpty()) {
-            return Keys.name(namedType.name);
+            return nameKey(namedType.name);
           } else {
-            return Keys.apply(Keys.name(namedType.name), typeList);
+            return Keys.apply(nameKey(namedType.name), typeList);
           }
 
         case TY_VAR:

@@ -72,4 +72,48 @@ type a = int and b = a list;
 > stdIn:1.22 Error: unbound type constructor: a
 >   raised at: stdIn:1.22
 
+(* A name that the declaration itself rebinds means the definition
+ * being displaced, not the one being declared. A type alias is
+ * transparent, so it is expanded. *)
+type t2 = int;
+> type t2 = int
+type t2 = t2 list;
+> type t2 = int list
+val x2 : t2 = [1,2];
+> val x2 = [1,2] : t2
+
+(*) The bindings of a 'type ... and ...' group are simultaneous.
+type u2 = int;
+> type u2 = int
+type u2 = u2 list and v2 = u2;
+> type u2 = int list
+> type v2 = int
+
+(* A datatype is generative, so it cannot be expanded; the displaced
+ * type is displayed '?.d2', as in Standard ML. *)
+datatype d2 = A2 | B2;
+> datatype d2 = A2 | B2
+type d2 = d2 list;
+> type d2 = ?.d2 list
+
+(* Shadowing the same name twice gives two distinct displaced types.
+ * Standard ML displays both '?.d3', which does not distinguish them;
+ * we expand the alias, which does. *)
+datatype d3 = A3 | B3;
+> datatype d3 = A3 | B3
+type d3 = d3 list;
+> type d3 = ?.d3 list
+type d3 = d3 list;
+> type d3 = ?.d3 list list
+
+(*) Each displaced datatype is a separate type, though both print '?.e3'.
+datatype e3 = P3 | Q3;
+> datatype e3 = P3 | Q3
+type e3 = e3 list;
+> type e3 = ?.e3 list
+datatype e3 = R3 | S3;
+> datatype e3 = R3 | S3
+type e3 = e3 list;
+> type e3 = ?.e3 list
+
 (*) End type-alias.smli
