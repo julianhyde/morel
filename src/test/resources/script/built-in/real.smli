@@ -858,6 +858,11 @@ f 2.5;
 > val it = (2,3,2,2) : int * int * int * int
 f 3.5;
 > val it = (3,4,3,4) : int * int * int * int
+(*) The top-level "round" also goes to nearest even on a tie.
+round 2.5;
+> val it = 2 : int
+round 3.5;
+> val it = 4 : int
 f ~2.0;
 > val it = (~2,~2,~2,~2) : int * int * int * int
 f ~1.75;
@@ -1337,14 +1342,5 @@ List.map (fn x => (x, Real.toString x))
   between binary and decimal real representations are readily available, e.g.,
   see the technical report by Gay[CITE]. *)
 (*) TODO
-
-(* "round" goes to nearest even on ties; "Real.fromString"
- * accepts a numeric prefix. *)
-round 2.5;
-> val it = 2 : int
-round 3.5;
-> val it = 4 : int
-Real.fromString "2.5x";
-> val it = SOME 2.5 : real option
 
 (*) End real.smli

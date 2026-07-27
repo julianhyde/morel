@@ -150,14 +150,17 @@ in
 end;
 > val it = 60 : int
 
-(* A polymorphic function is reusable at several types; lambdas
- * apply directly, including to unit and via wildcard. *)
+(* Lambdas -------------------------------------------------------- *)
+
+(*) A polymorphic function is reusable at several types.
 val f = fn x => x;
 > val f = fn : 'a -> 'a
 f 3;
 > val it = 3 : int
 f "a";
 > val it = "a" : string
+
+(*) A lambda can be applied directly, including to unit and via wildcard.
 (fn x => x) 5;
 > val it = 5 : int
 val g = fn s => size s;
@@ -169,7 +172,7 @@ g "abc";
 (fn _ => 9) 1;
 > val it = 9 : int
 
-(* Captured variables outlive their scope, across statements. *)
+(*) Captured variables outlive their scope, across statements.
 val k = let val a = 7 in fn x => a end;
 > val k = fn : 'a -> int
 k 100;
@@ -189,7 +192,7 @@ t 1 2;
 case (fn x => x) of f => f 8;
 > val it = 8 : int
 
-(* Curried functions and partial application across statements. *)
+(*) Curried functions and partial application, across statements.
 fun add x y = x + y;
 > val add = fn : int -> int -> int
 add 3 4;
@@ -199,8 +202,7 @@ val inc = add 1;
 inc 10;
 > val it = 11 : int
 
-(* Escaping closures and recursive references that cross statement
- * boundaries. *)
+(*) Escaping closures and recursion that cross statement boundaries.
 fun a x = fn () => b x and b x = x + 1;
 > val a = fn : int -> unit -> int
 > val b = fn : int -> int

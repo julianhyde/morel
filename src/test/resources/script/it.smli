@@ -84,8 +84,9 @@ val it = 42;
 it;
 > val it = 42 : int
 
-(* Rebinding a name can change its type; "it" tracks the latest
- * value. *)
+(* Each bare expression reassigns 'it', so it tracks the latest
+ * value, and its type can change. (These come last because they
+ * change 'it', which the tests above pin.) *)
 val x = 2;
 > val x = 2 : int
 x;
@@ -97,7 +98,7 @@ val x = "b";
 x;
 > val it = "b" : string
 
-(* A function value bound to "it" can be applied from "it". *)
+(*) 'it' holds a function value like any other, and can be applied.
 (fn x => x + 1) o (fn x => x * 2);
 > val it = fn : int -> int
 it 5;
