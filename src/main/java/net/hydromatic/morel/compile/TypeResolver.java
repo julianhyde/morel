@@ -136,6 +136,15 @@ public class TypeResolver {
   private final Deque<AggFrame> aggregateTripleStack = new ArrayDeque<>();
 
   /**
+   * Datatypes encountered whose name has since been taken over by a later
+   * declaration. A unifier term identifies a datatype only by name, so without
+   * these the type could not be recovered from the term.
+   *
+   * @see TypeMap#displacedTypes
+   */
+  private final Map<String, Type> displacedTypes = new HashMap<>();
+
+  /**
    * Names of user-defined functions whose first parameter is named {@code self}
    * (curried form); these can be invoked as methods.
    */
@@ -259,7 +268,11 @@ public class TypeResolver {
 
       final TypeMap typeMap0 =
           new TypeMap(
-              typeSystem, map, (Substitution) result, ImmutableMap.of());
+              typeSystem,
+              map,
+              (Substitution) result,
+              ImmutableMap.of(),
+              displacedTypes);
 
       // If any value bindings have aliased types (e.g. 'myInt' rather than
       // the expanded type 'int'), populate a map with those types.
@@ -268,7 +281,12 @@ public class TypeResolver {
       final TypeMap typeMap =
           realTypes.isEmpty()
               ? typeMap0
-              : new TypeMap(typeSystem, map, (Substitution) result, realTypes);
+              : new TypeMap(
+                  typeSystem,
+                  map,
+                  (Substitution) result,
+                  realTypes,
+                  displacedTypes);
 
       while (!preferredTypes.isEmpty()) {
         Map.Entry<Variable, PrimitiveType> x = preferredTypes.remove(0);
@@ -3497,7 +3515,7 @@ public class TypeResolver {
       return null;
     }
     final TypeMap tempTypeMap =
-        new TypeMap(typeSystem, map, subst, ImmutableMap.of());
+        new TypeMap(typeSystem, map, subst, ImmutableMap.of(), displacedTypes);
     final List<QualifiedType.Predicate> predicates = new ArrayList<>();
     for (Constraint c : ((SubstitutionResult) result).residualConstraints) {
       if (c.name == null || c.result == null) {
@@ -4643,6 +4661,12 @@ public class TypeResolver {
         if (dataType.name.equals(BAG_TY_CON)) {
           assert dataType.arguments.size() == 1;
           return bagTerm(toTerm(dataType.elementType(), subst));
+        }
+        // A term identifies a datatype by name, so a datatype whose name now
+        // belongs to something else could not be recovered from the term.
+        // Remember it, for TypeMap to convert back.
+        if (typeSystem.isDisplaced(dataType)) {
+          displacedTypes.put(dataType.name(), dataType);
         }
         return unifier.apply(
             dataType.name(), toTerms(dataType.arguments, subst));

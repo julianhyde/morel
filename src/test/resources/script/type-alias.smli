@@ -116,4 +116,31 @@ datatype e3 = R3 | S3;
 type e3 = e3 list;
 > type e3 = ?.e3 list
 
+(* A displaced datatype keeps its identity: its constructors still
+ * belong to it, and match against it. Whether a name still refers to
+ * a type is decided when the type is displayed, so the same value
+ * prints 'e4' before the name is taken over and '?.e4' after. *)
+datatype d4 = A4 | B4;
+> datatype d4 = A4 | B4
+type d4 = d4 list;
+> type d4 = ?.d4 list
+B4;
+> val it = B4 : ?.d4
+[A4];
+> val it = [A4] : ?.d4 list
+case A4 of A4 => 1 | B4 => 2;
+> val it = 1 : int
+
+(*) A datatype displaced by another datatype behaves the same way.
+datatype e4 = P4 | Q4;
+> datatype e4 = P4 | Q4
+val x4 = P4;
+> val x4 = P4 : e4
+datatype e4 = R4 | S4;
+> datatype e4 = R4 | S4
+x4;
+> val it = P4 : ?.e4
+val y4 = R4;
+> val y4 = R4 : e4
+
 (*) End type-alias.smli
