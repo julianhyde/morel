@@ -787,9 +787,14 @@ public class TypeResolver {
   }
 
   /**
-   * Walks an AST type and checks that every type-constructor reference has the
-   * right number of arguments. Used for type aliases, where {@link
-   * TypeToTermConverter#typeTerm} is not invoked.
+   * Walks an AST type and checks that every type-constructor reference is bound
+   * and has the right number of arguments. Used for type aliases, where {@link
+   * TypeToTermConverter#typeTerm} is not invoked and therefore unification
+   * would never see the error.
+   *
+   * <p>A {@code type} declaration is not recursive, and the bindings in a
+   * {@code type ... and ...} group are simultaneous, so a name declared by the
+   * declaration itself is not yet bound and is rejected here.
    */
   static void checkTypeConstructorArities(
       TypeSystem typeSystem, Ast.Type type) {
@@ -797,8 +802,14 @@ public class TypeResolver {
         new Visitor() {
           @Override
           protected void visit(Ast.NamedType namedType) {
-            checkTypeConstructorArity(
-                namedType, typeSystem.lookupOpt(namedType.name));
+            final Type resolved = typeSystem.lookupOpt(namedType.name);
+            if (resolved == null) {
+              throw new CompileException(
+                  "unbound type constructor: " + namedType.name,
+                  false,
+                  namedType.pos);
+            }
+            checkTypeConstructorArity(namedType, resolved);
             super.visit(namedType);
           }
         });
@@ -1473,11 +1484,12 @@ public class TypeResolver {
     requireNonNull(p.c);
     final Variable rv = unifier.variable();
     final Ast.Exp intoExp;
-    switch (aggKind(p.env, into.exp)) {
+    switch (aggKind(p.rootEnv, into.exp)) {
       case USER_UNKNOWN:
         // User-defined function whose type is not yet available.
         // Link directly to p.c to preserve record type propagation.
-        intoExp = deduceExpType(p.env, into.exp, toVariable(fnTerm(p.c, rv)));
+        intoExp =
+            deduceExpType(p.rootEnv, into.exp, toVariable(fnTerm(p.c, rv)));
         break;
       case BAG:
         {
@@ -1486,7 +1498,8 @@ public class TypeResolver {
           final Variable intoCArg0 = unifier.variable();
           equiv(intoCArg0, bagTerm(p.v));
           intoExp =
-              deduceExpType(p.env, into.exp, toVariable(fnTerm(intoCArg0, rv)));
+              deduceExpType(
+                  p.rootEnv, into.exp, toVariable(fnTerm(intoCArg0, rv)));
           break;
         }
       case LIST:
@@ -1495,7 +1508,8 @@ public class TypeResolver {
           final Variable intoCArg1 = unifier.variable();
           equiv(intoCArg1, listTerm(p.v));
           intoExp =
-              deduceExpType(p.env, into.exp, toVariable(fnTerm(intoCArg1, rv)));
+              deduceExpType(
+                  p.rootEnv, into.exp, toVariable(fnTerm(intoCArg1, rv)));
           break;
         }
       default:
@@ -1505,7 +1519,8 @@ public class TypeResolver {
           final Variable intoCArg = unifier.variable();
           sameOrderedness(intoCArg, p.v, p.c, p.v);
           final Variable intoVFn = unifier.variable();
-          intoExp = deduceApplyFnType(p.env, into.exp, intoVFn, intoCArg, rv);
+          intoExp =
+              deduceApplyFnType(p.rootEnv, into.exp, intoVFn, intoCArg, rv);
           reg(into.exp, intoVFn);
           equiv(intoVFn, fnTerm(intoCArg, rv));
           break;

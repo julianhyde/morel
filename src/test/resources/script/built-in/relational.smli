@@ -426,4 +426,11 @@ List.collate Relational.compare ([NONE, SOME 1], [NONE, SOME 1, NONE]);
 Vector.collate Relational.compare (Vector.fromList [1,2,3], Vector.fromList [1,2,4]);
 > val it = LESS : order
 
+(* Relational.iterate computes a fixed point (a transitive closure):
+ * from the initial rows, the update function's new rows are added
+ * each round until it produces none. This is the functional test
+ * that the type-assertion corpus lacked. *)
+Relational.iterate (bag [1]) (fn (oldList, newList) => (from n in newList where n < 4 yield n + 1));
+> val it = [1,2,3,4] : int bag
+
 (*) End relational.smli

@@ -1190,4 +1190,16 @@ classify 0w0;
 classify 0w7;
 > val it = "nonzero" : string
 
+(* A cons chain is right-associative; structural equality on
+ * tuples and lists; record fields print in alphabetical order
+ * regardless of input order. *)
+1 :: 2 :: nil;
+> val it = [1,2] : int list
+(1, 2) = (1, 3);
+> val it = false : bool
+[1, 2] = [1, 2];
+> val it = true : bool
+{b=2, a=1};
+> val it = {a=1,b=2} : {a:int, b:int}
+
 (*) End simple.smli

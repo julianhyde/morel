@@ -66,4 +66,9 @@ f 1;
 > uncaught exception Bind [nonexhaustive binding failure]
 >   raised at: stdIn:1.25-1.35
 
+(* Division by zero raises Div. *)
+7 div 0;
+> uncaught exception Div [divide by zero]
+>   raised at: stdIn:1.1-1.8
+
 (*) End exception.smli

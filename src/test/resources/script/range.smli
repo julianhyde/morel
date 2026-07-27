@@ -589,4 +589,11 @@ Range.flatten [POINT 1.0, POINT 3.0, POINT 1.0];
 > uncaught exception Size [size]
 >   raised at: 0.0-0.0
 
+(* A closed range up to Int.maxInt must terminate: the enumeration
+ * once stepped past the bound, wrapping int32 and looping forever. *)
+[1 .. 5];
+> val it = [1,2,3,4,5] : int list
+[2147483646 .. 2147483647];
+> val it = [2147483646,2147483647] : int list
+
 (*) End range.smli

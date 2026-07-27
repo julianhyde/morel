@@ -61,4 +61,15 @@ type myInt = int and myRealList = real list;
 val reals = [1.0, 2.0, 3.0]: myRealList;
 > val reals = [1,2,3] : myRealList
 
+(* A "type" declaration is not recursive, and the bindings in a
+ * "type ... and ..." group are simultaneous, so a name that the
+ * declaration itself introduces is not in scope in its body.
+ * Expanding such a name once overflowed the stack. *)
+type t = t list;
+> stdIn:1.10 Error: unbound type constructor: t
+>   raised at: stdIn:1.10
+type a = int and b = a list;
+> stdIn:1.22 Error: unbound type constructor: a
+>   raised at: stdIn:1.22
+
 (*) End type-alias.smli

@@ -84,4 +84,23 @@ val it = 42;
 it;
 > val it = 42 : int
 
+(* Rebinding a name can change its type; "it" tracks the latest
+ * value. *)
+val x = 2;
+> val x = 2 : int
+x;
+> val it = 2 : int
+it;
+> val it = 2 : int
+val x = "b";
+> val x = "b" : string
+x;
+> val it = "b" : string
+
+(* A function value bound to "it" can be applied from "it". *)
+(fn x => x + 1) o (fn x => x * 2);
+> val it = fn : int -> int
+it 5;
+> val it = 11 : int
+
 (*) End it.smli

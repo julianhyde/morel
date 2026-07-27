@@ -1338,4 +1338,13 @@ List.map (fn x => (x, Real.toString x))
   see the technical report by Gay[CITE]. *)
 (*) TODO
 
+(* "round" goes to nearest even on ties; "Real.fromString"
+ * accepts a numeric prefix. *)
+round 2.5;
+> val it = 2 : int
+round 3.5;
+> val it = 4 : int
+Real.fromString "2.5x";
+> val it = SOME 2.5 : real option
+
 (*) End real.smli

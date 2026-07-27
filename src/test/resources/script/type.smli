@@ -1157,4 +1157,13 @@ val w = [1] : my_list;
 > stdIn:1.15-1.22 Error: type constructor my_list given 0 arguments, wants 1
 >   raised at: stdIn:1.15-1.22
 
+(* "type_string" takes an operand of precedence 9 (an atom and its
+ * field selections), not a whole application, so "type_string f x"
+ * is "(type_string f) x" -- x applies to the resulting string, a
+ * type error -- rather than the type of "f x".
+ * (beside the "type_string ("x" ^ "y") ^ "z"" precedence test). *)
+type_string String.size "abc";
+> stdIn:1.1-1.30 Error: Cannot deduce type: conflict: fn(T2, T0) vs string
+>   raised at: stdIn:1.1-1.30
+
 (*) End type.smli

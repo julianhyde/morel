@@ -245,4 +245,15 @@ List.map (fn (Name, X) =>
 Sys.unset "output";
 > val it = () : unit
 
+(* "div" and "mod" round toward negative infinity;
+ * "Int.fromString" accepts a numeric prefix. *)
+~7 div 2;
+> val it = ~4 : int
+7 mod ~2;
+> val it = ~1 : int
+Int.fromString "83a";
+> val it = SOME 83 : int option
+Int.fromString "bad";
+> val it = NONE : int option
+
 (*) End int.smli
