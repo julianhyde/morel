@@ -78,9 +78,6 @@ public class MorelParserImpl implements MorelParser
    */
   private boolean inArg = false;
 
-  /** Depth of enclosing record braces. */
-  private int recordDepth = 0;
-
   public void setTabSize(int tabSize) {
     jj_input_stream.setTabSize(tabSize);
   }
@@ -197,18 +194,6 @@ public class MorelParserImpl implements MorelParser
     } catch (ParseException | Error e) {
       throw wrap(e);
     }
-  }
-
-  /** Returns whether token {@code i} starts an operator region. */
-  boolean isRegionKeyword(int i) {
-    if (recordDepth == 0) {
-      return false;
-    }
-    final Token t = getToken(i);
-    return t.kind == IDENTIFIER
-        && (t.image.equals("extend")
-            || t.image.equals("remove")
-            || t.image.equals("rename"));
   }
 }
 
@@ -327,8 +312,22 @@ Literal wordLiteral() : {}
   }
 }
 
+/** Parses a keyword that is not reserved. These words introduce an operator
+ * region inside a record (see [MOREL-430]) but remain usable as identifiers
+ * everywhere else, so every rule that accepts an identifier accepts them. */
+String nonReservedKeyword() : {}
+{
+  <ALL> { return token.image; }
+| <EXTEND> { return token.image; }
+| <REMOVE> { return token.image; }
+| <RENAME> { return token.image; }
+}
+
 /** Parses an identifier. */
-Id identifier() : {}
+Id identifier() :
+{
+  final String s;
+}
 {
   <IDENTIFIER> {
     return ast.id(pos(), token.image);
@@ -336,13 +335,20 @@ Id identifier() : {}
 | <QUOTED_IDENTIFIER> {
     return ast.id(pos(), unquoteIdentifier(token.image));
   }
+| s = nonReservedKeyword() {
+    return ast.id(pos(), s);
+  }
 }
 
 /** Parses an identifier, quoted identifier, or symbol. */
-String identifierOrSymbol() : {}
+String identifierOrSymbol() :
+{
+  final String s;
+}
 {
     <IDENTIFIER> { return token.image; }
   | <QUOTED_IDENTIFIER> { return unquoteIdentifier(token.image); }
+  | s = nonReservedKeyword() { return s; }
   | <PLUS> { return "+"; }
   | <MINUS> { return "-"; }
   | <STAR> { return "*"; }
@@ -637,7 +643,8 @@ void fromFirstScan(List<FromStep> steps) :
 }
 {
   LOOKAHEAD(
-      (<IDENTIFIER> | <QUOTED_IDENTIFIER>)
+      (<IDENTIFIER> | <QUOTED_IDENTIFIER>
+        | <ALL> | <EXTEND> | <REMOVE> | <RENAME>)
       (<COMMA> | <JOIN> | <WHERE> | <GROUP> | <COMPUTE>
         | <SKIP_> | <TAKE> | <YIELD> | <YIELDALL> | <EOF>))
   id = identifier() {
@@ -666,7 +673,8 @@ void fromScan(Op op, List<FromStep> steps) :
 }
 {
   LOOKAHEAD(
-      (<IDENTIFIER> | <QUOTED_IDENTIFIER>)
+      (<IDENTIFIER> | <QUOTED_IDENTIFIER>
+        | <ALL> | <EXTEND> | <REMOVE> | <RENAME>)
       (<COMMA> | <JOIN> | <WHERE> | <GROUP> | <COMPUTE>
         | <SKIP_> | <TAKE> | <YIELD> | <YIELDALL> | <EOF>))
   id = identifier() {
@@ -735,7 +743,8 @@ void fromStep(List<FromStep> steps) :
 |
   <GROUP> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <EQ>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER>
+        | <ALL> | <EXTEND> | <REMOVE> | <RENAME> ) <EQ>)
     binder = identifier() <EQ>
   |
     { binder = null; }
@@ -801,7 +810,8 @@ void fromStep(List<FromStep> steps) :
 |
   <YIELD> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <EQ>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER>
+        | <ALL> | <EXTEND> | <REMOVE> | <RENAME> ) <EQ>)
     binder = identifier() <EQ>
   |
     { binder = null; }
@@ -812,7 +822,8 @@ void fromStep(List<FromStep> steps) :
 |
   <YIELDALL> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <IN>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER>
+        | <ALL> | <EXTEND> | <REMOVE> | <RENAME> ) <IN>)
     binder = identifier() <IN>
   |
     { binder = null; }
@@ -1060,7 +1071,6 @@ Exp expression8() :
 {
   e = expression9()
   (
-    LOOKAHEAD(1, {!isRegionKeyword(1)})
     /* Set inArg so that expression9, when parsing the argument,
        suppresses the outer DOT chain for non-Id atoms (see expression9). */
     {
@@ -1349,7 +1359,8 @@ void namedExpression(PairList<Id, Exp> list) :
   final Id id;
 }
 {
-  LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> ) <EQ>)
+  LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER>
+        | <ALL> | <EXTEND> | <REMOVE> | <RENAME> ) <EQ>)
   id = identifier() <EQ> exp = expression() {
     list.add(id, exp);
   }
@@ -1454,14 +1465,14 @@ Exp atom() :
 |
   <LBRACE> {
     span = Span.of(pos());
-    ++recordDepth;
     final PairList<Id, Exp> nameExps = PairList.of();
     Exp exp;
     Exp with = null;
   }
   [
     (
-      LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>) <EQ>)
+      LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
+          | <ALL> | <EXTEND> | <REMOVE> | <RENAME>) <EQ>)
       labeledRecordExp(nameExps)
     |
       exp = expression()
@@ -1480,7 +1491,6 @@ Exp atom() :
     )*
   ]
   <RBRACE> {
-    --recordDepth;
     return ast.record(span.end(this), with, nameExps);
   }
 }
@@ -1490,6 +1500,7 @@ void labeledRecordExp(PairList<Id, Exp> nameExps) :
 {
   final Ast.Id id;
   final Ast.Exp exp;
+  final String s;
 }
 {
   LOOKAHEAD(<NATURAL_LITERAL> <EQ>)
@@ -1498,6 +1509,10 @@ void labeledRecordExp(PairList<Id, Exp> nameExps) :
 |
   LOOKAHEAD(<IDENTIFIER> <EQ>)
   <IDENTIFIER> { id = ast.id(pos(), token.image); }
+  <EQ> exp = expression() { nameExps.add(id, exp); }
+|
+  LOOKAHEAD(nonReservedKeyword() <EQ>)
+  s = nonReservedKeyword() { id = ast.id(pos(), s); }
   <EQ> exp = expression() { nameExps.add(id, exp); }
 |
   LOOKAHEAD(<QUOTED_IDENTIFIER> <EQ>)
@@ -1512,7 +1527,8 @@ void recordExp(PairList<Id, Exp> nameExps) :
   final Ast.Exp exp;
 }
 {
-  LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>) <EQ>)
+  LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
+          | <ALL> | <EXTEND> | <REMOVE> | <RENAME>) <EQ>)
   labeledRecordExp(nameExps)
 |
   exp = expression() {
@@ -2166,6 +2182,7 @@ void recordPat(Map<String, Pat> map) :
   ( <NATURAL_LITERAL> { id = token.image; }
   | <IDENTIFIER> { id = token.image; }
   | <QUOTED_IDENTIFIER> { id = unquoteIdentifier(token.image); }
+  | id = nonReservedKeyword()
   )
   (
     <EQ> pat = pat() { map.put(id, pat); }
@@ -2267,10 +2284,16 @@ Ast.Type type() :
   }
 }
 
-Ast.Type namedType() : {}
+Ast.Type namedType() :
+{
+  final String s;
+}
 {
   <IDENTIFIER> {
     return ast.namedType(pos(), ImmutableList.of(), token.image);
+  }
+| s = nonReservedKeyword() {
+    return ast.namedType(pos(), ImmutableList.of(), s);
   }
 | <QUOTED_IDENTIFIER> {
     return ast.namedType(pos(), ImmutableList.of(),
@@ -2488,6 +2511,10 @@ AstNode statementEof() :
 | < UNION: "union" >
 | < UNORDER: "unorder" >
 | < WHERE: "where" >
+| < ALL: "all" >
+| < EXTEND: "extend" >
+| < REMOVE: "remove" >
+| < RENAME: "rename" >
 | < WITH: "with" >
 | < YIELD: "yield" >
 | < YIELDALL: "yieldAll" >

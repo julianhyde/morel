@@ -1255,9 +1255,10 @@ public class LintTest {
   }
 
   /**
-   * Tests that {@link Parsers#RESERVED_WORDS} matches the alphabetic keyword
-   * tokens generated from {@code MorelParser.jj}. If this fails, a keyword was
-   * added or removed; update {@code RESERVED_WORDS} to match.
+   * Tests that {@link Parsers#RESERVED_WORDS} and {@link
+   * Parsers#NON_RESERVED_KEYWORDS} together match the alphabetic keyword tokens
+   * generated from {@code MorelParser.jj}. If this fails, a keyword was added
+   * or removed; update one of those sets to match.
    */
   @Test
   void testReservedWords() {
@@ -1273,7 +1274,9 @@ public class LintTest {
         }
       }
     }
-    assertThat(new TreeSet<>(Parsers.RESERVED_WORDS), is(fromGrammar));
+    final TreeSet<String> declared = new TreeSet<>(Parsers.RESERVED_WORDS);
+    declared.addAll(Parsers.NON_RESERVED_KEYWORDS);
+    assertThat(declared, is(fromGrammar));
   }
 
   /** Tests the primary-constructor rule against synthetic source code. */

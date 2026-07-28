@@ -53,9 +53,19 @@ public final class Parsers {
   }
 
   /**
+   * Keyword tokens that are not reserved. They introduce an operator region
+   * inside a record (see [MOREL-430]) but every rule that accepts an identifier
+   * accepts them too, so they need no back-ticks and are absent from {@link
+   * #RESERVED_WORDS}.
+   */
+  public static final Set<String> NON_RESERVED_KEYWORDS =
+      ImmutableSet.of("all", "extend", "remove", "rename");
+
+  /**
    * Reserved words. These cannot be used as identifiers unless quoted with
-   * back-ticks, so {@link #appendId} quotes them. Must be kept in sync with the
-   * keyword tokens in {@code MorelParser.jj}.
+   * back-ticks, so {@link #appendId} quotes them. Together with {@link
+   * #NON_RESERVED_KEYWORDS} these are the keyword tokens in {@code
+   * MorelParser.jj}.
    */
   public static final Set<String> RESERVED_WORDS =
       ImmutableSet.of(
