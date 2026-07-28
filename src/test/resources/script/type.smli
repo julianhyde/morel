@@ -47,6 +47,67 @@
 {{a = "1", b = 2, c = true, d = false} with c = false, b = 3};
 > val it = {a="1",b=3,c=false,d=false} : {a:string, b:int, c:bool, d:bool}
 
+(*) 'with' does not permit a field to change type.
+{{i=1,j="a"} with i="b"};
+> stdIn:1.1-1.25 Error: Cannot deduce type: conflict: string vs int
+>   raised at: stdIn:1.1-1.25
+
+(* A field that does not exist should be an error, but is currently
+ * ignored. See [MOREL-430]. *)
+{{i=1,j="a"} with k=2};
+> val it = {i=1,j="a"} : {i:int, j:string}
+
+(*) A label may not occur twice in the same 'with'.
+{{i=1} with i=2, i=3};
+> stdIn:1.18 Error: duplicate field 'i' in record
+>   raised at: stdIn:1.18
+
+(*) An assignment sees the enclosing environment.
+val k = 100;
+> val k = 100 : int
+{{i=1,j=2} with i=k};
+> val it = {i=100,j=2} : {i:int, j:int}
+
+(* An assignment does not see the record's own fields; 'j' here is the
+ * variable, not the field. [MOREL-430] makes fields visible, and they
+ * will shadow the environment, so this will become {i=2,j=2}. *)
+val j = 100;
+> val j = 100 : int
+{{i=1,j=2} with i=j};
+> val it = {i=100,j=2} : {i:int, j:int}
+
+(* The record being updated is itself visible, so its fields can be
+ * reached by qualifying them. *)
+val r = {i=1,j=100};
+> val r = {i=1,j=100} : {i:int, j:int}
+{r with j = r.i + 1};
+> val it = {i=1,j=2} : {i:int, j:int}
+
+(*) Qualified, the assignments see the old values, so this swaps.
+{r with i = r.j, j = r.i};
+> val it = {i=100,j=1} : {i:int, j:int}
+
+(* Here the record has a field named 'r', and 'r.i' is the variable
+ * 'r' above. Once [MOREL-430] makes fields visible they will shadow
+ * the environment, so 'r' will be the field, of type int, and this
+ * will be an error. *)
+val t = {i=1,r=100};
+> val t = {i=1,r=100} : {i:int, r:int}
+{t with i = r.i};
+> val it = {i=1,r=100} : {i:int, r:int}
+
+(* If that field is itself a record, both readings are well-typed, and
+ * [MOREL-430] will change the answer rather than raise an error: 'r.i'
+ * is 1 here, the variable, but will become 99, the field. *)
+val u = {i=0,r={i=99}};
+> val u = {i=0,r={i=99}} : {i:int, r:{i:int}}
+{u with i = r.i};
+> val it = {i=1,r={i=99}} : {i:int, r:{i:int}}
+
+(*) Qualifying by the record's own name is unambiguous either way.
+{u with i = u.r.i};
+> val it = {i=99,r={i=99}} : {i:int, r:{i:int}}
+
 (*) Empty record and empty tuple are equivalent, and of type 'unit'.
 {};
 > val it = () : unit

@@ -295,6 +295,32 @@ end;
 > stdIn:1.28 Error: duplicate field 'a' in record
 >   raised at: stdIn:1.28
 
+(*) Record 'with'
+:t {{i=1,j="a"} with i=2};
+> val it : {i:int, j:string}
+
+(*) The base's type must be known. An annotation is one way.
+:t fn (r : {i:int}) => {r with i=2};
+> val it : {i:int} -> {i:int}
+:t fn (r : {i:int, j:string}) => {r with i = r.i + 1};
+> val it : {i:int, j:string} -> {i:int, j:string}
+
+(* A record expression is another; its type is known from the fields,
+ * even when theirs are not yet. Here 'size j' gives j : string, and
+ * 'with' gives i the type of its assignment, so both are deduced. *)
+:t fn {i,j} => {i, j};
+> val it : {i:'a, j:'b} -> {i:'a, j:'b}
+:t fn {i,j} => {{i, j} with i = size j};
+> val it : {i:int, j:string} -> {i:int, j:string}
+(fn {i,j} => {{i, j} with i = size j}) {i=0,j="abc"};
+> val it = {i=3,j="abc"} : {i:int, j:string}
+
+(*) A field's type may be resolved by the assignment.
+:t {{i=[],j=1} with i=[1,2]};
+> val it : {i:int list, j:int}
+:t {{i=NONE} with i = SOME 2};
+> val it : {i:int option}
+
 (*) Incomplete record type
 :t fn (e, job) => e.job = job;
 > stdIn:1.29 Error: unresolved flex record (can't tell what fields there are besides #job)
