@@ -61,6 +61,7 @@ import java.util.NavigableMap;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,6 +70,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
@@ -314,6 +316,7 @@ public class TypeResolver {
         node2.accept(FieldExpander.create(typeSystem, env));
       } else {
         checkNoUnresolvedFieldRefs(node2, typeMap);
+        checkRecordWith(node2, typeMap);
       }
       checkNumericOperators(node2, typeMap);
 
@@ -410,6 +413,42 @@ public class TypeResolver {
               }
             }
             super.visit(apply);
+          }
+        });
+  }
+
+  /**
+   * Checks the base of each "{r with f = e}". Its type must be known, for the
+   * same reason that the argument of "#f" must be known, and every field
+   * assigned must be one that it has.
+   */
+  private static void checkRecordWith(Ast.Decl decl, TypeMap typeMap) {
+    decl.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.Record record) {
+            if (record.with != null) {
+              final SortedSet<String> fieldNames =
+                  typeMap.typeFieldNames(record.with);
+              if (fieldNames == null) {
+                throw new TypeException(
+                    "unresolved flex record (can't tell what fields there are "
+                        + "besides "
+                        + record.sortedArgs().keySet().stream()
+                            .map(id -> "#" + id.name)
+                            .collect(Collectors.joining(", "))
+                        + ")",
+                    record.with.pos);
+              }
+              record.args.forEach(
+                  (id, exp) -> {
+                    if (!fieldNames.contains(id.name)) {
+                      throw new TypeException(
+                          "field '" + id.name + "' does not exist", id.pos);
+                    }
+                  });
+            }
+            super.visit(record);
           }
         });
   }

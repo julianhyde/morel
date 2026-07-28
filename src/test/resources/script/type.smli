@@ -52,10 +52,13 @@
 > stdIn:1.1-1.25 Error: Cannot deduce type: conflict: string vs int
 >   raised at: stdIn:1.1-1.25
 
-(* A field that does not exist should be an error, but is currently
- * ignored. See [MOREL-430]. *)
+(*) A field that does not exist is an error.
 {{i=1,j="a"} with k=2};
-> val it = {i=1,j="a"} : {i:int, j:string}
+> stdIn:1.19 Error: field 'k' does not exist
+>   raised at: stdIn:1.19
+{{i=1,j="a"} with i=2, k=3};
+> stdIn:1.24 Error: field 'k' does not exist
+>   raised at: stdIn:1.24
 
 (*) A label may not occur twice in the same 'with'.
 {{i=1} with i=2, i=3};

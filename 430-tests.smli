@@ -2,7 +2,8 @@
  * 'remove', 'rename'. Expected output is what the issue specifies, not
  * what Morel currently does; none of these operators is implemented
  * yet, so every statement below is currently a parse-level
- * "cannot derive label" error. Move into
+ * "cannot derive label" error. The 'with' cases that are implemented
+ * have moved to type.smli and type-inference.smli. Move the rest into
  * src/test/resources/script/type.smli, beside the 'with' tests, as the
  * operators land.
  *)
@@ -64,10 +65,6 @@ val u = {i=0,r={i=99}};
 {u with i = u.r.i};
 > val it = {i=99,r={i=99}} : {i:int, r:{i:int}}
 
-(*) A field that does not exist is an error.
-{{i=1,j="a"} with k=2};
-> stdIn:1.1-1.23 Error: field 'k' does not exist
-
 (*) A field may not change type.
 {{i=1,j="a"} with i="b"};
 > stdIn:1.1-1.25 Error: Cannot deduce type: conflict: string vs int
@@ -75,15 +72,6 @@ val u = {i=0,r={i=99}};
 (* -------------------------------------------------------------------
  * Type inference
  *)
-
-(* A base whose type is not known should give the same error as any
- * other unresolved record. Morel currently throws
- * "java.lang.ClassCastException: TypeVar cannot be cast to
- * RecordLikeType"; the message is not pinned in type-inference.smli
- * because it names JDK internals. Compare 'fn (e, job) => e.job = job'
- * and '#a', which already report this properly. *)
-fn r => {r with i = 1};
-> stdIn:1.10 Error: unresolved flex record (can't tell what fields there are besides #i)
 
 (* Only a bare variable is a problem. A record expression as the base
  * is deducible from its fields: 'fn {i,j} => {{i, j} with i = size j}'

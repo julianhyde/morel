@@ -299,7 +299,12 @@ end;
 :t {{i=1,j="a"} with i=2};
 > val it : {i:int, j:string}
 
-(*) The base's type must be known. An annotation is one way.
+(*) The base's type must be known, as for '#f'.
+fn r => {r with i=1};
+> stdIn:1.10 Error: unresolved flex record (can't tell what fields there are besides #i)
+>   raised at: stdIn:1.10
+
+(*) An annotation is one way.
 :t fn (r : {i:int}) => {r with i=2};
 > val it : {i:int} -> {i:int}
 :t fn (r : {i:int, j:string}) => {r with i = r.i + 1};
