@@ -2423,60 +2423,15 @@ public class Ast {
   }
 
   /**
-   * Record.
-   *
-   * @see AstBuilder#isSingletonRecord(Exp)
-   * @see AstBuilder#isEmptyRecord(AstNode)
-   * @see AstBuilder#fieldCount(Exp)
-   */
-  /**
    * Operator applied to a record value inside braces: one of the operators of
    * [MOREL-430]. Regions are applied left to right, and each sees the result of
    * the previous one.
    */
-  public static class Region {
-    /** Kind of operator. */
-    public enum Kind {
-      WITH("with"),
-      WITH_ALL("with all"),
-      EXTEND("extend"),
-      EXTEND_ALL("extend all"),
-      REMOVE("remove"),
-      RENAME("rename");
+  public abstract static class Region {
+    public final Op op;
 
-      /** How the operator is written. */
-      public final String s;
-
-      Kind(String s) {
-        this.s = s;
-      }
-
-      /** Whether the operator is followed by an expression, not assignments. */
-      public boolean isAll() {
-        return this == WITH_ALL || this == EXTEND_ALL;
-      }
-    }
-
-    public final Kind kind;
-
-    /** Assignments, for {@code with}, {@code extend} and {@code rename}. */
-    public final PairList<Id, Exp> args;
-
-    /** Argument of {@code with all} and {@code extend all}, otherwise null. */
-    public final @Nullable Exp all;
-
-    /** Labels to remove, for {@code remove}, otherwise empty. */
-    public final ImmutableList<Id> labels;
-
-    Region(
-        Kind kind,
-        Iterable<? extends Map.Entry<Id, ? extends Exp>> args,
-        @Nullable Exp all,
-        List<Id> labels) {
-      this.kind = requireNonNull(kind);
-      this.args = ImmutablePairList.copyOf(args);
-      this.all = all;
-      this.labels = ImmutableList.copyOf(labels);
+    Region(Op op) {
+      this.op = requireNonNull(op);
     }
 
     @Override
@@ -2484,17 +2439,42 @@ public class Ast {
       return unparse(new AstWriter()).toString();
     }
 
+    /** Writes this region, including the leading space and operator. */
     AstWriter unparse(AstWriter w) {
-      w.append(" ").append(kind.s).append(" ");
-      if (all != null) {
-        return all.unparse(w, 0, 0);
-      }
-      if (!labels.isEmpty()) {
-        forEachIndexed(
-            labels,
-            (label, i) -> w.append(i > 0 ? ", " : "").append(label.name));
-        return w;
-      }
+      return unparseArgs(w.append(" ").append(op.padded.trim()).append(" "));
+    }
+
+    /** Writes the part after the operator. */
+    abstract AstWriter unparseArgs(AstWriter w);
+
+    /** Calls {@code consumer} for each expression this region contains. */
+    public abstract void forEachExp(Consumer<Exp> consumer);
+
+    /** Accepts a shuttle, returning a region with transformed expressions. */
+    public abstract Region accept(Shuttle shuttle);
+  }
+
+  /**
+   * Region that assigns to labels: {@code with}, {@code extend} and {@code
+   * rename}. For {@code rename} each value is an {@link Id} naming the field to
+   * relabel.
+   */
+  public static class AssignRegion extends Region {
+    public final PairList<Id, Exp> args;
+
+    AssignRegion(Op op, Iterable<? extends Map.Entry<Id, ? extends Exp>> args) {
+      super(op);
+      checkArgument(
+          op == Op.WITH_REGION
+              || op == Op.EXTEND_REGION
+              || op == Op.RENAME_REGION,
+          "op %s",
+          op);
+      this.args = ImmutablePairList.copyOf(args);
+    }
+
+    @Override
+    AstWriter unparseArgs(AstWriter w) {
       args.forEachIndexed(
           (i, k, v) ->
               w.append(i > 0 ? ", " : "")
@@ -2504,13 +2484,87 @@ public class Ast {
       return w;
     }
 
-    public Region copy(Collection<Map.Entry<Id, Exp>> args, @Nullable Exp all) {
-      return args.equals(this.args) && Objects.equals(all, this.all)
-          ? this
-          : new Region(kind, args, all, labels);
+    @Override
+    public void forEachExp(Consumer<Exp> consumer) {
+      args.rightList().forEach(consumer);
+    }
+
+    @Override
+    public Region accept(Shuttle shuttle) {
+      return copy(shuttle.visitPairList(args));
+    }
+
+    public AssignRegion copy(Collection<Map.Entry<Id, Exp>> args) {
+      return args.equals(this.args) ? this : new AssignRegion(op, args);
     }
   }
 
+  /**
+   * Region that takes a record-valued expression: {@code with all} and {@code
+   * extend all}.
+   */
+  public static class AllRegion extends Region {
+    public final Exp exp;
+
+    AllRegion(Op op, Exp exp) {
+      super(op);
+      checkArgument(
+          op == Op.WITH_ALL_REGION || op == Op.EXTEND_ALL_REGION, "op %s", op);
+      this.exp = requireNonNull(exp);
+    }
+
+    @Override
+    AstWriter unparseArgs(AstWriter w) {
+      return exp.unparse(w, 0, 0);
+    }
+
+    @Override
+    public void forEachExp(Consumer<Exp> consumer) {
+      consumer.accept(exp);
+    }
+
+    @Override
+    public Region accept(Shuttle shuttle) {
+      return copy(exp.accept(shuttle));
+    }
+
+    public AllRegion copy(Exp exp) {
+      return exp.equals(this.exp) ? this : new AllRegion(op, exp);
+    }
+  }
+
+  /** Region that removes labels: {@code remove}. */
+  public static class RemoveRegion extends Region {
+    public final ImmutableList<Id> labels;
+
+    RemoveRegion(List<Id> labels) {
+      super(Op.REMOVE_REGION);
+      this.labels = ImmutableList.copyOf(labels);
+    }
+
+    @Override
+    AstWriter unparseArgs(AstWriter w) {
+      forEachIndexed(
+          labels, (label, i) -> w.append(i > 0 ? ", " : "").append(label.name));
+      return w;
+    }
+
+    @Override
+    public void forEachExp(Consumer<Exp> consumer) {}
+
+    @Override
+    public Region accept(Shuttle shuttle) {
+      return this;
+    }
+  }
+
+  /**
+   * Record.
+   *
+   * @see AstBuilder#isSingletonRecord(Exp)
+   * @see AstBuilder#isEmptyRecord(AstNode)
+   * @see AstBuilder#fieldCount(Exp)
+   */
   public static class Record extends Exp {
     /** The expression before the first operator, or null if there is none. */
     public final @Nullable Exp with;

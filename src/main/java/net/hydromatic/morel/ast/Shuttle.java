@@ -252,9 +252,7 @@ public class Shuttle {
   }
 
   protected Ast.Region visit(Ast.Region region) {
-    return region.copy(
-        visitPairList(region.args),
-        region.all == null ? null : region.all.accept(this));
+    return region.accept(this);
   }
 
   // functions and matches

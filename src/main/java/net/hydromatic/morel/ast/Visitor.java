@@ -168,10 +168,7 @@ public class Visitor {
   }
 
   protected void visit(Ast.Region region) {
-    region.args.rightList().forEach(this::accept);
-    if (region.all != null) {
-      accept(region.all);
-    }
+    region.forEachExp(this::accept);
   }
 
   // functions and matches

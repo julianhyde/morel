@@ -382,13 +382,19 @@ public enum AstBuilder {
     return record(pos, with, PairList.copyOf(args), regions);
   }
 
-  /** Creates a region of a record expression. */
-  public Ast.Region region(
-      Ast.Region.Kind kind,
-      PairList<Ast.Id, Ast.Exp> args,
-      Ast.@Nullable Exp all,
-      List<Ast.Id> labels) {
-    return new Ast.Region(kind, args, all, labels);
+  /** Creates a "with", "extend" or "rename" region. */
+  public Ast.AssignRegion assignRegion(Op op, PairList<Ast.Id, Ast.Exp> args) {
+    return new Ast.AssignRegion(op, args);
+  }
+
+  /** Creates a "with all" or "extend all" region. */
+  public Ast.AllRegion allRegion(Op op, Ast.Exp exp) {
+    return new Ast.AllRegion(op, exp);
+  }
+
+  /** Creates a "remove" region. */
+  public Ast.RemoveRegion removeRegion(List<Ast.Id> labels) {
+    return new Ast.RemoveRegion(labels);
   }
 
   public Ast.Exp equal(Ast.Exp a0, Ast.Exp a1) {

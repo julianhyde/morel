@@ -99,6 +99,14 @@ public enum Op {
   RECORD(Assoc.ATOM),
   FN(" -> ", 6, Assoc.RIGHT),
 
+  // regions of a record expression (see Ast.Region)
+  WITH_REGION("with"),
+  WITH_ALL_REGION("with all"),
+  EXTEND_REGION("extend"),
+  EXTEND_ALL_REGION("extend all"),
+  REMOVE_REGION("remove"),
+  RENAME_REGION("rename"),
+
   // types
   TY_VAR(Assoc.ATOM),
   RECORD_TYPE(Assoc.ATOM),
