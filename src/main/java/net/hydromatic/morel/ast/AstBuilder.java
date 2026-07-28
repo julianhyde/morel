@@ -356,7 +356,15 @@ public enum AstBuilder {
 
   public Ast.Record record(
       Pos pos, Ast.@Nullable Exp with, PairList<Ast.Id, Ast.Exp> args) {
-    return new Ast.Record(pos, with, ImmutablePairList.copyOf(args));
+    return record(pos, with, args, ImmutableList.of());
+  }
+
+  public Ast.Record record(
+      Pos pos,
+      Ast.@Nullable Exp with,
+      PairList<Ast.Id, Ast.Exp> args,
+      List<Ast.Region> regions) {
+    return new Ast.Record(pos, with, ImmutablePairList.copyOf(args), regions);
   }
 
   public Ast.Record record(
@@ -364,6 +372,23 @@ public enum AstBuilder {
       Ast.@Nullable Exp with,
       Collection<Map.Entry<Ast.Id, Ast.Exp>> args) {
     return record(pos, with, PairList.copyOf(args));
+  }
+
+  public Ast.Record record(
+      Pos pos,
+      Ast.@Nullable Exp with,
+      Collection<Map.Entry<Ast.Id, Ast.Exp>> args,
+      List<Ast.Region> regions) {
+    return record(pos, with, PairList.copyOf(args), regions);
+  }
+
+  /** Creates a region of a record expression. */
+  public Ast.Region region(
+      Ast.Region.Kind kind,
+      PairList<Ast.Id, Ast.Exp> args,
+      Ast.@Nullable Exp all,
+      List<Ast.Id> labels) {
+    return new Ast.Region(kind, args, all, labels);
   }
 
   public Ast.Exp equal(Ast.Exp a0, Ast.Exp a1) {

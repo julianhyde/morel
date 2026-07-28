@@ -2429,21 +2429,117 @@ public class Ast {
    * @see AstBuilder#isEmptyRecord(AstNode)
    * @see AstBuilder#fieldCount(Exp)
    */
-  public static class Record extends Exp {
-    public final @Nullable Exp with;
+  /**
+   * Operator applied to a record value inside braces: one of the operators of
+   * [MOREL-430]. Regions are applied left to right, and each sees the result of
+   * the previous one.
+   */
+  public static class Region {
+    /** Kind of operator. */
+    public enum Kind {
+      WITH("with"),
+      WITH_ALL("with all"),
+      EXTEND("extend"),
+      EXTEND_ALL("extend all"),
+      REMOVE("remove"),
+      RENAME("rename");
+
+      /** How the operator is written. */
+      public final String s;
+
+      Kind(String s) {
+        this.s = s;
+      }
+
+      /** Whether the operator is followed by an expression, not assignments. */
+      public boolean isAll() {
+        return this == WITH_ALL || this == EXTEND_ALL;
+      }
+    }
+
+    public final Kind kind;
+
+    /** Assignments, for {@code with}, {@code extend} and {@code rename}. */
     public final PairList<Id, Exp> args;
+
+    /** Argument of {@code with all} and {@code extend all}, otherwise null. */
+    public final @Nullable Exp all;
+
+    /** Labels to remove, for {@code remove}, otherwise empty. */
+    public final ImmutableList<Id> labels;
+
+    Region(
+        Kind kind,
+        Iterable<? extends Map.Entry<Id, ? extends Exp>> args,
+        @Nullable Exp all,
+        List<Id> labels) {
+      this.kind = requireNonNull(kind);
+      this.args = ImmutablePairList.copyOf(args);
+      this.all = all;
+      this.labels = ImmutableList.copyOf(labels);
+    }
+
+    @Override
+    public String toString() {
+      return unparse(new AstWriter()).toString();
+    }
+
+    AstWriter unparse(AstWriter w) {
+      w.append(" ").append(kind.s).append(" ");
+      if (all != null) {
+        return all.unparse(w, 0, 0);
+      }
+      if (!labels.isEmpty()) {
+        forEachIndexed(
+            labels,
+            (label, i) -> w.append(i > 0 ? ", " : "").append(label.name));
+        return w;
+      }
+      args.forEachIndexed(
+          (i, k, v) ->
+              w.append(i > 0 ? ", " : "")
+                  .append(k.name)
+                  .append(" = ")
+                  .append(v, 0, 0));
+      return w;
+    }
+
+    public Region copy(Collection<Map.Entry<Id, Exp>> args, @Nullable Exp all) {
+      return args.equals(this.args) && Objects.equals(all, this.all)
+          ? this
+          : new Region(kind, args, all, labels);
+    }
+  }
+
+  public static class Record extends Exp {
+    /** The expression before the first operator, or null if there is none. */
+    public final @Nullable Exp with;
+
+    /**
+     * Assignments of the first {@code with} region, if any; otherwise the
+     * fields of a plain record expression.
+     */
+    public final PairList<Id, Exp> args;
+
+    /**
+     * Operator regions after the first, applied left to right. Empty unless the
+     * expression uses the operators of [MOREL-430].
+     */
+    public final ImmutableList<Region> regions;
 
     /** The empty record expression, {@code {}}. */
     public static final Record EMPTY =
-        new Record(Pos.ZERO, null, ImmutablePairList.of());
+        new Record(Pos.ZERO, null, ImmutablePairList.of(), ImmutableList.of());
 
     Record(
         Pos pos,
         @Nullable Exp with,
-        Iterable<? extends Map.Entry<Id, ? extends Exp>> args) {
+        Iterable<? extends Map.Entry<Id, ? extends Exp>> args,
+        List<Region> regions) {
       super(pos, Op.RECORD);
       this.with = with;
       this.args = ImmutablePairList.copyOf(args);
+      this.regions = ImmutableList.copyOf(regions);
     }
 
     @Override
@@ -2477,14 +2573,24 @@ public class Ast {
             }
             w.append(v, 0, 0);
           });
+      regions.forEach(region -> region.unparse(w));
       return w.append("}");
     }
 
     public Record copy(
         @Nullable Exp with, Collection<Map.Entry<Id, Exp>> args) {
-      return Objects.equals(with, this.with) && args.equals(this.args)
+      return copy(with, args, regions);
+    }
+
+    public Record copy(
+        @Nullable Exp with,
+        Collection<Map.Entry<Id, Exp>> args,
+        List<Region> regions) {
+      return Objects.equals(with, this.with)
+              && args.equals(this.args)
+              && regions.equals(this.regions)
           ? this
-          : ast.record(pos, with, args);
+          : ast.record(pos, with, args, regions);
     }
 
     public SortedMap<Id, Exp> sortedArgs() {

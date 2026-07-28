@@ -164,6 +164,14 @@ public class Visitor {
 
   protected void visit(Ast.Record record) {
     record.args.rightList().forEach(this::accept);
+    record.regions.forEach(this::visit);
+  }
+
+  protected void visit(Ast.Region region) {
+    region.args.rightList().forEach(this::accept);
+    if (region.all != null) {
+      accept(region.all);
+    }
   }
 
   // functions and matches
