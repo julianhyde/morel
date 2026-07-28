@@ -78,6 +78,9 @@ public class MorelParserImpl implements MorelParser
    */
   private boolean inArg = false;
 
+  /** Depth of enclosing record braces. */
+  private int recordDepth = 0;
+
   public void setTabSize(int tabSize) {
     jj_input_stream.setTabSize(tabSize);
   }
@@ -194,6 +197,18 @@ public class MorelParserImpl implements MorelParser
     } catch (ParseException | Error e) {
       throw wrap(e);
     }
+  }
+
+  /** Returns whether token {@code i} starts an operator region. */
+  boolean isRegionKeyword(int i) {
+    if (recordDepth == 0) {
+      return false;
+    }
+    final Token t = getToken(i);
+    return t.kind == IDENTIFIER
+        && (t.image.equals("extend")
+            || t.image.equals("remove")
+            || t.image.equals("rename"));
   }
 }
 
@@ -1045,6 +1060,7 @@ Exp expression8() :
 {
   e = expression9()
   (
+    LOOKAHEAD(1, {!isRegionKeyword(1)})
     /* Set inArg so that expression9, when parsing the argument,
        suppresses the outer DOT chain for non-Id atoms (see expression9). */
     {
@@ -1438,6 +1454,7 @@ Exp atom() :
 |
   <LBRACE> {
     span = Span.of(pos());
+    ++recordDepth;
     final PairList<Id, Exp> nameExps = PairList.of();
     Exp exp;
     Exp with = null;
@@ -1463,6 +1480,7 @@ Exp atom() :
     )*
   ]
   <RBRACE> {
+    --recordDepth;
     return ast.record(span.end(this), with, nameExps);
   }
 }
