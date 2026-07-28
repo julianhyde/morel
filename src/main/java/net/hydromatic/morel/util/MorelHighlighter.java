@@ -106,6 +106,7 @@ public class MorelHighlighter {
    */
   private static final Set<String> MOREL_KEYWORDS =
       ImmutableSet.of(
+          "all",
           "compute",
           "current",
           "desc",
@@ -113,6 +114,7 @@ public class MorelHighlighter {
           "elem",
           "except",
           "exists",
+          "extend",
           "forall",
           "from",
           "group",
@@ -125,6 +127,8 @@ public class MorelHighlighter {
           "order",
           "ordinal",
           "over",
+          "remove",
+          "rename",
           "require",
           "skip",
           "take",
