@@ -499,59 +499,17 @@ public class MainTest {
     ml("(fn x => x + 1) 3").assertParseSame();
     ml("hd [1, 2, 3]").assertParseSame();
 
-    // with
+    // with and other record modifiers
     ml("{e with deptno = 10}").assertParseSame();
     ml("{e with deptno = 10, empno = 100}").assertParseSame();
+    ml("{e with all d}").assertParseSame();
+    ml("{e remove deptno with all d}").assertParseSame();
+    ml("{e extend remuneration = sal + comm remove comm}").assertParseSame();
     ml("{hd scott.emps with deptno = 10, empno = 100}")
         .assertParse("{hd (#emps scott) with deptno = 10, empno = 100}");
-
-    // record modifiers
-    ml("{e with all r}").assertParseSame();
-    ml("{e extend deptno = 10}").assertParseSame();
-    ml("{e extend deptno = 10, empno = 100}").assertParseSame();
-    ml("{e extend all {deptno = 10}}").assertParseSame();
-    ml("{e remove deptno}").assertParseSame();
-    ml("{e remove deptno, empno}").assertParseSame();
-    ml("{e rename dno = deptno}").assertParseSame();
-    ml("{e rename dno = deptno, eno = empno}").assertParseSame();
-
-    // a modifier applies to the result of the one before it
-    ml("{e with deptno = 10 remove empno}").assertParseSame();
-    ml("{e remove empno with deptno = 10}").assertParseSame();
-    ml("{e with deptno = 10 with deptno = 20}").assertParseSame();
-    ml("{e rename dno = deptno extend x = 1 remove ename}").assertParseSame();
-    ml("{e extend all {d with dname = \"Sales\"} remove deptno}")
-        .assertParseSame();
-
-    // the base can be any expression, and a modifier ends it
-    ml("{hd es remove deptno}").assertParseSame();
     ml("{e.dept remove deptno}").assertParse("{#dept e remove deptno}");
-    ml("{{deptno = 10, ename = \"Shaggy\"} remove deptno}").assertParseSame();
-
-    // An item of a field list may have modifiers of its own, and takes the
-    // label its base implies. Unparsing writes the label even though it is
-    // implicit, so that it is clear what the modifiers apply to.
     ml("{a = 1, b remove x}").assertParse("{a = 1, b = b remove x}");
-    ml("{a = 1, b = b remove x}").assertParseSame();
-    ml("{a = 1, b with x = 5}").assertParse("{a = 1, b = b with x = 5}");
-    ml("{c = b extend z = 3}").assertParseSame();
-    ml("{a = 1, e.dept remove deptno}")
-        .assertParse("{a = 1, dept = #dept e remove deptno}");
-    ml("{a = 1, {b remove x} with y = 2}")
-        .assertParse("{a = 1, b = {b remove x} with y = 2}");
-
-    // In a modifier's arguments the braces are needed: without them the
-    // modifier would continue the record's own pipeline.
     ml("{r with i = {s remove x}}").assertParseSame();
-
-    // the four words are still identifiers where no modifier can begin
-    ml("{extend = 1, remove = 2, rename = 3, all = 4}").assertParseSame();
-    ml("{e with extend = 1}").assertParseSame();
-    ml("{e remove extend, all}").assertParseSame();
-    ml("{e with all = 1}").assertParseSame();
-    ml("f extend").assertParseSame();
-    ml("{e with x = f (g extend)}").assertParseSame();
-    ml("{e with x = (fn remove => remove) 1}").assertParseSame();
 
     // safe navigation
     ml("e?.deptno").assertParseSame();

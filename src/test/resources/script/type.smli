@@ -249,6 +249,47 @@ val u = {i=0,r={i=99}};
 {{i=1} extend j=i+1 remove i};
 > val it = {j=2} : {j:int}
 
+(*) The base may be any expression; a modifier ends it.
+val es = [{deptno=10,ename="Shaggy"}];
+> val es = [{deptno=10,ename="Shaggy"}] : {deptno:int, ename:string} list
+{hd es remove deptno};
+> val it = {ename="Shaggy"} : {ename:string}
+
+(*) A second 'with' sees the result of the first, so this does not swap.
+{{i=1,j=2} with i=j with j=i};
+> val it = {i=2,j=2} : {i:int, j:int}
+
+(*) The argument of 'with all' may be any record-valued expression.
+val patch = {i=9};
+> val patch = {i=9} : {i:int}
+{{i=1,j=2} with all patch};
+> val it = {i=9,j=2} : {i:int, j:int}
+
+(* The modifier keywords are not reserved: they are labels, variables and
+ * patterns like any other identifier. *)
+{extend = 1, remove = 2, rename = 3, all = 4};
+> val it = {all=4,extend=1,remove=2,rename=3}
+>   : {all:int, extend:int, remove:int, rename:int}
+{{extend=1, all=2} with extend = 3};
+> val it = {all=2,extend=3} : {all:int, extend:int}
+{{extend=1, all=2} remove extend, all};
+> val it = () : unit
+{{all=1} with all = 2};
+> val it = {all=2} : {all:int}
+val extend = 7;
+> val extend = 7 : int
+val id = fn x => x;
+> val id = fn : 'a -> 'a
+id extend;
+> val it = 7 : int
+
+(* Inside parentheses no modifier can begin, so there the words are
+ * arguments like any other identifier. *)
+{{i=1} with i = (id extend)};
+> val it = {i=7} : {i:int}
+{{i=1} with i = (fn remove => remove) 5};
+> val it = {i=5} : {i:int}
+
 (* An item of a field list may have modifiers of its own; they apply to
  * the item, not to the record being built, which has no base for them to
  * apply to. An unlabeled item takes the label its base implies. *)
@@ -260,6 +301,10 @@ val v = {x=1,y=2};
 > val it = {a=1,v={y=2}} : {a:int, v:{y:int}}
 {c = v extend z = 3};
 > val it = {c={x=1,y=2,z=3}} : {c:{x:int, y:int, z:int}}
+
+(*) A modified record may itself be the base of another modifier.
+{a = 1, {v remove x} with y = 3};
+> val it = {a=1,v={y=3}} : {a:int, v:{y:int}}
 
 (*) A worked example.
 {{comm=2.0,ename="Shaggy",sal=10.0} with sal=sal*12.0 extend tax=sal*0.3 extend net=sal-tax remove comm};
