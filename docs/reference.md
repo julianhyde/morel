@@ -217,11 +217,15 @@ In Standard ML but not in Morel:
                                 attributed expression (n &ge; 1)
 <i>exprow</i> &rarr; <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
                                 expression row
-<i>exprowItem</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i> <i>modifier<sub>1</sub></i> ... <i>modifier<sub>n</sub></i>
-                                field (<i>n</i> &ge; 0)
-<i>modifier</i> &rarr; <b>with</b> <i>exprow</i>            assign to fields
+<i>exprowItem</i> &rarr; <i>field</i> <i>modifier<sub>1</sub></i> ... <i>modifier<sub>n</sub></i>
+                                field, with modifiers of its own
+                                (<i>n</i> &ge; 0)
+<i>field</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i>
+<i>modifier</i> &rarr; <b>with</b> <i>field</i> [<b>,</b> <i>field</i> ]*
+                                assign to fields
     | <b>with all</b> <i>exp</i>              assign to every field of <i>exp</i>
-    | <b>extend</b> <i>exprow</i>             add fields
+    | <b>extend</b> <i>field</i> [<b>,</b> <i>field</i> ]*
+                                add fields
     | <b>extend all</b> <i>exp</i>            add every field of <i>exp</i>
     | <b>remove</b> <i>lab</i> [<b>,</b> <i>lab</i> ]*      remove fields
     | <b>rename</b> <i>lab</i> <b>=</b> <i>lab</i> [<b>,</b> <i>lab</i> <b>=</b> <i>lab</i> ]*
@@ -288,9 +292,19 @@ An item of a field list may have modifiers of its own. They apply to
 the item, not to the record being built, which has no base for them to
 apply to, so `{a = 1, b remove x}` means `{a = 1, b = b remove x}`; as
 elsewhere, an unlabeled item takes the label its expression implies,
-which for a modified record is the label its base implies. The first
-item is the exception: a modifier there makes the brace a modified
-record rather than a field list, which is what tells the two apart.
+which for a modified record is the label its base implies. Note that
+the arguments of a modifier are plain fields: a modifier keyword there
+starts another modifier of the same record, so in
+`{r with i = 1 remove j}` the `remove` applies to `r`, not to `1`.
+
+Two constraints do not appear in the grammar. An unlabeled first item
+may not have modifiers: a modifier there makes the brace a modified
+record rather than a field list, which is what tells the two apart, so
+`{b remove x}` is `b` less its field `x`. And a modifier's
+comma-separated list extends as far as it can, so an item with
+modifiers is in effect the last item: in `{a = 1, b with x = 5, c = 2}`
+the `c = 2` is a second assignment to `b`. Give the item braces of its
+own -- `{a = 1, b = {b remove x}, c = 2}` -- to end the list.
 
 `all`, `extend`, `remove` and `rename` are not reserved words; they
 have their special meaning only where a modifier can occur, and are
