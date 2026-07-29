@@ -293,9 +293,10 @@ modify a field's value, give it braces of its own --
 and let the field take the one its base implies:
 `{a = 1, {b remove x}}`.
 
-`all`, `extend`, `remove` and `rename` are not reserved words; they
-have their special meaning only where a modifier can occur, and are
-ordinary identifiers elsewhere.
+`extend`, `remove` and `rename` are reserved words, and need back-ticks
+to be used as identifiers. `all` is not: it is a keyword only after
+`with` and `extend`, where no identifier can occur, and is an ordinary
+identifier everywhere else.
 
 ### Patterns
 

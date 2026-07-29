@@ -265,30 +265,36 @@ val patch = {i=9};
 {{i=1,j=2} with all patch};
 > val it = {i=9,j=2} : {i:int, j:int}
 
-(* The modifier keywords are not reserved: they are labels, variables and
- * patterns like any other identifier. *)
-{extend = 1, remove = 2, rename = 3, all = 4};
-> val it = {all=4,extend=1,remove=2,rename=3}
->   : {all:int, extend:int, remove:int, rename:int}
-{{extend=1, all=2} with extend = 3};
-> val it = {all=2,extend=3} : {all:int, extend:int}
-{{extend=1, all=2} remove extend, all};
-> val it = () : unit
+(* 'all' is not a reserved word; it is a keyword only after 'with' and
+ * 'extend', and a label, variable or pattern anywhere else. *)
+{all = 4};
+> val it = {all=4} : {all:int}
 {{all=1} with all = 2};
 > val it = {all=2} : {all:int}
-val extend = 7;
-> val extend = 7 : int
+val all = 7;
+> val all = 7 : int
 val id = fn x => x;
 > val id = fn : 'a -> 'a
-id extend;
+id all;
 > val it = 7 : int
-
-(* Inside parentheses no modifier can begin, so there the words are
- * arguments like any other identifier. *)
-{{i=1} with i = (id extend)};
+{{i=1} with i = id all};
 > val it = {i=7} : {i:int}
-{{i=1} with i = (fn remove => remove) 5};
+{{i=1} with i = (fn all => all) 5};
 > val it = {i=5} : {i:int}
+
+(* 'extend', 'remove' and 'rename' are reserved, so as identifiers they
+ * need back-ticks, and are printed with them. *)
+{`extend` = 1, `remove` = 2, `rename` = 3};
+> val it = {`extend`=1,`remove`=2,`rename`=3}
+>   : {`extend`:int, `remove`:int, `rename`:int}
+{{`extend`=1, all=2} with `extend` = 3};
+> val it = {all=2,`extend`=3} : {all:int, `extend`:int}
+{{`extend`=1, all=2} remove `extend`, all};
+> val it = () : unit
+val `remove` = fn x => x + 1;
+> val `remove` = fn : int -> int
+`remove` 1;
+> val it = 2 : int
 
 (* A modifier applies to a base expression, so a field whose value is a
  * modified record needs braces of its own; unlabeled, the field takes

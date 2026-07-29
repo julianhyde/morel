@@ -53,12 +53,13 @@ public final class Parsers {
   }
 
   /**
-   * Keyword tokens that are not reserved. They introduce a modifier inside a
-   * record, but every rule that accepts an identifier accepts them too, so they
-   * need no back-ticks and are absent from {@link #RESERVED_WORDS}.
+   * Keyword tokens that are not reserved. {@code all} is a keyword only after
+   * {@code with} and {@code extend}, where no identifier can occur; everywhere
+   * else it is an ordinary identifier, so it needs no back-ticks and is absent
+   * from {@link #RESERVED_WORDS}.
    */
   public static final Set<String> NON_RESERVED_KEYWORDS =
-      ImmutableSet.of("all", "extend", "remove", "rename");
+      ImmutableSet.of("all");
 
   /**
    * Reserved words. These cannot be used as identifiers unless quoted with
@@ -85,6 +86,7 @@ public final class Parsers {
           "except",
           "exception",
           "exists",
+          "extend",
           "fn",
           "forall",
           "from",
@@ -112,6 +114,8 @@ public final class Parsers {
           "over",
           "raise",
           "rec",
+          "remove",
+          "rename",
           "require",
           "right",
           "sig",

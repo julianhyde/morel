@@ -78,21 +78,6 @@ public class MorelParserImpl implements MorelParser
    */
   private boolean inArg = false;
 
-  /**
-   * True while parsing an expression that a record modifier may follow: the
-   * expression a record's modifiers apply to, and the arguments of each
-   * modifier. When true, the application loop in expression8 declines to take
-   * {@code extend}, {@code remove} or {@code rename} as an argument, so that
-   * {@code {r extend k = 1}} does not parse as the application
-   * {@code r extend k}, and {@code {r extend j = i + 1 extend k = 2}} ends
-   * the first assignment at the second {@code extend}.
-   *
-   * <p>Parentheses, brackets and braces clear it, because a modifier cannot
-   * begin before their closing token; there the words are ordinary
-   * identifiers, as they are outside a record altogether.
-   */
-  private boolean modifierPossible = false;
-
   public void setTabSize(int tabSize) {
     jj_input_stream.setTabSize(tabSize);
   }
@@ -209,15 +194,6 @@ public class MorelParserImpl implements MorelParser
     } catch (ParseException | Error e) {
       throw wrap(e);
     }
-  }
-
-  /** Returns whether token {@code i} starts a record modifier.
-   *
-   * <p>{@code all} is not among them; it is a modifier keyword only after
-   * {@code with} or {@code extend}, where no application can occur. */
-  boolean isModifierKeyword(int i) {
-    final int kind = getToken(i).kind;
-    return kind == EXTEND || kind == REMOVE || kind == RENAME;
   }
 }
 
@@ -336,15 +312,13 @@ Literal wordLiteral() : {}
   }
 }
 
-/** Parses a keyword that is not reserved. These words introduce a modifier
- * inside a record but remain usable as identifiers everywhere else, so every
- * rule that accepts an identifier accepts them. */
+/** Parses a keyword that is not reserved. {@code all} is a keyword only after
+ * {@code with} and {@code extend}, where no identifier can occur; everywhere
+ * else it is an ordinary identifier, so every rule that accepts an identifier
+ * accepts it. */
 String nonReservedKeyword() : {}
 {
   <ALL> { return token.image; }
-| <EXTEND> { return token.image; }
-| <REMOVE> { return token.image; }
-| <RENAME> { return token.image; }
 }
 
 /** Parses an identifier. */
@@ -667,8 +641,7 @@ void fromFirstScan(List<FromStep> steps) :
 }
 {
   LOOKAHEAD(
-      (<IDENTIFIER> | <QUOTED_IDENTIFIER>
-        | <ALL> | <EXTEND> | <REMOVE> | <RENAME>)
+      (<IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL>)
       (<COMMA> | <JOIN> | <WHERE> | <GROUP> | <COMPUTE>
         | <SKIP_> | <TAKE> | <YIELD> | <YIELDALL> | <EOF>))
   id = identifier() {
@@ -697,8 +670,7 @@ void fromScan(Op op, List<FromStep> steps) :
 }
 {
   LOOKAHEAD(
-      (<IDENTIFIER> | <QUOTED_IDENTIFIER>
-        | <ALL> | <EXTEND> | <REMOVE> | <RENAME>)
+      (<IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL>)
       (<COMMA> | <JOIN> | <WHERE> | <GROUP> | <COMPUTE>
         | <SKIP_> | <TAKE> | <YIELD> | <YIELDALL> | <EOF>))
   id = identifier() {
@@ -767,8 +739,7 @@ void fromStep(List<FromStep> steps) :
 |
   <GROUP> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER>
-        | <ALL> | <EXTEND> | <REMOVE> | <RENAME> ) <EQ>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> ) <EQ>)
     binder = identifier() <EQ>
   |
     { binder = null; }
@@ -834,8 +805,7 @@ void fromStep(List<FromStep> steps) :
 |
   <YIELD> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER>
-        | <ALL> | <EXTEND> | <REMOVE> | <RENAME> ) <EQ>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> ) <EQ>)
     binder = identifier() <EQ>
   |
     { binder = null; }
@@ -846,8 +816,7 @@ void fromStep(List<FromStep> steps) :
 |
   <YIELDALL> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER>
-        | <ALL> | <EXTEND> | <REMOVE> | <RENAME> ) <IN>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> ) <IN>)
     binder = identifier() <IN>
   |
     { binder = null; }
@@ -1095,12 +1064,6 @@ Exp expression8() :
 {
   e = expression9()
   (
-    /* A modifier keyword ends the expression before it, in the one place
-       where a modifier can follow; elsewhere it is an ordinary identifier,
-       and an argument. The numeric 1 matters: a semantic lookahead on its
-       own replaces the syntactic lookahead that JavaCC computes for a
-       (...)* loop, and the loop would then iterate on "}" and ",". */
-    LOOKAHEAD(1, { !modifierPossible || !isModifierKeyword(1) })
     /* Set inArg so that expression9, when parsing the argument,
        suppresses the outer DOT chain for non-Id atoms (see expression9). */
     {
@@ -1389,8 +1352,7 @@ void namedExpression(PairList<Id, Exp> list) :
   final Id id;
 }
 {
-  LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER>
-        | <ALL> | <EXTEND> | <REMOVE> | <RENAME> ) <EQ>)
+  LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> ) <EQ>)
   id = identifier() <EQ> exp = expression() {
     list.add(id, exp);
   }
@@ -1405,11 +1367,6 @@ Exp atom() :
 {
   final Exp e;
   final Span span;
-  /* Value of modifierPossible on entry, restored on the way out: a record
-     modifier cannot begin before the closing token of a bracketed
-     expression, so inside one the modifier keywords are ordinary
-     identifiers. */
-  boolean prevModifierPossible;
 }
 {
   e = identifier() { return e; }
@@ -1446,19 +1403,15 @@ Exp atom() :
 |
   <LPAREN> {
     span = Span.of(pos());
-    prevModifierPossible = modifierPossible;
-    modifierPossible = false;
   }
   (
     <RPAREN> {
-      modifierPossible = prevModifierPossible;
       return ast.unitLiteral(span.end(this));
     }
   |
     e = expression()
     (
       <RPAREN> {
-        modifierPossible = prevModifierPossible;
         return e;
       }
     |
@@ -1471,7 +1424,6 @@ Exp atom() :
         <COMMA> e2 = expression() { list.add(e2); }
       )+
       <RPAREN> {
-        modifierPossible = prevModifierPossible;
         return ast.tuple(span.end(this), list);
       }
     )
@@ -1479,8 +1431,6 @@ Exp atom() :
 |
   <LBRACKET> {
     span = Span.of(pos());
-    prevModifierPossible = modifierPossible;
-    modifierPossible = false;
     final List<RangeListItem> items = new ArrayList<>();
   }
   [
@@ -1490,7 +1440,6 @@ Exp atom() :
     )*
   ]
   <RBRACKET> {
-    modifierPossible = prevModifierPossible;
     // If every item is a POINT, build an ordinary list literal; otherwise
     // build a RangeList that desugars to Range.flatten in TypeResolver.
     boolean anyRange = false;
@@ -1512,21 +1461,17 @@ Exp atom() :
 |
   <LBRACE> {
     span = Span.of(pos());
-    prevModifierPossible = modifierPossible;
-    modifierPossible = false;
     final PairList<Id, Exp> nameExps = PairList.of();
     final List<Ast.Modifier> modifiers = new ArrayList<Ast.Modifier>();
   }
   [
-    { modifierPossible = true; }
     recordExp(nameExps)
     (
-      <COMMA> { modifierPossible = true; } recordExp(nameExps)
+      <COMMA> recordExp(nameExps)
     )*
     ( recordModifier(modifiers) )*
   ]
   <RBRACE> {
-    modifierPossible = prevModifierPossible;
     // The fields and the modifiers are as they were written; whether they
     // are a valid combination -- modifiers require a single field, and that
     // field must have no label of its own -- is settled in Record.validate,
@@ -1552,7 +1497,7 @@ void recordModifier(List<Ast.Modifier> modifiers) :
   <WITH>
   (
     LOOKAHEAD({ getToken(1).kind == ALL && getToken(2).kind != EQ })
-    <ALL> { modifierPossible = true; } exp = expression() {
+    <ALL> exp = expression() {
       modifiers.add(ast.allModifier(Op.WITH_ALL_MODIFIER, exp));
     }
   |
@@ -1564,7 +1509,7 @@ void recordModifier(List<Ast.Modifier> modifiers) :
   <EXTEND>
   (
     LOOKAHEAD({ getToken(1).kind == ALL && getToken(2).kind != EQ })
-    <ALL> { modifierPossible = true; } exp = expression() {
+    <ALL> exp = expression() {
       modifiers.add(ast.allModifier(Op.EXTEND_ALL_MODIFIER, exp));
     }
   |
@@ -1585,10 +1530,9 @@ void recordModifier(List<Ast.Modifier> modifiers) :
 /** Parses the assignments of a "with" or "extend" modifier. */
 void recordModifierArgs(PairList<Id, Exp> args) : {}
 {
-  { modifierPossible = true; }
   recordExp(args)
   (
-    <COMMA> { modifierPossible = true; } recordExp(args)
+    <COMMA> recordExp(args)
   )*
 }
 
@@ -1651,7 +1595,7 @@ void recordExp(PairList<Id, Exp> nameExps) :
 }
 {
   LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
-          | <ALL> | <EXTEND> | <REMOVE> | <RENAME>) <EQ>)
+          | <ALL>) <EQ>)
   labeledRecordExp(nameExps)
 |
   exp = expression() {
