@@ -208,6 +208,9 @@ val u = {i=0,r={i=99}};
 {{i=1,j=2} rename k=i, k=j};
 > stdIn:1.24 Error: duplicate field 'k' in record
 >   raised at: stdIn:1.24
+{{i=1,j=2} rename k=i, m=i};
+> stdIn:1.26 Error: duplicate field 'i' in record
+>   raised at: stdIn:1.26
 
 (*) To duplicate a value under a second label, use 'extend'.
 {{i=1} extend k=i};
