@@ -2520,6 +2520,7 @@ AstNode statementEof() :
 <DEFAULT> TOKEN :
 {
   < AND: "and" >
+// lint: sort until '^$'
 | < ANDALSO: "andalso" >
 | < AS: "as" >
 | < CASE: "case" >
@@ -2548,6 +2549,8 @@ AstNode statementEof() :
 | < VAL: "val" >
 
 // The following are relational extensions:
+// lint: sort until '^$'
+| < ALL: "all" >
 | < COMPUTE: "compute" >
 | < CURRENT: "current" >
 | < DISTINCT: "distinct" >
@@ -2555,6 +2558,7 @@ AstNode statementEof() :
 | < ELEMENTS: "elements" >
 | < EXCEPT: "except" >
 | < EXISTS: "exists" >
+| < EXTEND: "extend" >
 | < FORALL: "forall" >
 | < FROM: "from" >
 | < FULL: "full" >
@@ -2567,21 +2571,19 @@ AstNode statementEof() :
 | < NOT_ELEM: "notelem" >
 | < ON: "on" >
 | < ORDER: "order" >
-| < RIGHT: "right" >
 | < ORDINAL: "ordinal" >
+| < REMOVE: "remove" >
+| < RENAME: "rename" >
 | < REQUIRE: "require" >
+| < RIGHT: "right" >
 | < SKIP_: "skip" >
 | < TAKE: "take" >
 | < THROUGH: "through" >
-| < TYPEOF: "typeof" >
 | < TYPE_STRING: "type_string" >
+| < TYPEOF: "typeof" >
 | < UNION: "union" >
 | < UNORDER: "unorder" >
 | < WHERE: "where" >
-| < ALL: "all" >
-| < EXTEND: "extend" >
-| < REMOVE: "remove" >
-| < RENAME: "rename" >
 | < WITH: "with" >
 | < YIELD: "yield" >
 | < YIELDALL: "yieldAll" >
