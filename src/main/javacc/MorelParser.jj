@@ -33,6 +33,7 @@ import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.util.Folder;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Pair;
@@ -1523,10 +1524,12 @@ Exp atom() :
     (
       LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
           | <ALL> | <EXTEND> | <REMOVE> | <RENAME>) <EQ>)
-      recordItem(nameExps)
+      { modifierPossible = true; }
+      recordExp(nameExps)
       (
-        <COMMA> recordItem(nameExps)
+        <COMMA> { modifierPossible = true; } recordExp(nameExps)
       )*
+      [ modifierNotAllowed() ]
     |
       { modifierPossible = true; }
       exp = expression()
@@ -1539,8 +1542,9 @@ Exp atom() :
           nameExps.add(ast.missingId(), exp);
         }
         (
-          <COMMA> recordItem(nameExps)
+          <COMMA> { modifierPossible = true; } recordExp(nameExps)
         )*
+        [ modifierNotAllowed() ]
       )
     )
   ]
@@ -1634,37 +1638,22 @@ void recordLabel(List<Id> labels) :
 }
 
 /**
- * Parses an item of a record's field list: an expression, optionally labeled,
- * and optionally followed by modifiers of its own.
- *
- * <p>The modifiers apply to the item, not to the record being built -- that
- * record has no base for them to apply to -- so "{a = 1, b remove x}" means
- * "{a = 1, b = b remove x}". As anywhere else, an unlabeled item takes the
- * label its expression implies, which for a modified record is the label its
- * base implies.
+ * Reports a modifier that follows a record's field list, where there is no
+ * base for it to apply to. Braces of its own give it one: "{a = 1, b = {b
+ * remove x}}" rather than "{a = 1, b remove x}".
  */
-void recordItem(PairList<Id, Exp> nameExps) :
+void modifierNotAllowed() :
 {
-  final List<Id> labels = new ArrayList<Id>();
   final List<Ast.Modifier> modifiers = new ArrayList<Ast.Modifier>();
-  Exp exp;
+  final Pos p;
 }
 {
-  [
-    LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
-        | <ALL> | <EXTEND> | <REMOVE> | <RENAME>) <EQ>)
-    recordLabel(labels) <EQ>
-  ]
-  { modifierPossible = true; }
-  exp = expression()
-  ( recordModifier(modifiers) )*
-  {
-    if (!modifiers.isEmpty()) {
-      exp =
-          ast.record(
-              exp.pos.plus(pos()), exp, PairList.<Id, Exp>of(), modifiers);
-    }
-    nameExps.add(labels.isEmpty() ? ast.missingId() : labels.get(0), exp);
+  { p = pos(getToken(1)); }
+  recordModifier(modifiers) {
+    throw new CompileException(
+        "a record modifier applies to a base expression; enclose the"
+            + " expression and its modifiers in braces",
+        false, p.plus(pos()));
   }
 }
 

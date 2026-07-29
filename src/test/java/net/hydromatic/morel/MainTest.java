@@ -508,8 +508,16 @@ public class MainTest {
     ml("{hd scott.emps with deptno = 10, empno = 100}")
         .assertParse("{hd (#emps scott) with deptno = 10, empno = 100}");
     ml("{e.dept remove deptno}").assertParse("{#dept e remove deptno}");
-    ml("{a = 1, b remove x}").assertParse("{a = 1, b = b remove x}");
+    ml("{a = 1, {b remove x}}").assertParseSame();
     ml("{r with i = {s remove x}}").assertParseSame();
+    mlE("{a = 1, b $remove x$}")
+        .assertParseThrows(
+            pos ->
+                throwsA(
+                    CompileException.class,
+                    "a record modifier applies to a base expression; enclose"
+                        + " the expression and its modifiers in braces",
+                    pos));
 
     // safe navigation
     ml("e?.deptno").assertParseSame();

@@ -2425,29 +2425,6 @@ public class Ast {
 
   /** Writes "label = expression", omitting a label that is implicit. */
   private static void unparseArg(AstWriter w, Id id, Exp exp) {
-    unparseArg(w, id, exp, false);
-  }
-
-  /**
-   * Writes "label = expression", omitting a label that is implicit.
-   *
-   * <p>If {@code item}, this is an item of a record's field list, where a
-   * modified record is written without its braces -- {@code b = b remove x}
-   * rather than {@code b = {b remove x}} -- because that is where a modifier is
-   * grammatical. The label is then written even if it is implicit, so that it
-   * is clear that the modifiers apply to the item rather than to the record
-   * being built.
-   */
-  private static void unparseArg(AstWriter w, Id id, Exp exp, boolean item) {
-    if (item && exp instanceof Record && ((Record) exp).base != null) {
-      final String label =
-          id.name.isEmpty() ? ast.implicitLabelOpt(exp) : id.name;
-      if (label != null) {
-        w.append(ast.id(exp.pos, label), 0, 0).append(" = ");
-      }
-      ((Record) exp).unparseModified(w);
-      return;
-    }
     if (!(id.name.isEmpty() || id.name.equals(ast.implicitLabelOpt(exp)))) {
       w.append(id, 0, 0).append(" = ");
     }
@@ -2711,28 +2688,17 @@ public class Ast {
     AstWriter unparse(AstWriter w, int left, int right) {
       w.append("{");
       if (base != null) {
-        unparseModified(w);
+        base.unparse(w, 0, 0);
+        modifiers.forEach(modifier -> modifier.unparse(w));
       }
       args.forEachIndexed(
           (i, k, v) -> {
             if (i > 0) {
               w.append(", ");
             }
-            unparseArg(w, k, v, true);
+            unparseArg(w, k, v);
           });
       return w.append("}");
-    }
-
-    /**
-     * Writes this record's base and modifiers, without the enclosing braces.
-     *
-     * <p>Valid only where a modifier is grammatical: inside the braces of this
-     * record, or as an item of another record's field list.
-     */
-    AstWriter unparseModified(AstWriter w) {
-      requireNonNull(base).unparse(w, 0, 0);
-      modifiers.forEach(modifier -> modifier.unparse(w));
-      return w;
     }
 
     public Record copy(

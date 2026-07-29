@@ -290,20 +290,20 @@ id extend;
 {{i=1} with i = (fn remove => remove) 5};
 > val it = {i=5} : {i:int}
 
-(* An item of a field list may have modifiers of its own; they apply to
- * the item, not to the record being built, which has no base for them to
- * apply to. An unlabeled item takes the label its base implies. *)
+(* A modifier applies to a base expression, so a field whose value is a
+ * modified record needs braces of its own; unlabeled, the field takes
+ * the label its base implies. *)
 val v = {x=1,y=2};
 > val v = {x=1,y=2} : {x:int, y:int}
-{a = 1, v remove x};
+{a = 1, {v remove x}};
 > val it = {a=1,v={y=2}} : {a:int, v:{y:int}}
-{a = 1, v = v remove x};
+{a = 1, v = {v remove x}};
 > val it = {a=1,v={y=2}} : {a:int, v:{y:int}}
-{c = v extend z = 3};
+{c = {v extend z = 3}};
 > val it = {c={x=1,y=2,z=3}} : {c:{x:int, y:int, z:int}}
 
 (*) A modified record may itself be the base of another modifier.
-{a = 1, {v remove x} with y = 3};
+{a = 1, {{v remove x} with y = 3}};
 > val it = {a=1,v={y=3}} : {a:int, v:{y:int}}
 
 (*) A worked example.
