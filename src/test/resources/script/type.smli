@@ -33,6 +33,18 @@
 ("a", false) = {1 = "a", 2 = true};
 > val it = false : bool
 
+(* A tuple is a record whose labels are ordinals, so a record pattern
+ * matches one, and a modifier applies to one. *)
+val {1=a,2=b} = ("a", true);
+> val a = "a" : string
+> val b = true : bool
+{("a", true) with 1 = "b"};
+> val it = ("b",true) : string * bool
+{("a", true) remove 2};
+> val it = {1="a"} : {1:string}
+{("a", true) extend c = 1};
+> val it = {1="a",2=true,c=1} : {1:string, 2:bool, c:int}
+
 (*) Records with 'with'
 {{a = 1, b = 2} with a = 3};
 > val it = {a=3,b=2} : {a:int, b:int}
@@ -236,6 +248,18 @@ val u = {i=0,r={i=99}};
 (*) 'extend' then 'remove' of the field the extension read.
 {{i=1} extend j=i+1 remove i};
 > val it = {j=2} : {j:int}
+
+(* An item of a field list may have modifiers of its own; they apply to
+ * the item, not to the record being built, which has no base for them to
+ * apply to. An unlabeled item takes the label its base implies. *)
+val v = {x=1,y=2};
+> val v = {x=1,y=2} : {x:int, y:int}
+{a = 1, v remove x};
+> val it = {a=1,v={y=2}} : {a:int, v:{y:int}}
+{a = 1, v = v remove x};
+> val it = {a=1,v={y=2}} : {a:int, v:{y:int}}
+{c = v extend z = 3};
+> val it = {c={x=1,y=2,z=3}} : {c:{x:int, y:int, z:int}}
 
 (*) A worked example.
 {{comm=2.0,ename="Shaggy",sal=10.0} with sal=sal*12.0 extend tax=sal*0.3 extend net=sal-tax remove comm};

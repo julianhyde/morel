@@ -75,6 +75,12 @@ public enum AstBuilder {
       case AGGREGATE:
         final Ast.Aggregate aggregate = (Ast.Aggregate) exp;
         return implicitLabelOpt(aggregate.aggregate);
+      case RECORD:
+        // A record with modifiers takes the label its base implies, so
+        // "{a = 1, b remove x}" labels the second item "b". A record without
+        // them has no implicit label.
+        final Ast.Record record = (Ast.Record) exp;
+        return record.base == null ? null : implicitLabelOpt(record.base);
       case APPLY:
         final Ast.Apply apply = (Ast.Apply) exp;
         if (apply.fn instanceof Ast.RecordSelector) {

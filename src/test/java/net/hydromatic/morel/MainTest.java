@@ -528,6 +528,22 @@ public class MainTest {
     ml("{e.dept remove deptno}").assertParse("{#dept e remove deptno}");
     ml("{{deptno = 10, ename = \"Shaggy\"} remove deptno}").assertParseSame();
 
+    // An item of a field list may have modifiers of its own, and takes the
+    // label its base implies. Unparsing writes the label even though it is
+    // implicit, so that it is clear what the modifiers apply to.
+    ml("{a = 1, b remove x}").assertParse("{a = 1, b = b remove x}");
+    ml("{a = 1, b = b remove x}").assertParseSame();
+    ml("{a = 1, b with x = 5}").assertParse("{a = 1, b = b with x = 5}");
+    ml("{c = b extend z = 3}").assertParseSame();
+    ml("{a = 1, e.dept remove deptno}")
+        .assertParse("{a = 1, dept = #dept e remove deptno}");
+    ml("{a = 1, {b remove x} with y = 2}")
+        .assertParse("{a = 1, b = {b remove x} with y = 2}");
+
+    // In a modifier's arguments the braces are needed: without them the
+    // modifier would continue the record's own pipeline.
+    ml("{r with i = {s remove x}}").assertParseSame();
+
     // the four words are still identifiers where no modifier can begin
     ml("{extend = 1, remove = 2, rename = 3, all = 4}").assertParseSame();
     ml("{e with extend = 1}").assertParseSame();

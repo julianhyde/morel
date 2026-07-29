@@ -1523,9 +1523,9 @@ Exp atom() :
     (
       LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
           | <ALL> | <EXTEND> | <REMOVE> | <RENAME>) <EQ>)
-      labeledRecordExp(nameExps)
+      recordItem(nameExps)
       (
-        <COMMA> recordExp(nameExps)
+        <COMMA> recordItem(nameExps)
       )*
     |
       { modifierPossible = true; }
@@ -1539,7 +1539,7 @@ Exp atom() :
           nameExps.add(ast.missingId(), exp);
         }
         (
-          <COMMA> recordExp(nameExps)
+          <COMMA> recordItem(nameExps)
         )*
       )
     )
@@ -1630,6 +1630,41 @@ void recordLabel(List<Id> labels) :
     id = identifier()
   ) {
     labels.add(id);
+  }
+}
+
+/**
+ * Parses an item of a record's field list: an expression, optionally labeled,
+ * and optionally followed by modifiers of its own.
+ *
+ * <p>The modifiers apply to the item, not to the record being built -- that
+ * record has no base for them to apply to -- so "{a = 1, b remove x}" means
+ * "{a = 1, b = b remove x}". As anywhere else, an unlabeled item takes the
+ * label its expression implies, which for a modified record is the label its
+ * base implies.
+ */
+void recordItem(PairList<Id, Exp> nameExps) :
+{
+  final List<Id> labels = new ArrayList<Id>();
+  final List<Ast.Modifier> modifiers = new ArrayList<Ast.Modifier>();
+  Exp exp;
+}
+{
+  [
+    LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
+        | <ALL> | <EXTEND> | <REMOVE> | <RENAME>) <EQ>)
+    recordLabel(labels) <EQ>
+  ]
+  { modifierPossible = true; }
+  exp = expression()
+  ( recordModifier(modifiers) )*
+  {
+    if (!modifiers.isEmpty()) {
+      exp =
+          ast.record(
+              exp.pos.plus(pos()), exp, PairList.<Id, Exp>of(), modifiers);
+    }
+    nameExps.add(labels.isEmpty() ? ast.missingId() : labels.get(0), exp);
   }
 }
 

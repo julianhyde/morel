@@ -1433,16 +1433,24 @@ public class Resolver {
           // Its type is not RecordType, but RecordLikeType.
           return core.wildcardPat(targetType);
         }
-        final RecordType recordType = (RecordType) targetType;
+        // The target may be a tuple type; a tuple is a record whose labels
+        // are ordinals, and "{1 = x, 2 = y}" is a valid pattern for it.
+        final RecordLikeType recordLikeType = (RecordLikeType) targetType;
         final ImmutableList.Builder<Core.Pat> args = ImmutableList.builder();
-        recordType.argNameTypes.forEach(
-            (label, argType) -> {
-              final Ast.Pat argPat = recordPat.args.get(label);
-              final Core.Pat corePat =
-                  argPat != null ? toCore(argPat) : core.wildcardPat(argType);
-              args.add(corePat);
-            });
-        return core.recordPat(recordType, args.build());
+        recordLikeType
+            .argNameTypes()
+            .forEach(
+                (label, argType) -> {
+                  final Ast.Pat argPat = recordPat.args.get(label);
+                  final Core.Pat corePat =
+                      argPat != null
+                          ? toCore(argPat)
+                          : core.wildcardPat(argType);
+                  args.add(corePat);
+                });
+        return recordLikeType instanceof RecordType
+            ? core.recordPat((RecordType) recordLikeType, args.build())
+            : core.tuplePat(recordLikeType, args.build());
 
       case TUPLE_PAT:
         final Ast.TuplePat tuplePat = (Ast.TuplePat) pat;
