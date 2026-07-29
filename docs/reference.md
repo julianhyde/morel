@@ -92,7 +92,8 @@ In Morel but not Standard ML:
   whose first parameter is named `self`
 * identifiers and type names may be quoted
   (for example, <code>\`an identifier\`</code>)
-* `with` functional update for record values (from OCaml)
+* record modifiers: `with` functional update for record values (from
+  OCaml), and `with all`, `extend`, `extend all`, `remove` and `rename`
 * overloaded functions may be declared using `over` and `inst`
 * attributes (`[@attr]` / `[@@attr]` / `[@@@attr]`) based on OCaml
 * `(*)` line comments (syntax as SML/NJ and MLton)
@@ -184,6 +185,8 @@ In Standard ML but not in Morel:
     | '<b>(</b>' <i>exp</i> '<b>)</b>'               parentheses
     | '<b>(</b>' <i>exp<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>exp<sub>n</sub></i> '<b>)</b>' tuple (n &ne; 1)
     | <b>{</b> [ <i>exprow</i> ] <b>}</b>            record
+    | <b>{</b> <i>exp</i> <i>modifier<sub>1</sub></i> ... <i>modifier<sub>n</sub></i> <b>}</b>
+                                modified record (<i>n</i> &ge; 1)
     | <b>#</b><i>lab</i>                      record selector
     | '<b>[</b>' <i>exp<sub>1</sub></i> <b>,</b> ... <b>,</b> <i>exp<sub>n</sub></i> '<b>]</b>' list (n &ge; 0)
     | '<b>(</b>' <i>exp<sub>1</sub></i> <b>;</b> ... <b>;</b> <i>exp<sub>n</sub></i> '<b>)</b>' sequence (n &ge; 2)
@@ -212,9 +215,16 @@ In Standard ML but not in Morel:
                                 universal quantification (<i>s</i> &ge; 0, <i>t</i> &ge; 0)
     | <i>exp</i> <i>expAttr<sub>1</sub></i> ... <i>expAttr<sub>n</sub></i>
                                 attributed expression (n &ge; 1)
-<i>exprow</i> &rarr; [ <i>exp</i> <b>with</b> ] <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
+<i>exprow</i> &rarr; <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
                                 expression row
 <i>exprowItem</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i>
+<i>modifier</i> &rarr; <b>with</b> <i>exprow</i>            assign to fields
+    | <b>with all</b> <i>exp</i>              assign to every field of <i>exp</i>
+    | <b>extend</b> <i>exprow</i>             add fields
+    | <b>extend all</b> <i>exp</i>            add every field of <i>exp</i>
+    | <b>remove</b> <i>lab</i> [<b>,</b> <i>lab</i> ]*      remove fields
+    | <b>rename</b> <i>lab</i> <b>=</b> <i>lab</i> [<b>,</b> <i>lab</i> <b>=</b> <i>lab</i> ]*
+                                rename fields
 <i>match</i> &rarr; <i>matchItem</i> [ '<b>|</b>' <i>matchItem</i> ]*
                                 match
 <i>matchItem</i> &rarr; <i>pat</i> <b>=&gt;</b> <i>exp</i>
@@ -244,6 +254,38 @@ In Standard ML but not in Morel:
 <i>groupKey</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i>
 <i>agg</i> &rarr; [ <i>id</i> <b>=</b> ] <i>exp</i> [ <b>of</b> <i>exp</i> ]
 </pre>
+
+#### Record modifiers
+
+Inside braces, an expression may be followed by modifiers, each applied
+to the record that the modifier before it produced:
+
+```sml
+{{comm = 2.0, ename = "Shaggy", sal = 10.0}
+    with sal = sal * 12.0
+    extend tax = sal * 0.3
+    remove comm};
+> val it = {ename="Shaggy",sal=120,tax=36} : {ename:string, sal:real, tax:real}
+```
+
+* `with` assigns to fields, which must exist and may not change type;
+* `extend` adds fields, which must not exist;
+* `with all` <i>exp</i> and `extend all` <i>exp</i> do the same for
+  every field of the record <i>exp</i>;
+* `remove` removes fields, which must exist;
+* `rename` gives the value of each right-hand label to the left-hand
+  one, and removes the right-hand labels; labels may therefore be
+  swapped or chained.
+
+Within one modifier the assignments are simultaneous, so
+`{r with i = j, j = i}` swaps two fields; a later modifier sees the
+result of an earlier one, so `{r with i = j with j = i}` does not. An
+assignment sees the fields of the record the modifier is applied to,
+and they shadow the enclosing environment.
+
+`all`, `extend`, `remove` and `rename` are not reserved words; they
+have their special meaning only where a modifier can occur, and are
+ordinary identifiers elsewhere.
 
 ### Patterns
 

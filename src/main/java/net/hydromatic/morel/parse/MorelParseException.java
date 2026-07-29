@@ -35,9 +35,9 @@ public class MorelParseException extends RuntimeException
   /**
    * Removes the non-reserved keywords from the list of expected tokens.
    *
-   * <p>They are tokens only so that they can end the expression before an
-   * operator region; every rule that accepts an identifier accepts them too.
-   * Naming them alongside {@code <IDENTIFIER>} would suggest that they are
+   * <p>They are tokens only so that they can end the expression before a record
+   * modifier; every rule that accepts an identifier accepts them too. Naming
+   * them alongside {@code <IDENTIFIER>} would suggest that they are
    * alternatives to it, and would list four words that are irrelevant to
    * whatever the user actually got wrong.
    */

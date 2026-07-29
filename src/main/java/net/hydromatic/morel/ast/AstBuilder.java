@@ -355,46 +355,47 @@ public enum AstBuilder {
   }
 
   public Ast.Record record(
-      Pos pos, Ast.@Nullable Exp with, PairList<Ast.Id, Ast.Exp> args) {
-    return record(pos, with, args, ImmutableList.of());
+      Pos pos, Ast.@Nullable Exp base, PairList<Ast.Id, Ast.Exp> args) {
+    return record(pos, base, args, ImmutableList.of());
   }
 
   public Ast.Record record(
       Pos pos,
-      Ast.@Nullable Exp with,
+      Ast.@Nullable Exp base,
       PairList<Ast.Id, Ast.Exp> args,
-      List<Ast.Region> regions) {
-    return new Ast.Record(pos, with, ImmutablePairList.copyOf(args), regions);
+      List<Ast.Modifier> modifiers) {
+    return new Ast.Record(pos, base, ImmutablePairList.copyOf(args), modifiers);
   }
 
   public Ast.Record record(
       Pos pos,
-      Ast.@Nullable Exp with,
+      Ast.@Nullable Exp base,
       Collection<Map.Entry<Ast.Id, Ast.Exp>> args) {
-    return record(pos, with, PairList.copyOf(args));
+    return record(pos, base, PairList.copyOf(args));
   }
 
   public Ast.Record record(
       Pos pos,
-      Ast.@Nullable Exp with,
+      Ast.@Nullable Exp base,
       Collection<Map.Entry<Ast.Id, Ast.Exp>> args,
-      List<Ast.Region> regions) {
-    return record(pos, with, PairList.copyOf(args), regions);
+      List<Ast.Modifier> modifiers) {
+    return record(pos, base, PairList.copyOf(args), modifiers);
   }
 
-  /** Creates a "with", "extend" or "rename" region. */
-  public Ast.AssignRegion assignRegion(Op op, PairList<Ast.Id, Ast.Exp> args) {
-    return new Ast.AssignRegion(op, args);
+  /** Creates a "with", "extend" or "rename" modifier. */
+  public Ast.AssignModifier assignModifier(
+      Op op, PairList<Ast.Id, Ast.Exp> args) {
+    return new Ast.AssignModifier(op, args);
   }
 
-  /** Creates a "with all" or "extend all" region. */
-  public Ast.AllRegion allRegion(Op op, Ast.Exp exp) {
-    return new Ast.AllRegion(op, exp);
+  /** Creates a "with all" or "extend all" modifier. */
+  public Ast.AllModifier allModifier(Op op, Ast.Exp exp) {
+    return new Ast.AllModifier(op, exp);
   }
 
-  /** Creates a "remove" region. */
-  public Ast.RemoveRegion removeRegion(List<Ast.Id> labels) {
-    return new Ast.RemoveRegion(labels);
+  /** Creates a "remove" modifier. */
+  public Ast.RemoveModifier removeModifier(List<Ast.Id> labels) {
+    return new Ast.RemoveModifier(labels);
   }
 
   public Ast.Exp equal(Ast.Exp a0, Ast.Exp a1) {

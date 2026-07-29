@@ -26,6 +26,7 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.type.RecordType.compareNames;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.firstDuplicate;
 
 import com.google.common.collect.ImmutableList;
@@ -2422,15 +2423,50 @@ public class Ast {
     }
   }
 
+  /** Writes "label = expression", omitting a label that is implicit. */
+  private static void unparseArg(AstWriter w, Id id, Exp exp) {
+    if (!(id.name.isEmpty() || id.name.equals(ast.implicitLabelOpt(exp)))) {
+      w.append(id, 0, 0).append(" = ");
+    }
+    w.append(exp, 0, 0);
+  }
+
   /**
-   * Operator applied to a record value inside braces: one of the operators of
-   * [MOREL-430]. Regions are applied left to right, and each sees the result of
-   * the previous one.
+   * Returns a copy of {@code args} with implicit labels made explicit.
+   *
+   * <p>Throws if two labels are the same.
    */
-  public abstract static class Region {
+  private static PairList<Id, Exp> validateArgs(PairList<Id, Exp> args) {
+    final PairList<Id, Exp> args2 = PairList.of();
+    args.forEach(
+        (id, exp) -> {
+          if (id.name.isEmpty()) {
+            // Throws if no implicit label can be derived.
+            id = ast.implicitLabel(exp);
+          }
+          args2.add(id, exp);
+        });
+
+    // Lazy transform - we are unlikely to access each element more than once
+    final List<String> names = args2.transform((id, e) -> id.name);
+    final int i = firstDuplicate(names);
+    if (i >= 0) {
+      final int j = names.lastIndexOf(names.get(i));
+      throw new TypeResolver.TypeException(
+          format("duplicate field '%s' in record", names.get(i)),
+          args.left(j).pos);
+    }
+    return args2;
+  }
+
+  /**
+   * Operator applied to a record value inside braces. Modifiers are applied
+   * left to right, and each sees the result of the previous one.
+   */
+  public abstract static class Modifier {
     public final Op op;
 
-    Region(Op op) {
+    Modifier(Op op) {
       this.op = requireNonNull(op);
     }
 
@@ -2439,7 +2475,7 @@ public class Ast {
       return unparse(new AstWriter()).toString();
     }
 
-    /** Writes this region, including the leading space and operator. */
+    /** Writes this modifier, including the leading space and operator. */
     AstWriter unparse(AstWriter w) {
       return unparseArgs(w.append(" ").append(op.padded.trim()).append(" "));
     }
@@ -2447,27 +2483,44 @@ public class Ast {
     /** Writes the part after the operator. */
     abstract AstWriter unparseArgs(AstWriter w);
 
-    /** Calls {@code consumer} for each expression this region contains. */
+    /** Calls {@code consumer} for each expression this modifier contains. */
     public abstract void forEachExp(Consumer<Exp> consumer);
 
-    /** Accepts a shuttle, returning a region with transformed expressions. */
-    public abstract Region accept(Shuttle shuttle);
+    /**
+     * Calls {@code consumer} for each label this modifier names. {@code with
+     * all} and {@code extend all} name none; the labels of their argument are
+     * not known until it has a type.
+     */
+    public void forEachLabel(Consumer<String> consumer) {}
+
+    /** Accepts a shuttle, returning a modifier with transformed expressions. */
+    public abstract Modifier accept(Shuttle shuttle);
+
+    /**
+     * Returns a copy of this modifier with implicit labels made explicit.
+     *
+     * <p>Throws if two labels are the same.
+     */
+    public Modifier validate() {
+      return this;
+    }
   }
 
   /**
-   * Region that assigns to labels: {@code with}, {@code extend} and {@code
+   * Modifier that assigns to labels: {@code with}, {@code extend} and {@code
    * rename}. For {@code rename} each value is an {@link Id} naming the field to
    * relabel.
    */
-  public static class AssignRegion extends Region {
+  public static class AssignModifier extends Modifier {
     public final PairList<Id, Exp> args;
 
-    AssignRegion(Op op, Iterable<? extends Map.Entry<Id, ? extends Exp>> args) {
+    AssignModifier(
+        Op op, Iterable<? extends Map.Entry<Id, ? extends Exp>> args) {
       super(op);
       checkArgument(
-          op == Op.WITH_REGION
-              || op == Op.EXTEND_REGION
-              || op == Op.RENAME_REGION,
+          op == Op.WITH_MODIFIER
+              || op == Op.EXTEND_MODIFIER
+              || op == Op.RENAME_MODIFIER,
           "op %s",
           op);
       this.args = ImmutablePairList.copyOf(args);
@@ -2476,11 +2529,12 @@ public class Ast {
     @Override
     AstWriter unparseArgs(AstWriter w) {
       args.forEachIndexed(
-          (i, k, v) ->
-              w.append(i > 0 ? ", " : "")
-                  .append(k.name)
-                  .append(" = ")
-                  .append(v, 0, 0));
+          (i, k, v) -> {
+            if (i > 0) {
+              w.append(", ");
+            }
+            unparseArg(w, k, v);
+          });
       return w;
     }
 
@@ -2490,26 +2544,38 @@ public class Ast {
     }
 
     @Override
-    public Region accept(Shuttle shuttle) {
+    public Modifier accept(Shuttle shuttle) {
       return copy(shuttle.visitPairList(args));
     }
 
-    public AssignRegion copy(Collection<Map.Entry<Id, Exp>> args) {
-      return args.equals(this.args) ? this : new AssignRegion(op, args);
+    @Override
+    public void forEachLabel(Consumer<String> consumer) {
+      args.leftList().forEach(id -> consumer.accept(id.name));
+    }
+
+    @Override
+    public AssignModifier validate() {
+      return copy(validateArgs(args));
+    }
+
+    public AssignModifier copy(Collection<Map.Entry<Id, Exp>> args) {
+      return args.equals(this.args) ? this : new AssignModifier(op, args);
     }
   }
 
   /**
-   * Region that takes a record-valued expression: {@code with all} and {@code
+   * Modifier that takes a record-valued expression: {@code with all} and {@code
    * extend all}.
    */
-  public static class AllRegion extends Region {
+  public static class AllModifier extends Modifier {
     public final Exp exp;
 
-    AllRegion(Op op, Exp exp) {
+    AllModifier(Op op, Exp exp) {
       super(op);
       checkArgument(
-          op == Op.WITH_ALL_REGION || op == Op.EXTEND_ALL_REGION, "op %s", op);
+          op == Op.WITH_ALL_MODIFIER || op == Op.EXTEND_ALL_MODIFIER,
+          "op %s",
+          op);
       this.exp = requireNonNull(exp);
     }
 
@@ -2524,21 +2590,21 @@ public class Ast {
     }
 
     @Override
-    public Region accept(Shuttle shuttle) {
+    public Modifier accept(Shuttle shuttle) {
       return copy(exp.accept(shuttle));
     }
 
-    public AllRegion copy(Exp exp) {
-      return exp.equals(this.exp) ? this : new AllRegion(op, exp);
+    public AllModifier copy(Exp exp) {
+      return exp.equals(this.exp) ? this : new AllModifier(op, exp);
     }
   }
 
-  /** Region that removes labels: {@code remove}. */
-  public static class RemoveRegion extends Region {
+  /** Modifier that removes labels: {@code remove}. */
+  public static class RemoveModifier extends Modifier {
     public final ImmutableList<Id> labels;
 
-    RemoveRegion(List<Id> labels) {
-      super(Op.REMOVE_REGION);
+    RemoveModifier(List<Id> labels) {
+      super(Op.REMOVE_MODIFIER);
       this.labels = ImmutableList.copyOf(labels);
     }
 
@@ -2553,7 +2619,12 @@ public class Ast {
     public void forEachExp(Consumer<Exp> consumer) {}
 
     @Override
-    public Region accept(Shuttle shuttle) {
+    public void forEachLabel(Consumer<String> consumer) {
+      labels.forEach(label -> consumer.accept(label.name));
+    }
+
+    @Override
+    public Modifier accept(Shuttle shuttle) {
       return this;
     }
   }
@@ -2566,20 +2637,20 @@ public class Ast {
    * @see AstBuilder#fieldCount(Exp)
    */
   public static class Record extends Exp {
-    /** The expression before the first operator, or null if there is none. */
-    public final @Nullable Exp with;
-
     /**
-     * Assignments of the first {@code with} region, if any; otherwise the
-     * fields of a plain record expression.
+     * The expression the modifiers are applied to, or null if this is a plain
+     * record expression.
      */
+    public final @Nullable Exp base;
+
+    /** Fields, if {@link #base} is null; otherwise empty. */
     public final PairList<Id, Exp> args;
 
     /**
-     * Operator regions after the first, applied left to right. Empty unless the
-     * expression uses the operators of [MOREL-430].
+     * Operators applied to {@link #base}, left to right; empty if {@code base}
+     * is null, otherwise non-empty.
      */
-    public final ImmutableList<Region> regions;
+    public final ImmutableList<Modifier> modifiers;
 
     /** The empty record expression, {@code {}}. */
     public static final Record EMPTY =
@@ -2587,13 +2658,16 @@ public class Ast {
 
     Record(
         Pos pos,
-        @Nullable Exp with,
+        @Nullable Exp base,
         Iterable<? extends Map.Entry<Id, ? extends Exp>> args,
-        List<Region> regions) {
+        List<Modifier> modifiers) {
       super(pos, Op.RECORD);
-      this.with = with;
+      this.base = base;
       this.args = ImmutablePairList.copyOf(args);
-      this.regions = ImmutableList.copyOf(regions);
+      this.modifiers = ImmutableList.copyOf(modifiers);
+      checkArgument(
+          base == null ? this.modifiers.isEmpty() : this.args.isEmpty(),
+          "a record has either fields or a base with modifiers");
     }
 
     @Override
@@ -2613,38 +2687,34 @@ public class Ast {
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
       w.append("{");
-      if (with != null) {
-        with.unparse(w, 0, 0);
-        w.append(" with ");
+      if (base != null) {
+        base.unparse(w, 0, 0);
       }
       args.forEachIndexed(
           (i, k, v) -> {
             if (i > 0) {
               w.append(", ");
             }
-            if (!(k.name.isEmpty() || k.name.equals(ast.implicitLabelOpt(v)))) {
-              w.append(k, 0, 0).append(" = ");
-            }
-            w.append(v, 0, 0);
+            unparseArg(w, k, v);
           });
-      regions.forEach(region -> region.unparse(w));
+      modifiers.forEach(modifier -> modifier.unparse(w));
       return w.append("}");
     }
 
     public Record copy(
-        @Nullable Exp with, Collection<Map.Entry<Id, Exp>> args) {
-      return copy(with, args, regions);
+        @Nullable Exp base, Collection<Map.Entry<Id, Exp>> args) {
+      return copy(base, args, modifiers);
     }
 
     public Record copy(
-        @Nullable Exp with,
+        @Nullable Exp base,
         Collection<Map.Entry<Id, Exp>> args,
-        List<Region> regions) {
-      return Objects.equals(with, this.with)
+        List<Modifier> modifiers) {
+      return Objects.equals(base, this.base)
               && args.equals(this.args)
-              && regions.equals(this.regions)
+              && modifiers.equals(this.modifiers)
           ? this
-          : ast.record(pos, with, args, regions);
+          : ast.record(pos, base, args, modifiers);
     }
 
     public SortedMap<Id, Exp> sortedArgs() {
@@ -2652,31 +2722,16 @@ public class Ast {
     }
 
     /**
-     * Returns a copy of this Record with implicit labels made explicit.
+     * Returns a copy of this Record with implicit labels made explicit, in its
+     * fields and in each of its modifiers.
      *
      * <p>Throws if there are duplicate field names.
      */
     public Record validate() {
-      final PairList<Ast.Id, Ast.Exp> args2 = PairList.of();
-      args.forEach(
-          (id, exp) -> {
-            if (id.name.isEmpty()) {
-              // Throws if no implicit label can be derived.
-              id = ast.implicitLabel(exp);
-            }
-            args2.add(id, exp);
-          });
-
-      // Lazy transform - we are unlikely to access each element more than once
-      final List<String> names = args2.transform((id, e) -> id.name);
-      final int i = firstDuplicate(names);
-      if (i >= 0) {
-        final int j = names.lastIndexOf(names.get(i));
-        throw new TypeResolver.TypeException(
-            format("duplicate field '%s' in record", names.get(i)),
-            args.left(j).pos);
-      }
-      return copy(with, args2);
+      return copy(
+          base,
+          validateArgs(args),
+          transformEager(modifiers, Modifier::validate));
     }
   }
 

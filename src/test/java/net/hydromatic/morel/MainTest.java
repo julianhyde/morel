@@ -505,6 +505,38 @@ public class MainTest {
     ml("{hd scott.emps with deptno = 10, empno = 100}")
         .assertParse("{hd (#emps scott) with deptno = 10, empno = 100}");
 
+    // record modifiers
+    ml("{e with all r}").assertParseSame();
+    ml("{e extend deptno = 10}").assertParseSame();
+    ml("{e extend deptno = 10, empno = 100}").assertParseSame();
+    ml("{e extend all {deptno = 10}}").assertParseSame();
+    ml("{e remove deptno}").assertParseSame();
+    ml("{e remove deptno, empno}").assertParseSame();
+    ml("{e rename dno = deptno}").assertParseSame();
+    ml("{e rename dno = deptno, eno = empno}").assertParseSame();
+
+    // a modifier applies to the result of the one before it
+    ml("{e with deptno = 10 remove empno}").assertParseSame();
+    ml("{e remove empno with deptno = 10}").assertParseSame();
+    ml("{e with deptno = 10 with deptno = 20}").assertParseSame();
+    ml("{e rename dno = deptno extend x = 1 remove ename}").assertParseSame();
+    ml("{e extend all {d with dname = \"Sales\"} remove deptno}")
+        .assertParseSame();
+
+    // the base can be any expression, and a modifier ends it
+    ml("{hd es remove deptno}").assertParseSame();
+    ml("{e.dept remove deptno}").assertParse("{#dept e remove deptno}");
+    ml("{{deptno = 10, ename = \"Shaggy\"} remove deptno}").assertParseSame();
+
+    // the four words are still identifiers where no modifier can begin
+    ml("{extend = 1, remove = 2, rename = 3, all = 4}").assertParseSame();
+    ml("{e with extend = 1}").assertParseSame();
+    ml("{e remove extend, all}").assertParseSame();
+    ml("{e with all = 1}").assertParseSame();
+    ml("f extend").assertParseSame();
+    ml("{e with x = f (g extend)}").assertParseSame();
+    ml("{e with x = (fn remove => remove) 1}").assertParseSame();
+
     // safe navigation
     ml("e?.deptno").assertParseSame();
     ml("a?.b?.c").assertParseSame();

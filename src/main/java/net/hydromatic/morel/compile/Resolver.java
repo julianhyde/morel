@@ -24,7 +24,6 @@ import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.anyMatch;
 import static net.hydromatic.morel.util.Static.last;
@@ -768,28 +767,13 @@ public class Resolver {
         transformEager(tuple.args, this::toCore));
   }
 
+  /**
+   * Converts a record expression. It has no modifiers; {@link TypeResolver}
+   * replaces a record that has them with the {@code let}s they desugar to.
+   */
   private Core.Tuple toCore(Ast.Record record) {
-    RecordLikeType type = (RecordLikeType) typeMap.getType(record);
-    List<Core.Exp> args;
-    if (record.with != null) {
-      args = new ArrayList<>();
-      final Core.Exp coreWith = toCore(record.with);
-      final Map<String, Ast.Exp> nameArgs = new HashMap<>();
-      record.args.forEach((id, exp) -> nameArgs.put(id.name, exp));
-      forEachIndexed(
-          type.argNames(),
-          (field, i) -> {
-            Ast.Exp exp = nameArgs.get(field);
-            if (exp != null) {
-              args.add(toCore(exp));
-            } else {
-              args.add(core.field(typeMap.typeSystem, coreWith, i));
-            }
-          });
-    } else {
-      args = transformEager(record.args(), this::toCore);
-    }
-    return core.tuple(type, args);
+    final RecordLikeType type = (RecordLikeType) typeMap.getType(record);
+    return core.tuple(type, transformEager(record.args(), this::toCore));
   }
 
   private Core.Exp toCore(Ast.ListExp list) {

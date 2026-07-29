@@ -246,13 +246,13 @@ public class Shuttle {
   protected Ast.Exp visit(Ast.Record record) {
     return ast.record(
         record.pos,
-        record.with == null ? null : record.with.accept(this),
+        record.base == null ? null : record.base.accept(this),
         visitPairList(record.args),
-        transformEager(record.regions, this::visit));
+        transformEager(record.modifiers, this::visit));
   }
 
-  protected Ast.Region visit(Ast.Region region) {
-    return region.accept(this);
+  protected Ast.Modifier visit(Ast.Modifier modifier) {
+    return modifier.accept(this);
   }
 
   // functions and matches

@@ -163,12 +163,15 @@ public class Visitor {
   }
 
   protected void visit(Ast.Record record) {
+    if (record.base != null) {
+      record.base.accept(this);
+    }
     record.args.rightList().forEach(this::accept);
-    record.regions.forEach(this::visit);
+    record.modifiers.forEach(this::visit);
   }
 
-  protected void visit(Ast.Region region) {
-    region.forEachExp(this::accept);
+  protected void visit(Ast.Modifier modifier) {
+    modifier.forEachExp(this::accept);
   }
 
   // functions and matches

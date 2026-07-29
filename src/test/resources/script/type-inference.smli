@@ -310,6 +310,27 @@ fn r => {r with i=1};
 :t fn (r : {i:int, j:string}) => {r with i = r.i + 1};
 > val it : {i:int, j:string} -> {i:int, j:string}
 
+(*) The other modifiers need the base's type for the same reason.
+fn r => {r extend k = 1};
+> stdIn:1.10 Error: unresolved flex record (can't tell what fields there are besides #k)
+>   raised at: stdIn:1.10
+fn r => {r remove i};
+> stdIn:1.10 Error: unresolved flex record (can't tell what fields there are besides #i)
+>   raised at: stdIn:1.10
+
+(*) 'extend' widens the type; 'remove' narrows it; 'rename' relabels it.
+:t fn (r : {i:int}) => {r extend j="a"};
+> val it : {i:int} -> {i:int, j:string}
+:t fn (r : {i:int, j:string}) => {r remove j};
+> val it : {i:int, j:string} -> {i:int}
+:t fn (r : {i:int, j:string}) => {r rename k=j};
+> val it : {i:int, j:string} -> {i:int, k:string}
+
+(* The fields need not be known when the modifier is deduced; a call
+ * later in the declaration can settle them. *)
+let val g = fn r => {r remove b} in g {a=1,b=2} end;
+> val it = {a=1} : {a:int}
+
 (* A record expression is another; its type is known from the fields,
  * even when theirs are not yet. Here 'size j' gives j : string, and
  * 'with' gives i the type of its assignment, so both are deduced. *)

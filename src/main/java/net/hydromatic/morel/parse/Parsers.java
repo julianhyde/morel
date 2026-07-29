@@ -53,10 +53,9 @@ public final class Parsers {
   }
 
   /**
-   * Keyword tokens that are not reserved. They introduce an operator region
-   * inside a record (see [MOREL-430]) but every rule that accepts an identifier
-   * accepts them too, so they need no back-ticks and are absent from {@link
-   * #RESERVED_WORDS}.
+   * Keyword tokens that are not reserved. They introduce a modifier inside a
+   * record, but every rule that accepts an identifier accepts them too, so they
+   * need no back-ticks and are absent from {@link #RESERVED_WORDS}.
    */
   public static final Set<String> NON_RESERVED_KEYWORDS =
       ImmutableSet.of("all", "extend", "remove", "rename");
