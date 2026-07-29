@@ -33,7 +33,6 @@ import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.util.Folder;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Pair;
@@ -1517,40 +1516,22 @@ Exp atom() :
     modifierPossible = false;
     final PairList<Id, Exp> nameExps = PairList.of();
     final List<Ast.Modifier> modifiers = new ArrayList<Ast.Modifier>();
-    Exp exp;
-    Exp base = null;
   }
   [
+    { modifierPossible = true; }
+    recordExp(nameExps)
     (
-      LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
-          | <ALL> | <EXTEND> | <REMOVE> | <RENAME>) <EQ>)
-      { modifierPossible = true; }
-      recordExp(nameExps)
-      (
-        <COMMA> { modifierPossible = true; } recordExp(nameExps)
-      )*
-      [ modifierNotAllowed() ]
-    |
-      { modifierPossible = true; }
-      exp = expression()
-      (
-        ( recordModifier(modifiers) )+ {
-          base = exp;
-        }
-      |
-        {
-          nameExps.add(ast.missingId(), exp);
-        }
-        (
-          <COMMA> { modifierPossible = true; } recordExp(nameExps)
-        )*
-        [ modifierNotAllowed() ]
-      )
-    )
+      <COMMA> { modifierPossible = true; } recordExp(nameExps)
+    )*
+    ( recordModifier(modifiers) )*
   ]
   <RBRACE> {
     modifierPossible = prevModifierPossible;
-    return ast.record(span.end(this), base, nameExps, modifiers);
+    // The fields and the modifiers are as they were written; whether they
+    // are a valid combination -- modifiers require a single field, and that
+    // field must have no label of its own -- is settled in Record.validate,
+    // where the field becomes the base the modifiers apply to.
+    return ast.record(span.end(this), null, nameExps, modifiers);
   }
 }
 
@@ -1634,26 +1615,6 @@ void recordLabel(List<Id> labels) :
     id = identifier()
   ) {
     labels.add(id);
-  }
-}
-
-/**
- * Reports a modifier that follows a record's field list, where there is no
- * base for it to apply to. Braces of its own give it one: "{a = 1, b = {b
- * remove x}}" rather than "{a = 1, b remove x}".
- */
-void modifierNotAllowed() :
-{
-  final List<Ast.Modifier> modifiers = new ArrayList<Ast.Modifier>();
-  final Pos p;
-}
-{
-  { p = pos(getToken(1)); }
-  recordModifier(modifiers) {
-    throw new CompileException(
-        "a record modifier applies to a base expression; enclose the"
-            + " expression and its modifiers in braces",
-        false, p.plus(pos()));
   }
 }
 

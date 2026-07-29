@@ -306,6 +306,18 @@ val v = {x=1,y=2};
 {a = 1, {{v remove x} with y = 3}};
 > val it = {a=1,v={y=3}} : {a:int, v:{y:int}}
 
+(* Without braces there is no base for the modifiers to apply to: they
+ * need a single field, and it may not have a label of its own. *)
+{a = 1, v remove x};
+> stdIn:1.1-1.20 Error: a record modifier applies to a base expression; enclose the expression and its modifiers in braces
+>   raised at: stdIn:1.1-1.20
+{v = v remove x};
+> stdIn:1.1-1.17 Error: a record modifier applies to a base expression; enclose the expression and its modifiers in braces
+>   raised at: stdIn:1.1-1.17
+{a = 1, b = 2 remove a};
+> stdIn:1.1-1.24 Error: a record modifier applies to a base expression; enclose the expression and its modifiers in braces
+>   raised at: stdIn:1.1-1.24
+
 (*) A worked example.
 {{comm=2.0,ename="Shaggy",sal=10.0} with sal=sal*12.0 extend tax=sal*0.3 extend net=sal-tax remove comm};
 > val it = {ename="Shaggy",net=84,sal=120,tax=36}

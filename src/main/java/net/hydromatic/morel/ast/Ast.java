@@ -42,6 +42,7 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
+import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
@@ -2639,7 +2640,7 @@ public class Ast {
   public static class Record extends Exp {
     /**
      * The expression the modifiers are applied to, or null if this is a plain
-     * record expression.
+     * record expression, or if the record has not been validated yet.
      */
     public final @Nullable Exp base;
 
@@ -2648,7 +2649,13 @@ public class Ast {
 
     /**
      * Operators applied to {@link #base}, left to right; empty if {@code base}
-     * is null, otherwise non-empty.
+     * is null and this record has been validated.
+     *
+     * <p>As it comes from the parser a record is a list of fields and a list of
+     * modifiers, because which of the two forms was written is not a question
+     * for the grammar: the modifiers apply to the single unlabeled field, if
+     * that is what there is, and are an error otherwise. {@link #validate()}
+     * settles it, moving that field to {@link #base}.
      */
     public final ImmutableList<Modifier> modifiers;
 
@@ -2666,8 +2673,8 @@ public class Ast {
       this.args = ImmutablePairList.copyOf(args);
       this.modifiers = ImmutableList.copyOf(modifiers);
       checkArgument(
-          base == null ? this.modifiers.isEmpty() : this.args.isEmpty(),
-          "a record has either fields or a base with modifiers");
+          base == null || this.args.isEmpty(),
+          "a record with a base has no fields of its own");
     }
 
     @Override
@@ -2689,7 +2696,6 @@ public class Ast {
       w.append("{");
       if (base != null) {
         base.unparse(w, 0, 0);
-        modifiers.forEach(modifier -> modifier.unparse(w));
       }
       args.forEachIndexed(
           (i, k, v) -> {
@@ -2698,6 +2704,7 @@ public class Ast {
             }
             unparseArg(w, k, v);
           });
+      modifiers.forEach(modifier -> modifier.unparse(w));
       return w.append("}");
     }
 
@@ -2723,11 +2730,23 @@ public class Ast {
 
     /**
      * Returns a copy of this Record with implicit labels made explicit, in its
-     * fields and in each of its modifiers.
+     * fields and in each of its modifiers, and with the field the modifiers
+     * apply to moved to {@link #base}.
      *
-     * <p>Throws if there are duplicate field names.
+     * <p>Throws if there are duplicate field names, or if there are modifiers
+     * and no single unlabeled field for them to apply to.
      */
     public Record validate() {
+      if (base == null && !modifiers.isEmpty()) {
+        // The builder moves the field the modifiers apply to into 'base', so
+        // if there still are fields here, there was not exactly one, or it
+        // had a label of its own.
+        throw new CompileException(
+            "a record modifier applies to a base expression; enclose the"
+                + " expression and its modifiers in braces",
+            false,
+            pos);
+      }
       return copy(
           base,
           validateArgs(args),

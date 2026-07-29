@@ -77,8 +77,8 @@ public enum AstBuilder {
         return implicitLabelOpt(aggregate.aggregate);
       case RECORD:
         // A record with modifiers takes the label its base implies, so
-        // "{a = 1, b remove x}" labels the second item "b". A record without
-        // them has no implicit label.
+        // "{a = 1, {b remove x}}" labels the second field "b". A record
+        // without them has no implicit label.
         final Ast.Record record = (Ast.Record) exp;
         return record.base == null ? null : implicitLabelOpt(record.base);
       case APPLY:
@@ -370,6 +370,15 @@ public enum AstBuilder {
       Ast.@Nullable Exp base,
       PairList<Ast.Id, Ast.Exp> args,
       List<Ast.Modifier> modifiers) {
+    if (base == null
+        && !modifiers.isEmpty()
+        && args.size() == 1
+        && args.left(0).name.isEmpty()) {
+      // The record is "{exp modifier ...}": the one field, which has no label
+      // of its own, is the base that the modifiers apply to.
+      return new Ast.Record(
+          pos, args.right(0), ImmutablePairList.of(), modifiers);
+    }
     return new Ast.Record(pos, base, ImmutablePairList.copyOf(args), modifiers);
   }
 

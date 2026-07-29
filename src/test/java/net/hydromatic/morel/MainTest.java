@@ -510,14 +510,8 @@ public class MainTest {
     ml("{e.dept remove deptno}").assertParse("{#dept e remove deptno}");
     ml("{a = 1, {b remove x}}").assertParseSame();
     ml("{r with i = {s remove x}}").assertParseSame();
-    mlE("{a = 1, b $remove x$}")
-        .assertParseThrows(
-            pos ->
-                throwsA(
-                    CompileException.class,
-                    "a record modifier applies to a base expression; enclose"
-                        + " the expression and its modifiers in braces",
-                    pos));
+    // A modifier with no base to apply to parses; Record.validate rejects it.
+    ml("{a = 1, b remove x}").assertParseSame();
 
     // safe navigation
     ml("e?.deptno").assertParseSame();
