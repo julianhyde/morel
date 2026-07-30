@@ -196,7 +196,7 @@ public class ShellTest {
   /** Tests {@link Shell} with empty input and banner disabled. */
   @Test
   void testShellNoBanner() {
-    fixture().withInputString("").assertOutput(containsString("- \r\r\n"));
+    fixture().withInputString("").assertOutput(containsString("- \r\n"));
   }
 
   /** Tests {@link Shell} with one line. */
@@ -205,11 +205,9 @@ public class ShellTest {
     assumeNotInCi();
     final String in = "1 + 2;\n";
     final String expected =
-        "1 + 2;\r\n"
-            + "- 1 + 2;\r\r\n"
-            + "\u001B[?2004lval it = 3 : int\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- 1 + 2;\r\n" //
+            + "val it = 3 : int\n"
+            + "- \r\n";
     fixture().withInputString(in).assertOutput(is2(expected));
   }
 
@@ -221,13 +219,10 @@ public class ShellTest {
         "1 +\n" //
             + "2;\n";
     final String expected =
-        "1 +\r\n"
-            + "2;\r\n"
-            + "- 1 +\r\r\n"
-            + "\u001B[?2004l= 2;\r\r\n"
-            + "\u001B[?2004lval it = 3 : int\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- 1 +\r\n" //
+            + "= 2;\r\n"
+            + "val it = 3 : int\n"
+            + "- \r\n";
     fixture().withInputString(in).assertOutput(is2(expected));
   }
 
@@ -256,19 +251,43 @@ public class ShellTest {
             + "\n"
             + ";\n";
     final String expected =
-        "(* a comment followed by empty *)\r\n"
-            + "\r\n"
-            + ";\r\n"
-            + "- (* a comment followed by empty *)\r\r\n"
-            + "\u001B[?2004l- \r\r\n"
-            + "\u001B[?2004l- ;\r\r\n"
-            + "\u001B[?2004l- \r\r\n"
-            + "\u001B[?2004l";
+        "- (* a comment followed by empty *)\r\n" //
+            + "- \r\n"
+            + "- ;\r\n"
+            + "- \r\n";
     fixture().withInputString(in).assertOutput(is2(expected));
   }
 
   private Matcher<String> is2(String expected) {
     return anyOf(is(expected), is(expected.replace("\u001B[?2004l", "")));
+  }
+
+  /**
+   * Tests that the shell writes each line of input once.
+   *
+   * <p>A terminal built over streams rather than a tty echoes the input from a
+   * pump thread of its own. That thread and the one that renders the line the
+   * reader has read both write to the output, in whatever order they are
+   * scheduled, so the output was not deterministic: usually the echo came first
+   * and the input appeared twice, but under load the pump could be descheduled
+   * after a character or two and the two interleaved, which made these tests
+   * fail once in a while. {@link Shell#create} now turns the echo off, leaving
+   * one writer.
+   */
+  @Test
+  void testInputWrittenOnce() {
+    final String in =
+        "1 + 2;\n" //
+            + "3 + 4;\n";
+    fixture()
+        .withInputString(in)
+        .assertOutput(
+            is(
+                "- 1 + 2;\r\n"
+                    + "val it = 3 : int\n"
+                    + "- 3 + 4;\r\n"
+                    + "val it = 7 : int\n"
+                    + "- \r\n"));
   }
 
   /** Tests {@link Shell} with a single-line comment. */
@@ -279,13 +298,10 @@ public class ShellTest {
         "(*) line comment\n" //
             + "1 + 2;\n";
     final String expected =
-        "(*) line comment\r\n"
-            + "1 + 2;\r\n"
-            + "- (*) line comment\r\r\n"
-            + "\u001B[?2004l- 1 + 2;\r\r\n"
-            + "\u001B[?2004lval it = 3 : int\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- (*) line comment\r\n" //
+            + "- 1 + 2;\r\n"
+            + "val it = 3 : int\n"
+            + "- \r\n";
     fixture().withInputString(in).assertOutput(is2(expected));
   }
 
@@ -297,13 +313,10 @@ public class ShellTest {
         "(*) it's a single-line comment with a quote\n" //
             + "2 + 3;\n";
     final String expected =
-        "(*) it's a single-line comment with a quote\r\n"
-            + "2 + 3;\r\n"
-            + "- (*) it's a single-line comment with a quote\r\r\n"
-            + "\u001B[?2004l- 2 + 3;\r\r\n"
-            + "\u001B[?2004lval it = 5 : int\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- (*) it's a single-line comment with a quote\r\n" //
+            + "- 2 + 3;\r\n"
+            + "val it = 5 : int\n"
+            + "- \r\n";
     fixture().withInputString(in).assertOutput(is2(expected));
   }
 
@@ -320,19 +333,13 @@ public class ShellTest {
             + "  x + 2\n"
             + "end;\n";
     final String expected =
-        "let\r\n"
-            + "  val x = 1\r\n"
-            + "in\r\n"
-            + "  x + 2\r\n"
-            + "end;\r\n"
-            + "- let\r\r\n"
-            + "\u001B[?2004l=   val x = 1\r\r\n"
-            + "\u001B[?2004l= in\r\r\n"
-            + "\u001B[?2004l=   x + 2\r\r\n"
-            + "\u001B[?2004l= end;\r\r\n"
-            + "\u001B[?2004lval it = 3 : int\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- let\r\n" //
+            + "=   val x = 1\r\n"
+            + "= in\r\n"
+            + "=   x + 2\r\n"
+            + "= end;\r\n"
+            + "val it = 3 : int\n"
+            + "- \r\n";
     fixture().withInputString(in).assertOutput(is2(expected));
   }
 
@@ -371,21 +378,19 @@ public class ShellTest {
     // and that z has been assigned after /tmp/z.sml has finished.
     final String in = "use \"x.sml\";\n";
     final String expected =
-        "use \"x.sml\";\r\n"
-            + "- use \"x.sml\";\r\r\n"
-            + "\u001B[?2004l[opening x.sml]\r\n"
-            + "val x = 2 : int\r\n"
-            + "val y = 5 : int\r\n"
-            + "val it = 7 : int\r\n"
-            + "[opening z.sml]\r\n"
-            + "val z = 7 : int\r\n"
-            + "val x = 1 : int\r\n"
-            + "val it = 8 : int\r\n"
-            + "val it = () : unit\r\n"
-            + "val it = 13 : int\r\n"
-            + "val it = () : unit\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- use \"x.sml\";\r\n"
+            + "[opening x.sml]\n"
+            + "val x = 2 : int\n"
+            + "val y = 5 : int\n"
+            + "val it = 7 : int\n"
+            + "[opening z.sml]\n"
+            + "val z = 7 : int\n"
+            + "val x = 1 : int\n"
+            + "val it = 8 : int\n"
+            + "val it = () : unit\n"
+            + "val it = 13 : int\n"
+            + "val it = () : unit\n"
+            + "- \r\n";
     fixture()
         .withArgListPlusDirectory()
         .withInputString(in)
@@ -417,7 +422,7 @@ public class ShellTest {
         "fun f 1 = 1;\n" //
             + "f 1;\n";
     final String expected =
-        "stdIn:1.5-1.12 Warning: match nonexhaustive\n"
+        "stdIn:1.5-1.12 Warning: match nonexhaustive\n" //
             + "  raised at: stdIn:1.5-1.12\n"
             + "val f = fn : int -> int\n"
             + "val it = 1 : int\n";
@@ -430,12 +435,10 @@ public class ShellTest {
     assumeNotInCi();
     final String in = "use \"empty.sml\";\n";
     final String expected =
-        "use \"empty.sml\";\r\n"
-            + "- use \"empty.sml\";\r\r\n"
-            + "\u001B[?2004l[opening empty.sml]\r\n"
-            + "val it = () : unit\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- use \"empty.sml\";\r\n"
+            + "[opening empty.sml]\n"
+            + "val it = () : unit\n"
+            + "- \r\n";
     fixture()
         .withArgListPlusDirectory()
         .withInputString(in)
@@ -455,15 +458,12 @@ public class ShellTest {
 
     final String in = "use \"missing.sml\";\n";
     final String expected =
-        "use \"missing.sml\";\r\n"
-            + "- use \"missing.sml\";\r\r\n"
-            + "\u001B[?2004l[opening missing.sml]\r\n"
-            + "[use failed: Io: openIn failed on missing.sml,"
-            + " No such file or directory]\r\n"
-            + "uncaught exception Error\r\n"
-            + "  raised at: stdIn:1.1-1.18\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- use \"missing.sml\";\r\n"
+            + "[opening missing.sml]\n"
+            + "[use failed: Io: openIn failed on missing.sml, No such file or directory]\n"
+            + "uncaught exception Error\n"
+            + "  raised at: stdIn:1.1-1.18\n"
+            + "- \r\n";
     fixture()
         .withArgListPlusDirectory()
         .withInputString(in)
@@ -483,19 +483,16 @@ public class ShellTest {
 
     final String in = "use \"self-referential.sml\";\n";
     final String expected =
-        "use \"self-referential.sml\";\r\n"
-            + "- use \"self-referential.sml\";\r\r\n"
-            + "\u001B[?2004l[opening self-referential.sml]\r\n"
-            + "[opening self-referential.sml]\r\n"
-            + "[opening self-referential.sml]\r\n"
-            + "[opening self-referential.sml]\r\n"
-            + "[use failed: Io: openIn failed on self-referential.sml,"
-            + " Too many open files]\r\n"
-            + "uncaught exception Error\r\n"
-            + "  raised at: stdIn:1.1-1.27\r\n"
-            + "val it = () : unit\r\n"
-            + "- \r\r\n"
-            + "\u001B[?2004l";
+        "- use \"self-referential.sml\";\r\n"
+            + "[opening self-referential.sml]\n"
+            + "[opening self-referential.sml]\n"
+            + "[opening self-referential.sml]\n"
+            + "[opening self-referential.sml]\n"
+            + "[use failed: Io: openIn failed on self-referential.sml, Too many open files]\n"
+            + "uncaught exception Error\n"
+            + "  raised at: stdIn:1.1-1.27\n"
+            + "val it = () : unit\n"
+            + "- \r\n";
     fixture()
         .withArgListPlusDirectory()
         .withArgList(list -> plus(list, "--maxUseDepth=3"))

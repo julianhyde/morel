@@ -75,6 +75,7 @@ import org.jline.reader.Parser;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Attributes;
+import org.jline.terminal.Attributes.LocalFlag;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
@@ -123,6 +124,18 @@ public class Shell {
     builder.dumb(configImpl.dumb);
     if (configImpl.dumb) {
       builder.type("dumb");
+    }
+    if (!configImpl.system) {
+      // A terminal over streams rather than a tty echoes its input from a
+      // pump thread of its own, which races with this thread's rendering of
+      // the line it has read, and writes every line twice: once raw, once
+      // after the prompt. Turn the echo off, and the line the reader renders
+      // is the only copy. The attributes must be set here, before the
+      // terminal is built: by the time it exists its pump is running, and may
+      // already have echoed a character.
+      final Attributes attributes = new Attributes();
+      attributes.setLocalFlag(LocalFlag.ECHO, false);
+      builder.attributes(attributes);
     }
     final Terminal terminal = builder.build();
     return new Shell(config, terminal);
