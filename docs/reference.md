@@ -92,8 +92,9 @@ In Morel but not Standard ML:
   whose first parameter is named `self`
 * identifiers and type names may be quoted
   (for example, <code>\`an identifier\`</code>)
-* record modifiers: `with` functional update for record values (from
-  OCaml), and `with all`, `extend`, `extend all`, `remove` and `rename`
+* record modifiers: `replace` (functional update for record values, as
+  OCaml's `with`), `extend`, `remove`, `rename`, their `or` pairs, `all`
+  and `lenient`
 * overloaded functions may be declared using `over` and `inst`
 * attributes (`[@attr]` / `[@@attr]` / `[@@@attr]`) based on OCaml
 * `(*)` line comments (syntax as SML/NJ and MLton)
@@ -218,13 +219,14 @@ In Standard ML but not in Morel:
 <i>exprow</i> &rarr; <i>exprowItem</i> [<b>,</b> <i>exprowItem</i> ]*
                                 expression row
 <i>exprowItem</i> &rarr; [ <i>lab</i> <b>=</b> ] <i>exp</i>
-<i>modifier</i> &rarr; <b>with</b> <i>exprow</i>            assign to fields
-    | <b>with all</b> <i>exp</i>              assign to every field of <i>exp</i>
-    | <b>extend</b> <i>exprow</i>             add fields
-    | <b>extend all</b> <i>exp</i>            add every field of <i>exp</i>
-    | <b>remove</b> <i>lab</i> [<b>,</b> <i>lab</i> ]*      remove fields
+<i>modifier</i> &rarr; <i>assignVerb</i> <i>exprow</i>          assign to fields
+    | <i>assignVerb</i> <b>all</b> <i>exp</i>        assign to every field of <i>exp</i>
+    | <b>remove</b> [ <b>or skip</b> ] <i>lab</i> [<b>,</b> <i>lab</i> ]*
+                                remove fields
     | <b>rename</b> <i>lab</i> <b>=</b> <i>lab</i> [<b>,</b> <i>lab</i> <b>=</b> <i>lab</i> ]*
                                 rename fields
+<i>assignVerb</i> &rarr; <b>extend</b> [ <b>or</b> ( <b>skip</b> | <b>replace</b> [ <b>lenient</b> ] ) ]
+    | <b>replace</b> [ <b>lenient</b> ] [ <b>or skip</b> ]
 <i>match</i> &rarr; <i>matchItem</i> [ '<b>|</b>' <i>matchItem</i> ]*
                                 match
 <i>matchItem</i> &rarr; <i>pat</i> <b>=&gt;</b> <i>exp</i>
@@ -262,41 +264,57 @@ to the record that the modifier before it produced:
 
 ```sml
 {{comm = 2.0, ename = "Shaggy", sal = 10.0}
-    with sal = sal * 12.0
+    replace sal = sal * 12.0
     extend tax = sal * 0.3
     remove comm};
 > val it = {ename="Shaggy",sal=120,tax=36} : {ename:string, sal:real, tax:real}
 ```
 
-* `with` assigns to fields, which must exist and may not change type;
-* `extend` adds fields, which must not exist;
-* `with all` <i>exp</i> and `extend all` <i>exp</i> do the same for
-  every field of the record <i>exp</i>;
-* `remove` removes fields, which must exist;
-* `rename` gives the value of each right-hand label to the left-hand
-  one, and removes the right-hand labels; labels may therefore be
-  swapped or chained.
+A modifier is one or two verbs, an optional `lenient`, an optional
+`all`, and an operand. The verbs are `replace`, `remove` and `skip`,
+which act on a label the record has, and `extend` and `skip`, which act
+on one it does not have. A single verb makes the other case a
+compile-time error; a pair joined by `or` handles both, and since each
+verb names its own case the pair is unordered. `skip` does nothing, and
+takes whichever case the other verb does not.
+
+| modifier | label exists | label absent |
+|---|---|---|
+| `extend` | error | add |
+| `replace` | replace | error |
+| `remove` | remove | error |
+| `extend or replace` | replace | add |
+| `extend or skip` | keep | add |
+| `replace or skip` | replace | skip |
+| `remove or skip` | remove | skip |
+
+Assignment preserves a field's type; `lenient` relaxes that check, and
+is allowed only after `replace` or `extend or replace`. `all` <i>exp</i>
+applies the verbs to every field of the record <i>exp</i> instead of to
+a list of assignments. `rename` gives the value of each right-hand label
+to the left-hand one, and removes the right-hand labels; labels may
+therefore be swapped or chained.
 
 Within one modifier the assignments are simultaneous, so
-`{r with i = j, j = i}` swaps two fields; a later modifier sees the
-result of an earlier one, so `{r with i = j with j = i}` does not. An
-assignment sees the fields of the record the modifier is applied to,
+`{r replace i = j, j = i}` swaps two fields; a later modifier sees the
+result of an earlier one, so `{r replace i = j replace j = i}` does not.
+An assignment sees the fields of the record the modifier is applied to,
 and they shadow the enclosing environment.
 
 A modifier always applies to a base expression, so it belongs to the
 braces it is written in, never to a field of the record being built:
 the arguments of a modifier are plain fields, and a modifier keyword
 among them starts another modifier of the same record, so in
-`{r with i = 1 remove j}` the `remove` applies to `r`, not to `1`. To
+`{r replace i = 1 remove j}` the `remove` applies to `r`, not to `1`. To
 modify a field's value, give it braces of its own --
 `{a = 1, b = {b remove x}}` -- or, as elsewhere, leave the label out
 and let the field take the one its base implies:
 `{a = 1, {b remove x}}`.
 
-`extend`, `remove` and `rename` are reserved words, and need back-ticks
-to be used as identifiers. `all` is not: it is a keyword only after
-`with` and `extend`, where no identifier can occur, and is an ordinary
-identifier everywhere else.
+`extend`, `remove`, `rename` and `replace` are reserved words, and need
+back-ticks to be used as identifiers. `all`, `lenient` and `or` are
+not: they are keywords only in the positions above, and are ordinary
+identifiers everywhere else.
 
 ### Patterns
 

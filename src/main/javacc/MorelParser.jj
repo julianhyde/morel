@@ -319,6 +319,8 @@ Literal wordLiteral() : {}
 String nonReservedKeyword() : {}
 {
   <ALL> { return token.image; }
+| <LENIENT> { return token.image; }
+| <OR> { return token.image; }
 }
 
 /** Parses an identifier. */
@@ -641,7 +643,7 @@ void fromFirstScan(List<FromStep> steps) :
 }
 {
   LOOKAHEAD(
-      (<IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL>)
+      (<IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> | <LENIENT> | <OR>)
       (<COMMA> | <JOIN> | <WHERE> | <GROUP> | <COMPUTE>
         | <SKIP_> | <TAKE> | <YIELD> | <YIELDALL> | <EOF>))
   id = identifier() {
@@ -670,7 +672,7 @@ void fromScan(Op op, List<FromStep> steps) :
 }
 {
   LOOKAHEAD(
-      (<IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL>)
+      (<IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> | <LENIENT> | <OR>)
       (<COMMA> | <JOIN> | <WHERE> | <GROUP> | <COMPUTE>
         | <SKIP_> | <TAKE> | <YIELD> | <YIELDALL> | <EOF>))
   id = identifier() {
@@ -739,7 +741,7 @@ void fromStep(List<FromStep> steps) :
 |
   <GROUP> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> ) <EQ>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> | <LENIENT> | <OR> ) <EQ>)
     binder = identifier() <EQ>
   |
     { binder = null; }
@@ -805,7 +807,7 @@ void fromStep(List<FromStep> steps) :
 |
   <YIELD> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> ) <EQ>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> | <LENIENT> | <OR> ) <EQ>)
     binder = identifier() <EQ>
   |
     { binder = null; }
@@ -816,7 +818,7 @@ void fromStep(List<FromStep> steps) :
 |
   <YIELDALL> { span = Span.of(pos()); }
   (
-    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> ) <IN>)
+    LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> | <LENIENT> | <OR> ) <IN>)
     binder = identifier() <IN>
   |
     { binder = null; }
@@ -1352,7 +1354,7 @@ void namedExpression(PairList<Id, Exp> list) :
   final Id id;
 }
 {
-  LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> ) <EQ>)
+  LOOKAHEAD(( <IDENTIFIER> | <QUOTED_IDENTIFIER> | <ALL> | <LENIENT> | <OR> ) <EQ>)
   id = identifier() <EQ> exp = expression() {
     list.add(id, exp);
   }
@@ -1481,53 +1483,72 @@ Exp atom() :
 }
 
 /**
- * Parses one modifier of a record expression, such as "with a = 1, b = 2",
- * "extend all r", "remove a" or "rename b = a".
+ * Parses one modifier of a record expression, such as "replace a = 1, b = 2",
+ * "extend or replace all r", "remove or skip a" or "rename b = a".
  *
  * <p>Modifiers are applied to the expression that precedes them, left to
- * right, and each sees the result of the previous one.
+ * right, and each sees the result of the previous one. A modifier is one or
+ * two verbs -- the second joined by "or", naming the case the first does not
+ * -- an optional "lenient", an optional "all", and an operand.
  */
 void recordModifier(List<Ast.Modifier> modifiers) :
 {
-  final PairList<Id, Exp> args = PairList.of();
+  final PairList<Id, Id> renames = PairList.of();
   final List<Id> labels = new ArrayList<Id>();
-  final Exp exp;
+  ModifierVerb verb;
+  boolean lenient = false;
 }
 {
-  <WITH>
-  (
-    LOOKAHEAD({ getToken(1).kind == ALL && getToken(2).kind != EQ })
-    <ALL> exp = expression() {
-      modifiers.add(ast.allModifier(Op.WITH_ALL_MODIFIER, exp));
-    }
-  |
-    recordModifierArgs(args) {
-      modifiers.add(ast.assignModifier(Op.WITH_MODIFIER, args));
-    }
-  )
+  <EXTEND> { verb = ModifierVerb.EXTEND; }
+  [
+    <OR>
+    (
+      <SKIP_> { verb = ModifierVerb.EXTEND_OR_SKIP; }
+    |
+      <REPLACE> { verb = ModifierVerb.EXTEND_OR_REPLACE; }
+      [ <LENIENT> { lenient = true; } ]
+    )
+  ]
+  modifierOperand(modifiers, verb, lenient)
 |
-  <EXTEND>
-  (
-    LOOKAHEAD({ getToken(1).kind == ALL && getToken(2).kind != EQ })
-    <ALL> exp = expression() {
-      modifiers.add(ast.allModifier(Op.EXTEND_ALL_MODIFIER, exp));
-    }
-  |
-    recordModifierArgs(args) {
-      modifiers.add(ast.assignModifier(Op.EXTEND_MODIFIER, args));
-    }
-  )
+  <REPLACE> { verb = ModifierVerb.REPLACE; }
+  [ <LENIENT> { lenient = true; } ]
+  [ <OR> <SKIP_> { verb = ModifierVerb.REPLACE_OR_SKIP; } ]
+  modifierOperand(modifiers, verb, lenient)
 |
-  <REMOVE> recordLabel(labels) ( <COMMA> recordLabel(labels) )* {
-    modifiers.add(ast.removeModifier(labels));
+  <REMOVE> { verb = ModifierVerb.REMOVE; }
+  [ <OR> <SKIP_> { verb = ModifierVerb.REMOVE_OR_SKIP; } ]
+  recordLabel(labels) ( <COMMA> recordLabel(labels) )* {
+    modifiers.add(ast.removeModifier(verb, labels));
   }
 |
-  <RENAME> renameArg(args) ( <COMMA> renameArg(args) )* {
-    modifiers.add(ast.assignModifier(Op.RENAME_MODIFIER, args));
+  <RENAME> renameArg(renames) ( <COMMA> renameArg(renames) )* {
+    modifiers.add(ast.renameModifier(renames));
   }
 }
 
-/** Parses the assignments of a "with" or "extend" modifier. */
+/**
+ * Parses the operand of an "extend" or "replace" modifier: "all" and a
+ * record-valued expression, or a list of assignments.
+ */
+void modifierOperand(
+    List<Ast.Modifier> modifiers, ModifierVerb verb, boolean lenient) :
+{
+  final PairList<Id, Exp> args = PairList.of();
+  final Exp exp;
+}
+{
+  LOOKAHEAD({ getToken(1).kind == ALL && getToken(2).kind != EQ })
+  <ALL> exp = expression() {
+    modifiers.add(ast.allModifier(verb, lenient, exp));
+  }
+|
+  recordModifierArgs(args) {
+    modifiers.add(ast.assignModifier(verb, lenient, args));
+  }
+}
+
+/** Parses the assignments of an "extend" or "replace" modifier. */
 void recordModifierArgs(PairList<Id, Exp> args) : {}
 {
   recordExp(args)
@@ -1537,7 +1558,7 @@ void recordModifierArgs(PairList<Id, Exp> args) : {}
 }
 
 /** Parses a "newLabel = oldLabel" pair of a "rename" modifier. */
-void renameArg(PairList<Id, Exp> args) :
+void renameArg(PairList<Id, Id> args) :
 {
   final List<Id> labels = new ArrayList<Id>();
 }
@@ -1595,7 +1616,7 @@ void recordExp(PairList<Id, Exp> nameExps) :
 }
 {
   LOOKAHEAD((<NATURAL_LITERAL> | <IDENTIFIER> | <QUOTED_IDENTIFIER>
-          | <ALL>) <EQ>)
+          | <ALL> | <LENIENT> | <OR>) <EQ>)
   labeledRecordExp(nameExps)
 |
   exp = expression() {
@@ -2568,12 +2589,15 @@ AstNode statementEof() :
 | < INTO: "into" >
 | < JOIN: "join" >
 | < LEFT: "left" >
+| < LENIENT: "lenient" >
 | < NOT_ELEM: "notelem" >
 | < ON: "on" >
+| < OR: "or" >
 | < ORDER: "order" >
 | < ORDINAL: "ordinal" >
 | < REMOVE: "remove" >
 | < RENAME: "rename" >
+| < REPLACE: "replace" >
 | < REQUIRE: "require" >
 | < RIGHT: "right" >
 | < SKIP_: "skip" >

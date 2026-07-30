@@ -73,6 +73,7 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import net.hydromatic.morel.ast.Ast;
+import net.hydromatic.morel.ast.Ast.ModifierVerb;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
@@ -2222,8 +2223,7 @@ public class TypeResolver {
   /** Deduces the types of the expressions of a modifier. */
   private Ast.Modifier deduceModifierTypes(TypeEnv env, Ast.Modifier modifier) {
     switch (modifier.op) {
-      case WITH_MODIFIER:
-      case EXTEND_MODIFIER:
+      case ASSIGN_MODIFIER:
         final Ast.AssignModifier assign = (Ast.AssignModifier) modifier;
         final PairList<Ast.Id, Ast.Exp> args = PairList.of();
         assign.args.forEach(
@@ -2231,8 +2231,7 @@ public class TypeResolver {
                 args.add(id, deduceExpType(env, exp, unifier.variable())));
         return assign.copy(args);
 
-      case WITH_ALL_MODIFIER:
-      case EXTEND_ALL_MODIFIER:
+      case ALL_MODIFIER:
         final Ast.AllModifier all = (Ast.AllModifier) modifier;
         return all.copy(deduceExpType(env, all.exp, unifier.variable()));
 
@@ -2337,8 +2336,8 @@ public class TypeResolver {
    * makes them shadow the enclosing environment; nesting is what makes a
    * modifier see the result of the one before it; and the bindings of one
    * {@code let} being simultaneous is what makes the assignments of one
-   * modifier simultaneous. For example, {@code {r with i = j, j = i remove j}}
-   * becomes
+   * modifier simultaneous. For example, {@code {r replace i = j, j = i remove
+   * j}} becomes
    *
    * <blockquote>
    *
@@ -2365,14 +2364,11 @@ public class TypeResolver {
       final List<Ast.ValBind> valBinds = new ArrayList<>();
       valBinds.add(ast.valBind(pos, fieldsPat(pos, fields), exp));
       switch (modifier.op) {
-        case WITH_MODIFIER:
-        case EXTEND_MODIFIER:
-        case RENAME_MODIFIER:
+        case ASSIGN_MODIFIER:
           assignFields(pos, (Ast.AssignModifier) modifier, fields, args);
           break;
 
-        case WITH_ALL_MODIFIER:
-        case EXTEND_ALL_MODIFIER:
+        case ALL_MODIFIER:
           final Ast.AllModifier all = (Ast.AllModifier) modifier;
           final String name = freeName(fields);
           valBinds.add(ast.valBind(pos, ast.idPat(pos, name), all.exp));
@@ -2387,6 +2383,10 @@ public class TypeResolver {
 
         case REMOVE_MODIFIER:
           removeFields(pos, (Ast.RemoveModifier) modifier, fields, args);
+          break;
+
+        case RENAME_MODIFIER:
+          renameFields(pos, (Ast.RenameModifier) modifier, fields, args);
           break;
 
         default:
@@ -2420,75 +2420,58 @@ public class TypeResolver {
     return name;
   }
 
-  /** Applies a {@code with}, {@code extend} or {@code rename} modifier. */
+  /**
+   * Applies an {@code extend} or {@code replace} modifier, in either case
+   * taking each label to whichever of the verb's two cases it falls in: the
+   * record has the label already, or it does not.
+   */
   private static void assignFields(
       Pos pos,
       Ast.AssignModifier modifier,
       List<String> fields,
       PairList<String, Ast.Exp> args) {
-    switch (modifier.op) {
-      case WITH_MODIFIER:
-        modifier.args.forEach(
-            (id, exp) -> {
-              if (!fields.contains(id.name)) {
-                throw fieldNotFound(id.name, id.pos);
-              }
-            });
-        final Map<String, Ast.Exp> assigned = new LinkedHashMap<>();
-        modifier.args.forEach((id, exp) -> assigned.put(id.name, exp));
-        fields.forEach(
-            field -> {
-              final Ast.Exp exp = assigned.get(field);
-              args.add(
-                  field,
-                  exp == null ? ast.id(pos, field) : sameType(exp, field));
-            });
-        return;
+    final Map<String, Ast.Exp> assigned = new LinkedHashMap<>();
+    modifier.args.forEach(
+        (id, exp) -> {
+          if (fields.contains(id.name)) {
+            if (modifier.verb.exists == ModifierVerb.Exists.ERROR) {
+              throw fieldExists(id.name, id.pos);
+            }
+          } else {
+            if (modifier.verb.absent == ModifierVerb.Absent.ERROR) {
+              throw fieldNotFound(id.name, id.pos);
+            }
+          }
+          assigned.put(id.name, exp);
+        });
 
-      case EXTEND_MODIFIER:
-        modifier.args.forEach(
-            (id, exp) -> {
-              if (fields.contains(id.name)) {
-                throw fieldExists(id.name, id.pos);
-              }
-            });
-        fields.forEach(field -> args.add(field, ast.id(pos, field)));
-        modifier.args.forEach((id, exp) -> args.add(id.name, exp));
-        return;
+    // Fields the record has: assigned, kept as they were, or removed.
+    fields.forEach(
+        field -> {
+          final Ast.Exp exp = assigned.get(field);
+          if (exp == null || modifier.verb.exists == ModifierVerb.Exists.SKIP) {
+            args.add(field, ast.id(pos, field));
+          } else {
+            args.add(field, modifier.lenient ? exp : sameType(exp, field));
+          }
+        });
 
-      default:
-        // 'rename' takes the value of each right label, which must exist, and
-        // gives it to the left label, which must not survive the renaming.
-        final Set<String> sources = new LinkedHashSet<>();
-        modifier.args.forEach(
-            (id, exp) -> {
-              final Ast.Id source = (Ast.Id) exp;
-              if (!fields.contains(source.name)) {
-                throw fieldNotFound(source.name, source.pos);
-              }
-              if (!sources.add(source.name)) {
-                throw new TypeException(
-                    format("duplicate field '%s' in record", source.name),
-                    source.pos);
-              }
-            });
-        fields.forEach(
-            field -> {
-              if (!sources.contains(field)) {
-                args.add(field, ast.id(pos, field));
-              }
-            });
-        modifier.args.forEach(
-            (id, exp) -> {
-              if (args.leftList().contains(id.name)) {
-                throw fieldExists(id.name, id.pos);
-              }
-              args.add(id.name, ast.id(pos, ((Ast.Id) exp).name));
-            });
+    // Labels the record does not have: added, or ignored.
+    if (modifier.verb.absent == ModifierVerb.Absent.ADD) {
+      modifier.args.forEach(
+          (id, exp) -> {
+            if (!fields.contains(id.name)) {
+              args.add(id.name, exp);
+            }
+          });
     }
   }
 
-  /** Applies a {@code with all} or {@code extend all} modifier. */
+  /**
+   * Applies an {@code extend all} or {@code replace all} modifier: the same
+   * rules as {@link #assignFields}, for every field of the modifier's
+   * record-valued argument.
+   */
   private static void assignAllFields(
       Pos pos,
       Ast.AllModifier modifier,
@@ -2496,27 +2479,75 @@ public class TypeResolver {
       List<String> allFields,
       String name,
       PairList<String, Ast.Exp> args) {
-    final boolean with = modifier.op == Op.WITH_ALL_MODIFIER;
     allFields.forEach(
         field -> {
-          if (fields.contains(field) != with) {
-            throw with
-                ? fieldNotFound(field, modifier.exp.pos)
-                : fieldExists(field, modifier.exp.pos);
+          if (fields.contains(field)) {
+            if (modifier.verb.exists == ModifierVerb.Exists.ERROR) {
+              throw fieldExists(field, modifier.exp.pos);
+            }
+          } else {
+            if (modifier.verb.absent == ModifierVerb.Absent.ERROR) {
+              throw fieldNotFound(field, modifier.exp.pos);
+            }
+          }
+        });
+
+    fields.forEach(
+        field -> {
+          if (!allFields.contains(field)
+              || modifier.verb.exists == ModifierVerb.Exists.SKIP) {
+            args.add(field, ast.id(pos, field));
+          } else {
+            final Ast.Exp exp = field(pos, name, field);
+            args.add(field, modifier.lenient ? exp : sameType(exp, field));
+          }
+        });
+
+    if (modifier.verb.absent == ModifierVerb.Absent.ADD) {
+      allFields.forEach(
+          field -> {
+            if (!fields.contains(field)) {
+              args.add(field, field(pos, name, field));
+            }
+          });
+    }
+  }
+
+  /**
+   * Applies a {@code rename} modifier. It takes the value of each label on the
+   * right, which must exist, and gives it to the label on the left, which must
+   * not survive the renaming.
+   */
+  private static void renameFields(
+      Pos pos,
+      Ast.RenameModifier modifier,
+      List<String> fields,
+      PairList<String, Ast.Exp> args) {
+    final Set<String> sources = new LinkedHashSet<>();
+    modifier.args.forEach(
+        (target, source) -> {
+          if (!fields.contains(source.name)) {
+            throw fieldNotFound(source.name, source.pos);
+          }
+          if (!sources.add(source.name)) {
+            throw new TypeException(
+                format("duplicate field '%s' in record", source.name),
+                source.pos);
           }
         });
     fields.forEach(
-        field ->
-            args.add(
-                field,
-                !allFields.contains(field)
-                    ? ast.id(pos, field)
-                    : with
-                        ? sameType(field(pos, name, field), field)
-                        : field(pos, name, field)));
-    if (!with) {
-      allFields.forEach(field -> args.add(field, field(pos, name, field)));
-    }
+        field -> {
+          if (!sources.contains(field)) {
+            args.add(field, ast.id(pos, field));
+          }
+        });
+    modifier.args.forEach(
+        (target, source) -> {
+          if (args.leftList().contains(target.name)) {
+            throw fieldExists(target.name, target.pos);
+          }
+          args.add(target.name, ast.id(pos, source.name));
+        });
   }
 
   /** Applies a {@code remove} modifier. */
@@ -2528,7 +2559,8 @@ public class TypeResolver {
     final Set<String> removed = new LinkedHashSet<>();
     modifier.labels.forEach(
         id -> {
-          if (!fields.contains(id.name)) {
+          if (!fields.contains(id.name)
+              && modifier.verb.absent == ModifierVerb.Absent.ERROR) {
             throw fieldNotFound(id.name, id.pos);
           }
           if (!removed.add(id.name)) {
@@ -2545,9 +2577,9 @@ public class TypeResolver {
   }
 
   /**
-   * Returns "exp : typeof field", which gives the value that {@code with}
-   * assigns the type of the field it replaces. A field of the base cannot
-   * change type.
+   * Returns "exp : typeof field", which gives an assigned value the type of the
+   * field it replaces. Assignment does not change a field's type, unless the
+   * modifier is {@code lenient}.
    */
   private static Ast.Exp sameType(Ast.Exp exp, String field) {
     return ast.annotatedExp(

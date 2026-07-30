@@ -418,7 +418,7 @@ public class AstDumper {
   }
 
   private static void dumpModifier(StringBuilder b, Ast.Modifier modifier) {
-    b.append(' ').append('(').append(modifier.op.padded.trim());
+    b.append(' ').append('(').append(modifier.toString().trim().split(" ")[0]);
     if (modifier instanceof Ast.AssignModifier) {
       ((Ast.AssignModifier) modifier)
           .args.forEach(

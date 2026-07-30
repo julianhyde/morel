@@ -35,11 +35,11 @@ public class MorelParseException extends RuntimeException
   /**
    * Removes the non-reserved keywords from the list of expected tokens.
    *
-   * <p>{@code all} is a token only so that it can be recognized after {@code
-   * with} and {@code extend}; every rule that accepts an identifier accepts it
-   * too. Naming it alongside {@code <IDENTIFIER>} would suggest that it is an
-   * alternative to it, and would name a word that is irrelevant to whatever the
-   * user actually got wrong.
+   * <p>{@code all}, {@code lenient} and {@code or} are tokens only so that they
+   * can be recognized inside a record modifier; every rule that accepts an
+   * identifier accepts them too. Naming them alongside {@code <IDENTIFIER>}
+   * would suggest that they are alternatives to it, and would name words that
+   * are irrelevant to whatever the user actually got wrong.
    */
   private static @Nullable String clean(@Nullable String message) {
     if (message == null || !message.contains("Was expecting")) {

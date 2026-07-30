@@ -2461,6 +2461,92 @@ public class Ast {
   }
 
   /**
+   * What a record modifier does to a label, in each of the two cases: the
+   * record has the label already, or it does not.
+   *
+   * <p>A verb names one case, and makes the other an error; a pair joined by
+   * {@code or} names both, and since each verb names its own case the pair is
+   * unordered. {@code skip} does nothing, and takes whichever case the other
+   * verb does not.
+   */
+  public enum ModifierVerb {
+    /** {@code extend}: adds a label, and rejects one that exists. */
+    EXTEND("extend", "", Exists.ERROR, Absent.ADD),
+    /** {@code extend or skip}: adds a label, and keeps one that exists. */
+    EXTEND_OR_SKIP("extend or skip", "", Exists.SKIP, Absent.ADD),
+    /** {@code extend or replace}: adds a label, or assigns to it. */
+    EXTEND_OR_REPLACE("extend or replace", "", Exists.REPLACE, Absent.ADD),
+    /** {@code replace}: assigns to a label, and rejects one that is absent. */
+    REPLACE("replace", "", Exists.REPLACE, Absent.ERROR),
+    /**
+     * {@code replace or skip}: assigns to a label, and ignores one that is
+     * absent.
+     */
+    REPLACE_OR_SKIP("replace", " or skip", Exists.REPLACE, Absent.SKIP),
+    /** {@code remove}: removes a label, and rejects one that is absent. */
+    REMOVE("remove", "", Exists.REMOVE, Absent.ERROR),
+    /**
+     * {@code remove or skip}: removes a label, and ignores one that is absent.
+     */
+    REMOVE_OR_SKIP("remove or skip", "", Exists.REMOVE, Absent.SKIP);
+
+    /** What to do with a label the record has. */
+    public final Exists exists;
+
+    /** What to do with a label the record does not have. */
+    public final Absent absent;
+
+    /** Text before {@code lenient}, if the modifier is lenient. */
+    private final String before;
+
+    /** Text after {@code lenient}. */
+    private final String after;
+
+    ModifierVerb(String before, String after, Exists exists, Absent absent) {
+      this.before = before;
+      this.after = after;
+      this.exists = exists;
+      this.absent = absent;
+    }
+
+    /** Returns the keywords of this verb, such as "extend or replace". */
+    public String verbs(boolean lenient) {
+      return lenient ? before + " lenient" + after : before + after;
+    }
+
+    /**
+     * Returns whether {@code lenient} is allowed after this verb; it is allowed
+     * only where a field can be assigned, because it relaxes the rule that
+     * assignment preserves the field's type.
+     */
+    public boolean allowsLenient() {
+      return exists == Exists.REPLACE;
+    }
+
+    /** What a modifier does to a label that the record has. */
+    public enum Exists {
+      /** Assigns the value the modifier gives. */
+      REPLACE,
+      /** Removes the field. */
+      REMOVE,
+      /** Leaves the field as it was. */
+      SKIP,
+      /** Reports that the field exists. */
+      ERROR
+    }
+
+    /** What a modifier does to a label that the record does not have. */
+    public enum Absent {
+      /** Adds a field with the value the modifier gives. */
+      ADD,
+      /** Does nothing. */
+      SKIP,
+      /** Reports that the field does not exist. */
+      ERROR
+    }
+  }
+
+  /**
    * Operator applied to a record value inside braces. Modifiers are applied
    * left to right, and each sees the result of the previous one.
    */
@@ -2476,21 +2562,24 @@ public class Ast {
       return unparse(new AstWriter()).toString();
     }
 
-    /** Writes this modifier, including the leading space and operator. */
+    /** Writes this modifier, including the leading space and its verbs. */
     AstWriter unparse(AstWriter w) {
-      return unparseArgs(w.append(" ").append(op.padded.trim()).append(" "));
+      return unparseArgs(w.append(" ").append(verbs()).append(" "));
     }
 
-    /** Writes the part after the operator. */
+    /** Returns the keywords that introduce this modifier. */
+    abstract String verbs();
+
+    /** Writes the part after the verbs. */
     abstract AstWriter unparseArgs(AstWriter w);
 
     /** Calls {@code consumer} for each expression this modifier contains. */
     public abstract void forEachExp(Consumer<Exp> consumer);
 
     /**
-     * Calls {@code consumer} for each label this modifier names. {@code with
-     * all} and {@code extend all} name none; the labels of their argument are
-     * not known until it has a type.
+     * Calls {@code consumer} for each label this modifier names. An {@code all}
+     * modifier names none; the labels of its argument are not known until it
+     * has a type.
      */
     public void forEachLabel(Consumer<String> consumer) {}
 
@@ -2508,23 +2597,29 @@ public class Ast {
   }
 
   /**
-   * Modifier that assigns to labels: {@code with}, {@code extend} and {@code
-   * rename}. For {@code rename} each value is an {@link Id} naming the field to
-   * relabel.
+   * Modifier that assigns to the labels of an expression row: {@code extend},
+   * {@code replace} and their {@code or} pairs.
    */
   public static class AssignModifier extends Modifier {
+    public final ModifierVerb verb;
+    public final boolean lenient;
     public final PairList<Id, Exp> args;
 
     AssignModifier(
-        Op op, Iterable<? extends Map.Entry<Id, ? extends Exp>> args) {
-      super(op);
-      checkArgument(
-          op == Op.WITH_MODIFIER
-              || op == Op.EXTEND_MODIFIER
-              || op == Op.RENAME_MODIFIER,
-          "op %s",
-          op);
+        ModifierVerb verb,
+        boolean lenient,
+        Iterable<? extends Map.Entry<Id, ? extends Exp>> args) {
+      super(Op.ASSIGN_MODIFIER);
+      this.verb = requireNonNull(verb);
+      this.lenient = lenient;
+      checkArgument(!lenient || verb.allowsLenient(), "verb %s", verb);
+      checkArgument(verb.exists != ModifierVerb.Exists.REMOVE, "verb %s", verb);
       this.args = ImmutablePairList.copyOf(args);
+    }
+
+    @Override
+    String verbs() {
+      return verb.verbs(lenient);
     }
 
     @Override
@@ -2560,24 +2655,34 @@ public class Ast {
     }
 
     public AssignModifier copy(Collection<Map.Entry<Id, Exp>> args) {
-      return args.equals(this.args) ? this : new AssignModifier(op, args);
+      return args.equals(this.args)
+          ? this
+          : new AssignModifier(verb, lenient, args);
     }
   }
 
   /**
-   * Modifier that takes a record-valued expression: {@code with all} and {@code
-   * extend all}.
+   * Modifier that applies its verb to every field of a record-valued
+   * expression: {@code extend all}, {@code replace all} and their {@code or}
+   * pairs.
    */
   public static class AllModifier extends Modifier {
+    public final ModifierVerb verb;
+    public final boolean lenient;
     public final Exp exp;
 
-    AllModifier(Op op, Exp exp) {
-      super(op);
-      checkArgument(
-          op == Op.WITH_ALL_MODIFIER || op == Op.EXTEND_ALL_MODIFIER,
-          "op %s",
-          op);
+    AllModifier(ModifierVerb verb, boolean lenient, Exp exp) {
+      super(Op.ALL_MODIFIER);
+      this.verb = requireNonNull(verb);
+      this.lenient = lenient;
+      checkArgument(!lenient || verb.allowsLenient(), "verb %s", verb);
+      checkArgument(verb.exists != ModifierVerb.Exists.REMOVE, "verb %s", verb);
       this.exp = requireNonNull(exp);
+    }
+
+    @Override
+    String verbs() {
+      return verb.verbs(lenient) + " all";
     }
 
     @Override
@@ -2596,17 +2701,27 @@ public class Ast {
     }
 
     public AllModifier copy(Exp exp) {
-      return exp.equals(this.exp) ? this : new AllModifier(op, exp);
+      return exp.equals(this.exp) ? this : new AllModifier(verb, lenient, exp);
     }
   }
 
-  /** Modifier that removes labels: {@code remove}. */
+  /**
+   * Modifier that removes labels: {@code remove} and {@code remove or skip}.
+   */
   public static class RemoveModifier extends Modifier {
+    public final ModifierVerb verb;
     public final ImmutableList<Id> labels;
 
-    RemoveModifier(List<Id> labels) {
+    RemoveModifier(ModifierVerb verb, List<Id> labels) {
       super(Op.REMOVE_MODIFIER);
+      this.verb = requireNonNull(verb);
+      checkArgument(verb.exists == ModifierVerb.Exists.REMOVE, "verb %s", verb);
       this.labels = ImmutableList.copyOf(labels);
+    }
+
+    @Override
+    String verbs() {
+      return verb.verbs(false);
     }
 
     @Override
@@ -2622,6 +2737,49 @@ public class Ast {
     @Override
     public void forEachLabel(Consumer<String> consumer) {
       labels.forEach(label -> consumer.accept(label.name));
+    }
+
+    @Override
+    public Modifier accept(Shuttle shuttle) {
+      return this;
+    }
+  }
+
+  /**
+   * Modifier that relabels fields: {@code rename}. Each pair gives the value of
+   * the label on the right to the label on the left, and all pairs apply
+   * simultaneously.
+   */
+  public static class RenameModifier extends Modifier {
+    public final PairList<Id, Id> args;
+
+    RenameModifier(Iterable<? extends Map.Entry<Id, ? extends Id>> args) {
+      super(Op.RENAME_MODIFIER);
+      this.args = ImmutablePairList.copyOf(args);
+    }
+
+    @Override
+    String verbs() {
+      return "rename";
+    }
+
+    @Override
+    AstWriter unparseArgs(AstWriter w) {
+      args.forEachIndexed(
+          (i, k, v) ->
+              w.append(i > 0 ? ", " : "")
+                  .append(k.name)
+                  .append(" = ")
+                  .append(v.name));
+      return w;
+    }
+
+    @Override
+    public void forEachExp(Consumer<Exp> consumer) {}
+
+    @Override
+    public void forEachLabel(Consumer<String> consumer) {
+      args.leftList().forEach(id -> consumer.accept(id.name));
     }
 
     @Override

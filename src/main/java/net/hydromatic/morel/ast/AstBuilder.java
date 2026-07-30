@@ -397,20 +397,27 @@ public enum AstBuilder {
     return record(pos, base, PairList.copyOf(args), modifiers);
   }
 
-  /** Creates a "with", "extend" or "rename" modifier. */
+  /** Creates an "extend" or "replace" modifier. */
   public Ast.AssignModifier assignModifier(
-      Op op, PairList<Ast.Id, Ast.Exp> args) {
-    return new Ast.AssignModifier(op, args);
+      Ast.ModifierVerb verb, boolean lenient, PairList<Ast.Id, Ast.Exp> args) {
+    return new Ast.AssignModifier(verb, lenient, args);
   }
 
-  /** Creates a "with all" or "extend all" modifier. */
-  public Ast.AllModifier allModifier(Op op, Ast.Exp exp) {
-    return new Ast.AllModifier(op, exp);
+  /** Creates an "extend all" or "replace all" modifier. */
+  public Ast.AllModifier allModifier(
+      Ast.ModifierVerb verb, boolean lenient, Ast.Exp exp) {
+    return new Ast.AllModifier(verb, lenient, exp);
   }
 
   /** Creates a "remove" modifier. */
-  public Ast.RemoveModifier removeModifier(List<Ast.Id> labels) {
-    return new Ast.RemoveModifier(labels);
+  public Ast.RemoveModifier removeModifier(
+      Ast.ModifierVerb verb, List<Ast.Id> labels) {
+    return new Ast.RemoveModifier(verb, labels);
+  }
+
+  /** Creates a "rename" modifier. */
+  public Ast.RenameModifier renameModifier(PairList<Ast.Id, Ast.Id> args) {
+    return new Ast.RenameModifier(args);
   }
 
   public Ast.Exp equal(Ast.Exp a0, Ast.Exp a1) {

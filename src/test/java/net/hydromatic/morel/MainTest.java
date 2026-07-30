@@ -499,17 +499,17 @@ public class MainTest {
     ml("(fn x => x + 1) 3").assertParseSame();
     ml("hd [1, 2, 3]").assertParseSame();
 
-    // with and other record modifiers
-    ml("{e with deptno = 10}").assertParseSame();
-    ml("{e with deptno = 10, empno = 100}").assertParseSame();
-    ml("{e with all d}").assertParseSame();
-    ml("{e remove deptno with all d}").assertParseSame();
+    // record modifiers
+    ml("{e replace deptno = 10}").assertParseSame();
+    ml("{e replace deptno = 10, empno = 100}").assertParseSame();
+    ml("{e replace all d}").assertParseSame();
+    ml("{e remove deptno replace all d}").assertParseSame();
     ml("{e extend remuneration = sal + comm remove comm}").assertParseSame();
-    ml("{hd scott.emps with deptno = 10, empno = 100}")
-        .assertParse("{hd (#emps scott) with deptno = 10, empno = 100}");
+    ml("{hd scott.emps replace deptno = 10, empno = 100}")
+        .assertParse("{hd (#emps scott) replace deptno = 10, empno = 100}");
     ml("{e.dept remove deptno}").assertParse("{#dept e remove deptno}");
     ml("{a = 1, {b remove x}}").assertParseSame();
-    ml("{r with i = {s remove x}}").assertParseSame();
+    ml("{r replace i = {s remove x}}").assertParseSame();
     // A modifier with no base to apply to parses; Record.validate rejects it.
     ml("{a = 1, b remove x}").assertParseSame();
 
