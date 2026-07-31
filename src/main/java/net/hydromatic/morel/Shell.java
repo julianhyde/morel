@@ -24,7 +24,6 @@ import static net.hydromatic.morel.util.Static.str;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.util.concurrent.Runnables;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -262,18 +261,6 @@ public class Shell {
   }
 
   /**
-   * Pauses after creating the terminal.
-   *
-   * <p>Calls the value set by {@link Config#withPauseFn(Runnable)} which, for
-   * the default config, does nothing; the instance used in testing pauses for a
-   * few milliseconds, which gives classes time to load and makes test
-   * deterministic.
-   */
-  protected final void pause() {
-    config.pauseFn.run();
-  }
-
-  /**
    * Returns whether we can ignore a line. We can ignore a line if it consists
    * only of comments, spaces, and optionally semicolon, and if we are not on a
    * continuation line.
@@ -387,7 +374,6 @@ public class Shell {
     }
     LineReader lineReader = lineReaderBuilder.build();
 
-    pause();
     Environment env = Environments.env(typeSystem, session, config.valueMap);
     final LineFn lineFn =
         new TerminalLineFn(minusPrompt, equalsPrompt, lineReader);
@@ -579,8 +565,6 @@ public class Shell {
 
     Config withDirectory(File directory);
 
-    Config withPauseFn(Runnable runnable);
-
     Config withMaxUseDepth(int maxUseDepth);
 
     Config withEval(@Nullable String eval);
@@ -597,7 +581,6 @@ public class Shell {
     private final boolean system;
     private final ImmutableMap<String, ForeignValue> valueMap;
     private final File directory;
-    private final Runnable pauseFn;
     private final int maxUseDepth;
     private final @Nullable String eval;
     private final @Nullable String colorScheme;
@@ -611,7 +594,6 @@ public class Shell {
             false,
             ImmutableMap.of(),
             new File(""),
-            Runnables.doNothing(),
             -1,
             null,
             null);
@@ -624,7 +606,6 @@ public class Shell {
         boolean help,
         ImmutableMap<String, ForeignValue> valueMap,
         File directory,
-        Runnable pauseFn,
         int maxUseDepth,
         @Nullable String eval,
         @Nullable String colorScheme) {
@@ -635,7 +616,6 @@ public class Shell {
       this.help = help;
       this.valueMap = requireNonNull(valueMap, "valueMap");
       this.directory = requireNonNull(directory, "directory");
-      this.pauseFn = requireNonNull(pauseFn, "pauseFn");
       this.maxUseDepth = maxUseDepth;
       this.eval = eval;
       this.colorScheme = colorScheme;
@@ -654,7 +634,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -673,7 +652,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -692,7 +670,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -711,7 +688,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -730,7 +706,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -751,7 +726,6 @@ public class Shell {
           help,
           immutableValueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -770,26 +744,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
-          maxUseDepth,
-          eval,
-          colorScheme);
-    }
-
-    @Override
-    public Config withPauseFn(Runnable pauseFn) {
-      if (this.pauseFn.equals(pauseFn)) {
-        return this;
-      }
-      return new ConfigImpl(
-          banner,
-          dumb,
-          system,
-          echo,
-          help,
-          valueMap,
-          directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -808,7 +762,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -827,7 +780,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
@@ -846,7 +798,6 @@ public class Shell {
           help,
           valueMap,
           directory,
-          pauseFn,
           maxUseDepth,
           eval,
           colorScheme);
