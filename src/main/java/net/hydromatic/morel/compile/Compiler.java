@@ -1254,8 +1254,12 @@ public class Compiler {
     if ((op == Op.EXCEPT || op == Op.INTERSECT) && !distinct) {
       // The right-hand-side codes are evaluated when the first row is on the
       // stack. This reduces work if the input is empty, but requires a
-      // custom compilation environment.
-      codes = transformEager(args, a -> compile(handoff.cx, a));
+      // custom compilation environment. The arguments are evaluated once per
+      // execution of the query, so a call to 'ordinal' in one of them counts
+      // the rows of the enclosing step; that counter is the one 'cxFrom'
+      // carries, as in the branch below.
+      final Context cxArg = handoff.cx.withOrdinalSlots(cxFrom.ordinalSlots);
+      codes = transformEager(args, a -> compile(cxArg, a));
     } else {
       // The right-hand-side codes are evaluated in result(), when the row is
       // not on the stack. Use cxFrom, whose offsets omit the row's variables.

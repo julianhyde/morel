@@ -1909,9 +1909,16 @@ public class Resolver {
      * Returns whether a step reads {@code ordinal}.
      *
      * <p>A nested query is evaluated once per row of the enclosing step, so an
-     * {@code ordinal} in the expression that the nested query scans belongs to
-     * the enclosing step and counts here. An {@code ordinal} in any later step
-     * of the nested query belongs to that step, and does not.
+     * {@code ordinal} in one of the expressions that the nested query evaluates
+     * before its first row belongs to the enclosing step and counts here. An
+     * {@code ordinal} anywhere else in the nested query belongs to a step of
+     * that query, and does not.
+     *
+     * <p>By the same rule, a {@code take}, {@code skip}, {@code union}, {@code
+     * except}, {@code intersect}, {@code through} or {@code into} step is
+     * answered no whatever it contains: its expressions are evaluated before
+     * <i>this</i> query's first row, so an {@code ordinal} in them belongs to
+     * the step enclosing this query, which finds it through its own lookahead.
      *
      * <p>A step that reads {@code ordinal} several times needs one field, not
      * several, so the answer is yes or no rather than a count.
@@ -1921,6 +1928,9 @@ public class Resolver {
      * read, and throws. The two must agree.
      */
     private boolean usesOrdinal(Ast.FromStep step) {
+      if (isRootStep(step)) {
+        return false;
+      }
       final AtomicBoolean b = new AtomicBoolean();
       step.accept(
           new Visitor() {
@@ -1944,16 +1954,40 @@ public class Resolver {
               visitQuery(forall.steps);
             }
 
+            /**
+             * Visits the expressions that a nested query evaluates before its
+             * first row, and nothing else.
+             */
             private void visitQuery(List<Ast.FromStep> steps) {
-              if (!steps.isEmpty() && steps.get(0) instanceof Ast.Scan) {
-                final Ast.Scan scan = (Ast.Scan) steps.get(0);
-                if (scan.exp != null) {
-                  scan.exp.accept(this);
-                }
-              }
+              forEachIndexed(
+                  steps,
+                  (s, i) -> {
+                    if (i == 0 && s instanceof Ast.Scan) {
+                      final Ast.Scan scan = (Ast.Scan) s;
+                      if (scan.exp != null) {
+                        scan.exp.accept(this);
+                      }
+                    } else if (isRootStep(s)) {
+                      s.accept(this);
+                    }
+                  });
             }
           });
       return b.get();
+    }
+
+    /**
+     * Returns whether every expression of a step is evaluated before its
+     * query's first row.
+     *
+     * @see #usesOrdinal(Ast.FromStep)
+     */
+    private boolean isRootStep(Ast.FromStep step) {
+      return step instanceof Ast.Skip
+          || step instanceof Ast.Take
+          || step instanceof Ast.SetStep
+          || step instanceof Ast.Through
+          || step instanceof Ast.Into;
     }
 
     @Override
@@ -1970,7 +2004,13 @@ public class Resolver {
                 corePat.type,
                 ImmutableRangeSet.of(Range.all()));
       } else {
-        coreExp = r.toCore(scan.exp);
+        // The first step's extent is evaluated before the query's first row,
+        // so 'current' in it is the enclosing query's row, not this query's
+        // (which has no rows yet). The type resolver read it that way too, in
+        // the root environment.
+        final Resolver rExp =
+            fromBuilder.stepEnv().bindings.isEmpty() ? Resolver.this : r;
+        coreExp = rExp.toCore(scan.exp);
         final Type elementType = coreExp.type.elementType();
         corePat = r.toCore(scan.pat, elementType);
       }

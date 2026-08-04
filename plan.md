@@ -654,23 +654,145 @@ is the right reading: those expressions are evaluated once per
 execution of the nested query, hence once per row of the enclosing
 step (§3a).
 
-The lookahead in §4 descends into a nested query only through its first
-`Scan`'s extent, so it does not see these, and the step that should
-materialize the field does not. Extending the lookahead is necessary
-but not sufficient: `Resolver` resolves these expressions with
-`withEnv(env)`, which excludes the query's bindings, so a reference to
-the materialized field is not in scope there and evaluates to null.
+### The rule
 
-Two ways out:
+An `ordinal` in a class-1 expression of a nested query is **valid, and
+means the enclosing row's ordinal, provided the enclosing step is
+ordered.** This is the reading of §3a taken literally, and it restores
+the answers that existed before this work. The alternative -- reject
+everywhere, making `ordinal` valid only where a row exists -- is
+recorded in issue #436 and is not what we are doing; #436 stays open
+for the abstract traversal it also proposes.
 
-* **Reject.** `take ordinal` at the top level is already an error
-  ("'ordinal' is only valid in a query"); it passes inside a nested
-  query only because the enclosing `current` is in scope. Making the
-  rule uniform -- `ordinal` is valid only where a row exists -- is the
-  smaller change and arguably what the type rule already means.
-* **Carry the field.** Put the materialized field in the query's root
-  environment so these expressions can read it, preserving the answers
-  that exist today.
+### One cause, three symptoms
 
-The first is recommended. Either way it needs tests for all five
-positions.
+All three come from attributing a class-1 expression of a nested query
+to that query's own step, rather than to the enclosing one.
+
+*Symptom 1 -- the crash.* The nested query's `acceptStep` asks
+`usesOrdinal(take)`, gets yes, and calls `materializeOrdinal` on the
+*nested* `FromBuilder`. `visit(Ast.Take)` then resolves the count with
+`withEnv(env)`, which deliberately excludes that query's own bindings,
+so the `Core.Id` for the freshly materialized field names something
+that is not in scope, and evaluates to null:
+
+```
+at RowSinks$TakeRowSink.start(RowSinks.java:663)
+at RowSinks$YieldRowSink.start(RowSinks.java:1384)
+```
+
+The `YieldRowSink` in that trace is the materialized-ordinal yield that
+should never have been added.
+
+*Symptom 2 -- the ordering check does not fire.*
+`TypeResolver.deduceOrdinalType` reads `last(stepStack.rightList())`,
+which during a class-1 expression is still the step being deduced. So
+
+```sml
+from x in bag [1,2] yield (from k in [10,20,30] take ordinal);
+```
+
+is not rejected as unordered; it crashes as symptom 1 instead.
+
+*Symptom 3 -- the position that "works" is wrong about ordering.* A
+nested query's step 0 gets a `Triple` built with `listTerm`
+unconditionally, so the check in `deduceOrdinalType` always passes
+there, whatever the enclosing step is:
+
+```sml
+from x in bag [1,2] yield {js = (from j in [x + ordinal])};
+> val it = [{js=[1]},{js=[3]}] : {js:int list} bag
+```
+
+The enclosing collection is a bag, so those ordinals are meaningless.
+Under the rule above this must be an error. It is a pre-existing bug,
+not a regression.
+
+### The fix
+
+**`TypeResolver`: hide the current step while deducing a class-1
+expression.** A query pushes one `stepStack` frame at a time, so hiding
+"the frames of this query" is popping the top one for the duration of
+the call (`withoutStep`). `deduceOrdinalType` then lands on the
+enclosing step, which gives all three: the ordering check tests the
+right collection, a top-level class-1 `ordinal` finds an empty stack
+and is rejected by `checkInQuery` as it is today, and symptom 3
+disappears because the `listTerm` frame is no longer the one consulted.
+
+No traversal is needed here -- the call sites *are* the class-1 set.
+There are eight of them, two more than §3a listed: besides a `take` or
+`skip` count, the set-step operands and the first scan's extent, the
+function of a `through` and of an `into` are applied to the whole
+collection, hence evaluated once per execution of the query.
+
+`through` was doubly wrong: it deduced its function in `p.env`, not
+`p.rootEnv`, so `current` in it type-checked against a row that the
+resolver had no way to supply, and crashed. It now matches `into`.
+
+**`Resolver`: attribute the lookahead the same way.** `usesOrdinal` is
+the mirror of those four sites and does need a traversal:
+
+* A `Take`, `Skip`, `Union`, `Except` or `Intersect` step is entirely
+  class 1, so `usesOrdinal` answers no for it whatever it contains: an
+  `ordinal` there belongs to the enclosing query, which will find it
+  through its own lookahead. (Step 0 is already skipped for the same
+  reason.)
+* `visitQuery`, which descends into a nested query, must visit *every*
+  class-1 expression of it -- the first `Scan`'s extent, and every
+  `take`/`skip` count and set-step operand at any position -- not just
+  the extent.
+
+**Scope: almost nothing more to do.** Once attribution is right, the
+field is mostly reachable already. For a materializing step, the nested
+`FromResolver` is created by that step's `withStepEnv`, whose env
+contains the materialized binding, and `Resolver.this` inside it
+carries the `ordinalPat`; `withEnv(env)` in `visit(Ast.Take)` resolves
+to exactly that resolver. For a `yield` step, which holds the call
+rather than materializing (phase 4), the nested `take` count compiles
+with `cxFrom`, which inherits the yield's `ordinalSlots`.
+
+Two exceptions:
+
+* `Compiler.compileSetSink` compiles a non-distinct `except`/`intersect`
+  operand in `handoff.cx`, which drops the counter. It now inherits
+  `cxFrom`'s, as the distinct branch beside it already did.
+* `Resolver.visit(Ast.Scan)` resolved the first step's extent with
+  `withStepEnv`, whose `current` is this query's row -- and at step 0
+  that row is the empty record. So `current` in a subquery's extent
+  type-checked as the enclosing row and evaluated as `{}`
+  (`ClassCastException`). It now resolves in the enclosing resolver,
+  matching where the type resolver read it.
+
+The edge that looked risky is not: a nested query that itself has a
+`yield` reading `ordinal` installs its own slots, but `cxFrom` is fixed
+before that happens, so a class-1 expression still reads the enclosing
+counter. `from x in [1,2,3] yield (from k in [10,20,30] yield k +
+ordinal take ordinal)` gives `[[],[10],[10,21]]` -- both counters live,
+each read where it belongs.
+
+### Tests
+
+In `relational.smli`, interleaved into the existing "Current" and
+"Ordinal" sections rather than kept apart, since they subsume several
+ad-hoc tests that were already there. Uniform one-liners: the eight
+root positions x {`current`, `ordinal`} x {top level, subquery of an
+ordered step, subquery of an unordered step, unordered subquery of an
+ordered step}, plus a subquery nested in a root position (invalid at
+the top level, valid under a row). The unordered cases are the
+regression guard for a check that had never fired.
+
+### A cleaner mechanism, not taken
+
+`current` needed no attribution work at all: it resolves through the
+type environment, and the root sites already deduce in `p.rootEnv`,
+which still holds the *enclosing* binding. That is the whole rule,
+expressed by the environment. `ordinal` needs `withoutStep` only
+because it resolves through `stepStack` instead, with the ordering
+check deferred to a `validations` closure.
+
+Binding `ordinal` in the environment alongside `Z_CURRENT` -- with a
+sentinel type where it is invalid, one for "not in a query" and one for
+"unordered step" -- would make both checks ordinary type errors and let
+`withoutStep`, the `stepStack` lookup in `deduceOrdinalType`, and the
+deferred validation all be deleted. The tests above pin the behavior
+either way.

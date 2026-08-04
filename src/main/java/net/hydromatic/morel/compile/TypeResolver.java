@@ -1245,6 +1245,41 @@ public class TypeResolver {
         typeSystem, BuiltIn.Z_CURRENT.mlName, TypeEnv.onlyValidInQuery(node));
   }
 
+  /**
+   * Deduces the type of an expression that is evaluated before a query's first
+   * row: a {@code skip} or {@code take} count, an operand of {@code union},
+   * {@code except} or {@code intersect}, or the extent of a scan that cannot
+   * see the query's own rows.
+   *
+   * <p>Such an expression is evaluated once per execution of the query, hence
+   * once per row of the step that <i>contains</i> the query. An {@code ordinal}
+   * in it therefore counts the rows of that enclosing step, not of the step we
+   * are deducing, so we hide the current step while deducing it. If there is no
+   * enclosing step -- the query is at the top level -- the environment has no
+   * {@code current} either, and {@link #checkInQuery} rejects the call.
+   */
+  private Ast.Exp deduceRootExpType(
+      Ast.FromStep step, TypeEnv env, Ast.Exp exp, Variable v) {
+    return withoutStep(step, () -> deduceExpType(env, exp, v));
+  }
+
+  /**
+   * Deduces a type with {@code step} hidden from the step stack, so that {@code
+   * current} and {@code ordinal} resolve to the step that encloses this query.
+   *
+   * @see #deduceRootExpType(Ast.FromStep, TypeEnv, Ast.Exp, Variable)
+   */
+  private <E> E withoutStep(Ast.FromStep step, Supplier<E> supplier) {
+    final int i = stepStack.size() - 1;
+    checkArgument(stepStack.leftList().get(i) == step, "not the current step");
+    final Map.Entry<Ast.FromStep, Triple> frame = stepStack.remove(i);
+    try {
+      return supplier.get();
+    } finally {
+      stepStack.add(frame.getKey(), frame.getValue());
+    }
+  }
+
   /** Deduces the type of an {@code ordinal} keyword: {@code int}. */
   private Ast.Exp deduceOrdinalType(
       TypeEnv env, Ast.Ordinal ordinal, Variable v) {
@@ -1389,7 +1424,8 @@ public class TypeResolver {
         // same type as the input. The skip expression must be an int.
         final Ast.Skip skip = (Ast.Skip) step;
         final Variable v11 = unifier.variable();
-        final Ast.Exp skipCount = deduceExpType(p.rootEnv, skip.exp, v11);
+        final Ast.Exp skipCount =
+            deduceRootExpType(skip, p.rootEnv, skip.exp, v11);
         equiv(v11, toTerm(PrimitiveType.INT));
         steps.add(skip.copy(skipCount));
         return p;
@@ -1400,7 +1436,8 @@ public class TypeResolver {
         // same type as the input. The take expression must be an int.
         final Ast.Take take = (Ast.Take) step;
         final Variable v12 = unifier.variable();
-        final Ast.Exp takeCount = deduceExpType(p.rootEnv, take.exp, v12);
+        final Ast.Exp takeCount =
+            deduceRootExpType(take, p.rootEnv, take.exp, v12);
         equiv(v12, toTerm(PrimitiveType.INT));
         steps.add(take.copy(takeCount));
         return p;
@@ -1415,7 +1452,7 @@ public class TypeResolver {
         for (Ast.Exp arg : setStep.args) {
           final Variable v15 = unifier.variable();
           terms.add(v15);
-          args2.add(deduceExpType(p.rootEnv, arg, v15));
+          args2.add(deduceRootExpType(setStep, p.rootEnv, arg, v15));
         }
         final Variable c4 = unifier.variable();
         meetCollections(terms, c4, p.v);
@@ -1469,7 +1506,11 @@ public class TypeResolver {
             deducePatType(
                 p.rootEnv, through.pat, termMap::add, null, v18, t -> t);
         final Variable v17 = toVariable(fnTerm(p.c, c18));
-        final Ast.Exp throughExp = deduceExpType(p.env, through.exp, v17);
+        // "f" is applied to the whole collection -- 'through p in f' is
+        // 'from p in f (from ...)' -- so it is evaluated before the query's
+        // first row, and cannot see the query's own rows.
+        final Ast.Exp throughExp =
+            deduceRootExpType(through, p.rootEnv, through.exp, v17);
         isCollectionOf(c18, v18);
         // Register the rewritten node (the one added to 'steps', which the
         // resolver later looks up), not only the original: type resolution may
@@ -1499,8 +1540,18 @@ public class TypeResolver {
    */
   private Triple deduceIntoStepType(
       Ast.Into into, Triple p, List<Ast.FromStep> steps) {
-    requireNonNull(p.c);
     final Variable rv = unifier.variable();
+    // "f" is applied to the whole collection, so it is evaluated before the
+    // query's first row.
+    final Ast.Exp intoExp =
+        withoutStep(into, () -> deduceIntoFnType(into, p, rv));
+    steps.add(into.copy(intoExp));
+    return Triple.singleton(p.rootEnv, p.env, rv);
+  }
+
+  /** Deduces the type of the function of an {@code into} step. */
+  private Ast.Exp deduceIntoFnType(Ast.Into into, Triple p, Variable rv) {
+    requireNonNull(p.c);
     final Ast.Exp intoExp;
     switch (aggKind(p.rootEnv, into.exp)) {
       case USER_UNKNOWN:
@@ -1544,8 +1595,7 @@ public class TypeResolver {
           break;
         }
     }
-    steps.add(into.copy(intoExp));
-    return Triple.singleton(p.rootEnv, p.env, rv);
+    return intoExp;
   }
 
   private Triple deduceScanStepType(
@@ -1572,6 +1622,10 @@ public class TypeResolver {
     } else {
       scanEnv = p.env;
     }
+    // A scan that cannot see the query's own rows -- the first step, whose
+    // 'env' is still the root env, or the source of a 'right' or 'full join'
+    // -- is evaluated before the query's first row.
+    final boolean root = scanEnv == p.rootEnv;
     if (scan.exp == null) {
       scanExp3 = null;
       // If we're iterating over 'all values' of the type, we'd better not
@@ -1580,14 +1634,20 @@ public class TypeResolver {
       c0 = null;
     } else if (scan.exp.op == Op.FROM_EQ) {
       final Ast.Exp scanExp = ((Ast.PrefixCall) scan.exp).a;
-      final Ast.Exp scanExp2 = deduceExpType(scanEnv, scanExp, v0);
+      final Ast.Exp scanExp2 =
+          root
+              ? deduceRootExpType(scan, scanEnv, scanExp, v0)
+              : deduceExpType(scanEnv, scanExp, v0);
       scanExp3 = ast.fromEq(scanExp2);
       sourceKind = SourceKind.SCALAR;
       c0 = null;
       reg(scanExp, v0);
     } else {
       c0 = unifier.variable();
-      scanExp3 = deduceExpType(scanEnv, scan.exp, c0);
+      scanExp3 =
+          root
+              ? deduceRootExpType(scan, scanEnv, scan.exp, c0)
+              : deduceExpType(scanEnv, scan.exp, c0);
       reg(scan.exp, c0);
       sourceKind = SourceKind.COLLECTION;
     }
