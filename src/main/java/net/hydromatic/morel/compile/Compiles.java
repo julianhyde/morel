@@ -153,6 +153,7 @@ public abstract class Compiles {
 
     final Resolver resolver = Resolver.of(resolved.typeMap, env, session);
     final Core.Decl coreDecl0 = resolver.toCore(resolved.node);
+    OrdinalChecker.check(coreDecl0);
     tracer.onCore(0, coreDecl0);
 
     // Store the initial Core.Decl and environment for Sys.planEx,
@@ -222,6 +223,7 @@ public abstract class Compiles {
         tracer.onCore(i + 2, coreDecl);
       }
     }
+    OrdinalChecker.check(coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
     if (hybrid) {

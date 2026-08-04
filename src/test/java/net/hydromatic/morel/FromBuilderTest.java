@@ -21,8 +21,11 @@ package net.hydromatic.morel;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasToString;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableMap;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -31,9 +34,11 @@ import java.util.List;
 import java.util.function.Function;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.OrdinalChecker;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
@@ -76,6 +81,15 @@ public class FromBuilderTest {
 
     Core.Literal intLiteral(int i) {
       return core.literal(intType, i);
+    }
+
+    /** Creates a call to "ordinal", as {@code FromBuilder} does. */
+    Core.Exp ordinalExp() {
+      return core.apply(
+          Pos.ZERO,
+          intType,
+          core.functionLiteral(typeSystem, BuiltIn.Z_ORDINAL),
+          core.tuple(typeSystem));
     }
 
     Core.Exp record(Core.Id... ids) {
@@ -579,6 +593,74 @@ public class FromBuilderTest {
     assertThat(from3, hasToString(expected3));
     final Core.Exp e3 = fromBuilder3.buildSimplify();
     assertThat(e3, is(from3));
+  }
+
+  /**
+   * Tests that {@link OrdinalChecker} accepts the shape that {@link
+   * FromBuilder#materializeOrdinal()} produces: one call to "ordinal", in a
+   * "yield", whose field later steps read.
+   */
+  @Test
+  void testOrdinalChecker() {
+    // from i in [1, 2] yield {i = i, v0 = ordinal} where v0 < 2
+    final Fixture f = new Fixture();
+    final FromBuilder fromBuilder = f.fromBuilder();
+    fromBuilder.scan(f.iPat, f.list12);
+    final Core.IdPat ordinalPat = fromBuilder.materializeOrdinal();
+    fromBuilder.where(
+        core.lessThan(f.typeSystem, core.id(ordinalPat), f.intLiteral(2)));
+
+    final Core.From from = fromBuilder.build();
+    assertThat(
+        from,
+        hasToString(
+            "from i in [1, 2] yield {i = i, v$0 = $ordinal ()} where v$0 < 2"));
+    OrdinalChecker.check(from);
+  }
+
+  /**
+   * Tests that {@link OrdinalChecker} rejects a call to "ordinal" outside a
+   * "yield". Such a call is evaluated at a rate that is not one per input row,
+   * so it cannot be a row ordinal.
+   */
+  @Test
+  void testOrdinalCheckerRejectsCallOutsideYield() {
+    // from i in [1, 2] where ordinal < 2
+    final Fixture f = new Fixture();
+    final FromBuilder fromBuilder = f.fromBuilder();
+    fromBuilder
+        .scan(f.iPat, f.list12)
+        .where(core.lessThan(f.typeSystem, f.ordinalExp(), f.intLiteral(2)));
+
+    final Core.From from = fromBuilder.build();
+    final VerifyException e =
+        assertThrows(VerifyException.class, () -> OrdinalChecker.check(from));
+    assertThat(
+        e.getMessage(), containsString("'ordinal' occurs outside a yield"));
+  }
+
+  /**
+   * Tests that {@link OrdinalChecker} rejects two calls to "ordinal" in one
+   * "yield". Each call would advance the counter, so the two would disagree.
+   */
+  @Test
+  void testOrdinalCheckerRejectsTwoCallsInOneYield() {
+    // from i in [1, 2] yield {a = ordinal, b = ordinal}
+    final Fixture f = new Fixture();
+    final FromBuilder fromBuilder = f.fromBuilder();
+    final PairList<String, Core.Exp> nameExps = PairList.of();
+    nameExps.add("a", f.ordinalExp());
+    nameExps.add("b", f.ordinalExp());
+    fromBuilder
+        .scan(f.iPat, f.list12)
+        .yield_(core.record(f.typeSystem, nameExps));
+
+    final Core.From from = fromBuilder.build();
+    final VerifyException e =
+        assertThrows(VerifyException.class, () -> OrdinalChecker.check(from));
+    assertThat(
+        e.getMessage(),
+        containsString("'ordinal' occurs 2 times in one yield"));
   }
 }
 
