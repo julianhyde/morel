@@ -84,15 +84,11 @@ import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
 import net.hydromatic.morel.util.TailList;
 import net.hydromatic.morel.util.ThreadLocals;
-import org.apache.calcite.util.TryThreadLocal;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** Compiles an expression to code that can be evaluated. */
 public class Compiler {
   protected static final EvalEnv EMPTY_ENV = Codes.emptyEnv();
-
-  private static final TryThreadLocal<int[]> ORDINAL_CODE =
-      TryThreadLocal.withInitial(() -> new int[] {0});
 
   protected final TypeSystem typeSystem;
 
@@ -230,6 +226,19 @@ public class Compiler {
      */
     final ImmutableList<Core.NamedPat> recPeers;
 
+    /**
+     * The row-ordinal counter of the enclosing "yield", or null if there is
+     * none.
+     *
+     * <p>A call to {@code ordinal} compiles to a read of this counter, so a
+     * call compiled in a context that has none is an error: it would have
+     * nothing to count. Only a "yield" installs one, which is what confines
+     * calls to a "yield" -- and because a context is threaded into nested
+     * compilation, a nested query's scan expression sees the enclosing yield's
+     * counter, which is the one its rows are positioned within.
+     */
+    final int @Nullable [] ordinalSlots;
+
     Context(Environment env) {
       this(env, StackLayout.EMPTY, 0, ImmutableMap.of(), ImmutableList.of());
     }
@@ -252,11 +261,28 @@ public class Compiler {
         int localDepth,
         Map<String, Integer> globalSlotMap,
         List<Core.NamedPat> recPeers) {
+      this(env, layout, localDepth, globalSlotMap, recPeers, null);
+    }
+
+    Context(
+        Environment env,
+        StackLayout layout,
+        int localDepth,
+        Map<String, Integer> globalSlotMap,
+        List<Core.NamedPat> recPeers,
+        int @Nullable [] ordinalSlots) {
       this.env = env;
       this.layout = layout;
       this.localDepth = localDepth;
       this.globalSlotMap = ImmutableMap.copyOf(globalSlotMap);
       this.recPeers = ImmutableList.copyOf(recPeers);
+      this.ordinalSlots = ordinalSlots;
+    }
+
+    /** Returns a copy of this context with a row-ordinal counter. */
+    Context withOrdinalSlots(int[] ordinalSlots) {
+      return new Context(
+          env, layout, localDepth, globalSlotMap, recPeers, ordinalSlots);
     }
 
     static Context of(Environment env) {
@@ -440,19 +466,23 @@ public class Compiler {
     return ImmutablePairList.fromTransformed(expressions, transformer);
   }
 
-  /** Compiles an expression that is evaluated once per row. */
+  /**
+   * Compiles the expression of a "yield" that produces a single value.
+   *
+   * <p>Installs a row-ordinal counter, so that a call to {@code ordinal} in the
+   * expression compiles to a read of it. If nothing read it, the counter is not
+   * maintained at run time and the step pays nothing.
+   */
   public Code compileRow(Context cx, Core.Exp expression) {
     final int[] ordinalSlots = {0};
-    try (TryThreadLocal.Memo ignored = ORDINAL_CODE.push(ordinalSlots)) {
-      Code code = compile(cx, expression);
-      if (ordinalSlots[0] == 0) {
-        return code;
-      }
-      // The ordinal was used in at least one place.
-      // Create a wrapper that will increment the ordinal each time.
-      ordinalSlots[0] = -1;
-      return Codes.ordinalInc(ordinalSlots, code);
+    Code code = compile(cx.withOrdinalSlots(ordinalSlots), expression);
+    if (ordinalSlots[0] == 0) {
+      return code;
     }
+    // The ordinal was read at least once. Wrap the expression in code that
+    // advances the counter once per row.
+    ordinalSlots[0] = -1;
+    return Codes.ordinalInc(ordinalSlots, code);
   }
 
   /**
@@ -465,18 +495,17 @@ public class Compiler {
   private ImmutableSortedMap<String, Code> compileRowMap(
       Context cx, List<? extends Map.Entry<String, Core.Exp>> nameExps) {
     final int[] ordinalSlots = {0};
-    try (TryThreadLocal.Memo ignored = ORDINAL_CODE.push(ordinalSlots)) {
-      final PairList<String, Code> mapCodes = PairList.of();
-      forEach(nameExps, (name, exp) -> mapCodes.add(name, compile(cx, exp)));
-      if (ordinalSlots[0] > 0) {
-        // The ordinal was used in at least one place.
-        // Create a wrapper that will increment the ordinal each time.
-        ordinalSlots[0] = -1;
-        final List<Code> codes = mapCodes.rightList();
-        codes.set(0, Codes.ordinalInc(ordinalSlots, codes.get(0)));
-      }
-      return ImmutableSortedMap.copyOf(mapCodes, RecordType.ORDERING);
+    final Context cxRow = cx.withOrdinalSlots(ordinalSlots);
+    final PairList<String, Code> mapCodes = PairList.of();
+    forEach(nameExps, (name, exp) -> mapCodes.add(name, compile(cxRow, exp)));
+    if (ordinalSlots[0] > 0) {
+      // The ordinal was read at least once. Wrap the first expression in code
+      // that advances the counter once per row.
+      ordinalSlots[0] = -1;
+      final List<Code> codes = mapCodes.rightList();
+      codes.set(0, Codes.ordinalInc(ordinalSlots, codes.get(0)));
     }
+    return ImmutableSortedMap.copyOf(mapCodes, RecordType.ORDERING);
   }
 
   public Code compile(Context cx, Core.Exp expression) {
@@ -596,9 +625,14 @@ public class Compiler {
             argCodes = compileArgs(cx, ((Core.Tuple) apply.arg).args);
             return Codes.list(argCodes);
           case Z_ORDINAL:
-            int[] ordinalSlots = ORDINAL_CODE.get();
-            ordinalSlots[0]++; // signal that we are using an ordinal
-            return Codes.ordinalGet(ordinalSlots);
+            if (cx.ordinalSlots == null) {
+              // Nothing is counting rows here. Only a 'yield' installs a
+              // counter, so a call anywhere else has nothing to read.
+              throw new AssertionError(
+                  "'ordinal' occurs outside a yield: " + apply);
+            }
+            cx.ordinalSlots[0]++; // signal that we are using an ordinal
+            return Codes.ordinalGet(cx.ordinalSlots);
           default:
             if (true) {
               break;
@@ -1079,14 +1113,12 @@ public class Compiler {
       Core.StepEnv stepEnv,
       List<Core.FromStep> remainingSteps,
       Type elementType) {
-    final int[] ordinalSlots = {0};
     final ImmutableList.Builder<Code> groupCodesB = ImmutableList.builder();
-    try (TryThreadLocal.Memo ignored = ORDINAL_CODE.push(ordinalSlots)) {
-      for (Core.Exp exp : group.groupExps.values()) {
-        // Group key codes evaluated at accept() time (scan vars on stack), use
-        // cx.
-        groupCodesB.add(compile(cx, exp));
-      }
+    for (Core.Exp exp : group.groupExps.values()) {
+      // Group key codes evaluated at accept() time (scan vars on stack), use
+      // cx. A key that reads the ordinal reads a field that an earlier 'yield'
+      // materialized, so no counter is installed here.
+      groupCodesB.add(compile(cx, exp));
     }
     // Compute inSlots first so we can use inSlots.leftList() for
     // Codes.aggregate. The name order in which values are captured (by slot
@@ -1139,16 +1171,7 @@ public class Compiler {
               scanDepth));
     }
     final ImmutableList<Code> groupCodes = groupCodesB.build();
-    final Code tupleCode = Codes.tuple(groupCodes);
-    final Code keyCode;
-    if (ordinalSlots[0] > 0) {
-      // A group key uses the ordinal. The key is evaluated once per input row,
-      // so wrapping it advances the ordinal in step with the rows.
-      ordinalSlots[0] = -1;
-      keyCode = Codes.ordinalInc(ordinalSlots, tupleCode);
-    } else {
-      keyCode = tupleCode;
-    }
+    final Code keyCode = Codes.tuple(groupCodes);
     final ImmutableList<Applicable> aggregateCodes = aggregateCodesB.build();
     final ImmutableList<String> outNames =
         transformEager(group.env.bindings, b -> b.id.name);
