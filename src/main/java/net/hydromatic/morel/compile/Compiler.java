@@ -475,10 +475,10 @@ public class Compiler {
   /**
    * Compiles an expression that is evaluated once per row.
    *
-   * <p>If {@code mayContainOrdinal}, installs a row-ordinal counter, so that a
-   * call to {@code ordinal} in the expression compiles to a read of it; and if
-   * nothing read it, the counter is not maintained at run time and the step
-   * pays nothing.
+   * <p>If {@code ordinalSlots} is not null, installs a row-ordinal counter, so
+   * that a call to {@code ordinal} in the expression compiles to a read of it;
+   * and if nothing read it, the counter is not maintained at run time and the
+   * step pays nothing.
    *
    * <p>Only the expression of a "yield" may contain a call, because only a
    * "yield" advances the counter. Elsewhere -- a scan expression, a "where"

@@ -491,9 +491,7 @@ public class FromBuilder {
     if (atom) {
       exp = core.id(remaining.get(0).id);
     } else {
-      final PairList<String, Core.Exp> nameExps = PairList.of();
-      remaining.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
-      exp = core.record(typeSystem, nameExps);
+      exp = core.record(typeSystem, remaining);
     }
     return yield_(
         false, Core.StepEnv.of(remaining, atom, stepEnv().ordered), exp, atom);

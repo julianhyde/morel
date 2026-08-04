@@ -1893,9 +1893,7 @@ public class Resolver {
       if (rowEnv.atom) {
         f = core.id(rowEnv.bindings.get(0).id);
       } else {
-        final PairList<String, Core.Exp> nameExps = PairList.of();
-        rowEnv.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
-        f = core.record(typeMap.typeSystem, nameExps);
+        f = core.record(typeMap.typeSystem, rowEnv.bindings);
       }
       return withEnv(stepEnv.bindings).withCurrent(f);
     }
