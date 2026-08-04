@@ -679,10 +679,11 @@ from i in [10,20,30]
   yield {a = ordinal, b = ordinal};
 > val it = [{a=0,b=0},{a=1,b=1},{a=2,b=2}] : {a:int, b:int} list
 
-(*) The count advances once per row, even on a row that does not read it.
-from i in [10,20,30]
-  yield (if i > 15 then ordinal else ~1);
-> val it = [~1,1,2] : int list
+(* The count advances once per row, even on a row that does not read it:
+   the ordinals on either side of a row that yields ~1 differ by 2. *)
+from i in [10,11,20,21,30]
+  yield (if i mod 10 = 0 then ordinal else ~1);
+> val it = [0,~1,2,~1,4] : int list
 
 (*) When there is a field called 'ordinal', it doesn't get used unless you quote it.
 from i in [3,1,4,5,3,5,8,9,7]
