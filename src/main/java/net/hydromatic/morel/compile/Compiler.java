@@ -467,13 +467,22 @@ public class Compiler {
   }
 
   /**
-   * Compiles the expression of a "yield" that produces a single value.
+   * Compiles an expression that is evaluated once per row.
    *
-   * <p>Installs a row-ordinal counter, so that a call to {@code ordinal} in the
-   * expression compiles to a read of it. If nothing read it, the counter is not
-   * maintained at run time and the step pays nothing.
+   * <p>If {@code mayContainOrdinal}, installs a row-ordinal counter, so that a
+   * call to {@code ordinal} in the expression compiles to a read of it; and if
+   * nothing read it, the counter is not maintained at run time and the step
+   * pays nothing.
+   *
+   * <p>Only the expression of a "yield" may contain a call, because only a
+   * "yield" advances the counter. Elsewhere -- a scan expression, a "where"
+   * condition -- no counter is installed, and compiling a call throws.
    */
-  public Code compileRow(Context cx, Core.Exp expression) {
+  public Code compileRow(
+      Context cx, Core.Exp expression, boolean mayContainOrdinal) {
+    if (!mayContainOrdinal) {
+      return compile(cx, expression);
+    }
     final int[] ordinalSlots = {0};
     Code code = compile(cx.withOrdinalSlots(ordinalSlots), expression);
     if (ordinalSlots[0] == 0) {
@@ -490,7 +499,7 @@ public class Compiler {
    *
    * <p>If one or more of those expressions references {@code ordinal}, add a
    * wrapper around the first expression that increments the ordinal, similar to
-   * how {@link #compileRow(Context, Core.Exp)} does it.
+   * how {@link #compileRow(Context, Core.Exp, boolean)} does it.
    */
   private ImmutableSortedMap<String, Code> compileRowMap(
       Context cx, List<? extends Map.Entry<String, Core.Exp>> nameExps) {
@@ -850,7 +859,7 @@ public class Compiler {
       Core.Scan scan,
       List<Core.FromStep> steps,
       Type elementType) {
-    final Code code = compileRow(cx, scan.exp);
+    final Code code = compileRow(cx, scan.exp, false);
     // Extend the layout with scan variable patterns at stack slots.
     StackLayout scanLayout = cx.layout;
     int depth = cx.localDepth;
@@ -931,7 +940,7 @@ public class Compiler {
 
       case WHERE:
         final Core.Where where = (Core.Where) firstStep;
-        final Code filterCode = compileRow(cx, where.exp);
+        final Code filterCode = compileRow(cx, where.exp, false);
         final Supplier<RowSink> whereNextFactory =
             createRowSinkFactory(
                 cx, cxFrom, allScope2, firstStep.env, skip(steps), elementType);
@@ -999,7 +1008,7 @@ public class Compiler {
         if (steps.size() == 1) {
           // Last step. Use a Collect row sink, and we're done.
           // Note that we don't use nextFactory.
-          final Code yieldCode = compileRow(cx, yield.exp);
+          final Code yieldCode = compileRow(cx, yield.exp, true);
           return () -> RowSinks.collect(yieldCode);
         }
         if (yield.exp instanceof Core.Tuple) {
