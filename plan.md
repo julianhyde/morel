@@ -84,6 +84,15 @@ Two places already cannot use the counter, and work around it:
    only because the increment is attached to the first of its codes.
 5. **No Calcite translation.** `CalciteCompiler` has no case for
    `Z_ORDINAL`, so a query using `ordinal` cannot be pushed down.
+6. **It gives wrong answers.** Only `compileRow`, `compileRowMap` and
+   `compileGroupSink` push a counter. An `order` key
+   (`Compiler.compileOrderSink`) and a scan or join condition
+   (`Compiler.java:830`) are compiled with plain `compile`, so
+   `ordinal` there reads a box that is never incremented and returns
+   the same value for every row. Found while implementing phase 1,
+   which fixes it: see the two `order (~ordinal)` and
+   `on i = ordinal mod 2` cases in `relational.smli`, whose answers
+   changed from "unsorted" and "empty" to the correct ones.
 
 ## 3. Proposed design
 
@@ -352,14 +361,24 @@ Keeping `ordinal` an expression means the phases land separately: the
 existing runtime can compile a generated field the moment it exists,
 so generation and the runtime change are independent commits.
 
-1. **Generation.** The AST lookahead (§4), the `ordinalPat` context
-   field in `FromResolver`, and generation in `FromBuilder`;
-   `groupOverOrdinal` is folded into it and stops being a special
-   case, including the multiple-use rewrite of §3. Invisibility (§5)
-   lands here — result types must be unchanged from today, so the
-   phase is not complete without it. The existing runtime still
-   compiles it, so behavior is unchanged; `Sys.plan` output is
-   regenerated in `relational.smli` and `bag.smli`.
+1. **Generation.** *(Done.)* The AST lookahead (§4), the `ordinalPat`
+   context field on `Resolver`, and `materializeOrdinal` /
+   `dropOrdinal` in `FromBuilder`; `groupOverOrdinal` folded into it
+   and deleted. Invisibility (§5) landed here, as `dropOrdinal`.
+   Multiple use (§3) needs no separate rewrite: because generation is
+   unconditional when a step reads `ordinal` at all, every use is
+   already a reference to the one generated field.
+
+   Two notes from doing it. The context field had to go on `Resolver`,
+   not `FromResolver`, so that it propagates into a nested query's
+   scan expression and gives §4's rule for free. And `current` must be
+   built from the environment *before* the field is added, or the
+   materialized field would change the type of the row the user sees.
+
+   Not behavior-preserving after all: it fixes problem 6 in §2. Four
+   new cases in `relational.smli`; the rest of the suite passes
+   unchanged, and no existing test prints a plan for a query using
+   `ordinal`, so there was no `Sys.plan` output to regenerate.
 2. **Validation.** Add the walk that checks the two rules of §3, and
    run it in test builds. It is worth landing separately, immediately
    after phase 1, so it is in place before the runtime moves under it.
