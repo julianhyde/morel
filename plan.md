@@ -187,6 +187,51 @@ A compiled yield can still ask, once, whether its expression contains
 any call, and skip the counter entirely if not — which is what
 `compileRowMap`'s use-counter already does.
 
+## 3a. Evaluation frequency, and the "before the first row" set
+
+A query's expressions fall into three classes by how often they are
+evaluated. The classes are what `ordinal` is really about, and getting
+them wrong is what produced the defect in §12.
+
+1. **Once per execution of the query** -- "before the first row". The
+   expression the *first* step scans; a `take` or `skip` count; the
+   operands of `union`, `except` and `intersect`. `TypeResolver` calls
+   this the root environment (`Triple.rootEnv`), and `Resolver` resolves
+   these with `withEnv(env)`, deliberately excluding the query's own
+   bindings -- there is no row yet.
+2. **Once per row arriving at step *N***. Step *N*'s condition, key or
+   expression, and the extent of a scan that is not the first step.
+3. **After the rows have been collected** -- an aggregate argument.
+
+An `ordinal` is meaningful only in class 2, and belongs to the step
+whose rows it counts. The subtlety is that class 1 of a *nested* query
+is class 2 of the enclosing step: a nested query is executed once per
+row of the step containing it, so its "before the first row"
+expressions are evaluated exactly as often as that step's own.
+
+That is why the rule in §4 has the shape it does, and why stating it as
+"the first step's extent" was too narrow.
+
+### The abstract visitor
+
+The set is worth capturing once, rather than being re-derived at each
+place that needs it. The shape: an abstract visitor that traverses only
+the expressions evaluated the same number of times as the root
+expression, in the manner of `EnvShuttle` -- the traversal is the base
+class, and each use supplies what to do at the leaves.
+
+Three uses in sight:
+
+* the `ordinal` lookahead in `Resolver`, which decides which step must
+  materialize the field;
+* whatever fixes §12, which needs the same set on the resolution side;
+* any analysis asking "is this expression loop-invariant with respect
+  to the query", which is the same question.
+
+It is needed in two forms, on `Ast` (the lookahead runs before Core
+exists) and on `Core` (for analyses over compiled queries). The class
+boundaries are identical; only the node types differ.
+
 ## 4. Which step an `ordinal` belongs to
 
 An occurrence of `ordinal` belongs to the innermost step whose input
@@ -552,3 +597,42 @@ Still open:
 2. `current` has a similar "only valid in a query" flavor but is
    already a reference to the row. Is there anything to unify here, or
    are they independent?
+
+## 12. Known defect: `ordinal` before the first row
+
+On this branch, an `ordinal` in a nested query's `take` or `skip`
+count, or in a `union`/`except`/`intersect` operand, crashes:
+
+```sml
+from x in [1,2] yield (from k in [10,20,30] take ordinal);
+> java.lang.NullPointerException
+from x in [1,2] yield (from k in [10,20] union [ordinal]);
+> java.lang.NullPointerException
+```
+
+Before this work they returned answers -- `[[],[10]]` and
+`[[10,20,0],[10,20,1]]` -- using the *enclosing* row's ordinal, which
+is the right reading: those expressions are evaluated once per
+execution of the nested query, hence once per row of the enclosing
+step (§3a).
+
+The lookahead in §4 descends into a nested query only through its first
+`Scan`'s extent, so it does not see these, and the step that should
+materialize the field does not. Extending the lookahead is necessary
+but not sufficient: `Resolver` resolves these expressions with
+`withEnv(env)`, which excludes the query's bindings, so a reference to
+the materialized field is not in scope there and evaluates to null.
+
+Two ways out:
+
+* **Reject.** `take ordinal` at the top level is already an error
+  ("'ordinal' is only valid in a query"); it passes inside a nested
+  query only because the enclosing `current` is in scope. Making the
+  rule uniform -- `ordinal` is valid only where a row exists -- is the
+  smaller change and arguably what the type rule already means.
+* **Carry the field.** Put the materialized field in the query's root
+  environment so these expressions can read it, preserving the answers
+  that exist today.
+
+The first is recommended. Either way it needs tests for all five
+positions.
