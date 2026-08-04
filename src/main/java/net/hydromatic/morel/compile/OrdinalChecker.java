@@ -26,30 +26,25 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Visitor;
 
 /**
- * Validates that calls to {@code ordinal} occur only where they can be
- * evaluated exactly once per input row.
+ * Validates that calls to {@code ordinal} occur only in a {@link Core.Yield}.
  *
- * <p>Two rules:
+ * <p>A "yield" is evaluated exactly once per input row, and the increment is
+ * attached to the step, not to the call. So a "yield" may contain any number of
+ * calls -- they all read the one counter, and all see the same value -- but a
+ * call anywhere else would read a counter that nothing advances. A "where"
+ * condition, an "order" key, a "group" key, an aggregate argument, and a "take"
+ * or "skip" count all read a field that an earlier "yield" materialized.
  *
- * <ol>
- *   <li>A call may occur only in the expression of a {@link Core.Yield}. A
- *       "where" condition, an "order" key, a "group" key, an aggregate
- *       argument, a "take" or "skip" count all read a field that an earlier
- *       "yield" materialized.
- *   <li>At most one call per {@code Yield}. One call, one increment, one field
- *       per row.
- * </ol>
- *
- * <p>The rules are what make the ordinal a field: exactly one step produces it,
- * exactly once per row, and everything downstream reads the binding. They are
- * not enforced by construction -- a call is an ordinary expression, so a pass
- * that hoists, duplicates, merges or inlines a yield's expression could break
- * them -- which is why they are checked.
+ * <p>The rule is not enforced by construction, because a call is an ordinary
+ * expression that a pass could hoist out of the step it belongs to, which is
+ * why it is checked. Merging, inlining or duplicating expressions within a
+ * "yield" is safe and needs no check: a second call is a second read of the
+ * same counter.
  */
 public class OrdinalChecker {
   private OrdinalChecker() {}
 
-  /** Validates a node, throwing if either rule is broken. */
+  /** Validates a node, throwing if the rule is broken. */
   public static void check(AstNode node) {
     node.accept(
         new Visitor() {
@@ -67,16 +62,9 @@ public class OrdinalChecker {
    * the walk reaches it.
    */
   private static void checkStep(Core.FromStep step) {
-    final int count = ordinalCount(step);
-    if (step.op == Op.YIELD) {
+    if (step.op != Op.YIELD) {
       verify(
-          count <= 1,
-          "'ordinal' occurs %s times in one yield: %s",
-          count,
-          step);
-    } else {
-      verify(
-          count == 0,
+          ordinalCount(step) == 0,
           "'ordinal' occurs outside a yield, in %s: %s",
           step.op,
           step);

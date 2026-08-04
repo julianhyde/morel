@@ -129,30 +129,37 @@ from e in emps
 `ordinal` stays what it is today in Core — the nullary call
 `$ordinal ()`, an application of `BuiltIn.Z_ORDINAL`. There is no new
 slot on `Core.Yield` and no new node type. What changes is *where the
-call is allowed to be*, expressed as two validation rules:
+call is allowed to be*, expressed as one validation rule:
 
-1. **`$ordinal ()` may appear only in the expression of a `Yield`**
-   (the `Project` operator). Not in a `where` condition, an `order`
-   key, a `group` key, an aggregate argument, a `take` or `skip`
-   count, or a function body. Those all read a field instead.
-2. **At most once per `Yield`.** One call, one increment, one field
-   per row.
+**`$ordinal ()` may appear only in the expression of a `Yield`** (the
+`Project` operator). Not in a `where` condition, an `order` key, a
+`group` key, an aggregate argument, or a `take` or `skip` count.
+Those all read a field instead.
 
-Both are checkable by a walk over Core, and phase 1 adds that check —
-in `Core` validation, or as a `checkArgument` where a `From` is built.
-The rules are what make the ordinal a field: exactly one Project
-produces it, exactly once per row, and everything downstream reads the
-resulting binding.
+A `Yield` may contain any number of calls. The increment belongs to
+the step, not to the call: the step is evaluated exactly once per
+input row, and every call in it reads the same counter and sees the
+same value. Only the *position* matters, which is what the rule
+constrains.
+
+That last point is deliberate, and was a correction. An earlier draft
+also required at most one call per `Yield`, on the grounds that two
+calls would run two generators. They do not — `OrdinalIncCode` wraps
+the whole row expression — and the extra rule would have made a legal
+optimization illegal: merging two yields, inlining a `let`, or
+duplicating a subexpression can each put a second call in one project
+without changing what the query means. A rule that rejects correct
+Core is worse than no rule.
 
 `group` shows why the reader must often be a different step from the
 producer, and is already implemented that way. Its keys are evaluated
 once per input row but its aggregate arguments are evaluated after
 grouping, when row position is gone, so `groupOverOrdinal` prefixes
 the step with a `yield` that materializes the ordinal and rewrites
-both keys and arguments to read it. Under rule 1 that stops being a
+both keys and arguments to read it. Under this rule that stops being a
 special case and becomes what every step does.
 
-### What rule 2 does and does not buy
+### Where the increment lives
 
 The two forms that look problematic behave, today, like this:
 
@@ -160,30 +167,25 @@ The two forms that look problematic behave, today, like this:
 from i in [10,20,30] yield {a = ordinal, b = ordinal};
 > val it = [{a=0,b=0},{a=1,b=1},{a=2,b=2}] : {a:int, b:int} list
 
-from i in [10,20,30] yield (if i > 15 then ordinal else ~1);
-> val it = [~1,1,2] : int list
+from i in [10,11,20,21,30]
+  yield (if i mod 10 = 0 then ordinal else ~1);
+> val it = [0,~1,2,~1,4] : int list
 ```
 
-Note the second: the count advances on the row that does *not* read
-it. That is because `OrdinalIncCode` wraps the whole row expression
-rather than sitting at the use site, so the increment is per row, not
-per evaluation of the call. **The new runtime must keep that
-property** (§6) — otherwise the conditional case silently changes
-answer, and rule 2 does not protect against it, because there is only
-one use.
+Both come from the same fact: `OrdinalIncCode` wraps the whole row
+expression rather than sitting at the use site, so the increment is
+per row, not per evaluation of the call. Two calls are two reads of
+one counter, and the count advances on the rows that do not read it
+at all — note the 0, 2, 4 in the second.
 
-The first is why rule 2 is enforced by *rewriting*, not by rejecting.
-`yield {a = ordinal, b = ordinal}` is legal Morel that returns the
-natural answer, and making it an error would be a language change
-that this issue does not call for. So when a yield's expression uses
-`ordinal` more than once, `FromResolver` prefixes a generator yield
-and rewrites every use to read its field — the same mechanism as §5,
-just triggered by the count rather than by the step type. Core then
-satisfies rule 2 by construction, and the user sees no difference.
+**The new runtime must keep that property** (§6). It is what lets the
+rule be about position only, and it is not something a validation rule
+could recover: the conditional case has a single use, so no rule about
+how many calls a yield contains would protect it.
 
-Rule 2 therefore buys representational clarity and a clean Calcite
-translation (one row-number column per project), rather than counter
-correctness, which §6 provides.
+A compiled yield can still ask, once, whether its expression contains
+any call, and skip the counter entirely if not — which is what
+`compileRowMap`'s use-counter already does.
 
 ## 4. Which step an `ordinal` belongs to
 
@@ -252,8 +254,8 @@ first cut always inserts.
 The lookahead is the only new analysis. `FromBuilder.containsOrdinal`
 already does the equivalent test on Core; the new one runs on the AST,
 before the generator exists, and honors the nested-query rule of §4.
-It must also *count* uses, to trigger the rewrite that keeps rule 2
-true (§3).
+It need only answer yes or no: a step that reads `ordinal` several
+times needs one field, not several.
 
 Naming uses `typeSystem.nameGenerator`, as `groupOverOrdinal` already
 does, so the field is `o$0`, `o$1`, … and cannot collide with a user
@@ -349,14 +351,11 @@ falls back to the interpreter — the status quo); emit
   counting in `FromBuilder`. A generating yield is identifiable by
   `containsOrdinal`, so these can test for it rather than infer it.
 * **Affected — the cost of keeping `ordinal` an expression.** The
-  rules of §3 are not enforced by construction, so any pass that
-  hoists, duplicates, merges or inlines a yield's field expressions
-  can break them: merging two yields could put two calls in one
-  project (rule 2), and hoisting a field expression into a `where`
-  could move a call out of a project entirely (rule 1). This is why
-  phase 1 adds the validation walk, and why it should run in test
-  builds rather than only in assertions. `FromBuilder`'s yield-merging
-  simplification is the first place to check.
+  rule of §3 is not enforced by construction, so a pass that hoists a
+  yield's field expression into a `where` or an `order` key would move
+  a call out of the step whose increment it depends on. That is what
+  the validation walk checks. Duplicating or merging within yields is
+  safe, which is most of what the passes actually do.
 * **Affected.** `Inliner` and any pass that duplicates an expression
   must not duplicate a reference to a generated field into a different
   row scope. Since the reference is an ordinary `Core.Id`, the
@@ -387,18 +386,18 @@ so generation and the runtime change are independent commits.
    new cases in `relational.smli`; the rest of the suite passes
    unchanged, and no existing test prints a plan for a query using
    `ordinal`, so there was no `Sys.plan` output to regenerate.
-2. **Validation.** *(Done.)* `OrdinalChecker` checks the two rules of
-   §3. It runs always, not only in test builds (open question 1
-   resolved): it is one visitor pass against several inlining passes,
-   and it follows the `RefChecker` precedent. `Compiles` calls it both
-   on the Core the resolver produced and on the Core that reaches the
-   compiler, so it covers the passes that could break the rules.
+2. **Validation.** *(Done.)* `OrdinalChecker` checks the rule of §3.
+   It runs always, not only in test builds (open question 1 resolved):
+   it is one visitor pass against several inlining passes, and it
+   follows the `RefChecker` precedent. `Compiles` calls it both on the
+   Core the resolver produced and on the Core that reaches the
+   compiler, so it covers the passes that could break the rule.
 
-   Nothing in the pipeline breaks either rule today, so the check
-   earns its keep only in phases 3 and 4. Its own tests, in
-   `FromBuilderTest`, matter more than usual for that reason: a
-   checker that never fires is worthless, so there is a positive case
-   and one negative case per rule.
+   Nothing in the pipeline breaks it today, so the check earns its
+   keep only in phases 3 and 4. Its own tests, in `FromBuilderTest`,
+   matter more than usual for that reason: a checker that never fires
+   is worthless, so there is a positive case, a case with several
+   calls in one yield, and a negative case.
 3. **New runtime.** Move the counter into the yield `RowSink`; delete
    `ORDINAL_CODE`, `ordinalGet`/`ordinalInc`,
    `OrdinalGetCode`/`OrdinalIncCode`, `RowSinks.first`,

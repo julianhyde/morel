@@ -640,11 +640,13 @@ public class FromBuilderTest {
   }
 
   /**
-   * Tests that {@link OrdinalChecker} rejects two calls to "ordinal" in one
-   * "yield". Each call would advance the counter, so the two would disagree.
+   * Tests that {@link OrdinalChecker} allows several calls to "ordinal" in one
+   * "yield". The increment belongs to the step, not to the call, so the calls
+   * are reads of one counter and all see the same value; merging, inlining or
+   * duplicating expressions within a "yield" is therefore safe.
    */
   @Test
-  void testOrdinalCheckerRejectsTwoCallsInOneYield() {
+  void testOrdinalCheckerAllowsSeveralCallsInOneYield() {
     // from i in [1, 2] yield {a = ordinal, b = ordinal}
     final Fixture f = new Fixture();
     final FromBuilder fromBuilder = f.fromBuilder();
@@ -656,11 +658,11 @@ public class FromBuilderTest {
         .yield_(core.record(f.typeSystem, nameExps));
 
     final Core.From from = fromBuilder.build();
-    final VerifyException e =
-        assertThrows(VerifyException.class, () -> OrdinalChecker.check(from));
     assertThat(
-        e.getMessage(),
-        containsString("'ordinal' occurs 2 times in one yield"));
+        from,
+        hasToString(
+            "from i in [1, 2] yield {a = $ordinal (), b = $ordinal ()}"));
+    OrdinalChecker.check(from);
   }
 }
 
