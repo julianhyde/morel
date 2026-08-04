@@ -206,10 +206,10 @@ expression evaluated once per row. Stated as a rule over the AST:
   see the ordinal of the **left** row, that is, of the row arriving at
   the step. The condition is evaluated once per candidate pair, so it
   is the one place where the rate of evaluation and the ordinal
-  disagree. Decided for now; see `issue-ordinal-on-clause.md` for the
-  follow-up that changes the condition (only) to the ordinal of the
-  candidate pair. The extent expression keeps the left ordinal either
-  way, because no pair has been formed when it is evaluated.
+  disagree. Decided for now; #435 is the follow-up that changes the
+  condition (only) to the ordinal of the candidate pair. The extent
+  expression keeps the left ordinal either way, because no pair has
+  been formed when it is evaluated.
 
 This is the existing behavior, and `relational.smli` pins it: the
 nested-query case gives `[{i=10,js=[10,11]},{i=20,js=[21,22]},…]`,
