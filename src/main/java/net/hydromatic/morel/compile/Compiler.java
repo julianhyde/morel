@@ -1009,23 +1009,25 @@ public class Compiler {
         final Core.Yield yield = (Core.Yield) firstStep;
         final ImmutableMap<String, Binding> yieldAllScope =
             shadowMerge(allScope2, firstStep.env.bindings);
+        // Counts the reads of the row ordinal while compiling, then holds it
+        // while evaluating. Exactly one of the branches below uses it, and
+        // passes it to the sink only if something read it.
+        final int[] slots = {0};
         if (steps.size() == 1) {
           // Last step. Use a Collect row sink, and we're done.
           // Note that we don't use nextFactory.
-          final int[] slots = {0};
           final Code yieldCode = compileRow(cx, yield.exp, slots);
-          final int @Nullable [] ordinalSlots = slots[0] == 0 ? null : slots;
-          return () -> RowSinks.collect(yieldCode, ordinalSlots);
+          final int @Nullable [] liveSlots = slots[0] == 0 ? null : slots;
+          return () -> RowSinks.collect(yieldCode, liveSlots);
         }
         if (yield.exp instanceof Core.Tuple) {
           final Core.Tuple tuple = (Core.Tuple) yield.exp;
           final RecordLikeType recordType = tuple.type();
           if (Binding.matchesFields(yield.env.bindings, recordType)) {
-            final int[] slots = {0};
             final Map<String, Code> codeMap =
                 compileRowMap(
                     cx, Pair.zip(recordType.argNames(), tuple.args), slots);
-            final int @Nullable [] ordinalSlots = slots[0] == 0 ? null : slots;
+            final int @Nullable [] liveSlots = slots[0] == 0 ? null : slots;
             // Extend layout: assign yield output vars to stack slots in the
             // same order as codeMap.keySet() (alphabetical) so that the push
             // order in YieldRowSink.accept(Stack) matches the slot indices.
@@ -1040,14 +1042,13 @@ public class Compiler {
                     skip(steps),
                     elementType);
             return () ->
-                RowSinks.yield(codeMap, ordinalSlots, yieldNextFactory.get());
+                RowSinks.yield(codeMap, liveSlots, yieldNextFactory.get());
           }
         }
         final Binding binding = yield.env.bindings.get(0);
-        final int[] slots1 = {0};
         Map<String, Code> codeMap =
-            compileRowMap(cx, PairList.of(binding.id.name, yield.exp), slots1);
-        final int @Nullable [] ordinalSlots1 = slots1[0] == 0 ? null : slots1;
+            compileRowMap(cx, PairList.of(binding.id.name, yield.exp), slots);
+        final int @Nullable [] liveSlots = slots[0] == 0 ? null : slots;
         // Single yield output var: extend layout with one more stack slot.
         final Context cxYield =
             yieldContext(cx, firstStep.env.bindings, codeMap.keySet());
@@ -1059,8 +1060,7 @@ public class Compiler {
                 firstStep.env,
                 skip(steps),
                 elementType);
-        return () ->
-            RowSinks.yield(codeMap, ordinalSlots1, yieldNextFactory.get());
+        return () -> RowSinks.yield(codeMap, liveSlots, yieldNextFactory.get());
 
       case ORDER:
         return compileOrderSink(
