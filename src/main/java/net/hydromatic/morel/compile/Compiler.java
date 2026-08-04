@@ -279,8 +279,14 @@ public class Compiler {
       this.ordinalSlots = ordinalSlots;
     }
 
-    /** Returns a copy of this context with a row-ordinal counter. */
-    Context withOrdinalSlots(int[] ordinalSlots) {
+    /**
+     * Returns a copy of this context with a row-ordinal counter, or without one
+     * if {@code ordinalSlots} is null.
+     */
+    Context withOrdinalSlots(int @Nullable [] ordinalSlots) {
+      if (ordinalSlots == this.ordinalSlots) {
+        return this;
+      }
       return new Context(
           env, layout, localDepth, globalSlotMap, recPeers, ordinalSlots);
     }
@@ -1825,9 +1831,13 @@ public class Compiler {
       final List<Binding> bindings = new ArrayList<>();
       Compiles.acceptBinding(typeSystem, match.pat, bindings);
       // Fresh context: no globalSlotMap, no recPeers (nested closures start
-      // a new scope).
+      // a new scope). The row-ordinal counter is inherited: a match list in
+      // the expression of a "yield" -- an "if", for instance -- is evaluated
+      // while that row is current, so a call to 'ordinal' in an arm reads the
+      // yield's counter.
       final Context innerCx =
-          new Context(cx.env.bindAll(bindings), innerLayout, depth);
+          new Context(cx.env.bindAll(bindings), innerLayout, depth)
+              .withOrdinalSlots(cx.ordinalSlots);
 
       final Code bodyCode =
           tailPos
