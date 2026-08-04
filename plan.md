@@ -342,10 +342,27 @@ falls back to the interpreter — the status quo); emit
 
 ## 8. Optimizations enabled and affected
 
-* **Enabled.** `FromBuilder.scan` can drop the `!containsOrdinal(exp)`
-  guard. Once the subquery's ordinal is a materialized field, merging
-  its scan into the enclosing loop is safe, because the field carries
-  the inner count.
+* **Not enabled after all.** This section claimed `FromBuilder.scan`
+  could drop its `!containsOrdinal(exp)` guard, on the grounds that
+  once the subquery's ordinal is a materialized field, merging its
+  scan into the enclosing loop is safe because the field carries the
+  inner count. That is wrong on both counts, and dropping the guard
+  miscompiles: `from j in (from k in ["a","b","c"] where ordinal < 2)`
+  throws `ClassCastException`.
+
+  The field does not carry anything, because the step that *computes*
+  it is spliced along with the rest. Inlining drops the subquery's
+  trailing `yield` (`skipLast`) and rebuilds the projection from the
+  surviving bindings -- which, after phase 1, include the generated
+  ordinal field, so the field leaks into the result and its type no
+  longer matches. And where the enclosing builder already has bindings,
+  merging multiplies the rows the counting `yield` sees, so the count
+  would change even if the projection were right.
+
+  The guard is therefore semantic, not an artifact of the old
+  implementation. It covers the case `safeToInline` does not: the
+  subquery as the *first* step, where there is no join multiplication
+  and inlining otherwise looks safe.
 * **Affected.** An inserted `yield` perturbs anything that pattern
   matches on step shape: `isSimplePat`, `safeToInline`, and the step
   counting in `FromBuilder`. A generating yield is identifiable by
@@ -440,9 +457,13 @@ so generation and the runtime change are independent commits.
    cannot disturb an outer one.
 4. **Let a reading `yield` hold the call** (§5), so the common
    `yield {ordinal, e.name}` costs no extra step.
-5. **Re-enable subquery inlining** — drop the `containsOrdinal` guard
-   in `FromBuilder.scan`, and fix whatever step-shape matching an
-   inserted `yield` disturbs.
+5. **Re-enable subquery inlining** — *abandoned as specified.* Dropping
+   the `containsOrdinal` guard in `FromBuilder.scan` miscompiles; see
+   §8. Making inlining work would mean teaching it about the generated
+   field: keep the subquery's drop-`yield` rather than skipping it, or
+   re-materialize after the merge. That is a real piece of work on
+   `FromBuilder`'s inlining, not a guard removal, and it is worth doing
+   only if inlining a subquery that uses `ordinal` is worth having.
 6. **Calcite** (optional, §7).
 
 Phases 1–3 are the issue; 4–6 are the payoff and can land separately.
