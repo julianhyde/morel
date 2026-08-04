@@ -386,7 +386,8 @@ so generation and the runtime change are independent commits.
    new cases in `relational.smli`; the rest of the suite passes
    unchanged, and no existing test prints a plan for a query using
    `ordinal`, so there was no `Sys.plan` output to regenerate.
-2. **Validation.** *(Done.)* `OrdinalChecker` checks the rule of §3.
+2. **Validation.** *(Done, and superseded by phase 3.)* `OrdinalChecker`
+   checks the rule of §3.
    It runs always, not only in test builds (open question 1 resolved):
    it is one visitor pass against several inlining passes, and it
    follows the `RefChecker` precedent. `Compiles` calls it both on the
@@ -398,10 +399,35 @@ so generation and the runtime change are independent commits.
    matter more than usual for that reason: a checker that never fires
    is worthless, so there is a positive case, a case with several
    calls in one yield, and a negative case.
-3. **New runtime.** Move the counter into the yield `RowSink`; delete
-   `ORDINAL_CODE`, `ordinalGet`/`ordinalInc`,
-   `OrdinalGetCode`/`OrdinalIncCode`, `RowSinks.first`,
+
+   It was worth landing even though phase 3 deletes it: it pinned the
+   rule while the representation was still settling, and its
+   nested-query test is what showed the attribution was wrong.
+3. **New runtime, and the check moves into it.** Move the counter into
+   the yield `RowSink`; delete `ORDINAL_CODE`, `ordinalGet` /
+   `ordinalInc`, `OrdinalGetCode` / `OrdinalIncCode`, `RowSinks.first`,
    `FirstRowSink` and `Describer.addStartAction`.
+
+   The compiler tracks, per step, whether the step referenced the
+   ordinal. After compiling a step: if it did and the step is not a
+   `yield`, throw; if it is a `yield`, that is the flag saying the sink
+   must maintain a counter, and a yield that did not reference it pays
+   nothing.
+
+   This subsumes phase 2, so `OrdinalChecker` is **deleted** here and
+   its tests become tests of the compiler's error. Two reasons it is
+   the better home. It gets §4's attribution right by construction --
+   while compiling a nested query's scan expression inside a yield's
+   row expression, the counter in scope simply *is* the yield's, which
+   is the rule both hand-written checkers had to encode and one of them
+   got backwards. And it cannot be bypassed: `Compiles` had to call the
+   checker at two points, whereas every query reaches the compiler.
+
+   What the compiler must *not* do is what it does today.
+   `ORDINAL_CODE` is a `TryThreadLocal.withInitial(() -> new int[] {0})`,
+   so a call that finds no counter is silently handed a fresh one. That
+   default is why problem 6 in §2 went unnoticed. Absence of a counter
+   has to be an error.
 4. **Let a reading `yield` hold the call** (§5), so the common
    `yield {ordinal, e.name}` costs no extra step.
 5. **Re-enable subquery inlining** — drop the `containsOrdinal` guard
