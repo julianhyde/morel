@@ -781,18 +781,50 @@ ordered step}, plus a subquery nested in a root position (invalid at
 the top level, valid under a row). The unordered cases are the
 regression guard for a check that had never fired.
 
-### A cleaner mechanism, not taken
+### The mechanism, second time
 
 `current` needed no attribution work at all: it resolves through the
 type environment, and the root sites already deduce in `p.rootEnv`,
 which still holds the *enclosing* binding. That is the whole rule,
-expressed by the environment. `ordinal` needs `withoutStep` only
-because it resolves through `stepStack` instead, with the ordering
-check deferred to a `validations` closure.
+expressed by the environment. `ordinal` needed `withoutStep` only
+because it resolved through `stepStack` instead.
 
-Binding `ordinal` in the environment alongside `Z_CURRENT` -- with a
-sentinel type where it is invalid, one for "not in a query" and one for
-"unordered step" -- would make both checks ordinary type errors and let
-`withoutStep`, the `stepStack` lookup in `deduceOrdinalType`, and the
-deferred validation all be deleted. The tests above pin the behavior
-either way.
+So `Triple.of` now binds `ordinal` beside `current`. What it binds is
+not the type -- always `int` -- but the collection whose rows the
+occurrence counts. A literal sentinel type for the invalid cases is not
+available: "not in a query" is already absence from the environment,
+but "unordered" cannot be decided when the binding is made, because a
+scan's collection may still be a type variable. The deferred check
+stays; it is now keyed off what the environment returned rather than
+off a captured step.
+
+That deleted `stepStack`, `withoutStep`, `deduceRootExpType`, the eight
+call sites, the scan's `root` flag and the `into` method extracted only
+to be wrapped -- 39 lines net, and one mechanism where there were two.
+A `union`, `except` or `intersect` now rebinds, so a later step counts
+what the set operation produced.
+
+### Retiring the resolver's lookahead: measured, not done
+
+`Resolver.usesOrdinal` and `isRootStep` are 47 code lines that re-derive
+over the AST what the type resolver knows. Removing them was the larger
+prize on paper. Measured, it is not:
+
+* The environment tells `deduceOrdinalType` which *query level* an
+  occurrence belongs to, but not which *step* of that level -- and the
+  step is what has to materialize the field. Recovering it means
+  holding the step being deduced, and saving it across a nested query,
+  which is a step stack again. The mechanism moves rather than goes.
+* Consecutive steps can share one binding: `take` and `skip` pass their
+  `Triple` through unchanged, so in `from i in [1,2,3] take 2 where
+  ordinal > 0` the `take` and the `where` read the same collection
+  variable. Keying on that variable would mark the `take` as needing a
+  field -- which is exactly §12's bug. So the "which steps are root"
+  knowledge does not disappear either.
+* The set would have to reach `Resolver` through `TypeMap`, keyed on
+  the *rewritten* step nodes. `deduceScanStepType` already carries a
+  comment about registering rewritten nodes because someone was bitten
+  by that identity; a second such channel is a poor trade.
+
+Net: about −15 lines, one more cross-pass map, and a new identity
+coupling. Left alone.
