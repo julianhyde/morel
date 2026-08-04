@@ -226,19 +226,10 @@ public class Compiler {
      */
     final ImmutableList<Core.NamedPat> recPeers;
 
-    /**
-     * The row-ordinal counter of the enclosing "yield", or null if there is
-     * none.
-     *
-     * <p>A call to {@code ordinal} compiles to a read of this counter, so a
-     * call compiled in a context that has none is an error: it would have
-     * nothing to count. Only a "yield" installs one, which is what confines
-     * calls to a "yield" -- and because a context is threaded into nested
-     * compilation, a nested query's scan expression sees the enclosing yield's
-     * counter, which is the one its rows are positioned within.
-     */
+    /** Row-ordinal counter, or null if enclosing step is not "yield". */
     final int @Nullable [] ordinalSlots;
 
+    /** Creates a context with no stack layout; used by {@code RelContext}. */
     Context(Environment env) {
       this(env, StackLayout.EMPTY, 0, ImmutableMap.of(), ImmutableList.of());
     }
@@ -279,10 +270,7 @@ public class Compiler {
       this.ordinalSlots = ordinalSlots;
     }
 
-    /**
-     * Returns a copy of this context with a row-ordinal counter, or without one
-     * if {@code ordinalSlots} is null.
-     */
+    /** Returns a copy of this context with a given row-ordinal counter. */
     Context withOrdinalSlots(int @Nullable [] ordinalSlots) {
       if (ordinalSlots == this.ordinalSlots) {
         return this;
@@ -481,8 +469,9 @@ public class Compiler {
    * step pays nothing.
    *
    * <p>Only the expression of a "yield" may contain a call, because only a
-   * "yield" advances the counter. Elsewhere -- a scan expression, a "where"
-   * condition -- no counter is installed, and compiling a call throws.
+   * "yield" advances the counter. Elsewhere &mdash; a scan expression, a
+   * "where" condition &mdash; no counter is installed, and compiling a call
+   * throws.
    */
   public Code compileRow(
       Context cx, Core.Exp expression, int @Nullable [] ordinalSlots) {
@@ -939,7 +928,7 @@ public class Compiler {
             transformEager(sortedBindings, b -> cx.fieldCode(b.id));
         code = Codes.tuple(codes);
       }
-      return () -> RowSinks.collect(code);
+      return () -> RowSinks.collect(code, null);
     }
     final Core.FromStep firstStep = steps.get(0);
     switch (firstStep.op) {
@@ -1844,7 +1833,7 @@ public class Compiler {
       Compiles.acceptBinding(typeSystem, match.pat, bindings);
       // Fresh context: no globalSlotMap, no recPeers (nested closures start
       // a new scope). The row-ordinal counter is inherited: a match list in
-      // the expression of a "yield" -- an "if", for instance -- is evaluated
+      // the expression of a "yield" - an "if", for instance - is evaluated
       // while that row is current, so a call to 'ordinal' in an arm reads the
       // yield's counter.
       final Context innerCx =

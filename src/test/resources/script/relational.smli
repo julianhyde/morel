@@ -522,10 +522,10 @@ from e in emps,
 > stdIn:1.5-1.12 Error: 'current' is only valid in a query
 >   raised at: stdIn:1.5-1.12
 
-(* The expressions that a query evaluates before its first row -- the
+(* The expressions that a query evaluates before its first row - the
  * collection that its first step scans, a 'take' or 'skip' count, the
  * operands of 'union', 'except' and 'intersect', and the function of a
- * 'through' or an 'into' -- have no row to read. *)
+ * 'through' or an 'into' - have no row to read. *)
 from i in [current];
 > stdIn:1.12-1.19 Error: 'current' is only valid in a query
 >   raised at: stdIn:1.12-1.19
@@ -841,10 +841,10 @@ from i in [10,20,30] group {m = ordinal} compute {s = sum over ordinal};
 
 (* Ordinal before the first row ----------------------------------- *)
 
-(* The expressions that a query evaluates before its first row -- the
+(* The expressions that a query evaluates before its first row - the
  * collection that its first step scans, a 'take' or 'skip' count, the
  * operands of 'union', 'except' and 'intersect', and the function of a
- * 'through' or an 'into' -- have no row to read. *)
+ * 'through' or an 'into' - have no row to read. *)
 from i in [ordinal];
 > stdIn:1.12-1.19 Error: 'ordinal' is only valid in a query
 >   raised at: stdIn:1.12-1.19

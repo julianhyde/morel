@@ -96,11 +96,11 @@ public class Resolver {
    * The field that holds the ordinal of the current row, if the step being
    * resolved reads {@code ordinal}.
    *
-   * <p>A step cannot compute its own ordinal -- only a "yield" evaluates an
-   * expression exactly once per input row -- so the step is preceded by a
-   * "yield" that materializes the ordinal as a field, and references to {@code
-   * ordinal} resolve to this pattern. Null if the step does not read {@code
-   * ordinal}.
+   * <p>A step cannot compute its own ordinal &mdash; only a "yield" evaluates
+   * an expression exactly once per input row &mdash; so the step is preceded by
+   * a "yield" that materializes the ordinal as a field, and references to
+   * {@code ordinal} resolve to this pattern. Null if the step does not read
+   * {@code ordinal}.
    *
    * <p>Propagates into sub-resolvers, and therefore into a nested query. That
    * is deliberate: in
@@ -1872,8 +1872,8 @@ public class Resolver {
       }
       if (step instanceof Ast.Yield) {
         // A "yield" is evaluated once per input row, so it can hold the call
-        // itself and needs no field. This is the common case --
-        // 'yield {ordinal, e.name}' -- and it costs no extra step.
+        // itself and needs no field. This is the common case -
+        // 'yield {ordinal, e.name}' - and it costs no extra step.
         accept(step);
         return;
       }

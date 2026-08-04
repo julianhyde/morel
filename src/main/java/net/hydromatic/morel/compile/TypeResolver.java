@@ -1251,7 +1251,7 @@ public class TypeResolver {
    * rows the occurrence counts, put there by the step that produced it (see
    * {@link Triple#of}). Reading it here is what decides which step an {@code
    * ordinal} belongs to, and the collection must be ordered for it to mean
-   * anything -- which is not known until the types are resolved.
+   * anything &mdash; which is not known until the types are resolved.
    */
   private Ast.Exp deduceOrdinalType(
       TypeEnv env, Ast.Ordinal ordinal, Variable v) {
@@ -1472,8 +1472,8 @@ public class TypeResolver {
             deducePatType(
                 p.rootEnv, through.pat, termMap::add, null, v18, t -> t);
         final Variable v17 = toVariable(fnTerm(p.c, c18));
-        // "f" is applied to the whole collection -- 'through p in f' is
-        // 'from p in f (from ...)' -- so it is evaluated before the query's
+        // "f" is applied to the whole collection - 'through p in f' is
+        // 'from p in f (from ...)' - so it is evaluated before the query's
         // first row, and cannot see the query's own rows.
         final Ast.Exp throughExp = deduceExpType(p.rootEnv, through.exp, v17);
         isCollectionOf(c18, v18);
@@ -1616,8 +1616,8 @@ public class TypeResolver {
     // once per candidate pair: an 'ordinal' in it counts pairs, so this is the
     // collection whose orderedness decides whether it means anything. (Both
     // inputs must be ordered for the pairs to be.) An 'ordinal' in the extent
-    // still counts input rows -- no pair exists when the extent is evaluated
-    // -- and reads the binding the previous step left.
+    // still counts input rows, reading the binding the previous step left; no
+    // pair exists when the extent is evaluated.
     final Variable c = unifier.variable();
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
@@ -5369,7 +5369,7 @@ public class TypeResolver {
      * <p>Binding them here is what attributes an occurrence to a step. An
      * expression evaluated before a query's first row is deduced in {@link
      * #rootEnv}, which no step of this query has touched, so it reads the
-     * bindings the <i>enclosing</i> step left -- which is the rule.
+     * bindings the <i>enclosing</i> step left &mdash; which is the rule.
      */
     static Triple of(TypeEnv rootEnv, TypeEnv env, Variable v, Variable c) {
       return new Triple(
@@ -5378,10 +5378,6 @@ public class TypeResolver {
               .bind(BuiltIn.Z_ORDINAL.mlName, c),
           v,
           c);
-    }
-
-    Triple withV(Variable v) {
-      return v == this.v ? this : new Triple(rootEnv, env, v, c);
     }
 
     Triple withEnv(TypeEnv env) {
