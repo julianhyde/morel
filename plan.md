@@ -42,29 +42,34 @@ Done:
   condition used to read a counter nothing advanced (§2.6).
 * **Phase 2** -- `OrdinalChecker`, since deleted by phase 3.
 * **Phase 3** -- the counter travels in `Compiler.Context`;
-  `ORDINAL_CODE` deleted; only a `yield` installs a counter, so a call
-  anywhere else throws at compile time; the reset moved into
+  `ORDINAL_CODE` deleted; only a `yield` installs a counter (and, since
+  #435, a scan with an `ordinal` in its condition), so a call anywhere
+  else throws at compile time; the reset moved into
   `RowSink.start`, deleting `RowSinks.first`, `FirstRowSink` and
   `Describer.addStartAction`.
 * **Phase 4** -- a reading `yield` holds the call, so
   `yield {ordinal, e.name}` costs no extra step. Required inheriting
   the counter into match-list arms (`compileMatchListImpl`).
+* **§12** -- `ordinal` and `current` in an expression evaluated before
+  a query's first row read the *enclosing* row. The eight root
+  positions are tested for both keywords, at the top level and in a
+  subquery of an ordered and of an unordered step. The alternative,
+  rejecting them everywhere, is recorded in #436, which stays open for
+  the abstract traversal it also proposes.
+* **#435** -- `ordinal` in a join's `on` condition counts candidate
+  pairs, continuously across the join, and is valid only if both sides
+  are ordered. See §4.
+* **Attribution** -- `ordinal` resolves through the type environment,
+  as `current` always did, so `stepStack` is gone and the root
+  positions need no special handling.
 
 Not done:
 
 * **Phase 5** -- abandoned as specified; dropping the
   `containsOrdinal` guard miscompiles. See §8.
 * **Phase 6** -- Calcite. Untouched, still optional.
-* **§12** -- a regression on this branch: `ordinal` before a nested
-  query's first row. Fix this before anything else.
 
-Issues: #435 (ordinal in a join's `on` condition) is filed.
-`issue-ordinal-before-first-row.md` is drafted and unfiled; it covers
-the language question behind §12.
-
-Suggested order for the next session: decide the §12 rule (reject, or
-carry the field), implement it with the traversal of §3a, add tests for
-all five positions, then reconsider phases 5 and 6.
+Next: phases 5 and 6, if they are wanted at all.
 
 ## 1. How `ordinal` works today
 
@@ -285,14 +290,20 @@ expression evaluated once per row. Stated as a rule over the AST:
   query, it belongs to that inner step.
 * An `ordinal` with no enclosing step is an error, which is why
   `from i in [ordinal, ordinal + 1]` is rejected today.
-* In a join step, both the extent expression and the `on` condition
-  see the ordinal of the **left** row, that is, of the row arriving at
-  the step. The condition is evaluated once per candidate pair, so it
-  is the one place where the rate of evaluation and the ordinal
-  disagree. Decided for now; #435 is the follow-up that changes the
-  condition (only) to the ordinal of the candidate pair. The extent
-  expression keeps the left ordinal either way, because no pair has
-  been formed when it is evaluated.
+* In a join step, the extent expression sees the ordinal of the
+  **left** row -- the row arriving at the step -- because no candidate
+  pair has been formed when it is evaluated. The `on` condition sees
+  the ordinal of the candidate **pair**, counted continuously across
+  the join, because that is the rate at which it is evaluated (#435).
+  It is valid there only if both sides are ordered, since otherwise
+  the pairs are not. This is the one counter that a step other than a
+  `yield` installs: the pairs do not exist until the scan runs, so no
+  preceding step could materialize the value as a field. It also means
+  such a condition cannot be reordered or pushed down -- it depends on
+  the join's enumeration order. Nothing does that today; `FromBuilder`
+  inlines a scan only when its condition is `true`, and
+  `RangePushdown` rewrites the extent while carrying the condition
+  across unchanged.
 
 This is the existing behavior, and `relational.smli` pins it: the
 nested-query case gives `[{i=10,js=[10,11]},{i=20,js=[21,22]},…]`,
