@@ -387,9 +387,18 @@ so generation and the runtime change are independent commits.
    new cases in `relational.smli`; the rest of the suite passes
    unchanged, and no existing test prints a plan for a query using
    `ordinal`, so there was no `Sys.plan` output to regenerate.
-2. **Validation.** Add the walk that checks the two rules of §3, and
-   run it in test builds. It is worth landing separately, immediately
-   after phase 1, so it is in place before the runtime moves under it.
+2. **Validation.** *(Done.)* `OrdinalChecker` checks the two rules of
+   §3. It runs always, not only in test builds (open question 1
+   resolved): it is one visitor pass against several inlining passes,
+   and it follows the `RefChecker` precedent. `Compiles` calls it both
+   on the Core the resolver produced and on the Core that reaches the
+   compiler, so it covers the passes that could break the rules.
+
+   Nothing in the pipeline breaks either rule today, so the check
+   earns its keep only in phases 3 and 4. Its own tests, in
+   `FromBuilderTest`, matter more than usual for that reason: a
+   checker that never fires is worthless, so there is a positive case
+   and one negative case per rule.
 3. **New runtime.** Move the counter into the yield `RowSink`; delete
    `ORDINAL_CODE`, `ordinalGet`/`ordinalInc`,
    `OrdinalGetCode`/`OrdinalIncCode`, `RowSinks.first`,
@@ -456,30 +465,34 @@ New cases to add:
 * Negative tests for the validation walk (§3): hand-built Core with
   two calls in one project, or a call outside a project, must be
   rejected. These guard the rules that the representation cannot
-  enforce by construction.
+  enforce by construction. *(Done, in `FromBuilderTest`.)*
 
 ## 11. Open questions
 
-1. Where does the validation walk run — always, under an assertion
-   flag, or only in tests? Always is safest but costs a walk per
-   query; test-only leaves production Core unchecked. Test builds are
-   assumed above.
-2. Which mechanism for invisibility (§5) — a flag on `Binding`, or an
-   explicit drop where the reader is converted? The flag is preferred
-   above, but it touches a shared class for one feature.
-3. Should the lookahead reuse `TypeResolver`'s knowledge? It already
+Answered while implementing phases 1 and 2:
+
+* *Where does the validation walk run?* Always — see phase 2.
+* *Which mechanism for invisibility?* Neither of the two considered.
+  A flag on `Binding` cannot work: a query's result type comes from
+  the last step's environment, so marking a binding unprojectable
+  would make the type disagree with the record the runtime builds.
+  The field has to be projected away by a step, which is
+  `FromBuilder.dropOrdinal`.
+* *Does `ordinal` in a `take` or `skip` count expression mean
+  anything?* It is already rejected — `'ordinal' is only valid in a
+  query` — as is an `ordinal` in a query's first step. So the
+  `toCore(Ast.Ordinal)` fallback that builds a bare call is
+  unreachable, and phase 3 can delete it rather than preserve it.
+
+Still open:
+
+1. Should the lookahead reuse `TypeResolver`'s knowledge? It already
    knows, in `deduceOrdinalType`, which step an `ordinal` belongs to,
    and could record it for the resolver — but the AST is rewritten
    between the two passes, so the recorded node may not be the one the
    resolver visits, and the attribution differs in the nested case
-   (§4). An independent lookahead in `FromResolver` is assumed.
-4. Does an `ordinal` in a `take` or `skip` *count expression* have a
-   meaning? Those expressions are evaluated once per query, in the
-   root environment (see `Triple.rootEnv`), not once per row, so there
-   is no row to be positioned within. Confirm the current behavior and
-   reject it explicitly if it is not already rejected. (This is only
-   about the count expression. The row counting the operators do to
-   implement themselves is private and stays as it is.)
-5. `current` has a similar "only valid in a query" flavor but is
+   (§4). An independent lookahead in `FromResolver` is what phase 1
+   did.
+2. `current` has a similar "only valid in a query" flavor but is
    already a reference to the row. Is there anything to unify here, or
    are they independent?
