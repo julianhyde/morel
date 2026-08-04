@@ -619,6 +619,30 @@ public class FromBuilderTest {
   }
 
   /**
+   * Tests that {@link OrdinalChecker} allows a call to "ordinal" in the
+   * expression that a nested query scans, when the enclosing step is a "yield".
+   * That expression is evaluated once per row of the enclosing step, so the
+   * call belongs to that step, not to the nested query.
+   */
+  @Test
+  void testOrdinalCheckerAllowsCallInNestedScan() {
+    // from i in [1, 2] yield {js = (from j in [ordinal])}
+    final Fixture f = new Fixture();
+    final FromBuilder inner = f.fromBuilder();
+    inner.scan(f.jPat, core.list(f.typeSystem, f.ordinalExp()));
+    final Core.From innerFrom = inner.build();
+
+    final FromBuilder outer = f.fromBuilder();
+    outer.scan(f.iPat, f.list12);
+    final PairList<String, Core.Exp> nameExps = PairList.of();
+    nameExps.add("js", innerFrom);
+    outer.yield_(core.record(f.typeSystem, nameExps));
+
+    final Core.From from = outer.build();
+    OrdinalChecker.check(from);
+  }
+
+  /**
    * Tests that {@link OrdinalChecker} rejects a call to "ordinal" outside a
    * "yield". Such a call is evaluated at a rate that is not one per input row,
    * so it cannot be a row ordinal.

@@ -1907,6 +1907,9 @@ public class Resolver {
      *
      * <p>A step that reads {@code ordinal} several times needs one field, not
      * several, so the answer is yes or no rather than a count.
+     *
+     * <p>{@link OrdinalChecker} applies the same rule to Core, to validate what
+     * this produces. The two must agree.
      */
     private boolean usesOrdinal(Ast.FromStep step) {
       final AtomicBoolean b = new AtomicBoolean();

@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Verify.verify;
+import static net.hydromatic.morel.util.Ord.forEachIndexed;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hydromatic.morel.ast.AstNode;
@@ -51,21 +52,17 @@ public class OrdinalChecker {
         new Visitor() {
           @Override
           protected void visit(Core.From from) {
-            from.steps.forEach(OrdinalChecker::checkStep);
+            forEachIndexed(from.steps, (step, i) -> checkStep(step, i == 0));
             super.visit(from);
           }
         });
   }
 
-  /**
-   * Validates one step. Considers only the calls that belong to this step; a
-   * call inside a nested query belongs to a step of that query, and is checked
-   * when the walk reaches it.
-   */
-  private static void checkStep(Core.FromStep step) {
+  /** Validates one step. */
+  private static void checkStep(Core.FromStep step, boolean first) {
     if (step.op != Op.YIELD) {
       verify(
-          !usesOrdinal(step),
+          !usesOrdinal(step, first),
           "'ordinal' occurs outside a yield, in %s: %s",
           step.op,
           step);
@@ -73,12 +70,30 @@ public class OrdinalChecker {
   }
 
   /**
-   * Returns whether a step calls {@code ordinal}, not descending into a nested
-   * query.
+   * Returns whether a step calls {@code ordinal}.
+   *
+   * <p>Counts the calls that belong to this step, which is not the same as the
+   * calls that occur within it. A call belongs to the innermost step whose
+   * input row it is positioned within, so:
+   *
+   * <ul>
+   *   <li>A call inside a nested query counts here only if it is in the
+   *       expression the nested query scans, because that expression is
+   *       evaluated once per row of <i>this</i> step. Calls in the nested
+   *       query's later steps belong to those steps.
+   *   <li>Conversely, if this step is the first of its query, a call in the
+   *       expression it scans belongs to the enclosing step, and does not count
+   *       here. (In a query that is not nested, such a call is rejected
+   *       earlier, by {@code TypeResolver}.)
+   * </ul>
+   *
+   * <p>This is the same rule that {@code Resolver.FromResolver.usesOrdinal}
+   * applies to the AST, when deciding which step must materialize the field.
+   * The two must agree: this one validates what that one produces.
    */
-  private static boolean usesOrdinal(Core.FromStep step) {
+  private static boolean usesOrdinal(Core.FromStep step, boolean first) {
     final AtomicBoolean b = new AtomicBoolean();
-    step.accept(
+    final Visitor visitor =
         new Visitor() {
           @Override
           protected void visit(Core.Apply apply) {
@@ -90,9 +105,17 @@ public class OrdinalChecker {
 
           @Override
           protected void visit(Core.From from) {
-            // A nested query's steps are checked on their own terms.
+            if (!from.steps.isEmpty()
+                && from.steps.get(0) instanceof Core.Scan) {
+              ((Core.Scan) from.steps.get(0)).exp.accept(this);
+            }
           }
-        });
+        };
+    if (first && step instanceof Core.Scan) {
+      ((Core.Scan) step).condition.accept(visitor);
+    } else {
+      step.accept(visitor);
+    }
     return b.get();
   }
 }
