@@ -479,18 +479,16 @@ public class Compiler {
    * condition -- no counter is installed, and compiling a call throws.
    */
   public Code compileRow(
-      Context cx, Core.Exp expression, boolean mayContainOrdinal) {
-    if (!mayContainOrdinal) {
+      Context cx, Core.Exp expression, int @Nullable [] ordinalSlots) {
+    if (ordinalSlots == null) {
       return compile(cx, expression);
     }
-    final int[] ordinalSlots = {0};
     Code code = compile(cx.withOrdinalSlots(ordinalSlots), expression);
     if (ordinalSlots[0] == 0) {
       return code;
     }
     // The ordinal was read at least once. Wrap the expression in code that
-    // advances the counter once per row.
-    ordinalSlots[0] = -1;
+    // advances the counter once per row. The sink resets it per execution.
     return Codes.ordinalInc(ordinalSlots, code);
   }
 
@@ -499,18 +497,19 @@ public class Compiler {
    *
    * <p>If one or more of those expressions references {@code ordinal}, add a
    * wrapper around the first expression that increments the ordinal, similar to
-   * how {@link #compileRow(Context, Core.Exp, boolean)} does it.
+   * how {@link #compileRow(Context, Core.Exp, int[])} does it.
    */
   private ImmutableSortedMap<String, Code> compileRowMap(
-      Context cx, List<? extends Map.Entry<String, Core.Exp>> nameExps) {
-    final int[] ordinalSlots = {0};
+      Context cx,
+      List<? extends Map.Entry<String, Core.Exp>> nameExps,
+      int[] ordinalSlots) {
     final Context cxRow = cx.withOrdinalSlots(ordinalSlots);
     final PairList<String, Code> mapCodes = PairList.of();
     forEach(nameExps, (name, exp) -> mapCodes.add(name, compile(cxRow, exp)));
     if (ordinalSlots[0] > 0) {
       // The ordinal was read at least once. Wrap the first expression in code
-      // that advances the counter once per row.
-      ordinalSlots[0] = -1;
+      // that advances the counter once per row. The sink resets it per
+      // execution.
       final List<Code> codes = mapCodes.rightList();
       codes.set(0, Codes.ordinalInc(ordinalSlots, codes.get(0)));
     }
@@ -804,8 +803,7 @@ public class Compiler {
     Supplier<RowSink> rowSinkFactory =
         createRowSinkFactory(
             cx, Core.StepEnv.EMPTY, from.steps, from.type().elementType());
-    Supplier<RowSink> firstRowSinkFactory =
-        () -> RowSinks.first(rowSinkFactory.get());
+    Supplier<RowSink> firstRowSinkFactory = rowSinkFactory;
     return RowSinks.from(firstRowSinkFactory);
   }
 
@@ -859,7 +857,7 @@ public class Compiler {
       Core.Scan scan,
       List<Core.FromStep> steps,
       Type elementType) {
-    final Code code = compileRow(cx, scan.exp, false);
+    final Code code = compileRow(cx, scan.exp, null);
     // Extend the layout with scan variable patterns at stack slots.
     StackLayout scanLayout = cx.layout;
     int depth = cx.localDepth;
@@ -940,7 +938,7 @@ public class Compiler {
 
       case WHERE:
         final Core.Where where = (Core.Where) firstStep;
-        final Code filterCode = compileRow(cx, where.exp, false);
+        final Code filterCode = compileRow(cx, where.exp, null);
         final Supplier<RowSink> whereNextFactory =
             createRowSinkFactory(
                 cx, cxFrom, allScope2, firstStep.env, skip(steps), elementType);
@@ -1008,15 +1006,20 @@ public class Compiler {
         if (steps.size() == 1) {
           // Last step. Use a Collect row sink, and we're done.
           // Note that we don't use nextFactory.
-          final Code yieldCode = compileRow(cx, yield.exp, true);
-          return () -> RowSinks.collect(yieldCode);
+          final int[] slots = {0};
+          final Code yieldCode = compileRow(cx, yield.exp, slots);
+          final int @Nullable [] ordinalSlots = slots[0] == 0 ? null : slots;
+          return () -> RowSinks.collect(yieldCode, ordinalSlots);
         }
         if (yield.exp instanceof Core.Tuple) {
           final Core.Tuple tuple = (Core.Tuple) yield.exp;
           final RecordLikeType recordType = tuple.type();
           if (Binding.matchesFields(yield.env.bindings, recordType)) {
+            final int[] slots = {0};
             final Map<String, Code> codeMap =
-                compileRowMap(cx, Pair.zip(recordType.argNames(), tuple.args));
+                compileRowMap(
+                    cx, Pair.zip(recordType.argNames(), tuple.args), slots);
+            final int @Nullable [] ordinalSlots = slots[0] == 0 ? null : slots;
             // Extend layout: assign yield output vars to stack slots in the
             // same order as codeMap.keySet() (alphabetical) so that the push
             // order in YieldRowSink.accept(Stack) matches the slot indices.
@@ -1030,12 +1033,15 @@ public class Compiler {
                     firstStep.env,
                     skip(steps),
                     elementType);
-            return () -> RowSinks.yield(codeMap, yieldNextFactory.get());
+            return () ->
+                RowSinks.yield(codeMap, ordinalSlots, yieldNextFactory.get());
           }
         }
         final Binding binding = yield.env.bindings.get(0);
+        final int[] slots1 = {0};
         Map<String, Code> codeMap =
-            compileRowMap(cx, PairList.of(binding.id.name, yield.exp));
+            compileRowMap(cx, PairList.of(binding.id.name, yield.exp), slots1);
+        final int @Nullable [] ordinalSlots1 = slots1[0] == 0 ? null : slots1;
         // Single yield output var: extend layout with one more stack slot.
         final Context cxYield =
             yieldContext(cx, firstStep.env.bindings, codeMap.keySet());
@@ -1047,7 +1053,8 @@ public class Compiler {
                 firstStep.env,
                 skip(steps),
                 elementType);
-        return () -> RowSinks.yield(codeMap, yieldNextFactory.get());
+        return () ->
+            RowSinks.yield(codeMap, ordinalSlots1, yieldNextFactory.get());
 
       case ORDER:
         return compileOrderSink(

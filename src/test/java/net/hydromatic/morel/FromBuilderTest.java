@@ -21,11 +21,8 @@ package net.hydromatic.morel;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasToString;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableMap;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -38,7 +35,6 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
-import net.hydromatic.morel.compile.OrdinalChecker;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
@@ -596,13 +592,13 @@ public class FromBuilderTest {
   }
 
   /**
-   * Tests that {@link OrdinalChecker} accepts the shape that {@link
-   * FromBuilder#materializeOrdinal()} produces: one call to "ordinal", in a
-   * "yield", whose field later steps read.
+   * Tests the shape that {@link FromBuilder#materializeOrdinal()} produces: a
+   * call to "ordinal" in a "yield", and a later step that reads the field it
+   * binds.
    */
   @Test
-  void testOrdinalChecker() {
-    // from i in [1, 2] yield {i = i, v0 = ordinal} where v0 < 2
+  void testMaterializeOrdinal() {
+    // from i in [1, 2] yield {i = i, v$0 = ordinal} where v$0 < 2
     final Fixture f = new Fixture();
     final FromBuilder fromBuilder = f.fromBuilder();
     fromBuilder.scan(f.iPat, f.list12);
@@ -615,62 +611,16 @@ public class FromBuilderTest {
         from,
         hasToString(
             "from i in [1, 2] yield {i = i, v$0 = $ordinal ()} where v$0 < 2"));
-    OrdinalChecker.check(from);
   }
 
   /**
-   * Tests that {@link OrdinalChecker} allows a call to "ordinal" in the
-   * expression that a nested query scans, when the enclosing step is a "yield".
-   * That expression is evaluated once per row of the enclosing step, so the
-   * call belongs to that step, not to the nested query.
+   * Tests that a "yield" may contain several calls to "ordinal". The increment
+   * belongs to the step, not to the call, so the calls are reads of one counter
+   * and all see the same value; merging, inlining or duplicating expressions
+   * within a "yield" is therefore safe.
    */
   @Test
-  void testOrdinalCheckerAllowsCallInNestedScan() {
-    // from i in [1, 2] yield {js = (from j in [ordinal])}
-    final Fixture f = new Fixture();
-    final FromBuilder inner = f.fromBuilder();
-    inner.scan(f.jPat, core.list(f.typeSystem, f.ordinalExp()));
-    final Core.From innerFrom = inner.build();
-
-    final FromBuilder outer = f.fromBuilder();
-    outer.scan(f.iPat, f.list12);
-    final PairList<String, Core.Exp> nameExps = PairList.of();
-    nameExps.add("js", innerFrom);
-    outer.yield_(core.record(f.typeSystem, nameExps));
-
-    final Core.From from = outer.build();
-    OrdinalChecker.check(from);
-  }
-
-  /**
-   * Tests that {@link OrdinalChecker} rejects a call to "ordinal" outside a
-   * "yield". Such a call is evaluated at a rate that is not one per input row,
-   * so it cannot be a row ordinal.
-   */
-  @Test
-  void testOrdinalCheckerRejectsCallOutsideYield() {
-    // from i in [1, 2] where ordinal < 2
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.iPat, f.list12)
-        .where(core.lessThan(f.typeSystem, f.ordinalExp(), f.intLiteral(2)));
-
-    final Core.From from = fromBuilder.build();
-    final VerifyException e =
-        assertThrows(VerifyException.class, () -> OrdinalChecker.check(from));
-    assertThat(
-        e.getMessage(), containsString("'ordinal' occurs outside a yield"));
-  }
-
-  /**
-   * Tests that {@link OrdinalChecker} allows several calls to "ordinal" in one
-   * "yield". The increment belongs to the step, not to the call, so the calls
-   * are reads of one counter and all see the same value; merging, inlining or
-   * duplicating expressions within a "yield" is therefore safe.
-   */
-  @Test
-  void testOrdinalCheckerAllowsSeveralCallsInOneYield() {
+  void testSeveralOrdinalCallsInOneYield() {
     // from i in [1, 2] yield {a = ordinal, b = ordinal}
     final Fixture f = new Fixture();
     final FromBuilder fromBuilder = f.fromBuilder();
@@ -686,7 +636,6 @@ public class FromBuilderTest {
         from,
         hasToString(
             "from i in [1, 2] yield {a = $ordinal (), b = $ordinal ()}"));
-    OrdinalChecker.check(from);
   }
 }
 

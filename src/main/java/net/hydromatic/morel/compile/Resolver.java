@@ -788,15 +788,11 @@ public class Resolver {
   }
 
   private Core.Exp toCore(Ast.Ordinal ordinal) {
-    if (ordinalPat != null) {
-      // The step is preceded by a "yield" that materialized the ordinal as a
-      // field; read that field.
-      return core.id(ordinalPat);
-    }
-    Core.Literal fn =
-        core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_ORDINAL);
-    Core.Tuple arg = core.tuple(typeMap.typeSystem);
-    return core.apply(ordinal.pos, PrimitiveType.INT, fn, arg);
+    // The step is preceded by a "yield" that materialized the ordinal as a
+    // field; read that field. Every position that would have no field --
+    // a query's first step, a "take" or "skip" count -- is rejected by
+    // TypeResolver, so there is no other case.
+    return core.id(requireNonNull(ordinalPat, "ordinalPat"));
   }
 
   /** Converts an id in a declaration to Core. */
@@ -1908,8 +1904,9 @@ public class Resolver {
      * <p>A step that reads {@code ordinal} several times needs one field, not
      * several, so the answer is yes or no rather than a count.
      *
-     * <p>{@link OrdinalChecker} applies the same rule to Core, to validate what
-     * this produces. The two must agree.
+     * <p>The compiler applies the same rule: only a "yield" installs a
+     * row-ordinal counter, so a call compiled anywhere else has nothing to
+     * read, and throws. The two must agree.
      */
     private boolean usesOrdinal(Ast.FromStep step) {
       final AtomicBoolean b = new AtomicBoolean();
