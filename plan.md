@@ -28,6 +28,44 @@ change of representation: from mutable state hidden in the compiled
 plan to an ordinary (but invisible) field of the row, generated while
 translating AST to Core.
 
+## 0. Status
+
+Branch `434-ordinal-field`. `fullMake` green at the last commit that
+touched code (511 tests, 0 failures).
+
+Done:
+
+* **Phase 1** -- `ordinal` is materialized as a row field during
+  AST-to-Core. `Resolver.ordinalPat` carries it;
+  `FromBuilder.materializeOrdinal` / `dropOrdinal` add and remove it;
+  `groupOverOrdinal` deleted. Fixed a bug: an `order` key or scan
+  condition used to read a counter nothing advanced (§2.6).
+* **Phase 2** -- `OrdinalChecker`, since deleted by phase 3.
+* **Phase 3** -- the counter travels in `Compiler.Context`;
+  `ORDINAL_CODE` deleted; only a `yield` installs a counter, so a call
+  anywhere else throws at compile time; the reset moved into
+  `RowSink.start`, deleting `RowSinks.first`, `FirstRowSink` and
+  `Describer.addStartAction`.
+* **Phase 4** -- a reading `yield` holds the call, so
+  `yield {ordinal, e.name}` costs no extra step. Required inheriting
+  the counter into match-list arms (`compileMatchListImpl`).
+
+Not done:
+
+* **Phase 5** -- abandoned as specified; dropping the
+  `containsOrdinal` guard miscompiles. See §8.
+* **Phase 6** -- Calcite. Untouched, still optional.
+* **§12** -- a regression on this branch: `ordinal` before a nested
+  query's first row. Fix this before anything else.
+
+Issues: #435 (ordinal in a join's `on` condition) is filed.
+`issue-ordinal-before-first-row.md` is drafted and unfiled; it covers
+the language question behind §12.
+
+Suggested order for the next session: decide the §12 rule (reject, or
+carry the field), implement it with the traversal of §3a, add tests for
+all five positions, then reconsider phases 5 and 6.
+
 ## 1. How `ordinal` works today
 
 `ordinal` is a reserved word (`MorelParser.jj`) parsed as an atom into
