@@ -763,6 +763,19 @@ from i in [1,2]
 > val it = [{i=1,j=0},{i=1,j=1},{i=1,j=2},{i=2,j=0},{i=2,j=1},{i=2,j=2}]
 >   : {i:int, j:int} list
 
+(* A correlated subquery is evaluated afresh for each outer row, so its
+   ordinal restarts; here the number of rows it produces varies. *)
+from i in [1,2,3]
+  join j in (from k in [10,20,30] where k > i * 10 yield ordinal);
+> val it = [{i=1,j=0},{i=1,j=1},{i=2,j=0}] : {i:int, j:int} list
+
+(* Two counters are live at once: the outer one advances while the
+   inner one restarts for each outer row. *)
+from i in [10,20,30]
+  yield {a = ordinal, ks = (from k in ["p","q"] yield ordinal)};
+> val it = [{a=0,ks=[0,1]},{a=1,ks=[0,1]},{a=2,ks=[0,1]}]
+>   : {a:int, ks:int list} list
+
 (* "ordinal" is the input row's position where a group key reads
  * it, so the enumeration must advance per row -- the position once
  * stuck, collapsing every row into one group. *)
