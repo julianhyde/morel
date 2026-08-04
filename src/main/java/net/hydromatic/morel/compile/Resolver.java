@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
@@ -1755,16 +1756,9 @@ public class Resolver {
     final FromBuilder fromBuilder;
 
     /**
-     * The field holding the ordinal of the current row, if the step this
-     * resolver is converting reads {@code ordinal}; null otherwise.
-     *
-     * @see Resolver#ordinalPat
-     */
-    private final Core.@Nullable IdPat stepOrdinalPat;
-
-    /**
      * The step environment before {@link FromBuilder#materializeOrdinal()}
-     * added the ordinal field; null unless {@link #stepOrdinalPat} is set.
+     * added the ordinal field; null unless the step being converted reads
+     * {@code ordinal}.
      *
      * <p>{@code current} is built from this environment, not from the one that
      * contains the ordinal field. The field is an implementation detail, and
@@ -1777,16 +1771,12 @@ public class Resolver {
           core.fromBuilder(
               typeMap.typeSystem,
               () -> env.bindAll(aggregateResolver.bindings())),
-          null,
           null);
     }
 
     private FromResolver(
-        FromBuilder fromBuilder,
-        Core.@Nullable IdPat stepOrdinalPat,
-        Core.@Nullable StepEnv stepPriorEnv) {
+        FromBuilder fromBuilder, Core.@Nullable StepEnv stepPriorEnv) {
       this.fromBuilder = fromBuilder;
-      this.stepOrdinalPat = stepOrdinalPat;
       this.stepPriorEnv = stepPriorEnv;
     }
 
@@ -1795,10 +1785,13 @@ public class Resolver {
      * resolver's {@link FromBuilder}. Steps are converted through {@link
      * Visitor#accept}, whose signature has no room for the extra context, so it
      * travels in a resolver rather than in a parameter.
+     *
+     * <p>The field itself travels in the enclosing {@link Resolver}, which is
+     * where a nested query will look for it (see {@link Resolver#ordinalPat}).
      */
     private FromResolver withOrdinal(
-        Core.IdPat stepOrdinalPat, Core.StepEnv stepPriorEnv) {
-      return new FromResolver(fromBuilder, stepOrdinalPat, stepPriorEnv);
+        Core.IdPat ordinalPat, Core.StepEnv priorEnv) {
+      return withOrdinalPat(ordinalPat).new FromResolver(fromBuilder, priorEnv);
     }
 
     Core.Exp run(Ast.Query query) {
@@ -1872,7 +1865,7 @@ public class Resolver {
      * Resolver#ordinalPat}) or has already been rejected by the type resolver.
      */
     private void acceptStep(Ast.FromStep step, int i) {
-      if (i == 0 || ordinalUseCount(step) == 0) {
+      if (i == 0 || !usesOrdinal(step)) {
         accept(step);
         return;
       }
@@ -1896,9 +1889,7 @@ public class Resolver {
         rowEnv.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
         f = core.record(typeMap.typeSystem, nameExps);
       }
-      return withEnv(stepEnv.bindings)
-          .withCurrent(f)
-          .withOrdinalPat(stepOrdinalPat != null ? stepOrdinalPat : ordinalPat);
+      return withEnv(stepEnv.bindings).withCurrent(f);
     }
 
     @Override
@@ -1907,20 +1898,23 @@ public class Resolver {
     }
 
     /**
-     * Returns how many times a step reads {@code ordinal}.
+     * Returns whether a step reads {@code ordinal}.
      *
      * <p>A nested query is evaluated once per row of the enclosing step, so an
      * {@code ordinal} in the expression that the nested query scans belongs to
-     * the enclosing step and is counted here. An {@code ordinal} in any later
-     * step of the nested query belongs to that step, and is not.
+     * the enclosing step and counts here. An {@code ordinal} in any later step
+     * of the nested query belongs to that step, and does not.
+     *
+     * <p>A step that reads {@code ordinal} several times needs one field, not
+     * several, so the answer is yes or no rather than a count.
      */
-    private int ordinalUseCount(Ast.FromStep step) {
-      final int[] count = {0};
+    private boolean usesOrdinal(Ast.FromStep step) {
+      final AtomicBoolean b = new AtomicBoolean();
       step.accept(
           new Visitor() {
             @Override
             protected void visit(Ast.Ordinal ordinal) {
-              ++count[0];
+              b.set(true);
             }
 
             @Override
@@ -1947,7 +1941,7 @@ public class Resolver {
               }
             }
           });
-      return count[0];
+      return b.get();
     }
 
     @Override

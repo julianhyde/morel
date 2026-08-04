@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Verify.verify;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
@@ -57,14 +58,14 @@ public class OrdinalChecker {
   }
 
   /**
-   * Validates one step. Counts only the calls that belong to this step; a call
-   * inside a nested query belongs to a step of that query, and is checked when
-   * the walk reaches it.
+   * Validates one step. Considers only the calls that belong to this step; a
+   * call inside a nested query belongs to a step of that query, and is checked
+   * when the walk reaches it.
    */
   private static void checkStep(Core.FromStep step) {
     if (step.op != Op.YIELD) {
       verify(
-          ordinalCount(step) == 0,
+          !usesOrdinal(step),
           "'ordinal' occurs outside a yield, in %s: %s",
           step.op,
           step);
@@ -72,17 +73,17 @@ public class OrdinalChecker {
   }
 
   /**
-   * Returns how many times a step calls {@code ordinal}, not descending into a
-   * nested query.
+   * Returns whether a step calls {@code ordinal}, not descending into a nested
+   * query.
    */
-  private static int ordinalCount(Core.FromStep step) {
-    final int[] count = {0};
+  private static boolean usesOrdinal(Core.FromStep step) {
+    final AtomicBoolean b = new AtomicBoolean();
     step.accept(
         new Visitor() {
           @Override
           protected void visit(Core.Apply apply) {
             if (apply.isCallTo(BuiltIn.Z_ORDINAL)) {
-              ++count[0];
+              b.set(true);
             }
             super.visit(apply);
           }
@@ -92,7 +93,7 @@ public class OrdinalChecker {
             // A nested query's steps are checked on their own terms.
           }
         });
-    return count[0];
+    return b.get();
   }
 }
 

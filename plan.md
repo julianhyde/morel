@@ -119,9 +119,9 @@ For example, `from e in emps where ordinal < 2` becomes, in Core
 
 ```
 from e in emps
-  yield {e = e, o$0 = $ordinal ()}  (* generated: the 'where' reads it *)
-  where o$0 < 2
-  yield {e.deptno, e.id, e.name}    (* implicit; o$0 is not projected *)
+  yield {e = e, v$0 = $ordinal ()}  (* generated: the 'where' reads it *)
+  where v$0 < 2
+  yield {e.deptno, e.id, e.name}    (* implicit; v$0 is not projected *)
 ```
 
 ### Representation: an ordinary expression in a `Project`
@@ -258,7 +258,7 @@ It need only answer yes or no: a step that reads `ordinal` several
 times needs one field, not several.
 
 Naming uses `typeSystem.nameGenerator`, as `groupOverOrdinal` already
-does, so the field is `o$0`, `o$1`, … and cannot collide with a user
+does, so the field is `v$0`, `v$1`, … and cannot collide with a user
 name.
 
 `take` and `skip` are unaffected. They count rows to implement
@@ -272,7 +272,7 @@ The generated pat is a binding of the generating step — it must be, or
 the reader could not refer to it — but the field must not reach the
 query's result. The implicit final `yield` projects the bindings in
 scope, so without suppression `where ordinal < 2` would return
-`{deptno, id, name, o$0}` instead of `{deptno, id, name}`.
+`{deptno, id, name, v$0}` instead of `{deptno, id, name}`.
 
 Options:
 
@@ -457,7 +457,7 @@ New cases to add:
   These give `([10,21],[10,21])` and `[[100,201],[100,201]]` today,
   via the start-action reset; they must give the same answers with the
   reset deleted.
-* Hygiene: a user field literally named `o$0` (if expressible) or a
+* Hygiene: a user field literally named `v$0` (if expressible) or a
   query with many generated fields, to confirm no collision.
 * `Sys.plan` output showing a generating yield, as documentation of
   the new representation.
