@@ -1752,18 +1752,15 @@ public class Resolver {
    * Ast.FromStep} calling {@link FromBuilder} appropriately.
    */
   private class FromResolver extends Visitor {
-    final FromBuilder fromBuilder =
-        core.fromBuilder(
-            typeMap.typeSystem,
-            () -> env.bindAll(aggregateResolver.bindings()));
+    final FromBuilder fromBuilder;
 
     /**
-     * The field holding the ordinal of the current row, while converting a step
-     * that reads {@code ordinal}; null otherwise.
+     * The field holding the ordinal of the current row, if the step this
+     * resolver is converting reads {@code ordinal}; null otherwise.
      *
      * @see Resolver#ordinalPat
      */
-    private Core.@Nullable IdPat stepOrdinalPat;
+    private final Core.@Nullable IdPat stepOrdinalPat;
 
     /**
      * The step environment before {@link FromBuilder#materializeOrdinal()}
@@ -1773,7 +1770,36 @@ public class Resolver {
      * contains the ordinal field. The field is an implementation detail, and
      * must not change the type of the row that the user sees.
      */
-    private Core.@Nullable StepEnv stepPriorEnv;
+    private final Core.@Nullable StepEnv stepPriorEnv;
+
+    FromResolver() {
+      this(
+          core.fromBuilder(
+              typeMap.typeSystem,
+              () -> env.bindAll(aggregateResolver.bindings())),
+          null,
+          null);
+    }
+
+    private FromResolver(
+        FromBuilder fromBuilder,
+        Core.@Nullable IdPat stepOrdinalPat,
+        Core.@Nullable StepEnv stepPriorEnv) {
+      this.fromBuilder = fromBuilder;
+      this.stepOrdinalPat = stepOrdinalPat;
+      this.stepPriorEnv = stepPriorEnv;
+    }
+
+    /**
+     * Returns a resolver for a step that reads {@code ordinal}, sharing this
+     * resolver's {@link FromBuilder}. Steps are converted through {@link
+     * Visitor#accept}, whose signature has no room for the extra context, so it
+     * travels in a resolver rather than in a parameter.
+     */
+    private FromResolver withOrdinal(
+        Core.IdPat stepOrdinalPat, Core.StepEnv stepPriorEnv) {
+      return new FromResolver(fromBuilder, stepOrdinalPat, stepPriorEnv);
+    }
 
     Core.Exp run(Ast.Query query) {
       if (query.isInto()) {
@@ -1852,14 +1878,7 @@ public class Resolver {
       }
       final Core.StepEnv priorEnv = fromBuilder.stepEnv();
       final Core.IdPat ordinalPat = fromBuilder.materializeOrdinal();
-      stepOrdinalPat = ordinalPat;
-      stepPriorEnv = priorEnv;
-      try {
-        accept(step);
-      } finally {
-        stepOrdinalPat = null;
-        stepPriorEnv = null;
-      }
+      withOrdinal(ordinalPat, priorEnv).accept(step);
       fromBuilder.dropOrdinal(ordinalPat, priorEnv);
     }
 
