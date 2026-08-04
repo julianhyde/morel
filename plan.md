@@ -403,7 +403,7 @@ so generation and the runtime change are independent commits.
    It was worth landing even though phase 3 deletes it: it pinned the
    rule while the representation was still settling, and its
    nested-query test is what showed the attribution was wrong.
-3. **New runtime, and the check moves into it.** Move the counter into
+3. **New runtime, and the check moves into it.** *(Done.)* Move the counter into
    the yield `RowSink`; delete `ORDINAL_CODE`, `ordinalGet` /
    `ordinalInc`, `OrdinalGetCode` / `OrdinalIncCode`, `RowSinks.first`,
    `FirstRowSink` and `Describer.addStartAction`.
@@ -428,6 +428,16 @@ so generation and the runtime change are independent commits.
    so a call that finds no counter is silently handed a fresh one. That
    default is why problem 6 in §2 went unnoticed. Absence of a counter
    has to be an error.
+
+   In the event the counter did not have to move at all -- only the
+   *reset* did. `RowSink.start` already runs once per execution, and
+   `CollectRowSink` already used it to clear its list, so the yield and
+   collect sinks take the counter and reset it there. The `int[]` stays
+   a compile-time allocation, but is now only a channel between a sink
+   and the codes it evaluates, written and read within one `accept`.
+   A correlated subquery gets a fresh sink per outer row and so
+   restarts; each yield step has its own counter, so an inner query
+   cannot disturb an outer one.
 4. **Let a reading `yield` hold the call** (§5), so the common
    `yield {ordinal, e.name}` costs no extra step.
 5. **Re-enable subquery inlining** — drop the `containsOrdinal` guard
