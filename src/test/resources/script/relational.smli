@@ -717,6 +717,18 @@ from i in [10,20,30]
   yield {a = ordinal, b = ordinal};
 > val it = [{a=0,b=0},{a=1,b=1},{a=2,b=2}] : {a:int, b:int} list
 
+(* A 'yield' holds the counter, so a call must still find it after the
+   contexts that compiling the expression creates: a 'let', a recursive
+   function, and a mutually recursive one. *)
+from i in [10,20] yield (let val x = ordinal in x + 1 end);
+> val it = [1,2] : int list
+from i in [10,20] yield (let fun f y = if y = 0 then ordinal else f (y - 1) in f 2 end);
+> val it = [0,1] : int list
+from i in [10,20] yield (let fun g y = y + ordinal and h y = g y in h 1 end);
+> val it = [1,2] : int list
+from i in [10,20] yield (let fun f y = y in f 1 + ordinal end);
+> val it = [1,2] : int list
+
 (* The count advances once per row, even on a row that does not read it:
    the ordinals on either side of a row that yields ~1 differ by 2. *)
 from i in [10,11,20,21,30]
@@ -933,6 +945,14 @@ from x in [10,20] yield (from i in bag [1,2] through j in (fn y => [ordinal]));
 > val it = [[0],[1]] : int list list
 from x in [10,20] yield (from i in bag [1,2] into (fn y => ordinal));
 > val it = [0,1] : int list
+
+(*) The preceding steps may include a 'group' or an 'order'.
+from x in [1,2] yield (from k in [10,20,30] group {m = k mod 2} take ordinal);
+> val it = [[],[{m=0}]] : {m:int} list list
+from x in [1,2] yield (from k in [30,10,20] group {m = k} order m take ordinal);
+> val it = [[],[{m=10}]] : {m:int} list list
+from x in [1,2] yield (from k in [30,10,20] order k skip ordinal);
+> val it = [[10,20,30],[20,30]] : int list list
 
 (* A subquery in one of those positions is itself evaluated before its
  * enclosing query's first row, so the reading skips that query too. *)

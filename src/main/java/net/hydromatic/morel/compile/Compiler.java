@@ -231,11 +231,18 @@ public class Compiler {
 
     /** Creates a context with no stack layout; used by {@code RelContext}. */
     Context(Environment env) {
-      this(env, StackLayout.EMPTY, 0, ImmutableMap.of(), ImmutableList.of());
+      this(
+          env,
+          StackLayout.EMPTY,
+          0,
+          ImmutableMap.of(),
+          ImmutableList.of(),
+          null);
     }
 
     Context(Environment env, StackLayout layout, int localDepth) {
-      this(env, layout, localDepth, ImmutableMap.of(), ImmutableList.of());
+      this(
+          env, layout, localDepth, ImmutableMap.of(), ImmutableList.of(), null);
     }
 
     Context(
@@ -243,16 +250,7 @@ public class Compiler {
         StackLayout layout,
         int localDepth,
         Map<String, Integer> globalSlotMap) {
-      this(env, layout, localDepth, globalSlotMap, ImmutableList.of());
-    }
-
-    Context(
-        Environment env,
-        StackLayout layout,
-        int localDepth,
-        Map<String, Integer> globalSlotMap,
-        List<Core.NamedPat> recPeers) {
-      this(env, layout, localDepth, globalSlotMap, recPeers, null);
+      this(env, layout, localDepth, globalSlotMap, ImmutableList.of(), null);
     }
 
     Context(
@@ -284,13 +282,15 @@ public class Compiler {
     }
 
     Context bindAll(Iterable<Binding> bindings) {
+      final Environment env1 = env.bindAll(bindings);
       return new Context(
-          env.bindAll(bindings), layout, localDepth, globalSlotMap, recPeers);
+          env1, layout, localDepth, globalSlotMap, recPeers, ordinalSlots);
     }
 
     /** Returns a copy of this context with the given rec-group peers. */
     Context withRecPeers(List<Core.NamedPat> recPeers) {
-      return new Context(env, layout, localDepth, globalSlotMap, recPeers);
+      return new Context(
+          env, layout, localDepth, globalSlotMap, recPeers, ordinalSlots);
     }
 
     /**
@@ -365,7 +365,23 @@ public class Compiler {
       if (extLocalDepth == localDepth) {
         return this;
       }
-      return new Context(env, extLayout, extLocalDepth, globalSlotMap);
+      return new Context(
+          env, extLayout, extLocalDepth, globalSlotMap, recPeers, ordinalSlots);
+    }
+
+    /**
+     * Returns a context with {@code names} removed from the layout, so that
+     * they compile to a {@link Codes#get(String)} lookup rather than a stack
+     * read.
+     */
+    Context withoutStackSlots(Collection<String> names) {
+      return new Context(
+          env,
+          layout.without(names),
+          localDepth,
+          globalSlotMap,
+          recPeers,
+          ordinalSlots);
     }
 
     /**
@@ -1199,12 +1215,7 @@ public class Compiler {
     // Downstream uses cxFrom with GROUP output names stripped from the layout,
     // so those names compile to GetCode (reading from groupEnvs in globalEnv)
     // rather than StackCode (reading the pre-GROUP slot value, e.g. a closure).
-    final Context cxResult =
-        new Context(
-            cxFrom.env,
-            cxFrom.layout.without(outNames),
-            cxFrom.localDepth,
-            cxFrom.globalSlotMap);
+    final Context cxResult = cxFrom.withoutStackSlots(outNames);
     final Supplier<RowSink> groupNextFactory =
         createRowSinkFactory(
             cxResult,
@@ -1599,7 +1610,12 @@ public class Compiler {
       }
     }
     return new Context(
-        cx.env.bindAll(bindings), newLayout, depth, cx.globalSlotMap);
+        cx.env.bindAll(bindings),
+        newLayout,
+        depth,
+        cx.globalSlotMap,
+        cx.recPeers,
+        cx.ordinalSlots);
   }
 
   protected Code finishCompileLet(
