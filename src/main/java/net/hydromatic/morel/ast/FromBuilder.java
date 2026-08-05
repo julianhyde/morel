@@ -503,7 +503,7 @@ public class FromBuilder {
   }
 
   /** Creates the expression {@code ordinal}. */
-  private Core.Exp ordinalExp() {
+  public Core.Exp ordinalExp() {
     return core.apply(
         Pos.ZERO,
         PrimitiveType.INT,

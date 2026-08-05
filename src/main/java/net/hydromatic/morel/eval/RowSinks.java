@@ -210,14 +210,6 @@ public abstract class RowSinks {
    * Creates a {@link RowSink} to collect the results of a {@code from}
    * expression.
    */
-  public static RowSink collect(Code code) {
-    return collect(code, null);
-  }
-
-  /**
-   * Creates a {@link RowSink} that collects rows, resetting a row-ordinal
-   * counter at the start of each execution.
-   */
   public static RowSink collect(Code code, int @Nullable [] ordinalSlots) {
     return new CollectRowSink(code, ordinalSlots);
   }

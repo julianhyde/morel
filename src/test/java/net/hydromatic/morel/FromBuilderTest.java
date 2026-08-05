@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.function.Function;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
-import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
@@ -77,15 +76,6 @@ public class FromBuilderTest {
 
     Core.Literal intLiteral(int i) {
       return core.literal(intType, i);
-    }
-
-    /** Creates a call to "ordinal", as {@code FromBuilder} does. */
-    Core.Exp ordinalExp() {
-      return core.apply(
-          Pos.ZERO,
-          intType,
-          core.functionLiteral(typeSystem, BuiltIn.Z_ORDINAL),
-          core.tuple(typeSystem));
     }
 
     Core.Exp record(Core.Id... ids) {
@@ -624,9 +614,10 @@ public class FromBuilderTest {
     // from i in [1, 2] yield {a = ordinal, b = ordinal}
     final Fixture f = new Fixture();
     final FromBuilder fromBuilder = f.fromBuilder();
-    final PairList<String, Core.Exp> nameExps = PairList.of();
-    nameExps.add("a", f.ordinalExp());
-    nameExps.add("b", f.ordinalExp());
+    final PairList<String, Core.Exp> nameExps =
+        PairList.copyOf(
+            "a", fromBuilder.ordinalExp(),
+            "b", fromBuilder.ordinalExp());
     fromBuilder
         .scan(f.iPat, f.list12)
         .yield_(core.record(f.typeSystem, nameExps));
