@@ -27,12 +27,26 @@ import java.util.Map;
 
 /** Abstract syntax tree node. */
 public abstract class AstNode {
-  public final Pos pos;
+  public Pos pos;
   public final Op op;
 
   public AstNode(Pos pos, Op op) {
     this.pos = requireNonNull(pos);
     this.op = requireNonNull(op);
+  }
+
+  /**
+   * Widens this node's position and returns this node.
+   *
+   * <p>Used by the parser to make grouping parentheses part of the span of the
+   * expression, pattern or type they enclose: {@code ( e )} widens {@code e}'s
+   * position to cover the parentheses. The node is freshly parsed and not yet
+   * shared, so mutating its position in place is safe. Position does not
+   * participate in equality.
+   */
+  public AstNode withPos(Pos pos) {
+    this.pos = requireNonNull(pos);
+    return this;
   }
 
   /**

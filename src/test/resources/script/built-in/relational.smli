@@ -151,7 +151,7 @@ Relational.max (bag ["a", "bc", "ab"]);
 > val it = "bc" : string
 Relational.max (bag [] : int bag);
 > uncaught exception Empty
->   raised at: stdIn:1.1-1.33
+>   raised at: stdIn:1.1-1.34
 Relational.max (bag [0w1, 0wxFFFFFFFFFFFFFFFF]);
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Relational.max (bag [(1, 2), (2, 1), (1, 9)]);
@@ -177,7 +177,7 @@ Relational.min (bag ["a", "bc", "ab"]);
 > val it = "a" : string
 Relational.min (bag [] : int bag);
 > uncaught exception Empty
->   raised at: stdIn:1.1-1.33
+>   raised at: stdIn:1.1-1.34
 Relational.min (bag [0w1, 0wxFFFFFFFFFFFFFFFF]);
 > val it = 0wx1 : word
 Relational.min (bag [(1, 2), (2, 1), (1, 9)]);
