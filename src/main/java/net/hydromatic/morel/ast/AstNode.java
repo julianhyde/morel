@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.ast;
 
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ import java.util.Map;
 
 /** Abstract syntax tree node. */
 public abstract class AstNode {
-  public Pos pos;
+  public final Pos pos;
   public final Op op;
 
   public AstNode(Pos pos, Op op) {
@@ -36,17 +37,19 @@ public abstract class AstNode {
   }
 
   /**
-   * Widens this node's position and returns this node.
+   * Returns a copy of this node with a given position.
    *
-   * <p>Used by the parser to make grouping parentheses part of the span of the
-   * expression, pattern or type they enclose: {@code ( e )} widens {@code e}'s
-   * position to cover the parentheses. The node is freshly parsed and not yet
-   * shared, so mutating its position in place is safe. Position does not
-   * participate in equality.
+   * <p>Only implemented for certain node types.
+   * Intended to be called only by the parser, right after node creation.
+   * Returns this node if the position is already correct, and in any case
+   * returns a node of the same type.
    */
   public AstNode withPos(Pos pos) {
-    this.pos = requireNonNull(pos);
-    return this;
+    if (pos.equals(this.pos)) {
+      return this;
+    }
+    throw new IllegalArgumentException(
+        format("cannot change position: %s %s", op, getClass()));
   }
 
   /**
