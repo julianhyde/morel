@@ -1,0 +1,385 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Graph 3-coloring, expressed as a query over relations.
+ *
+ * A coloring is a total function from vertices to colors, represented
+ * extensionally as a relation. The query generates every such
+ * function and keeps those that assign different colors to the
+ * endpoints of every edge.
+ *
+ * Based on an example by Wolfgang Gatterbauer.
+ *)
+
+set ("output", "tabular");
+> val it = () : unit
+
+(* -------------------------------------------------------------------
+ * Solution 1 - vertex, edge and color relations
+ *
+ * Written by Wolfgang Gatterbauer.
+ *)
+
+(* ---------------------------------------------------------------- *)
+(* Input relations                                                  *)
+(* ---------------------------------------------------------------- *)
+
+(* Vertex(v) = {a, b, c} *)
+val vertex =
+  [{v = "a"},
+   {v = "b"},
+   {v = "c"}];
+> v
+> -
+> a
+> b
+> c
+>
+> val vertex : {v:string} list
+
+(* Edge(u,v) = {(a,b), (b,c), (c,a)} *)
+val edge =
+  [{u = "a", v = "b"},
+   {u = "b", v = "c"},
+   {u = "c", v = "a"}];
+> u v
+> - -
+> a b
+> b c
+> c a
+>
+> val edge : {u:string, v:string} list
+
+(* Color(c) = {1, 2, 3} *)
+val color =
+  [{c = 1},
+   {c = 2},
+   {c = 3}];
+> c
+> -
+> 1
+> 2
+> 3
+>
+> val color : {c:int} list
+
+
+(* ---------------------------------------------------------------- *)
+(* Generate every total function Vertex -> Color                    *)
+(*                                                                  *)
+(* Each function is represented extensionally as a relation         *)
+(* F(v,c), that is, as a list of {v, c} records.                    *)
+(* ---------------------------------------------------------------- *)
+
+fun assignments [] =
+      [[]]
+
+  | assignments ({v = vertexName} :: remainingVertices) =
+      from {c = chosenColor} in color,
+           rest in assignments remainingVertices
+        yield
+          {v = vertexName, c = chosenColor} :: rest;
+> val assignments = fn : {v:'a} list -> {c:int, v:'a} list list
+
+
+(* ---------------------------------------------------------------- *)
+(* Keep only proper 3-colorings                                     *)
+(*                                                                  *)
+(* Reject F if some edge has equally colored endpoints.             *)
+(* ---------------------------------------------------------------- *)
+
+val solutions =
+  from f in assignments vertex
+    where not
+      (exists e in edge,
+              f1 in f,
+              f2 in f
+         where e.u = f1.v
+           andalso e.v = f2.v
+           andalso f1.c = f2.c)
+    yield f;
+> val solutions =
+>   [[{c=1,v="a"},{c=2,v="b"},{c=3,v="c"}],
+>    [{c=1,v="a"},{c=3,v="b"},{c=2,v="c"}],
+>    [{c=2,v="a"},{c=1,v="b"},{c=3,v="c"}],
+>    [{c=2,v="a"},{c=3,v="b"},{c=1,v="c"}],
+>    [{c=3,v="a"},{c=1,v="b"},{c=2,v="c"}],
+>    [{c=3,v="a"},{c=2,v="b"},{c=1,v="c"}]] : {c:int, v:string} list list
+
+
+(* ---------------------------------------------------------------- *)
+(* Optional: inspect the result                                     *)
+(* ---------------------------------------------------------------- *)
+
+val solutionCount = length solutions;
+> val solutionCount = 6 : int
+
+val oneColoring = hd solutions;
+> c v
+> - -
+> 1 a
+> 2 b
+> 3 c
+>
+> val oneColoring : {c:int, v:string} list
+
+(* -------------------------------------------------------------------
+ * Solution 2 - each vertex is a column, each assignment of a
+ * color to a vertex is a column value, edges are encoded into
+ * the program, and colors are an enumerated type.
+ *
+ * Written by Julian Hyde.
+ *)
+datatype color = BLUE | GREEN | RED;
+> datatype color = BLUE | GREEN | RED
+from c1: color, c2, c3
+  where c1 <> c2
+  andalso c2 <> c3
+  andalso c3 <> c1;
+> c1    c2    c3
+> ----- ----- -----
+> BLUE  GREEN RED
+> BLUE  RED   GREEN
+> GREEN BLUE  RED
+> GREEN RED   BLUE
+> RED   BLUE  GREEN
+> RED   GREEN BLUE
+>
+> val it : {c1:color, c2:color, c3:color} bag
+
+(* -------------------------------------------------------------------
+ * Solution 3 - vertex set is a record, edges are encoded into
+ * the program, and colors are an enumerated type.
+ *)
+datatype color = BLUE | GREEN | RED;
+> datatype color = BLUE | GREEN | RED
+type assignment = {c1: color, c2: color, c3: color};
+> type assignment = {c1:color, c2:color, c3:color}
+from a: assignment
+  where a.c1 <> a.c2
+  andalso a.c2 <> a.c3
+  andalso a.c3 <> a.c1;
+> c1    c2    c3
+> ----- ----- -----
+> BLUE  GREEN RED
+> BLUE  RED   GREEN
+> GREEN BLUE  RED
+> GREEN RED   BLUE
+> RED   BLUE  GREEN
+> RED   GREEN BLUE
+>
+> val it : {c1:color, c2:color, c3:color} bag
+
+(* -------------------------------------------------------------------
+ * Solution 4 - as solution 3, but colors are constrained int
+ * values.
+ *
+ * Requires #239 "Constrained types". Disabled.
+ *)
+(*
+type color = int check i => i elem [0..2];
+> type color = int check i => i elem [0..2]
+type assignment = {c1: color, c2: color, c3: color};
+> type assignment = {c1:color, c2:color, c3:color}
+from a: assignment
+  where a.c1 <> a.c2
+  andalso a.c2 <> a.c3
+  andalso a.c3 <> a.c1;
+> c1    c2    c3
+> ----- ----- -----
+> 0     1     2
+> 0     2     1
+> 1     0     2
+> 1     2     0
+> 2     0     1
+> 2     1     0
+>
+> val it : {c1:color, c2:color, c3:color} bag
+*)
+
+(* -------------------------------------------------------------------
+ * Solution 5 - vertex set is a record, edges are encoded into
+ * the program, and colors are small integers.
+ *
+ * Gives a "not grounded" error because Morel does not know that
+ * a record type whose fields are all enumerable is enumerable.
+ *)
+type assignment = {c1: int, c2: int, c3: int};
+> type assignment = {c1:int, c2:int, c3:int}
+from a: assignment
+  where a.c1 <> a.c2
+  andalso a.c2 <> a.c3
+  andalso a.c3 <> a.c1
+  andalso a.c1 elem [0..2]
+  andalso a.c2 elem [0..2]
+  andalso a.c3 elem [0..2];
+> stdIn:1.6-1.19 Error: pattern 'a' is not grounded
+>   raised at: stdIn:1.6-1.19
+
+(* -------------------------------------------------------------------
+ * Solution 6 - as solution 1, vertex, edge and color are
+ * relations, but the 'assignments' function is replaced by a
+ * general 'k-element sub-bag' generator, in the style of the
+ * package queries in 'recipes.smli'.
+ *)
+
+(* The cells: every (vertex, color) pair. A coloring picks one cell
+ * per vertex. *)
+val cells =
+  bag (from v in vertex, c in color yield {v = v.v, c = c.c});
+> c v
+> - -
+> 1 a
+> 2 a
+> 3 a
+> 1 b
+> 2 b
+> 3 b
+> 1 c
+> 2 c
+> 3 c
+>
+> val cells : {c:int, v:string} bag
+
+(* All k-element sub-bags of a bag. Like 'subSets' in 'recipes.smli',
+ * but generating only the sub-bags of the size we want rather than
+ * the whole power set: 84 candidates here rather than 2^9 = 512. *)
+fun choose (_, 0) = [[]]
+  | choose ([], _) = []
+  | choose (x :: xs, k) =
+      (from s in choose (xs, k - 1) yield x :: s) @ choose (xs, k);
+> val choose = fn : 'a list * int -> 'a list list
+
+fun subBagsOfSize (b, k) =
+  Bag.map Bag.fromList (Bag.fromList (choose (Bag.toList b, k)));
+> val subBagsOfSize = fn : 'a bag * int -> 'a bag bag
+
+(* A proper coloring is a 3-element sub-bag of the cells that gives
+ * every vertex a color (with as many cells as vertices, 'every vertex
+ * at least once' implies 'exactly once'), and that gives adjacent
+ * vertices different colors. *)
+val solutions =
+  from f in subBagsOfSize (cells, length vertex)
+    where (forall w in vertex
+             require (exists p in f where p.v = w.v))
+    andalso not
+      (exists e in edge, f1 in f, f2 in f
+         where e.u = f1.v andalso e.v = f2.v andalso f1.c = f2.c);
+> val solutions =
+>   [[{c=1,v="a"},{c=2,v="b"},{c=3,v="c"}],
+>    [{c=1,v="a"},{c=3,v="b"},{c=2,v="c"}],
+>    [{c=2,v="a"},{c=1,v="b"},{c=3,v="c"}],
+>    [{c=2,v="a"},{c=3,v="b"},{c=1,v="c"}],
+>    [{c=3,v="a"},{c=1,v="b"},{c=2,v="c"}],
+>    [{c=3,v="a"},{c=2,v="b"},{c=1,v="c"}]] : {c:int, v:string} bag bag
+
+(* -------------------------------------------------------------------
+ * Solution 7 - as solution 6, but starting from the keys.
+ *
+ * Solution 6 generates every 3-element sub-bag of the cells and
+ * then throws away those that miss a vertex; only 27 of its 84
+ * candidates assign a color to each vertex. Grouping the cells by
+ * vertex and taking one cell per group makes that constraint
+ * structural: every candidate is a total function, so the
+ * 'forall' test goes away, and only the edge constraint is left.
+ *)
+
+(* The cells that color each vertex: one group per key. *)
+val groups =
+  from w in vertex
+    yield Bag.toList (from p in cells where p.v = w.v);
+> val groups =
+>   [[{c=1,v="a"},{c=2,v="a"},{c=3,v="a"}],
+>    [{c=1,v="b"},{c=2,v="b"},{c=3,v="b"}],
+>    [{c=1,v="c"},{c=2,v="c"},{c=3,v="c"}]] : {c:int, v:string} list list
+
+(* Pick one element from each group. Where 'choose' selects k of the
+ * elements of one bag, 'product' selects one element of each of k
+ * bags. *)
+fun product [] = [[]]
+  | product (g :: gs) =
+      let
+        val rest = product gs
+      in
+        List.concat (from x in g yield (from r in rest yield x :: r))
+      end;
+> val product = fn : 'a list list -> 'a list list
+
+fun onePerGroup gs = Bag.map Bag.fromList (Bag.fromList (product gs));
+> val onePerGroup = fn : 'a list list -> 'a bag bag
+
+Bag.length (onePerGroup groups);
+> val it = 27 : int
+
+val solutions =
+  from f in onePerGroup groups
+    where not
+      (exists e in edge, f1 in f, f2 in f
+         where e.u = f1.v andalso e.v = f2.v andalso f1.c = f2.c);
+> val solutions =
+>   [[{c=1,v="a"},{c=2,v="b"},{c=3,v="c"}],
+>    [{c=1,v="a"},{c=3,v="b"},{c=2,v="c"}],
+>    [{c=2,v="a"},{c=1,v="b"},{c=3,v="c"}],
+>    [{c=2,v="a"},{c=3,v="b"},{c=1,v="c"}],
+>    [{c=3,v="a"},{c=1,v="b"},{c=2,v="c"}],
+>    [{c=3,v="a"},{c=2,v="b"},{c=1,v="c"}]] : {c:int, v:string} bag bag
+
+(* -------------------------------------------------------------------
+ * Solution 8 - the generator of solutions 6 and 7 named as an
+ * operation in its own right.
+ *
+ * David Pratten, in "Relational exponentiation: the missing third
+ * operation", argues that relational algebra needs a third
+ * arithmetic operation alongside union and cartesian product:
+ * exponentiation, "the set of all functions from a finite data
+ * relation to a (possibly infinite) decision relation", written
+ * 'SolutionSet(Data, Decision)'. That is precisely what solutions
+ * 1, 6 and 7 each build by hand; solution 7's 'onePerGroup'
+ * becomes its implementation.
+ *
+ * Morel has no row polymorphism, so 'solutionSet' cannot merge a
+ * key record with a value record itself: 'fun merge (k, v) = {k
+ * extend all v}' is rejected as an unresolved flex record. But the
+ * caller can pass the merge as a lambda, whose argument types are
+ * known at the call site, and then no field name appears in the
+ * query.
+ *)
+fun solutionSet (keys, values, pair) =
+  onePerGroup (from k in keys yield (from v in values yield pair (k, v)));
+> val solutionSet = fn : 'a list * 'b list * ('a * 'b -> 'c) -> 'c bag bag
+
+(*) 'color ^ vertex' has 3 ^ 3 = 27 elements.
+Bag.length (solutionSet (vertex, color, fn (w, c) => {w extend all c}));
+> val it = 27 : int
+
+(* The query is now just the constraint: generating the search space
+ * is no longer part of it. *)
+val solutions =
+  from f in solutionSet (vertex, color, fn (w, c) => {w extend all c})
+    where not
+      (exists e in edge, f1 in f, f2 in f
+         where e.u = f1.v andalso e.v = f2.v andalso f1.c = f2.c);
+> val solutions =
+>   [[{c=1,v="a"},{c=2,v="b"},{c=3,v="c"}],
+>    [{c=1,v="a"},{c=3,v="b"},{c=2,v="c"}],
+>    [{c=2,v="a"},{c=1,v="b"},{c=3,v="c"}],
+>    [{c=2,v="a"},{c=3,v="b"},{c=1,v="c"}],
+>    [{c=3,v="a"},{c=1,v="b"},{c=2,v="c"}],
+>    [{c=3,v="a"},{c=2,v="b"},{c=1,v="c"}]] : {c:int, v:string} bag bag
+
+(*) End coloring.smli
