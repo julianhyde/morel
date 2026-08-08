@@ -325,6 +325,34 @@ from i in [1,2] yieldAll r in [i, i*10] join u in [3,4];
 >   [{r=1,u=3},{r=1,u=4},{r=10,u=3},{r=10,u=4},{r=2,u=3},{r=2,u=4},{r=20,u=3},
 >    {r=20,u=4}] : {r:int, u:int} list
 
+(* A record with modifiers is an ordinary element expression. It too is
+ * named as a whole, not by its fields. *)
+from i in [{a=1},{a=2}]
+  yieldAll [{i extend b = a * 10}, {i extend b = 0}]
+  where current.b > 5;
+> val it = [{a=1,b=10},{a=2,b=20}] : {a:int, b:int} list
+from i in [{a=1},{a=2}]
+  yieldAll r in [{i replace a = a + 10}]
+  where r.a > 11;
+> val it = [{a=12}] : {a:int} list
+
+(* A 'let' around the collection does not change how the element is
+ * named: 'yieldAll' names the whole element, whereas 'yield' of a
+ * record binds the record's fields. *)
+from i in [{a=1},{a=2}]
+  yieldAll (let val d = i.a in [{y=d}, {y=d+10}] end)
+  where current.y > 5;
+> val it = [{y=11},{y=12}] : {y:int} list
+from i in [{a=1},{a=2}]
+  yieldAll r in (let val d = i.a in [{y=d}, {y=d+10}] end)
+  where r.y > 5;
+> val it = [{y=11},{y=12}] : {y:int} list
+from i in [{a=1},{a=2}]
+  yieldAll (let val d = i.a in [{y=d}] end)
+  where y > 5;
+> stdIn:3.9 Error: unbound variable or constructor: y
+>   raised at: stdIn:3.9
+
 (* 'yieldAll' over a correlated subquery (the LATERAL/flatMap case):
  * the subquery references the outer row. This works because
  * 'yieldAll' desugars to a scan, '<prior>, v in e yield v'. *)

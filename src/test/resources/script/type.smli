@@ -182,12 +182,12 @@ val u = {i=0,r={i=99}};
 > val it = {i=1} : {i:int}
 {{i=1,j="a",k=true} remove j, k};
 > val it = {i=1} : {i:int}
-
-(*) Removing the only field gives the empty record, which is unit.
+{{i=1,j="a",k=true} remove j, k, i};
+> val it = () : unit
 {{i=1} remove i};
 > val it = () : unit
-
-(*) A field that does not exist is an error.
+{{} extend i = 1 remove i};
+> val it = () : unit
 {{i=1} remove k};
 > stdIn:1.15 Error: field 'k' does not exist
 >   raised at: stdIn:1.15
@@ -254,6 +254,8 @@ val es = [{deptno=10,ename="Shaggy"}];
 > val es = [{deptno=10,ename="Shaggy"}] : {deptno:int, ename:string} list
 {hd es remove deptno};
 > val it = {ename="Shaggy"} : {ename:string}
+{hd es remove deptno, ename};
+> val it = () : unit
 
 (*) A second 'replace' sees the result of the first, so this does not swap.
 {{i=1,j=2} replace i=j replace j=i};
@@ -371,7 +373,7 @@ val patch2 = {i=2,k=3};
 >   : {ename:string, net:real, sal:real, tax:real}
 
 (* A 'yield' of a modified record binds the fields of the record it
-   produced, so the steps that follow can see them. *)
+ * produced, so the steps that follow can see them. *)
 val es2 = [{deptno=10,empno=1,ename="Alice"},{deptno=20,empno=2,ename="Bob"}];
 > val es2 =
 >   [{deptno=10,empno=1,ename="Alice"},{deptno=20,empno=2,ename="Bob"}]
@@ -389,6 +391,26 @@ from e in es2 yield {e extend bonus = empno * 10} where deptno = 20 yield {ename
 (*) The same goes for a 'let' the user wrote.
 from e in es2 yield (let val d = e.deptno in {dept = d, big = d > 15} end) where big yield dept;
 > val it = [20] : int list
+
+(* 'unit' is the record with no fields, so it is a base like any other,
+ * and a modifier may leave a record with no fields. *)
+{{} extend i = 1 remove i};
+> val it = () : unit
+{{} extend i = 1, j = 2};
+> val it = {i=1,j=2} : {i:int, j:int}
+{() extend i = 1};
+> val it = {i=1} : {i:int}
+{{i=1} remove i extend j = 2};
+> val it = {j=2} : {j:int}
+{{} extend all {a=1,b=2}};
+> val it = {a=1,b=2} : {a:int, b:int}
+{{a=1} replace all {}};
+> val it = {a=1} : {a:int}
+
+(*) A field of 'unit' does not exist, so it cannot be removed or replaced.
+{{} remove i};
+> stdIn:1.12 Error: field 'i' does not exist
+>   raised at: stdIn:1.12
 
 (*) Empty record and empty tuple are equivalent, and of type 'unit'.
 {};

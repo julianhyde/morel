@@ -2331,9 +2331,23 @@ public class TypeResolver {
     }
   }
 
-  /** Returns the field names of a record or tuple term, otherwise null. */
+  /**
+   * Returns the field names of a record or tuple term, otherwise null.
+   *
+   * <p>{@code unit} is the record with no fields -- {@code recordTerm} maps
+   * {@code {}} onto it -- so its field names are the empty list, not null. Were
+   * it null, {@code {{} extend i = 1}} would never be desugared, and would end
+   * as an unresolved flex record.
+   */
   private static @Nullable List<String> termFieldNames(Term t) {
-    return t instanceof Sequence ? fieldList((Sequence) t) : null;
+    if (!(t instanceof Sequence)) {
+      return null;
+    }
+    final Sequence sequence = (Sequence) t;
+    if (sequence.operator.equals(PrimitiveType.UNIT.moniker)) {
+      return ImmutableList.of();
+    }
+    return fieldList(sequence);
   }
 
   /**
