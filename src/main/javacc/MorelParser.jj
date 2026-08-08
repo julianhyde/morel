@@ -113,6 +113,26 @@ public class MorelParserImpl implements MorelParser
     return pos(token.next);
   }
 
+  /** Checks that {@code pat} may be the pattern of an unbounded scan, that
+   * is, a scan with no "in" or "=" clause, such as "from a" or
+   * "from a: assignment". Morel deduces the extent from the pattern's type,
+   * and so the pattern must name a variable; it may bear a type annotation,
+   * which is often what makes the type (and therefore the extent) known.
+   *
+   * <p>For any other pattern we throw the parse error that the grammar would
+   * have thrown before this alternative existed, namely that "in" or "=" was
+   * expected. */
+  private void checkUnbounded(Ast.Pat pat) throws ParseException {
+    Ast.Pat p = pat;
+    while (p.op == Op.ANNOTATED_PAT) {
+      p = ((Ast.AnnotatedPat) p).pat;
+    }
+    if (p.op != Op.ID_PAT) {
+      throw new ParseException(
+          token, new int[][] {{IN}, {EQ}}, tokenImage);
+    }
+  }
+
   @Override
   public MorelParseException wrap(Throwable x) {
     if (x instanceof ParseException) {
@@ -660,6 +680,11 @@ void fromFirstScan(List<FromStep> steps) :
     <EQ> exp = expression() {
       steps.add(ast.scan(pat.pos.plus(pos()), pat, ast.fromEq(exp), null));
     }
+  |
+    {
+      checkUnbounded(pat);
+      steps.add(ast.scan(pat.pos.plus(pos()), pat, null, null));
+    }
   )
 }
 
@@ -696,6 +721,11 @@ void fromScan(Op op, List<FromStep> steps) :
     <EQ> exp = expression() {
       steps.add(
           ast.scan(pat.pos.plus(pos()), op, pat, ast.fromEq(exp), null));
+    }
+  |
+    {
+      checkUnbounded(pat);
+      steps.add(ast.scan(pat.pos.plus(pos()), op, pat, null, null));
     }
   )
 }

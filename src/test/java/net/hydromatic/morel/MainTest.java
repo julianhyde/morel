@@ -2176,8 +2176,22 @@ public class MainTest {
                 + " j in [3, 4] on f (i, j) yield i + j");
 
     // In "from p in exp" and "from p = exp", p can be any pattern
-    // but in "from v" v can only be an identifier.
+    // but in "from v" v can only be an identifier, optionally with a type
+    // annotation, as in "from v: t".
     ml("from x, y in [1, 2], z").assertParseSame();
+    ml("from x: int").assertParse("from x : int");
+    ml("from x: int, y: bool list").assertParse("from x : int, y : bool list");
+    ml("from x in [1, 2], y: bool where y")
+        .assertParse("from x in [1, 2], y : bool where y");
+    ml("from x: int in [1, 2]").assertParse("from x : int in [1, 2]");
+    ml("exists x: int where x > 1").assertParse("exists x : int where x > 1");
+    ml("forall x: int require x > 1")
+        .assertParse("forall x : int require x > 1");
+    mlE("from {x, y}: int$,$ z")
+        .assertParseThrowsParseException("Encountered \" \",\" \", \"\"");
+    mlE("from (x, y): int $where$ true")
+        .assertParseThrowsParseException(
+            "Encountered \" \"where\" \"where \"\"");
     ml("from {x, y} in [{x=1, y=2}], z")
         .assertParse("from {x = x, y = y} in [{x = 1, y = 2}], z");
     mlE("from {x, y}$,$ z")
