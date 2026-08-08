@@ -322,6 +322,55 @@ public abstract class Codes {
         }
       };
 
+  /**
+   * Consumes {@code word} from {@code source} if it is next, and returns
+   * whether it was. If it was not, {@code source} is left where it was.
+   */
+  private static boolean consume(
+      CharSource[] source, Applicable1<List, Object> reader, String word) {
+    return consume(source, reader, word, false);
+  }
+
+  /** As {@link #consume}, optionally ignoring case. */
+  private static boolean consume(
+      CharSource[] source,
+      Applicable1<List, Object> reader,
+      String word,
+      boolean ignoreCase) {
+    final Object mark = source[0].stream();
+    for (int i = 0; i < word.length(); i++) {
+      final int c = source[0].peek();
+      final boolean match =
+          ignoreCase
+              ? c >= 0 && Character.toLowerCase(c) == word.charAt(i)
+              : c == word.charAt(i);
+      if (!match) {
+        source[0] = new CharSource(reader, mark);
+        return false;
+      }
+      source[0].advance();
+    }
+    return true;
+  }
+
+  /** @see BuiltIn#BOOL_SCAN */
+  private static final Applicable BOOL_SCAN =
+      new BaseApplicable2<List, Applicable1<List, Object>, Object>(
+          BuiltIn.BOOL_SCAN) {
+        @Override
+        public List apply(Applicable1<List, Object> reader, Object stream) {
+          final CharSource[] source = {new CharSource(reader, stream)};
+          source[0].skipWhitespace();
+          if (consume(source, reader, "true")) {
+            return optionSome(ImmutableList.of(true, source[0].stream()));
+          }
+          if (consume(source, reader, "false")) {
+            return optionSome(ImmutableList.of(false, source[0].stream()));
+          }
+          return OPTION_NONE;
+        }
+      };
+
   /** @see BuiltIn#BOOL_TO_STRING */
   private static final Applicable BOOL_TO_STRING =
       new BaseApplicable1<String, Boolean>(BuiltIn.BOOL_TO_STRING) {
@@ -1691,12 +1740,127 @@ public abstract class Codes {
         }
       };
 
+  /**
+   * Pulls characters from a stream through a {@code StringCvt} reader, for the
+   * {@code scan} functions.
+   *
+   * <p>The stream is opaque - it belongs to whoever supplied the reader - so
+   * the only way along it is to call the reader. A stream is a value, though,
+   * so keeping one is enough to go back to it.
+   */
+  private static class CharSource {
+    private final Applicable1<List, Object> reader;
+    private Object stream;
+    /** Next character, or -1 at the end of the stream. */
+    private int c;
+    /** Stream that follows {@link #c}. */
+    private Object nextStream;
+
+    CharSource(Applicable1<List, Object> reader, Object stream) {
+      this.reader = reader;
+      this.stream = stream;
+      read();
+    }
+
+    private void read() {
+      final List option = reader.apply(stream);
+      if (option.size() < 2) {
+        c = -1;
+      } else {
+        final List pair = (List) option.get(1);
+        c = (Character) pair.get(0);
+        nextStream = pair.get(1);
+      }
+    }
+
+    /** Returns the next character without consuming it, or -1 at the end. */
+    int peek() {
+      return c;
+    }
+
+    /** Consumes the next character. */
+    void advance() {
+      stream = nextStream;
+      read();
+    }
+
+    /** Returns the stream, positioned before the next character. */
+    Object stream() {
+      return stream;
+    }
+
+    /** Consumes any whitespace. */
+    void skipWhitespace() {
+      while (c >= 0 && Character.isWhitespace((char) c)) {
+        advance();
+      }
+    }
+  }
+
   /** @see BuiltIn#INT_SAME_SIGN */
   private static final Applicable2 INT_SAME_SIGN =
       new BaseApplicable2<Boolean, Integer, Integer>(BuiltIn.INT_SAME_SIGN) {
         @Override
         public Boolean apply(Integer a0, Integer a1) {
           return a0 < 0 && a1 < 0 || a0 == 0 && a1 == 0 || a0 > 0 && a1 > 0;
+        }
+      };
+
+  /** @see BuiltIn#INT_SCAN */
+  private static final Applicable INT_SCAN =
+      new BaseApplicable3<List, List, Applicable1<List, Object>, Object>(
+          BuiltIn.INT_SCAN) {
+        @Override
+        public List apply(
+            List radix, Applicable1<List, Object> reader, Object stream) {
+          final int base = Radix.of(radix).base;
+          CharSource source = new CharSource(reader, stream);
+          source.skipWhitespace();
+
+          final boolean negative;
+          if (source.peek() == '~' || source.peek() == '-') {
+            negative = true;
+            source.advance();
+          } else {
+            negative = false;
+            if (source.peek() == '+') {
+              source.advance();
+            }
+          }
+
+          // A hexadecimal integer may start "0x"; if what follows is not a
+          // hexadecimal digit, the "0" is a digit and the "x" is not ours.
+          if (base == 16 && source.peek() == '0') {
+            final Object mark = source.stream();
+            source.advance();
+            if (source.peek() == 'x' || source.peek() == 'X') {
+              source.advance();
+              if (Character.digit(source.peek(), 16) < 0) {
+                source = new CharSource(reader, mark);
+              }
+            } else {
+              source = new CharSource(reader, mark);
+            }
+          }
+
+          final StringBuilder digits = new StringBuilder();
+          while (source.peek() >= 0
+              && Character.digit(source.peek(), base) >= 0) {
+            digits.append((char) source.peek());
+            source.advance();
+          }
+          if (digits.length() == 0) {
+            return OPTION_NONE;
+          }
+          final int i;
+          try {
+            i =
+                Integer.parseInt(
+                    negative ? "-" + digits : digits.toString(), base);
+          } catch (NumberFormatException e) {
+            throw new MorelRuntimeException(BuiltInExn.OVERFLOW, Pos.ZERO);
+          }
+          return optionSome(ImmutableList.of(i, source.stream()));
         }
       };
 
@@ -3943,6 +4107,89 @@ public abstract class Codes {
     return (Float.floatToRawIntBits(f) & 0x8000_0000) == 0x8000_0000;
   }
 
+  /** @see BuiltIn#REAL_SCAN */
+  private static final Applicable REAL_SCAN =
+      new BaseApplicable2<List, Applicable1<List, Object>, Object>(
+          BuiltIn.REAL_SCAN) {
+        @Override
+        public List apply(Applicable1<List, Object> reader, Object stream) {
+          final CharSource[] source = {new CharSource(reader, stream)};
+          source[0].skipWhitespace();
+          final StringBuilder b = new StringBuilder();
+          if (source[0].peek() == '~' || source[0].peek() == '-') {
+            b.append('-');
+            source[0].advance();
+          } else if (source[0].peek() == '+') {
+            source[0].advance();
+          }
+
+          // "inf", "infinity" and "nan", in any case.
+          final boolean negative = b.length() > 0;
+          for (String word : new String[] {"infinity", "inf", "nan"}) {
+            if (consume(source, reader, word, true)) {
+              final float d =
+                  word.equals("nan")
+                      ? Float.NaN
+                      : negative
+                          ? Float.NEGATIVE_INFINITY
+                          : Float.POSITIVE_INFINITY;
+              return optionSome(ImmutableList.of(d, source[0].stream()));
+            }
+          }
+
+          int digits = digits(source, b, 10);
+          if (source[0].peek() == '.') {
+            final Object mark = source[0].stream();
+            source[0].advance();
+            final StringBuilder f = new StringBuilder(".");
+            final int fracDigits = digits(source, f, 10);
+            if (fracDigits == 0) {
+              source[0] = new CharSource(reader, mark);
+            } else {
+              b.append(f);
+              digits += fracDigits;
+            }
+          }
+          if (digits == 0) {
+            return OPTION_NONE;
+          }
+          if (source[0].peek() == 'e' || source[0].peek() == 'E') {
+            final Object mark = source[0].stream();
+            source[0].advance();
+            final StringBuilder e = new StringBuilder("e");
+            if (source[0].peek() == '~' || source[0].peek() == '-') {
+              e.append('-');
+              source[0].advance();
+            } else if (source[0].peek() == '+') {
+              source[0].advance();
+            }
+            if (digits(source, e, 10) == 0) {
+              source[0] = new CharSource(reader, mark);
+            } else {
+              b.append(e);
+            }
+          }
+          return optionSome(
+              ImmutableList.of(
+                  Float.parseFloat(b.toString()), source[0].stream()));
+        }
+      };
+
+  /**
+   * Appends to {@code b} the digits that {@code source} starts with, and
+   * returns how many there were.
+   */
+  private static int digits(CharSource[] source, StringBuilder b, int base) {
+    int n = 0;
+    while (source[0].peek() >= 0
+        && Character.digit(source[0].peek(), base) >= 0) {
+      b.append((char) source[0].peek());
+      source[0].advance();
+      ++n;
+    }
+    return n;
+  }
+
   /** @see BuiltIn#REAL_SIGN */
   private static final Applicable REAL_SIGN = new RealSign(Pos.ZERO);
 
@@ -5735,6 +5982,55 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#WORD_SCAN */
+  private static final Applicable WORD_SCAN =
+      new BaseApplicable3<List, List, Applicable1<List, Object>, Object>(
+          BuiltIn.WORD_SCAN) {
+        @Override
+        public List apply(
+            List radix, Applicable1<List, Object> reader, Object stream) {
+          final int base = Radix.of(radix).base;
+          final CharSource[] source = {new CharSource(reader, stream)};
+          source[0].skipWhitespace();
+
+          // A word may be written "0w42"; a hexadecimal word may also be
+          // written "0x1f" or "0wx1f". If what follows is not a digit, the
+          // "0" is a digit and the rest is not ours.
+          if (source[0].peek() == '0') {
+            final Object mark = source[0].stream();
+            source[0].advance();
+            boolean prefix = false;
+            if (source[0].peek() == 'w') {
+              source[0].advance();
+              if (base == 16
+                  && (source[0].peek() == 'x' || source[0].peek() == 'X')) {
+                source[0].advance();
+              }
+              prefix = Character.digit(source[0].peek(), base) >= 0;
+            } else if (base == 16
+                && (source[0].peek() == 'x' || source[0].peek() == 'X')) {
+              source[0].advance();
+              prefix = Character.digit(source[0].peek(), base) >= 0;
+            }
+            if (!prefix) {
+              source[0] = new CharSource(reader, mark);
+            }
+          }
+
+          final StringBuilder b = new StringBuilder();
+          if (digits(source, b, base) == 0) {
+            return OPTION_NONE;
+          }
+          final long w;
+          try {
+            w = Long.parseUnsignedLong(b.toString(), base);
+          } catch (NumberFormatException e) {
+            throw new MorelRuntimeException(BuiltInExn.OVERFLOW, Pos.ZERO);
+          }
+          return optionSome(ImmutableList.of(w, source[0].stream()));
+        }
+      };
+
   /** @see BuiltIn#WORD_TO_INT */
   private static final Applicable WORD_TO_INT =
       new WordToInt(BuiltIn.WORD_TO_INT, Pos.ZERO);
@@ -6384,6 +6680,7 @@ public abstract class Codes {
     b.add(BuiltIn.BOOL_OP_LT, BOOL_OP_LT);
     b.add(BuiltIn.BOOL_OP_NE, BOOL_OP_NE);
     b.add(BuiltIn.BOOL_ORELSE, BOOL_ORELSE);
+    b.add(BuiltIn.BOOL_SCAN, BOOL_SCAN);
     b.add(BuiltIn.BOOL_TO_STRING, BOOL_TO_STRING);
     b.add(BuiltIn.CHAR_CHR, CHAR_CHR);
     b.add(BuiltIn.CHAR_COMPARE, CHAR_COMPARE);
@@ -6494,6 +6791,7 @@ public abstract class Codes {
     b.add(BuiltIn.INT_QUOT, INT_QUOT);
     b.add(BuiltIn.INT_REM, INT_REM);
     b.add(BuiltIn.INT_SAME_SIGN, INT_SAME_SIGN);
+    b.add(BuiltIn.INT_SCAN, INT_SCAN);
     b.add(BuiltIn.INT_SIGN, INT_SIGN);
     b.add(BuiltIn.INT_TO_INT, INT_TO_INT);
     b.add(BuiltIn.INT_TO_LARGE, INT_TO_LARGE);
@@ -6668,6 +6966,7 @@ public abstract class Codes {
     b.add(BuiltIn.REAL_REM, REAL_REM);
     b.add(BuiltIn.REAL_ROUND, REAL_ROUND);
     b.add(BuiltIn.REAL_SAME_SIGN, REAL_SAME_SIGN);
+    b.add(BuiltIn.REAL_SCAN, REAL_SCAN);
     b.add(BuiltIn.REAL_SIGN, REAL_SIGN);
     b.add(BuiltIn.REAL_SIGN_BIT, REAL_SIGN_BIT);
     b.add(BuiltIn.REAL_SPLIT, REAL_SPLIT);
@@ -6807,6 +7106,7 @@ public abstract class Codes {
         BuiltIn.WORD_OP_SHIFT_RIGHT_ARITHMETIC, WORD_OP_SHIFT_RIGHT_ARITHMETIC);
     b.add(BuiltIn.WORD_OP_TIMES, WORD_OP_TIMES);
     b.add(BuiltIn.WORD_ORB, WORD_ORB);
+    b.add(BuiltIn.WORD_SCAN, WORD_SCAN);
     b.add(BuiltIn.WORD_TO_INT, WORD_TO_INT);
     b.add(BuiltIn.WORD_TO_INT_X, WORD_TO_INT_X);
     b.add(BuiltIn.WORD_TO_LARGE, WORD_TO_LARGE);

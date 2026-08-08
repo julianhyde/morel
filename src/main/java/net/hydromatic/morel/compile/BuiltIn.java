@@ -694,6 +694,23 @@ public enum BuiltIn {
    * <p>"toString b" returns the string representation of <em>b</em>, either
    * "true" or "false".
    */
+  /**
+   * Function "Bool.scan", of type "(char, &alpha;) reader &rarr; (bool,
+   * &alpha;) reader".
+   *
+   * <p>"scan getc strm" returns "SOME (b, rest)" if "strm" starts, after any
+   * whitespace, with "true" or "false"; "NONE" otherwise.
+   */
+  BOOL_SCAN(
+      "Bool",
+      "scan",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      ts.reader(CHAR, h.get(0)), ts.reader(BOOL, h.get(0))))),
+
   BOOL_TO_STRING("Bool", "toString", true, ts -> ts.fnType(BOOL, STRING)),
 
   /**
@@ -1707,6 +1724,27 @@ public enum BuiltIn {
    */
   INT_SAME_SIGN(
       "Int", "sameSign", true, ts -> ts.fnType(ts.tupleType(INT, INT), BOOL)),
+
+  /**
+   * Function "Int.scan", of type "radix &rarr; (char, &alpha;) reader &rarr;
+   * (int, &alpha;) reader".
+   *
+   * <p>"scan radix getc strm" returns "SOME (i, rest)" if an integer in the
+   * format denoted by "radix" can be read from a prefix of "strm", after
+   * skipping initial whitespace; "NONE" otherwise. Raises "Overflow" if an
+   * integer can be read but is too large for type "int".
+   */
+  INT_SCAN(
+      "Int",
+      "scan",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      ts.lookup(Datatype.STRING_CVT_RADIX),
+                      ts.reader(CHAR, h.get(0)),
+                      ts.reader(INT, h.get(0))))),
 
   /**
    * Function "Int.sign", of type "int &rarr; int".
@@ -3594,6 +3632,23 @@ public enum BuiltIn {
       ts -> ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
 
   /**
+   * Function "Real.scan", of type "(char, &alpha;) reader &rarr; (real,
+   * &alpha;) reader".
+   *
+   * <p>"scan getc strm" reads a real from a prefix of "strm", after skipping
+   * initial whitespace. It accepts "inf", "infinity" and "nan", in any case.
+   */
+  REAL_SCAN(
+      "Real",
+      "scan",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      ts.reader(CHAR, h.get(0)), ts.reader(REAL, h.get(0))))),
+
+  /**
    * Function "Real.sign", of type "real &rarr; int".
    *
    * <p>Returns ~1 if r is negative, 0 if r is zero, or 1 if r is positive. An
@@ -4985,6 +5040,26 @@ public enum BuiltIn {
   WORD_OP_TIMES("Word", "*", ts -> ts.fnType(ts.tupleType(WORD, WORD), WORD)),
   WORD_ORB(
       "Word", "orb", true, ts -> ts.fnType(ts.tupleType(WORD, WORD), WORD)),
+  /**
+   * Function "Word.scan", of type "radix &rarr; (char, &alpha;) reader &rarr;
+   * (word, &alpha;) reader".
+   *
+   * <p>"scan radix getc strm" reads an unsigned number in the format denoted by
+   * "radix" from a prefix of "strm", after skipping initial whitespace. The
+   * number may start "0w", and, if hexadecimal, "0x" or "0wx".
+   */
+  WORD_SCAN(
+      "Word",
+      "scan",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      ts.lookup(Datatype.STRING_CVT_RADIX),
+                      ts.reader(CHAR, h.get(0)),
+                      ts.reader(WORD, h.get(0))))),
+
   WORD_TO_INT("Word", "toInt", ts -> ts.fnType(WORD, INT)),
   WORD_TO_INT_X("Word", "toIntX", ts -> ts.fnType(WORD, INT)),
   WORD_TO_LARGE("Word", "toLarge", ts -> ts.fnType(WORD, WORD)),
