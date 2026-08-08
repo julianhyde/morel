@@ -1860,7 +1860,12 @@ public class Resolver {
       final Resolver r = withStepEnv(fromBuilder.stepEnv());
       final Core.Exp exp = r.toCore(yield.exp);
       final String binder = yield.binder == null ? null : yield.binder.name;
-      fromBuilder.yield_(binder, exp);
+      // The step binds the fields of the record it yields. The record may be
+      // wrapped in 'let's -- 'TypeResolver.desugarModifiers' puts it there --
+      // and 'exp' is then a 'let' or 'case', so ask the Ast, as TypeResolver
+      // did when it deduced the bindings.
+      final boolean record = TypeResolver.letBody(yield.exp).op == Op.RECORD;
+      fromBuilder.yield_(binder, exp, record);
     }
 
     @Override

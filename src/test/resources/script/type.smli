@@ -370,6 +370,26 @@ val patch2 = {i=2,k=3};
 > val it = {ename="Shaggy",net=84,sal=120,tax=36}
 >   : {ename:string, net:real, sal:real, tax:real}
 
+(* A 'yield' of a modified record binds the fields of the record it
+   produced, so the steps that follow can see them. *)
+val es2 = [{deptno=10,empno=1,ename="Alice"},{deptno=20,empno=2,ename="Bob"}];
+> val es2 =
+>   [{deptno=10,empno=1,ename="Alice"},{deptno=20,empno=2,ename="Bob"}]
+>   : {deptno:int, empno:int, ename:string} list
+from e in es2 yield {e replace deptno = deptno + 1} where deptno = 11;
+> val it = [{deptno=11,empno=1,ename="Alice"}]
+>   : {deptno:int, empno:int, ename:string} list
+from e in es2 yield {e remove deptno} where empno = 2 yield ename;
+> val it = ["Bob"] : string list
+from e in es2 yield {e rename dno = deptno} order dno yield dno;
+> val it = [10,20] : int list
+from e in es2 yield {e extend bonus = empno * 10} where deptno = 20 yield {ename, bonus};
+> val it = [{bonus=20,ename="Bob"}] : {bonus:int, ename:string} list
+
+(*) The same goes for a 'let' the user wrote.
+from e in es2 yield (let val d = e.deptno in {dept = d, big = d > 15} end) where big yield dept;
+> val it = [20] : int list
+
 (*) Empty record and empty tuple are equivalent, and of type 'unit'.
 {};
 > val it = () : unit

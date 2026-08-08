@@ -1931,12 +1931,13 @@ public class TypeResolver {
     final Variable c6 = unifier.variable();
     sameOrderedness(c6, v6, requireNonNull(p.c), p.v);
 
-    if (yield.binder == null && yieldExp2.op == Op.RECORD) {
+    final Ast.Exp yieldExp3 = letBody(yieldExp2);
+    if (yield.binder == null && yieldExp3.op == Op.RECORD) {
       // A record whose modifiers are not desugared yet has no fields to
       // bind; it will be desugared, and this step deduced again, or the
       // attempt will end in an error.
-      final Ast.Record record2 = (Ast.Record) yieldExp2;
-      final Term term = record2.base == null ? map.get(yieldExp2) : null;
+      final Ast.Record record2 = (Ast.Record) yieldExp3;
+      final Term term = record2.base == null ? map.get(yieldExp3) : null;
       if (term instanceof Sequence) {
         final Sequence sequence = (Sequence) term;
         fieldVars.clear();
@@ -1955,6 +1956,26 @@ public class TypeResolver {
       fieldVars.add(label, v6);
     }
     return Triple.of(p.rootEnv, envs.typeEnv, v6, c6);
+  }
+
+  /**
+   * Returns the body of a chain of {@code let} expressions; {@code exp} itself
+   * if it is not a {@code let}.
+   *
+   * <p>A {@code yield} step binds the fields of the record it yields, and the
+   * {@code let}s in between do not change that. {@link #desugarModifiers} turns
+   * a record with modifiers into one {@code let} per modifier, whose body is
+   * the record that the last modifier produced, and its fields are the step's
+   * fields; the same goes for a {@code let} the user wrote.
+   *
+   * <p>{@link Resolver} applies the same test to the same tree, so that the
+   * bindings it creates for the step are the ones deduced here.
+   */
+  static Ast.Exp letBody(Ast.Exp exp) {
+    while (exp.op == Op.LET) {
+      exp = ((Ast.Let) exp).exp;
+    }
+    return exp;
   }
 
   /** Derives the row label. */
