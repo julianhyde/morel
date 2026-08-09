@@ -332,7 +332,7 @@ identifiers everywhere else.
     | <i>id</i> <b>as</b> <i>pat</i>                 layered
 <i>patrow</i> &rarr; '<b>...</b>'                  wildcard
     | <i>lab</i> <b>=</b> <i>pat</i> [<b>,</b> <i>patrow</i>]      pattern
-    | <i>id</i> [<b>,</b> <i>patrow</i>]             label as variable
+    | <i>id</i> [ <b>:</b> <i>type</i> ] [<b>,</b> <i>patrow</i>]   label as variable
 </pre>
 
 ### Types

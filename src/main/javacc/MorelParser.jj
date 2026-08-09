@@ -2288,11 +2288,17 @@ Pat atomPat() :
   }
 }
 
-/** Parses a "label = pat" inside a record pattern. */
+/** Parses a "label = pat" inside a record pattern.
+ *
+ * <p>A label may also stand for itself, as in "{b, i}", and such a label may
+ * bear a type annotation, as in "{b: bool, i}"; the latter is shorthand for
+ * "{b = b: bool, i = i}". */
 void recordPat(Map<String, Pat> map) :
 {
   final String id;
+  final Pos idPos;
   final Ast.Pat pat;
+  final Type type;
 }
 {
   ( <NATURAL_LITERAL> { id = token.image; }
@@ -2300,10 +2306,16 @@ void recordPat(Map<String, Pat> map) :
   | <QUOTED_IDENTIFIER> { id = unquoteIdentifier(token.image); }
   | id = nonReservedKeyword()
   )
+  { idPos = pos(); }
   (
     <EQ> pat = pat() { map.put(id, pat); }
   |
-    { map.put(id, ast.idPat(pos(), id)); }
+    <COLON> type = type() {
+      map.put(id,
+          ast.annotatedPat(idPos.plus(type.pos), ast.idPat(idPos, id), type));
+    }
+  |
+    { map.put(id, ast.idPat(idPos, id)); }
   )
 }
 
