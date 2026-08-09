@@ -5123,6 +5123,15 @@ public abstract class Codes {
   private static final Applicable2 STRING_FIELDS =
       new StringTokenize(BuiltIn.STRING_FIELDS);
 
+  /** @see BuiltIn#STRING_FROM_STRING */
+  private static final Applicable STRING_FROM_STRING =
+      new BaseApplicable1<List, String>(BuiltIn.STRING_FROM_STRING) {
+        @Override
+        public List apply(String s) {
+          return scanString(STRING_SCAN, s);
+        }
+      };
+
   /** @see BuiltIn#STRING_IMPLODE */
   private static final Applicable STRING_IMPLODE =
       new BaseApplicable1<String, List<Character>>(BuiltIn.STRING_IMPLODE) {
@@ -5338,6 +5347,15 @@ public abstract class Codes {
       return s.substring(i, i + j);
     }
   }
+
+  /** @see BuiltIn#STRING_TO_STRING */
+  private static final Applicable STRING_TO_STRING =
+      new BaseApplicable1<String, String>(BuiltIn.STRING_TO_STRING) {
+        @Override
+        public String apply(String s) {
+          return Parsers.stringToString(s);
+        }
+      };
 
   /** @see BuiltIn#STRING_TOKENS */
   private static final Applicable2 STRING_TOKENS =
@@ -7432,6 +7450,7 @@ public abstract class Codes {
     b.add(BuiltIn.STRING_EXPLODE, STRING_EXPLODE);
     b.add(BuiltIn.STRING_EXTRACT, STRING_EXTRACT);
     b.add(BuiltIn.STRING_FIELDS, STRING_FIELDS);
+    b.add(BuiltIn.STRING_FROM_STRING, STRING_FROM_STRING);
     b.add(BuiltIn.STRING_IMPLODE, STRING_IMPLODE);
     b.add(BuiltIn.STRING_IS_PREFIX, STRING_IS_PREFIX);
     b.add(BuiltIn.STRING_IS_SUBSTRING, STRING_IS_SUBSTRING);
@@ -7450,6 +7469,7 @@ public abstract class Codes {
     b.add(BuiltIn.STRING_STR, STRING_STR);
     b.add(BuiltIn.STRING_SUB, STRING_SUB);
     b.add(BuiltIn.STRING_SUBSTRING, STRING_SUBSTRING);
+    b.add(BuiltIn.STRING_TO_STRING, STRING_TO_STRING);
     b.add(BuiltIn.STRING_TOKENS, STRING_TOKENS);
     b.add(BuiltIn.STRING_TRANSLATE, STRING_TRANSLATE);
     b.add(BuiltIn.SYS_CLEAR_ENV, SYS_CLEAR_ENV);

@@ -200,15 +200,13 @@ sig
   (** returns true if `s` and `t` are not equal. *)
   val `<>` : string * string -> bool [@@prototype "s <> t"] [@@syntax "infix"]
 
-(*
   (**
    * returns a string corresponding to `s`, with non-printable
    * characters replaced by SML escape sequences. This is equivalent to
    *
    * <pre>translate Char.toString s</pre>
    *)
-  val toString : string -> string
-*) [@@prototype "toString s"]
+  val toString : string -> string [@@method] [@@prototype "toString s"]
 
   (**
    * scans its character source as a sequence of printable
@@ -224,57 +222,23 @@ sig
   val scan : (char, 'a) reader -> (string, 'a) reader
       [@@prototype "scan getc strm"]
 
-(*
   (**
-   * scans the string `s` as a sequence of printable
-   * characters, converting SML escape sequences into the appropriate
-   * characters. It does not skip leading whitespace. It returns as many
-   * characters as can successfully be scanned, stopping when it reaches
-   * the end of the string or a non-printing character (i.e., one not
-   * satisfying `isPrint`), or if it encounters an improper escape
-   * sequence. It ignores the remaining characters.
+   * scans the string `s` as a sequence of printable characters, converting
+   * SML escape sequences into the characters they denote. It does not skip
+   * leading whitespace. It returns as many characters as can successfully be
+   * scanned, stopping when it reaches the end of the string, a non-printing
+   * character, or an improper escape sequence, and it ignores the remaining
+   * characters.
    *
-   * If no conversion is possible, e.g., if the first character is
-   * non-printable or begins an illegal escape sequence, `NONE` is
-   * returned. Note, however, that `fromString ""` returns `SOME("")`.
+   * It returns `NONE` if it can scan no characters at all and the string has
+   * not ended; `fromString ""` returns `SOME ""`. Equivalent to
+   * `StringCvt.scanString scan`.
    *
-   * For more information on the allowed escape sequences, see the entry
-   * for `CHAR.fromString`. SML source also allows escaped formatting
-   * sequences, which are ignored during conversion. The rule is that if
-   * any prefix of the input is successfully scanned, including an escaped
-   * formatting sequence, the function returns some string. It only
-   * returns `NONE` in the case where the prefix of the input cannot be
-   * scanned at all. Here are some sample conversions:
-   *
-   * <pre>
-   * Input string s fromString s
-   * ============== ============
-   * "\\q"
-   *          NONE
-   * "a\^D"
-   *         SOME "a"
-   * "a\\ \\\\q"
-   * SOME "a"
-   * "\\ \\"
-   *      SOME ""
-   * ""
-   *             SOME ""
-   * "\\ \\\^D"
-   *     SOME ""
-   * "\\ a"
-   *         NONE
-   * </pre>
-   *
-   * *Implementation note*: Because of the special cases, such as
-   * `fromString ""` = `SOME ""`,
-   * `fromString "\\ \\\^D"` = `SOME ""`, and
-   * `fromString "\^D"
-   * = NONE`,
-   * the function cannot be implemented as a simple iterative application
-   * of `CHAR.scan`.
+   * For the escape sequences it accepts, see `Char.fromString`. An escaped
+   * formatting sequence - a backslash, whitespace, and a backslash - stands
+   * for nothing, and is consumed even if what follows it cannot be scanned.
    *)
-  val fromString : string -> string option
-*) [@@prototype "fromString s"]
+  val fromString : string -> string option [@@prototype "fromString s"]
 
 (*
   (**

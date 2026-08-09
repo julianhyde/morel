@@ -4185,6 +4185,18 @@ public enum BuiltIn {
       ts -> ts.fnType(ts.fnType(CHAR, BOOL), STRING, ts.listType(STRING))),
 
   /**
+   * Function "String.fromString", of type "string &rarr; string option".
+   *
+   * <p>"fromString s" scans {@code s} as a sequence of printable characters,
+   * converting SML escape sequences into the characters they denote. It is
+   * {@code StringCvt.scanString} of {@link #STRING_SCAN scan}, so it returns as
+   * many characters as it can and ignores the rest, and returns {@code NONE}
+   * only if it can scan no characters at all and the string has not ended.
+   */
+  STRING_FROM_STRING(
+      "String", "fromString", ts -> ts.fnType(STRING, ts.option(STRING))),
+
+  /**
    * Function "String.implode", of type "char list &rarr; string".
    *
    * <p>"implode l" generates the string containing the characters in the list
@@ -4329,6 +4341,14 @@ public enum BuiltIn {
       "substring",
       true,
       ts -> ts.fnType(ts.tupleType(STRING, INT, INT), STRING)),
+
+  /**
+   * Function "String.toString", of type "string &rarr; string".
+   *
+   * <p>"toString s" returns {@code s} with non-printable characters replaced by
+   * SML escape sequences. Equivalent to {@code translate Char.toString s}.
+   */
+  STRING_TO_STRING("String", "toString", true, ts -> ts.fnType(STRING, STRING)),
 
   /**
    * Function "String.tokens", of type "(char &rarr; bool) &rarr; string &rarr;

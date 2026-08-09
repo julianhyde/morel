@@ -29,9 +29,9 @@ Sys.set ("stringDepth", ~1);
 String;
 > val it =
 >   {<=fn,<==fn,<>=fn,==fn,>=fn,>==fn,^=fn,collate=fn,compare=fn,concat=fn,
->    concatWith=fn,explode=fn,extract=fn,fields=fn,implode=fn,isPrefix=fn,
->    isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,scan=fn,size=fn,
->    str=fn,sub=fn,substring=fn,tokens=fn,translate=fn}
+>    concatWith=fn,explode=fn,extract=fn,fields=fn,fromString=fn,implode=fn,
+>    isPrefix=fn,isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,scan=fn,
+>    size=fn,str=fn,sub=fn,substring=fn,toString=fn,tokens=fn,translate=fn}
 >   : {<:string * string -> bool, <=:string * string -> bool,
 >       <>:string * string -> bool, =:string * string -> bool,
 >       >:string * string -> bool, >=:string * string -> bool,
@@ -42,13 +42,14 @@ String;
 >       explode:string -> char list,
 >       extract:string * int * int option -> string,
 >       fields:(char -> bool) -> string -> string list,
->       implode:char list -> string, isPrefix:string -> string -> bool,
+>       fromString:string -> string option, implode:char list -> string,
+>       isPrefix:string -> string -> bool,
 >       isSubstring:string -> string -> bool,
 >       isSuffix:string -> string -> bool,
 >       map:(char -> char) -> string -> string, maxSize:int,
 >       scan:('a -> (char * 'a) option) -> 'a -> (string * 'a) option,
 >       size:string -> int, str:char -> string, sub:string * int -> char,
->       substring:string * int * int -> string,
+>       substring:string * int * int -> string, toString:string -> string,
 >       tokens:(char -> bool) -> string -> string list,
 >       translate:(char -> string) -> string -> string}
 
@@ -410,6 +411,27 @@ String.`<>` ("a", "b");
 String.`<>` ("a", "a");
 > val it = false : bool
 
+(* [toString s] returns s with non-printable characters replaced by SML escape
+   sequences; it is equivalent to translate Char.toString. *)
+String.toString;
+> val it = fn : string -> string
+String.toString "abc";
+> val it = "abc" : string
+String.toString "a\nb";
+> val it = "a\\nb" : string
+String.toString "a\"b";
+> val it = "a\\\"b" : string
+String.toString "a\\b";
+> val it = "a\\\\b" : string
+String.toString (str (chr 0) ^ "x");
+> val it = "\\^@x" : string
+String.toString ("a" ^ str (chr 200));
+> val it = "a\\200" : string
+String.toString "";
+> val it = "" : string
+"a\nb".toString ();
+> val it = "a\\nb" : string
+
 (* [scan getc strm] scans a sequence of printable characters, converting SML
    escape sequences into the characters they denote. Like Char.scan, it does
    not skip leading whitespace; unlike Char.scan, it stops rather than fails
@@ -498,9 +520,36 @@ String.scan (reader "\n") 0;
 String.scan (reader "\\ a") 0;
 > val it = NONE : (string * int) option
 
-(* val toString : string -> String.string
- * val fromString : String.string -> string option
- * val toCString : string -> String.string
+(* [fromString s] scans s as a sequence of printable characters, converting
+   SML escape sequences. It is StringCvt.scanString of scan, so it returns as
+   many characters as it can and ignores the rest, and gives NONE only if it
+   can scan nothing at all and the string has not ended. *)
+String.fromString;
+> val it = fn : string -> string option
+String.fromString "abc";
+> val it = SOME "abc" : string option
+String.fromString "a\\nb";
+> val it = SOME "a\nb" : string option
+String.fromString "";
+> val it = SOME "" : string option
+String.fromString "a\\q";
+> val it = SOME "a" : string option
+String.fromString "\\q";
+> val it = NONE : string option
+String.fromString "abc\ndef";
+> val it = SOME "abc" : string option
+String.fromString "\\ \\";
+> val it = SOME "" : string option
+String.fromString "\\ \\a";
+> val it = SOME "a" : string option
+String.fromString "a\"b";
+> val it = SOME "a\"b" : string option
+
+(*) toString and fromString are inverses on a string of printable characters.
+String.fromString (String.toString "a\nb\"c");
+> val it = SOME "a\nb\"c" : string option
+
+(* val toCString : string -> String.string
  * val fromCString : String.string -> string option *)
 
 (*) End string.smli
