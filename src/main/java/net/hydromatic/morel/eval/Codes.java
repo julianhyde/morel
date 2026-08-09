@@ -34,6 +34,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Chars;
@@ -1042,12 +1043,160 @@ public abstract class Codes {
       };
 
   /**
+   * Month names, as they appear in the format that {@link #DATE_SCAN} reads.
+   */
+  private static final Set<String> DATE_MONTH_NAMES =
+      BuiltIn.Datatype.DATE_MONTH.constructors().stream()
+          .map(c -> c.constructor)
+          .collect(ImmutableSet.toImmutableSet());
+
+  /**
    * Month values for {@link BuiltIn#DATE_MONTH_FN}, indexed Jan(0)..Dec(11).
    */
   private static final List<List<String>> DATE_MONTHS =
       transformEager(
           BuiltIn.Datatype.DATE_MONTH.constructors(),
           c -> ImmutableList.of(c.constructor));
+
+  /** @see BuiltIn#DATE_SCAN */
+  private static final Applicable DATE_SCAN = new DateScan(Pos.ZERO);
+
+  /** Implements {@link #DATE_SCAN}. */
+  private static class DateScan
+      extends BasePositionedApplicable2<
+          List, Applicable1<List, Object>, Object> {
+    DateScan(Pos pos) {
+      super(BuiltIn.DATE_SCAN, pos);
+    }
+
+    @Override
+    public DateScan withPos(Pos pos) {
+      return new DateScan(pos);
+    }
+
+    @Override
+    public List apply(Applicable1<List, Object> reader, Object stream) {
+      final CharSource[] source = {new CharSource(reader, stream)};
+
+      // The weekday has to be a valid name, but says nothing that the rest
+      // of the date does not; the weekday of the result comes from the date.
+      final String weekday = fixedWidth(source, 3);
+      if (weekday == null || !DATE_WEEKDAY_NAMES.contains(weekday)) {
+        return OPTION_NONE;
+      }
+      final String monthName = space(source) ? fixedWidth(source, 3) : null;
+      if (monthName == null || !DATE_MONTH_NAMES.contains(monthName)) {
+        return OPTION_NONE;
+      }
+
+      // The day occupies two characters, and may be written with a leading
+      // zero or a leading space: "Mar 08" and "Mar  8" are both allowed.
+      if (!space(source)) {
+        return OPTION_NONE;
+      }
+      int day = 0;
+      final int pad = source[0].peek();
+      if (pad != ' ') {
+        if (!isDigit(pad)) {
+          return OPTION_NONE;
+        }
+        day = pad - '0';
+      }
+      source[0].advance();
+      if (!isDigit(source[0].peek())) {
+        return OPTION_NONE;
+      }
+      day = day * 10 + (source[0].peek() - '0');
+      source[0].advance();
+
+      final int hour = space(source) ? twoDigits(source) : -1;
+      final int minute = colon(source) ? twoDigits(source) : -1;
+      final int second = colon(source) ? twoDigits(source) : -1;
+      if (hour < 0 || minute < 0 || second < 0 || !space(source)) {
+        return OPTION_NONE;
+      }
+
+      final StringBuilder yearDigits = new StringBuilder();
+      if (digits(source, yearDigits, 10) == 0) {
+        return OPTION_NONE;
+      }
+
+      final OffsetDateTime date;
+      try {
+        final int year = Integer.parseInt(yearDigits.toString());
+        date =
+            OffsetDateTime.of(
+                year,
+                dateMonthFromName(monthName).getValue(),
+                day,
+                hour,
+                minute,
+                second,
+                0,
+                ZoneOffset.UTC);
+      } catch (NumberFormatException | DateTimeException e) {
+        throw new MorelRuntimeException(BuiltInExn.DATE, pos);
+      }
+      return optionSome(ImmutableList.of(date, source[0].stream()));
+    }
+
+    /** Returns whether {@code c} is a decimal digit. */
+    private boolean isDigit(int c) {
+      return c >= '0' && c <= '9';
+    }
+
+    /** Consumes a space, and returns whether there was one. */
+    private boolean space(CharSource[] source) {
+      return literal(source, ' ');
+    }
+
+    /** Consumes a colon, and returns whether there was one. */
+    private boolean colon(CharSource[] source) {
+      return literal(source, ':');
+    }
+
+    /** Consumes {@code c}, and returns whether it was next. */
+    private boolean literal(CharSource[] source, char c) {
+      if (source[0].peek() != c) {
+        return false;
+      }
+      source[0].advance();
+      return true;
+    }
+
+    /**
+     * Consumes two digits and returns their value, or -1 if there are not two
+     * digits.
+     */
+    private int twoDigits(CharSource[] source) {
+      final int c0 = source[0].peek();
+      if (!isDigit(c0)) {
+        return -1;
+      }
+      source[0].advance();
+      final int c1 = source[0].peek();
+      if (!isDigit(c1)) {
+        return -1;
+      }
+      source[0].advance();
+      return (c0 - '0') * 10 + (c1 - '0');
+    }
+
+    /**
+     * Consumes {@code n} characters, or returns null if the stream ends first.
+     */
+    private @Nullable String fixedWidth(CharSource[] source, int n) {
+      final StringBuilder b = new StringBuilder();
+      for (int i = 0; i < n; i++) {
+        if (source[0].peek() < 0) {
+          return null;
+        }
+        b.append((char) source[0].peek());
+        source[0].advance();
+      }
+      return b.toString();
+    }
+  }
 
   /** @see BuiltIn#DATE_SECOND */
   private static final Applicable DATE_SECOND =
@@ -1085,6 +1234,14 @@ public abstract class Codes {
           return DATE_WEEKDAYS.get(d.getDayOfWeek().getValue() - 1);
         }
       };
+
+  /**
+   * Weekday names, as they appear in the format that {@link #DATE_SCAN} reads.
+   */
+  private static final Set<String> DATE_WEEKDAY_NAMES =
+      BuiltIn.Datatype.DATE_WEEKDAY.constructors().stream()
+          .map(c -> c.constructor)
+          .collect(ImmutableSet.toImmutableSet());
 
   /**
    * Weekday values for {@link BuiltIn#DATE_WEEK_DAY}, indexed Mon(0)..Sun(6).
@@ -6993,6 +7150,7 @@ public abstract class Codes {
     b.add(BuiltIn.DATE_LOCAL_OFFSET, DATE_LOCAL_OFFSET);
     b.add(BuiltIn.DATE_MINUTE, DATE_MINUTE);
     b.add(BuiltIn.DATE_MONTH_FN, DATE_MONTH_FN);
+    b.add(BuiltIn.DATE_SCAN, DATE_SCAN);
     b.add(BuiltIn.DATE_SECOND, DATE_SECOND);
     b.add(BuiltIn.DATE_TO_STRING, DATE_TO_STRING);
     b.add(BuiltIn.DATE_TO_TIME, DATE_TO_TIME);

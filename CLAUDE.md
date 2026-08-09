@@ -265,11 +265,13 @@ When implementing a structure from the
    `docs/lib/index.md`, and `docs/reference.md`.
 
 Notes:
-- `scan` functions (those taking a `StringCvt.reader`) are implemented
-  for `Bool`, `Char`, `Int`, `Real` and `Word`; `String`, `Date` and
-  `Time` still need theirs. `Codes.CharSource` pulls characters through
-  the caller's reader, and `Codes.scanChar` scans one character or SML
-  escape sequence.
+- The `scan` functions (those taking a `StringCvt.reader`) are all
+  implemented. `Codes.CharSource` pulls characters through the caller's
+  reader, and `Codes.scanChar` scans one character or SML escape
+  sequence. Expected values in the tests come from running the same
+  expression under `sml`; where Morel's representation forces a
+  different answer (`time` is a 64-bit nanosecond count, `Date.date`
+  rejects out-of-range fields rather than normalizing) the test says so.
 - In Morel, `LargeReal.real` = `real` and `LargeInt.int` = `int`.
 - Enum constants in `BuiltIn.java` and `Codes.java` must be in alphabetical
   order within their sort region (checked by `LintTest.testLint`).

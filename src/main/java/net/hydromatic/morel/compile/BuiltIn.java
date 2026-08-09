@@ -1198,6 +1198,29 @@ public enum BuiltIn {
       true,
       ts -> ts.fnType(ts.lookup(Eqtype.DATE), ts.lookup(Datatype.DATE_MONTH))),
 
+  /**
+   * Function "Date.scan" of type "(char, 'a) reader &rarr; (date, 'a) reader".
+   *
+   * <p>"scan getc strm" reads a date from a prefix of the character stream
+   * {@code strm}, in the format "Www Mmm DD HH:MM:SS YYYY" produced by {@link
+   * #DATE_TO_STRING toString}. It does not skip leading whitespace, the fields
+   * are separated by exactly one space, and the day may be written with a
+   * leading zero or a leading space. The weekday must be a valid name but is
+   * otherwise ignored; the weekday of the result is determined by the date. It
+   * raises {@link BuiltInExn#DATE Date} if the fields are well-formed but do
+   * not denote a date, as {@link #DATE_DATE date} does.
+   */
+  DATE_SCAN(
+      "Date",
+      "scan",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      ts.reader(CHAR, h.get(0)),
+                      ts.reader(ts.lookup(Eqtype.DATE), h.get(0))))),
+
   /** Function "Date.second", of type "date &rarr; int". */
   DATE_SECOND(
       "Date", "second", true, ts -> ts.fnType(ts.lookup(Eqtype.DATE), INT)),

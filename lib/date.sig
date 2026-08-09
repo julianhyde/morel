@@ -107,6 +107,20 @@ sig
   (** returns the month of `d`. *)
   val month : date -> month [@@method] [@@prototype "month d"]
 
+  (**
+   * reads a date from a prefix of the character stream `strm`, in the format
+   * `"Www Mmm DD HH:MM:SS YYYY"` produced by `toString`. It does not skip
+   * leading whitespace, the fields are separated by exactly one space, and
+   * the day may be written with a leading zero or a leading space. Returns
+   * `SOME (d, rest)`, or `NONE` if the stream does not begin with a date in
+   * that format. The weekday must be a valid name but is otherwise ignored;
+   * the weekday of the result is determined by the date. Raises `Date` if
+   * the fields are well-formed but do not denote a date, for example if the
+   * day is `32`.
+   *)
+  val scan : (char, 'a) reader -> (date, 'a) reader
+      [@@prototype "scan getc strm"]
+
   (** returns the second of `d`, in the range `[0, 59]`. *)
   val second : date -> int [@@method] [@@prototype "second d"]
 

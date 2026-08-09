@@ -64,6 +64,7 @@ val <a id='isDst' href="#isDst-impl">isDst</a> : date -> bool option
 val <a id='localOffset' href="#localOffset-impl">localOffset</a> : unit -> time
 val <a id='minute' href="#minute-impl">minute</a> : date -> int
 val <a id='month' href="#month-impl">month</a> : date -> month
+val <a id='scan' href="#scan-impl">scan</a> : (char, 'a) reader -> (date, 'a) reader
 val <a id='second' href="#second-impl">second</a> : date -> int
 val <a id='toString' href="#toString-impl">toString</a> : date -> string
 val <a id='toTime' href="#toTime-impl">toTime</a> : date -> time
@@ -163,6 +164,19 @@ not, or `NONE` if the information is not available.
 <h3><code>month</code></h3>
 
 `month d` (or `d.month ()`) returns the month of `d`.
+
+<a id="scan-impl"></a>
+<h3><code>scan</code></h3>
+
+`scan getc strm` reads a date from a prefix of the character stream `strm`, in the format
+`"Www Mmm DD HH:MM:SS YYYY"` produced by `toString`. It does not skip
+leading whitespace, the fields are separated by exactly one space, and
+the day may be written with a leading zero or a leading space. Returns
+`SOME (d, rest)`, or `NONE` if the stream does not begin with a date in
+that format. The weekday must be a valid name but is otherwise ignored;
+the weekday of the result is determined by the date. Raises `Date` if
+the fields are well-formed but do not denote a date, for example if the
+day is `32`.
 
 <a id="second-impl"></a>
 <h3><code>second</code></h3>
