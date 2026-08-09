@@ -5570,6 +5570,75 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#TIME_SCAN */
+  private static final Applicable TIME_SCAN = new TimeScan(Pos.ZERO);
+
+  /** Implements {@link #TIME_SCAN}. */
+  private static class TimeScan
+      extends BasePositionedApplicable2<
+          List, Applicable1<List, Object>, Object> {
+    TimeScan(Pos pos) {
+      super(BuiltIn.TIME_SCAN, pos);
+    }
+
+    @Override
+    public TimeScan withPos(Pos pos) {
+      return new TimeScan(pos);
+    }
+
+    @Override
+    public List apply(Applicable1<List, Object> reader, Object stream) {
+      final CharSource[] source = {new CharSource(reader, stream)};
+      source[0].skipWhitespace();
+
+      final boolean negative;
+      if (source[0].peek() == '~' || source[0].peek() == '-') {
+        negative = true;
+        source[0].advance();
+      } else {
+        negative = false;
+        if (source[0].peek() == '+') {
+          source[0].advance();
+        }
+      }
+
+      final StringBuilder integer = new StringBuilder();
+      digits(source, integer, 10);
+      final StringBuilder fraction = new StringBuilder();
+      if (source[0].peek() == '.') {
+        // A decimal point must be followed by at least one digit; if it is
+        // not, the whole time is ill-formed, not merely finished.
+        source[0].advance();
+        if (digits(source, fraction, 10) == 0) {
+          return OPTION_NONE;
+        }
+      } else if (integer.length() == 0) {
+        return OPTION_NONE;
+      }
+
+      // Nanoseconds are the finest we can represent; discard the rest, and
+      // pad if there were fewer than nine fractional digits.
+      while (fraction.length() < 9) {
+        fraction.append('0');
+      }
+      fraction.setLength(9);
+
+      final long nanos;
+      try {
+        final long seconds =
+            integer.length() == 0 ? 0 : Long.parseLong(integer.toString());
+        nanos =
+            Math.addExact(
+                Math.multiplyExact(seconds, 1_000_000_000L),
+                Long.parseLong(fraction.toString()));
+      } catch (NumberFormatException | ArithmeticException e) {
+        throw new MorelRuntimeException(BuiltInExn.TIME, pos);
+      }
+      return optionSome(
+          ImmutableList.of(negative ? -nanos : nanos, source[0].stream()));
+    }
+  }
+
   /** @see BuiltIn#TIME_SUBTRACT */
   private static final Applicable2 TIME_SUBTRACT =
       new BaseApplicable2<Long, Long, Long>(BuiltIn.TIME_SUBTRACT) {
@@ -7242,6 +7311,7 @@ public abstract class Codes {
     b.add(BuiltIn.TIME_LE, TIME_LE);
     b.add(BuiltIn.TIME_LT, TIME_LT);
     b.add(BuiltIn.TIME_NOW, TIME_NOW);
+    b.add(BuiltIn.TIME_SCAN, TIME_SCAN);
     b.add(BuiltIn.TIME_SUBTRACT, TIME_SUBTRACT);
     b.add(BuiltIn.TIME_TO_MICROSECONDS, TIME_TO_MICROSECONDS);
     b.add(BuiltIn.TIME_TO_MILLISECONDS, TIME_TO_MILLISECONDS);

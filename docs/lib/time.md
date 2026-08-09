@@ -60,6 +60,7 @@ val <a id='>=' href="#>=-impl">>=</a> : time * time -> bool
 val <a id='now' href="#now-impl">now</a> : unit -> time
 val <a id='fmt' href="#fmt-impl">fmt</a> : int -> time -> string
 val <a id='toString' href="#toString-impl">toString</a> : time -> string
+val <a id='scan' href="#scan-impl">scan</a> : (char, 'a) reader -> (time, 'a) reader
 val <a id='fromString' href="#fromString-impl">fromString</a> : string -> time option
 </pre>
 
@@ -187,6 +188,17 @@ values are formatted with a leading `~`.
 
 `toString t` (or `t.toString ()`) formats `t` as a decimal number of seconds with 3 fractional digits.
 Equivalent to `fmt 3 t`.
+
+<a id="scan-impl"></a>
+<h3><code>scan</code></h3>
+
+`scan getc strm` reads a time from a prefix of the character stream `strm`, after skipping
+initial whitespace. The time is a decimal number of seconds, optionally
+signed with `~`, `-` or `+`, and with an optional fractional part; the
+sign must be followed immediately by the number, and a decimal point
+must be followed by at least one digit. Returns `SOME (t, rest)`, or
+`NONE` if no time can be read. Digits beyond a nanosecond are discarded.
+Raises `Time` if the time is too large to be represented.
 
 <a id="fromString-impl"></a>
 <h3><code>fromString</code></h3>

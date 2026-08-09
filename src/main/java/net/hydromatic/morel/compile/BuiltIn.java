@@ -4580,6 +4580,28 @@ public enum BuiltIn {
   /** Function "Time.now", of type "unit &rarr; time". */
   TIME_NOW("Time", "now", ts -> ts.fnType(UNIT, ts.lookup(Eqtype.TIME))),
 
+  /**
+   * Function "Time.scan" of type "(char, 'a) reader &rarr; (time, 'a) reader".
+   *
+   * <p>"scan getc strm" reads a time from a prefix of the character stream
+   * {@code strm}, after skipping initial whitespace. The time is a decimal
+   * number of seconds, optionally signed with "~", "-" or "+", and with an
+   * optional fractional part; the sign must be followed immediately by the
+   * number, and a decimal point must be followed by at least one digit. Digits
+   * beyond a nanosecond are discarded. It raises {@link BuiltInExn#TIME Time}
+   * if the time is too large to be represented.
+   */
+  TIME_SCAN(
+      "Time",
+      "scan",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      ts.reader(CHAR, h.get(0)),
+                      ts.reader(ts.lookup(Eqtype.TIME), h.get(0))))),
+
   /** Function "Time.-", of type "time * time &rarr; time". */
   TIME_SUBTRACT(
       "Time",
