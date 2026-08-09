@@ -101,6 +101,10 @@ public class LintTest {
   private static final Pattern LINT_SKIP_PATTERN =
       Pattern.compile("// lint:skip(?: (\\d+))?\\s*$");
 
+  /** Matches zero or more spaces followed by an asterisk. */
+  private static final Pattern CONTINUATION_STAR_PATTERN =
+      Pattern.compile(" *\\*");
+
   /** Maximum line length in Java files. */
   public static final int JAVA_WIDTH = 80;
 
@@ -542,9 +546,11 @@ public class LintTest {
           }
 
           // Validate block comment intermediate lines.
-          if (f.commentStartLine > 0
-              && f.commentDepth == 1
-              && f.pendingBlockOpenLine == 0) {
+          final boolean starBlock =
+              f.commentStartLine > 0
+                  && f.commentDepth == 1
+                  && f.pendingBlockOpenLine == 0;
+          if (starBlock) {
             if (!s.trim().equals("*)")) {
               if (!s.startsWith(" *")) {
                 f.message(line, "block comment line must start with ' *'");
@@ -559,6 +565,21 @@ public class LintTest {
                     MOREL_WIDTH);
               }
             }
+          } else if (f.commentDepth > 0
+              && f.docCommentDepth == 0
+              && !s.trim().startsWith("*)")
+              && CONTINUATION_STAR_PATTERN.matcher(s).lookingAt()) {
+            // A continuation line of a block comment - one that the comment
+            // was already open at the start of - must not begin with zero or
+            // more spaces and then '*'. Three kinds of comment are exempt:
+            // the line that closes a comment; a doc comment, which opens
+            // '(**' and is starred by convention; and a block that opens
+            // with a bare '(*' and whose first line starts with ' *', for
+            // which the rule above requires the stars. Thus a comment
+            // follows one convention or the other, never a mixture.
+            f.message(
+                line,
+                "block comment continuation line must not start with '*'");
           }
 
           // Track comment depth.
@@ -577,9 +598,22 @@ public class LintTest {
                   f.pendingBlockOpenLine = line.fnr();
                 }
               }
+              // A comment that opens '(**' is a doc comment, and is starred
+              // by convention. Remember the depth at which it opened, so
+              // that a doc comment inside a commented-out block - how a
+              // '.sig' file keeps an unimplemented entry visible - is
+              // recognized too.
+              if (f.docCommentDepth == 0
+                  && i + 2 < s.length()
+                  && s.charAt(i + 2) == '*') {
+                f.docCommentDepth = f.commentDepth;
+              }
               i += 2;
             } else if (s.charAt(i) == '*' && s.charAt(i + 1) == ')') {
               f.commentDepth--;
+              if (f.commentDepth < f.docCommentDepth) {
+                f.docCommentDepth = 0;
+              }
               if (f.commentDepth == 0) {
                 f.commentStartLine = 0;
                 f.pendingBlockOpenLine = 0;
@@ -1181,6 +1215,51 @@ public class LintTest {
     assertThat(programResult("foo.smli", code), is(expectedMessages));
   }
 
+  /**
+   * Tests the rule that a continuation line of a block comment must not start
+   * with zero or more spaces followed by an asterisk.
+   */
+  @Test
+  void testBlockCommentContinuation() {
+    final String code =
+        "(* A comment whose continuation lines\n"
+            + "   are merely indented is fine,\n"
+            + " * and one whose lines are starred is not,\n"
+            + "* whether the asterisk is in column 0,\n"
+            + "  * or after any number of spaces,\n"
+            + "   but the closing line is exempt.\n"
+            + " *)\n"
+            + "(* A comment that ends on the line it opens has none. *)\n"
+            + "val x = 1; (* A comment that opens mid-line\n"
+            + " * still has continuation lines. *)\n"
+            + "\n"
+            + "(** A doc comment is starred by convention,\n"
+            + " * so it is exempt.\n"
+            + " *)\n"
+            + "(*\n"
+            + "  (** So is one commented out, however deeply indented,\n"
+            + "   * and the line that closes the outer comment may carry\n"
+            + "   * text after the '*)'.\n"
+            + "   *)\n"
+            + "  val f : int -> int\n"
+            + "*) [@@prototype \"f i\"]\n"
+            + "\n"
+            + "(*) A line comment has none.\n"
+            + "\n"
+            + "(*) End test.smli\n";
+    final String expectedMessages =
+        "["
+            + "GuavaCharSource{memory}:3:"
+            + "block comment continuation line must not start with '*'\n"
+            + "GuavaCharSource{memory}:4:"
+            + "block comment continuation line must not start with '*'\n"
+            + "GuavaCharSource{memory}:5:"
+            + "block comment continuation line must not start with '*'\n"
+            + "GuavaCharSource{memory}:10:"
+            + "block comment continuation line must not start with '*'\n";
+    assertThat(programResult("foo.smli", code), is(expectedMessages));
+  }
+
   /** Tests the rule that flags consecutive {@code (*)} line comments. */
   @Test
   void testConsecutiveComments() {
@@ -1746,6 +1825,11 @@ public class LintTest {
     int commentDepth;
     int commentStartLine;
     int pendingBlockOpenLine;
+    /**
+     * Comment depth at which the innermost doc comment ({@code (**}) opened, or
+     * 0 if no doc comment is open.
+     */
+    int docCommentDepth;
     /**
      * First line (1-based) of a run of consecutive {@code (*)} line comments,
      * or 0 if not in such a run.
