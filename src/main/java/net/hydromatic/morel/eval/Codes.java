@@ -23,6 +23,7 @@ import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.eval.Slots.maxOf;
+import static net.hydromatic.morel.util.Characters.isPrint;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.SKIP;
@@ -617,6 +618,167 @@ public abstract class Codes {
       }
       return (char) (c - 1);
     }
+  }
+
+  /** @see BuiltIn#CHAR_SCAN */
+  private static final Applicable CHAR_SCAN =
+      new BaseApplicable2<List, Applicable1<List, Object>, Object>(
+          BuiltIn.CHAR_SCAN) {
+        @Override
+        public List apply(Applicable1<List, Object> reader, Object stream) {
+          final CharSource[] source = {new CharSource(reader, stream)};
+          skipGaps(source, reader);
+          final Character c = scanChar(source, reader);
+          return c == null
+              ? OPTION_NONE
+              : optionSome(ImmutableList.of(c, source[0].stream()));
+        }
+      };
+
+  /**
+   * Consumes any escaped formatting sequences that {@code source} starts with.
+   *
+   * <p>Such a sequence is a backslash, one or more whitespace characters, and a
+   * backslash; it stands for nothing. If a backslash is followed by whitespace
+   * but no closing backslash, nothing is consumed, and the caller will find the
+   * backslash and reject it as an ill-formed escape.
+   */
+  private static void skipGaps(
+      CharSource[] source, Applicable1<List, Object> reader) {
+    for (; ; ) {
+      final Object mark = source[0].stream();
+      if (source[0].peek() != '\\') {
+        return;
+      }
+      source[0].advance();
+      if (source[0].peek() < 0
+          || !Character.isWhitespace((char) source[0].peek())) {
+        source[0] = new CharSource(reader, mark);
+        return;
+      }
+      source[0].skipWhitespace();
+      if (source[0].peek() != '\\') {
+        source[0] = new CharSource(reader, mark);
+        return;
+      }
+      source[0].advance();
+    }
+  }
+
+  /**
+   * Scans a character, or an SML escape sequence denoting a character, from
+   * {@code source}, and returns null if {@code source} does not start with one.
+   *
+   * <p>A character stands for itself if it is printable and is neither a
+   * double-quote nor a backslash; those two, and the non-printable characters,
+   * have to be escaped. If the result is null, {@code source} is left where it
+   * was.
+   *
+   * @see BuiltIn#CHAR_SCAN
+   */
+  private static @Nullable Character scanChar(
+      CharSource[] source, Applicable1<List, Object> reader) {
+    final Object mark = source[0].stream();
+    final int c = source[0].peek();
+    if (c < 0) {
+      return null;
+    }
+    if (c != '\\') {
+      if (!isPrint((char) c) || c == '"') {
+        return null;
+      }
+      source[0].advance();
+      return (char) c;
+    }
+
+    source[0].advance();
+    final int c2 = source[0].peek();
+    final int escaped;
+    switch (c2) {
+      case '"':
+      case '\\':
+        escaped = c2;
+        break;
+      case 'a':
+        escaped = 7;
+        break;
+      case 'b':
+        escaped = '\b';
+        break;
+      case 't':
+        escaped = '\t';
+        break;
+      case 'n':
+        escaped = '\n';
+        break;
+      case 'v':
+        escaped = 11;
+        break;
+      case 'f':
+        escaped = '\f';
+        break;
+      case 'r':
+        escaped = '\r';
+        break;
+
+      case '^':
+        // "\^@" is character 0, "\^A" is 1, ..., "\^_" is 31.
+        source[0].advance();
+        final int c3 = source[0].peek();
+        if (c3 < '@' || c3 > '_') {
+          source[0] = new CharSource(reader, mark);
+          return null;
+        }
+        source[0].advance();
+        return (char) (c3 - '@');
+
+      case 'u':
+        // A "u" escape is the character whose code is the four hexadecimal
+        // digits that follow.
+        source[0].advance();
+        return scanCode(source, reader, mark, 16, 4);
+
+      default:
+        if (c2 >= '0' && c2 <= '9') {
+          // "\ddd" is the character whose code is the three decimal digits
+          // "ddd".
+          return scanCode(source, reader, mark, 10, 3);
+        }
+        source[0] = new CharSource(reader, mark);
+        return null;
+    }
+    source[0].advance();
+    return (char) escaped;
+  }
+
+  /**
+   * Scans exactly {@code n} digits in the given base, and returns the character
+   * whose code they are.
+   *
+   * <p>Returns null, and rewinds {@code source} to {@code mark}, if there are
+   * too few digits or the code is not that of a character.
+   */
+  private static @Nullable Character scanCode(
+      CharSource[] source,
+      Applicable1<List, Object> reader,
+      Object mark,
+      int base,
+      int n) {
+    int code = 0;
+    for (int i = 0; i < n; i++) {
+      final int digit = Character.digit(source[0].peek(), base);
+      if (digit < 0) {
+        source[0] = new CharSource(reader, mark);
+        return null;
+      }
+      code = code * base + digit;
+      source[0].advance();
+    }
+    if (code > CHAR_MAX_ORD) {
+      source[0] = new CharSource(reader, mark);
+      return null;
+    }
+    return (char) code;
   }
 
   /** @see BuiltIn#CHAR_SUCC */
@@ -6713,6 +6875,7 @@ public abstract class Codes {
     b.add(BuiltIn.CHAR_OP_NE, CHAR_OP_NE);
     b.add(BuiltIn.CHAR_ORD, CHAR_ORD);
     b.add(BuiltIn.CHAR_PRED, CHAR_PRED);
+    b.add(BuiltIn.CHAR_SCAN, CHAR_SCAN);
     b.add(BuiltIn.CHAR_SUCC, CHAR_SUCC);
     b.add(BuiltIn.CHAR_TO_CSTRING, CHAR_TO_CSTRING);
     b.add(BuiltIn.CHAR_TO_LOWER, CHAR_TO_LOWER);

@@ -964,6 +964,28 @@ public enum BuiltIn {
   CHAR_PRED("Char", "pred", true, ts -> ts.fnType(CHAR, CHAR)),
 
   /**
+   * Function "Char.scan" of type "(char, 'a) reader &rarr; (char, 'a) reader".
+   *
+   * <p>"scan getc strm" scans a character, or an SML escape sequence denoting a
+   * character, from a prefix of the character stream {@code strm}. It does not
+   * skip leading whitespace; a space is a character like any other. It returns
+   * {@code SOME (c, rest)}, where {@code c} is the character scanned and {@code
+   * rest} is the rest of the stream, or {@code NONE} if the stream does not
+   * start with a character or starts with an ill-formed escape sequence. An
+   * escaped formatting sequence (a backslash, whitespace, and a backslash) is
+   * skipped, and the character after it is scanned.
+   */
+  CHAR_SCAN(
+      "Char",
+      "scan",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      ts.reader(CHAR, h.get(0)), ts.reader(CHAR, h.get(0))))),
+
+  /**
    * Function "Char.succ" of type "char &rarr; char".
    *
    * <p>"succ c" returns the character immediately following {@code c} in the

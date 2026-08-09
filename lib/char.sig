@@ -187,10 +187,19 @@ sig
 
   (* Returns a printable string representation of the character. *)
   val toString : char -> (*String.*)string [@@method] [@@prototype "toString c"]
-(*
-  val scan       : (Char.char, 'a) StringCvt.reader
-                   -> (char, 'a) StringCvt.reader
-*)
+  (**
+   * scans a character, or an SML escape sequence denoting a character,
+   * from a prefix of the character stream `strm`. It does not skip
+   * leading whitespace; a space is a character like any other. Returns
+   * `SOME (c, rest)`, where `c` is the character scanned and `rest` is
+   * the rest of the stream, or `NONE` if the stream does not start with
+   * a character or starts with an ill-formed escape sequence. An escaped
+   * formatting sequence (a backslash, whitespace, and a backslash) is
+   * skipped, and the character after it is scanned.
+   *)
+  val scan : (char, 'a) reader -> (char, 'a) reader
+      [@@prototype "scan getc strm"]
+
   (* Scans a character from a string, returning SOME c or NONE. *)
   val fromString : (*String.*)string -> char option [@@prototype "fromString s"]
 
