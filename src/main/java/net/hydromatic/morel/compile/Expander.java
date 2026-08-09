@@ -261,15 +261,25 @@ public class Expander {
             if (scan.exp.isExtent()) {
               for (Core.NamedPat namedPat : namedPats) {
                 patternPos.put(namedPat, scan.exp.pos);
-                if (!stepVarSet.usedPats.contains(namedPat)) {
-                  // Ignore patterns that are not used. For example, "y" is
-                  // unused in "exists x, y where x elem [1,2,3]".
+                final Generator generator = cache.bestGenerator(namedPat);
+                if (generator == null) {
                   continue;
                 }
-                final Generator generator = cache.bestGenerator(namedPat);
-                if (generator != null) {
-                  generatorMap.put(namedPat, generator);
+                if (!stepVarSet.usedPats.contains(namedPat)
+                    && generator.cardinality
+                        == Generator.Cardinality.INFINITE) {
+                  // Ignore patterns that no step refers to and that we could
+                  // not ground anyway. For example, "y" is unused in
+                  // "exists x, y where x elem [1,2,3]", and its extent is
+                  // infinite; dropping it does not change whether the query
+                  // has rows.
+                  //
+                  // A pattern that no step refers to but that has a finite
+                  // generator is kept: it is still a column of the query's
+                  // output, as "b" is in "from b: bool, i where i elem [3,5]".
+                  continue;
                 }
+                generatorMap.put(namedPat, generator);
               }
               allPats.addAll(namedPats);
             }
@@ -323,18 +333,17 @@ public class Expander {
             final Core.Scan scan = (Core.Scan) step;
             if (scan.exp.isExtent()) {
               for (Core.NamedPat p : scan.pat.expand()) {
-                // Skip scan variables that are not used, e.g. "y" in
-                // "exists x, y where x elem [1, 2]".
-                if (stepVarSet.usedPats.contains(p)) {
-                  addGeneratorScan(
-                      typeSystem,
-                      patternState,
-                      p,
-                      generatorMap,
-                      allPats,
-                      allScanPats,
-                      fromBuilder);
-                }
+                // Variables that no step refers to and that we could not
+                // ground, e.g. "y" in "exists x, y where x elem [1, 2]", have
+                // no entry in generatorMap, and addGeneratorScan skips them.
+                addGeneratorScan(
+                    typeSystem,
+                    patternState,
+                    p,
+                    generatorMap,
+                    allPats,
+                    allScanPats,
+                    fromBuilder);
               }
               if (scan.env.atom
                   && fromBuilder.stepEnv().bindings.size() == 1

@@ -844,6 +844,108 @@ from i in [1, 2], p: pair where p.b;
 exists p: pair where p.b;
 > val it = true : bool
 
+(* The pattern of an unbounded scan may be a tuple or a record, and then means
+ * the same as one unbounded scan per component: the extent of a product type
+ * is the product of its components' extents. Each component is grounded by
+ * whichever strategy suits it - 'b' by materializing the finite type 'bool',
+ * 'i' from the collection that constrains it. *)
+from b, i where i elem [3, 5] andalso b;
+> b    i
+> ---- -
+> true 3
+> true 5
+>
+> val it : {b:bool, i:int} bag
+from (b, i) where i elem [3, 5] andalso b;
+> b    i
+> ---- -
+> true 3
+> true 5
+>
+> val it : {b:bool, i:int} bag
+from {b, i} where i elem [3, 5] andalso b;
+> b    i
+> ---- -
+> true 3
+> true 5
+>
+> val it : {b:bool, i:int} bag
+
+(* A component that no step refers to is still a column of the result, and is
+ * materialized if its type is finite. *)
+from (b: bool, i) where i elem [3, 5];
+> b     i
+> ----- -
+> false 3
+> false 5
+> true  3
+> true  5
+>
+> val it : {b:bool, i:int} bag
+from {b: bool, i} where i elem [3, 4, 5];
+> b     i
+> ----- -
+> false 3
+> false 4
+> false 5
+> true  3
+> true  4
+> true  5
+>
+> val it : {b:bool, i:int} bag
+
+(*) Nested products are decomposed too.
+from (b: bool, (c: bool, i)) where i elem [3, 5] andalso b andalso c;
+> b    c    i
+> ---- ---- -
+> true true 3
+> true true 5
+>
+> val it : {b:bool, c:bool, i:int} bag
+
+(* An 'as' pattern names the whole product as well as its components, so the
+ * product's extent is materialized as a whole. *)
+from p as (b: bool, c: bool) where b;
+> b    c     p
+>            1    2
+> ---- ----- ---- -----
+> true false true false
+> true true  true true
+>
+> val it : {b:bool, c:bool, p:bool * bool} bag
+
+(* The pattern of an unbounded scan must be composed of variables, tuples and
+ * records. Any other pattern selects some of the values of its type rather
+ * than naming them all; write 'from p in exp' to scan a collection with such
+ * a pattern. *)
+from SOME i;
+> stdIn:1.6-1.12 Error: pattern 'SOME i' cannot be enumerated; the pattern of an unbounded scan must be composed of variables, tuples and records
+>   raised at: stdIn:1.6-1.12
+from 1;
+> stdIn:1.6 Error: pattern '1' cannot be enumerated; the pattern of an unbounded scan must be composed of variables, tuples and records
+>   raised at: stdIn:1.6
+from [i, j];
+> stdIn:1.6-1.12 Error: pattern '[i, j]' cannot be enumerated; the pattern of an unbounded scan must be composed of variables, tuples and records
+>   raised at: stdIn:1.6-1.12
+from i :: j;
+> stdIn:1.6-1.12 Error: pattern 'i :: j' cannot be enumerated; the pattern of an unbounded scan must be composed of variables, tuples and records
+>   raised at: stdIn:1.6-1.12
+from _;
+> stdIn:1.6 Error: pattern '_' cannot be enumerated; the pattern of an unbounded scan must be composed of variables, tuples and records
+>   raised at: stdIn:1.6
+from (i, _);
+> stdIn:1.10 Error: pattern '_' cannot be enumerated; the pattern of an unbounded scan must be composed of variables, tuples and records
+>   raised at: stdIn:1.10
+from ();
+> stdIn:1.6-1.8 Error: pattern '()' cannot be enumerated; a tuple or record pattern in an unbounded scan must have at least one component
+>   raised at: stdIn:1.6-1.8
+from (i: int, ());
+> stdIn:1.15-1.17 Error: pattern '()' cannot be enumerated; a tuple or record pattern in an unbounded scan must have at least one component
+>   raised at: stdIn:1.15-1.17
+exists SOME i;
+> stdIn:1.8-1.14 Error: pattern 'SOME i' cannot be enumerated; the pattern of an unbounded scan must be composed of variables, tuples and records
+>   raised at: stdIn:1.8-1.14
+
 (*) Finite-type extent materialization.
 from b where b orelse not b;
 > val it = [false,true] : bool bag
