@@ -130,7 +130,7 @@ format codes include `%Y` (4-digit year), `%m` (2-digit month),
 <h3><code>fromString</code></h3>
 
 `fromString s` parses a date from a prefix of the string `s`, which should be in the
-format produced by `toString` (e.g., `"Thu Jan  1 00:00:00 1970"`).
+format produced by `toString` (e.g., `"Thu Jan 01 00:00:00 1970"`).
 Returns `SOME d` if successful, `NONE` otherwise; characters after the
 date are ignored. Equivalent to `StringCvt.scanString scan`.
 
@@ -192,7 +192,8 @@ of range are normalized, as in `date`.
 <h3><code>toString</code></h3>
 
 `toString d` (or `d.toString ()`) formats `d` as a string in the format `"Www Mmm DD HH:MM:SS YYYY"`,
-for example `"Thu Jan  1 00:00:00 1970"`.
+for example `"Thu Jan 01 00:00:00 1970"`. The day is padded with a zero;
+the `%c` format code of `fmt` pads it with a space.
 
 <a id="toTime-impl"></a>
 <h3><code>toTime</code></h3>

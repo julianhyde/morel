@@ -146,6 +146,23 @@ Date.compare (Date.fromTimeUniv (Time.zeroTime), Date.fromTimeUniv (Time.fromSec
 Date.fmt "%Y-%m-%d" (Date.fromTimeUniv (Time.zeroTime));
 > val it = "1970-01-01" : string
 
+(* toString pads a single-digit day with a zero, and the "%c" format code
+   pads it with a space; the two are otherwise the same. *)
+Date.toString (Date.fromTimeUniv (Time.zeroTime));
+> val it = "Thu Jan 01 00:00:00 1970" : string
+Date.fmt "%c" (Date.fromTimeUniv (Time.zeroTime));
+> val it = "Thu Jan  1 00:00:00 1970" : string
+Date.fmt "%d" (Date.fromTimeUniv (Time.zeroTime));
+> val it = "01" : string
+Date.fmt "%e" (Date.fromTimeUniv (Time.zeroTime));
+> val it = " 1" : string
+
+(*) A two-digit day is written the same way by both.
+Date.toString (Date.fromTimeUniv (Time.fromSeconds 1500000));
+> val it = "Sun Jan 18 08:40:00 1970" : string
+Date.fmt "%c" (Date.fromTimeUniv (Time.fromSeconds 1500000));
+> val it = "Sun Jan 18 08:40:00 1970" : string
+
 (* [scan getc strm] reads a date in the format "Www Mmm DD HH:MM:SS YYYY"
    produced by toString. The expected values are those of SML/NJ, except
    where noted. *)

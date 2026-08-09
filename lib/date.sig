@@ -80,7 +80,7 @@ sig
 
   (**
    * parses a date from a prefix of the string `s`, which should be in the
-   * format produced by `toString` (e.g., `"Thu Jan  1 00:00:00 1970"`).
+   * format produced by `toString` (e.g., `"Thu Jan 01 00:00:00 1970"`).
    * Returns `SOME d` if successful, `NONE` otherwise; characters after the
    * date are ignored. Equivalent to `StringCvt.scanString scan`.
    *)
@@ -131,7 +131,8 @@ sig
 
   (**
    * formats `d` as a string in the format `"Www Mmm DD HH:MM:SS YYYY"`,
-   * for example `"Thu Jan  1 00:00:00 1970"`.
+   * for example `"Thu Jan 01 00:00:00 1970"`. The day is padded with a zero;
+   * the `%c` format code of `fmt` pads it with a space.
    *)
   val toString : date -> string [@@method] [@@prototype "toString d"]
 

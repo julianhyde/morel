@@ -1358,7 +1358,7 @@ public abstract class Codes {
             sb.append(d.format(Formatters.MMMM));
             break;
           case 'c':
-            sb.append(dateToString(d));
+            sb.append(dateToString(d, false));
             break;
           case 'd':
             sb.append(format("%02d", d.getDayOfMonth()));
@@ -1423,9 +1423,22 @@ public abstract class Codes {
    * used by SML's {@code Date.toString}.
    */
   private static String dateToString(OffsetDateTime d) {
+    return dateToString(d, true);
+  }
+
+  /**
+   * Formats an {@link OffsetDateTime} as "Www Mmm DD HH:MM:SS YYYY".
+   *
+   * <p>{@code Date.toString} pads the day with a zero, and the {@code %c}
+   * format code pads it with a space; the two are otherwise the same. The year
+   * is not padded, as {@code %Y} does not pad it.
+   */
+  private static String dateToString(OffsetDateTime d, boolean zeroPadDay) {
     return format(
         Locale.ROOT,
-        "%s %s %2d %02d:%02d:%02d %4d",
+        zeroPadDay
+            ? "%s %s %02d %02d:%02d:%02d %d"
+            : "%s %s %2d %02d:%02d:%02d %d",
         d.format(Formatters.EEE),
         d.format(Formatters.MMM),
         d.getDayOfMonth(),

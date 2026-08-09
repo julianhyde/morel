@@ -1230,7 +1230,13 @@ public enum BuiltIn {
   DATE_SECOND(
       "Date", "second", true, ts -> ts.fnType(ts.lookup(Eqtype.DATE), INT)),
 
-  /** Function "Date.toString", of type "date &rarr; string". */
+  /**
+   * Function "Date.toString", of type "date &rarr; string".
+   *
+   * <p>Formats a date as "Www Mmm DD HH:MM:SS YYYY", for example "Thu Jan 01
+   * 00:00:00 1970". The day is padded with a zero; the "%c" format code of
+   * {@link #DATE_FMT fmt} pads it with a space.
+   */
   DATE_TO_STRING(
       "Date",
       "toString",
