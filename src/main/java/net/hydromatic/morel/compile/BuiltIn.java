@@ -4236,6 +4236,30 @@ public enum BuiltIn {
       "String", "<>", ts -> ts.fnType(ts.tupleType(STRING, STRING), BOOL)),
 
   /**
+   * Function "String.scan" of type "(char, 'a) reader &rarr; (string, 'a)
+   * reader".
+   *
+   * <p>"scan getc strm" scans its character source as a sequence of printable
+   * characters, converting SML escape sequences into the characters they
+   * denote. It does not skip leading whitespace. It returns as many characters
+   * as it can, stopping when it reaches the end of the stream, a non-printing
+   * character, or an improper escape sequence, and it returns the rest of the
+   * stream along with them. It returns {@code NONE} if it can scan no
+   * characters at all and the stream has not ended.
+   *
+   * <p>Unlike {@link #CHAR_SCAN}, it accepts an unescaped double-quote.
+   */
+  STRING_SCAN(
+      "String",
+      "scan",
+      ts ->
+          ts.forallType(
+              1,
+              h ->
+                  ts.fnType(
+                      ts.reader(CHAR, h.get(0)), ts.reader(STRING, h.get(0))))),
+
+  /**
    * Function "String.size", of type "string &rarr; int".
    *
    * <p>"size s" returns |s|, the number of characters in string s.

@@ -628,7 +628,7 @@ public abstract class Codes {
         public List apply(Applicable1<List, Object> reader, Object stream) {
           final CharSource[] source = {new CharSource(reader, stream)};
           skipGaps(source, reader);
-          final Character c = scanChar(source, reader);
+          final Character c = scanChar(source, reader, false);
           return c == null
               ? OPTION_NONE
               : optionSome(ImmutableList.of(c, source[0].stream()));
@@ -669,22 +669,24 @@ public abstract class Codes {
    * Scans a character, or an SML escape sequence denoting a character, from
    * {@code source}, and returns null if {@code source} does not start with one.
    *
-   * <p>A character stands for itself if it is printable and is neither a
-   * double-quote nor a backslash; those two, and the non-printable characters,
-   * have to be escaped. If the result is null, {@code source} is left where it
-   * was.
+   * <p>A character stands for itself if it is printable and is not a backslash;
+   * a backslash, and the non-printable characters, have to be escaped. A
+   * double-quote stands for itself only if {@code quoteOk}; it does in a string
+   * but not in a character. If the result is null, {@code source} is left where
+   * it was.
    *
    * @see BuiltIn#CHAR_SCAN
+   * @see BuiltIn#STRING_SCAN
    */
   private static @Nullable Character scanChar(
-      CharSource[] source, Applicable1<List, Object> reader) {
+      CharSource[] source, Applicable1<List, Object> reader, boolean quoteOk) {
     final Object mark = source[0].stream();
     final int c = source[0].peek();
     if (c < 0) {
       return null;
     }
     if (c != '\\') {
-      if (!isPrint((char) c) || c == '"') {
+      if (!isPrint((char) c) || c == '"' && !quoteOk) {
         return null;
       }
       source[0].advance();
@@ -5051,6 +5053,32 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#STRING_SCAN */
+  private static final Applicable STRING_SCAN =
+      new BaseApplicable2<List, Applicable1<List, Object>, Object>(
+          BuiltIn.STRING_SCAN) {
+        @Override
+        public List apply(Applicable1<List, Object> reader, Object stream) {
+          final CharSource[] source = {new CharSource(reader, stream)};
+          final StringBuilder b = new StringBuilder();
+          for (; ; ) {
+            // An escaped formatting sequence stands for nothing, and is
+            // consumed even if what follows it cannot be scanned.
+            skipGaps(source, reader);
+            final Character c = scanChar(source, reader, true);
+            if (c == null) {
+              break;
+            }
+            b.append((char) c);
+          }
+          if (b.length() == 0 && source[0].peek() >= 0) {
+            // We scanned nothing, and it was not because the stream ended.
+            return OPTION_NONE;
+          }
+          return optionSome(ImmutableList.of(b.toString(), source[0].stream()));
+        }
+      };
+
   /** @see BuiltIn#STRING_SIZE */
   private static final Applicable1 STRING_SIZE =
       new BaseApplicable1<Integer, String>(BuiltIn.STRING_SIZE) {
@@ -7173,6 +7201,7 @@ public abstract class Codes {
     b.add(BuiltIn.STRING_OP_LE, STRING_OP_LE);
     b.add(BuiltIn.STRING_OP_LT, STRING_OP_LT);
     b.add(BuiltIn.STRING_OP_NE, STRING_OP_NE);
+    b.add(BuiltIn.STRING_SCAN, STRING_SCAN);
     b.add(BuiltIn.STRING_SIZE, STRING_SIZE);
     b.add(BuiltIn.STRING_STR, STRING_STR);
     b.add(BuiltIn.STRING_SUB, STRING_SUB);

@@ -210,7 +210,6 @@ sig
   val toString : string -> string
 *) [@@prototype "toString s"]
 
-(*
   (**
    * scans its character source as a sequence of printable
    * characters, converting SML escape sequences into the appropriate
@@ -219,10 +218,11 @@ sig
    * the end of the string or a non-printing character (i.e., one not
    * satisfying `isPrint`), or if it encounters an improper escape
    * sequence. It returns the remaining characters as the rest of the
-   * stream.
+   * stream. It returns `NONE` if it can scan no characters at all and
+   * the stream has not ended.
    *)
-  val scan : (char, 'a) StringCvt.reader -> (string, 'a) StringCvt.reader
-*) [@@prototype "scan getc strm"]
+  val scan : (char, 'a) reader -> (string, 'a) reader
+      [@@prototype "scan getc strm"]
 
 (*
   (**

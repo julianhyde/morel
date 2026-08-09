@@ -62,6 +62,7 @@ val <a id='>' href="#>-impl">></a> : string * string -> bool
 val <a id='>=' href="#>=-impl">>=</a> : string * string -> bool
 val <a id='=' href="#=-impl">=</a> : string * string -> bool
 val <a id='<>' href="#<>-impl"><></a> : string * string -> bool
+val <a id='scan' href="#scan-impl">scan</a> : (char, 'a) reader -> (string, 'a) reader
 </pre>
 
 <a id="string-impl"></a>
@@ -254,5 +255,18 @@ ordering.
 <h3><code><></code></h3>
 
 `s <> t` returns true if `s` and `t` are not equal.
+
+<a id="scan-impl"></a>
+<h3><code>scan</code></h3>
+
+`scan getc strm` scans its character source as a sequence of printable
+characters, converting SML escape sequences into the appropriate
+characters. It does not skip leading whitespace. It returns as many
+characters as can successfully be scanned, stopping when it reaches
+the end of the string or a non-printing character (i.e., one not
+satisfying `isPrint`), or if it encounters an improper escape
+sequence. It returns the remaining characters as the rest of the
+stream. It returns `NONE` if it can scan no characters at all and
+the stream has not ended.
 
 [//]: # (end:lib/string)

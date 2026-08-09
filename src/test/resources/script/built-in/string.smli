@@ -30,8 +30,8 @@ String;
 > val it =
 >   {<=fn,<==fn,<>=fn,==fn,>=fn,>==fn,^=fn,collate=fn,compare=fn,concat=fn,
 >    concatWith=fn,explode=fn,extract=fn,fields=fn,implode=fn,isPrefix=fn,
->    isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,size=fn,str=fn,
->    sub=fn,substring=fn,tokens=fn,translate=fn}
+>    isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,scan=fn,size=fn,
+>    str=fn,sub=fn,substring=fn,tokens=fn,translate=fn}
 >   : {<:string * string -> bool, <=:string * string -> bool,
 >       <>:string * string -> bool, =:string * string -> bool,
 >       >:string * string -> bool, >=:string * string -> bool,
@@ -46,6 +46,7 @@ String;
 >       isSubstring:string -> string -> bool,
 >       isSuffix:string -> string -> bool,
 >       map:(char -> char) -> string -> string, maxSize:int,
+>       scan:('a -> (char * 'a) option) -> 'a -> (string * 'a) option,
 >       size:string -> int, str:char -> string, sub:string * int -> char,
 >       substring:string * int * int -> string,
 >       tokens:(char -> bool) -> string -> string list,
@@ -409,9 +410,95 @@ String.`<>` ("a", "b");
 String.`<>` ("a", "a");
 > val it = false : bool
 
+(* [scan getc strm] scans a sequence of printable characters, converting SML
+   escape sequences into the characters they denote. Like Char.scan, it does
+   not skip leading whitespace; unlike Char.scan, it stops rather than fails
+   when it meets something it cannot scan. The expected values are those of
+   SML/NJ. *)
+fun reader s i =
+  if i < String.size s then SOME (String.sub (s, i), i + 1) else NONE;
+> val reader = fn : string -> int -> (char * int) option
+String.scan;
+> val it = fn : ('a -> (char * 'a) option) -> 'a -> (string * 'a) option
+String.scan (reader "abc") 0;
+> val it = SOME ("abc",3) : (string * int) option
+String.scan (reader "hello world") 0;
+> val it = SOME ("hello world",11) : (string * int) option
+
+(*) Leading whitespace is scanned, not skipped.
+String.scan (reader " ab") 0;
+> val it = SOME (" ab",3) : (string * int) option
+
+(*) The empty stream yields the empty string.
+String.scan (reader "") 0;
+> val it = SOME ("",0) : (string * int) option
+
+(*) Escape sequences are converted, as in Char.scan.
+String.scan (reader "a\\nb") 0;
+> val it = SOME ("a\nb",4) : (string * int) option
+String.scan (reader "a\\065b") 0;
+> val it = SOME ("aAb",6) : (string * int) option
+String.scan (reader "a\\^Ab") 0;
+> val it = SOME ("a\^Ab",5) : (string * int) option
+String.scan (reader "a\\u0042c") 0;
+> val it = SOME ("aBc",8) : (string * int) option
+String.scan (reader "a\\\\b") 0;
+> val it = SOME ("a\\b",4) : (string * int) option
+
+(*) Unlike Char.scan, an unescaped double-quote is a character.
+String.scan (reader "a\"b") 0;
+> val it = SOME ("a\"b",3) : (string * int) option
+String.scan (reader "\"abc") 0;
+> val it = SOME ("\"abc",4) : (string * int) option
+
+(* Scanning stops at a non-printable character, or at an escape sequence that
+   is ill-formed, has too few digits, or is out of range; what is scanned so
+   far is returned, and the rest of the stream begins at the character that
+   stopped it. *)
+String.scan (reader "abc\ndef") 0;
+> val it = SOME ("abc",3) : (string * int) option
+String.scan (reader "a\\q") 0;
+> val it = SOME ("a",1) : (string * int) option
+String.scan (reader "a\\256b") 0;
+> val it = SOME ("a",1) : (string * int) option
+String.scan (reader "a\\12b") 0;
+> val it = SOME ("a",1) : (string * int) option
+String.scan (reader "a\\uD800c") 0;
+> val it = SOME ("a",1) : (string * int) option
+String.scan (reader "a\\") 0;
+> val it = SOME ("a",1) : (string * int) option
+
+(*) A character that came from an escape sequence need not be printable.
+String.scan (reader "\\255") 0;
+> val it = SOME ("\255",4) : (string * int) option
+String.scan (reader "\\127x") 0;
+> val it = SOME ("\127x",5) : (string * int) option
+
+(* An escaped formatting sequence stands for nothing, and is consumed even if
+   what follows it cannot be scanned. *)
+String.scan (reader "a\\ \\b") 0;
+> val it = SOME ("ab",5) : (string * int) option
+String.scan (reader "a\\ \\") 0;
+> val it = SOME ("a",4) : (string * int) option
+String.scan (reader "a\\ \\\\qz") 0;
+> val it = SOME ("a",4) : (string * int) option
+
+(* If nothing at all can be scanned, the result is the empty string if the
+   stream has ended, and NONE if it has not. *)
+String.scan (reader "\\ \\") 0;
+> val it = SOME ("",3) : (string * int) option
+String.scan (reader "\\ \\\\ \\") 0;
+> val it = SOME ("",6) : (string * int) option
+String.scan (reader "\\ \\a") 0;
+> val it = SOME ("a",4) : (string * int) option
+String.scan (reader "\\q") 0;
+> val it = NONE : (string * int) option
+String.scan (reader "\n") 0;
+> val it = NONE : (string * int) option
+String.scan (reader "\\ a") 0;
+> val it = NONE : (string * int) option
+
 (* val toString : string -> String.string
- * val scan       : (char, 'a) StringCvt.reader
- *                    -> (string, 'a) StringCvt.reader
  * val fromString : String.string -> string option
  * val toCString : string -> String.string
  * val fromCString : String.string -> string option *)
