@@ -1118,6 +1118,12 @@ public enum BuiltIn {
   /**
    * Function "Date.date", of type "{day:int, hour:int, minute:int, month:month,
    * offset:time option, second:int, year:int} &rarr; date".
+   *
+   * <p>A day, hour, minute or second outside its usual range carries into the
+   * field above it, as it does in C's {@code mktime}: day 32 of March is April
+   * 1, day 0 is the last day of February, and hour 25 is hour 1 of the next
+   * day. It raises {@link BuiltInExn#DATE Date} if the year is so far out of
+   * range that there is no such date.
    */
   DATE_DATE(
       "Date",
@@ -1206,9 +1212,8 @@ public enum BuiltIn {
    * #DATE_TO_STRING toString}. It does not skip leading whitespace, the fields
    * are separated by exactly one space, and the day may be written with a
    * leading zero or a leading space. The weekday must be a valid name but is
-   * otherwise ignored; the weekday of the result is determined by the date. It
-   * raises {@link BuiltInExn#DATE Date} if the fields are well-formed but do
-   * not denote a date, as {@link #DATE_DATE date} does.
+   * otherwise ignored; the weekday of the result is determined by the date.
+   * Fields that are out of range are normalized, as in {@link #DATE_DATE date}.
    */
   DATE_SCAN(
       "Date",

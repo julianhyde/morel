@@ -203,7 +203,9 @@ Raises `Time` if the time is too large to be represented.
 <a id="fromString-impl"></a>
 <h3><code>fromString</code></h3>
 
-`fromString s` parses a time value from the string `s`, which should be a decimal number
-of seconds. Returns `SOME t` if successful, `NONE` otherwise.
+`fromString s` parses a time from a prefix of the string `s`, which should be a decimal
+number of seconds, after skipping initial whitespace. Returns `SOME t` if
+successful, `NONE` otherwise; characters after the number are ignored.
+Equivalent to `StringCvt.scanString scan`.
 
 [//]: # (end:lib/time)

@@ -200,7 +200,12 @@ sig
   val scan : (char, 'a) reader -> (char, 'a) reader
       [@@prototype "scan getc strm"]
 
-  (* Scans a character from a string, returning SOME c or NONE. *)
+  (**
+   * scans a character, or an SML escape sequence denoting a character, from
+   * a prefix of the string `s`. It does not skip leading whitespace, and
+   * characters after the first are ignored. Equivalent to
+   * `StringCvt.scanString scan`.
+   *)
   val fromString : (*String.*)string -> char option [@@prototype "fromString s"]
 
   (** returns `SOME c`, the character with code `i`, or `NONE` if `i` is not in

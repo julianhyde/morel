@@ -999,13 +999,13 @@ Real.fromString "2.x";
 > val it = SOME 2 : real option
 (*) fromString cannot parse "inf", "nan" etc.
 Real.fromString "inf";
-> val it = NONE : real option
+> val it = SOME inf : real option
 Real.fromString "~inf";
-> val it = NONE : real option
+> val it = SOME ~inf : real option
 Real.fromString "-inf";
-> val it = NONE : real option
+> val it = SOME ~inf : real option
 Real.fromString "nan";
-> val it = NONE : real option
+> val it = SOME nan : real option
 
 (* Side-by-side comparison of how each format handles a range of values.
  * To run in SML, prepend `open StringCvt;` (Morel exposes the constructors

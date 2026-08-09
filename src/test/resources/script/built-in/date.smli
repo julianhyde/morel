@@ -77,15 +77,13 @@ Date.localOffset ();
 Date.date {year=1970, month=Jan, day=1, hour=0, minute=0, second=0, offset=NONE};
 > val it = 1970-01-01T00:00Z : date
 
-(*) Date exception: day out of range
+(*) A day outside its usual range carries into the month.
 Date.date {year=1970, month=Jan, day=32, hour=0, minute=0, second=0, offset=NONE};
-> uncaught exception Date
->   raised at: stdIn:1.1-1.82
+> val it = 1970-02-01T00:00Z : date
 
-(*) Date exception: hour out of range
+(*) An hour outside its usual range carries into the day.
 Date.date {year=1970, month=Jan, day=1, hour=25, minute=0, second=0, offset=NONE};
-> uncaught exception Date
->   raised at: stdIn:1.1-1.82
+> val it = 1970-01-02T01:00Z : date
 
 (*) Remaining Date functions, using epoch as a convenient date
 Date.year (Date.fromTimeUniv (Time.zeroTime));
@@ -221,24 +219,19 @@ Date.scan (reader "") 0;
 Date.scan (reader "abc") 0;
 > val it = NONE : (date * int) option
 
-(* Morel raises Date if the fields are well-formed but do not denote a date,
-   as Date.date does; SML/NJ instead normalizes, scanning "Mar 32" as April 1
-   and "25:06:45" as 01:06:45 the next day. *)
+(* Fields that are out of range are normalized, as in Date.date: "Mar 32" is
+   April 1, "Mar 00" is the last day of February, and "25:06:45" is 01:06:45
+   the next day. *)
 Date.scan (reader "Wed Mar 32 19:06:45 2023") 0;
-> uncaught exception Date
->   raised at: stdIn:1.1-1.48
+> val it = SOME (2023-04-01T19:06:45Z,24) : (date * int) option
 Date.scan (reader "Wed Mar 00 19:06:45 2023") 0;
-> uncaught exception Date
->   raised at: stdIn:1.1-1.48
+> val it = SOME (2023-02-28T19:06:45Z,24) : (date * int) option
 Date.scan (reader "Fri Feb 30 12:00:00 2023") 0;
-> uncaught exception Date
->   raised at: stdIn:1.1-1.48
+> val it = SOME (2023-03-02T12:00Z,24) : (date * int) option
 Date.scan (reader "Wed Mar 08 25:06:45 2023") 0;
-> uncaught exception Date
->   raised at: stdIn:1.1-1.48
+> val it = SOME (2023-03-09T01:06:45Z,24) : (date * int) option
 Date.scan (reader "Wed Mar 08 19:06:75 2023") 0;
-> uncaught exception Date
->   raised at: stdIn:1.1-1.48
+> val it = SOME (2023-03-08T19:07:15Z,24) : (date * int) option
 
 (* Morel accepts any year that forms a date, whereas SML/NJ returns NONE for
    "0000" and raises Date for "20". *)

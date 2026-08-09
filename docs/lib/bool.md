@@ -71,8 +71,11 @@ with "true" or "false", `NONE` otherwise.
 <a id="fromString-impl"></a>
 <h3><code>fromString</code></h3>
 
-`fromString s` scans a `bool` value from the string `s`. Returns `SOME (true)` if
-`s` is "true", `SOME (false)` if `s` is "false", and `NONE` otherwise.
+`fromString s` scans a `bool` value from a prefix of the string `s`, after skipping
+initial whitespace. Returns `SOME (true)` if `s` starts with "true",
+`SOME (false)` if it starts with "false", and `NONE` otherwise;
+characters after the value are ignored. Equivalent to
+`StringCvt.scanString scan`.
 
 <a id="andalso-impl"></a>
 <h3><code>andalso</code></h3>

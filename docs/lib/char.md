@@ -286,7 +286,10 @@ skipped, and the character after it is scanned.
 <a id="fromString-impl"></a>
 <h3><code>fromString</code></h3>
 
-`fromString s`
+`fromString s` scans a character, or an SML escape sequence denoting a character, from
+a prefix of the string `s`. It does not skip leading whitespace, and
+characters after the first are ignored. Equivalent to
+`StringCvt.scanString scan`.
 
 <a id="fromInt-impl"></a>
 <h3><code>fromInt</code></h3>

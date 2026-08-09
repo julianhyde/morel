@@ -303,14 +303,18 @@ Char.fromString "\\065";
 > val it = SOME #"A" : char option
 Char.fromString "a";
 > val it = SOME #"a" : char option
+
+(* A non-printable character has to be written as an escape sequence; the
+   character itself is not scanned, even though toString would print it as
+   that escape sequence. *)
 Char.fromString "\^@";
-> val it = SOME #"\^@" : char option
+> val it = NONE : char option
 Char.fromString "\t";
-> val it = SOME #"\t" : char option
+> val it = NONE : char option
 Char.fromString "\\t";
 > val it = SOME #"\t" : char option
 Char.fromString "\009";
-> val it = SOME #"\t" : char option
+> val it = NONE : char option
 Char.fromString "\\009";
 > val it = SOME #"\t" : char option
 

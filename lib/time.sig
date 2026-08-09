@@ -143,8 +143,10 @@ sig
       [@@prototype "scan getc strm"]
 
   (**
-   * parses a time value from the string `s`, which should be a decimal number
-   * of seconds. Returns `SOME t` if successful, `NONE` otherwise.
+   * parses a time from a prefix of the string `s`, which should be a decimal
+   * number of seconds, after skipping initial whitespace. Returns `SOME t` if
+   * successful, `NONE` otherwise; characters after the number are ignored.
+   * Equivalent to `StringCvt.scanString scan`.
    *)
   val fromString : string -> time option [@@prototype "fromString s"]
 end
