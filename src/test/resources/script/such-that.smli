@@ -946,6 +946,29 @@ exists SOME i;
 > stdIn:1.8-1.14 Error: pattern 'SOME i' cannot be enumerated; the pattern of an unbounded scan must be composed of variables, tuples and records
 >   raised at: stdIn:1.8-1.14
 
+(* A variable whose values cannot be enumerated is an error. Where the query
+ * still has a scan, the expander names the pattern; where the query has one
+ * step and has simplified to the extent alone, there is no pattern left to
+ * name, so the message names the type. Either way it is an error, not a
+ * crash. *)
+from i;
+> stdIn:1.6 Error: cannot enumerate all values of type ''a'
+>   raised at: stdIn:1.6
+from i, j;
+> stdIn:1.6 Error: pattern 'i' is not grounded
+>   raised at: stdIn:1.6
+from b: bool, i;
+> stdIn:1.15 Error: pattern 'i' is not grounded
+>   raised at: stdIn:1.15
+from (b: bool, i);
+> stdIn:1.6-1.18 Error: pattern 'i' is not grounded
+>   raised at: stdIn:1.6-1.18
+
+(* A query that only counts its rows, as 'exists' does, may ignore a variable
+ * that it cannot enumerate if no step refers to it. *)
+exists w, x, y where (x, 2) elem [(1, 2), (1, 3), (4, 3)];
+> val it = true : bool
+
 (*) Finite-type extent materialization.
 from b where b orelse not b;
 > val it = [false,true] : bool bag
