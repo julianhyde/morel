@@ -1621,71 +1621,6 @@ public class TypeResolver {
     return Triple.singleton(p.rootEnv, p.env, rv);
   }
 
-  /**
-   * Checks that {@code pat}, the pattern of an unbounded scan such as "{@code
-   * from p}", describes values that Morel can enumerate.
-   *
-   * <p>An unbounded scan has no collection to draw from; it deduces its rows
-   * from the pattern's type, and every variable the pattern binds must end up
-   * with a value. So the pattern may be composed only of variables, tuples,
-   * records, "as" patterns and type annotations. A constructor, literal or list
-   * pattern would instead select some of the values of its type, and a wildcard
-   * would name none, so we reject them. Write "{@code from p in exp}" to scan a
-   * collection with such a pattern.
-   */
-  private static void checkEnumerable(Ast.Pat pat) {
-    switch (pat.op) {
-      case ID_PAT:
-        break;
-
-      case ANNOTATED_PAT:
-        checkEnumerable(((Ast.AnnotatedPat) pat).pat);
-        break;
-
-      case AS_PAT:
-        checkEnumerable(((Ast.AsPat) pat).pat);
-        break;
-
-      case TUPLE_PAT:
-        checkNotEmpty(pat, ((Ast.TuplePat) pat).args);
-        ((Ast.TuplePat) pat).args.forEach(TypeResolver::checkEnumerable);
-        break;
-
-      case RECORD_PAT:
-        checkNotEmpty(pat, ((Ast.RecordPat) pat).args.values());
-        ((Ast.RecordPat) pat)
-            .args
-            .values()
-            .forEach(TypeResolver::checkEnumerable);
-        break;
-
-      default:
-        final String message =
-            format(
-                "pattern '%s' cannot be enumerated; "
-                    + "the pattern of an unbounded scan must be composed of "
-                    + "variables, tuples and records",
-                pat);
-        throw new CompileException(message, false, pat.pos);
-    }
-  }
-
-  /**
-   * Checks that a tuple or record pattern in an unbounded scan has at least one
-   * component, and therefore binds at least one variable. "{@code from ()}"
-   * asks Morel to enumerate values but names none of them.
-   */
-  private static void checkNotEmpty(Ast.Pat pat, Collection<Ast.Pat> args) {
-    if (args.isEmpty()) {
-      final String message =
-          format(
-              "pattern '%s' cannot be enumerated; a tuple or record pattern "
-                  + "in an unbounded scan must have at least one component",
-              pat);
-      throw new CompileException(message, false, pat.pos);
-    }
-  }
-
   private Triple deduceScanStepType(
       Ast.Scan scan,
       Triple p,
@@ -1711,7 +1646,6 @@ public class TypeResolver {
       scanEnv = p.env;
     }
     if (scan.exp == null) {
-      checkEnumerable(scan.pat);
       scanExp3 = null;
       // If we're iterating over 'all values' of the type, we'd better not
       // commit to doing it in order.
