@@ -240,30 +240,24 @@ sig
    *)
   val fromString : string -> string option [@@prototype "fromString s"]
 
-(*
   (**
    * returns a string corresponding to `s`, with non-printable
    * characters replaced by C escape sequences. This is equivalent to
    *
    * <pre>translate Char.toCString s</pre>
    *)
-  val toCString : string -> string
-*) [@@prototype "toCString s"]
+  val toCString : string -> string [@@method] [@@prototype "toCString s"]
 
-(*
   (**
-   * scans the string `s` as a string in the C language,
-   * converting C escape sequences into the appropriate characters. The
-   * semantics are identical to `fromString` above, except that C escape
-   * sequences are used (see ISO C standard ISO/IEC 9899:1990).
+   * scans the string `s` as a string in the C language, converting C escape
+   * sequences into the characters they denote. Returns `NONE` unless the
+   * whole of `s` is scanned; unlike `fromString`, it does not stop early and
+   * ignore the rest. `fromCString ""` returns `SOME ""`.
    *
-   * For more information on the allowed escape sequences, see the entry
-   * for `CHAR.fromCString`. Note that `fromCString` accepts an unescaped
-   * single quote character, but does not accept an unescaped double
-   * quote character.
+   * For the escape sequences it accepts, see `Char.fromCString`. Note that it
+   * accepts an unescaped double-quote and an unescaped single quote.
    *)
-  val fromCString : string -> string option
-*) [@@prototype "fromCString s"]
+  val fromCString : string -> string option [@@prototype "fromCString s"]
 end
 [@@description "String operations."]
 

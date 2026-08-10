@@ -29,9 +29,10 @@ Sys.set ("stringDepth", ~1);
 String;
 > val it =
 >   {<=fn,<==fn,<>=fn,==fn,>=fn,>==fn,^=fn,collate=fn,compare=fn,concat=fn,
->    concatWith=fn,explode=fn,extract=fn,fields=fn,fromString=fn,implode=fn,
->    isPrefix=fn,isSubstring=fn,isSuffix=fn,map=fn,maxSize=2147483647,scan=fn,
->    size=fn,str=fn,sub=fn,substring=fn,toString=fn,tokens=fn,translate=fn}
+>    concatWith=fn,explode=fn,extract=fn,fields=fn,fromCString=fn,
+>    fromString=fn,implode=fn,isPrefix=fn,isSubstring=fn,isSuffix=fn,map=fn,
+>    maxSize=2147483647,scan=fn,size=fn,str=fn,sub=fn,substring=fn,
+>    toCString=fn,toString=fn,tokens=fn,translate=fn}
 >   : {<:string * string -> bool, <=:string * string -> bool,
 >       <>:string * string -> bool, =:string * string -> bool,
 >       >:string * string -> bool, >=:string * string -> bool,
@@ -42,6 +43,7 @@ String;
 >       explode:string -> char list,
 >       extract:string * int * int option -> string,
 >       fields:(char -> bool) -> string -> string list,
+>       fromCString:string -> string option,
 >       fromString:string -> string option, implode:char list -> string,
 >       isPrefix:string -> string -> bool,
 >       isSubstring:string -> string -> bool,
@@ -49,7 +51,8 @@ String;
 >       map:(char -> char) -> string -> string, maxSize:int,
 >       scan:('a -> (char * 'a) option) -> 'a -> (string * 'a) option,
 >       size:string -> int, str:char -> string, sub:string * int -> char,
->       substring:string * int * int -> string, toString:string -> string,
+>       substring:string * int * int -> string, toCString:string -> string,
+>       toString:string -> string,
 >       tokens:(char -> bool) -> string -> string list,
 >       translate:(char -> string) -> string -> string}
 
@@ -549,7 +552,73 @@ String.fromString "a\"b";
 String.fromString (String.toString "a\nb\"c");
 > val it = SOME "a\nb\"c" : string option
 
-(* val toCString : string -> String.string
- * val fromCString : String.string -> string option *)
+(* [toCString s] returns s with non-printable characters replaced by C escape
+   sequences; it is equivalent to translate Char.toCString. *)
+String.toCString;
+> val it = fn : string -> string
+String.toCString "abc";
+> val it = "abc" : string
+String.toCString "a\nb";
+> val it = "a\\nb" : string
+String.toCString "a\"b";
+> val it = "a\\\"b" : string
+String.toCString "a\\b";
+> val it = "a\\\\b" : string
+String.toCString "a'b";
+> val it = "a\\'b" : string
+String.toCString "a?b";
+> val it = "a\\?b" : string
+String.toCString (str (chr 0) ^ "x");
+> val it = "\\000x" : string
+String.toCString ("a" ^ str (chr 200));
+> val it = "a\\310" : string
+String.toCString "";
+> val it = "" : string
+"a\nb".toCString ();
+> val it = "a\\nb" : string
+
+(* [fromCString s] scans s as a string in the C language. Unlike fromString,
+   it returns NONE unless the whole of s is scanned. *)
+String.fromCString;
+> val it = fn : string -> string option
+String.fromCString "abc";
+> val it = SOME "abc" : string option
+String.fromCString "";
+> val it = SOME "" : string option
+String.fromCString "a\\nb";
+> val it = SOME "a\nb" : string option
+String.fromCString "\\x41\\x42";
+> val it = SOME "AB" : string option
+String.fromCString "\\1\\2";
+> val it = SOME "\^A\^B" : string option
+String.fromCString "a\\?b";
+> val it = SOME "a?b" : string option
+
+(*) C allows an unescaped double-quote and single quote.
+String.fromCString "a\"b";
+> val it = SOME "a\"b" : string option
+String.fromCString "a'b";
+> val it = SOME "a'b" : string option
+
+(* Anything that cannot be scanned makes the whole string fail, even at the
+   end, where fromString would stop and return what it had. *)
+String.fromCString "a\\qb";
+> val it = NONE : string option
+String.fromCString "abc\ndef";
+> val it = NONE : string option
+String.fromCString "ab\n";
+> val it = NONE : string option
+String.fromCString "a\\";
+> val it = NONE : string option
+
+(*) The numeric escapes are greedy, then range-checked.
+String.fromCString "a\\x41b";
+> val it = NONE : string option
+String.fromCString "\\778";
+> val it = SOME "?8" : string option
+
+(*) toCString and fromCString are inverses.
+String.fromCString (String.toCString ("a\nb\"c'd?e" ^ str (chr 200)));
+> val it = SOME "a\nb\"c'd?e\200" : string option
 
 (*) End string.smli

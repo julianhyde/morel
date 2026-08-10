@@ -4185,6 +4185,18 @@ public enum BuiltIn {
       ts -> ts.fnType(ts.fnType(CHAR, BOOL), STRING, ts.listType(STRING))),
 
   /**
+   * Function "String.fromCString", of type "string &rarr; string option".
+   *
+   * <p>"fromCString s" scans {@code s} as a string in the C language,
+   * converting C escape sequences into the characters they denote. It returns
+   * {@code NONE} unless the whole of {@code s} is scanned; unlike {@link
+   * #STRING_FROM_STRING fromString}, it does not stop early and ignore the
+   * rest.
+   */
+  STRING_FROM_CSTRING(
+      "String", "fromCString", ts -> ts.fnType(STRING, ts.option(STRING))),
+
+  /**
    * Function "String.fromString", of type "string &rarr; string option".
    *
    * <p>"fromString s" scans {@code s} as a sequence of printable characters,
@@ -4341,6 +4353,15 @@ public enum BuiltIn {
       "substring",
       true,
       ts -> ts.fnType(ts.tupleType(STRING, INT, INT), STRING)),
+
+  /**
+   * Function "String.toCString", of type "string &rarr; string".
+   *
+   * <p>"toCString s" returns {@code s} with non-printable characters replaced
+   * by C escape sequences. Equivalent to {@code translate Char.toCString s}.
+   */
+  STRING_TO_CSTRING(
+      "String", "toCString", true, ts -> ts.fnType(STRING, STRING)),
 
   /**
    * Function "String.toString", of type "string &rarr; string".

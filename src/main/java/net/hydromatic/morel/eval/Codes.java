@@ -457,6 +457,7 @@ public abstract class Codes {
    * was.
    *
    * @see BuiltIn#CHAR_FROM_CSTRING
+   * @see BuiltIn#STRING_FROM_CSTRING
    */
   private static @Nullable Character scanCChar(
       CharSource[] source, Applicable1<List, Object> reader) {
@@ -5274,6 +5275,27 @@ public abstract class Codes {
   private static final Applicable2 STRING_FIELDS =
       new StringTokenize(BuiltIn.STRING_FIELDS);
 
+  /** @see BuiltIn#STRING_FROM_CSTRING */
+  private static final Applicable STRING_FROM_CSTRING =
+      new BaseApplicable1<List, String>(BuiltIn.STRING_FROM_CSTRING) {
+        @Override
+        public List apply(String s) {
+          final Applicable1<List, Object> reader = stringReader(s);
+          final CharSource[] source = {new CharSource(reader, 0)};
+          final StringBuilder b = new StringBuilder();
+          while (source[0].peek() >= 0) {
+            // Every character has to be scanned; there is no stopping early
+            // and ignoring the rest, as there is in fromString.
+            final Character c = scanCChar(source, reader);
+            if (c == null) {
+              return OPTION_NONE;
+            }
+            b.append((char) c);
+          }
+          return optionSome(b.toString());
+        }
+      };
+
   /** @see BuiltIn#STRING_FROM_STRING */
   private static final Applicable STRING_FROM_STRING =
       new BaseApplicable1<List, String>(BuiltIn.STRING_FROM_STRING) {
@@ -5498,6 +5520,19 @@ public abstract class Codes {
       return s.substring(i, i + j);
     }
   }
+
+  /** @see BuiltIn#STRING_TO_CSTRING */
+  private static final Applicable STRING_TO_CSTRING =
+      new BaseApplicable1<String, String>(BuiltIn.STRING_TO_CSTRING) {
+        @Override
+        public String apply(String s) {
+          final StringBuilder b = new StringBuilder();
+          for (int i = 0; i < s.length(); i++) {
+            b.append(charToCString(s.charAt(i)));
+          }
+          return b.toString();
+        }
+      };
 
   /** @see BuiltIn#STRING_TO_STRING */
   private static final Applicable STRING_TO_STRING =
@@ -7601,6 +7636,7 @@ public abstract class Codes {
     b.add(BuiltIn.STRING_EXPLODE, STRING_EXPLODE);
     b.add(BuiltIn.STRING_EXTRACT, STRING_EXTRACT);
     b.add(BuiltIn.STRING_FIELDS, STRING_FIELDS);
+    b.add(BuiltIn.STRING_FROM_CSTRING, STRING_FROM_CSTRING);
     b.add(BuiltIn.STRING_FROM_STRING, STRING_FROM_STRING);
     b.add(BuiltIn.STRING_IMPLODE, STRING_IMPLODE);
     b.add(BuiltIn.STRING_IS_PREFIX, STRING_IS_PREFIX);
@@ -7620,6 +7656,7 @@ public abstract class Codes {
     b.add(BuiltIn.STRING_STR, STRING_STR);
     b.add(BuiltIn.STRING_SUB, STRING_SUB);
     b.add(BuiltIn.STRING_SUBSTRING, STRING_SUBSTRING);
+    b.add(BuiltIn.STRING_TO_CSTRING, STRING_TO_CSTRING);
     b.add(BuiltIn.STRING_TO_STRING, STRING_TO_STRING);
     b.add(BuiltIn.STRING_TOKENS, STRING_TOKENS);
     b.add(BuiltIn.STRING_TRANSLATE, STRING_TRANSLATE);

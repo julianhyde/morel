@@ -65,6 +65,8 @@ val <a id='<>' href="#<>-impl"><></a> : string * string -> bool
 val <a id='toString' href="#toString-impl">toString</a> : string -> string
 val <a id='scan' href="#scan-impl">scan</a> : (char, 'a) reader -> (string, 'a) reader
 val <a id='fromString' href="#fromString-impl">fromString</a> : string -> string option
+val <a id='toCString' href="#toCString-impl">toCString</a> : string -> string
+val <a id='fromCString' href="#fromCString-impl">fromCString</a> : string -> string option
 </pre>
 
 <a id="string-impl"></a>
@@ -296,5 +298,24 @@ not ended; `fromString ""` returns `SOME ""`. Equivalent to
 For the escape sequences it accepts, see `Char.fromString`. An escaped
 formatting sequence - a backslash, whitespace, and a backslash - stands
 for nothing, and is consumed even if what follows it cannot be scanned.
+
+<a id="toCString-impl"></a>
+<h3><code>toCString</code></h3>
+
+`toCString s` (or `s.toCString ()`) returns a string corresponding to `s`, with non-printable
+characters replaced by C escape sequences. This is equivalent to
+
+<pre>translate Char.toCString s</pre>
+
+<a id="fromCString-impl"></a>
+<h3><code>fromCString</code></h3>
+
+`fromCString s` scans the string `s` as a string in the C language, converting C escape
+sequences into the characters they denote. Returns `NONE` unless the
+whole of `s` is scanned; unlike `fromString`, it does not stop early and
+ignore the rest. `fromCString ""` returns `SOME ""`.
+
+For the escape sequences it accepts, see `Char.fromCString`. Note that it
+accepts an unescaped double-quote and an unescaped single quote.
 
 [//]: # (end:lib/string)
