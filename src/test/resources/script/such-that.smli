@@ -194,8 +194,10 @@ from i, j where i elem [1, 2] andalso j elem [i + 1 .. i + 2];
 (*) Collection inversion of "elem".
 from x where x elem [1,2,3] andalso x > 1;
 > val it = [2,3] : int bag
+(* A collection may hold a value twice, but an unbounded scan yields each
+ * satisfying assignment once. *)
 from x where x elem [1,2,2,3];
-> val it = [1,2,2,3] : int bag
+> val it = [1,2,3] : int bag
 from y where y elem [1,2] andalso y elem [2,3];
 > val it = [2] : int bag
 
@@ -419,7 +421,7 @@ from n where isSmall n orelse isLarge n;
 from x where x elem [1, 2, 4];
 > val it = [1,2,4] : int bag
 Sys.planEx "999";
-> val it = "val it = from x in #fromList Bag ([1, 2, 4])" : string
+> val it = "val it = from x in #fromList Bag ([1, 2, 4]) group x" : string
 
 (* In the following case, we solve for x given a value of y. This
  * requires predicate-inversion because it cannot be solved using
@@ -1997,7 +1999,7 @@ Sys.planEx "0";
 >   "val it = from d : {deptno:int, dname:string, loc:string} where op elem (d, #depts scott)"
 >   : string
 Sys.planEx "3";
-> val it = "val it = from d in #depts scott" : string
+> val it = "val it = from d in #depts scott group d" : string
 
 (* testFromSuchThat2c - Record pattern with field renaming *)
 from loc, deptno, name
@@ -2017,7 +2019,7 @@ Sys.planEx "0";
 (* TODO: remove spurious 'where' *)
 Sys.planEx "3";
 > val it =
->   "val it = from ({deptno = deptno, dname = name, loc = loc}) in #depts scott"
+>   "val it = from ({deptno = deptno, dname = name, loc = loc}) in #depts scott group {deptno = deptno, loc = loc, name = name}"
 >   : string
 
 (* testFromSuchThat2d - Record pattern with literal and additional
@@ -2037,7 +2039,7 @@ Sys.planEx "0";
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = from ({deptno = dno, dname = name, loc = \"CHICAGO\"}) in #depts scott where dno > 20"
+>   "val it = from ({deptno = dno, dname = name, loc = \"CHICAGO\"}) in #depts scott group {dno = dno, name = name} where dno > 20"
 >   : string
 
 (* testFromSuchThat2d3 - Forward references with equality constraint *)
@@ -2059,7 +2061,7 @@ Sys.planEx "0";
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = from v in #depts scott join dno in #fromList Bag ([#deptno v]) join name in #fromList Bag ([#dname v]) where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
+>   "val it = from v in #depts scott group v join dno in #fromList Bag ([#deptno v]) join name in #fromList Bag ([#dname v]) where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
 >   : string
 
 (* testFromSuchThat2d4 - Forward references with inequality constraint *)
@@ -2081,7 +2083,7 @@ Sys.planEx "0";
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = from v in #depts scott join dno in #fromList Bag ([#deptno v]) join name in #fromList Bag ([#dname v]) where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
+>   "val it = from v in #depts scott group v join dno in #fromList Bag ([#deptno v]) join name in #fromList Bag ([#dname v]) where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
 >   : string
 
 (* testFromSuchThat2e - Function inlining with elem predicate.
@@ -2099,7 +2101,8 @@ Sys.planEx "0";
 >   "val it = from d : {deptno:int, dname:string, loc:string} where (let val d_1 = d in op elem (d_1, #depts scott) end) andalso #deptno d = 20 yield #dname d"
 >   : string
 Sys.planEx "999";
-> val it = "val it = from d in #depts scott where #deptno d = 20 yield #dname d"
+> val it =
+>   "val it = from d in #depts scott group d where #deptno d = 20 yield #dname d"
 >   : string
 
 (* testFromSuchThat2f - Join via suchthat with two functions *)
@@ -2123,7 +2126,7 @@ Sys.planEx "0";
 >   : string
 Sys.planEx "999";
 > val it =
->   "val it = from d in #depts scott join e in #emps scott where #deptno d = #deptno e andalso #deptno d = 20 yield #dname d"
+>   "val it = from d in #depts scott group d join e in (from e in #emps scott group e) where #deptno d = #deptno e andalso #deptno d = 20 yield #dname d"
 >   : string
 
 (* testProvenanceThroughFunction - Provenance propagation through
@@ -2144,7 +2147,7 @@ Sys.planEx "0";
 >   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in from x_1 : int where f x_1 end end"
 >   : string
 Sys.planEx "999";
-> val it = "val it = from x in #fromList Bag ([1, 2, 3])" : string
+> val it = "val it = from x in #fromList Bag ([1, 2, 3]) group x" : string
 
 (* testProvenanceThroughFunctionWithFilter - Same as above but
  * with an additional filter. Provenance removes 'f x'
@@ -2161,7 +2164,8 @@ Sys.planEx "0";
 >   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in from x_1 : int where f x_1 andalso x_1 > 1 end end"
 >   : string
 Sys.planEx "999";
-> val it = "val it = from x in #fromList Bag ([1, 2, 3]) where x > 1" : string
+> val it = "val it = from x in #fromList Bag ([1, 2, 3]) group x where x > 1"
+>   : string
 
 (* testFromSuchThat3 - Smaller version of testFromSuchThat *)
 let
