@@ -97,9 +97,12 @@ public class LintTest {
       Pattern.compile(
           "\\b(java|javax|com|net|org)\\.[a-z]+(\\.[a-z]+)*\\.[A-Z]");
 
-  /** Matches "// lint:skip" or "// lint:skip N". */
+  /**
+   * Matches "lint:skip" or "lint:skip N" in a line comment. The comment is "//"
+   * in Java and "(*)" in Morel.
+   */
   private static final Pattern LINT_SKIP_PATTERN =
-      Pattern.compile("// lint:skip(?: (\\d+))?\\s*$");
+      Pattern.compile("(?://|\\(\\*\\)) lint:skip(?: (\\d+))?\\s*$");
 
   /** Matches zero or more spaces followed by an asterisk. */
   private static final Pattern CONTINUATION_STAR_PATTERN =
@@ -536,21 +539,31 @@ public class LintTest {
           final FileState f = line.state();
           final String s = line.line();
 
-          // If the previous line was a block-open "(*", determine
-          // whether this is a real block comment or commented-out code.
-          if (f.pendingBlockOpenLine == line.fnr() - 1) {
-            if (s.startsWith(" *")) {
+          // If the previous line opened a block, the line after it says what
+          // kind of comment this is. " *" starts prose, which the stricter
+          // rule below governs. A non-space in column 0 starts commented-out
+          // code, which is left alone: code is written flush left, and
+          // starring it would have to be undone to bring it back.
+          if (f.pendingBlockOpenLine > 0
+              && f.pendingBlockOpenLine == line.fnr() - 1) {
+            if (f.pendingBlockOpenBare && s.startsWith(" *")) {
               f.commentStartLine = f.pendingBlockOpenLine;
+            } else if (!s.isEmpty() && s.charAt(0) != ' ') {
+              f.commentedOutCode = true;
             }
             f.pendingBlockOpenLine = 0;
           }
 
-          // Validate block comment intermediate lines.
+          // Validate block comment intermediate lines. A "lint:skip" suppresses
+          // the messages but not the depth tracking below, which every later
+          // line depends on.
           final boolean starBlock =
               f.commentStartLine > 0
                   && f.commentDepth == 1
                   && f.pendingBlockOpenLine == 0;
-          if (starBlock) {
+          if (lintSkip(line)) {
+            // Suppressed.
+          } else if (starBlock) {
             if (!s.trim().equals("*)")) {
               if (!s.startsWith(" *")) {
                 f.message(line, "block comment line must start with ' *'");
@@ -566,36 +579,69 @@ public class LintTest {
               }
             }
           } else if (f.commentDepth > 0
-              && f.docCommentDepth == 0
+              && !f.commentedOutCode
               && !s.trim().startsWith("*)")
-              && CONTINUATION_STAR_PATTERN.matcher(s).lookingAt()) {
+              && !CONTINUATION_STAR_PATTERN.matcher(s).lookingAt()) {
             // A continuation line of a block comment - one that the comment
-            // was already open at the start of - must not begin with zero or
-            // more spaces and then '*'. Three kinds of comment are exempt:
-            // the line that closes a comment; a doc comment, which opens
-            // '(**' and is starred by convention; and a block that opens
-            // with a bare '(*' and whose first line starts with ' *', for
-            // which the rule above requires the stars. Thus a comment
-            // follows one convention or the other, never a mixture.
+            // was already open at the start of - must begin with zero or more
+            // spaces and then '*'. The line that closes a comment is exempt,
+            // and so is a block that opens with a bare '(*' and whose first
+            // line starts with ' *', for which the rule above requires the
+            // same thing, more strictly.
             f.message(
-                line,
-                "block comment continuation line must not start with '*'");
+                line, "block comment continuation line must start with '*'");
           }
 
           // Track comment depth.
           int i = 0;
+          boolean inString = false;
           while (i < s.length() - 1) {
-            if (s.charAt(i) == '(' && s.charAt(i + 1) == '*') {
-              // Skip "(*)" — line comment, not block open
+            if (inString) {
+              // Inside a string literal, "(*" and "*)" are just characters.
+              // 'highlight.smli' is full of strings that contain them.
+              if (s.charAt(i) == '\\') {
+                i += 2;
+              } else {
+                if (s.charAt(i) == '"') {
+                  inString = false;
+                }
+                i++;
+              }
+            } else if (f.commentDepth == 0 && s.charAt(i) == '"') {
+              inString = true;
+              i++;
+            } else if (s.charAt(i) == '(' && s.charAt(i + 1) == '*') {
               if (i + 2 < s.length() && s.charAt(i + 2) == ')') {
+                if (f.commentDepth == 0) {
+                  // "(*)" comments to the end of the line, so nothing later
+                  // on it opens or closes a block. Stop reading the line;
+                  // scanning on would see the "(*" in a line such as
+                  //   "a" ^ (*) line comment with (* fake block comment
+                  // and believe a block comment had opened.
+                  break;
+                }
+                // Within a block comment, "(*)" is three characters to skip.
                 i += 3;
                 continue;
               }
               f.commentDepth++;
               if (f.commentDepth == 1) {
-                // Check if '(*' is the entire trimmed line
-                if (s.trim().equals("(*")) {
+                // The line after this one decides what kind of comment it is,
+                // but only for an opener that says nothing itself: '(*' alone,
+                // or one that opens with 'TODO', which introduces the code it
+                // comments out rather than describing it.
+                final String t = s.trim();
+                f.pendingBlockOpenBare = t.equals("(*");
+                if (f.pendingBlockOpenBare) {
+                  // The line after a bare '(*' says what kind of comment this
+                  // is; see above.
                   f.pendingBlockOpenLine = line.fnr();
+                } else if (t.startsWith("(* TODO")) {
+                  // A comment that opens '(* TODO' introduces the code it
+                  // comments out rather than describing it, and says so on the
+                  // opening line. Its body is code, whatever it is indented
+                  // by, so it needs no line after it to say so.
+                  f.commentedOutCode = true;
                 }
               }
               // A comment that opens '(**' is a doc comment, and is starred
@@ -617,6 +663,7 @@ public class LintTest {
               if (f.commentDepth == 0) {
                 f.commentStartLine = 0;
                 f.pendingBlockOpenLine = 0;
+                f.commentedOutCode = false;
               }
               i += 2;
             } else {
@@ -1216,47 +1263,78 @@ public class LintTest {
   }
 
   /**
-   * Tests the rule that a continuation line of a block comment must not start
-   * with zero or more spaces followed by an asterisk.
+   * Tests the rule that a continuation line of a block comment must start with
+   * zero or more spaces followed by an asterisk.
    */
   @Test
   void testBlockCommentContinuation() {
     final String code =
         "(* A comment whose continuation lines\n"
-            + "   are merely indented is fine,\n"
-            + " * and one whose lines are starred is not,\n"
-            + "* whether the asterisk is in column 0,\n"
-            + "  * or after any number of spaces,\n"
-            + "   but the closing line is exempt.\n"
+            + " * are starred is fine,\n"
+            + "   and one that is merely indented is not,\n"
+            + "* an asterisk in column 0 is fine,\n"
+            + "  * as is any number of spaces before it,\n"
+            + " * and the closing line is exempt.\n"
             + " *)\n"
             + "(* A comment that ends on the line it opens has none. *)\n"
             + "val x = 1; (* A comment that opens mid-line\n"
             + " * still has continuation lines. *)\n"
             + "\n"
-            + "(** A doc comment is starred by convention,\n"
-            + " * so it is exempt.\n"
-            + " *)\n"
-            + "(*\n"
-            + "  (** So is one commented out, however deeply indented,\n"
-            + "   * and the line that closes the outer comment may carry\n"
-            + "   * text after the '*)'.\n"
-            + "   *)\n"
+            + "(*) A line comment runs to the end of the line, so a (* in it\n"
+            + "val y = 2;\n"
+            + "(*) does not open a block comment, and this line is code.\n"
+            + "val z = 3;\n"
+            + "(* A closing line may carry text after it.\n"
             + "  val f : int -> int\n"
             + "*) [@@prototype \"f i\"]\n"
             + "\n"
-            + "(*) A line comment has none.\n"
+            + "(*\n"
+            + "val commentedOut = 1;\n"
+            + "> val commentedOut = 1 : int\n"
+            + "*)\n"
+            + "\n"
+            + "(* TODO an opener that says so needs no line after it to\n"
+            + "  (** and so may be indented, as a '.sig' file writes it. *)\n"
+            + "  val f : int -> int\n"
+            + "*)\n"
             + "\n"
             + "(*) End test.smli\n";
     final String expectedMessages =
         "["
             + "GuavaCharSource{memory}:3:"
-            + "block comment continuation line must not start with '*'\n"
-            + "GuavaCharSource{memory}:4:"
-            + "block comment continuation line must not start with '*'\n"
-            + "GuavaCharSource{memory}:5:"
-            + "block comment continuation line must not start with '*'\n"
-            + "GuavaCharSource{memory}:10:"
-            + "block comment continuation line must not start with '*'\n";
+            + "block comment continuation line must start with '*'\n"
+            + "GuavaCharSource{memory}:17:"
+            + "block comment continuation line must start with '*'\n";
+    assertThat(programResult("foo.smli", code), is(expectedMessages));
+  }
+
+  /**
+   * Tests that "(*) lint:skip N" suppresses messages for the comment's own line
+   * and the N lines after it.
+   */
+  @Test
+  void testLintSkip() {
+    final String code =
+        "(* A comment whose continuation line\n"
+            + "   is not starred is reported.\n"
+            + " *)\n"
+            + "\n"
+            + "(*) lint:skip 2\n"
+            + "(* But not when a 'lint:skip' covers it,\n"
+            + "   as here.\n"
+            + " *)\n"
+            + "\n"
+            + "(* And the skip does not outlast its count,\n"
+            + "   so this one is reported again.\n"
+            + " *)\n"
+            + "\n"
+            + "(*) End test.smli\n";
+    final String expectedMessages =
+        "["
+            + "GuavaCharSource{memory}:2:"
+            + "block comment continuation line must start with '*'\n"
+            + "GuavaCharSource{memory}:11:"
+            + "block comment continuation line must start with '*'\n";
     assertThat(programResult("foo.smli", code), is(expectedMessages));
   }
 
@@ -1825,6 +1903,16 @@ public class LintTest {
     int commentDepth;
     int commentStartLine;
     int pendingBlockOpenLine;
+    /**
+     * Whether {@link #pendingBlockOpenLine} was {@code (*} and nothing more.
+     */
+    boolean pendingBlockOpenBare;
+    /**
+     * Whether the open block comment is commented-out code: it opened with a
+     * bare {@code (*}, or with {@code (* TODO}, and the line after it starts in
+     * column 0.
+     */
+    boolean commentedOutCode;
     /**
      * Comment depth at which the innermost doc comment ({@code (**}) opened, or
      * 0 if no doc comment is open.
