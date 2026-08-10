@@ -438,9 +438,124 @@ public abstract class Codes {
       new BaseApplicable1<List, String>(BuiltIn.CHAR_FROM_CSTRING) {
         @Override
         public List apply(String s) {
-          throw new UnsupportedOperationException("CHAR_FROM_CSTRING");
+          final Applicable1<List, Object> reader = stringReader(s);
+          final CharSource[] source = {new CharSource(reader, 0)};
+          final Character c = scanCChar(source, reader);
+          return c == null ? OPTION_NONE : optionSome(c);
         }
       };
+
+  /**
+   * Scans a character, or a C escape sequence denoting a character, from {@code
+   * source}, and returns null if {@code source} does not start with one.
+   *
+   * <p>A character stands for itself if it is printable and is not a backslash;
+   * unlike SML, C allows an unescaped double-quote here. The escape sequences
+   * are C's: a letter, a backslash, a quote or a question mark; one to three
+   * octal digits; or "x" and one or more hexadecimal digits. A code above
+   * {@link #CHAR_MAX_ORD} is not a character, and the source is left where it
+   * was.
+   *
+   * @see BuiltIn#CHAR_FROM_CSTRING
+   */
+  private static @Nullable Character scanCChar(
+      CharSource[] source, Applicable1<List, Object> reader) {
+    final Object mark = source[0].stream();
+    final int c = source[0].peek();
+    if (c < 0) {
+      return null;
+    }
+    if (c != '\\') {
+      if (!isPrint((char) c)) {
+        return null;
+      }
+      source[0].advance();
+      return (char) c;
+    }
+
+    source[0].advance();
+    final int c2 = source[0].peek();
+    final int escaped;
+    switch (c2) {
+      case 'a':
+        escaped = 7;
+        break;
+      case 'b':
+        escaped = '\b';
+        break;
+      case 't':
+        escaped = '\t';
+        break;
+      case 'n':
+        escaped = '\n';
+        break;
+      case 'v':
+        escaped = 11;
+        break;
+      case 'f':
+        escaped = '\f';
+        break;
+      case 'r':
+        escaped = '\r';
+        break;
+      case '"':
+      case '\'':
+      case '?':
+      case '\\':
+        escaped = c2;
+        break;
+
+      case 'x':
+        // "x" and as many hexadecimal digits as follow it; there must be at
+        // least one.
+        source[0].advance();
+        return scanCCode(source, reader, mark, 16, Integer.MAX_VALUE);
+
+      default:
+        if (c2 >= '0' && c2 <= '7') {
+          // Up to three octal digits, stopping at the first character that is
+          // not one.
+          return scanCCode(source, reader, mark, 8, 3);
+        }
+        source[0] = new CharSource(reader, mark);
+        return null;
+    }
+    source[0].advance();
+    return (char) escaped;
+  }
+
+  /**
+   * Scans up to {@code max} digits in the given base - at least one - and
+   * returns the character whose code they are.
+   *
+   * <p>Returns null, and rewinds {@code source} to {@code mark}, if there is no
+   * digit or the code is not that of a character.
+   */
+  private static @Nullable Character scanCCode(
+      CharSource[] source,
+      Applicable1<List, Object> reader,
+      Object mark,
+      int base,
+      int max) {
+    int code = 0;
+    int n = 0;
+    while (n < max && Character.digit(source[0].peek(), base) >= 0) {
+      code = code * base + Character.digit(source[0].peek(), base);
+      if (code > CHAR_MAX_ORD) {
+        // Keep going so that the whole numeral is consumed conceptually, but
+        // the value is out of range; stop before it overflows.
+        source[0] = new CharSource(reader, mark);
+        return null;
+      }
+      source[0].advance();
+      ++n;
+    }
+    if (n == 0) {
+      source[0] = new CharSource(reader, mark);
+      return null;
+    }
+    return (char) code;
+  }
 
   /** @see BuiltIn#CHAR_FROM_INT */
   private static final Applicable CHAR_FROM_INT =
@@ -808,9 +923,45 @@ public abstract class Codes {
       new BaseApplicable1<String, Character>(BuiltIn.CHAR_TO_CSTRING) {
         @Override
         public String apply(Character character) {
-          throw new UnsupportedOperationException("CHAR_TO_CSTRING");
+          return charToCString(character);
         }
       };
+
+  /**
+   * Converts a character to how it appears in a C string literal.
+   *
+   * <p>A printable character stands for itself, except for the four that C
+   * requires to be escaped; every other character becomes a backslash and three
+   * octal digits. Inverse of {@link #scanCChar}.
+   */
+  private static String charToCString(char c) {
+    switch (c) {
+      case 7:
+        return "\\a";
+      case '\b':
+        return "\\b";
+      case '\t':
+        return "\\t";
+      case '\n':
+        return "\\n";
+      case 11:
+        return "\\v";
+      case '\f':
+        return "\\f";
+      case '\r':
+        return "\\r";
+      case '"':
+        return "\\\"";
+      case '\'':
+        return "\\'";
+      case '?':
+        return "\\?";
+      case '\\':
+        return "\\\\";
+      default:
+        return isPrint(c) ? String.valueOf(c) : format("\\%03o", (int) c);
+    }
+  }
 
   /** @see BuiltIn#CHAR_TO_LOWER */
   private static final Applicable CHAR_TO_LOWER =

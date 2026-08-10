@@ -300,11 +300,22 @@ the range `0` to `maxOrd`.
 <a id="toCString-impl"></a>
 <h3><code>toCString</code></h3>
 
-`toCString c` (or `c.toCString ()`)
+`toCString c` (or `c.toCString ()`) returns a string containing `c`, if `c` is printable, and otherwise a C
+escape sequence denoting it. Bell, backspace, tab, newline, vertical tab,
+form feed and carriage return become `"\\a"`, `"\\b"`, `"\\t"`,
+`"\\n"`, `"\\v"`, `"\\f"` and `"\\r"`; a double-quote, a single
+quote, a question mark and a backslash are escaped with a backslash; every
+other character becomes a backslash and three octal digits.
 
 <a id="fromCString-impl"></a>
 <h3><code>fromCString</code></h3>
 
-`fromCString s`
+`fromCString s` scans a character, or a C escape sequence denoting a character, from a
+prefix of the string `s`. It does not skip leading whitespace, and
+characters after the first are ignored. Unlike `fromString`, it accepts
+an unescaped double-quote, and has no escaped formatting sequence; its
+numeric escapes are one to three octal digits, or `x` and one or more
+hexadecimal digits. Returns `NONE` if no character can be scanned, or if
+the code is greater than `maxOrd`.
 
 [//]: # (end:lib/char)
