@@ -4048,12 +4048,17 @@ class Generators {
         Core.Exp collection,
         Iterable<? extends Core.NamedPat> freePats,
         Set<Core.Exp> provenance) {
+      // A collection may hold a value more than once, and an unbounded scan
+      // yields each satisfying assignment once, so the generator is not
+      // unique: 'expandFrom2' wraps it in 'distinct'. Whether the collection
+      // in fact holds duplicates is not something we try to prove here; an
+      // optimizer may later remove a 'distinct' that it can see is redundant.
       super(
           collection,
           freePats,
           pat,
           Cardinality.FINITE,
-          true,
+          false,
           true,
           provenance);
       this.collection = collection;

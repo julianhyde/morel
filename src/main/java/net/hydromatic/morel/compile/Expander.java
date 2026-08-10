@@ -559,12 +559,23 @@ public class Expander {
         // Add "join (x, y, z) in collection".
         fromBuilder.scan(generator.pat, generator.exp);
       } else {
-        // Generator may produce duplicates (e.g., union of overlapping ranges).
-        // Wrap with distinct: "from pat in collection group pat"
+        // The generator may produce a value more than once - a collection may
+        // hold duplicates, and a union of ranges may overlap - but an
+        // unbounded scan yields each assignment once. Deduplicate:
+        //   join (x, y, z) in (from (x, y, z) in collection
+        //                        distinct
+        //                        yield {x, y, z})
+        // The yield and the scan pattern both use the canonical record form,
+        // because 'distinct' groups by the variables and sorts them, and so
+        // does not return a tuple in the order the generator's pattern
+        // expects.
         final FromBuilder fromBuilder2 = core.fromBuilder(typeSystem);
         fromBuilder2.scan(generator.pat, generator.exp);
         fromBuilder2.distinct();
-        fromBuilder.scan(generator.pat, fromBuilder2.build());
+        fromBuilder2.yield_(core.recordOrAtom(typeSystem, expandedPats));
+        fromBuilder.scan(
+            core.recordOrAtomPat(typeSystem, expandedPats),
+            fromBuilder2.build());
       }
     } else {
       // Some patterns are already bound. Create a filtered projection.
