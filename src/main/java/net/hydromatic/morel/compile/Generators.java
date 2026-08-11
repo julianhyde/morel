@@ -397,6 +397,9 @@ class Generators {
     final List<Core.NamedPat> yieldPats = dependentGen.pat.expand();
     fromBuilder.yield_(core.recordOrAtom(typeSystem, yieldPats));
     fromBuilder.distinct();
+    // As in 'addExistsFilterGenerator': 'distinct' is a 'group', whose output
+    // has no order of its own, and an unbounded scan is ordered.
+    fromBuilder.order(core.recordOrAtom(typeSystem, yieldPats));
 
     final Core.From joinedFrom = fromBuilder.build();
     final Set<Core.NamedPat> freePats2 = freePats(typeSystem, joinedFrom);
@@ -569,6 +572,9 @@ class Generators {
     }
     fromBuilder.yield_(core.id(yieldPat));
     fromBuilder.distinct();
+    // 'distinct' is a 'group', whose output has no order of its own; an
+    // unbounded scan yields its values in the order of the type, so sort them.
+    fromBuilder.order(core.id(yieldPat));
 
     final Core.From filteredFrom = fromBuilder.build();
     final Set<Core.NamedPat> freePats2 = freePats(typeSystem, filteredFrom);

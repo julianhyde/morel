@@ -126,6 +126,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class TypeResolver {
   private final TypeSystem typeSystem;
   private final Consumer<CompileException> warningConsumer;
+  private final PairList<Ast.FromStep, Triple> stepStack = PairList.of();
   private final PairList<Ast.Group, Triple> computeStack = PairList.of();
   private final List<Consumer<Resolved>> validations = new ArrayList<>();
   private final Unifier unifier = new MartelliUnifier();
@@ -650,33 +651,12 @@ public class TypeResolver {
     return realTypes;
   }
 
-  /**
-   * Whether a type AST contains a {@code typeof}, whose type only inference
-   * knows. {@link #toType} converts a type AST syntactically, and has no case
-   * for such a type; a caller that would reach one must skip it.
-   */
-  private static boolean containsExpressionType(Ast.Type type) {
-    final AtomicBoolean found = new AtomicBoolean();
-    type.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Ast.ExpressionType expressionType) {
-            found.set(true);
-          }
-        });
-    return found.get();
-  }
-
   private @Nullable Type deduceRealType(
       Ast.Pat pat,
       @Nullable Type annotatedType,
       Ast.Exp exp,
       BiConsumer<Ast.Pat, Type> consumer) {
-    // An annotation that uses 'typeof' is skipped, here and below. It
-    // never names an alias -- it gives the binding exactly the type that is
-    // deduced for it -- so there is no real type to record.
-    if (pat instanceof Ast.AnnotatedPat
-        && !containsExpressionType(((Ast.AnnotatedPat) pat).type)) {
+    if (pat instanceof Ast.AnnotatedPat) {
       final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) pat;
       final Type annotatedType2 = toType(annotatedPat.type, typeSystem);
       final Type realType =
@@ -692,8 +672,7 @@ public class TypeResolver {
         return annotatedType;
       }
     }
-    if (exp instanceof Ast.AnnotatedExp
-        && !containsExpressionType(((Ast.AnnotatedExp) exp).type)) {
+    if (exp instanceof Ast.AnnotatedExp) {
       final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) exp;
       final Type annotatedType2 = toType(annotatedExp.type, typeSystem);
       final Type realType =
@@ -1333,25 +1312,16 @@ public class TypeResolver {
         typeSystem, BuiltIn.Z_CURRENT.mlName, TypeEnv.onlyValidInQuery(node));
   }
 
-  /**
-   * Deduces the type of an {@code ordinal} keyword: {@code int}.
-   *
-   * <p>What the environment binds is not that type but the collection whose
-   * rows the occurrence counts, put there by the step that produced it (see
-   * {@link Triple#of}). Reading it here is what decides which step an {@code
-   * ordinal} belongs to, and the collection must be ordered for it to mean
-   * anything &mdash; which is not known until the types are resolved.
-   */
+  /** Deduces the type of an {@code ordinal} keyword: {@code int}. */
   private Ast.Exp deduceOrdinalType(
       TypeEnv env, Ast.Ordinal ordinal, Variable v) {
-    final Term c =
-        env.get(
-            typeSystem,
-            BuiltIn.Z_ORDINAL.mlName,
-            TypeEnv.onlyValidInQuery(ordinal));
+    checkInQuery(env, ordinal);
+    final Triple step = last(stepStack.rightList());
     validations.add(
         resolved -> {
-          if (resolved.typeMap.termToType(c).op() != Op.LIST) {
+          requireNonNull(step.c);
+          Type stepType = resolved.typeMap.termToType(step.c);
+          if (stepType.op() != Op.LIST) {
             throw new TypeException(
                 "cannot use 'ordinal' in unordered query", ordinal.pos);
           }
@@ -1400,7 +1370,12 @@ public class TypeResolver {
       // Whether this is the last step. (The synthetic "yield" counts as a last
       // step.)
       final boolean lastStep = step.i == query.steps.size() - 1;
-      p = deduceStepType(step.e, p, fieldVars, steps2);
+      try {
+        stepStack.add(step.e, p);
+        p = deduceStepType(step.e, p, fieldVars, steps2);
+      } finally {
+        stepStack.remove(stepStack.size() - 1);
+      }
       switch (step.e.op) {
         case COMPUTE:
         case INTO:
@@ -1512,7 +1487,7 @@ public class TypeResolver {
         final Variable c4 = unifier.variable();
         meetCollections(terms, c4, p.v);
         steps.add(setStep.copy(setStep.distinct, args2));
-        return Triple.of(p.rootEnv, p.env, p.v, c4);
+        return new Triple(p.rootEnv, p.env, p.v, c4);
 
       case YIELD:
         return deduceYieldStepType((Ast.Yield) step, p, fieldVars, steps);
@@ -1561,10 +1536,7 @@ public class TypeResolver {
             deducePatType(
                 p.rootEnv, through.pat, termMap::add, null, v18, t -> t);
         final Variable v17 = toVariable(fnTerm(p.c, c18));
-        // "f" is applied to the whole collection - 'through p in f' is
-        // 'from p in f (from ...)' - so it is evaluated before the query's
-        // first row, and cannot see the query's own rows.
-        final Ast.Exp throughExp = deduceExpType(p.rootEnv, through.exp, v17);
+        final Ast.Exp throughExp = deduceExpType(p.env, through.exp, v17);
         isCollectionOf(c18, v18);
         // Register the rewritten node (the one added to 'steps', which the
         // resolver later looks up), not only the original: type resolution may
@@ -1669,9 +1641,8 @@ public class TypeResolver {
     }
     if (scan.exp == null) {
       scanExp3 = null;
-      // An unbounded scan yields its values in the natural order of the
-      // variables that its pattern binds, so it is ordered, and leaves the
-      // query as ordered as it found it.
+      // If we're iterating over 'all values' of the type, we'd better not
+      // commit to doing it in order.
       sourceKind = SourceKind.NONE;
       c0 = null;
     } else if (scan.exp.op == Op.FROM_EQ) {
@@ -1701,20 +1672,10 @@ public class TypeResolver {
     // The 'on' clause sees the non-optional ('unwrapped') types, so resolve it
     // before wrapping any fields in 'option' below.
     final TypeEnv env4 = typeEnvs.typeEnv;
-    // The collection of candidate pairs. It is created here, before the
-    // constraints that give it a type, because the 'on' condition is evaluated
-    // once per candidate pair: an 'ordinal' in it counts pairs, so this is the
-    // collection whose orderedness decides whether it means anything. (Both
-    // inputs must be ordered for the pairs to be.) An 'ordinal' in the extent
-    // still counts input rows, reading the binding the previous step left; no
-    // pair exists when the extent is evaluated.
-    final Variable c = unifier.variable();
     final Ast.Exp scanCondition2;
     if (scan.condition != null) {
       final Variable v5 = unifier.variable();
-      scanCondition2 =
-          deduceExpType(
-              env4.bind(BuiltIn.Z_ORDINAL.mlName, c), scan.condition, v5);
+      scanCondition2 = deduceExpType(env4, scan.condition, v5);
       equiv(v5, toTerm(PrimitiveType.BOOL));
     } else {
       scanCondition2 = null;
@@ -1744,8 +1705,11 @@ public class TypeResolver {
     }
 
     final Variable v = fieldVar(fieldVars, true);
+    final Variable c;
     switch (sourceKind) {
       case NONE:
+        c = toVariable(bagTerm(v));
+        break;
       case SCALAR:
         // Consider "from ... yield {i=1} join b = false".
         // p.c is "int list" or "int bag" - collection type from previous step
@@ -1754,9 +1718,11 @@ public class TypeResolver {
         // v0 is "bool" - the element type of the input
         // c is "{i:int, b:bool} list" or "bag" - collection type of the query
         // v is "{i:int, b:bool}" - the element type of the query
+        c = unifier.variable();
         sameOrderedness(p.c, p.v, c, v);
         break;
       default:
+        c = unifier.variable();
         if (steps.isEmpty()) {
           // Consider "from (i, j) in [(1, true), (2, false)]".
           // c0 is "(int * bool) list" - the collection type of the input
@@ -2365,23 +2331,9 @@ public class TypeResolver {
     }
   }
 
-  /**
-   * Returns the field names of a record or tuple term, otherwise null.
-   *
-   * <p>{@code unit} is the record with no fields -- {@code recordTerm} maps
-   * {@code {}} onto it -- so its field names are the empty list, not null. Were
-   * it null, {@code {{} extend i = 1}} would never be desugared, and would end
-   * as an unresolved flex record.
-   */
+  /** Returns the field names of a record or tuple term, otherwise null. */
   private static @Nullable List<String> termFieldNames(Term t) {
-    if (!(t instanceof Sequence)) {
-      return null;
-    }
-    final Sequence sequence = (Sequence) t;
-    if (sequence.operator.equals(PrimitiveType.UNIT.moniker)) {
-      return ImmutableList.of();
-    }
-    return fieldList(sequence);
+    return t instanceof Sequence ? fieldList((Sequence) t) : null;
   }
 
   /**
@@ -5854,23 +5806,12 @@ public class TypeResolver {
       return new Triple(rootEnv, env, v, null);
     }
 
-    /**
-     * Creates a triple for the output of a step, binding what the next step
-     * will read: {@code current} is its row, {@code ordinal} the collection
-     * whose rows it counts.
-     *
-     * <p>Binding them here is what attributes an occurrence to a step. An
-     * expression evaluated before a query's first row is deduced in {@link
-     * #rootEnv}, which no step of this query has touched, so it reads the
-     * bindings the <i>enclosing</i> step left &mdash; which is the rule.
-     */
     static Triple of(TypeEnv rootEnv, TypeEnv env, Variable v, Variable c) {
-      return new Triple(
-          rootEnv,
-          env.bind(BuiltIn.Z_CURRENT.mlName, v)
-              .bind(BuiltIn.Z_ORDINAL.mlName, c),
-          v,
-          c);
+      return new Triple(rootEnv, env.bind(BuiltIn.Z_CURRENT.mlName, v), v, c);
+    }
+
+    Triple withV(Variable v) {
+      return v == this.v ? this : new Triple(rootEnv, env, v, c);
     }
 
     Triple withEnv(TypeEnv env) {
@@ -5916,8 +5857,7 @@ public class TypeResolver {
   private enum SourceKind {
     /**
      * No source expression (e.g. {@code from p}, iterating all values of a
-     * type); the query inherits the input's orderedness, as {@link #SCALAR}
-     * does.
+     * type); the query is an unordered bag.
      */
     NONE,
     /**
