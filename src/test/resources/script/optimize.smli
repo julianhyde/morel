@@ -501,4 +501,32 @@ from x, y
 > stdIn:1.6 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.6
 
+(* -------------------------------------------------------------------
+ * Deduplication that the consumer of a query renders unnecessary.
+ *)
+
+(* The expander deduplicates each generator it derives, because an unbounded
+ * scan yields each assignment once. 'exists' and 'forall' ask only whether a
+ * query has rows, which duplicates cannot change, so the generator is left as
+ * it is; the plan below has no 'group'. *)
+exists i where i elem [3, 1, 2];
+> val it = true : bool
+Sys.plan ();
+> val it =
+>   "apply(fnValue Relational.nonEmpty, argCode from(sink join(pat i_5, exp apply(fnValue Bag.fromList, argCode tuple(constant(3), constant(1), constant(2))), sink collect(stack(offset 1, name i)))))"
+>   : string
+forall i where i elem [2, 4] require i mod 2 = 0;
+> val it = true : bool
+
+(* A 'take' or 'skip' depends on how many rows there are, which
+ * deduplicating changes, so the generator is deduplicated after all. Here
+ * '[1, 1, 2]' has two distinct values, which 'skip 2' removes; the three
+ * undeduplicated rows would leave one. *)
+from i where i elem [1, 1, 2] skip 2;
+> val it = [] : int bag
+exists i where i elem [1, 1, 2] skip 2;
+> val it = false : bool
+exists i where i elem [1, 1, 2] skip 1;
+> val it = true : bool
+
 (*) End optimize.smli

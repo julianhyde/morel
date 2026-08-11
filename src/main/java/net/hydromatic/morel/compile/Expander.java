@@ -112,7 +112,11 @@ public class Expander {
     }
 
     // Third, substitute generators.
-    Core.From from2 = expandFrom2(cache, env, stepVars);
+    // Deduplicating a generator is observable if the query's rows are used,
+    // and also if a 'take' or 'skip' is applied to them: those depend on how
+    // many rows there are, which removing duplicates changes.
+    final boolean dedupObservable = rowsUsed || hasTakeOrSkip(from.steps);
+    Core.From from2 = expandFrom2(cache, env, stepVars, dedupObservable);
     if (from2.steps.isEmpty() && !from.steps.isEmpty()) {
       // Every pattern was dropped, because none is referred to by a step and
       // none can be grounded, as in "from i, j". Dropping them all leaves a
@@ -253,8 +257,21 @@ public class Expander {
     DONE
   }
 
+  /** Returns whether any step is a 'take' or a 'skip'. */
+  private static boolean hasTakeOrSkip(List<Core.FromStep> steps) {
+    for (Core.FromStep step : steps) {
+      if (step.op == Op.TAKE || step.op == Op.SKIP) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private static Core.From expandFrom2(
-      Generators.Cache cache, Environment env, StepVarSet stepVarSet) {
+      Generators.Cache cache,
+      Environment env,
+      StepVarSet stepVarSet,
+      boolean dedupObservable) {
     // Build the set of patterns that are assigned in some scan.
     final TypeSystem typeSystem = cache.typeSystem;
     // Tracks processing state for each pattern.
@@ -334,6 +351,7 @@ public class Expander {
           // Pull forward any generators.
           for (Core.NamedPat freePat : freePats) {
             addGeneratorScan(
+                dedupObservable,
                 typeSystem,
                 patternState,
                 freePat,
@@ -351,6 +369,7 @@ public class Expander {
                 // ground, e.g. "y" in "exists x, y where x elem [1, 2]", have
                 // no entry in generatorMap, and addGeneratorScan skips them.
                 addGeneratorScan(
+                    dedupObservable,
                     typeSystem,
                     patternState,
                     p,
@@ -495,6 +514,7 @@ public class Expander {
    * those variables' generators first.
    */
   private static void addGeneratorScan(
+      boolean dedupObservable,
       TypeSystem typeSystem,
       Map<Core.NamedPat, PatternState> patternState,
       Core.NamedPat freePat,
@@ -520,6 +540,7 @@ public class Expander {
     // Make sure all dependencies have a scan.
     for (Core.NamedPat p : generator.freePats) {
       addGeneratorScan(
+          dedupObservable,
           typeSystem,
           patternState,
           p,
@@ -555,8 +576,12 @@ public class Expander {
     }
     // Now all dependencies are DONE, add a scan for the generator.
     if (expandedPats.equals(requiredPats)) {
-      if (generator.unique) {
+      if (generator.unique || !dedupObservable) {
         // Add "join (x, y, z) in collection".
+        //
+        // A query whose rows are only counted - 'exists' or 'forall', with no
+        // 'take' or 'skip' - does not need the generator deduplicated:
+        // removing duplicate rows cannot change whether there are any.
         fromBuilder.scan(generator.pat, generator.exp);
       } else {
         // The generator may produce a value more than once - a collection may
@@ -620,8 +645,9 @@ public class Expander {
       // uniqueness via the join condition.
       // If patterns are projected away because they're not in `allPats` (inner
       // variables like y in "exists y"), we need distinct to avoid duplicates.
-      boolean needsDistinct = !generator.unique;
-      if (!needsDistinct) {
+      // As above, a query whose rows are only counted needs no deduplication.
+      boolean needsDistinct = !generator.unique && dedupObservable;
+      if (!needsDistinct && dedupObservable) {
         for (Core.NamedPat p : expandedPats) {
           // Outer-scope variables (!allScanPats) have join conditions added
           // above and don't require distinct. Only inner variables (those that
