@@ -640,6 +640,9 @@ public class Expander {
       }
       if (needsDistinct) {
         fromBuilder2.distinct();
+        // 'distinct' is a 'group', whose output has no order of its own, and
+        // an unbounded scan yields its values in the order of the type.
+        fromBuilder2.order(core.recordOrAtom(typeSystem, requiredPats));
       }
 
       // Add scan from the filtered subquery.
