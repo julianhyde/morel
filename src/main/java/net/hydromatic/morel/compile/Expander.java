@@ -597,6 +597,11 @@ public class Expander {
         final FromBuilder fromBuilder2 = core.fromBuilder(typeSystem);
         fromBuilder2.scan(generator.pat, generator.exp);
         fromBuilder2.distinct();
+        // An unbounded scan yields its values in the natural order of the
+        // variables. Sort after the 'distinct', whose 'group' has no order of
+        // its own, and before the 'yield', which rebinds the variables that
+        // the sort names.
+        fromBuilder2.order(core.recordOrAtom(typeSystem, expandedPats));
         fromBuilder2.yield_(core.recordOrAtom(typeSystem, expandedPats));
         fromBuilder.scan(
             core.recordOrAtomPat(typeSystem, expandedPats),
@@ -662,6 +667,9 @@ public class Expander {
       }
       if (needsDistinct) {
         fromBuilder2.distinct();
+        // As above: 'distinct' is a 'group', whose output has no order of its
+        // own, and an unbounded scan is ordered.
+        fromBuilder2.order(core.recordOrAtom(typeSystem, requiredPats));
       }
 
       // Add scan from the filtered subquery.

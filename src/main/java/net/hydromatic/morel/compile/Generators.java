@@ -397,6 +397,8 @@ class Generators {
     final List<Core.NamedPat> yieldPats = dependentGen.pat.expand();
     fromBuilder.yield_(core.recordOrAtom(typeSystem, yieldPats));
     fromBuilder.distinct();
+    // As above.
+    fromBuilder.order(core.recordOrAtom(typeSystem, yieldPats));
 
     final Core.From joinedFrom = fromBuilder.build();
     final Set<Core.NamedPat> freePats2 = freePats(typeSystem, joinedFrom);
@@ -569,6 +571,10 @@ class Generators {
     }
     fromBuilder.yield_(core.id(yieldPat));
     fromBuilder.distinct();
+    // An unbounded scan yields its values in the natural order of the
+    // variables; 'distinct' is a 'group', whose output has no order of its
+    // own.
+    fromBuilder.order(core.id(yieldPat));
 
     final Core.From filteredFrom = fromBuilder.build();
     final Set<Core.NamedPat> freePats2 = freePats(typeSystem, filteredFrom);
