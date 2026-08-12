@@ -22,26 +22,126 @@ License.
 
 ## Goal
 
-Extend `type` declarations, types and expressions with a `check` clause, and
-enforce the constraints so that **it is impossible to create a value of a
-constrained type that breaches its constraints**.
+Extend `type` declarations and types with a `check` clause, and enforce the
+constraints so that **it is impossible to create a value of a constrained type
+that breaches its constraints**.
 
-That bar is the hard part. This document works out where a value can enter a
-constrained type, what happens at each of those places, and which of them we
-can close.
+## Surface types and erasure
+
+A constrained type is a **surface** type. There are two type languages:
+
+* the *surface* language, in which `check` is a type constructor, and
+* the *inference* language, which is Morel's existing type language,
+
+with an erasure `⌊·⌋` that deletes `check` nodes structurally, so `⌊nat⌋ =
+int`.
+
+**Type inference is unchanged.** Algorithm W runs on the inference language.
+Principal types and the value restriction are unaffected, and there is no
+subtyping rule to admit. Constraints are handled by a second, syntax-directed
+pass over the elaborated tree, which reconstructs a surface type for each
+subexpression by walking the skeleton W has already produced, and inserts a
+check wherever a value flows into a position whose surface type is
+constrained.
+
+This is the structure of [Liquid Types][liquid] (Rondon, Kawaguchi and Jhala,
+PLDI 2008), where Hindley-Milner is invoked first as an oracle and each
+subexpression is then assigned a template with the same shape as its inferred
+ML type. The difference is that we propagate constraints from declared
+signatures rather than inferring them by predicate abstraction.
+
+[liquid]: https://patrickrondon.com/research/papers/liquid-types-pldi08.pdf
+
+### Widening is free, narrowing is checked
+
+Erasure is what makes a `nat` usable as an `int`. No coercion is needed in
+that direction and none is generated: the representation is identical and the
+constraint is simply dropped. The other direction is a narrowing, and can
+fail.
+
+```sml
+type nat = int check i => i >= 0;
+
+val n: nat = 5;
+val i = n - 100;
+> val i = ~95 : int
+(*) Widening is free; 'n - 100' is an ordinary int subtraction.
+
+val m: nat = i;
+> uncaught exception Constraint [~95 is not a valid nat]
+(*) Narrowing is checked at the binding, where the surface type is known.
+```
+
+### The invariant
+
+**No elaboration decision may consult the substitution — only surface types
+that are syntactically present.**
+
+So a constrained type that reaches a type variable is *lost*, and the second
+pass recovers it only where a declared signature lets it flow covariantly out
+of a result position.
+
+```sml
+val ns: nat list = [1, 2, 3];
+val ms = List.map (fn i => i - 1) ns;
+> val ms = [0,1,2] : int list
+(* The constraint is erased at the boundary: 'a is instantiated to int, and
+ * nothing propagates it to the result. *)
+```
+
+This invariant is also the soundness argument for the goal. Every place a
+surface type *claims* a constraint, a check is inserted; everywhere else the
+constraint is erased, so nothing claims it. A value cannot breach a constraint
+that was never asserted of it.
+
+A surface type is therefore **a record of what has been verified, not an
+obligation to verify**.
+
+```sml
+val ps = List.map (fn i => i as nat) [3, ~2];
+> uncaught exception Constraint [~2 is not a valid nat]
+(* The cast is an ordinary expression, evaluated once per element. Had it
+ * succeeded, the surface type of 'ps' would be 'nat list'. *)
+```
+
+Note that this also answers promptness: a cast written *inside* the mapper
+runs per element and fails at the offending one, where a narrowing at the
+binding would have run the whole traversal first.
+
+### Not an `abstype`
+
+`abstype` gives a similar guarantee — one checked way in, so the invariant
+holds of every value — but in the wrong shape. It is opaque in *both*
+directions:
+
+| | in (`int` to `nat`) | out (`nat` to `int`) |
+|---|---|---|
+| `abstype` | explicit constructor | explicit accessor |
+| constrained type | checked narrowing | free, by erasure |
+
+Requiring `toInt n + 1` everywhere would make constrained types unusable for
+their purpose. (`abstype` is in any case largely superseded in Standard ML by
+opaque signature ascription, and Morel has no user-facing module system.)
+
+The analogy fails on the implementation too. `abstype` has a constructor; a
+narrowing has none. On success it is the **identity**: no wrapper is
+allocated, no tag is attached, and equality, printing and serialization are
+unaffected.
 
 ## Syntax
 
-As in the issue, with one change (below):
-
 > *typbind* ::= ⟨*var*⟩(`,`) *id* [`check` *match*] `=` *typ* ⟨`and` *typbind*⟩
 >
-> *exp* ::= ... | *exp* `check` *match*
+> *exp* ::= ... | *exp* `as` *typ* | *exp* `asOpt` *typ*
+
+`as` subsumes the *exp* `check` *match* production originally proposed: `e
+check m` is `e as (t check m)` with `t` inferred. Only one of the two forms
+need be kept.
 
 ### `check` matches need not be exhaustive
 
-The issue originally required the *match* to be exhaustive. Instead, a
-non-exhaustive match is allowed, and the compiler appends `| _ => false`. A
+The issue text requires the *match* to be exhaustive. Instead, a
+non-exhaustive match is allowed and the compiler appends `| _ => false`, so a
 value that matches no branch fails the check.
 
 ```sml
@@ -55,94 +155,108 @@ Consequences:
 
 * `PatternCoverageChecker` must not report a `check` match as non-exhaustive.
   It should still report a *redundant* branch, which is a real mistake.
-* Appending `| _ => false` is a Core-level rewrite, so the appended branch
-  needs a source position for error messages; use the position of the whole
-  match.
-* A match of one branch whose pattern is irrefutable (`i => i >= 0`, the
-  common case) is unchanged: no branch is appended.
+* The appended branch needs a source position for error messages; use the
+  position of the whole match.
+* A single irrefutable branch (`i => i >= 0`, the common case) is unchanged:
+  no branch is appended.
 
-## A constrained type is distinct from its base type
+## Conversion operators
 
-An ordinary alias expands, as in Standard ML: `type nat = int` makes `nat` and
-`int` the same type, and the name does not survive inference.
+Widening needs no operator. Narrowing has two, differing only in how they
+report failure.
 
-A *constrained* type does not. `type nat = int check i => i >= 0` is a
-distinct type. This is the decision that makes the rest of the design work:
-if `nat` expanded to `int`, then every `int` would be structurally a `nat`,
-there would be no site to guard, and the constraint would be unenforceable.
+Both take a value and a type, and their typing rule is stated on erasures: `e
+as t` and `e asOpt t` are well-typed if `⌊t⌋` unifies with the inferred type
+of `e`. Because erasure deletes `check` nodes, every type built over `int` —
+`int`, `nat`, `batchSize`, an anonymous `int check ...` — has the same
+erasure, so all of them may be converted to one another. A conversion between
+different erasures is an ordinary type error, reported by the unifier without
+any constraint reasoning.
 
-The relation between the two is **subtyping**: every `nat` is an `int`, so
+Neither is a runtime type test: Morel values carry no type information, so `i
+asOpt string` is a compile-time error rather than an expression returning
+`NONE`. The question they ask is whether a value satisfies a constraint, never
+what type a value has.
 
-* `nat` to `int` is free (an upcast: nothing to check), and
-* `int` to `nat` requires a check (a downcast).
+### `as`
 
-Every check in this document is a downcast. That is also what the issue's
-examples assume — `val j: int check k => k >= 10 = i + 10` downcasts an `int`
-expression into a constrained position.
+Returns the value unchanged if the constraints of `t` hold, and otherwise
+raises `Constraint`. Surface type `t`, inference type `⌊t⌋`.
 
-**We do not add general subtyping to the unifier.** A downcast is inserted
-only where the expected type is one the user wrote — checking mode in a
-bidirectional reading of the type rules. Hindley-Milner inference is
-unchanged, and the set of coercion sites stays syntactic and finite. Where an
-`int` meets a `nat` outside such a site, the result is a type error, not a
-silent coercion.
+```sml
+type nat = int check i => i >= 0;
+type teen = int check i => i >= 13 andalso i <= 19;
 
-Two properties of Morel make this subtyping simpler than it would be
-elsewhere. There are **no mutable references**, so nothing is invariant: an
-immutable `list` and `bag` are covariant, and a function is contravariant in
-its argument. And the representation is **identical** — a constrained type is
-distinct in the type system but not boxed at run time — so an upcast is free,
-a `nat list` used as an `int list` costs nothing, and interoperation with
-Calcite is unaffected.
+val i = ~95;
+i as nat;
+> uncaught exception Constraint [~95 is not a valid nat]
 
-### Not an `abstype`
+val n: nat = 5;
+n as teen;
+> uncaught exception Constraint [5 is not a valid teen]
+(*) Legal: 'nat' and 'teen' have the same erasure, 'int'.
 
-`abstype` gives the same guarantee we want — one checked way in, so the
-invariant holds of every value — but in the wrong shape. It is opaque in
-*both* directions:
+n as int;
+> val it = 5 : int
+(*) Legal and free: widening discards a constraint, checks nothing.
 
-| | in (`int` to `nat`) | out (`nat` to `int`) |
-|---|---|---|
-| `abstype` | explicit constructor | explicit accessor |
-| constrained type | implicit, **checked** | implicit, **free** |
+"abc" as nat;
+> Cannot convert 'string' to 'nat': types have different erasures
+```
 
-Requiring `toInt n + 1` everywhere would make constrained types unusable for
-their purpose. A constrained type is a *refinement* type, not an abstract
-type. (`abstype` is in any case largely superseded in Standard ML by opaque
-signature ascription, and Morel has no user-facing module system, so it is not
-available as a building block.)
+### `asOpt`
 
-`abstype` remains a fair model of the *implementation*: a distinct type whose
-only entry point is a generated checked constructor. The divergence is that
-the exit is implicit and free, and that there is no box.
+Returns `SOME v` if the constraints hold and `NONE` otherwise, with surface
+type `t option`. It exists because failure is often ordinary — a value parsed
+from outside, or a row that should be filtered rather than abort a scan — and
+because the refined value arrives bound, so the successful branch needs no
+separate mechanism for tracking what has been established.
 
-### Ascription is the cast
+```sml
+val i = 20;
+i asOpt nat;
+> val it = SOME 20 : nat option
+i asOpt teen;
+> val it = NONE : teen option
 
-We do not need a new cast operator. Two forms already express one:
+case i asOpt nat of
+    SOME n => n * 2
+  | NONE => 0;
+> val it = 40 : int
+(* 'n' has surface type 'nat', so passing it to something expecting a 'nat'
+ * emits no further check. *)
+```
 
-* `e : nat` casts to a named constrained type — ordinary Standard ML
-  ascription;
-* `e check m` casts to an anonymous one — already proposed in #239, and used
-  in #242 as `(i * j) check p => p > 0`.
+### Properties
 
-Ascription therefore does the work, and one rule covers everything: **an
-ascription site is a coercion site is a blame site.**
+* Neither operator changes representation; on success `as` is the identity.
+* On a composite type the check is deep, applied to components before the
+  whole, using the same order and blame path as construction.
+* Where the surface type already satisfies the target, the check is elided
+  statically, so `n as nat` costs nothing.
+* Converting to a constrained **function** type is rejected: it cannot be the
+  identity, since the only way to enforce it is a proxy checking each argument
+  and result.
 
-## Where a downcast happens
+```sml
+[1, ~2, 3] as nat list;
+> uncaught exception Constraint [~2 is not a valid nat: element 1]
 
-The sections below enumerate the sites, and what each one does when the
-constraint fails.
+val f = fn i => i - 1;
+f as (nat -> nat);
+> Cannot convert to a constrained function type
+```
+
+## Where a check is inserted
 
 Errors use Morel's existing format, `uncaught exception Name [message]`, as in
 `uncaught exception Subscript [subscript out of bounds]`.
 
-### A. Direct binding sites
+### A. Bindings, parameters and results
 
-Syntactic, and easy.
+Syntactic, and the common case.
 
 ```sml
-type nat = int check i => i >= 0;
-
 val n: nat = ~1;
 > uncaught exception Constraint [~1 is not a valid nat]
 
@@ -155,9 +269,11 @@ g ();
 > uncaught exception Constraint [~1 is not a valid nat: result of g]
 ```
 
-### B. Construction of composite values
+A parameter's check is compiled inside the function, so it travels with the
+function value and fires however the function is called — including from
+polymorphic code that knows nothing of `nat`.
 
-Also syntactic. The check applies as the composite is built.
+### B. Construction of composite values
 
 ```sml
 type employee = {empno: nat, name: string};
@@ -180,8 +296,8 @@ e replace empno = ~1;
 > uncaught exception Constraint [~1 is not a valid nat: field empno]
 ```
 
-Compound constraints need an order and a path. Check components before the
-whole, so the message names the innermost failure:
+Compound constraints check components before the whole, so the message names
+the innermost failure:
 
 ```sml
 type evenPair = (nat * nat) check (i, j) => i * j mod 2 = 0;
@@ -191,104 +307,49 @@ type evenPair = (nat * nat) check (i, j) => i * j mod 2 = 0;
 > uncaught exception Constraint [(1,3) is not a valid evenPair]
 ```
 
-### C. Downcasts into a polymorphic result
+### C. Through polymorphic functions
 
-A polymorphic function needs no modification. The downcast happens at the
-site where the constrained type is written, which is outside the function.
+**No polymorphic function needs to change**, and none is instrumented. Either
+the constraint is erased at the boundary, in which case nothing is claimed of
+the result and nothing need be checked:
 
 ```sml
-fun dec x = x - 1;
-val ns: nat list = List.map dec [0, 1, 2];
+val ms = List.map (fn i => i - 1) ns;
+> val ms = [0,1,2] : int list
+```
+
+or the result is narrowed at a written type, and the check goes there:
+
+```sml
+val ms: nat list = List.map (fn i => i - 1) ns;
 > uncaught exception Constraint [~1 is not a valid nat: element 0]
 ```
 
-`List.map` runs unchanged and returns an `int list`; the downcast to `nat
-list` at the `val` binding walks the list and checks each element.
-
-Better still, a check written in a function's own signature compiles into its
-body and travels with the value, so combinators stay ignorant even at higher
-order:
+or a cast is written inside, and runs per element:
 
 ```sml
-fun dec (x: nat): nat = x - 1;   (* both checks inside dec *)
-twice dec 1;                     (* 'a = nat; no coercion; twice unchanged *)
-List.map dec ns;                 (* 'a = nat, 'b = nat; map unchanged *)
+List.map (fn i => (i - 1) as nat) ns;
+> uncaught exception Constraint [~1 is not a valid nat]
 ```
 
-Two costs, neither of them soundness:
+The costs are promptness (a narrowing at a binding runs the whole traversal
+first) and forcing (a narrowing walks its operand, so a lazy or foreign
+collection is materialized; see E).
 
-* **Promptness.** The exception is raised at the boundary, after the
-  traversal, not at the offending element. `List.map` over `[3, 101, 8]`
-  completes all three calls before the check runs, and reports the first
-  breach in the *result*, not the first one encountered.
-* **Forcing.** A downcast walks its operand, so a lazy or foreign collection
-  is materialized at the boundary. See E.
+### D. Constrained function types — deferred
 
-### D. Downcasts at a type variable
-
-This is the case that a polymorphic function cannot absorb.
+A narrowing to a function type cannot be the identity, so it is rejected
+rather than implemented with a proxy.
 
 ```sml
-type nat = int check i => i >= 0;
-fun dec (x: nat) = x - 1;        (* nat -> int: checks argument, not result *)
-fun twice f x = f (f x);         (* ('a -> 'a) -> 'a -> 'a *)
-twice dec 1;
-> Error: cannot unify nat and int in argument of twice
+val h: nat -> nat = fn i => i - 1;
+> Cannot convert to a constrained function type
 ```
 
-Unifying `nat -> int` with `'a -> 'a` needs `'a = nat` from the argument and
-`'a = int` from the result. Under distinctness that is a type error rather
-than a silent breach, which is the improvement we want. But to *run* it, the
-`int` result of the inner `f x` must be downcast to `nat` before the outer `f`
-receives it, and that downcast sits at a position typed `'a`, inside a `twice`
-compiled once and holding no checker.
-
-The same shape at first order is fine, because the downcast lands at a written
-type rather than a type variable:
-
-```sml
-val ns: nat list = List.map dec ns0;   (* one downcast at the binding *)
-```
-
-**The fix is an ascription, not a new mechanism.** Writing the type gives the
-compiler a site to compile the coercion, and `twice` is still unchanged:
-
-```sml
-twice (dec : nat -> nat) 5;
-> val it = 3 : nat
-twice (dec : nat -> nat) 1;        (* dec (dec 1) = dec 0 = ~1 *)
-> uncaught exception Constraint [~1 is not a valid nat: result of dec]
-twice (dec : nat -> nat) ~1;
-> uncaught exception Constraint [~1 is not a valid nat: argument of dec]
-```
-
-Note which half needs the wrapper. `dec`'s *argument* check is compiled inside
-`dec` and travels with the function value, so it fires however `dec` is
-called, even from a polymorphic function that knows nothing. Only the *result*
-needs the ascription to wrap it.
-
-So D is a type error whose remedy the user can write today, rather than a hole
-that waits on #290. #290 would remove the need for the ascription, not enable
-the feature.
-
-### D2. Function values
-
-A downcast of a *function* cannot inspect its operand; it must wrap it, and
-then attribute blame.
-
-```sml
-fun dec x = x - 1;
-val g: nat -> nat = dec;    (* wraps dec: checks argument in, result out *)
-g 0;
-> uncaught exception Constraint [~1 is not a valid nat: result of g]
-g ~1;
-> uncaught exception Constraint [~1 is not a valid nat: argument of g]
-```
-
-Note that a downcast on data is an inspection and returns its operand
-unchanged, whereas a downcast on a function is a transformation. Wrapping is
-tractable at a written type; it is not available at a type variable, which is
-D again.
+This also removes the workaround an earlier draft of this plan proposed —
+ascribing at a call site, `twice (dec : nat -> nat) 1`, to place a coercion
+the compiler could compile. That is now rejected too. The polymorphic cases
+therefore have no user-level remedy, and wait on the deferred work below.
 
 ### E. Values from outside
 
@@ -296,10 +357,11 @@ Foreign rows and parsed values never pass through a Morel constructor.
 
 ```sml
 val emps: employee bag = scott.emps;
-Variant.parse "..." : nat;
 ```
 
-Checking them on entry is expensive and forces a streamed bag.
+A narrowing here walks the whole bag, turning a streamed Calcite query into a
+materialized one. `asOpt` is the intended tool where failure should filter
+rather than abort.
 
 ### F. Generated values
 
@@ -309,11 +371,13 @@ From the issue's comment: a constrained type used as a scan source must
 ```sml
 type parity_pair = {i: int, j: int} check {i, j} => i mod 2 = j mod 2;
 from p: parity_pair where p.i elem [0..2] andalso p.j elem [5..8];
+> val it = [{i=0,j=6},{i=0,j=8},{i=1,j=5},{i=1,j=7},{i=2,j=6},{i=2,j=8}]
+>   : {i:int, j:int} bag
 ```
 
-`Extents` already deduces "the set of values a variable can take", so this is
-where it plugs in — but it means a constraint must be *readable* by the
-planner, not merely callable.
+There is no value to check, so no narrowing can help. `Extents` already
+deduces "the set of values a variable can take", so this is where it plugs in
+— but a constraint must be *readable* by the planner, not merely callable.
 
 ### G. The predicate itself
 
@@ -324,115 +388,52 @@ val x: odd = 0;
 > uncaught exception Div [divide by zero]
 ```
 
-The issue also specifies that a predicate captures the values it uses at
+The issue specifies that a predicate captures the values it uses at
 declaration time, so redefining `limit` or `lessThanDozen` afterwards does not
-change the type. The closure must therefore be snapshotted into the type,
-which affects type equality, printing and serialization.
-
-## Polymorphic functions do not need to change
-
-The important question for reuse is not "is the function polymorphic?" but
-**where does the downcast land?**
-
-* If it lands at a type the user wrote — a `val` annotation, a parameter, a
-  return, a field — the downcast is compiled there, and every polymorphic
-  function it flows through is untouched. `List.map`, `List.filter`, `twice`
-  and user combinators need no modification, no reified type and no
-  handler. This covers C, and it is the overwhelmingly common case.
-* If it lands at a **type variable** (D), there is nowhere to compile it. The
-  function was compiled once at `'a` and holds no checker.
-
-So only D needs a dispatch mechanism, and D is the same question as #290:
-what does a polymorphic function do when it needs a type-directed operation
-for a type variable? There a polymorphic function needs a *comparator*, and
-"the comparator is generated at compile time, but the full type is not
-available until the function is applied". Here it needs a *checker*.
-`Range.contains`, `Range.normalize`, `Range.toList` and `Range.toBag` need
-the same thing.
-
-Morel's current mechanism, `Codes.Typed.withType(typeSystem, type)`,
-specializes a builtin once the concrete type is known at compile time. That is
-enough for a monomorphic site and not for a polymorphic one — which is
-precisely why #290 is still open.
-
-So: **do not invent a constraint-dispatch mechanism for #239.** Whatever
-solves #290 should carry the checker too. Until then, D is a type error, which
-is honest: the program is rejected rather than silently unchecked.
-
-### Options for the remaining cases
-
-| | Approach | Reuse of polymorphic functions | Closes | Cost |
-|---|---|---|---|---|
-| 1 | Downcast at written types (this plan) | Untouched — no reified type, no handler | A, B, C, D2 | Traversal per downcast; not prompt |
-| 2 | Type-directed dispatch, shared with #290 | Untouched — one compiled copy serves every instantiation | D | Large compiler change; hidden parameters |
-| 3 | General subtyping in the unifier | Untouched | D, and removes the type errors | Subtyping plus HM is a research-grade change |
-| 4 | Static proof (#242 `prove`), runtime check only where unproven | Untouched | An optimization on 1, not a design | SMT-shaped work |
-| 5 | "Already checked" mark on a value | Untouched | Repeated traversal | Representation change; interacts with equality |
-
-Option 3 is the only one that would make `twice dec 1` run without a wrapper,
-and it is much the most expensive; option 2 gets the same effect for the price
-we are paying for #290 anyway.
-
-### Recommendation
-
-Land 1, and let #290 supply 2:
-
-* Phases 1–3 implement the downcast at written types, which covers A, B, C and
-  D2 — nearly all the value, with no change to any polymorphic function.
-* A downcast landing at a type variable (D) is a **type error**, not a silent
-  hole, and the remedy is an ascription the user can write today. The program
-  is rejected, so the "impossible to breach" promise holds for everything that
-  compiles.
-* When #290 lands a dispatch mechanism, route the checker through it. That
-  removes the need for the ascription; it is not what enables the feature.
-
-That ordering means we never ship an unsound-but-quiet feature, and we do not
-build a second dispatch mechanism that #290 will later replace.
+change the type. The closure must be snapshotted into the surface type, which
+affects surface-type equality and printing.
 
 ## Phases
 
-0. **A constrained type survives inference.** A plain alias still expands; a
-   constrained type does not. This is the prerequisite: unless the type
-   reaches `Core`, there is nothing to compile a downcast from. Touches
-   `TypeSystem`, `Keys`, `TypeResolver` and `Unifier`, and `Pretty` for
-   printing.
-1. **Syntax.** `check` keyword; `typbind` and `exp` productions; `Ast` and
-   `Core` nodes; append `| _ => false`; suppress the non-exhaustive error and
-   keep the redundant-branch one. No enforcement yet.
-2. **Runtime.** `Constraint` added to `BuiltInExn`; downcast at bindings,
-   parameters and returns (A).
-3. **Composites.** Downcast into records, tuples, lists, datatype
-   constructors and record modifiers (B, C); component-before-whole ordering
-   and the blame path in messages.
-4. **Functions.** Wrap a function at a downcast to a constrained function
-   type, with blame (D2).
-5. **Restriction.** A downcast landing at a type variable is a type error (D).
-   The message should name the ascription that fixes it, in the style of
-   "cannot unify nat and int in argument of twice; ascribe the argument, as
-   `(dec : nat -> nat)`".
-6. **Dispatch.** Once #290 has a mechanism, carry checkers through it and
-   lift the phase-5 restriction.
-7. **Planner.** Teach `Extents` to read constraints so a constrained type can
+1. **Surface types.** A second type language with `check` nodes and an erasure
+   to the inference language; surface types recorded on `Core` nodes. No
+   enforcement. Inference untouched.
+2. **Syntax.** `check` in `typbind`; `as` and `asOpt` expressions; append
+   `| _ => false`; suppress the non-exhaustive error, keep the redundant one.
+3. **Narrowing.** `Constraint` in `BuiltInExn`; checks at bindings, parameters
+   and results (A); `as` and `asOpt`; static elision where the surface type
+   already satisfies the target.
+4. **Composites.** Deep checks for records, tuples, lists, datatype
+   constructors and record modifiers (B); component-before-whole ordering and
+   the blame path.
+5. **Rejections.** Constrained function types (D) and conversions between
+   different erasures, with messages that say which.
+6. **Planner.** Teach `Extents` to read constraints so a constrained type can
    be scanned (F). Overlaps #240 and #241.
+
+Deferred: constrained function types and any recovery of a constraint that has
+reached a type variable. Both need a type-directed dispatch mechanism; #290
+needs one too, for comparators, so they should share it. Under this design
+neither is a soundness hole — the constraint is erased, so nothing is claimed
+— which is why they can wait.
 
 ## Open questions
 
-1. **Message format.** The issue uses both a bare `uncaught exception
-   Constraint` and a descriptive `Invalid value '~10' for type 'nat' when
-   assigning to field 'empno'`. This plan assumes `uncaught exception
-   Constraint [<value> is not a valid <type>: <path>]`. Confirm?
-2. **Anonymous constrained types.** `val j: int check k => k >= 10 = ...` has
-   no type name to put in the message. Use the source position?
-3. **Predicate that raises.** Propagate the underlying exception (as above),
-   or wrap it as `Constraint`?
-4. **Cost of deep checks.** Is a per-boundary traversal of a large bag
-   acceptable, or should a checked value carry a "already checked" mark?
+1. **The issue text still requires an exhaustive match.** This plan allows a
+   non-exhaustive one and appends `| _ => false`. The issue should be updated.
+2. **Anonymous constrained types in messages.** `val j: int check k => k >= 10
+   = ...` has no type name to put in `[... is not a valid ...]`. Use the
+   source position?
+3. **Predicate that raises.** Propagate the underlying exception, as above, or
+   wrap it as `Constraint`?
+4. **Repeated narrowing.** A value narrowed to `nat list` and then passed to
+   something else expecting `nat list` is walked twice. Is that acceptable, or
+   should a surface type at a binding be enough to elide the second?
 5. **Foreign data (E).** Check on entry, or declare the boundary untrusted?
 6. **What `assert` returns.** #239 says the #242 operators "return their
    operand, of the same type, but with additional constraints known to the
    system", but #242 says "Both have type `bool`" and uses `assert p > 0;` as
-   a statement. This plan follows #242, so `assert` is not a cast and
-   ascription does that job. The two issues should be reconciled.
-7. **Does ascription always check?** This plan says `e : nat` inserts a
-   downcast. If some ascriptions should be static-only, we need a second form,
-   and the "ascription site is a coercion site" rule is lost.
+   a statement. This plan follows #242. The two issues should be reconciled.
+7. **Does a plain annotation always narrow?** `val m: nat = i` checks. If some
+   annotations should be static-only, `as` and the annotation differ, and the
+   rule "a written surface type is a check site" is lost.
