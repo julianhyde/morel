@@ -151,14 +151,48 @@ type badPair = (bool * int) check
   | (false, i) => i mod 2 = 0;
 ```
 
-Consequences:
+### When to append
 
-* `PatternCoverageChecker` must not report a `check` match as non-exhaustive.
-  It should still report a *redundant* branch, which is a real mistake.
-* The appended branch needs a source position for error messages; use the
-  position of the whole match.
-* A single irrefutable branch (`i => i >= 0`, the common case) is unchanged:
-  no branch is appended.
+Appending unconditionally would break the issue's own example. A redundant
+branch is an **error** today, and it throws:
+
+```
+fun f 1 = "a" | f 1 = "b" | f _ = "c";
+> stdIn:1.17-1.26 Error: match redundant
+fun g 1 = "a";
+> stdIn:1.5-1.14 Warning: match nonexhaustive
+```
+
+so appending `| _ => false` to a match that is *already* exhaustive — such as
+the three-branch `badPair` in the issue — would make the appended branch
+redundant and reject the declaration.
+
+No new property is needed. Use the existing `matchCoverageEnabled`:
+
+* **`matchCoverageEnabled` false** — append blindly. Redundancy is never
+  reported, so a redundant `_ => false` is unreachable and harmless. More to
+  the point, `PatternCoverageChecker` is SAT-based (`Sat`, via
+  `isExhaustive`), and someone who disables coverage checking should not be
+  made to pay for a solver call merely to decide whether to append.
+* **`matchCoverageEnabled` true** — call `PatternCoverageChecker.isExhaustive`
+  on the match and append only if it is not exhaustive. The appended branch
+  then covers a gap, so it is not redundant, and the match is exhaustive
+  afterwards, so no warning is emitted either.
+
+The semantics are the same either way: a value matching no branch fails the
+check.
+
+Other consequences:
+
+* **Ordering.** The decision and the rewrite must happen *before* the general
+  `checkPatternCoverage` pass, so that pass sees an exhaustive match and emits
+  neither the non-exhaustive warning nor a redundancy error.
+* `isExhaustive` takes `Core.Pat`, so the rewrite is a Core-level one.
+* The appended branch needs a source position; use the position of the whole
+  match, and never blame it — user-written redundancy inside a `check` match
+  is a real mistake and should stay an error.
+* A single irrefutable branch (`i => i >= 0`, the common case) is exhaustive,
+  so nothing is appended.
 
 ## Conversion operators
 
@@ -399,7 +433,9 @@ affects surface-type equality and printing.
    to the inference language; surface types recorded on `Core` nodes. No
    enforcement. Inference untouched.
 2. **Syntax.** `check` in `typbind`; `as` and `asOpt` expressions; append
-   `| _ => false`; suppress the non-exhaustive error, keep the redundant one.
+   `| _ => false` per the rule above — blindly if `matchCoverageEnabled` is
+   false, otherwise only when `isExhaustive` says the match has a gap — before
+   the general coverage pass runs.
 3. **Narrowing.** `Constraint` in `BuiltInExn`; checks at bindings, parameters
    and results (A); `as` and `asOpt`; static elision where the surface type
    already satisfies the target.
