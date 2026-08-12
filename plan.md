@@ -261,13 +261,65 @@ case i asOpt nat of
  * emits no further check. *)
 ```
 
+### Precedence and associativity
+
+`as` and `asOpt` take the **same precedence as `:`**, are left-associative,
+and chain. In Morel's grammar `:` sits in its own production above every
+infix level:
+
+```
+expression: expression0 ( <COLON> type )*
+```
+
+so adding `<AS>` and `<AS_OPT>` as alternatives in that loop is the whole
+change. Consequences, all of them shared with `:` today:
+
+```sml
+i - 1 as nat        (*) = (i - 1) as nat; looser than every operator
+i as nat as teen    (*) = (i as nat) as teen; left-associative
+e : int as nat      (*) = (e : int) as nat; mixes with ':'
+(i as nat) + 1      (*) parentheses required, as for ':'
+```
+
+Two reasons to follow `:` rather than Kotlin, Rust or TypeScript, where `as`
+binds *tighter* than arithmetic so that `x as Int + 1` means `(x as Int) + 1`:
+
+1. **Refactoring safety.** `e : t` and `e as t` are the same shape — an
+   expression paired with a type — and differ only in whether a check is
+   emitted. If they had different precedence, changing one to the other would
+   silently regroup the expression.
+2. **The type grammar shares `*` and `->` with the expression grammar.** Under
+   tight binding, `x as int * int` is ambiguous: `int * int` is a legal type
+   and `... * int` is a legal expression. ML resolves this by parsing the type
+   greedily at the loosest level, which is why `: ty` is loosest in Standard
+   ML and Haskell but `as` is tight in Kotlin, whose types contain no `*`.
+   Morel's own parse error already lists `-> : *` as the continuations of a
+   type.
+
+The cost is that `i as nat + 1` needs parentheses. That is not new: `1 : int +
+2` is a parse error in Morel today.
+
+`asOpt` mirrors Kotlin's `as?` exactly — cast that yields absence rather than
+throwing — which is a good sign for the pair, though the spelling must be a
+word because Morel's lexer has no `?`. It has to be a reserved word: in `e
+asOpt t` an identifier could otherwise appear in that position, and `e asOpt`
+would parse as an application. That breaks any existing code using `asOpt` as
+an identifier.
+
 ### Properties
 
 * Neither operator changes representation; on success `as` is the identity.
 * On a composite type the check is deep, applied to components before the
   whole, using the same order and blame path as construction.
 * Where the surface type already satisfies the target, the check is elided
-  statically, so `n as nat` costs nothing.
+  statically, so `n as nat` costs nothing. The implementation computes a
+  **residual**: the part of the target's constraint not discharged by what is
+  already known. An empty residual means no runtime check.
+* Elision uses **subsumption**, not equality of types. If `k` has type `int
+  check z => z > 0`, then `k as nat` is free, because `z > 0` entails `z >=
+  0`. Entailment is undecidable in general, so the test must be a *sound
+  approximation*: when it cannot prove entailment it emits the check. Never
+  the reverse. This is the same reasoning #242's `prove` needs.
 * Converting to a constrained **function** type is rejected: it cannot be the
   identity, since the only way to enforce it is a proxy checking each argument
   and result.
@@ -440,26 +492,47 @@ before the tests that depend on it are written.
 
 ### The printed type is the observable
 
-The second pass knows a surface type only where one is syntactically present.
-That is directly visible, and is the same behaviour aliases have today:
+What the second pass knows is directly visible in the printed type, which
+makes these the cheapest tests of the design — and the ones most likely to
+break if propagation is later "improved" into something unsound.
+
+A constrained type **is** printed on re-reference, unlike an alias today:
 
 ```sml
 val n: nat = 5;
-> val n = 5 : nat        (*) written, so known
+> val n = 5 : nat
 n;
-> val it = 5 : int       (*) erased on re-reference
-[n];
-> val it = [5] : int list        (*) not propagated into construction
-{a = n};
-> val it = {a=5} : {a:int}
-val ns: nat list = [1, 2];
-List.hd ns;
-> val it = 1 : int       (*) not propagated out
+> val it = 5 : nat       (*) the check is inside the alias, so the name stays
+
+val k: int check z => z > 0 = 5;
+k;
+> val it = 5 : int check z => z > 0    (*) anonymous: printed in full
 ```
 
-These are the cheapest tests we have for the invariant, and the ones most
-likely to break if someone later "improves" propagation into something
-unsound. Pin all of them.
+So a binding records its surface type in the environment, and a use of the
+bound variable recovers it. That is not a violation of the invariant: the
+invariant forbids consulting the *substitution*, not the environment.
+
+Note this differs from an ordinary alias, which is erased on re-reference
+(`type nat = int` without a `check` prints `int`). The two must be tested
+side by side, because the difference is the whole point.
+
+Still to decide (open question 8): whether a surface type propagates through
+*construction* and *selection*.
+
+```sml
+[n];                     (*) 'nat list' or 'int list'?
+{a = n};                 (*) '{a:nat}' or '{a:int}'?
+val ns: nat list = [1, 2];
+List.hd ns;              (*) 'nat' or 'int'?
+```
+
+Today's alias behaviour is `int list`, `{a:int}`, `int`. Propagating would be
+sound — each element *was* verified, so it records what is known — and is in
+the spirit of "a record of what was verified". `List.hd` is the harder case,
+since recovering `nat` there means reading it out of an instantiated type
+variable, which the invariant forbids. The tests cannot be written until this
+is settled.
 
 ### Axes
 
@@ -498,6 +571,10 @@ the shape is the point (composites, function types).
 1. **Elision must not over-elide.** `n as nat` where `n: nat` is free; `i as
    nat` where `i: int` must check. Same shape, opposite answers — the pair
    catches an elision keyed on the target type rather than the source.
+   Subsumption needs its own row: `k as nat` where `k: int check z => z > 0`
+   is free because `z > 0` entails `z >= 0`, whereas `n as teen` where `n:
+   nat` is not, because `i >= 0` does not entail `i >= 13`. And a case the
+   approximation cannot prove must emit the check rather than drop it.
 2. **All four coverage combinations.** {match has a gap, is exhaustive} ×
    {`matchCoverageEnabled` true, false}. All four must accept the declaration
    and give identical runtime semantics; today two of them would error.
@@ -539,7 +616,7 @@ the shape is the point (composites, function types).
 
 ### Where the tests live
 
-* `script/constrained.smli` (new) — the bulk: sites, outcomes, messages.
+* `script/check.smli` (new) — the bulk: sites, outcomes, messages.
 * `script/match.smli` — the append rule and the four coverage combinations,
   since they are about matches.
 * `script/type.smli` — erasure, unification, and the printed-type observables
@@ -609,3 +686,12 @@ neither is a soundness hole — the constraint is erased, so nothing is claimed
 7. **Does a plain annotation always narrow?** `val m: nat = i` checks. If some
    annotations should be static-only, `as` and the annotation differ, and the
    rule "a written surface type is a check site" is lost.
+8. **Does a surface type propagate through construction and selection?** `[n]`
+   where `n: nat` — `nat list` or `int list`? `List.hd ns` where `ns: nat
+   list` — `nat` or `int`? Propagating through construction records what was
+   verified and is sound; recovering through selection means reading an
+   instantiated type variable, which the invariant forbids. The printing tests
+   cannot be written until this is settled.
+9. **Hiding constraints when printing.** An anonymous constrained type prints
+   in full (`int check z => z > 0`), which is noisy in a wide record. A
+   variant of `type_string` that elides constraints is proposed for later.
