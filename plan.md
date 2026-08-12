@@ -61,17 +61,80 @@ Consequences:
 * A match of one branch whose pattern is irrefutable (`i => i >= 0`, the
   common case) is unchanged: no branch is appended.
 
-## Where a value can breach a constraint
+## A constrained type is distinct from its base type
 
-`type` in Morel is a **transparent alias** (`AliasType`: "an alias is
-transparent ... not a distinct type"). So `type nat = int check i => i >= 0`
-makes `nat` and `int` the same type to the unifier, and every `int` is
-structurally a `nat`. There is no single construction site to guard; we have
-to find every point where a value flows into a position whose static type is
-constrained.
+An ordinary alias expands, as in Standard ML: `type nat = int` makes `nat` and
+`int` the same type, and the name does not survive inference.
 
-Errors below use Morel's existing format, `uncaught exception Name [message]`,
-as in `uncaught exception Subscript [subscript out of bounds]`.
+A *constrained* type does not. `type nat = int check i => i >= 0` is a
+distinct type. This is the decision that makes the rest of the design work:
+if `nat` expanded to `int`, then every `int` would be structurally a `nat`,
+there would be no site to guard, and the constraint would be unenforceable.
+
+The relation between the two is **subtyping**: every `nat` is an `int`, so
+
+* `nat` to `int` is free (an upcast: nothing to check), and
+* `int` to `nat` requires a check (a downcast).
+
+Every check in this document is a downcast. That is also what the issue's
+examples assume — `val j: int check k => k >= 10 = i + 10` downcasts an `int`
+expression into a constrained position.
+
+**We do not add general subtyping to the unifier.** A downcast is inserted
+only where the expected type is one the user wrote — checking mode in a
+bidirectional reading of the type rules. Hindley-Milner inference is
+unchanged, and the set of coercion sites stays syntactic and finite. Where an
+`int` meets a `nat` outside such a site, the result is a type error, not a
+silent coercion.
+
+Two properties of Morel make this subtyping simpler than it would be
+elsewhere. There are **no mutable references**, so nothing is invariant: an
+immutable `list` and `bag` are covariant, and a function is contravariant in
+its argument. And the representation is **identical** — a constrained type is
+distinct in the type system but not boxed at run time — so an upcast is free,
+a `nat list` used as an `int list` costs nothing, and interoperation with
+Calcite is unaffected.
+
+### Not an `abstype`
+
+`abstype` gives the same guarantee we want — one checked way in, so the
+invariant holds of every value — but in the wrong shape. It is opaque in
+*both* directions:
+
+| | in (`int` to `nat`) | out (`nat` to `int`) |
+|---|---|---|
+| `abstype` | explicit constructor | explicit accessor |
+| constrained type | implicit, **checked** | implicit, **free** |
+
+Requiring `toInt n + 1` everywhere would make constrained types unusable for
+their purpose. A constrained type is a *refinement* type, not an abstract
+type. (`abstype` is in any case largely superseded in Standard ML by opaque
+signature ascription, and Morel has no user-facing module system, so it is not
+available as a building block.)
+
+`abstype` remains a fair model of the *implementation*: a distinct type whose
+only entry point is a generated checked constructor. The divergence is that
+the exit is implicit and free, and that there is no box.
+
+### Ascription is the cast
+
+We do not need a new cast operator. Two forms already express one:
+
+* `e : nat` casts to a named constrained type — ordinary Standard ML
+  ascription;
+* `e check m` casts to an anonymous one — already proposed in #239, and used
+  in #242 as `(i * j) check p => p > 0`.
+
+Ascription therefore does the work, and one rule covers everything: **an
+ascription site is a coercion site is a blame site.**
+
+## Where a downcast happens
+
+The sections below enumerate the sites, and what each one does when the
+constraint fails.
+
+Errors use Morel's existing format, `uncaught exception Name [message]`, as in
+`uncaught exception Subscript [subscript out of bounds]`.
 
 ### A. Direct binding sites
 
@@ -128,39 +191,104 @@ type evenPair = (nat * nat) check (i, j) => i * j mod 2 = 0;
 > uncaught exception Constraint [(1,3) is not a valid evenPair]
 ```
 
-### C. Flow through polymorphic functions
+### C. Downcasts into a polymorphic result
 
-Here transparency bites. Neither `id` nor `List.map` mentions `nat`; the only
-place to check is the binding.
+A polymorphic function needs no modification. The downcast happens at the
+site where the constrained type is written, which is outside the function.
 
 ```sml
-fun id x = x;
-val n: nat = id ~1;
-> uncaught exception Constraint [~1 is not a valid nat]
-
-val ns: nat list = List.map (fn i => i - 1) [0, 1, 2];
+fun dec x = x - 1;
+val ns: nat list = List.map dec [0, 1, 2];
 > uncaught exception Constraint [~1 is not a valid nat: element 0]
 ```
 
-Checking at the binding means walking the whole list there, every time such a
-value crosses such a boundary.
+`List.map` runs unchanged and returns an `int list`; the downcast to `nat
+list` at the `val` binding walks the list and checks each element.
 
-### D. Function values
+Better still, a check written in a function's own signature compiles into its
+body and travels with the value, so combinators stay ignorant even at higher
+order:
 
 ```sml
-val g: nat -> nat = fn i => i - 1;
-g 0;
+fun dec (x: nat): nat = x - 1;   (* both checks inside dec *)
+twice dec 1;                     (* 'a = nat; no coercion; twice unchanged *)
+List.map dec ns;                 (* 'a = nat, 'b = nat; map unchanged *)
 ```
 
-Nothing is wrong at the binding: `fn i => i - 1` *is* an `int -> int`. The
-breach happens later, at the call, and the blame differs:
+Two costs, neither of them soundness:
+
+* **Promptness.** The exception is raised at the boundary, after the
+  traversal, not at the offending element. `List.map` over `[3, 101, 8]`
+  completes all three calls before the check runs, and reports the first
+  breach in the *result*, not the first one encountered.
+* **Forcing.** A downcast walks its operand, so a lazy or foreign collection
+  is materialized at the boundary. See E.
+
+### D. Downcasts at a type variable
+
+This is the case that a polymorphic function cannot absorb.
 
 ```sml
+type nat = int check i => i >= 0;
+fun dec (x: nat) = x - 1;        (* nat -> int: checks argument, not result *)
+fun twice f x = f (f x);         (* ('a -> 'a) -> 'a -> 'a *)
+twice dec 1;
+> Error: cannot unify nat and int in argument of twice
+```
+
+Unifying `nat -> int` with `'a -> 'a` needs `'a = nat` from the argument and
+`'a = int` from the result. Under distinctness that is a type error rather
+than a silent breach, which is the improvement we want. But to *run* it, the
+`int` result of the inner `f x` must be downcast to `nat` before the outer `f`
+receives it, and that downcast sits at a position typed `'a`, inside a `twice`
+compiled once and holding no checker.
+
+The same shape at first order is fine, because the downcast lands at a written
+type rather than a type variable:
+
+```sml
+val ns: nat list = List.map dec ns0;   (* one downcast at the binding *)
+```
+
+**The fix is an ascription, not a new mechanism.** Writing the type gives the
+compiler a site to compile the coercion, and `twice` is still unchanged:
+
+```sml
+twice (dec : nat -> nat) 5;
+> val it = 3 : nat
+twice (dec : nat -> nat) 1;        (* dec (dec 1) = dec 0 = ~1 *)
+> uncaught exception Constraint [~1 is not a valid nat: result of dec]
+twice (dec : nat -> nat) ~1;
+> uncaught exception Constraint [~1 is not a valid nat: argument of dec]
+```
+
+Note which half needs the wrapper. `dec`'s *argument* check is compiled inside
+`dec` and travels with the function value, so it fires however `dec` is
+called, even from a polymorphic function that knows nothing. Only the *result*
+needs the ascription to wrap it.
+
+So D is a type error whose remedy the user can write today, rather than a hole
+that waits on #290. #290 would remove the need for the ascription, not enable
+the feature.
+
+### D2. Function values
+
+A downcast of a *function* cannot inspect its operand; it must wrap it, and
+then attribute blame.
+
+```sml
+fun dec x = x - 1;
+val g: nat -> nat = dec;    (* wraps dec: checks argument in, result out *)
 g 0;
 > uncaught exception Constraint [~1 is not a valid nat: result of g]
 g ~1;
 > uncaught exception Constraint [~1 is not a valid nat: argument of g]
 ```
+
+Note that a downcast on data is an inspection and returns its operand
+unchanged, whereas a downcast on a function is a transformation. Wrapping is
+tractable at a written type; it is not available at a type variable, which is
+D again.
 
 ### E. Values from outside
 
@@ -201,81 +329,90 @@ declaration time, so redefining `limit` or `lessThanDozen` afterwards does not
 change the type. The closure must therefore be snapshotted into the type,
 which affects type equality, printing and serialization.
 
-## C and D are one problem, and it is #290
+## Polymorphic functions do not need to change
 
-C and D look different but reduce to the same question: **what happens when a
-constrained type meets a type variable?**
+The important question for reuse is not "is the function polymorphic?" but
+**where does the downcast land?**
 
-* In C, `List.map` is compiled once, at type `('a -> 'b) -> 'a list -> 'b
-  list`. When `'b` is instantiated to `nat`, the compiled code has no idea it
-  should be checking anything.
-* In D, `g`'s calls are only checkable where `g`'s type is statically known.
-  Pass `g` to something polymorphic and the knowledge is gone.
+* If it lands at a type the user wrote — a `val` annotation, a parameter, a
+  return, a field — the downcast is compiled there, and every polymorphic
+  function it flows through is untouched. `List.map`, `List.filter`, `twice`
+  and user combinators need no modification, no reified type and no
+  handler. This covers C, and it is the overwhelmingly common case.
+* If it lands at a **type variable** (D), there is nowhere to compile it. The
+  function was compiled once at `'a` and holds no checker.
 
-This is exactly #290. There, a polymorphic function needs a *comparator* for a
-type variable, and "the comparator is generated at compile time, but the full
-type is not available until the function is applied". Here a polymorphic
-function needs a *checker* for a type variable. `Range.contains`,
-`Range.normalize`, `Range.toList` and `Range.toBag` need the same thing.
+So only D needs a dispatch mechanism, and D is the same question as #290:
+what does a polymorphic function do when it needs a type-directed operation
+for a type variable? There a polymorphic function needs a *comparator*, and
+"the comparator is generated at compile time, but the full type is not
+available until the function is applied". Here it needs a *checker*.
+`Range.contains`, `Range.normalize`, `Range.toList` and `Range.toBag` need
+the same thing.
 
 Morel's current mechanism, `Codes.Typed.withType(typeSystem, type)`,
 specializes a builtin once the concrete type is known at compile time. That is
-enough for a monomorphic call site and not enough for a polymorphic one —
-which is precisely why #290 is still open.
+enough for a monomorphic site and not for a polymorphic one — which is
+precisely why #290 is still open.
 
 So: **do not invent a constraint-dispatch mechanism for #239.** Whatever
-solves #290 should carry the checker too.
+solves #290 should carry the checker too. Until then, D is a type error, which
+is honest: the program is rejected rather than silently unchecked.
 
-### Options
+### Options for the remaining cases
 
-| | Approach | Reuse of polymorphic functions | Soundness | Cost |
+| | Approach | Reuse of polymorphic functions | Closes | Cost |
 |---|---|---|---|---|
-| 1 | Check at annotation boundaries only | Good — polymorphic code is untouched and uninstrumented | A, B closed; C partly (deep walk); D, E, F open | Deep traversal per boundary, repeated |
-| 2 | Type-directed dispatch (dictionary passing), shared with #290 | Good — one compiled copy serves every instantiation | A–D closable | Large compiler change; hidden parameters |
-| 3 | Nominal (opaque) refinement | Excellent — checked once at construction, never re-walked | Strongest | Contradicts the issue's implicit `int` → `nat` examples; explicit coercions everywhere |
-| 4 | Static proof (#242 `prove`), runtime check only where unproven | Good | An optimization on 1 or 2, not a design | SMT-shaped work |
-| 5 | Constraints never cross a type variable; document the hole | Perfect — nothing changes | A, B only | Trivial |
+| 1 | Downcast at written types (this plan) | Untouched — no reified type, no handler | A, B, C, D2 | Traversal per downcast; not prompt |
+| 2 | Type-directed dispatch, shared with #290 | Untouched — one compiled copy serves every instantiation | D | Large compiler change; hidden parameters |
+| 3 | General subtyping in the unifier | Untouched | D, and removes the type errors | Subtyping plus HM is a research-grade change |
+| 4 | Static proof (#242 `prove`), runtime check only where unproven | Untouched | An optimization on 1, not a design | SMT-shaped work |
+| 5 | "Already checked" mark on a value | Untouched | Repeated traversal | Representation change; interacts with equality |
 
-Option 3 deserves a note, because it is the only one that makes the bar
-("impossible to create a value in breach") achievable cheaply: if `nat` is
-distinct from `int`, a `nat list` is checked once when built and never again,
-and `List.map f` over it needs only `f`'s own boundary checked. The cost is
-that `val j: int check k => k >= 10 = i + 10` — an example in the issue —
-requires an implicit checked coercion, so we would be re-introducing option 1
-at the coercion points anyway. A middle road is *nominal with implicit checked
-coercion*: nominal enough to hang a checker on and to avoid re-walking, with
-the compiler inserting the coercion where the issue's syntax expects one.
+Option 3 is the only one that would make `twice dec 1` run without a wrapper,
+and it is much the most expensive; option 2 gets the same effect for the price
+we are paying for #290 anyway.
 
 ### Recommendation
 
-Land 1, scoped by 5, and design for 2:
+Land 1, and let #290 supply 2:
 
-* Phase 1–3 (below) implement option 1 for the syntactic cases A and B, which
-  is where nearly all the value is.
-* A constrained type appearing in a *polymorphic* position (C, D) is a
-  compile-time error at first — option 5 — rather than a silent hole. That
-  keeps the "impossible to breach" promise honest for the fragment we support.
-* When #290 lands a dispatch mechanism, relax the restriction and route the
-  checker through it.
+* Phases 1–3 implement the downcast at written types, which covers A, B, C and
+  D2 — nearly all the value, with no change to any polymorphic function.
+* A downcast landing at a type variable (D) is a **type error**, not a silent
+  hole, and the remedy is an ascription the user can write today. The program
+  is rejected, so the "impossible to breach" promise holds for everything that
+  compiles.
+* When #290 lands a dispatch mechanism, route the checker through it. That
+  removes the need for the ascription; it is not what enables the feature.
 
 That ordering means we never ship an unsound-but-quiet feature, and we do not
 build a second dispatch mechanism that #290 will later replace.
 
 ## Phases
 
+0. **A constrained type survives inference.** A plain alias still expands; a
+   constrained type does not. This is the prerequisite: unless the type
+   reaches `Core`, there is nothing to compile a downcast from. Touches
+   `TypeSystem`, `Keys`, `TypeResolver` and `Unifier`, and `Pretty` for
+   printing.
 1. **Syntax.** `check` keyword; `typbind` and `exp` productions; `Ast` and
    `Core` nodes; append `| _ => false`; suppress the non-exhaustive error and
    keep the redundant-branch one. No enforcement yet.
-2. **Runtime.** `Constraint` added to `BuiltInExn`; check at direct bindings,
+2. **Runtime.** `Constraint` added to `BuiltInExn`; downcast at bindings,
    parameters and returns (A).
-3. **Composites.** Construction of records, tuples, lists, datatype
-   constructors and record modifiers (B); component-before-whole ordering and
-   the blame path in messages.
-4. **Restriction.** Reject a constrained type in a polymorphic position, with
-   a message pointing at this limitation.
-5. **Dispatch.** Once #290 has a mechanism, carry checkers through it and
-   lift the phase-4 restriction (C, D).
-6. **Planner.** Teach `Extents` to read constraints so a constrained type can
+3. **Composites.** Downcast into records, tuples, lists, datatype
+   constructors and record modifiers (B, C); component-before-whole ordering
+   and the blame path in messages.
+4. **Functions.** Wrap a function at a downcast to a constrained function
+   type, with blame (D2).
+5. **Restriction.** A downcast landing at a type variable is a type error (D).
+   The message should name the ascription that fixes it, in the style of
+   "cannot unify nat and int in argument of twice; ascribe the argument, as
+   `(dec : nat -> nat)`".
+6. **Dispatch.** Once #290 has a mechanism, carry checkers through it and
+   lift the phase-5 restriction.
+7. **Planner.** Teach `Extents` to read constraints so a constrained type can
    be scanned (F). Overlaps #240 and #241.
 
 ## Open questions
@@ -291,3 +428,11 @@ build a second dispatch mechanism that #290 will later replace.
 4. **Cost of deep checks.** Is a per-boundary traversal of a large bag
    acceptable, or should a checked value carry a "already checked" mark?
 5. **Foreign data (E).** Check on entry, or declare the boundary untrusted?
+6. **What `assert` returns.** #239 says the #242 operators "return their
+   operand, of the same type, but with additional constraints known to the
+   system", but #242 says "Both have type `bool`" and uses `assert p > 0;` as
+   a statement. This plan follows #242, so `assert` is not a cast and
+   ascription does that job. The two issues should be reconciled.
+7. **Does ascription always check?** This plan says `e : nat` inserts a
+   downcast. If some ascriptions should be static-only, we need a second form,
+   and the "ascription site is a coercion site" rule is lost.
