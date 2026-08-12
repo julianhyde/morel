@@ -427,6 +427,142 @@ declaration time, so redefining `limit` or `lessThanDozen` afterwards does not
 change the type. The closure must be snapshotted into the surface type, which
 affects surface-type equality and printing.
 
+## Testing
+
+### There is no oracle
+
+For the `scan` functions of #371, SML/NJ settled every expected value, and it
+repeatedly contradicted what the specification implied. Here there is no
+oracle: no Standard ML has constrained types. Expected values come from this
+document alone, so **the tests are the specification**, and a wrong expectation
+will be enshrined rather than caught. Every open question below must be closed
+before the tests that depend on it are written.
+
+### The printed type is the observable
+
+The second pass knows a surface type only where one is syntactically present.
+That is directly visible, and is the same behaviour aliases have today:
+
+```sml
+val n: nat = 5;
+> val n = 5 : nat        (*) written, so known
+n;
+> val it = 5 : int       (*) erased on re-reference
+[n];
+> val it = [5] : int list        (*) not propagated into construction
+{a = n};
+> val it = {a=5} : {a:int}
+val ns: nat list = [1, 2];
+List.hd ns;
+> val it = 1 : int       (*) not propagated out
+```
+
+These are the cheapest tests we have for the invariant, and the ones most
+likely to break if someone later "improves" propagation into something
+unsound. Pin all of them.
+
+### Axes
+
+1. **Type shape** — primitive, tuple, record, list, bag, option, datatype,
+   nested (`{a: nat list}`, `(nat * nat) list`), constrained-over-constrained
+   (`type teen = nat check ...`), function (rejected), type variable (erased).
+2. **Site** — the A–G sections above.
+3. **Outcome** — passes and returns the value unchanged; fails with a message
+   and blame path; rejected at compile time; elided statically.
+4. **Match shape** — single irrefutable branch, multi-branch exhaustive,
+   multi-branch with a gap, redundant branch; crossed with
+   `matchCoverageEnabled`.
+
+Crossing every axis is wasteful. Cross axis 3 with axis 2 exhaustively, and
+sample axis 1 — one primitive, one record, one list, one nested — except where
+the shape is the point (composites, function types).
+
+### Site × outcome
+
+| Site | passes | fails | rejected | elided |
+|---|---|---|---|---|
+| `val` with annotation | ✓ | ✓ | — | when surface type already conforms |
+| function parameter | ✓ | ✓ | — | — |
+| function result | ✓ | ✓ | — | — |
+| record / tuple / list construction | ✓ | ✓ (path names field, component, element) | — | — |
+| datatype constructor | ✓ | ✓ | — | — |
+| record modifier (#432) | ✓ | ✓ | — | — |
+| `as` | ✓ | ✓ | different erasure; function type | `n as nat` |
+| `asOpt` | `SOME` | `NONE` (never raises) | as above | — |
+| through a polymorphic function | no check, constraint erased | — | — | — |
+| foreign bag (E) | ✓ | ✓ | — | — |
+| `from` scan (F) | generates conforming values | — | — | — |
+
+### Cases a naive matrix misses
+
+1. **Elision must not over-elide.** `n as nat` where `n: nat` is free; `i as
+   nat` where `i: int` must check. Same shape, opposite answers — the pair
+   catches an elision keyed on the target type rather than the source.
+2. **All four coverage combinations.** {match has a gap, is exhaustive} ×
+   {`matchCoverageEnabled` true, false}. All four must accept the declaration
+   and give identical runtime semantics; today two of them would error.
+3. **Component before whole.** A value failing both a component constraint and
+   the enclosing one must report the component.
+4. **Nested blame.** `{xs = [1, ~2]}` at `{xs: nat list}` must name the field
+   *and* the element.
+5. **Round trip.** `nat` to `int` to `nat` re-checks: nothing records that a
+   value was checked before.
+6. **Vacuous cases.** `[]: nat list` and `NONE: nat option` pass. Does the
+   predicate run zero times? Observable if it raises.
+7. **Refinement survives `asOpt`.** In `case i asOpt nat of SOME n => ...`,
+   `n` has surface type `nat`, so a use of `n` where a `nat` is wanted emits
+   no second check. This is the only place a constraint is *gained* rather
+   than asserted, and it is easy to get wrong.
+8. **Repeated `check` clauses.** `int check i => i >= 1 check j => j <= 12`:
+   both apply; which failure is reported first?
+9. **Capture.** All three of the issue's cases — redefine a captured value,
+   redefine a captured function, and a type declared in a `let` whose captured
+   bindings have gone out of scope.
+10. **Predicate misbehaviour.** Raises, diverges, returns a non-`bool`,
+    is constantly true, is constantly false.
+11. **Same erasure, different constraint.** `nat as teen`, `teen as nat`,
+    `nat as int`, anonymous `int check ...` to and from named.
+12. **Different erasure is the unifier's error**, not the constraint
+    machinery's: `"abc" as nat` must report before any constraint reasoning,
+    and must not mention `Constraint`.
+13. **Function types rejected at both sites** — `f as (nat -> nat)` and `val
+    h: nat -> nat = f`.
+14. **Shadowing.** A `check` match whose bound variable shadows an outer one.
+15. **Self-reference.** `type t = t check ...`, and mutually recursive
+    constrained types.
+16. **Idempotency.** `script/idempotent.smli` round-trips source through the
+    printer and parser; `check`, `as` and `asOpt` must survive.
+17. **`Sys.plan()`.** Is the check visible in the plan, and does the inliner
+    or `Relationalize` remove it?
+18. **Calcite pushdown.** A constrained bag pushed to Calcite: does the check
+    survive, and is a foreign scan still streamed?
+
+### Where the tests live
+
+* `script/constrained.smli` (new) — the bulk: sites, outcomes, messages.
+* `script/match.smli` — the append rule and the four coverage combinations,
+  since they are about matches.
+* `script/type.smli` — erasure, unification, and the printed-type observables
+  above.
+* `script/idempotent.smli` — parser/printer round trip.
+* `TypeTest` — unit tests for the erasure function itself, which is easier to
+  cover exhaustively in Java than through scripts.
+* `LintTest` — the new keywords appear in `docs/reference.md`.
+
+### By phase
+
+Each phase should land with its own tests, rather than deferring them:
+
+1. Surface types — `TypeTest` erasure; the printed-type observables.
+2. Syntax — parse and print `check`, `as`, `asOpt`; the four coverage
+   combinations; redundant branch still an error; `idempotent.smli`.
+3. Narrowing — site × outcome for `val`, parameter, result; `as`/`asOpt`;
+   elision pair (case 1 above); message format.
+4. Composites — shapes and nested blame paths; ordering (case 3); vacuous
+   cases.
+5. Rejections — function types, different erasures.
+6. Planner — the `parity_pair` scan from the issue comment.
+
 ## Phases
 
 1. **Surface types.** A second type language with `check` nodes and an erasure
