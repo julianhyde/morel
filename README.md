@@ -69,7 +69,8 @@ On Windows, the last line is
 If you are using Java 8 through 10, you must add parameters
 `-Dcheckstyle.version=9.3 -Dhsqldb.version=2.5.1` to this command
 line; if you are using Java 11 through 16, you must add parameter
-`-Dcheckstyle.version=10.26.1`.
+`-Dcheckstyle.version=10.26.1`; if you are using Java 17 through 20,
+you must add parameter `-Dcheckstyle.version=12.1.2`.
 
 ### Run the shell
 
