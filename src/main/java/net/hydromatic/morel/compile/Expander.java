@@ -639,7 +639,8 @@ public class Expander {
           scanPat, generator.exp, core.andAlso(typeSystem, joinConditions));
 
       // Yield only the required patterns.
-      fromBuilder2.yield_(core.recordOrAtom(typeSystem, requiredPats));
+      final Core.Exp yieldExp = core.recordOrAtom(typeSystem, requiredPats);
+      fromBuilder2.yield_(yieldExp);
 
       // Add distinct if:
       // 1. The generator may produce duplicates (!generator.unique), or
@@ -667,9 +668,7 @@ public class Expander {
       }
       if (needsDistinct) {
         fromBuilder2.distinct();
-        // As above: 'distinct' is a 'group', whose output has no order of its
-        // own, and an unbounded scan is ordered.
-        fromBuilder2.order(core.recordOrAtom(typeSystem, requiredPats));
+        fromBuilder2.order(yieldExp);
       }
 
       // Add scan from the filtered subquery.
