@@ -28,6 +28,8 @@ For a full list of releases, see
 
 Release 0.x.0 ...
 
+Breaking changes:
+
 Contributors:
 
 ### Features
@@ -83,6 +85,9 @@ such as `s.size ()`, the
 [record modifiers](https://github.com/hydromatic/morel/issues/432)
 `extend`, `remove`, `rename` and `replace`, and
 [dot syntax for tuple fields](https://github.com/hydromatic/morel/issues/332).
+A `yield`, `yieldAll` or `group` step can also
+[name its output with a single variable](https://github.com/hydromatic/morel/issues/387),
+as in `yield v = e`.
 
 The built-in library adds the
 [`Date`](https://github.com/hydromatic/morel/issues/278),
@@ -112,6 +117,24 @@ means that recursion depth is no longer bounded by the Java stack; that
 in turn allows
 [N Queens](https://github.com/hydromatic/morel/issues/148) to be solved
 for arbitrarily large N.
+
+Breaking changes:
+* The `with` record modifier is now called `replace`
+  ([#432](https://github.com/hydromatic/morel/issues/432))
+* A `yield`, `yieldAll` or `group` step of the form `v = e` now binds
+  `v`, rather than testing whether `v` equals `e`; write `yield (v = e)`
+  for the equality test
+  ([#387](https://github.com/hydromatic/morel/issues/387))
+* An unbounded scan has type `list` rather than `bag`, yields its values
+  in the natural order of their type, and yields each value once;
+  previously the order depended on which generator the optimizer chose,
+  and duplicates were possible. A bounded scan is unaffected.
+  ([#443](https://github.com/hydromatic/morel/issues/443))
+* `ordinal` in a join's `on` condition is now the ordinal of the
+  candidate pair of rows, that is, the number of times the `on`
+  condition has been evaluated; previously it was the ordinal of the
+  left-hand row
+  ([#435](https://github.com/hydromatic/morel/issues/435))
 
 Contributors:
 Guy Freeman,
@@ -413,10 +436,7 @@ You can now compute expressions before and after aggregation, for
 example `2.0 * avg over (units * unitPrice)`. The `elements`
 collection lets you access the
 [raw elements of a group](https://github.com/hydromatic/morel/issues/304)
-and even write subqueries in the `compute` clause. (*Breaking change:*
-The `of` keyword has been replaced by `over`, and composite keys and
-compute expressions must now be records with the usual `{` ... `}`
-syntax.)
+and even write subqueries in the `compute` clause.
 
 The type system includes
 [type aliases](https://github.com/hydromatic/morel/issues/285)
@@ -428,6 +448,12 @@ The built-in library adds the
 [`Fn`](https://github.com/hydromatic/morel/issues/301), and
 [`ListPair`](https://github.com/hydromatic/morel/issues/295)
 structures.
+
+Breaking changes:
+* In an aggregate query, the `of` keyword is replaced by `over`, and
+  composite keys and compute expressions must be records, written with
+  the usual `{` ... `}` syntax
+  ([#288](https://github.com/hydromatic/morel/issues/288))
 
 Contributors:
 Julian Hyde
@@ -578,6 +604,18 @@ defined by the
 The `scott` sample database now uses
 [pluralized table names](https://github.com/hydromatic/morel/issues/255)
 like `emps` instead of `EMP`.
+
+Breaking changes:
+* The `scott` sample database maps the `EMP` table to `emps`, and
+  pluralizes the other table names likewise
+  ([#255](https://github.com/hydromatic/morel/issues/255))
+* The syntax of the `order` step is simplified, and the `desc` keyword
+  is removed
+  ([#244](https://github.com/hydromatic/morel/issues/244))
+* Queries distinguish ordered from unordered collections, and several
+  operations now return the new `bag` type rather than `list`
+  ([#273](https://github.com/hydromatic/morel/issues/273),
+  [#235](https://github.com/hydromatic/morel/issues/235))
 
 Contributors:
 Julian Hyde
