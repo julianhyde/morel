@@ -34,7 +34,13 @@ and commit the modified `pom.xml`.
 
 Write release notes. Run the
 [relNotes](https://github.com/julianhyde/share/blob/master/tools/relNotes)
-script and append the output to [HISTORY.md](HISTORY.md).
+script and append the output to [HISTORY.md](HISTORY.md), laid out as
+the commented-out template there. Then edit the entries:
+
+* One entry per issue; merge those marked "continued" or "part N".
+* Drop entries too vague to tell from the change that subsumes them.
+* List breaking changes as bullets, just before the contributors.
+* Date the release in UTC.
 
 Update version numbers in
 `src/main/java/net/hydromatic/morel/util/JavaVersion.java`, `README`,
