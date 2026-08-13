@@ -46,7 +46,7 @@ Contributors:
 
 -->
 
-## <a id="0.9.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.9.0">0.9.0</a> / 2026-08-12
+## <a id="0.9.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.9.0">0.9.0</a> / 2026-08-13
 
 Release 0.9.0 is a large release that adds a Datalog sub-language, a
 constraint solver that can evaluate queries over unbounded variables,
@@ -147,10 +147,8 @@ Julian Hyde
   ([#443](https://github.com/hydromatic/morel/issues/443))
 * Allow unbounded scan to have arbitrary pattern, including type annotation
   (`from b: bool`) ([#440](https://github.com/hydromatic/morel/issues/440))
-* `scan` functions for `Bool`, `Char`, `Date`, `Int`, `Real`, `String`,
-  `Time`, and `Word`, and various `toString`, `fromString` functions
-  ([#371](https://github.com/hydromatic/morel/issues/371), continued)
-* `StringCvt` structure
+* `StringCvt` structure, and `fmt`, `scan`, `toString` and `fromString`
+  functions in various structures
   ([#371](https://github.com/hydromatic/morel/issues/371))
 * Extend tabular mode to render enum values as scalars
   ([#441](https://github.com/hydromatic/morel/issues/441))
@@ -168,17 +166,14 @@ Julian Hyde
   "binder" variable ([#387](https://github.com/hydromatic/morel/issues/387))
 * Add `type_string` operator
   ([#406](https://github.com/hydromatic/morel/issues/406))
-* Add `PP` structure (pretty-printer), and use it to print values
+* Add `PP` structure (pretty-printer), use it to print values, and
+  pretty-print lists and types compactly, like SML/NJ
   ([#398](https://github.com/hydromatic/morel/issues/398),
   [#339](https://github.com/hydromatic/morel/issues/339))
-* Pretty-print lists and types compactly, like SML/NJ
-  ([#398](https://github.com/hydromatic/morel/issues/398), part 2)
 * Add the `word` type and `Word` structure
   ([#396](https://github.com/hydromatic/morel/issues/396))
 * Align the top-level environment with Standard ML
   ([#395](https://github.com/hydromatic/morel/issues/395))
-* Extend tabular mode to render nested records and record options (continues
-  [#376](https://github.com/hydromatic/morel/issues/376))
 * Ground an unbounded variable bounded by `elem` over a range
 * Disallow unbound type variables in `type` and `datatype` declarations
   ([#356](https://github.com/hydromatic/morel/issues/356))
@@ -193,22 +188,20 @@ Julian Hyde
   ([#382](https://github.com/hydromatic/morel/issues/382))
 * Add `yieldAll` step, a flatMap for `from` expressions
   ([#257](https://github.com/hydromatic/morel/issues/257))
-* Extend tabular mode to fold strings and display nested collections
+* Extend tabular mode to fold strings, and to display nested collections,
+  nested records and record options
   ([#376](https://github.com/hydromatic/morel/issues/376))
 * Use feasibility-based bound tightening (FBBT) to deduce and strengthen
   variable bounds ([#373](https://github.com/hydromatic/morel/issues/373))
 * Extend list constructor to allow ranges, e.g. `where i elem [0..^10, 20,
   100..]` ([#372](https://github.com/hydromatic/morel/issues/372))
-* Implement `Real.fmt` and `Int.fmt` functions and parts of the `StringCvt`
-  structure ([#371](https://github.com/hydromatic/morel/issues/371))
 * Add attributes and doc comments
   ([#369](https://github.com/hydromatic/morel/issues/369))
 * Add `Sys.parseTree` built-in function for AST inspection
-* Strip trailing `.0` from whole-number reals in tabular output (continues
-  [#358](https://github.com/hydromatic/morel/issues/358))
 * Include source position in interactive compile-error messages
 * Add `raise` command ([#364](https://github.com/hydromatic/morel/issues/364))
-* Display whole `real` values without trailing `.0`
+* Display whole `real` values without trailing `.0`, in both classic and
+  tabular output
   ([#358](https://github.com/hydromatic/morel/issues/358))
 * `Range` structure ([#338](https://github.com/hydromatic/morel/issues/338))
 * Add Darn notebook kernel and MorelHighlighter
@@ -319,8 +312,8 @@ Julian Hyde
 * Constructor values should pretty-print their payloads according to their
   type
 * Merge multiple range constraints into a single call to
-  `Range.discreteSetOf` (continues
-  [#338](https://github.com/hydromatic/morel/issues/338))
+  `Range.discreteSetOf`
+  ([#338](https://github.com/hydromatic/morel/issues/338))
 * Migrate evaluation from `EvalEnv` chain to `Stack`
   ([#349](https://github.com/hydromatic/morel/issues/349))
 * Predicate inversion should filter by outer-scope variables
@@ -359,7 +352,7 @@ Julian Hyde
   script
 * Add a `matchStrict` property, to enable strict output matching, and move
   pretty-printing tests into `pretty.smli`
-  ([#398](https://github.com/hydromatic/morel/issues/398), part 1)
+  ([#398](https://github.com/hydromatic/morel/issues/398))
 * Long method-call chain causes javac StackOverflowError
 * Lint: Add rule to encourage converting consecutive line comments `(*)` into
   block comments `(*` ... `*)`
@@ -370,7 +363,6 @@ Julian Hyde
   ([#361](https://github.com/hydromatic/morel/issues/361))
 * Add graph algorithm examples based on "EmptyHeaded" paper
   ([#233](https://github.com/hydromatic/morel/issues/233))
-* Lint
 * Run longest-running script tests first to minimize total parallel duration
 * Solve the "N Queens" problem
   ([#148](https://github.com/hydromatic/morel/issues/148))
@@ -379,10 +371,9 @@ Julian Hyde
 * Test suite hangs intermittently due to JDBC connection pool exhaustion and
   cyclic wait for connections
   ([#340](https://github.com/hydromatic/morel/issues/340))
-* Test output should fail to match if types are different (continues
-  [#334](https://github.com/hydromatic/morel/issues/334))
 * Linter should cover Markdown files
-* Make test scripts resilient to changes in the order of `bag` values
+* Make test scripts resilient to changes in the order of `bag` values, and
+  fail to match if types are different
   ([#334](https://github.com/hydromatic/morel/issues/334))
 * Linter should police Morel block comments
   ([#335](https://github.com/hydromatic/morel/issues/335))
@@ -393,7 +384,7 @@ Julian Hyde
 * Add `variant.smli`, a test for the `variant` datatype
   ([#324](https://github.com/hydromatic/morel/issues/324))
 * Script framework incorrectly strips output lines inside block comments
-  ([#306](https://github.com/hydromatic/morel/issues/306), continued)
+  ([#306](https://github.com/hydromatic/morel/issues/306))
 * Allow running GitHub action on a specified commit
 
 ### Component upgrades
@@ -416,11 +407,9 @@ Julian Hyde
 * Move documentation metadata from `functions.toml` to `.sig` files
   ([#368](https://github.com/hydromatic/morel/issues/368))
 * Maven Central badge in README is broken
-* Document methods (built-in functions that allow postfix calls) (continues
-  [#348](https://github.com/hydromatic/morel/issues/348))
-* Split documentation of the built-in functions into a page per structure
+* Split documentation of the built-in functions into a page per structure,
+  and document methods (built-in functions that allow postfix calls)
   ([#348](https://github.com/hydromatic/morel/issues/348))
-* Update current version
 * Generate a table of all built-in properties
 * Documentation for `Relational.iterate`
 * Release 0.9.0 ([#446](https://github.com/hydromatic/morel/issues/446))
