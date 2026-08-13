@@ -179,10 +179,11 @@ wrong.
 **The rule we need.** Binding a metavariable to the written form is sound, and
 that is the case parametricity covers: `#1 p`, `List.hd ns`, `List.map (fn i
 => i) ns`. But when two *concrete* types with the same erasure meet, the
-result must be the **weaker** of the two — the constraints both sides
-guarantee — not whichever came first. `nat` meets `int` gives `int`; `nat`
-meets `teen` gives `nat`, since `teen` entails it. That is both sound and
-deterministic, which SML/NJ's rule is neither.
+result is their **meet**, computed without entailment: equal constraints
+(textually) meet to themselves, and anything else meets to the base type.
+`nat` meets `nat` gives `nat`; `nat` meets `int` gives `int`; `nat` meets
+`teen` gives `int`, even though `teen` implies `nat`. Sound, deterministic,
+and cheap, which SML/NJ's rule is not.
 
 Morel expands eagerly today, so all of this is new behaviour:
 
@@ -210,6 +211,46 @@ val ps = List.map (fn i => i as nat) [3, ~2];
 Note that this also answers promptness: a cast written *inside* the mapper
 runs per element and fails at the offending one, where a narrowing at the
 binding would have run the whole traversal first.
+
+### The condition must be closed
+
+A `check` condition may not depend on the environment. Its only free variable
+is the value the match binds. That is what lets a constrained type be interned
+like any other: `TypeSystem` holds `Map<Key, Type>`, a `Key` must hash and
+compare cheaply, and it cannot hold a closure. With a closed condition the key
+is structural — the condition itself — and two constrained types are the same
+type when their conditions are textually equal.
+
+**The issue's `batchSize` example is not closed**, and neither is the section
+that follows it:
+
+```sml
+val limit = 12;
+fun lessThanDozen i = i >= 1 andalso i <= limit;
+type batchSize = int check i => lessThanDozen i;
+```
+
+Two ways to reconcile:
+
+* **Reject it.** The condition must be written inline. Simple, and the whole
+  question of what a predicate captures disappears, along with the issue's
+  three re-binding cases.
+* **Inline at declaration time.** Substitute `lessThanDozen` and `limit`,
+  giving the closed term `check i => i >= 1 andalso i <= 12`. This *is* the
+  issue's stated semantics — "the predicate does not change if the values are
+  re-bound" — with the snapshot taken as a closed term rather than a closure,
+  so the example survives and keying still works. A condition that cannot be
+  inlined, such as one calling a recursive function, is rejected.
+
+Either way the condition in the type is a closed term, and re-binding cannot
+affect it. Built-in operators are not rebindable — `val op >= = ...` is a
+parse error — so they need no special treatment.
+
+### Out of scope
+
+* Parameterized constrained types, `type 'a t = 'a list check ...`.
+* Overloading (`over`, `inst`) on constrained types.
+* Recursive constrained types.
 
 ### Not an `abstype`
 
@@ -418,11 +459,12 @@ an identifier.
   statically, so `n as nat` costs nothing. The implementation computes a
   **residual**: the part of the target's constraint not discharged by what is
   already known. An empty residual means no runtime check.
-* Elision uses **subsumption**, not equality of types. If `k` has type `int
-  check z => z > 0`, then `k as nat` is free, because `z > 0` entails `z >=
-  0`. Entailment is undecidable in general, so the test must be a *sound
-  approximation*: when it cannot prove entailment it emits the check. Never
-  the reverse. This is the same reasoning #242's `prove` needs.
+* Elision does **not** attempt entailment. Two constraints match only if they
+  are textually equal; anything else emits the check. So `n as nat` is free,
+  but `k as nat` where `k` has type `int check z => z > 0` is *not*, even
+  though `z > 0` implies `z >= 0`. Conservative and cheap, and it keeps #242's
+  `prove` out of the critical path. An entailment test can be added later
+  without changing any accepted program, only removing checks.
 * Converting to a constrained **function** type is rejected: it cannot be the
   identity, since the only way to enforce it is a proxy checking each argument
   and result.
@@ -774,29 +816,23 @@ neither is a soundness hole — the constraint is erased, so nothing is claimed
 
 ## Open questions
 
-1. **The issue text still requires an exhaustive match.** This plan allows a
-   non-exhaustive one and appends `| _ => false`. The issue should be updated.
-2. **Anonymous constrained types in messages.** `val j: int check k => k >= 10
-   = ...` has no type name to put in `[... is not a valid ...]`. Use the
-   source position?
-3. **Predicate that raises.** Propagate the underlying exception, as above, or
-   wrap it as `Constraint`?
-4. **Repeated narrowing.** A value narrowed to `nat list` and then passed to
-   something else expecting `nat list` is walked twice. Is that acceptable, or
-   should a surface type at a binding be enough to elide the second?
-5. **Foreign data (E).** Check on entry, or declare the boundary untrusted?
-6. **What `assert` returns.** #239 says the #242 operators "return their
+1. **Closed conditions: reject or inline?** The issue's `batchSize` example is
+   not closed. Rejecting it is simpler; inlining preserves it and matches the
+   semantics the issue states. Blocks phase 3, not the phase 1 spike.
+2. **Predicate that raises.** Propagate the underlying exception, or wrap it
+   as `Constraint`?
+3. **Naming an anonymous constrained type in a message.** With a closed
+   condition, printing the condition itself is probably the answer:
+   `uncaught exception Constraint [~1 does not satisfy 'i => i >= 0']`.
+4. **What `assert` returns.** #239 says the #242 operators "return their
    operand, of the same type, but with additional constraints known to the
-   system", but #242 says "Both have type `bool`" and uses `assert p > 0;` as
-   a statement. This plan follows #242. The two issues should be reconciled.
-7. **Does a plain annotation always narrow?** `val m: nat = i` checks. If some
-   annotations should be static-only, `as` and the annotation differ, and the
-   rule "a written surface type is a check site" is lost.
-8. **Should the abbreviation fix be a separate issue?** Making Morel's
-   abbreviations propagate as Standard ML's is a prerequisite, but it is a
-   divergence from Standard ML in its own right and changes existing printed
-   types. Landing it separately would keep this branch honest and give the
-   change its own tests.
-9. **Hiding constraints when printing.** An anonymous constrained type prints
-   in full (`int check z => z > 0`), which is noisy in a wide record. A
-   variant of `type_string` that elides constraints is proposed for later.
+   system", but #242 says "Both have type `bool`". This plan follows #242.
+5. **Two edits the issue needs.** It still requires the `check` match to be
+   exhaustive, and its capture-semantics section is superseded by the closed
+   condition above.
+6. **Foreign data (E).** Check on entry, or declare the boundary untrusted?
+7. **Repeated narrowing.** A value narrowed to `nat list` and passed to
+   something else expecting `nat list` is walked twice. Acceptable?
+8. **Hiding constraints when printing.** An anonymous constrained type prints
+   in full, which is noisy in a wide record. A variant of `type_string` that
+   elides constraints is proposed for later.
