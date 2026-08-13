@@ -24,7 +24,7 @@ For a full list of releases, see
 <a href="https://github.com/hydromatic/morel/releases">GitHub</a>.
 
 <!--
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.x.0">0.x.0</a> / xxxx-xx-xx
+## <a id="0.x.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.x.0">0.x.0</a> / xxxx-xx-xx
 
 Release 0.x.0 ...
 
@@ -44,7 +44,7 @@ Contributors:
 
 -->
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.9.0">0.9.0</a> / 2026-08-12
+## <a id="0.9.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.9.0">0.9.0</a> / 2026-08-12
 
 Release 0.9.0 is a large release that adds a Datalog sub-language, a
 constraint solver that can evaluate queries over unbounded variables,
@@ -402,7 +402,7 @@ Julian Hyde
 * Documentation for `Relational.iterate`
 * Release 0.9.0 ([#446](https://github.com/hydromatic/morel/issues/446))
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.8.0">0.8.0</a> / 2025-11-23
+## <a id="0.8.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.8.0">0.8.0</a> / 2025-11-23
 
 Release 0.8.0 has improvements to aggregate query syntax, the type
 system, and the standard library.
@@ -544,7 +544,7 @@ Julian Hyde
 * Release 0.8.0
   ([#320](https://github.com/hydromatic/morel/issues/320))
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.7.0">0.7.0</a> / 2025-06-07
+## <a id="0.7.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.7.0">0.7.0</a> / 2025-06-07
 
 Release 0.7.0 is a huge release with major changes to query syntax and
 semantics.
@@ -657,7 +657,7 @@ Julian Hyde
   ([#269](https://github.com/hydromatic/morel/issues/269))
 * Typos in query reference
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.6.0">0.6.0</a> / 2024-05-02
+## <a id="0.6.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.6.0">0.6.0</a> / 2024-05-02
 
 Release 0.6.0 generalizes queries with
 [universal and existential quantification](https://github.com/hydromatic/morel/issues/241)
@@ -752,7 +752,7 @@ Julian Hyde
 * [Document query expressions](docs/query.md)
 * In release notes, use the '0.x.0' format for releases
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.5.0">0.5.0</a> / 2025-03-04
+## <a id="0.5.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.5.0">0.5.0</a> / 2025-03-04
 
 Release 0.5.0 extends the syntax of the `from` expression
 ([`distinct`](https://github.com/hydromatic/morel/issues/231),
@@ -831,7 +831,7 @@ Julian Hyde
 * Release 0.5.0
   ([#243](https://github.com/hydromatic/morel/issues/243))
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.4.0">0.4.0</a> / 2024-01-04
+## <a id="0.4.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.4.0">0.4.0</a> / 2024-01-04
 
 Release 0.4.0 extends `from` syntax, adding
 <a href="https://github.com/hydromatic/morel/issues/129">`suchthat`</a>,
@@ -931,7 +931,7 @@ Rette66
   ([#211](https://github.com/hydromatic/morel/issues/211))
 * Add Maven Central badge to `README.md`
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.3.0">0.3.0</a> / 2022-10-02
+## <a id="0.3.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.3.0">0.3.0</a> / 2022-10-02
 
 Release 0.3.0 extends `from` syntax, adding an
 <a href="https://github.com/hydromatic/morel/issues/20">`order` clause</a>,
@@ -1223,7 +1223,7 @@ Sergey Nuyanzin
 * Add examples of recursive queries and fixed-point algorithms
 * Add Morel logo and square image
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/morel-0.2.0">0.2.0</a> / 2020-03-10
+## <a id="0.2.0" href="https://github.com/hydromatic/morel/releases/tag/morel-0.2.0">0.2.0</a> / 2020-03-10
 
 The first release since smlj was renamed to Morel includes major
 improvements to the type system and relational extensions. Some highlights:
@@ -1310,7 +1310,7 @@ improvements to the type system and relational extensions. Some highlights:
 * Add [javadoc to site](http://hydromatic.net/morel/apidocs/)
 * Generate an asciinema demo
 
-## <a href="https://github.com/hydromatic/morel/releases/tag/smlj-0.1.0">0.1</a> / 2019-07-24
+## <a id="0.1" href="https://github.com/hydromatic/morel/releases/tag/smlj-0.1.0">0.1</a> / 2019-07-24
 
 Initial release features the core language (primitive types, lists,
 tuples, records; `let`, `if`, `fn` and `case` expressions; `val`,
