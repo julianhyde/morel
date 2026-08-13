@@ -83,9 +83,7 @@ License.
     <!-- We support (and test) Checkstyle as low as 9.3.
          In JDK 8 through 10, you must add '-Dcheckstyle.version=9.3'
          because Checkstyle 10 requires JDK 11 or higher.
-         In JDK 11 through 16, you must add '-Dcheckstyle.version=10.26.1'
-         because Checkstyle 11 and 12 require JDK 17 or higher.
-         In JDK 17 through 20, you must add '-Dcheckstyle.version=12.1.2'
+         In JDK 11 through 20, you must add '-Dcheckstyle.version=10.26.1'
          because Checkstyle 13 requires JDK 21 or higher. -->
     <checkstyle.version>13.10.0</checkstyle.version>
     <findbugs.version>3.0.2</findbugs.version>
