@@ -104,13 +104,17 @@ whatever form was written, so `'a` in `List.hd : 'a list -> 'a` is bound to
 `nat`, not to `int`, and the result prints `nat`. This is not subtyping and
 does not disturb principal types; Standard ML has both.
 
-**The result is sound for free, and the reason is parametricity.** The name
-survives exactly where unification never had to look inside it — that is,
-where the value passed only through parametric operations, so it is one of the
-inputs and its constraint still holds. The moment an operation needs the base
-type (`i - 1` needs `int` arithmetic) the name reduces to `int`, and that is
-precisely the moment the value may have changed and the constraint stops being
-guaranteed. Nothing has to enforce this; the unifier does it.
+**Where a metavariable is involved this is sound for free, and the reason is
+parametricity.** The name survives exactly where unification never had to look
+inside it — that is, where the value passed only through parametric
+operations, so it is one of the inputs and its constraint still holds. The
+moment an operation needs the base type (`i - 1` needs `int` arithmetic) the
+name reduces to `int`, and that is precisely the moment the value may have
+changed and the constraint stops being guaranteed. Nothing has to enforce
+this; the unifier does it.
+
+Parametricity does *not* cover the case where two concrete types meet, and
+there SML/NJ's rule is unsound for us; see below.
 
 It is conservative in the safe direction. `List.filter (fn i => i > 0) ns`
 gives `int list` although filtering cannot invalidate the constraint, because
@@ -127,27 +131,71 @@ soundness argument for the goal.
 Note that this supersedes the stronger rule in the issue's comment — "no
 elaboration decision may consult the substitution" — which would give `List.hd
 ns : int` and lose the propagation above. Consulting the substitution is
-exactly what makes `#1 p : nat` work, and head-reduction is what keeps it
-sound.
+exactly what makes `#1 p : nat` work. But the comment's rule was guarding
+something real: consulting the substitution is only sound when the binding
+came from a metavariable. Where two concrete types meet, an extra rule is
+needed; see below.
 
-### Morel does not do this yet
+### This is not in the Definition, and we cannot adopt it unchanged
 
-Morel expands an alias eagerly, so it is already less faithful than Standard
-ML, before any constraint is involved:
+Two caveats, both of which matter.
 
-| | Morel today | SML/NJ |
-|---|---|---|
-| `fun f (x: nat) = x` | `int -> int` | `nat -> nat` |
-| `[n]` where `n: nat` | `int list` | `nat list` |
-| `{a = n}` | `{a:int}` | `{a:nat}` |
-| `List.hd ns` | `int` | `nat` |
+**It is not specified.** In the Definition of Standard ML a `type` binding
+introduces a *type function*, and applying a type function β-reduces
+immediately; after elaboration there is no `nat`, it simply *is* `int`. The
+Definition also says nothing about what a top level prints. So preserving the
+name is an implementation nicety, not a requirement, and Morel's eager
+expansion is faithful to the Definition. The Definition gives inference rules
+rather than an algorithm; implementations use Algorithm W with unification,
+and those that preserve abbreviations represent a `type` as a *defined type
+constructor* carrying its definition and unify **up to head-reduction** —
+SML/NJ's `DEFtyc` and `headReduceType`, OCaml's `expand_head`. Standard
+practice, not standardized.
 
-Making Morel's abbreviations behave as Standard ML's is therefore a
-prerequisite, and is worth doing on its own account — it is a divergence from
-Standard ML independent of this feature, and probably deserves its own issue.
-Constrained types then ride on the same mechanism, with one addition: a
-`check` node must not obstruct unification, so head-reduction discards it,
-just as it expands an abbreviation.
+**SML/NJ's rule is order-dependent, and adopting it unchanged would be
+unsound.** Which name survives depends on the order the unifier meets the
+operands:
+
+```sml
+val n : nat = 5;   val i : int = 6;
+[n, i];    > [5,6] : nat list
+[i, n];    > [6,5] : int list
+```
+
+For a plain abbreviation that is harmless, because the two are the same type
+and nothing is claimed. For a *constrained* type it is not:
+
+```sml
+val bad : int = ~5;
+[n, bad];                    > [5,~5] : nat list
+List.nth ([n, bad], 1);      > ~5 : nat
+```
+
+`~5` has been given the type `nat` without ever being checked. A later `as
+nat` on it would be elided, and the value would breach the constraint. So the
+heuristic is presentation for Standard ML but load-bearing for us, and it is
+wrong.
+
+**The rule we need.** Binding a metavariable to the written form is sound, and
+that is the case parametricity covers: `#1 p`, `List.hd ns`, `List.map (fn i
+=> i) ns`. But when two *concrete* types with the same erasure meet, the
+result must be the **weaker** of the two — the constraints both sides
+guarantee — not whichever came first. `nat` meets `int` gives `int`; `nat`
+meets `teen` gives `nat`, since `teen` entails it. That is both sound and
+deterministic, which SML/NJ's rule is neither.
+
+Morel expands eagerly today, so all of this is new behaviour:
+
+| | Morel today | SML/NJ | this plan |
+|---|---|---|---|
+| `fun f (x: nat) = x` | `int -> int` | `nat -> nat` | `nat -> nat` |
+| `[n]` where `n: nat` | `int list` | `nat list` | `nat list` |
+| `List.hd ns` | `int` | `nat` | `nat` |
+| `[n, i]` where `i: int` | `int list` | `nat list` | `int list` |
+| `[i, n]` | `int list` | `int list` | `int list` |
+
+A `check` node must also not obstruct unification: head-reduction discards it,
+as it expands an abbreviation.
 
 A surface type is therefore **a record of what has been verified, not an
 obligation to verify**.
@@ -697,11 +745,12 @@ Each phase should land with its own tests, rather than deferring them:
 
 ## Phases
 
-1. **Abbreviations propagate.** Make Morel's type abbreviations survive
-   inference as Standard ML's do, by unifying up to head-reduction rather than
-   expanding eagerly. This changes existing printed types and is worth its own
-   issue. `check` nodes then ride on the same mechanism, head-reduction
-   discarding them as it expands an abbreviation.
+1. **Abbreviations propagate.** Unify up to head-reduction rather than
+   expanding eagerly, so an abbreviation survives inference. Not required by
+   the Definition, and it changes existing printed types, so it is worth its
+   own issue. Unlike SML/NJ, when two concrete types with the same erasure
+   meet, take the weaker: order-independent, and sound once constraints are
+   involved. `check` nodes then ride on the same mechanism.
 2. **Syntax.** `check` in `typbind`; `as` and `asOpt` expressions; append
    `| _ => false` per the rule above — blindly if `matchCoverageEnabled` is
    false, otherwise only when `isExhaustive` says the match has a gap — before
