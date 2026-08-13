@@ -26,25 +26,31 @@ Extend `type` declarations and types with a `check` clause, and enforce the
 constraints so that **it is impossible to create a value of a constrained type
 that breaches its constraints**.
 
-## Surface types and erasure
+## Constrained types and erasure
 
-A constrained type is a **surface** type. There are two type languages:
+`check` is a type constructor in Morel's **one** type language, so a
+constrained type is an ordinary type that inference can carry, exactly as
+Standard ML carries a type abbreviation.
 
-* the *surface* language, in which `check` is a type constructor, and
-* the *inference* language, which is Morel's existing type language,
+The erasure `⌊·⌋` deletes `check` nodes structurally, so `⌊nat⌋ = int`. It is
+not applied eagerly to the whole program. It is applied **on demand, at the
+head**, by unification: when the unifier compares two types whose heads
+differ, it expands an abbreviation or discards a `check` node and retries.
+Everywhere else the written form survives, and a metavariable is bound to
+whatever was written. Erasure also states the typing rule for `as` and
+`asOpt`, below.
 
-with an erasure `⌊·⌋` that deletes `check` nodes structurally, so `⌊nat⌋ =
-int`.
+**Type inference is unchanged.** Algorithm W runs as it does now, principal
+types and the value restriction are unaffected, and there is no subtyping rule
+to admit. Head-reduction is how Standard ML has always treated abbreviations,
+not a new relation on types.
 
-**Type inference is unchanged.** Algorithm W runs on the inference language.
-Principal types and the value restriction are unaffected, and there is no
-subtyping rule to admit. Constraints are handled by a second, syntax-directed
-pass over the elaborated tree, which reconstructs a surface type for each
-subexpression by walking the skeleton W has already produced, and inserts a
-check wherever a value flows into a position whose surface type is
-constrained.
+A second, syntax-directed pass then walks the elaborated tree and **inserts a
+check wherever a value flows into a position whose type is constrained**. Note
+what this pass is *not* responsible for: propagation. The unifier has already
+done that. The pass only decides where checks go.
 
-This is the structure of [Liquid Types][liquid] (Rondon, Kawaguchi and Jhala,
+That division follows [Liquid Types][liquid] (Rondon, Kawaguchi and Jhala,
 PLDI 2008), where Hindley-Milner is invoked first as an oracle and each
 subexpression is then assigned a template with the same shape as its inferred
 ML type. The difference is that we propagate constraints from declared
@@ -72,27 +78,76 @@ val m: nat = i;
 (*) Narrowing is checked at the binding, where the surface type is known.
 ```
 
-### The invariant
+### Propagation is Standard ML's, by head-reduction
 
-**No elaboration decision may consult the substitution — only surface types
-that are syntactically present.**
-
-So a constrained type that reaches a type variable is *lost*, and the second
-pass recovers it only where a declared signature lets it flow covariantly out
-of a result position.
+A constrained type should propagate as a Standard ML type abbreviation does.
+SML/NJ keeps the name through construction, selection and polymorphic
+instantiation, and this is the behaviour to match:
 
 ```sml
-val ns: nat list = [1, 2, 3];
-val ms = List.map (fn i => i - 1) ns;
-> val ms = [0,1,2] : int list
-(* The constraint is erased at the boundary: 'a is instantiated to int, and
- * nothing propagates it to the result. *)
+type nat = int;
+val ns : nat list = [1,2];
+List.map (fn i => i) ns;          > [1,2] : nat list
+List.map (fn i => i - 1) ns;      > [0,1] : int list
+List.filter (fn i => i > 0) ns;   > [1,2] : int list
+val p : nat * nat = (1,2);
+#1 p;                             > 1 : nat
+fun twice f x = f (f x);
+twice (fn i => i) (hd ns);        > 1 : nat
+twice (fn i => i - 1) (hd ns);    > ~1 : int
 ```
 
-This invariant is also the soundness argument for the goal. Every place a
-surface type *claims* a constraint, a check is inserted; everywhere else the
-constraint is erased, so nothing claims it. A value cannot breach a constraint
-that was never asserted of it.
+The mechanism is that the abbreviation is a **named type constructor in the
+one type language**, and unification is **up to head-reduction**: the name is
+expanded only when a rule needs to look inside it. A metavariable is bound to
+whatever form was written, so `'a` in `List.hd : 'a list -> 'a` is bound to
+`nat`, not to `int`, and the result prints `nat`. This is not subtyping and
+does not disturb principal types; Standard ML has both.
+
+**The result is sound for free, and the reason is parametricity.** The name
+survives exactly where unification never had to look inside it — that is,
+where the value passed only through parametric operations, so it is one of the
+inputs and its constraint still holds. The moment an operation needs the base
+type (`i - 1` needs `int` arithmetic) the name reduces to `int`, and that is
+precisely the moment the value may have changed and the constraint stops being
+guaranteed. Nothing has to enforce this; the unifier does it.
+
+It is conservative in the safe direction. `List.filter (fn i => i > 0) ns`
+gives `int list` although filtering cannot invalidate the constraint, because
+the *predicate* mentioned `int`. Losing a constraint that still holds is a
+false negative; the reverse never happens.
+
+### The invariant
+
+**A constraint is claimed only where the type says so, and a check is inserted
+wherever a value flows into a claim.** Everywhere else the name has reduced to
+the base type, so nothing is claimed and nothing can be breached. That is the
+soundness argument for the goal.
+
+Note that this supersedes the stronger rule in the issue's comment — "no
+elaboration decision may consult the substitution" — which would give `List.hd
+ns : int` and lose the propagation above. Consulting the substitution is
+exactly what makes `#1 p : nat` work, and head-reduction is what keeps it
+sound.
+
+### Morel does not do this yet
+
+Morel expands an alias eagerly, so it is already less faithful than Standard
+ML, before any constraint is involved:
+
+| | Morel today | SML/NJ |
+|---|---|---|
+| `fun f (x: nat) = x` | `int -> int` | `nat -> nat` |
+| `[n]` where `n: nat` | `int list` | `nat list` |
+| `{a = n}` | `{a:int}` | `{a:nat}` |
+| `List.hd ns` | `int` | `nat` |
+
+Making Morel's abbreviations behave as Standard ML's is therefore a
+prerequisite, and is worth doing on its own account — it is a divergence from
+Standard ML independent of this feature, and probably deserves its own issue.
+Constrained types then ride on the same mechanism, with one addition: a
+`check` node must not obstruct unification, so head-reduction discards it,
+just as it expands an abbreviation.
 
 A surface type is therefore **a record of what has been verified, not an
 obligation to verify**.
@@ -517,22 +572,21 @@ Note this differs from an ordinary alias, which is erased on re-reference
 (`type nat = int` without a `check` prints `int`). The two must be tested
 side by side, because the difference is the whole point.
 
-Still to decide (open question 8): whether a surface type propagates through
-*construction* and *selection*.
+A surface type propagates through construction and selection, as in Standard
+ML, so these follow the SML/NJ column of the table above:
 
 ```sml
-[n];                     (*) 'nat list' or 'int list'?
-{a = n};                 (*) '{a:nat}' or '{a:int}'?
+[n];                     > [5] : nat list
+{a = n};                 > {a=5} : {a:nat}
 val ns: nat list = [1, 2];
-List.hd ns;              (*) 'nat' or 'int'?
+List.hd ns;              > 1 : nat
+List.map (fn i => i - 1) ns;   > [0,1] : int list
 ```
 
-Today's alias behaviour is `int list`, `{a:int}`, `int`. Propagating would be
-sound — each element *was* verified, so it records what is known — and is in
-the spirit of "a record of what was verified". `List.hd` is the harder case,
-since recovering `nat` there means reading it out of an instantiated type
-variable, which the invariant forbids. The tests cannot be written until this
-is settled.
+The last is the one to pin hardest: the name is lost exactly where an
+operation needed the base type, and that is what makes propagation sound.
+Since Morel does not behave this way today, each of these is a change to
+existing behaviour and needs a test whether or not a `check` is involved.
 
 ### Axes
 
@@ -630,7 +684,8 @@ the shape is the point (composites, function types).
 
 Each phase should land with its own tests, rather than deferring them:
 
-1. Surface types — `TypeTest` erasure; the printed-type observables.
+1. Abbreviations — the SML/NJ column of the table above, with and without
+   a `check`; `TypeTest` for head-reduction and erasure.
 2. Syntax — parse and print `check`, `as`, `asOpt`; the four coverage
    combinations; redundant branch still an error; `idempotent.smli`.
 3. Narrowing — site × outcome for `val`, parameter, result; `as`/`asOpt`;
@@ -642,9 +697,11 @@ Each phase should land with its own tests, rather than deferring them:
 
 ## Phases
 
-1. **Surface types.** A second type language with `check` nodes and an erasure
-   to the inference language; surface types recorded on `Core` nodes. No
-   enforcement. Inference untouched.
+1. **Abbreviations propagate.** Make Morel's type abbreviations survive
+   inference as Standard ML's do, by unifying up to head-reduction rather than
+   expanding eagerly. This changes existing printed types and is worth its own
+   issue. `check` nodes then ride on the same mechanism, head-reduction
+   discarding them as it expands an abbreviation.
 2. **Syntax.** `check` in `typbind`; `as` and `asOpt` expressions; append
    `| _ => false` per the rule above — blindly if `matchCoverageEnabled` is
    false, otherwise only when `isExhaustive` says the match has a gap — before
@@ -686,12 +743,11 @@ neither is a soundness hole — the constraint is erased, so nothing is claimed
 7. **Does a plain annotation always narrow?** `val m: nat = i` checks. If some
    annotations should be static-only, `as` and the annotation differ, and the
    rule "a written surface type is a check site" is lost.
-8. **Does a surface type propagate through construction and selection?** `[n]`
-   where `n: nat` — `nat list` or `int list`? `List.hd ns` where `ns: nat
-   list` — `nat` or `int`? Propagating through construction records what was
-   verified and is sound; recovering through selection means reading an
-   instantiated type variable, which the invariant forbids. The printing tests
-   cannot be written until this is settled.
+8. **Should the abbreviation fix be a separate issue?** Making Morel's
+   abbreviations propagate as Standard ML's is a prerequisite, but it is a
+   divergence from Standard ML in its own right and changes existing printed
+   types. Landing it separately would keep this branch honest and give the
+   change its own tests.
 9. **Hiding constraints when printing.** An anonymous constrained type prints
    in full (`int check z => z > 0`), which is noisy in a wide record. A
    variant of `type_string` that elides constraints is proposed for later.
