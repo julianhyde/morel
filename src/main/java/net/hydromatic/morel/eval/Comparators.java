@@ -28,6 +28,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.DummyType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -186,7 +188,13 @@ public class Comparators {
               };
 
         default:
-          throw new AssertionError("unknown type: " + type);
+          // A function type arrives here, from "order (fn x => x)" and the
+          // like. There is no order on functions, and the user, not the
+          // compiler, is at fault.
+          throw new CompileException(
+              "comparison not defined for type '" + type + "'",
+              false,
+              Pos.ZERO);
       }
     }
 

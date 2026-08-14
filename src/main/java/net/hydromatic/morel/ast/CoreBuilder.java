@@ -51,6 +51,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
 import net.hydromatic.morel.compile.NameGenerator;
@@ -199,6 +200,15 @@ public enum CoreBuilder {
               : typeSystem.tupleType(transform(argList, Core.Exp::type));
       final List<Type> applicableTypes =
           filterEager(((MultiType) type).types, t -> t.canCallArgOf(arg0Type));
+      if (applicableTypes.isEmpty()) {
+        // No instance of the overloaded name takes this argument type. The
+        // user is at fault; "from i in [1] compute sum" gets here, because
+        // nothing says what is summed and the argument stays a type variable.
+        throw new CompileException(
+            "operator not defined for type '" + arg0Type + "'",
+            false,
+            Pos.ZERO);
+      }
       checkArgument(
           applicableTypes.size() == 1,
           "expected one overload for arguments %s, got %s %s",

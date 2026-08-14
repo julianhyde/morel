@@ -4937,12 +4937,16 @@ public abstract class Codes {
   private static final Macro RELATIONAL_SUM =
       (typeSystem, env, argType) -> {
         if (argType.isCollection()) {
+          // The element type is not necessarily primitive; in "group i compute
+          // sum" it is a type variable, because nothing says what is summed.
           final Type resultType = argType.elementType();
-          switch ((PrimitiveType) resultType) {
-            case INT:
-              return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_INT);
-            case REAL:
-              return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_REAL);
+          if (resultType instanceof PrimitiveType) {
+            switch ((PrimitiveType) resultType) {
+              case INT:
+                return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_INT);
+              case REAL:
+                return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_REAL);
+            }
           }
         }
         throw new CompileException(
