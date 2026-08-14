@@ -203,9 +203,51 @@ val bad2: nat list = ["x"];
 > stdIn:1.1-1.27 Error: Cannot deduce type: conflict: string vs nat (alias for int)
 >   raised at: stdIn:1.1-1.27
 
-(*) An operator defined for the underlying type is defined for the alias.
+(* An operator defined for the underlying type is defined for the alias. Note
+ * that the result keeps the alias, because Morel's arithmetic operators are
+ * overloaded, 'a * 'a -> 'a; Standard ML's '+' is int * int -> int, so SML/NJ
+ * gives 'int' here. *)
 n + 1;
 > val it = 6 : nat
+n - 100;
+> val it = ~95 : nat
+n * 2;
+> val it = 10 : nat
+n div 2;
+> val it = 2 : nat
+n mod 2;
+> val it = 1 : nat
+~n;
+> val it = ~5 : nat
+
+(*) A comparison is not arithmetic, so it yields bool.
+n < 6;
+> val it = true : bool
+n = 5;
+> val it = true : bool
+
+(*) An alias of 'real' works the same way.
+type ratio = real;
+> type ratio = real
+val r: ratio = 1.5;
+> val r = 1.5 : ratio
+r + 1.0;
+> val it = 2.5 : ratio
+Real.abs r;
+> val it = 1.5 : real
+
+(*) Mixing an alias with its underlying type is allowed; the alias survives.
+n + (1: int);
+> val it = 6 : nat
+
+(*) An operator not defined for the underlying type is still rejected.
+type flag = bool;
+> type flag = bool
+val fl: flag = true;
+> val fl = true : flag
+fl + 1;
+> stdIn:1.1-1.7 Error: Cannot deduce type: conflict: flag (alias for bool) vs int
+>   raised at: stdIn:1.1-1.7
 
 (*) Type errors report types in the syntax they are written in.
 val t1: int * int = 1;

@@ -121,6 +121,31 @@ gives `int list` although filtering cannot invalidate the constraint, because
 the *predicate* mentioned `int`. Losing a constraint that still holds is a
 false negative; the reverse never happens.
 
+### Arithmetic must drop the constraint
+
+Standard ML's `+` is `int * int -> int`, so `n + 1` where `n: nat` has type
+`int` and the constraint is dropped, exactly as the parametricity argument
+above requires. **Morel's arithmetic operators are overloaded, `'a * 'a ->
+'a`**, so the alias is carried through instead:
+
+```sml
+type nat = int check i => i >= 0;
+val n: nat = 5;
+n + 1;      (*) Morel gives 'nat'; Standard ML gives 'int'
+n - 100;    (*) Morel gives 'nat' -- and ~95 is not a nat
+```
+
+For a plain alias that is harmless, and `script/type-alias.smli` pins it. For
+a constrained type it is **unsound**, and `n - 100` is the plan's own first
+example of a value that must lose its constraint.
+
+So an overloaded operator whose result may differ from its arguments has to
+reduce a constrained argument type to its base type before choosing the result
+type. It is not enough to treat this as a special case of `-`: every operator
+that computes a new value is affected, and the ones that merely select or
+compare (`#1`, `=`, `<`) are not. The rule is the same one parametricity
+gives: a constraint survives only where the value does.
+
 ### The invariant
 
 **A constraint is claimed only where the type says so, and a check is inserted
