@@ -292,11 +292,26 @@ public class TypeSystem {
     return dataType;
   }
 
-  /** Creates a type that is an alias for another type. */
+  /**
+   * Creates a type that is an alias for another type, and binds the name.
+   *
+   * <p>Called when elaborating a {@code type} declaration.
+   */
   Type aliasType(String name, Type type, List<Type> arguments) {
     final AliasType aliasType = new AliasType(name, type, arguments);
     typeByName.put(name, aliasType);
     return aliasType;
+  }
+
+  /**
+   * Creates an alias applied to arguments, such as {@code int my_list}, without
+   * binding the name.
+   *
+   * <p>Binding it would replace the declaration, {@code 'a my_list}, with this
+   * instance, and the next use of the name would resolve to {@code int}.
+   */
+  Type aliasTypeInstance(String name, Type type, List<Type> arguments) {
+    return new AliasType(name, type, arguments);
   }
 
   /**

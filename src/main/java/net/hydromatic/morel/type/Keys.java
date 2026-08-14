@@ -54,7 +54,16 @@ public class Keys {
   /** Returns a key that gives a name to an existing type. */
   public static Type.Key alias(
       String name, Type.Key key, List<? extends Type.Key> arguments) {
-    return new AliasKey(name, key, ImmutableList.copyOf(arguments));
+    return new AliasKey(name, key, ImmutableList.copyOf(arguments), true);
+  }
+
+  /**
+   * Creates a key for an alias applied to arguments, such as {@code int
+   * my_list}. Unlike {@link #alias}, it does not bind the name.
+   */
+  public static Type.Key aliasInstance(
+      String name, Type.Key key, List<? extends Type.Key> arguments) {
+    return new AliasKey(name, key, ImmutableList.copyOf(arguments), false);
   }
 
   /**
@@ -293,12 +302,19 @@ public class Keys {
     private final String name;
     private final Type.Key key;
     private final ImmutableList<Type.Key> arguments;
+    /** Whether this is a declaration, and so binds the name. */
+    private final boolean binding;
 
-    AliasKey(String name, Type.Key key, ImmutableList<Type.Key> arguments) {
+    AliasKey(
+        String name,
+        Type.Key key,
+        ImmutableList<Type.Key> arguments,
+        boolean binding) {
       super(Op.ALIAS_TYPE);
       this.name = requireNonNull(name);
       this.key = key;
       this.arguments = requireNonNull(arguments);
+      this.binding = binding;
     }
 
     @Override
@@ -321,13 +337,17 @@ public class Keys {
       return obj == this
           || obj instanceof AliasKey
               && ((AliasKey) obj).name.equals(name)
-              && ((AliasKey) obj).key.equals(key);
+              && ((AliasKey) obj).key.equals(key)
+              && ((AliasKey) obj).binding == binding;
     }
 
     @Override
     public Type toType(TypeSystem typeSystem) {
-      return typeSystem.aliasType(
-          name, key.toType(typeSystem), typeSystem.typesFor(arguments));
+      final Type type = key.toType(typeSystem);
+      final List<Type> args = typeSystem.typesFor(arguments);
+      return binding
+          ? typeSystem.aliasType(name, type, args)
+          : typeSystem.aliasTypeInstance(name, type, args);
     }
   }
 
