@@ -200,6 +200,7 @@ public class TypeResolver {
   static final String UNORDERED = "unordered";
 
   static final String OPTION_TY_CON = BuiltIn.Datatype.OPTION.mlName();
+  static final String ALIAS_TY_CON = "$alias";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
 
@@ -430,7 +431,10 @@ public class TypeResolver {
               final String name = ((Ast.Id) apply.fn).name;
               final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(name);
               if (builtIn != null && builtIn.preferredType != null) {
-                final Type type = typeMap.getType(apply);
+                // An alias is transparent, so expand it before asking
+                // whether the operator is defined for the type: '+' is
+                // defined for 'nat' if it is defined for 'int'.
+                final Type type = typeMap.getType(apply).unalias();
                 if (!(type instanceof TypeVar)
                     && !overloadDomain(builtIn).contains(type)) {
                   final String opName =
@@ -4587,7 +4591,12 @@ public class TypeResolver {
                   subst.plus(
                       (TypeVar) alias.parameterTypes.get(i), argTerms.right(i));
             }
-            final Term aliasTerm = toTerm(alias.type, subst);
+            final Term body = toTerm(alias.type, subst);
+            final Term aliasTerm =
+                aliasTerm(
+                    alias.name,
+                    body,
+                    ImmutableList.copyOf(argTerms.rightList()));
             return reg(namedType.copy(argTerms.leftList()), v, aliasTerm);
           }
 
@@ -5119,6 +5128,33 @@ public class TypeResolver {
     return unifier.apply(FN_TY_CON, arg, result);
   }
 
+  /**
+   * Creates a term for a type alias.
+   *
+   * <p>The first argument is the expanded body, so that the unifier can
+   * head-reduce by replacing the term with {@code terms.get(0)}; the rest are
+   * the alias's arguments, which {@link TypeMap} needs to rebuild the {@link
+   * AliasType}.
+   */
+  private Sequence aliasTerm(
+      String name, Term body, List<? extends Term> args) {
+    final List<Term> terms = new ArrayList<>();
+    terms.add(body);
+    terms.addAll(args);
+    return unifier.apply(ALIAS_TY_CON + ":" + name, terms);
+  }
+
+  /** Returns whether a term is a type alias, as built by {@link #aliasTerm}. */
+  static boolean isAliasTerm(Term term) {
+    return term instanceof Sequence
+        && ((Sequence) term).operator.startsWith(ALIAS_TY_CON + ":");
+  }
+
+  /** Returns the name of an alias term. */
+  static String aliasTermName(Sequence sequence) {
+    return sequence.operator.substring(ALIAS_TY_CON.length() + 1);
+  }
+
   private Term recordTerm(NavigableMap<String, ? extends Term> labelTypes) {
     final NavigableSet<String> labels = labelTypes.navigableKeySet();
     if (TypeSystem.areContiguousIntegers(labels) && labelTypes.size() != 1) {
@@ -5154,14 +5190,15 @@ public class TypeResolver {
         final Variable variable = subst.get((TypeVar) type);
         return variable != null ? variable : unifier.variable();
       case ALIAS_TYPE:
-        // During type inference, we pretend that an alias type is its
-        // underlying type. For example, if we have 'type t = int', and
-        // 'val i = 1: t', we treat 'i' has having type 'int'.
-        //
-        // After type inference is complete, can can deduce the true type
-        // bottom-up. Thus, '[1: t]' has type 't list'.
+        // An alias survives inference, as in Standard ML, so that '[n]' where
+        // 'n: t' has type 't list'. The term carries the expanded body as its
+        // first argument, and the unifier expands it -- head-reduction --
+        // only when it meets a term with a different operator.
         final AliasType aliasType = (AliasType) type;
-        return toTerm(aliasType.type, subst);
+        return aliasTerm(
+            aliasType.name,
+            toTerm(aliasType.type, subst),
+            toTerms(aliasType.arguments, subst));
       case DATA_TYPE:
         final DataType dataType = (DataType) type;
         if (dataType.name.equals(BAG_TY_CON)) {
