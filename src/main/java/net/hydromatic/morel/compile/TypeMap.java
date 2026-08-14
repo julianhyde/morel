@@ -35,6 +35,7 @@ import java.util.SortedSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.QualifiedType;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -240,6 +241,25 @@ public class TypeMap {
         case "string":
         case "unit":
         default:
+          if (TypeResolver.isAliasTerm(sequence)) {
+            // "$alias:t(body, arg...)" becomes the alias 't', applied to its
+            // arguments. If the alias has gone out of scope, or its name now
+            // belongs to something else, fall back to the expanded body.
+            final String name = TypeResolver.aliasTermName(sequence);
+            final Type aliasType = typeMap.typeSystem.lookupOpt(name);
+            final Type body = sequence.terms.get(0).accept(this);
+            if (!(aliasType instanceof AliasType)) {
+              return body;
+            }
+            if (sequence.terms.size() == 1) {
+              return aliasType;
+            }
+            // A parameterized alias, e.g. "int my_list", expands, as it did
+            // before an alias survived inference. Preserving it would mean
+            // rebuilding the instantiated alias, which TypeSystem.apply does
+            // not do for aliases.
+            return body;
+          }
           // A displaced datatype is looked up first; the type system would
           // return whatever has taken over its name.
           final Type displaced = typeMap.displacedTypes.get(sequence.operator);

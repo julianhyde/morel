@@ -818,6 +818,11 @@ public class TypeSystem {
         || hasTypeVar(fromType)
         || hasTypeVar(toType)
         || fromType instanceof RecordType && toType.isProgressive()
+        // An alias is transparent, so a type that mentions one is compatible
+        // with the type it abbreviates. TypeResolver has already checked that
+        // they agree; here the two may differ only in whether the alias has
+        // been expanded.
+        || fromType.containsAlias()
         || toType.containsAlias()
         || fromType instanceof ListType
             && toType instanceof ListType

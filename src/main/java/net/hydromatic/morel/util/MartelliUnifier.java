@@ -83,6 +83,22 @@ public class MartelliUnifier extends Unifier {
 
         if (!left.operator.equals(right.operator)
             || left.terms.size() != right.terms.size()) {
+          // Head-reduce. A type alias is a term whose first argument is its
+          // expanded body; if it meets a term with a different operator, the
+          // aliases are expanded and the pair retried.
+          final Term left2 = headReduce(left);
+          final Term right2 = headReduce(right);
+          if (left2 != left || right2 != right) {
+            if (conflictsAtHead(left2, right2)) {
+              // The expansions still disagree, so report the aliases that were
+              // written rather than what they expand to.
+              tracer.onConflict(left, right);
+              return failure(
+                  "conflict: " + render(left) + " vs " + render(right));
+            }
+            work.add(left2, right2);
+            continue;
+          }
           tracer.onConflict(left, right);
           return failure("conflict: " + render(left) + " vs " + render(right));
         }
@@ -169,6 +185,73 @@ public class MartelliUnifier extends Unifier {
     }
   }
 
+  private static final String TUPLE_OP = "tuple";
+  private static final String FN_OP = "fn";
+  private static final String RECORD_OP = "record";
+
+  /**
+   * Renders a term, parenthesized if it would otherwise bind less tightly than
+   * a postfix type constructor: "(int * int) list", not "int * int list".
+   */
+  private static String atomic(Term term) {
+    final String s = render(term);
+    return s.indexOf(' ') < 0 || s.startsWith("(") ? s : "(" + s + ")";
+  }
+
+  /** Renders terms, separated. */
+  private static String join(List<Term> terms, String separator) {
+    final StringBuilder b = new StringBuilder();
+    for (int i = 0; i < terms.size(); i++) {
+      if (i > 0) {
+        b.append(separator);
+      }
+      b.append(render(terms.get(i)));
+    }
+    return b.toString();
+  }
+
+  /** Field names of a record term, "record:a:b", or null if there are none. */
+  private static @Nullable List<String> fieldNames(Sequence seq) {
+    if (seq.operator.length() <= RECORD_OP.length()) {
+      return null;
+    }
+    final String[] names =
+        seq.operator.substring(RECORD_OP.length() + 1).split(":");
+    return ImmutableList.copyOf(names);
+  }
+
+  /**
+   * Expands a type alias by one step, or returns the term unchanged.
+   *
+   * <p>A type alias is a sequence whose operator starts with "$alias:" and
+   * whose first argument is its expanded body. Expanding lets an alias unify
+   * with the type it abbreviates, while leaving the alias in place everywhere
+   * the two never meet, so that it survives inference.
+   */
+  private static Term headReduce(Term term) {
+    while (term instanceof Sequence
+        && ((Sequence) term).operator.startsWith(ALIAS_PREFIX)) {
+      term = ((Sequence) term).terms.get(0);
+    }
+    return term;
+  }
+
+  /**
+   * Whether two fully expanded terms are sequences that disagree at the head,
+   * and so can never unify.
+   */
+  private static boolean conflictsAtHead(Term left, Term right) {
+    return left instanceof Sequence
+        && right instanceof Sequence
+        && !((Sequence) left).operator.equals(((Sequence) right).operator);
+  }
+
+  /**
+   * Operator prefix of a type-alias sequence. Must match {@code
+   * TypeResolver.ALIAS_TY_CON}.
+   */
+  private static final String ALIAS_PREFIX = "$alias:";
+
   // Collection terms are represented as "$collection(element, orderedness)",
   // where orderedness is the atom "ordered" (a list) or "unordered" (a bag).
   // These constants mirror those in TypeResolver, and let error messages render
@@ -220,17 +303,39 @@ public class MartelliUnifier extends Unifier {
             ORDERED_OP.equals(orderednessAtom(seq.terms.get(1)))
                 ? "list"
                 : "bag";
-        return kind + "(" + render(seq.terms.get(0)) + ")";
+        return atomic(seq.terms.get(0)) + " " + kind;
+      }
+      if (seq.operator.startsWith(ALIAS_PREFIX)) {
+        // "$alias:t(int)" reads "t (alias for int)".
+        final String name = seq.operator.substring(ALIAS_PREFIX.length());
+        return name + " (alias for " + render(seq.terms.get(0)) + ")";
+      }
+      if (seq.operator.equals(TUPLE_OP)) {
+        return join(seq.terms, " * ");
+      }
+      if (seq.operator.equals(FN_OP) && seq.terms.size() == 2) {
+        return render(seq.terms.get(0)) + " -> " + render(seq.terms.get(1));
+      }
+      if (seq.operator.startsWith(RECORD_OP)) {
+        final List<String> names = fieldNames(seq);
+        if (names != null && names.size() == seq.terms.size()) {
+          final StringBuilder b = new StringBuilder("{");
+          for (int i = 0; i < seq.terms.size(); i++) {
+            if (i > 0) {
+              b.append(", ");
+            }
+            b.append(names.get(i)).append(':').append(render(seq.terms.get(i)));
+          }
+          return b.append('}').toString();
+        }
       }
       if (!seq.terms.isEmpty()) {
-        final StringBuilder b = new StringBuilder(seq.operator).append('(');
-        for (int i = 0; i < seq.terms.size(); i++) {
-          if (i > 0) {
-            b.append(", ");
-          }
-          b.append(render(seq.terms.get(i)));
-        }
-        return b.append(')').toString();
+        // A type constructor applied to arguments, e.g. "int option".
+        return (seq.terms.size() == 1
+                ? atomic(seq.terms.get(0))
+                : "(" + join(seq.terms, ", ") + ")")
+            + " "
+            + seq.operator;
       }
     }
     return term.toString();
