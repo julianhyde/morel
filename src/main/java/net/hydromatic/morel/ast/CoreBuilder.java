@@ -770,7 +770,8 @@ public enum CoreBuilder {
         Core.StepEnv.of(transform(idPats, Binding::of), atom, ordered), exp);
   }
 
-  // Relational tree ({@link Rel}) nodes. See spec.md; these will replace the
+  // Relational tree ({@link Core.Rel}) nodes. See spec.md; these will replace
+  // the
   // step builders above when step 3 of plan.md deletes Core.From's step list.
 
   /** Name that an expression uses for the element of a node's input. */
@@ -806,30 +807,31 @@ public enum CoreBuilder {
   }
 
   /** Creates a leaf, whose expression must have a collection type. */
-  public Rel.Scan scan(Core.Exp exp) {
+  public Core.Rel.Scan scan(Core.Exp exp) {
     if (!exp.type.isCollection()) {
       throw new IllegalArgumentException(
           "scan expression must be list or bag: " + exp.type);
     }
-    return new Rel.Scan(exp);
+    return new Core.Rel.Scan(exp);
   }
 
   /**
    * Creates a filter; its condition is a {@code bool} expression over {@code
    * $0}.
    */
-  public Rel.Filter filter(Rel input, Core.Exp condition) {
+  public Core.Rel.Filter filter(Core.Rel input, Core.Exp condition) {
     checkBoolType(condition, "filter condition");
-    return new Rel.Filter(input, condition);
+    return new Core.Rel.Filter(input, condition);
   }
 
   /**
    * Creates a projection; the element type is the type of {@code exp}, an
    * expression over {@code $0}, and the kind is that of the input.
    */
-  public Rel.Project project(TypeSystem typeSystem, Rel input, Core.Exp exp) {
+  public Core.Rel.Project project(
+      TypeSystem typeSystem, Core.Rel input, Core.Exp exp) {
     final Type type = collectionType(typeSystem, input.isOrdered(), exp.type);
-    return new Rel.Project(type, input, exp);
+    return new Core.Rel.Project(type, input, exp);
   }
 
   /**
@@ -837,22 +839,22 @@ public enum CoreBuilder {
    * the output is ordered only if both the input and the body are ordered,
    * because it is a nested loop.
    */
-  public Rel.ProjectMany projectMany(
-      TypeSystem typeSystem, Rel input, Core.IdPat param, Rel body) {
+  public Core.Rel.ProjectMany projectMany(
+      TypeSystem typeSystem, Core.Rel input, Core.IdPat param, Core.Rel body) {
     final boolean ordered = input.isOrdered() && body.isOrdered();
     final Type type = collectionType(typeSystem, ordered, body.elementType());
-    return new Rel.ProjectMany(type, input, param, body);
+    return new Core.Rel.ProjectMany(type, input, param, body);
   }
 
   /** Creates an inner join. */
-  public Rel.Join join(
+  public Core.Rel.Join join(
       TypeSystem typeSystem,
-      Rel left,
-      Rel right,
+      Core.Rel left,
+      Core.Rel right,
       Core.Exp condition,
       Core.Exp yieldExp) {
     return join(
-        typeSystem, Rel.JoinType.INNER, left, right, condition, yieldExp);
+        typeSystem, Core.Rel.JoinType.INNER, left, right, condition, yieldExp);
   }
 
   /**
@@ -860,26 +862,26 @@ public enum CoreBuilder {
    * {@code $0} and {@code $1}, and the output is ordered only if both inputs
    * are ordered.
    */
-  public Rel.Join join(
+  public Core.Rel.Join join(
       TypeSystem typeSystem,
-      Rel.JoinType joinType,
-      Rel left,
-      Rel right,
+      Core.Rel.JoinType joinType,
+      Core.Rel left,
+      Core.Rel right,
       Core.Exp condition,
       Core.Exp yieldExp) {
     checkBoolType(condition, "join condition");
     final boolean ordered = left.isOrdered() && right.isOrdered();
     final Type type = collectionType(typeSystem, ordered, yieldExp.type);
-    return new Rel.Join(type, joinType, left, right, condition, yieldExp);
+    return new Core.Rel.Join(type, joinType, left, right, condition, yieldExp);
   }
 
   /**
    * Creates a {@code group}; the element type is a record of the keys and
    * aggregates, or, if there is exactly one of them, its bare type.
    */
-  public Rel.Group group(
+  public Core.Rel.Group group(
       TypeSystem typeSystem,
-      Rel input,
+      Core.Rel input,
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
     final Map<String, Type> nameTypes = new LinkedHashMap<>();
@@ -896,7 +898,7 @@ public enum CoreBuilder {
             ImmutableSortedMap.copyOf(nameTypes, ORDERING).entrySet());
     final Type type =
         collectionType(typeSystem, input.isOrdered(), elementType);
-    return new Rel.Group(
+    return new Core.Rel.Group(
         type,
         input,
         ImmutableSortedMap.copyOf(keys, ORDERING),
@@ -904,46 +906,47 @@ public enum CoreBuilder {
   }
 
   /** Creates an {@code order}; the output is always a {@code list}. */
-  public Rel.Order order(TypeSystem typeSystem, Rel input, Core.Exp exp) {
+  public Core.Rel.Order order(
+      TypeSystem typeSystem, Core.Rel input, Core.Exp exp) {
     final Type type = typeSystem.listType(input.elementType());
-    return new Rel.Order(type, input, exp);
+    return new Core.Rel.Order(type, input, exp);
   }
 
   /** Creates an {@code unorder}; the output is always a {@code bag}. */
-  public Rel.Unorder unorder(TypeSystem typeSystem, Rel input) {
+  public Core.Rel.Unorder unorder(TypeSystem typeSystem, Core.Rel input) {
     final Type type = typeSystem.bagType(input.elementType());
-    return new Rel.Unorder(type, input);
+    return new Core.Rel.Unorder(type, input);
   }
 
   /**
    * Creates a {@code skip}; its count is evaluated before the first element
    * exists, and therefore cannot mention {@code $0}.
    */
-  public Rel.Skip skip(Rel input, Core.Exp count) {
-    return new Rel.Skip(input, count);
+  public Core.Rel.Skip skip(Core.Rel input, Core.Exp count) {
+    return new Core.Rel.Skip(input, count);
   }
 
   /**
    * Creates a {@code take}; its count is evaluated before the first element
    * exists, and therefore cannot mention {@code $0}.
    */
-  public Rel.Take take(Rel input, Core.Exp count) {
-    return new Rel.Take(input, count);
+  public Core.Rel.Take take(Core.Rel input, Core.Exp count) {
+    return new Core.Rel.Take(input, count);
   }
 
   /**
    * Creates a set operator; all inputs must have the same element type, and the
    * output is ordered only if every input is ordered.
    */
-  public Rel.SetRel setRel(
+  public Core.Rel.SetRel setRel(
       TypeSystem typeSystem,
-      Rel.SetOp setOp,
+      Core.Rel.SetOp setOp,
       boolean distinct,
-      Iterable<? extends Rel> inputs) {
-    final ImmutableList<Rel> inputList = ImmutableList.copyOf(inputs);
+      Iterable<? extends Core.Rel> inputs) {
+    final ImmutableList<Core.Rel> inputList = ImmutableList.copyOf(inputs);
     final Type elementType = inputList.get(0).elementType();
     boolean ordered = true;
-    for (Rel input : inputList) {
+    for (Core.Rel input : inputList) {
       if (!input.elementType().equals(elementType)) {
         throw new IllegalArgumentException(
             format(
@@ -953,7 +956,7 @@ public enum CoreBuilder {
       ordered = ordered && input.isOrdered();
     }
     final Type type = collectionType(typeSystem, ordered, elementType);
-    return new Rel.SetRel(type, setOp, distinct, inputList);
+    return new Core.Rel.SetRel(type, setOp, distinct, inputList);
   }
 
   private static void checkBoolType(Core.Exp exp, String what) {
