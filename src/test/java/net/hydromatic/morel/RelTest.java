@@ -21,12 +21,15 @@ package net.hydromatic.morel;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
 
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.compile.RelValidator;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TypeSystem;
@@ -82,6 +85,11 @@ public class RelTest {
 
     Core.Exp greaterThan(Core.Exp a0, Core.Exp a1) {
       return core.greaterThan(typeSystem, a0, a1);
+    }
+
+    /** Returns the violations that the validator finds in a tree. */
+    List<String> violations(Core.Rel rel) {
+      return RelValidator.violations(typeSystem, rel);
     }
   }
 
@@ -301,6 +309,75 @@ public class RelTest {
             "union [all]\n" //
                 + "  [1, 2]\n"
                 + "  #fromList Bag ([5, 6])\n"));
+  }
+
+  /**
+   * Tests that the validator accepts trees the builder produces, and finds the
+   * ways in which a hand-built tree can go wrong.
+   */
+  @Test
+  void testValidator() {
+    final Fixture f = new Fixture();
+
+    // A tree built by the builder is valid.
+    final Core.Rel filter =
+        core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1)));
+    final Core.Rel project =
+        core.project(f.typeSystem, filter, f.record(f.input0, f.intLiteral(0)));
+    assertThat(f.violations(project), empty());
+
+    final Core.Rel join =
+        core.join(
+            f.typeSystem,
+            f.list12,
+            f.list34,
+            core.equal(f.typeSystem, f.input0, f.input1),
+            f.record(f.input0, f.input1));
+    assertThat(f.violations(join), empty());
+
+    // $1 belongs to a join; a filter does not bind it.
+    final Core.Rel badFilter =
+        core.filter(f.list12, core.equal(f.typeSystem, f.input0, f.input1));
+    assertThat(
+        f.violations(badFilter),
+        is(Arrays.asList("filter condition cannot reference $1")));
+
+    // 'skip' and 'take' counts are evaluated before the first element exists.
+    assertThat(
+        f.violations(core.take(f.list12, f.input0)),
+        is(Arrays.asList("take count cannot reference $0")));
+    assertThat(
+        f.violations(core.skip(f.list12, f.input0)),
+        is(Arrays.asList("skip count cannot reference $0")));
+
+    // A leaf cannot see the element of the node above it.
+    final Core.Rel badLeaf =
+        core.filter(
+            core.list(f.typeSystem, f.input0),
+            core.greaterThan(f.typeSystem, f.input0, f.intLiteral(1)));
+    assertThat(
+        f.violations(badLeaf), is(Arrays.asList("leaf cannot reference $0")));
+
+    // But a nested tree may use $0, because it binds its own.
+    final Core.Rel nested =
+        core.filter(
+            core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1))),
+            f.greaterThan(f.input0, f.intLiteral(0)));
+    assertThat(f.violations(nested), empty());
+
+    // A projectMany body binds $0 in its own right, and may mention the
+    // lambda's parameter.
+    final Core.IdPat dPat = core.idPat(f.intType, "d", 0);
+    final Core.Rel projectMany =
+        core.projectMany(
+            f.typeSystem,
+            f.list12,
+            dPat,
+            core.project(
+                f.typeSystem,
+                core.list(f.typeSystem, core.id(dPat)),
+                f.record(core.id(dPat), f.input0)));
+    assertThat(f.violations(projectMany), empty());
   }
 }
 
