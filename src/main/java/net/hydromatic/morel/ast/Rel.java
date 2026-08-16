@@ -23,6 +23,7 @@ import static java.util.Objects.requireNonNull;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.Type;
@@ -412,7 +413,7 @@ public abstract class Rel {
     }
 
     public String toString2() {
-      return name().toLowerCase(java.util.Locale.ROOT);
+      return name().toLowerCase(Locale.ROOT);
     }
   }
 
@@ -475,7 +476,7 @@ public abstract class Rel {
     EXCEPT;
 
     public String opName() {
-      return name().toLowerCase(java.util.Locale.ROOT);
+      return name().toLowerCase(Locale.ROOT);
     }
   }
 
