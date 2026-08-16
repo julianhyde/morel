@@ -18,8 +18,6 @@
  */
 package net.hydromatic.morel.eval;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -55,8 +53,22 @@ public class Discretes {
    * Returns a {@link Discrete} domain for the given type, or throws {@link
    * CompileException} if the type is not discrete.
    */
-  @SuppressWarnings("unchecked")
   public static Discrete<Object> discreteFor(
+      TypeSystem typeSystem, Type type, Pos pos) {
+    final Discrete<Object> discrete = discreteForOrNull(typeSystem, type, pos);
+    if (discrete == null) {
+      throw new CompileException("not a discrete type: " + type, false, pos);
+    }
+    return discrete;
+  }
+
+  /**
+   * Returns a {@link Discrete} domain for the given type, or null if the type
+   * is not discrete. Use this where not being discrete is an expected answer
+   * rather than an error.
+   */
+  @SuppressWarnings("unchecked")
+  public static @Nullable Discrete<Object> discreteForOrNull(
       TypeSystem typeSystem, Type type, Pos pos) {
     if (type instanceof PrimitiveType) {
       switch ((PrimitiveType) type) {
@@ -69,8 +81,7 @@ public class Discretes {
         case UNIT:
           return (Discrete<Object>) (Discrete<?>) UNIT;
         default:
-          throw new CompileException(
-              "not a discrete type: " + type, false, pos);
+          return null;
       }
     }
     if (type instanceof RecordLikeType) {
@@ -79,19 +90,28 @@ public class Discretes {
     if (type instanceof DataType) {
       return dataTypeDiscrete(typeSystem, (DataType) type, pos);
     }
-    throw new CompileException("not a discrete type: " + type, false, pos);
+    return null;
   }
 
   /** Creates a {@link Discrete} for a tuple or record type. */
-  private static Discrete<Object> tupleDiscrete(
+  private static @Nullable Discrete<Object> tupleDiscrete(
       TypeSystem typeSystem, RecordLikeType type, Pos pos) {
-    final List<Discrete<Object>> components =
-        type.argTypes().stream()
-            .map(t -> discreteFor(typeSystem, t, pos))
-            .collect(toImmutableList());
+    final ImmutableList.Builder<Discrete<Object>> components =
+        ImmutableList.builder();
+    for (Type argType : type.argTypes()) {
+      final Discrete<Object> component =
+          discreteForOrNull(typeSystem, argType, pos);
+      if (component == null) {
+        // A product is discrete only if every component is. Name the component
+        // rather than the whole tuple; it is the one at fault.
+        throw new CompileException(
+            "not a discrete type: " + argType, false, pos);
+      }
+      components.add(component);
+    }
     final Comparator<Object> cmp =
         Comparators.comparatorFor(typeSystem, type, pos);
-    return new TupleDiscrete(cmp, components);
+    return new TupleDiscrete(cmp, components.build());
   }
 
   /**
@@ -150,10 +170,14 @@ public class Discretes {
   }
 
   /** Creates a {@link Discrete} for a DataType. */
-  private static Discrete<Object> dataTypeDiscrete(
+  private static @Nullable Discrete<Object> dataTypeDiscrete(
       TypeSystem typeSystem, DataType dt, Pos pos) {
     if (dt.name.equals(BuiltIn.Datatype.DESCENDING.mlName())) {
-      final Discrete<Object> inner = discreteFor(typeSystem, dt.arg(0), pos);
+      final Discrete<Object> inner =
+          discreteForOrNull(typeSystem, dt.arg(0), pos);
+      if (inner == null) {
+        return null;
+      }
       final Comparator<Object> cmp =
           Comparators.comparatorFor(typeSystem, dt, pos);
       return new DescendingDiscrete(inner, cmp);
@@ -171,13 +195,14 @@ public class Discretes {
       if (e.getValue().equals(Keys.dummy())) {
         ctorDiscretes.add(Optional.empty());
       } else {
-        try {
-          ctorDiscretes.add(
-              Optional.of(
-                  discreteFor(typeSystem, ctorTypes.get(e.getKey()), pos)));
-        } catch (CompileException ex) {
+        final Discrete<Object> argDiscrete =
+            discreteForOrNull(typeSystem, ctorTypes.get(e.getKey()), pos);
+        if (argDiscrete == null) {
+          // A constructor's argument type is not discrete, so neither is the
+          // datatype. Name the datatype; its constructors are its own affair.
           throw new CompileException("not a discrete type: " + dt, false, pos);
         }
+        ctorDiscretes.add(Optional.of(argDiscrete));
       }
     }
     final ImmutableList<String> names = ctorNames.build();
@@ -187,7 +212,7 @@ public class Discretes {
       return new SumDiscrete(cmp, names, ctorDiscretes.build());
     }
 
-    throw new CompileException("not a discrete type: " + dt, false, pos);
+    return null;
   }
 
   private static final Comparator<Object> NATURAL = Comparators::compare;

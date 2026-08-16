@@ -9427,14 +9427,10 @@ public abstract class Codes {
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type, Pos pos) {
       Type elemType = rangeElementType(type);
-      Discrete<Object> d;
-      try {
-        d = Discretes.discreteFor(typeSystem, elemType, pos);
-      } catch (CompileException ex) {
-        // Element type is not discrete (e.g. real). POINT items are still
-        // finite; non-POINT items raise Size at runtime.
-        d = null;
-      }
+      // A non-discrete element type (e.g. real) is not an error here. POINT
+      // items are still finite; non-POINT items raise Size at runtime.
+      final Discrete<Object> d =
+          Discretes.discreteForOrNull(typeSystem, elemType, pos);
       return new RangeFlatten(d);
     }
 
