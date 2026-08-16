@@ -99,8 +99,11 @@ Well-formedness, checked by the validator:
   not a formality: it is what makes `take` and `skip` arguments
   constant-foldable and hoistable, and it is the reason they cannot
   silently become correlated.
-* An expression that contains a nested tree rebinds `$0` inside it;
-  see §8.
+* An expression that contains a nested tree rebinds `$0` inside it,
+  so an outer element that must reach into a nested tree is bound to
+  a name first; see §8. `projectMany` is the one node whose input
+  element is named by a lambda parameter rather than by `$0`, for
+  that reason.
 
 Reification (#359) loses nothing: a node's expression wraps
 mechanically as `fn $0 => e`, which is the lambda form, recovered on
@@ -277,32 +280,49 @@ syntactic guard: when the collection expression stops mentioning
 `$0` (because a preceding rule pulled the correlated part out), the
 node is a cross join and `join` replaces it.
 
-**Open: how the outer element reaches the pairing.** `projectMany`
-emits the inner elements, but `from e in emps, d in e.depts` must
-emit pairs, so something has to combine `$0` with each inner
-element. Where the combination is an ordinary Morel expression
-(`List.map (fn d => {d, e = $0}) $0.depts`) nothing is at stake, but
-that spelling buries a projection inside a scalar expression where no
-rule can see it. Where the expression is instead a nested tree, that
-tree's own nodes rebind `$0` to *their* input, so the outer element
-is shadowed and the pairing cannot be written at all. Candidates:
+**How the outer element reaches the pairing.** `projectMany` emits
+the inner elements, but `from d in depts, e in d.emps` must emit
+pairs, so something has to combine the outer element with each inner
+one, and the natural place is a nested query:
 
-* **(a) A sigil for enclosing scopes**, so an inner expression can
-  name an outer element (Calcite's correlation variables, with
-  lexical numbering instead of a global counter). Keeps `projectMany`
-  honest to its name; adds a second naming scheme, and decorrelation
-  has to rewrite inside the nested tree.
-* **(b) A yield on `projectMany`**, over `$0` (outer) and `$1`
-  (inner), defaulting to `$1` — with the default it is exactly the
-  flat-map its name describes, and with a yield it is a dependent
-  join whose numbering, commute and decorrelation are uniform with
-  `join`. Adds no naming scheme; the constructor does two jobs.
+```
+projectMany depts (fn d => from e in d.emps yield {d, e})
+```
 
-(b) is the recommendation, on the strength of decorrelation being
-local: `projectMany(input, coll, yield)` where `coll` does not
-mention `$0` becomes `join(input, coll, yield)` with no traversal
-into a nested tree. Pending confirmation; whichever is chosen must
-be fixed in step 0, because the plan-text grammar prints it.
+which in Core is a `projectMany` whose argument is a lambda whose
+body is a `project` over the leaf `d.emps`, with the projection
+expression `{d = d, e = $0}` — `$0` being the inner element and `d`
+the lambda's parameter.
+
+So the outer element is named by an ordinary lambda binder. This is
+not a retreat from §2: it is the one place where a scope crosses a
+tree boundary, and `$0` cannot cross it, because the nested tree
+rebinds `$0` to its own input. A named binder crosses it by ordinary
+lexical scoping — no sigil, no correlation counter, no yield on the
+node, and no descent into scalar expressions where rules cannot look.
+`projectMany` is exactly monadic bind, `α bag * (α -> β bag) -> β
+bag`, and the lambda is a plain Core lambda, so reification is
+nothing.
+
+Two consequences worth stating:
+
+* **`projectMany` is the one node that does not bind `$0`.** Its
+  input element is named by its lambda's parameter, precisely because
+  its argument is the one expression that routinely contains a tree.
+  Every other node binds `$0` (and `join` also `$1`) as §2 says.
+* **The device generalizes.** Any expression that contains a nested
+  tree shadows `$0` inside it, so a correlated subquery elsewhere —
+  `where exists (from d in depts where d.deptno = e.deptno)` — binds
+  the outer element the same way, with `let v = $0 in ...` around the
+  subquery. It is the same mechanism, written with `let` instead of
+  `fn` because the node's own argument is not a function.
+
+Decorrelation stays a rule with a syntactic guard, now stated over
+the lambda: when no leaf inside the body has a free occurrence of the
+parameter, the collection does not depend on the outer element, and
+`projectMany input (fn v => body)` becomes a `join` whose right input
+is that leaf and whose yield is the body's projection with `v ↦ $0`
+and the inner `$0 ↦ $1`.
 
 ## 9. Sequencing principle
 

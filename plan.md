@@ -29,8 +29,9 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 
 - [ ] Constructor set: SCAN-free leaves (bare expressions), FILTER,
       JOIN (with yield expression over `$0` and `$1`), PROJECT_MANY
-      (collection-typed expression over `$0`; subsumes the dependent
-      scan), PROJECT, GROUP (key/agg shapes), ORDER, UNORDER, LIMIT,
+      (lambda `v => collection`, subsuming the dependent scan; the
+      one node that names its input element rather than binding
+      `$0`), PROJECT, GROUP (key/agg shapes), ORDER, UNORDER, LIMIT,
       SKIP, UNION, INTERSECT, EXCEPT, COMPUTE; DISTINCT desugars to
       GROUP; AND/OR n-ary.
 - [ ] Per-constructor bag/list kind signatures, transcribed from
@@ -110,8 +111,8 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 
 - Unorder pushdown (the motivating rewrite; needs the step-0 kind
   signatures).
-- Decorrelation (PROJECT_MANY → JOIN where the collection expression
-  stops mentioning `$0`; exercises the scope-merge rename
+- Decorrelation (PROJECT_MANY → JOIN where no leaf inside the lambda
+  body mentions its parameter; exercises the scope-merge rename
   convention).
 - Row-representation revisit (Plans A/B/B′ per discussion.md §5),
   motivated by making rules easier to write.
