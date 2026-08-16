@@ -48,8 +48,8 @@ Two things that `Core.From` carries today do not exist here:
 * **No `atom` flag.** Atomization was the rule that a single binding
   yields its bare type rather than a one-field record. In the tree it
   is not a rule at all: an element's type is the type of the
-  expression that constructs it, so `project [$0.sal]` has element
-  type `real` because `$0.sal : real`, and nothing had to decide.
+  expression that constructs it, so `project [#sal $0]` has element
+  type `real` because `#sal $0 : real`, and nothing had to decide.
 
 The tree is a closed algebra: every constructor takes collections and
 returns a collection. A node *is* a Core expression — `Core.Rel`
@@ -254,8 +254,9 @@ arg      ::= '[' exp ']' | '[' label '=' exp (',' label '=' exp)* ']'
 ```
 
 Expressions inside brackets are printed as Morel, by the same
-unparser that prints Core expressions elsewhere, so `$0.deptno = $1
-.deptno` and `{d = $1, e = $0}` are literally what appears.
+unparser that prints Core expressions elsewhere, so a field access
+appears as `#deptno $0` (Morel's `e.deptno` is sugar for `#deptno e`)
+and a record construction as `{d = $1, e = $0}`.
 
 `Sys.planEx` prints the same tree with `: type` appended to every
 line, the type being the node's full collection type.
@@ -282,7 +283,7 @@ from e in scott.emps
 ```
 
 ```
-join [$0.deptno = $1.deptno] [{dname = $1.dname, e = $0, id = $1.deptno}]
+join [#deptno $0 = #deptno $1] [{dname = #dname $1, e = $0, id = #deptno $1}]
   scott.emps
   scott.depts
 ```
@@ -302,7 +303,7 @@ projectMany
   scott.depts
   fn d =>
     project [{d = d, e = $0}]
-      filter [$0.sal > 1000]
+      filter [#sal $0 > 1000]
         d.emps
 ```
 
@@ -320,7 +321,7 @@ from e in scott.emps
 ```
 
 ```
-group [deptno = $0.deptno] [total = sum over $0.sal]
+group [deptno = #deptno $0] [total = sum over #sal $0]
   scott.emps
 ```
 
