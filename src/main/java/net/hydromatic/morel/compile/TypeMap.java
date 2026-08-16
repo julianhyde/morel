@@ -20,7 +20,6 @@ package net.hydromatic.morel.compile;
 
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Pair.forEach;
-import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
@@ -36,8 +35,6 @@ import java.util.SortedSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
-import net.hydromatic.morel.type.AliasType;
-import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.QualifiedType;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -243,30 +240,6 @@ public class TypeMap {
         case "string":
         case "unit":
         default:
-          if (TypeResolver.isAliasTerm(sequence)) {
-            // "$alias:t(body, arg...)" becomes the alias 't', applied to its
-            // arguments. If the alias has gone out of scope, or its name now
-            // belongs to something else, fall back to the expanded body.
-            final String name = TypeResolver.aliasTermName(sequence);
-            final Type aliasType = typeMap.typeSystem.lookupOpt(name);
-            final Type body = sequence.terms.get(0).accept(this);
-            if (!(aliasType instanceof AliasType)) {
-              return body;
-            }
-            if (sequence.terms.size() == 1) {
-              return aliasType;
-            }
-            // A parameterized alias, e.g. "int my_list". Rebuild it from
-            // its name, expanded body and arguments. It must not bind the
-            // name, which still belongs to the declaration, "'a my_list".
-            final List<Type> args =
-                transformEager(skip(sequence.terms), t -> t.accept(this));
-            return Keys.aliasInstance(
-                    ((AliasType) aliasType).name,
-                    body.key(),
-                    transformEager(args, Type::key))
-                .toType(typeMap.typeSystem);
-          }
           // A displaced datatype is looked up first; the type system would
           // return whatever has taken over its name.
           final Type displaced = typeMap.displacedTypes.get(sequence.operator);
