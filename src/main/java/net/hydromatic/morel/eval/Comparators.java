@@ -43,9 +43,14 @@ import net.hydromatic.morel.util.PairList;
 public class Comparators {
   private Comparators() {}
 
-  /** Returns a comparator for a given type. */
-  public static Comparator comparatorFor(TypeSystem typeSystem, Type type) {
-    return new ComparatorBuilder(typeSystem).comparatorFor(type);
+  /**
+   * Returns a comparator for a given type. {@code pos} is the position of the
+   * expression whose values are to be compared, for an error message if the
+   * type has no order.
+   */
+  public static Comparator comparatorFor(
+      TypeSystem typeSystem, Type type, Pos pos) {
+    return new ComparatorBuilder(typeSystem, pos).comparatorFor(type);
   }
 
   /** Compares two objects using their natural order. */
@@ -72,10 +77,12 @@ public class Comparators {
   /** Contains shared state while building comparators for various types. */
   static class ComparatorBuilder {
     private final TypeSystem typeSystem;
+    private final Pos pos;
     private final Map<Type.Key, Comparator> cache = new HashMap<>();
 
-    ComparatorBuilder(TypeSystem typeSystem) {
+    ComparatorBuilder(TypeSystem typeSystem, Pos pos) {
       this.typeSystem = requireNonNull(typeSystem);
+      this.pos = requireNonNull(pos);
     }
 
     Comparator comparatorFor(Type t2) {
@@ -189,12 +196,9 @@ public class Comparators {
 
         default:
           // A function type arrives here, from "order (fn x => x)" and the
-          // like. There is no order on functions, and the user, not the
-          // compiler, is at fault.
+          // like. There is no order on functions.
           throw new CompileException(
-              "comparison not defined for type '" + type + "'",
-              false,
-              Pos.ZERO);
+              "comparison not defined for type '" + type + "'", false, pos);
       }
     }
 

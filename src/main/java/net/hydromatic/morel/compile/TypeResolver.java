@@ -973,9 +973,9 @@ public class TypeResolver {
    * type for {@code namedType.name}, or null if the name is not bound.
    *
    * <p>An unbound name reaches unification as a term that no type can be made
-   * from. If unification does not first find a conflict for it, as it does for
-   * the "true" in "val b: true = false", it survives to {@link TypeMap}, where
-   * it used to become an {@link AssertionError} in the user's face.
+   * from, and unification finds a conflict for it only sometimes -- as it does
+   * for the "true" in "val b: true = false" -- so it is checked here rather
+   * than left to {@link TypeMap}.
    */
   private static void checkTypeConstructorBound(
       Ast.NamedType namedType, @Nullable Type type) {
@@ -4316,8 +4316,7 @@ public class TypeResolver {
       }
       checkBoundTyVars(bind.tyVars, bodyTypes);
       // Check that every type-constructor reference in a constructor's
-      // argument type is bound and has the right number of arguments, before
-      // TypeSystem.lookup turns an unbound one into an AssertionError.
+      // argument type is bound and has the right number of arguments.
       for (Ast.Type bodyType : bodyTypes) {
         checkTypeConstructorArities(typeSystem, bodyType, declaring);
       }

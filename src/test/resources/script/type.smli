@@ -1556,11 +1556,11 @@ val w = [1] : my_list;
 > stdIn:1.15-1.22 Error: type constructor my_list given 0 arguments, wants 1
 >   raised at: stdIn:1.15-1.22
 
-(* An unbound name in a type annotation is an error. Such a name used to
- * reach unification as a term that no type could be made from; if
- * unification did not first find a conflict for it, as it does for the
- * "true" in "val b: true = false", it survived to TypeMap and became an
- * AssertionError in the user's face. *)
+(* An unbound name in a type annotation is an error. Such a name reaches
+ * unification as a term that no type can be made from, and unification
+ * finds a conflict for it only sometimes -- as it does for the "true" in
+ * "val b: true = false" -- so the name is checked where the annotation
+ * becomes a term. *)
 from {b: true, c: char};
 > stdIn:1.10-1.14 Error: unbound type constructor: true
 >   raised at: stdIn:1.10-1.14
