@@ -24,7 +24,9 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.google.common.collect.ImmutableList;
+import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -64,6 +66,11 @@ class DiscreteTest {
     BuiltIn.dataTypes(typeSystem, bindings);
   }
 
+  /** Returns two raised to the power {@code n}. */
+  private static BigInteger two(int n) {
+    return BigInteger.ONE.shiftLeft(n);
+  }
+
   /** Returns the discrete domain of a type. */
   private Discrete<Object> discrete(Type type) {
     return Discretes.discreteFor(typeSystem, type, Pos.ZERO);
@@ -83,10 +90,11 @@ class DiscreteTest {
     assertThat(d.comparator().compare(1, 2) < 0, is(true));
     assertThat(d.comparator().compare(2, 2), is(0));
     assertThat(d.comparator().compare(3, 2) > 0, is(true));
-    assertThat(d.size(), is(1L << 32));
-    assertThat(d.ordinal(Integer.MIN_VALUE), is(0L));
-    assertThat(d.ordinal(0), is(1L << 31));
-    assertThat(d.ordinal(Integer.MAX_VALUE), is((1L << 32) - 1));
+    assertThat(d.size(), is(two(32)));
+    assertThat(d.ordinal(Integer.MIN_VALUE), is(BigInteger.ZERO));
+    assertThat(d.ordinal(0), is(two(31)));
+    assertThat(
+        d.ordinal(Integer.MAX_VALUE), is(two(32).subtract(BigInteger.ONE)));
   }
 
   @Test
@@ -104,10 +112,10 @@ class DiscreteTest {
     assertThat(d.comparator().compare('a', 'b') < 0, is(true));
     assertThat(d.comparator().compare('b', 'b'), is(0));
     assertThat(d.comparator().compare('c', 'b') > 0, is(true));
-    assertThat(d.size(), is(256L));
-    assertThat(d.ordinal(CHR_0), is(0L));
-    assertThat(d.ordinal('a'), is(97L));
-    assertThat(d.ordinal(CHR_255), is(255L));
+    assertThat(d.size(), is(two(8)));
+    assertThat(d.ordinal(CHR_0), is(BigInteger.ZERO));
+    assertThat(d.ordinal('a'), is(BigInteger.valueOf(97)));
+    assertThat(d.ordinal(CHR_255), is(BigInteger.valueOf(255)));
   }
 
   @Test
@@ -130,34 +138,33 @@ class DiscreteTest {
 
     // Positions run over the product, so counting from one value to another
     // costs no more than subtracting.
-    assertThat(d.size(), is(2L * (1L << 32)));
-    assertThat(d.ordinal(d.minValue()), is(0L));
-    assertThat(d.ordinal(falseMax), is((1L << 32) - 1));
-    assertThat(d.ordinal(trueMin), is(1L << 32));
-    assertThat(d.ordinal(d.maxValue()), is(2L * (1L << 32) - 1));
+    assertThat(d.size(), is(two(33)));
+    assertThat(d.ordinal(d.minValue()), is(BigInteger.ZERO));
+    assertThat(d.ordinal(falseMax), is(two(32).subtract(BigInteger.ONE)));
+    assertThat(d.ordinal(trueMin), is(two(32)));
+    assertThat(d.ordinal(d.maxValue()), is(two(33).subtract(BigInteger.ONE)));
   }
 
   /**
-   * Tests a domain with more values than a {@code long} can number. Three ints
-   * make 2^96 values, so its size and the positions in its upper reaches
-   * saturate.
+   * Tests a domain with far more values than a machine integer can number. A
+   * nine-character word has 256^9 = 2^72 of them, and its positions are still
+   * exact.
    */
   @Test
-  void testTupleDiscreteSaturates() {
-    final RecordLikeType intIntIntType =
-        typeSystem.tupleType(
-            PrimitiveType.INT, PrimitiveType.INT, PrimitiveType.INT);
-    final Discrete<Object> d = discrete(intIntIntType);
+  void testWordDiscrete() {
+    final RecordLikeType wordType =
+        typeSystem.tupleType(Collections.nCopies(9, PrimitiveType.CHAR));
+    final Discrete<Object> d = discrete(wordType);
 
-    assertThat(d.size(), is(Long.MAX_VALUE));
-    assertThat(d.ordinal(d.minValue()), is(0L));
-    assertThat(d.ordinal(d.maxValue()), is(Long.MAX_VALUE));
+    assertThat(d.size(), is(two(72)));
+    assertThat(d.ordinal(d.minValue()), is(BigInteger.ZERO));
+    assertThat(d.ordinal(d.maxValue()), is(two(72).subtract(BigInteger.ONE)));
 
-    // The bottom of the domain is still numbered exactly; only the third
-    // component has been counted, and it has not overflowed.
-    final List<Object> low =
-        ImmutableList.of(Integer.MIN_VALUE, Integer.MIN_VALUE, 0);
-    assertThat(d.ordinal(low), is(1L << 31));
+    // The leading character is worth 256^8 = 2^64 words, so a word that
+    // differs from the least only there is that far along.
+    final List<Object> word = new ArrayList<>(Collections.nCopies(9, CHR_0));
+    word.set(0, '\u0002');
+    assertThat(d.ordinal(ImmutableList.copyOf(word)), is(two(65)));
   }
 
   @Test
@@ -188,11 +195,11 @@ class DiscreteTest {
     assertThat(d.comparator().compare(desc4, desc5) > 0, is(true));
 
     // Positions are counted from the far end, so they too are reversed.
-    assertThat(d.size(), is(1L << 32));
-    assertThat(d.ordinal(d.minValue()), is(0L));
-    assertThat(d.ordinal(desc5), is((1L << 31) - 6));
-    assertThat(d.ordinal(desc4), is((1L << 31) - 5));
-    assertThat(d.ordinal(d.maxValue()), is((1L << 32) - 1));
+    assertThat(d.size(), is(two(32)));
+    assertThat(d.ordinal(d.minValue()), is(BigInteger.ZERO));
+    assertThat(d.ordinal(desc5), is(two(31).subtract(BigInteger.valueOf(6))));
+    assertThat(d.ordinal(desc4), is(two(31).subtract(BigInteger.valueOf(5))));
+    assertThat(d.ordinal(d.maxValue()), is(two(32).subtract(BigInteger.ONE)));
   }
 }
 

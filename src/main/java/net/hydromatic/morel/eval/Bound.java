@@ -21,6 +21,7 @@ package net.hydromatic.morel.eval;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
+import java.math.BigInteger;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
@@ -100,12 +101,12 @@ class Bound {
 
   /**
    * Largest number of values that {@link #enumerate} will produce for one
-   * range. A discrete domain is finite, but "int" alone has 2^32 values, so an
-   * unremarkable range can ask for more of them than will fit in memory; past
-   * this many, {@code Size} is raised, as it is for a list that outgrows {@code
-   * Vector.maxLen}.
+   * range. A discrete domain is finite, but "int" alone has 2^32 values and a
+   * nine-character word 2^72, so an unremarkable range can ask for more of them
+   * than will fit in memory; past this many, {@code Size} is raised, as it is
+   * for a list that outgrows {@code Vector.maxLen}.
    */
-  private static final int MAX_COUNT = (1 << 24) - 1;
+  private static final BigInteger MAX_COUNT = BigInteger.valueOf((1 << 24) - 1);
 
   static void enumerate(
       Discrete<Object> discrete, Bound lo, Bound hi, Consumer<Object> out) {
@@ -135,27 +136,21 @@ class Bound {
         }
       }
     }
-    // Count the values before producing any. Positions give the count without
-    // walking, so a range of billions costs no more than a range of three.
-    final long startOrdinal = discrete.ordinal(start);
-    final long endOrdinal = discrete.ordinal(end);
-    if (startOrdinal < Long.MAX_VALUE
-        && endOrdinal < Long.MAX_VALUE
-        && endOrdinal - startOrdinal >= MAX_COUNT) {
+    // Count the values before producing any. The count is the distance
+    // between the endpoints' positions, so a range of 2^65 values is refused
+    // as quickly as a range of three is built.
+    final BigInteger count =
+        discrete.ordinal(end).subtract(discrete.ordinal(start));
+    if (count.compareTo(MAX_COUNT) >= 0) {
       throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, Pos.ZERO);
     }
 
     Comparator<Object> cmp = discrete.comparator();
     Object v = start;
-    int count = 0;
     while (true) {
       int c = cmp.compare(v, end);
       if (c > 0 || c == 0 && !endInclusive) {
         break;
-      }
-      // A domain too large to number defeats the count above; stop here.
-      if (++count > MAX_COUNT) {
-        throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, Pos.ZERO);
       }
       out.accept(v);
       Object next = discrete.next(v);

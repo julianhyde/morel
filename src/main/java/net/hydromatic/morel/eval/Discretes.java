@@ -19,6 +19,7 @@
 package net.hydromatic.morel.eval;
 
 import com.google.common.collect.ImmutableList;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -47,21 +48,6 @@ public class Discretes {
   @SuppressWarnings({"unchecked"})
   static Discrete<Object> dummy() {
     return (Discrete<Object>) (Discrete<?>) UNIT;
-  }
-
-  /** Adds two counts, saturating at {@link Long#MAX_VALUE}. */
-  private static long satAdd(long a, long b) {
-    final long c = a + b;
-    // Both arguments are non-negative, so a negative sum has overflowed.
-    return c < 0 ? Long.MAX_VALUE : c;
-  }
-
-  /** Multiplies two counts, saturating at {@link Long#MAX_VALUE}. */
-  private static long satMul(long a, long b) {
-    if (a == 0 || b == 0) {
-      return 0;
-    }
-    return a > Long.MAX_VALUE / b ? Long.MAX_VALUE : a * b;
   }
 
   /**
@@ -271,14 +257,17 @@ public class Discretes {
       return Integer.MAX_VALUE;
     }
 
+    private static final BigInteger SIZE =
+        BigInteger.ONE.shiftLeft(Integer.SIZE);
+
     @Override
-    public long size() {
-      return 1L << Integer.SIZE;
+    public BigInteger size() {
+      return SIZE;
     }
 
     @Override
-    public long ordinal(Integer v) {
-      return (long) v - Integer.MIN_VALUE;
+    public BigInteger ordinal(Integer v) {
+      return BigInteger.valueOf((long) v - Integer.MIN_VALUE);
     }
   }
 
@@ -309,14 +298,16 @@ public class Discretes {
       return '\u00ff';
     }
 
+    private static final BigInteger SIZE = BigInteger.valueOf('\u00ff' + 1);
+
     @Override
-    public long size() {
-      return (long) '\u00ff' + 1;
+    public BigInteger size() {
+      return SIZE;
     }
 
     @Override
-    public long ordinal(Character v) {
-      return v;
+    public BigInteger ordinal(Character v) {
+      return BigInteger.valueOf(v);
     }
   }
 
@@ -348,13 +339,13 @@ public class Discretes {
     }
 
     @Override
-    public long size() {
-      return 2;
+    public BigInteger size() {
+      return BigInteger.valueOf(2);
     }
 
     @Override
-    public long ordinal(Boolean v) {
-      return v ? 1 : 0;
+    public BigInteger ordinal(Boolean v) {
+      return v ? BigInteger.ONE : BigInteger.ZERO;
     }
   }
 
@@ -388,13 +379,13 @@ public class Discretes {
     }
 
     @Override
-    public long size() {
-      return 1;
+    public BigInteger size() {
+      return BigInteger.ONE;
     }
 
     @Override
-    public long ordinal(Unit v) {
-      return 0;
+    public BigInteger ordinal(Unit v) {
+      return BigInteger.ZERO;
     }
   }
 
@@ -402,10 +393,16 @@ public class Discretes {
   private static final class TupleDiscrete implements Discrete<Object> {
     private final Comparator<Object> cmp;
     private final List<Discrete<Object>> components;
+    private final BigInteger size;
 
     TupleDiscrete(Comparator<Object> cmp, List<Discrete<Object>> components) {
       this.cmp = cmp;
       this.components = components;
+      BigInteger size = BigInteger.ONE;
+      for (Discrete<Object> component : components) {
+        size = size.multiply(component.size());
+      }
+      this.size = size;
     }
 
     @Override
@@ -434,26 +431,22 @@ public class Discretes {
     }
 
     @Override
-    public long size() {
-      long size = 1;
-      for (Discrete<Object> component : components) {
-        size = satMul(size, component.size());
-      }
+    public BigInteger size() {
       return size;
     }
 
     @Override
-    public long ordinal(Object v) {
+    public BigInteger ordinal(Object v) {
       // Mixed radix, most significant component first, as the order is
       // lexicographic.
       final List<?> list = (List<?>) v;
-      long ordinal = 0;
+      BigInteger ordinal = BigInteger.ZERO;
       for (int i = 0; i < components.size(); i++) {
         final Discrete<Object> component = components.get(i);
         ordinal =
-            satAdd(
-                satMul(ordinal, component.size()),
-                component.ordinal(list.get(i)));
+            ordinal
+                .multiply(component.size())
+                .add(component.ordinal(list.get(i)));
       }
       return ordinal;
     }
@@ -505,19 +498,17 @@ public class Discretes {
     }
 
     @Override
-    public long size() {
+    public BigInteger size() {
       return inner.size();
     }
 
     @Override
-    public long ordinal(Object v) {
+    public BigInteger ordinal(Object v) {
       // The order is reversed, so position is counted from the far end.
-      final long innerSize = inner.size();
-      final long innerOrdinal = inner.ordinal(((List<?>) v).get(1));
-      if (innerSize == Long.MAX_VALUE || innerOrdinal == Long.MAX_VALUE) {
-        return Long.MAX_VALUE;
-      }
-      return innerSize - 1 - innerOrdinal;
+      return inner
+          .size()
+          .subtract(BigInteger.ONE)
+          .subtract(inner.ordinal(((List<?>) v).get(1)));
     }
   }
 
@@ -596,34 +587,34 @@ public class Discretes {
     }
 
     @Override
-    public long size() {
-      long size = 0;
+    public BigInteger size() {
+      BigInteger size = BigInteger.ZERO;
       for (Optional<Discrete<Object>> d : ctorDiscretes) {
-        size = satAdd(size, sizeOf(d));
+        size = size.add(sizeOf(d));
       }
       return size;
     }
 
     @Override
-    public long ordinal(Object v) {
+    public BigInteger ordinal(Object v) {
       // Constructors run in declaration order, so a value's position is the
       // number of values under the constructors before its own, plus its
       // position among its own constructor's arguments.
       final List<?> list = (List<?>) v;
       final int i = ctorNames.indexOf((String) list.get(0));
-      long ordinal = 0;
+      BigInteger ordinal = BigInteger.ZERO;
       for (int j = 0; j < i; j++) {
-        ordinal = satAdd(ordinal, sizeOf(ctorDiscretes.get(j)));
+        ordinal = ordinal.add(sizeOf(ctorDiscretes.get(j)));
       }
       final Optional<Discrete<Object>> d = ctorDiscretes.get(i);
       return d.isPresent()
-          ? satAdd(ordinal, d.get().ordinal(list.get(1)))
+          ? ordinal.add(d.get().ordinal(list.get(1)))
           : ordinal;
     }
 
     /** Returns how many values a constructor has; a nullary one has itself. */
-    private static long sizeOf(Optional<Discrete<Object>> d) {
-      return d.isPresent() ? d.get().size() : 1;
+    private static BigInteger sizeOf(Optional<Discrete<Object>> d) {
+      return d.isPresent() ? d.get().size() : BigInteger.ONE;
     }
 
     /** Returns the minimum value starting at constructor index {@code i}. */

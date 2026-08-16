@@ -484,6 +484,41 @@ Range.flatten [AT_LEAST (DESC 3)];
 > uncaught exception Size [size]
 >   raised at: 0.0-0.0
 
+(* A nine-character word has 256^9 = 2^72 values, more than a machine
+ * integer can number. Counting them is exact all the same, so how many a
+ * range holds decides whether it can be made into a list, however large
+ * the domain it is drawn from.
+ *
+ * Each of these counts from the least word, so a range holds as many
+ * words as its upper bound has words below it: a character in position i
+ * (from 0) is worth 256^(8-i) of them. *)
+
+(*) 2^3 words: the last character, worth 1 word each, reaches 8.
+List.length (Range.flatten
+  [LESS_THAN (#"\000", #"\000", #"\000", #"\000", #"\000", #"\000",
+     #"\000", #"\000", #"\008")]);
+> val it = 8 : int
+
+(*) 2^9 words: the eighth character is worth 256 words, and reaches 2.
+List.length (Range.flatten
+  [LESS_THAN (#"\000", #"\000", #"\000", #"\000", #"\000", #"\000",
+     #"\000", #"\002", #"\000")]);
+> val it = 512 : int
+
+(*) 2^50 words: the third character is worth 256^6 = 2^48, and reaches 4.
+List.length (Range.flatten
+  [LESS_THAN (#"\000", #"\000", #"\004", #"\000", #"\000", #"\000",
+     #"\000", #"\000", #"\000")]);
+> uncaught exception Size [size]
+>   raised at: 0.0-0.0
+
+(*) 2^65 words: the first character is worth 256^8 = 2^64, and reaches 2.
+List.length (Range.flatten
+  [LESS_THAN (#"\002", #"\000", #"\000", #"\000", #"\000", #"\000",
+     #"\000", #"\000", #"\000")]);
+> uncaught exception Size [size]
+>   raised at: 0.0-0.0
+
 (*) 'descending' reverses the order of the type it wraps.
 Range.flatten [CLOSED (DESC 3, DESC 1)];
 > val it = [DESC 3,DESC 2,DESC 1] : int descending list
