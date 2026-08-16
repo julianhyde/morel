@@ -799,17 +799,17 @@ public class FromBuilder {
   /** Calls the method to re-register a step. */
   private class StepHandler extends Visitor {
     @Override
-    protected void visit(Core.Except except) {
+    protected void visit(Core.ExceptStep except) {
       except(except.distinct, except.args);
     }
 
     @Override
-    protected void visit(Core.Group group) {
+    protected void visit(Core.GroupStep group) {
       group(group.env.atom, group.groupExps, group.aggregates);
     }
 
     @Override
-    protected void visit(Core.Intersect intersect) {
+    protected void visit(Core.IntersectStep intersect) {
       intersect(intersect.distinct, intersect.args);
     }
 
@@ -829,22 +829,22 @@ public class FromBuilder {
     }
 
     @Override
-    protected void visit(Core.Skip skip) {
+    protected void visit(Core.SkipStep skip) {
       skip(skip.exp);
     }
 
     @Override
-    protected void visit(Core.Take take) {
+    protected void visit(Core.TakeStep take) {
       take(take.exp);
     }
 
     @Override
-    protected void visit(Core.Union union) {
+    protected void visit(Core.UnionStep union) {
       union(union.distinct, union.args);
     }
 
     @Override
-    protected void visit(Core.Unorder unorder) {
+    protected void visit(Core.UnorderStep unorder) {
       unorder();
     }
 

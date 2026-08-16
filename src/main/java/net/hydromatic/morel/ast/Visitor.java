@@ -469,23 +469,23 @@ public class Visitor {
     where.exp.accept(this);
   }
 
-  protected void visit(Core.Skip skip) {
+  protected void visit(Core.SkipStep skip) {
     skip.exp.accept(this);
   }
 
-  protected void visit(Core.Take take) {
+  protected void visit(Core.TakeStep take) {
     take.exp.accept(this);
   }
 
-  protected void visit(Core.Except except) {
+  protected void visit(Core.ExceptStep except) {
     except.args.forEach(this::accept);
   }
 
-  protected void visit(Core.Intersect intersect) {
+  protected void visit(Core.IntersectStep intersect) {
     intersect.args.forEach(this::accept);
   }
 
-  protected void visit(Core.Union union) {
+  protected void visit(Core.UnionStep union) {
     union.args.forEach(this::accept);
   }
 
@@ -498,7 +498,7 @@ public class Visitor {
     recValDecl.list.forEach(this::accept);
   }
 
-  protected void visit(Core.Group group) {
+  protected void visit(Core.GroupStep group) {
     group.groupExps.values().forEach(this::accept);
     group.aggregates.values().forEach(this::accept);
   }
@@ -518,7 +518,7 @@ public class Visitor {
     yield.exp.accept(this);
   }
 
-  protected void visit(Core.Unorder unorder) {}
+  protected void visit(Core.UnorderStep unorder) {}
 
   protected void visit(Core.TuplePat tuplePat) {
     tuplePat.args.forEach(this::accept);

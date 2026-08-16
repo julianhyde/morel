@@ -1696,8 +1696,8 @@ public class Core {
      * input is ordered.
      *
      * <p>For example, {@link Where} and {@link Yield} are ordered if and only
-     * if their input is ordered; {@link Order} is always ordered; {@link Group}
-     * is unordered.
+     * if their input is ordered; {@link Order} is always ordered; {@link
+     * GroupStep} is unordered.
      */
     public boolean isOrdered(boolean inputIsOrdered) {
       return inputIsOrdered;
@@ -1900,16 +1900,16 @@ public class Core {
   }
 
   /** A {@code skip} clause in a {@code from} expression. */
-  public static class Skip extends FromStep {
+  public static class SkipStep extends FromStep {
     public final Exp exp;
 
-    Skip(Core.StepEnv env, Exp exp) {
+    SkipStep(Core.StepEnv env, Exp exp) {
       super(Op.SKIP, env);
       this.exp = requireNonNull(exp, "exp");
     }
 
     @Override
-    public Skip accept(Shuttle shuttle) {
+    public SkipStep accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -1924,7 +1924,7 @@ public class Core {
       return w.append(" skip ").append(exp, 0, 0);
     }
 
-    public Skip copy(Exp exp, Core.StepEnv env) {
+    public SkipStep copy(Exp exp, Core.StepEnv env) {
       return exp == this.exp && env.equals(this.env)
           ? this
           : core.skip(env, exp);
@@ -1932,16 +1932,16 @@ public class Core {
   }
 
   /** A {@code take} clause in a {@code from} expression. */
-  public static class Take extends FromStep {
+  public static class TakeStep extends FromStep {
     public final Exp exp;
 
-    Take(Core.StepEnv env, Exp exp) {
+    TakeStep(Core.StepEnv env, Exp exp) {
       super(Op.TAKE, env);
       this.exp = requireNonNull(exp, "exp");
     }
 
     @Override
-    public Take accept(Shuttle shuttle) {
+    public TakeStep accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -1956,14 +1956,16 @@ public class Core {
       return w.append(" take ").append(exp, 0, 0);
     }
 
-    public Take copy(Exp exp, Core.StepEnv env) {
+    public TakeStep copy(Exp exp, Core.StepEnv env) {
       return exp == this.exp && env.equals(this.env)
           ? this
           : core.take(env, exp);
     }
   }
 
-  /** Base class of {@link Except}, {@link Intersect}, {@link Union}. */
+  /**
+   * Base class of {@link ExceptStep}, {@link IntersectStep}, {@link UnionStep}.
+   */
   public abstract static class SetStep extends FromStep {
     public final boolean distinct;
     public final ImmutableList<Exp> args;
@@ -1994,8 +1996,8 @@ public class Core {
   }
 
   /** An {@code except} clause in a {@code from} expression. */
-  public static class Except extends SetStep {
-    Except(StepEnv env, boolean distinct, ImmutableList<Exp> args) {
+  public static class ExceptStep extends SetStep {
+    ExceptStep(StepEnv env, boolean distinct, ImmutableList<Exp> args) {
       super(
           Op.EXCEPT,
           env.withOrdered(
@@ -2006,7 +2008,7 @@ public class Core {
     }
 
     @Override
-    public Except accept(Shuttle shuttle) {
+    public ExceptStep accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2016,7 +2018,7 @@ public class Core {
     }
 
     @Override
-    public Except copy(boolean distinct, List<Exp> args, StepEnv env) {
+    public ExceptStep copy(boolean distinct, List<Exp> args, StepEnv env) {
       return distinct == this.distinct
               && args.equals(this.args)
               && env.equals(this.env)
@@ -2026,8 +2028,8 @@ public class Core {
   }
 
   /** An {@code intersect} clause in a {@code from} expression. */
-  public static class Intersect extends SetStep {
-    Intersect(StepEnv env, boolean distinct, ImmutableList<Exp> args) {
+  public static class IntersectStep extends SetStep {
+    IntersectStep(StepEnv env, boolean distinct, ImmutableList<Exp> args) {
       super(
           Op.INTERSECT,
           env.withOrdered(
@@ -2038,7 +2040,7 @@ public class Core {
     }
 
     @Override
-    public Intersect accept(Shuttle shuttle) {
+    public IntersectStep accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2048,7 +2050,7 @@ public class Core {
     }
 
     @Override
-    public Intersect copy(boolean distinct, List<Exp> args, StepEnv env) {
+    public IntersectStep copy(boolean distinct, List<Exp> args, StepEnv env) {
       return distinct == this.distinct
               && args.equals(this.args)
               && env.equals(this.env)
@@ -2058,8 +2060,8 @@ public class Core {
   }
 
   /** A {@code union} clause in a {@code from} expression. */
-  public static class Union extends SetStep {
-    Union(StepEnv env, boolean distinct, ImmutableList<Exp> args) {
+  public static class UnionStep extends SetStep {
+    UnionStep(StepEnv env, boolean distinct, ImmutableList<Exp> args) {
       super(
           Op.UNION,
           env.withOrdered(
@@ -2070,7 +2072,7 @@ public class Core {
     }
 
     @Override
-    public Union accept(Shuttle shuttle) {
+    public UnionStep accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2080,7 +2082,7 @@ public class Core {
     }
 
     @Override
-    public Union copy(boolean distinct, List<Exp> args, StepEnv env) {
+    public UnionStep copy(boolean distinct, List<Exp> args, StepEnv env) {
       return distinct == this.distinct
               && args.equals(this.args)
               && env.equals(this.env)
@@ -2134,11 +2136,11 @@ public class Core {
   }
 
   /** A {@code group} clause in a {@code from} expression. */
-  public static class Group extends FromStep {
+  public static class GroupStep extends FromStep {
     public final SortedMap<Core.IdPat, Exp> groupExps;
     public final SortedMap<Core.IdPat, Aggregate> aggregates;
 
-    Group(
+    GroupStep(
         Core.StepEnv env,
         ImmutableSortedMap<Core.IdPat, Exp> groupExps,
         ImmutableSortedMap<Core.IdPat, Aggregate> aggregates) {
@@ -2149,7 +2151,7 @@ public class Core {
     }
 
     @Override
-    public Group accept(Shuttle shuttle) {
+    public GroupStep accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2190,7 +2192,7 @@ public class Core {
       return w;
     }
 
-    public Group copy(
+    public GroupStep copy(
         boolean atom,
         SortedMap<Core.IdPat, Exp> groupExps,
         SortedMap<Core.IdPat, Aggregate> aggregates) {
@@ -2203,8 +2205,8 @@ public class Core {
   }
 
   /** Step that converts the stream to an unordered collection. */
-  public static class Unorder extends FromStep {
-    Unorder(Core.StepEnv env) {
+  public static class UnorderStep extends FromStep {
+    UnorderStep(Core.StepEnv env) {
       super(Op.UNORDER, env.withOrdered(false));
     }
 
@@ -2220,7 +2222,7 @@ public class Core {
     }
 
     @Override
-    public Unorder accept(Shuttle shuttle) {
+    public UnorderStep accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2229,7 +2231,7 @@ public class Core {
       visitor.visit(this);
     }
 
-    public Unorder copy(Core.StepEnv env) {
+    public UnorderStep copy(Core.StepEnv env) {
       return env.equals(this.env) ? this : core.unorder(env);
     }
   }

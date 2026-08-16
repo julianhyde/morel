@@ -262,7 +262,7 @@ public class Resolver {
    * </ul>
    *
    * <p>If the pre- and post-expressions are non-trivial we end up with a {@link
-   * Core.Yield} on a {@link Core.Group} on a {@link Core.Yield}.
+   * Core.Yield} on a {@link Core.GroupStep} on a {@link Core.Yield}.
    *
    * <p>What is the environment? If the query is "{@code from e in emps group
    * e.deptno compute sum over e.salary * 2.0}", then this resolver (used for

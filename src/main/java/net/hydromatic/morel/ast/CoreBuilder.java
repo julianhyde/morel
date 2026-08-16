@@ -690,7 +690,7 @@ public enum CoreBuilder {
     return new Core.Order(env.withOrdered(true), exp);
   }
 
-  public Core.Group group(
+  public Core.GroupStep group(
       boolean atom,
       boolean ordered,
       SortedMap<Core.IdPat, Core.Exp> groupExps,
@@ -703,7 +703,7 @@ public enum CoreBuilder {
         "atom with %s bindings %s",
         bindings.size(),
         bindings);
-    return new Core.Group(
+    return new Core.GroupStep(
         Core.StepEnv.of(bindings, atom, ordered),
         ImmutableSortedMap.copyOfSorted(groupExps),
         ImmutableSortedMap.copyOfSorted(aggregates));
@@ -713,31 +713,31 @@ public enum CoreBuilder {
     return new Core.Where(env, exp);
   }
 
-  public Core.Skip skip(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Skip(env, exp);
+  public Core.SkipStep skip(Core.StepEnv env, Core.Exp exp) {
+    return new Core.SkipStep(env, exp);
   }
 
-  public Core.Take take(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Take(env, exp);
+  public Core.TakeStep take(Core.StepEnv env, Core.Exp exp) {
+    return new Core.TakeStep(env, exp);
   }
 
-  public Core.Except except(
+  public Core.ExceptStep except(
       Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.Except(env, distinct, ImmutableList.copyOf(args));
+    return new Core.ExceptStep(env, distinct, ImmutableList.copyOf(args));
   }
 
-  public Core.Intersect intersect(
+  public Core.IntersectStep intersect(
       Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.Intersect(env, distinct, ImmutableList.copyOf(args));
+    return new Core.IntersectStep(env, distinct, ImmutableList.copyOf(args));
   }
 
-  public Core.Union union(
+  public Core.UnionStep union(
       Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.Union(env, distinct, ImmutableList.copyOf(args));
+    return new Core.UnionStep(env, distinct, ImmutableList.copyOf(args));
   }
 
-  public Core.Unorder unorder(Core.StepEnv env) {
-    return new Core.Unorder(env.withOrdered(false));
+  public Core.UnorderStep unorder(Core.StepEnv env) {
+    return new Core.UnorderStep(env.withOrdered(false));
   }
 
   public Core.Yield yield_(Core.StepEnv env, Core.Exp exp) {

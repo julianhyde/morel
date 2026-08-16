@@ -964,7 +964,7 @@ public class Compiler {
         return () -> RowSinks.where(filterCode, whereNextFactory.get());
 
       case SKIP:
-        final Core.Skip skip = (Core.Skip) firstStep;
+        final Core.SkipStep skip = (Core.SkipStep) firstStep;
         final Code skipCode = compile(cxFrom, skip.exp);
         final Supplier<RowSink> skipNextFactory =
             createRowSinkFactory(
@@ -972,7 +972,7 @@ public class Compiler {
         return () -> RowSinks.skip(skipCode, skipNextFactory.get());
 
       case TAKE:
-        final Core.Take take = (Core.Take) firstStep;
+        final Core.TakeStep take = (Core.TakeStep) firstStep;
         final Code takeCode = compile(cxFrom, take.exp);
         final Supplier<RowSink> takeNextFactory =
             createRowSinkFactory(
@@ -980,7 +980,7 @@ public class Compiler {
         return () -> RowSinks.take(takeCode, takeNextFactory.get());
 
       case EXCEPT:
-        final Core.Except except = (Core.Except) firstStep;
+        final Core.ExceptStep except = (Core.ExceptStep) firstStep;
         return compileSetSink(
             cx,
             cxFrom,
@@ -993,7 +993,7 @@ public class Compiler {
             elementType);
 
       case INTERSECT:
-        final Core.Intersect intersect = (Core.Intersect) firstStep;
+        final Core.IntersectStep intersect = (Core.IntersectStep) firstStep;
         return compileSetSink(
             cx,
             cxFrom,
@@ -1006,7 +1006,7 @@ public class Compiler {
             elementType);
 
       case UNION:
-        final Core.Union union = (Core.Union) firstStep;
+        final Core.UnionStep union = (Core.UnionStep) firstStep;
         return compileSetSink(
             cx,
             cxFrom,
@@ -1096,7 +1096,7 @@ public class Compiler {
             cx,
             cxFrom,
             allScope2,
-            (Core.Group) firstStep,
+            (Core.GroupStep) firstStep,
             stepEnv,
             skip(steps),
             elementType);
@@ -1144,7 +1144,7 @@ public class Compiler {
       Context cx,
       Context cxFrom,
       ImmutableMap<String, Binding> allScopeBindings,
-      Core.Group group,
+      Core.GroupStep group,
       Core.StepEnv stepEnv,
       List<Core.FromStep> remainingSteps,
       Type elementType) {
@@ -1972,17 +1972,17 @@ public class Compiler {
           } else if (step instanceof Core.Where) {
             collectReferencedStackVarsRec(
                 layout, ((Core.Where) step).exp, excludePats, captureMap);
-          } else if (step instanceof Core.Skip) {
+          } else if (step instanceof Core.SkipStep) {
             collectReferencedStackVarsRec(
-                layout, ((Core.Skip) step).exp, excludePats, captureMap);
-          } else if (step instanceof Core.Take) {
+                layout, ((Core.SkipStep) step).exp, excludePats, captureMap);
+          } else if (step instanceof Core.TakeStep) {
             collectReferencedStackVarsRec(
-                layout, ((Core.Take) step).exp, excludePats, captureMap);
+                layout, ((Core.TakeStep) step).exp, excludePats, captureMap);
           } else if (step instanceof Core.Order) {
             collectReferencedStackVarsRec(
                 layout, ((Core.Order) step).exp, excludePats, captureMap);
-          } else if (step instanceof Core.Group) {
-            final Core.Group group = (Core.Group) step;
+          } else if (step instanceof Core.GroupStep) {
+            final Core.GroupStep group = (Core.GroupStep) step;
             group
                 .groupExps
                 .values()
@@ -2006,7 +2006,7 @@ public class Compiler {
             collectReferencedStackVarsRec(
                 layout, ((Core.Yield) step).exp, excludePats, captureMap);
           } else if (step instanceof Core.SetStep) {
-            // Handles Core.Union, Core.Intersect, Core.Except
+            // Handles Core.UnionStep, Core.IntersectStep, Core.ExceptStep
             ((Core.SetStep) step)
                 .args.forEach(
                     arg ->
