@@ -135,9 +135,9 @@ n + 1;      (*) Morel gives 'nat'; Standard ML gives 'int'
 n - 100;    (*) Morel gives 'nat' -- and ~95 is not a nat
 ```
 
-For a plain alias that is harmless, and `script/type-alias.smli` pins it. For
-a constrained type it is **unsound**, and `n - 100` is the plan's own first
-example of a value that must lose its constraint.
+For a plain alias that is harmless, since the alias and its expansion are the
+same type. For a constrained type it is **unsound**, and `n - 100` is the
+plan's own first example of a value that must lose its constraint.
 
 So an overloaded operator whose result may differ from its arguments has to
 reduce a constrained argument type to its base type before choosing the result

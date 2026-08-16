@@ -23,7 +23,6 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.allMatch;
-import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -124,13 +123,7 @@ public class Inliner extends EnvShuttle {
       }
       Object v = binding.value;
       if (v instanceof Macro) {
-        // A macro dispatches on the shape of its argument type, so expand any
-        // alias first: '+' at 'nat * nat' is the same macro expansion as at
-        // 'int * int'. Expanding the head and, for a tuple, each component is
-        // enough for every macro, and cannot recurse as a general deep
-        // expansion would on a recursive datatype.
-        final Type paramType =
-            unaliasArg(((FnType) id.type.unalias()).paramType);
+        final Type paramType = ((FnType) id.type).paramType;
         if (!(paramType instanceof TypeVar)) {
           final Macro macro = (Macro) binding.value;
           final Core.Exp x = macro.expand(typeSystem, env, paramType);
@@ -502,20 +495,6 @@ public class Inliner extends EnvShuttle {
         return let.exp.accept(bind(bindings));
     }
     return super.visit(let);
-  }
-
-  /**
-   * Expands aliases in a macro's argument type: at the head, and in each
-   * component if it is a tuple.
-   */
-  private Type unaliasArg(Type type) {
-    final Type type2 = type.unalias();
-    if (type2 instanceof TupleType) {
-      final TupleType tupleType = (TupleType) type2;
-      return typeSystem.tupleType(
-          transformEager(tupleType.argTypes, Type::unalias));
-    }
-    return type2;
   }
 }
 
