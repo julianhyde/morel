@@ -49,6 +49,21 @@ public class Discretes {
     return (Discrete<Object>) (Discrete<?>) UNIT;
   }
 
+  /** Adds two counts, saturating at {@link Long#MAX_VALUE}. */
+  private static long satAdd(long a, long b) {
+    final long c = a + b;
+    // Both arguments are non-negative, so a negative sum has overflowed.
+    return c < 0 ? Long.MAX_VALUE : c;
+  }
+
+  /** Multiplies two counts, saturating at {@link Long#MAX_VALUE}. */
+  private static long satMul(long a, long b) {
+    if (a == 0 || b == 0) {
+      return 0;
+    }
+    return a > Long.MAX_VALUE / b ? Long.MAX_VALUE : a * b;
+  }
+
   /**
    * Returns a {@link Discrete} domain for the given type, or throws {@link
    * CompileException} if the type is not discrete.
@@ -255,6 +270,16 @@ public class Discretes {
     public Integer maxValue() {
       return Integer.MAX_VALUE;
     }
+
+    @Override
+    public long size() {
+      return 1L << Integer.SIZE;
+    }
+
+    @Override
+    public long ordinal(Integer v) {
+      return (long) v - Integer.MIN_VALUE;
+    }
   }
 
   /** {@link Discrete} implementation for {@code char} (ordinals 0–255). */
@@ -283,6 +308,16 @@ public class Discretes {
     public Character maxValue() {
       return '\u00ff';
     }
+
+    @Override
+    public long size() {
+      return (long) '\u00ff' + 1;
+    }
+
+    @Override
+    public long ordinal(Character v) {
+      return v;
+    }
   }
 
   /** {@link Discrete} implementation for {@code bool} (false &lt; true). */
@@ -310,6 +345,16 @@ public class Discretes {
     @Override
     public Boolean maxValue() {
       return Boolean.TRUE;
+    }
+
+    @Override
+    public long size() {
+      return 2;
+    }
+
+    @Override
+    public long ordinal(Boolean v) {
+      return v ? 1 : 0;
     }
   }
 
@@ -340,6 +385,16 @@ public class Discretes {
     @Override
     public Unit maxValue() {
       return Unit.INSTANCE;
+    }
+
+    @Override
+    public long size() {
+      return 1;
+    }
+
+    @Override
+    public long ordinal(Unit v) {
+      return 0;
     }
   }
 
@@ -376,6 +431,31 @@ public class Discretes {
     @Override
     public @Nullable Object maxValue() {
       return tupleExtreme(components, /* min= */ false);
+    }
+
+    @Override
+    public long size() {
+      long size = 1;
+      for (Discrete<Object> component : components) {
+        size = satMul(size, component.size());
+      }
+      return size;
+    }
+
+    @Override
+    public long ordinal(Object v) {
+      // Mixed radix, most significant component first, as the order is
+      // lexicographic.
+      final List<?> list = (List<?>) v;
+      long ordinal = 0;
+      for (int i = 0; i < components.size(); i++) {
+        final Discrete<Object> component = components.get(i);
+        ordinal =
+            satAdd(
+                satMul(ordinal, component.size()),
+                component.ordinal(list.get(i)));
+      }
+      return ordinal;
     }
   }
 
@@ -423,18 +503,24 @@ public class Discretes {
       final Object min = inner.minValue();
       return min == null ? null : ImmutableList.of("DESC", min);
     }
+
+    @Override
+    public long size() {
+      return inner.size();
+    }
+
+    @Override
+    public long ordinal(Object v) {
+      // The order is reversed, so position is counted from the far end.
+      final long innerSize = inner.size();
+      final long innerOrdinal = inner.ordinal(((List<?>) v).get(1));
+      if (innerSize == Long.MAX_VALUE || innerOrdinal == Long.MAX_VALUE) {
+        return Long.MAX_VALUE;
+      }
+      return innerSize - 1 - innerOrdinal;
+    }
   }
 
-  /**
-   * {@link Discrete} implementation for a sum DataType (all constructors are
-   * either nullary or wrap a discrete argument type).
-   *
-   * <p>Handles both pure enums (e.g., {@code order}) and mixed types (e.g.,
-   * {@code (order, bool) either}).
-   *
-   * <p>Runtime values: nullary constructor {@code C} is {@code ["C"]}; unary
-   * constructor {@code C of t} is {@code ["C", tValue]}.
-   */
   /**
    * {@link Discrete} implementation for a sum DataType (all constructors are
    * either nullary or wrap a discrete argument type).
@@ -507,6 +593,37 @@ public class Discretes {
     @Override
     public @Nullable Object maxValue() {
       return lastOf(ctorNames.size() - 1);
+    }
+
+    @Override
+    public long size() {
+      long size = 0;
+      for (Optional<Discrete<Object>> d : ctorDiscretes) {
+        size = satAdd(size, sizeOf(d));
+      }
+      return size;
+    }
+
+    @Override
+    public long ordinal(Object v) {
+      // Constructors run in declaration order, so a value's position is the
+      // number of values under the constructors before its own, plus its
+      // position among its own constructor's arguments.
+      final List<?> list = (List<?>) v;
+      final int i = ctorNames.indexOf((String) list.get(0));
+      long ordinal = 0;
+      for (int j = 0; j < i; j++) {
+        ordinal = satAdd(ordinal, sizeOf(ctorDiscretes.get(j)));
+      }
+      final Optional<Discrete<Object>> d = ctorDiscretes.get(i);
+      return d.isPresent()
+          ? satAdd(ordinal, d.get().ordinal(list.get(1)))
+          : ordinal;
+    }
+
+    /** Returns how many values a constructor has; a nullary one has itself. */
+    private static long sizeOf(Optional<Discrete<Object>> d) {
+      return d.isPresent() ? d.get().size() : 1;
     }
 
     /** Returns the minimum value starting at constructor index {@code i}. */

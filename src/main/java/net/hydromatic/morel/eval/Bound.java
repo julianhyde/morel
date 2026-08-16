@@ -98,11 +98,28 @@ class Bound {
         ImmutableList.of(lo.value, hi.value));
   }
 
+  /**
+   * Largest number of values that {@link #enumerate} will produce for one
+   * range. A discrete domain is finite, but "int" alone has 2^32 values, so an
+   * unremarkable range can ask for more of them than will fit in memory; past
+   * this many, {@code Size} is raised, as it is for a list that outgrows {@code
+   * Vector.maxLen}.
+   */
+  private static final int MAX_COUNT = (1 << 24) - 1;
+
   static void enumerate(
       Discrete<Object> discrete, Bound lo, Bound hi, Consumer<Object> out) {
+    // An endpoint left unbounded is the end of the domain. The domain is
+    // finite, so "AT_LEAST #\"\253\"" yields the last three characters, even
+    // though it names no upper bound.
+    final Object end;
+    final boolean endInclusive;
     if (hi.value == null) {
-      throw new Codes.MorelRuntimeException(
-          Codes.BuiltInExn.SIZE, Pos.ZERO); // unbounded range
+      end = discrete.maxValue();
+      endInclusive = true;
+    } else {
+      end = hi.value;
+      endInclusive = hi.inclusive;
     }
     Object start;
     if (lo.value == null) {
@@ -118,12 +135,27 @@ class Bound {
         }
       }
     }
+    // Count the values before producing any. Positions give the count without
+    // walking, so a range of billions costs no more than a range of three.
+    final long startOrdinal = discrete.ordinal(start);
+    final long endOrdinal = discrete.ordinal(end);
+    if (startOrdinal < Long.MAX_VALUE
+        && endOrdinal < Long.MAX_VALUE
+        && endOrdinal - startOrdinal >= MAX_COUNT) {
+      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, Pos.ZERO);
+    }
+
     Comparator<Object> cmp = discrete.comparator();
     Object v = start;
+    int count = 0;
     while (true) {
-      int c = cmp.compare(v, hi.value);
-      if (c > 0 || c == 0 && !hi.inclusive) {
+      int c = cmp.compare(v, end);
+      if (c > 0 || c == 0 && !endInclusive) {
         break;
+      }
+      // A domain too large to number defeats the count above; stop here.
+      if (++count > MAX_COUNT) {
+        throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, Pos.ZERO);
       }
       out.accept(v);
       Object next = discrete.next(v);

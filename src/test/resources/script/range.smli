@@ -456,6 +456,34 @@ Range.flatten [CLOSED ((false, false), (true, true))];
 Range.flatten [CLOSED (LESS, GREATER)];
 > val it = [LESS,EQUAL,GREATER] : order list
 
+(* An endpoint left unbounded is the end of the domain, and a bounded
+ * domain has one, so these enumerate rather than raising Size. *)
+Range.flatten [AT_LEAST #"\253"];
+> val it = [#"\253",#"\254",#"\255"] : char list
+Range.flatten [AT_LEAST EQUAL];
+> val it = [EQUAL,GREATER] : order list
+Range.flatten [ALL] : bool list;
+> val it = [false,true] : bool list
+Range.flatten [ALL] : (bool * bool) list;
+> val it = [(false,false),(false,true),(true,false),(true,true)]
+>   : (bool * bool) list
+Range.flatten [ALL] : unit list;
+> val it = [()] : unit list
+
+(* A domain may be too large to make a list of, whether it is named by an
+ * unbounded endpoint or reached by counting from the end of the domain.
+ * Both are refused at once, by counting, not by counting up to the
+ * limit. *)
+Range.flatten [AT_LEAST 3];
+> uncaught exception Size [size]
+>   raised at: 0.0-0.0
+Range.flatten [AT_MOST (false, 1)];
+> uncaught exception Size [size]
+>   raised at: 0.0-0.0
+Range.flatten [AT_LEAST (DESC 3)];
+> uncaught exception Size [size]
+>   raised at: 0.0-0.0
+
 (*) 'descending' reverses the order of the type it wraps.
 Range.flatten [CLOSED (DESC 3, DESC 1)];
 > val it = [DESC 3,DESC 2,DESC 1] : int descending list

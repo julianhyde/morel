@@ -56,6 +56,23 @@ public interface Discrete<T> {
 
   /** Returns the maximum value of this type. */
   T maxValue();
+
+  /**
+   * Returns how many values this type has, saturating at {@link
+   * Long#MAX_VALUE}.
+   */
+  long size();
+
+  /**
+   * Returns the position of {@code v}, counting from 0 at {@link #minValue},
+   * saturating at {@link Long#MAX_VALUE}.
+   *
+   * <p>Positions serve only to count the values between two others, so a domain
+   * that has more values than a {@code long} can number may saturate; a caller
+   * that sees {@link Long#MAX_VALUE} learns that the position is too large to
+   * count to, which is all it needs to know.
+   */
+  long ordinal(T v);
 }
 
 // End Discrete.java

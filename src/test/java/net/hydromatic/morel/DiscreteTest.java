@@ -83,6 +83,10 @@ class DiscreteTest {
     assertThat(d.comparator().compare(1, 2) < 0, is(true));
     assertThat(d.comparator().compare(2, 2), is(0));
     assertThat(d.comparator().compare(3, 2) > 0, is(true));
+    assertThat(d.size(), is(1L << 32));
+    assertThat(d.ordinal(Integer.MIN_VALUE), is(0L));
+    assertThat(d.ordinal(0), is(1L << 31));
+    assertThat(d.ordinal(Integer.MAX_VALUE), is((1L << 32) - 1));
   }
 
   @Test
@@ -100,6 +104,10 @@ class DiscreteTest {
     assertThat(d.comparator().compare('a', 'b') < 0, is(true));
     assertThat(d.comparator().compare('b', 'b'), is(0));
     assertThat(d.comparator().compare('c', 'b') > 0, is(true));
+    assertThat(d.size(), is(256L));
+    assertThat(d.ordinal(CHR_0), is(0L));
+    assertThat(d.ordinal('a'), is(97L));
+    assertThat(d.ordinal(CHR_255), is(255L));
   }
 
   @Test
@@ -119,6 +127,37 @@ class DiscreteTest {
     assertThat(d.prev(trueMin), is(falseMax));
     assertThat(d.next(d.maxValue()), nullValue());
     assertThat(d.prev(d.minValue()), nullValue());
+
+    // Positions run over the product, so counting from one value to another
+    // costs no more than subtracting.
+    assertThat(d.size(), is(2L * (1L << 32)));
+    assertThat(d.ordinal(d.minValue()), is(0L));
+    assertThat(d.ordinal(falseMax), is((1L << 32) - 1));
+    assertThat(d.ordinal(trueMin), is(1L << 32));
+    assertThat(d.ordinal(d.maxValue()), is(2L * (1L << 32) - 1));
+  }
+
+  /**
+   * Tests a domain with more values than a {@code long} can number. Three ints
+   * make 2^96 values, so its size and the positions in its upper reaches
+   * saturate.
+   */
+  @Test
+  void testTupleDiscreteSaturates() {
+    final RecordLikeType intIntIntType =
+        typeSystem.tupleType(
+            PrimitiveType.INT, PrimitiveType.INT, PrimitiveType.INT);
+    final Discrete<Object> d = discrete(intIntIntType);
+
+    assertThat(d.size(), is(Long.MAX_VALUE));
+    assertThat(d.ordinal(d.minValue()), is(0L));
+    assertThat(d.ordinal(d.maxValue()), is(Long.MAX_VALUE));
+
+    // The bottom of the domain is still numbered exactly; only the third
+    // component has been counted, and it has not overflowed.
+    final List<Object> low =
+        ImmutableList.of(Integer.MIN_VALUE, Integer.MIN_VALUE, 0);
+    assertThat(d.ordinal(low), is(1L << 31));
   }
 
   @Test
@@ -147,6 +186,13 @@ class DiscreteTest {
     assertThat(d.comparator().compare(desc5, desc4) < 0, is(true));
     assertThat(d.comparator().compare(desc5, desc5), is(0));
     assertThat(d.comparator().compare(desc4, desc5) > 0, is(true));
+
+    // Positions are counted from the far end, so they too are reversed.
+    assertThat(d.size(), is(1L << 32));
+    assertThat(d.ordinal(d.minValue()), is(0L));
+    assertThat(d.ordinal(desc5), is((1L << 31) - 6));
+    assertThat(d.ordinal(desc4), is((1L << 31) - 5));
+    assertThat(d.ordinal(d.maxValue()), is((1L << 32) - 1));
   }
 }
 
