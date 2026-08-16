@@ -652,28 +652,28 @@ public class Shuttle {
     return where.copy(where.exp.accept(this), where.env);
   }
 
-  protected Core.Skip visit(Core.Skip skip) {
+  protected Core.SkipStep visit(Core.SkipStep skip) {
     return skip.copy(skip.exp.accept(this), skip.env);
   }
 
-  protected Core.Take visit(Core.Take take) {
+  protected Core.TakeStep visit(Core.TakeStep take) {
     return take.copy(take.exp.accept(this), take.env);
   }
 
-  protected Core.Except visit(Core.Except except) {
+  protected Core.ExceptStep visit(Core.ExceptStep except) {
     return except.copy(except.distinct, visitList(except.args), except.env);
   }
 
-  protected Core.Intersect visit(Core.Intersect intersect) {
+  protected Core.IntersectStep visit(Core.IntersectStep intersect) {
     return intersect.copy(
         intersect.distinct, visitList(intersect.args), intersect.env);
   }
 
-  protected Core.Union visit(Core.Union union) {
+  protected Core.UnionStep visit(Core.UnionStep union) {
     return union.copy(union.distinct, visitList(union.args), union.env);
   }
 
-  protected Core.Group visit(Core.Group group) {
+  protected Core.GroupStep visit(Core.GroupStep group) {
     return group.copy(
         group.env.atom,
         visitSortedMap(group.groupExps),
@@ -695,7 +695,7 @@ public class Shuttle {
     return yield.copy(yield.env, yield.exp.accept(this));
   }
 
-  protected Core.Unorder visit(Core.Unorder unorder) {
+  protected Core.UnorderStep visit(Core.UnorderStep unorder) {
     return unorder;
   }
 

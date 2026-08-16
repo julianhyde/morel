@@ -145,7 +145,7 @@ abstract class EnvVisitor extends Visitor {
    */
   private Environment aggEnv(boolean includeInput) {
     final FromContext fromContext = fromStack.element();
-    final Core.Group group = (Core.Group) fromContext.step;
+    final Core.GroupStep group = (Core.GroupStep) fromContext.step;
     Environment env = fromContext.visitor.env;
     if (includeInput) {
       env = env.bindAll(fromContext.stepEnv.bindings);
