@@ -2275,7 +2275,13 @@ public class Core {
    * <p>This is the balanced representation that replaces the step list of
    * {@link From}; see {@code spec.md} for the normative description, and {@code
    * plan.md} for the sequence in which it lands. In step 1 the tree is a
-   * shadow: it is built and printed, but {@code Core.From} still does the work.
+   * shadow: it is built and printed, but {@code From} still does the work.
+   *
+   * <p>A node is an {@link Exp} whose type is a collection type. Therefore a
+   * node's input is simply an expression: a nested node, or a leaf such as
+   * {@code scott.emps} or {@code [1, 2]}. There is no scan operator; any
+   * collection-valued expression will do, and the node above it names its
+   * element {@code $0}.
    *
    * <p>Unlike a {@link FromStep}, a node carries no bindings. Its element type
    * is derived from its inputs and its expressions, and is exactly the type of
@@ -2285,15 +2291,9 @@ public class Core {
    * the input element, because its body may contain a tree that would shadow
    * {@code $0}.
    */
-  public abstract static class Rel {
-    /**
-     * Collection type of this node; {@code list} or {@code bag} of the element
-     * type.
-     */
-    public final Type type;
-
-    protected Rel(Type type) {
-      this.type = requireNonNull(type, "type");
+  public abstract static class Rel extends Exp {
+    Rel(Op op, Type type) {
+      super(Pos.ZERO, op, type);
       if (!type.isCollection()) {
         throw new IllegalArgumentException("not a collection type: " + type);
       }
@@ -2316,7 +2316,7 @@ public class Core {
     public abstract String opName();
 
     /** Returns this node's inputs. */
-    public abstract List<Rel> inputs();
+    public abstract List<Exp> inputs();
 
     /**
      * Appends this node's arguments, each in brackets, to a plan-text line.
@@ -2343,22 +2343,44 @@ public class Core {
 
     protected void describe(StringBuilder b, int indent, boolean withTypes) {
       describeLine(b, indent, withTypes);
-      for (Rel input : inputs()) {
-        input.describe(b, indent + 2, withTypes);
+      for (Exp input : inputs()) {
+        describeInput(input, b, indent + 2, withTypes);
       }
     }
 
     protected void describeLine(
         StringBuilder b, int indent, boolean withTypes) {
-      for (int i = 0; i < indent; i++) {
-        b.append(' ');
-      }
+      indent(b, indent);
       b.append(opName());
       describeArgs(b);
       if (withTypes) {
         b.append(" : ").append(type.moniker());
       }
       b.append('\n');
+    }
+
+    /**
+     * Appends an input to plan text: a node prints as a node, and any other
+     * expression prints as a leaf line.
+     */
+    static void describeInput(
+        Exp input, StringBuilder b, int indent, boolean withTypes) {
+      if (input instanceof Rel) {
+        ((Rel) input).describe(b, indent, withTypes);
+        return;
+      }
+      indent(b, indent);
+      b.append(input);
+      if (withTypes) {
+        b.append(" : ").append(input.type.moniker());
+      }
+      b.append('\n');
+    }
+
+    static void indent(StringBuilder b, int indent) {
+      for (int i = 0; i < indent; i++) {
+        b.append(' ');
+      }
     }
 
     /** Appends an argument, in brackets, to a plan-text line. */
@@ -2381,253 +2403,8 @@ public class Core {
     }
 
     @Override
-    public String toString() {
-      return describe();
-    }
-
-    /**
-     * Leaf: a collection-valued expression, and the boundary between the tree
-     * and the rest of Core.
-     *
-     * <p>A scan binds nothing. Its element flows out as a value, and the node
-     * above names it {@code $0}.
-     */
-    public static class Scan extends Rel {
-      public final Exp exp;
-
-      Scan(Exp exp) {
-        super(exp.type);
-        this.exp = exp;
-      }
-
-      @Override
-      public String opName() {
-        return "scan";
-      }
-
-      @Override
-      public List<Rel> inputs() {
-        return ImmutableList.of();
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        arg(b, exp);
-      }
-    }
-
-    /** Node with one input. */
-    public abstract static class SingleRel extends Rel {
-      public final Rel input;
-
-      SingleRel(Type type, Rel input) {
-        super(type);
-        this.input = requireNonNull(input, "input");
-      }
-
-      @Override
-      public List<Rel> inputs() {
-        return ImmutableList.of(input);
-      }
-    }
-
-    /**
-     * Removes the elements for which a condition, an expression over {@code
-     * $0}, is false.
-     */
-    public static class Filter extends SingleRel {
-      public final Exp condition;
-
-      Filter(Rel input, Exp condition) {
-        super(input.type, input);
-        this.condition = requireNonNull(condition, "condition");
-      }
-
-      @Override
-      public String opName() {
-        return "filter";
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        arg(b, condition);
-      }
-    }
-
-    /** Maps each element to one element, via an expression over {@code $0}. */
-    public static class Project extends SingleRel {
-      public final Exp exp;
-
-      Project(Type type, Rel input, Exp exp) {
-        super(type, input);
-        this.exp = requireNonNull(exp, "exp");
-      }
-
-      @Override
-      public String opName() {
-        return "project";
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        arg(b, exp);
-      }
-    }
-
-    /**
-     * Maps each element to many elements: monadic bind, and what a dependent
-     * scan becomes.
-     *
-     * <p>The parameter {@code param} names the input element throughout the
-     * body, in place of {@code $0}, because the body is a tree and would
-     * otherwise shadow it. The node is correlated if, and only if, a leaf of
-     * the body mentions the parameter.
-     */
-    public static class ProjectMany extends SingleRel {
-      public final IdPat param;
-      public final Rel body;
-
-      ProjectMany(Type type, Rel input, IdPat param, Rel body) {
-        super(type, input);
-        this.param = requireNonNull(param, "param");
-        this.body = requireNonNull(body, "body");
-      }
-
-      @Override
-      public String opName() {
-        return "projectMany";
-      }
-
-      @Override
-      protected void describe(StringBuilder b, int indent, boolean withTypes) {
-        describeLine(b, indent, withTypes);
-        input.describe(b, indent + 2, withTypes);
-        for (int i = 0; i < indent + 2; i++) {
-          b.append(' ');
-        }
-        b.append("fn ").append(param.name).append(" =>").append('\n');
-        body.describe(b, indent + 4, withTypes);
-      }
-    }
-
-    /**
-     * Groups elements by zero or more keys, computing zero or more aggregates.
-     *
-     * <p>Keys and aggregate arguments are expressions over {@code $0}; the
-     * labels are the output record's labels. {@code distinct} is this node with
-     * the whole element as its only key and no aggregates.
-     */
-    public static class Group extends SingleRel {
-      public final ImmutableSortedMap<String, Exp> keys;
-      public final ImmutableSortedMap<String, Aggregate> aggregates;
-
-      Group(
-          Type type,
-          Rel input,
-          ImmutableSortedMap<String, Exp> keys,
-          ImmutableSortedMap<String, Aggregate> aggregates) {
-        super(type, input);
-        this.keys = requireNonNull(keys, "keys");
-        this.aggregates = requireNonNull(aggregates, "aggregates");
-      }
-
-      @Override
-      public String opName() {
-        return "group";
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        args(b, keys);
-        if (!aggregates.isEmpty()) {
-          args(b, aggregates);
-        }
-      }
-    }
-
-    /**
-     * Sorts elements by an expression over {@code $0}; always yields a {@code
-     * list}.
-     */
-    public static class Order extends SingleRel {
-      public final Exp exp;
-
-      Order(Type type, Rel input, Exp exp) {
-        super(type, input);
-        this.exp = requireNonNull(exp, "exp");
-      }
-
-      @Override
-      public String opName() {
-        return "order";
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        arg(b, exp);
-      }
-    }
-
-    /** Discards order; always yields a {@code bag}. */
-    public static class Unorder extends SingleRel {
-      Unorder(Type type, Rel input) {
-        super(type, input);
-      }
-
-      @Override
-      public String opName() {
-        return "unorder";
-      }
-    }
-
-    /**
-     * Discards the first {@code count} elements.
-     *
-     * <p>{@code count} is evaluated once, before the first element exists, and
-     * therefore cannot mention {@code $0}.
-     */
-    public static class Skip extends SingleRel {
-      public final Exp count;
-
-      Skip(Rel input, Exp count) {
-        super(input.type, input);
-        this.count = requireNonNull(count, "count");
-      }
-
-      @Override
-      public String opName() {
-        return "skip";
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        arg(b, count);
-      }
-    }
-
-    /**
-     * Keeps the first {@code count} elements.
-     *
-     * <p>{@code count} is evaluated once, before the first element exists, and
-     * therefore cannot mention {@code $0}.
-     */
-    public static class Take extends SingleRel {
-      public final Exp count;
-
-      Take(Rel input, Exp count) {
-        super(input.type, input);
-        this.count = requireNonNull(count, "count");
-      }
-
-      @Override
-      public String opName() {
-        return "take";
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        arg(b, count);
-      }
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append(describe());
     }
 
     /** How a {@link Join} treats elements that have no match. */
@@ -2638,8 +2415,8 @@ public class Core {
       FULL;
 
       /**
-       * Returns the type of the value that a join of this type binds to {@code
-       * $0}, given the element type of its left input.
+       * Returns whether the left element is optional, and therefore whether
+       * {@code $0} has an {@code option} type.
        */
       public boolean leftIsOption() {
         return this == RIGHT || this == FULL;
@@ -2653,113 +2430,560 @@ public class Core {
         return this == LEFT || this == FULL;
       }
 
-      public String toString2() {
-        return name().toLowerCase(Locale.ROOT);
-      }
-    }
-
-    /**
-     * Pairs elements of two inputs, and maps each pair to an element via a
-     * yield expression over {@code $0} and {@code $1}.
-     *
-     * <p>Commuting a join swaps its inputs and substitutes {@code $0} for
-     * {@code $1} and vice versa in the condition and the yield; the element
-     * type is unchanged, so nothing above the node rewrites.
-     */
-    public static class Join extends Rel {
-      public final JoinType joinType;
-      public final Rel left;
-      public final Rel right;
-      public final Exp condition;
-      public final Exp yieldExp;
-
-      Join(
-          Type type,
-          JoinType joinType,
-          Rel left,
-          Rel right,
-          Exp condition,
-          Exp yieldExp) {
-        super(type);
-        this.joinType = requireNonNull(joinType, "joinType");
-        this.left = requireNonNull(left, "left");
-        this.right = requireNonNull(right, "right");
-        this.condition = requireNonNull(condition, "condition");
-        this.yieldExp = requireNonNull(yieldExp, "yieldExp");
-      }
-
-      @Override
-      public String opName() {
-        return "join";
-      }
-
-      @Override
-      public List<Rel> inputs() {
-        return ImmutableList.of(left, right);
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        if (joinType != JoinType.INNER) {
-          arg(b, joinType.toString2());
-        }
-        if (!condition.isBoolLiteral(true)) {
-          arg(b, condition);
-        }
-        arg(b, yieldExp);
-      }
-    }
-
-    /** Which set operation a {@link SetRel} performs. */
-    public enum SetOp {
-      UNION,
-      INTERSECT,
-      EXCEPT;
-
+      /** Returns the name of this join type, as it appears in plan text. */
       public String opName() {
         return name().toLowerCase(Locale.ROOT);
-      }
-    }
-
-    /**
-     * Combines the elements of two or more inputs, all of the same element
-     * type.
-     */
-    public static class SetRel extends Rel {
-      public final SetOp setOp;
-      public final boolean distinct;
-      public final ImmutableList<Rel> inputs;
-
-      SetRel(
-          Type type, SetOp setOp, boolean distinct, ImmutableList<Rel> inputs) {
-        super(type);
-        this.setOp = requireNonNull(setOp, "setOp");
-        this.distinct = distinct;
-        this.inputs = requireNonNull(inputs, "inputs");
-        if (inputs.size() < 2) {
-          throw new IllegalArgumentException(
-              "set operator needs at least two inputs: " + inputs.size());
-        }
-      }
-
-      @Override
-      public String opName() {
-        return setOp.opName();
-      }
-
-      @Override
-      public List<Rel> inputs() {
-        return inputs;
-      }
-
-      @Override
-      protected void describeArgs(StringBuilder b) {
-        if (!distinct) {
-          arg(b, "all");
-        }
       }
     }
   }
+
+  /** Node with one input. */
+  public abstract static class SingleRel extends Rel {
+    public final Exp input;
+
+    SingleRel(Op op, Type type, Exp input) {
+      super(op, type);
+      this.input = requireNonNull(input, "input");
+    }
+
+    @Override
+    public List<Exp> inputs() {
+      return ImmutableList.of(input);
+    }
+  }
+
+  /**
+   * Removes the elements for which a condition, an expression over {@code $0},
+   * is false.
+   */
+  public static class Filter extends SingleRel {
+    public final Exp condition;
+
+    Filter(Exp input, Exp condition) {
+      super(Op.FILTER, input.type, input);
+      this.condition = requireNonNull(condition, "condition");
+    }
+
+    @Override
+    public String opName() {
+      return "filter";
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      arg(b, condition);
+    }
+
+    @Override
+    public Filter accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Filter copy(Exp input, Exp condition) {
+      return input == this.input && condition == this.condition
+          ? this
+          : core.filter(input, condition);
+    }
+  }
+
+  /** Maps each element to one element, via an expression over {@code $0}. */
+  public static class Project extends SingleRel {
+    public final Exp exp;
+
+    Project(Type type, Exp input, Exp exp) {
+      super(Op.PROJECT, type, input);
+      this.exp = requireNonNull(exp, "exp");
+    }
+
+    @Override
+    public String opName() {
+      return "project";
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      arg(b, exp);
+    }
+
+    @Override
+    public Project accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Project copy(TypeSystem typeSystem, Exp input, Exp exp) {
+      return input == this.input && exp == this.exp
+          ? this
+          : core.project(typeSystem, input, exp);
+    }
+  }
+
+  /**
+   * Maps each element to many elements: monadic bind, and what a dependent scan
+   * becomes.
+   *
+   * <p>The parameter {@link #param} names the input element throughout the
+   * body, in place of {@code $0}, because the body may be a tree and would
+   * otherwise shadow it. The node is correlated if, and only if, a leaf of the
+   * body mentions the parameter.
+   */
+  public static class ProjectMany extends SingleRel {
+    public final IdPat param;
+    public final Exp body;
+
+    ProjectMany(Type type, Exp input, IdPat param, Exp body) {
+      super(Op.PROJECT_MANY, type, input);
+      this.param = requireNonNull(param, "param");
+      this.body = requireNonNull(body, "body");
+    }
+
+    @Override
+    public String opName() {
+      return "projectMany";
+    }
+
+    @Override
+    protected void describe(StringBuilder b, int indent, boolean withTypes) {
+      describeLine(b, indent, withTypes);
+      describeInput(input, b, indent + 2, withTypes);
+      indent(b, indent + 2);
+      b.append("fn ").append(param.name).append(" =>").append('\n');
+      describeInput(body, b, indent + 4, withTypes);
+    }
+
+    @Override
+    public ProjectMany accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public ProjectMany copy(
+        TypeSystem typeSystem, Exp input, IdPat param, Exp body) {
+      return input == this.input && param == this.param && body == this.body
+          ? this
+          : core.projectMany(typeSystem, input, param, body);
+    }
+  }
+
+  /**
+   * Pairs elements of two inputs, and maps each pair to an element via a yield
+   * expression over {@code $0} and {@code $1}.
+   *
+   * <p>Commuting a join swaps its inputs and substitutes {@code $0} for {@code
+   * $1} and vice versa in the condition and the yield; the element type is
+   * unchanged, so nothing above the node rewrites.
+   */
+  public static class Join extends Rel {
+    public final Rel.JoinType joinType;
+    public final Exp left;
+    public final Exp right;
+    public final Exp condition;
+    public final Exp yieldExp;
+
+    Join(
+        Type type,
+        Rel.JoinType joinType,
+        Exp left,
+        Exp right,
+        Exp condition,
+        Exp yieldExp) {
+      super(Op.JOIN, type);
+      this.joinType = requireNonNull(joinType, "joinType");
+      this.left = requireNonNull(left, "left");
+      this.right = requireNonNull(right, "right");
+      this.condition = requireNonNull(condition, "condition");
+      this.yieldExp = requireNonNull(yieldExp, "yieldExp");
+    }
+
+    @Override
+    public String opName() {
+      return "join";
+    }
+
+    @Override
+    public List<Exp> inputs() {
+      return ImmutableList.of(left, right);
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      if (joinType != Rel.JoinType.INNER) {
+        arg(b, joinType.opName());
+      }
+      if (!condition.isBoolLiteral(true)) {
+        arg(b, condition);
+      }
+      arg(b, yieldExp);
+    }
+
+    @Override
+    public Join accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Join copy(
+        TypeSystem typeSystem,
+        Rel.JoinType joinType,
+        Exp left,
+        Exp right,
+        Exp condition,
+        Exp yieldExp) {
+      return joinType == this.joinType
+              && left == this.left
+              && right == this.right
+              && condition == this.condition
+              && yieldExp == this.yieldExp
+          ? this
+          : core.join(typeSystem, joinType, left, right, condition, yieldExp);
+    }
+  }
+
+  /**
+   * Groups elements by zero or more keys, computing zero or more aggregates.
+   *
+   * <p>Keys and aggregate arguments are expressions over {@code $0}; the labels
+   * are the output record's labels. {@code distinct} is this node with the
+   * whole element as its only key and no aggregates.
+   */
+  public static class Group extends SingleRel {
+    public final ImmutableSortedMap<String, Exp> keys;
+    public final ImmutableSortedMap<String, Aggregate> aggregates;
+
+    Group(
+        Type type,
+        Exp input,
+        ImmutableSortedMap<String, Exp> keys,
+        ImmutableSortedMap<String, Aggregate> aggregates) {
+      super(Op.GROUP, type, input);
+      this.keys = requireNonNull(keys, "keys");
+      this.aggregates = requireNonNull(aggregates, "aggregates");
+    }
+
+    @Override
+    public String opName() {
+      return "group";
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      args(b, keys);
+      if (!aggregates.isEmpty()) {
+        args(b, aggregates);
+      }
+    }
+
+    @Override
+    public Group accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Group copy(
+        TypeSystem typeSystem,
+        Exp input,
+        SortedMap<String, Exp> keys,
+        SortedMap<String, Aggregate> aggregates) {
+      return input == this.input
+              && keys.equals(this.keys)
+              && aggregates.equals(this.aggregates)
+          ? this
+          : core.group(typeSystem, input, keys, aggregates);
+    }
+  }
+
+  /**
+   * Sorts elements by an expression over {@code $0}; always yields a {@code
+   * list}.
+   */
+  public static class Sort extends SingleRel {
+    public final Exp exp;
+
+    Sort(Type type, Exp input, Exp exp) {
+      super(Op.SORT, type, input);
+      this.exp = requireNonNull(exp, "exp");
+    }
+
+    @Override
+    public String opName() {
+      return "sort";
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      arg(b, exp);
+    }
+
+    @Override
+    public Sort accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Sort copy(TypeSystem typeSystem, Exp input, Exp exp) {
+      return input == this.input && exp == this.exp
+          ? this
+          : core.sort(typeSystem, input, exp);
+    }
+  }
+
+  /** Discards order; always yields a {@code bag}. */
+  public static class Unorder extends SingleRel {
+    Unorder(Type type, Exp input) {
+      super(Op.UNORDER, type, input);
+    }
+
+    @Override
+    public String opName() {
+      return "unorder";
+    }
+
+    @Override
+    public Unorder accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Unorder copy(TypeSystem typeSystem, Exp input) {
+      return input == this.input ? this : core.unorder(typeSystem, input);
+    }
+  }
+
+  /**
+   * Discards the first {@code count} elements.
+   *
+   * <p>{@code count} is evaluated once, before the first element exists, and
+   * therefore cannot mention {@code $0}.
+   */
+  public static class Skip extends SingleRel {
+    public final Exp count;
+
+    Skip(Exp input, Exp count) {
+      super(Op.SKIP, input.type, input);
+      this.count = requireNonNull(count, "count");
+    }
+
+    @Override
+    public String opName() {
+      return "skip";
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      arg(b, count);
+    }
+
+    @Override
+    public Skip accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Skip copy(Exp input, Exp count) {
+      return input == this.input && count == this.count
+          ? this
+          : core.skip(input, count);
+    }
+  }
+
+  /**
+   * Keeps the first {@code count} elements.
+   *
+   * <p>{@code count} is evaluated once, before the first element exists, and
+   * therefore cannot mention {@code $0}.
+   */
+  public static class Take extends SingleRel {
+    public final Exp count;
+
+    Take(Exp input, Exp count) {
+      super(Op.TAKE, input.type, input);
+      this.count = requireNonNull(count, "count");
+    }
+
+    @Override
+    public String opName() {
+      return "take";
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      arg(b, count);
+    }
+
+    @Override
+    public Take accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Take copy(Exp input, Exp count) {
+      return input == this.input && count == this.count
+          ? this
+          : core.take(input, count);
+    }
+  }
+
+  /**
+   * Base class of {@link Union}, {@link Intersect} and {@link Except}, which
+   * combine the elements of two or more inputs of the same element type.
+   */
+  public abstract static class SetRel extends Rel {
+    public final boolean distinct;
+    public final ImmutableList<Exp> inputs;
+
+    SetRel(Op op, Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(op, type);
+      this.distinct = distinct;
+      this.inputs = requireNonNull(inputs, "inputs");
+      if (inputs.size() < 2) {
+        throw new IllegalArgumentException(
+            "set operator needs at least two inputs: " + inputs.size());
+      }
+    }
+
+    @Override
+    public List<Exp> inputs() {
+      return inputs;
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      if (!distinct) {
+        arg(b, "all");
+      }
+    }
+
+    public abstract SetRel copy(
+        TypeSystem typeSystem, boolean distinct, List<Exp> inputs);
+  }
+
+  /** Combines the elements of its inputs. */
+  public static class Union extends SetRel {
+    Union(Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(Op.UNION, type, distinct, inputs);
+    }
+
+    @Override
+    public String opName() {
+      return "union";
+    }
+
+    @Override
+    public Union accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Union copy(
+        TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
+      return distinct == this.distinct && inputs.equals(this.inputs)
+          ? this
+          : core.union(typeSystem, distinct, inputs);
+    }
+  }
+
+  /** Keeps the elements that occur in every input. */
+  public static class Intersect extends SetRel {
+    Intersect(Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(Op.INTERSECT, type, distinct, inputs);
+    }
+
+    @Override
+    public String opName() {
+      return "intersect";
+    }
+
+    @Override
+    public Intersect accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Intersect copy(
+        TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
+      return distinct == this.distinct && inputs.equals(this.inputs)
+          ? this
+          : core.intersect(typeSystem, distinct, inputs);
+    }
+  }
+
+  /** Keeps the elements of the first input that occur in no other input. */
+  public static class Except extends SetRel {
+    Except(Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(Op.EXCEPT, type, distinct, inputs);
+    }
+
+    @Override
+    public String opName() {
+      return "except";
+    }
+
+    @Override
+    public Except accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Except copy(
+        TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
+      return distinct == this.distinct && inputs.equals(this.inputs)
+          ? this
+          : core.except(typeSystem, distinct, inputs);
+    }
+  }
+
   /** Application of a function to its argument. */
   public static class Apply extends Exp {
     public final Exp fn;

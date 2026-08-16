@@ -31,17 +31,17 @@ tests green. Plan text and rewrite ports are each paid exactly once.
       JOIN (with yield expression over `$0` and `$1`), PROJECT_MANY
       (lambda `v => collection`, subsuming the dependent scan; the
       one node that names its input element rather than binding
-      `$0`), PROJECT, GROUP (key/agg shapes), ORDER, UNORDER, LIMIT,
+      `$0`), PROJECT, GROUP (key/agg shapes), SORT, UNORDER, TAKE,
       SKIP, UNION, INTERSECT, EXCEPT, COMPUTE; DISTINCT desugars to
       GROUP; AND/OR n-ary.
 - [ ] Per-constructor bag/list kind signatures, transcribed from
-      current step semantics (ORDER : bag -> list; UNORDER; kind of
+      current step semantics (SORT : bag -> list; UNORDER; kind of
       join; set operators).
 - [ ] Scoping invariants: a one-input node binds `$0` to its input
       element, a two-input node binds `$0` and `$1` to its left and
       right input elements, in addition to the environment enclosing
       the tree; expressions evaluated before the first row (SKIP and
-      LIMIT arguments) see the enclosing environment only, and `$0`
+      TAKE arguments) see the enclosing environment only, and `$0`
       in them is an error; every other free variable of an embedded
       expression is bound outside the tree; per-node label
       distinctness; deterministic rename convention at scope merges.

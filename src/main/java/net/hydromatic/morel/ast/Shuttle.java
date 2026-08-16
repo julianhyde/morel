@@ -674,6 +674,74 @@ public class Shuttle {
     return unorder;
   }
 
+  // Relational tree (Core.Rel) nodes.
+
+  protected Core.Filter visit(Core.Filter filter) {
+    return filter.copy(
+        filter.input.accept(this), filter.condition.accept(this));
+  }
+
+  protected Core.Project visit(Core.Project project) {
+    return project.copy(
+        typeSystem, project.input.accept(this), project.exp.accept(this));
+  }
+
+  protected Core.ProjectMany visit(Core.ProjectMany projectMany) {
+    return projectMany.copy(
+        typeSystem,
+        projectMany.input.accept(this),
+        projectMany.param.accept(this),
+        projectMany.body.accept(this));
+  }
+
+  protected Core.Join visit(Core.Join join) {
+    return join.copy(
+        typeSystem,
+        join.joinType,
+        join.left.accept(this),
+        join.right.accept(this),
+        join.condition.accept(this),
+        join.yieldExp.accept(this));
+  }
+
+  protected Core.Group visit(Core.Group group) {
+    return group.copy(
+        typeSystem,
+        group.input.accept(this),
+        visitSortedMap(group.keys),
+        visitSortedMap(group.aggregates));
+  }
+
+  protected Core.Sort visit(Core.Sort sort) {
+    return sort.copy(
+        typeSystem, sort.input.accept(this), sort.exp.accept(this));
+  }
+
+  protected Core.Unorder visit(Core.Unorder unorder) {
+    return unorder.copy(typeSystem, unorder.input.accept(this));
+  }
+
+  protected Core.Skip visit(Core.Skip skip) {
+    return skip.copy(skip.input.accept(this), skip.count.accept(this));
+  }
+
+  protected Core.Take visit(Core.Take take) {
+    return take.copy(take.input.accept(this), take.count.accept(this));
+  }
+
+  protected Core.Union visit(Core.Union union) {
+    return union.copy(typeSystem, union.distinct, visitList(union.inputs));
+  }
+
+  protected Core.Intersect visit(Core.Intersect intersect) {
+    return intersect.copy(
+        typeSystem, intersect.distinct, visitList(intersect.inputs));
+  }
+
+  protected Core.Except visit(Core.Except except) {
+    return except.copy(typeSystem, except.distinct, visitList(except.inputs));
+  }
+
   protected Core.OverDecl visit(Core.OverDecl overDecl) {
     return overDecl;
   }

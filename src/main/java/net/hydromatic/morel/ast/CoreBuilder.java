@@ -766,9 +766,8 @@ public enum CoreBuilder {
         Core.StepEnv.of(transform(idPats, Binding::of), atom, ordered), exp);
   }
 
-  // Relational tree ({@link Core.Rel}) nodes. See spec.md; these will replace
-  // the
-  // step builders above when step 3 of plan.md deletes Core.From's step list.
+  // Relational tree (Core.Rel) nodes. These will replace the step builders
+  // above when step 3 of plan.md deletes Core.From's step list.
 
   /** Name that an expression uses for the element of a node's input. */
   public static final String INPUT_0 = "$0";
@@ -802,32 +801,25 @@ public enum CoreBuilder {
         : typeSystem.bagType(elementType);
   }
 
-  /** Creates a leaf, whose expression must have a collection type. */
-  public Core.Rel.Scan scan(Core.Exp exp) {
-    if (!exp.type.isCollection()) {
-      throw new IllegalArgumentException(
-          "scan expression must be list or bag: " + exp.type);
-    }
-    return new Core.Rel.Scan(exp);
-  }
-
   /**
    * Creates a filter; its condition is a {@code bool} expression over {@code
    * $0}.
    */
-  public Core.Rel.Filter filter(Core.Rel input, Core.Exp condition) {
+  public Core.Filter filter(Core.Exp input, Core.Exp condition) {
+    checkCollection(input);
     checkBoolType(condition, "filter condition");
-    return new Core.Rel.Filter(input, condition);
+    return new Core.Filter(input, condition);
   }
 
   /**
    * Creates a projection; the element type is the type of {@code exp}, an
    * expression over {@code $0}, and the kind is that of the input.
    */
-  public Core.Rel.Project project(
-      TypeSystem typeSystem, Core.Rel input, Core.Exp exp) {
-    final Type type = collectionType(typeSystem, input.isOrdered(), exp.type);
-    return new Core.Rel.Project(type, input, exp);
+  public Core.Project project(
+      TypeSystem typeSystem, Core.Exp input, Core.Exp exp) {
+    checkCollection(input);
+    final Type type = collectionType(typeSystem, isOrdered(input), exp.type);
+    return new Core.Project(type, input, exp);
   }
 
   /**
@@ -835,18 +827,21 @@ public enum CoreBuilder {
    * the output is ordered only if both the input and the body are ordered,
    * because it is a nested loop.
    */
-  public Core.Rel.ProjectMany projectMany(
-      TypeSystem typeSystem, Core.Rel input, Core.IdPat param, Core.Rel body) {
-    final boolean ordered = input.isOrdered() && body.isOrdered();
-    final Type type = collectionType(typeSystem, ordered, body.elementType());
-    return new Core.Rel.ProjectMany(type, input, param, body);
+  public Core.ProjectMany projectMany(
+      TypeSystem typeSystem, Core.Exp input, Core.IdPat param, Core.Exp body) {
+    checkCollection(input);
+    checkCollection(body);
+    final boolean ordered = isOrdered(input) && isOrdered(body);
+    final Type type =
+        collectionType(typeSystem, ordered, body.type.elementType());
+    return new Core.ProjectMany(type, input, param, body);
   }
 
   /** Creates an inner join. */
-  public Core.Rel.Join join(
+  public Core.Join join(
       TypeSystem typeSystem,
-      Core.Rel left,
-      Core.Rel right,
+      Core.Exp left,
+      Core.Exp right,
       Core.Exp condition,
       Core.Exp yieldExp) {
     return join(
@@ -858,28 +853,31 @@ public enum CoreBuilder {
    * {@code $0} and {@code $1}, and the output is ordered only if both inputs
    * are ordered.
    */
-  public Core.Rel.Join join(
+  public Core.Join join(
       TypeSystem typeSystem,
       Core.Rel.JoinType joinType,
-      Core.Rel left,
-      Core.Rel right,
+      Core.Exp left,
+      Core.Exp right,
       Core.Exp condition,
       Core.Exp yieldExp) {
+    checkCollection(left);
+    checkCollection(right);
     checkBoolType(condition, "join condition");
-    final boolean ordered = left.isOrdered() && right.isOrdered();
+    final boolean ordered = isOrdered(left) && isOrdered(right);
     final Type type = collectionType(typeSystem, ordered, yieldExp.type);
-    return new Core.Rel.Join(type, joinType, left, right, condition, yieldExp);
+    return new Core.Join(type, joinType, left, right, condition, yieldExp);
   }
 
   /**
    * Creates a {@code group}; the element type is a record of the keys and
    * aggregates, or, if there is exactly one of them, its bare type.
    */
-  public Core.Rel.Group group(
+  public Core.Group group(
       TypeSystem typeSystem,
-      Core.Rel input,
+      Core.Exp input,
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
+    checkCollection(input);
     final Map<String, Type> nameTypes = new LinkedHashMap<>();
     keys.forEach((name, exp) -> nameTypes.put(name, exp.type));
     aggregates.forEach((name, agg) -> nameTypes.put(name, agg.type));
@@ -892,67 +890,107 @@ public enum CoreBuilder {
     final Type elementType =
         typeSystem.recordOrScalarType(
             ImmutableSortedMap.copyOf(nameTypes, ORDERING).entrySet());
-    final Type type =
-        collectionType(typeSystem, input.isOrdered(), elementType);
-    return new Core.Rel.Group(
+    final Type type = collectionType(typeSystem, isOrdered(input), elementType);
+    return new Core.Group(
         type,
         input,
         ImmutableSortedMap.copyOf(keys, ORDERING),
         ImmutableSortedMap.copyOf(aggregates, ORDERING));
   }
 
-  /** Creates an {@code order}; the output is always a {@code list}. */
-  public Core.Rel.Order order(
-      TypeSystem typeSystem, Core.Rel input, Core.Exp exp) {
-    final Type type = typeSystem.listType(input.elementType());
-    return new Core.Rel.Order(type, input, exp);
+  /** Creates a {@code sort}; the output is always a {@code list}. */
+  public Core.Sort sort(TypeSystem typeSystem, Core.Exp input, Core.Exp exp) {
+    checkCollection(input);
+    final Type type = typeSystem.listType(input.type.elementType());
+    return new Core.Sort(type, input, exp);
   }
 
   /** Creates an {@code unorder}; the output is always a {@code bag}. */
-  public Core.Rel.Unorder unorder(TypeSystem typeSystem, Core.Rel input) {
-    final Type type = typeSystem.bagType(input.elementType());
-    return new Core.Rel.Unorder(type, input);
+  public Core.Unorder unorder(TypeSystem typeSystem, Core.Exp input) {
+    checkCollection(input);
+    final Type type = typeSystem.bagType(input.type.elementType());
+    return new Core.Unorder(type, input);
   }
 
   /**
    * Creates a {@code skip}; its count is evaluated before the first element
    * exists, and therefore cannot mention {@code $0}.
    */
-  public Core.Rel.Skip skip(Core.Rel input, Core.Exp count) {
-    return new Core.Rel.Skip(input, count);
+  public Core.Skip skip(Core.Exp input, Core.Exp count) {
+    checkCollection(input);
+    return new Core.Skip(input, count);
   }
 
   /**
    * Creates a {@code take}; its count is evaluated before the first element
    * exists, and therefore cannot mention {@code $0}.
    */
-  public Core.Rel.Take take(Core.Rel input, Core.Exp count) {
-    return new Core.Rel.Take(input, count);
+  public Core.Take take(Core.Exp input, Core.Exp count) {
+    checkCollection(input);
+    return new Core.Take(input, count);
+  }
+
+  /** Creates a {@code union}. */
+  public Core.Union union(
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
+    return new Core.Union(
+        setRelType(typeSystem, inputList), distinct, inputList);
+  }
+
+  /** Creates an {@code intersect}. */
+  public Core.Intersect intersect(
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
+    return new Core.Intersect(
+        setRelType(typeSystem, inputList), distinct, inputList);
+  }
+
+  /** Creates an {@code except}. */
+  public Core.Except except(
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
+    return new Core.Except(
+        setRelType(typeSystem, inputList), distinct, inputList);
   }
 
   /**
-   * Creates a set operator; all inputs must have the same element type, and the
-   * output is ordered only if every input is ordered.
+   * Returns the type of a set operator: all inputs must have the same element
+   * type, and the output is ordered only if every input is ordered.
    */
-  public Core.Rel.SetRel setRel(
-      TypeSystem typeSystem,
-      Core.Rel.SetOp setOp,
-      boolean distinct,
-      Iterable<? extends Core.Rel> inputs) {
-    final ImmutableList<Core.Rel> inputList = ImmutableList.copyOf(inputs);
-    final Type elementType = inputList.get(0).elementType();
+  private Type setRelType(
+      TypeSystem typeSystem, List<? extends Core.Exp> inputs) {
+    inputs.forEach(CoreBuilder::checkCollection);
+    final Type elementType = inputs.get(0).type.elementType();
     boolean ordered = true;
-    for (Core.Rel input : inputList) {
-      if (!input.elementType().equals(elementType)) {
+    for (Core.Exp input : inputs) {
+      if (!input.type.elementType().equals(elementType)) {
         throw new IllegalArgumentException(
             format(
                 "set operator inputs have different element types: %s, %s",
-                elementType, input.elementType()));
+                elementType, input.type.elementType()));
       }
-      ordered = ordered && input.isOrdered();
+      ordered = ordered && isOrdered(input);
     }
-    final Type type = collectionType(typeSystem, ordered, elementType);
-    return new Core.Rel.SetRel(type, setOp, distinct, inputList);
+    return collectionType(typeSystem, ordered, elementType);
+  }
+
+  /** Returns whether an expression's collection type is a {@code list}. */
+  private static boolean isOrdered(Core.Exp exp) {
+    return exp.type instanceof ListType;
+  }
+
+  private static void checkCollection(Core.Exp exp) {
+    if (!exp.type.isCollection()) {
+      throw new IllegalArgumentException(
+          "input must be list or bag: " + exp.type);
+    }
   }
 
   private static void checkBoolType(Core.Exp exp, String what) {

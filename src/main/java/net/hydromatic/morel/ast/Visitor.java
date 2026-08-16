@@ -520,6 +520,72 @@ public class Visitor {
 
   protected void visit(Core.UnorderStep unorder) {}
 
+  // Relational tree (Core.Rel) nodes.
+
+  protected void visit(Core.Filter filter) {
+    filter.input.accept(this);
+    filter.condition.accept(this);
+  }
+
+  protected void visit(Core.Project project) {
+    project.input.accept(this);
+    project.exp.accept(this);
+  }
+
+  protected void visit(Core.ProjectMany projectMany) {
+    projectMany.input.accept(this);
+    projectMany.param.accept(this);
+    projectMany.body.accept(this);
+  }
+
+  protected void visit(Core.Join join) {
+    join.left.accept(this);
+    join.right.accept(this);
+    join.condition.accept(this);
+    join.yieldExp.accept(this);
+  }
+
+  protected void visit(Core.Group group) {
+    group.input.accept(this);
+    group.keys.values().forEach(this::accept);
+    group.aggregates.values().forEach(this::accept);
+  }
+
+  protected void visit(Core.Sort sort) {
+    sort.input.accept(this);
+    sort.exp.accept(this);
+  }
+
+  protected void visit(Core.Unorder unorder) {
+    unorder.input.accept(this);
+  }
+
+  protected void visit(Core.Skip skip) {
+    skip.input.accept(this);
+    skip.count.accept(this);
+  }
+
+  protected void visit(Core.Take take) {
+    take.input.accept(this);
+    take.count.accept(this);
+  }
+
+  protected void visit(Core.SetRel setRel) {
+    setRel.inputs.forEach(this::accept);
+  }
+
+  protected void visit(Core.Union union) {
+    visit((Core.SetRel) union);
+  }
+
+  protected void visit(Core.Intersect intersect) {
+    visit((Core.SetRel) intersect);
+  }
+
+  protected void visit(Core.Except except) {
+    visit((Core.SetRel) except);
+  }
+
   protected void visit(Core.TuplePat tuplePat) {
     tuplePat.args.forEach(this::accept);
   }
