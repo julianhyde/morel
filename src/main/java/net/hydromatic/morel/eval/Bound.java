@@ -99,17 +99,12 @@ class Bound {
         ImmutableList.of(lo.value, hi.value));
   }
 
-  /**
-   * Largest number of values that {@link #enumerate} will produce for one
-   * range. A discrete domain is finite, but "int" alone has 2^32 values and a
-   * nine-character word 2^72, so an unremarkable range can ask for more of them
-   * than will fit in memory; past this many, {@code Size} is raised, as it is
-   * for a list that outgrows {@code Vector.maxLen}.
-   */
-  private static final BigInteger MAX_COUNT = BigInteger.valueOf((1 << 24) - 1);
-
   static void enumerate(
-      Discrete<Object> discrete, Bound lo, Bound hi, Consumer<Object> out) {
+      Discrete<Object> discrete,
+      Bound lo,
+      Bound hi,
+      BigInteger maxLength,
+      Consumer<Object> out) {
     // An endpoint left unbounded is the end of the domain. The domain is
     // finite, so "AT_LEAST #\"\253\"" yields the last three characters, even
     // though it names no upper bound.
@@ -141,7 +136,7 @@ class Bound {
     // as quickly as a range of three is built.
     final BigInteger count =
         discrete.ordinal(end).subtract(discrete.ordinal(start));
-    if (count.compareTo(MAX_COUNT) >= 0) {
+    if (count.compareTo(maxLength) >= 0) {
       throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, Pos.ZERO);
     }
 

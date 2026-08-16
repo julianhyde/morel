@@ -519,6 +519,27 @@ List.length (Range.flatten
 > uncaught exception Size [size]
 >   raised at: 0.0-0.0
 
+(* How many values are too many is the "rangeMaxLength" property. Lower
+ * it and a range that was short enough no longer is. *)
+Sys.set ("rangeMaxLength", 4);
+> val it = () : unit
+Range.flatten [CLOSED (1, 10)];
+> uncaught exception Size [size]
+>   raised at: 0.0-0.0
+Range.flatten [CLOSED (1, 3)];
+> val it = [1,2,3] : int list
+
+(* The limit may be larger than a Morel "int" can hold, and is then
+ * written as a numeral in a string. *)
+Sys.set ("rangeMaxLength", "4722366482869645213696");
+> val it = () : unit
+List.length (Range.flatten [CLOSED (1, 100)]);
+> val it = 100 : int
+Sys.show "rangeMaxLength";
+> val it = SOME "4722366482869645213696" : string option
+Sys.unset "rangeMaxLength";
+> val it = () : unit
+
 (*) 'descending' reverses the order of the type it wraps.
 Range.flatten [CLOSED (DESC 3, DESC 1)];
 > val it = [DESC 3,DESC 2,DESC 1] : int descending list

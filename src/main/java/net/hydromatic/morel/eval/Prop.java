@@ -27,6 +27,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
 import java.io.File;
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -259,6 +260,28 @@ public enum Prop {
       "Current version of Morel."),
 
   /**
+   * Integer property "rangeMaxLength" is the largest number of values that
+   * expanding a range may produce.
+   *
+   * <p>A discrete domain is finite but not therefore small: "int" alone has
+   * 2^32 values, and a nine-character word 2^72. An unremarkable range can thus
+   * ask for more values than will fit in memory, and past this many {@code
+   * Size} is raised instead.
+   *
+   * <p>Default is 2^24 - 1, the same as {@code Vector.maxLen}.
+   *
+   * <p>The value may be larger than a Morel "int" can hold, so it is written as
+   * a string where it does not fit: {@code Sys.set ("rangeMaxLength",
+   * "4722366482869645213696")}.
+   */
+  RANGE_MAX_LENGTH(
+      "rangeMaxLength",
+      BigInteger.class,
+      true,
+      BigInteger.ONE.shiftLeft(24).subtract(BigInteger.ONE),
+      "Largest number of values that expanding a range may produce."),
+
+  /**
    * Boolean property "relationalize" is whether to convert to relational
    * algebra. Default is false.
    */
@@ -396,7 +419,8 @@ public enum Prop {
   }
 
   private boolean validValue(Class<?> type, Object value) {
-    if (type == Boolean.class
+    if (type == BigInteger.class
+        || type == Boolean.class
         || type == File.class
         || type == Integer.class
         || type == String.class
@@ -442,6 +466,13 @@ public enum Prop {
     checkType(Integer.class);
     Object o = map.get(this);
     return this.<Integer>typeValue(o);
+  }
+
+  /** Returns the value of this property as a {@link BigInteger}. */
+  public BigInteger bigIntegerValue(Map<Prop, Object> map) {
+    checkType(BigInteger.class);
+    Object o = map.get(this);
+    return this.<BigInteger>typeValue(o);
   }
 
   /** Returns the value of a string property. */
@@ -494,6 +525,24 @@ public enum Prop {
       set(map, optional.get());
       return;
     }
+    if (type == BigInteger.class && !(value instanceof BigInteger)) {
+      // A Morel "int" stops at 2^31 - 1, so a larger value is written as a
+      // numeral in a string.
+      if (value instanceof Integer) {
+        set(map, BigInteger.valueOf((Integer) value));
+        return;
+      }
+      if (value instanceof String) {
+        final BigInteger bigInteger;
+        try {
+          bigInteger = new BigInteger((String) value);
+        } catch (NumberFormatException e) {
+          throw new RuntimeException("value must be a number: " + value);
+        }
+        set(map, bigInteger);
+        return;
+      }
+    }
     set(map, value);
   }
 
@@ -524,6 +573,12 @@ public enum Prop {
   public String typeName() {
     if (type.isEnum()) {
       return "enum";
+    } else if (type == BigInteger.class) {
+      // Not "int"; the value may be larger than a Morel "int" can hold, and is
+      // then written as a numeral in a string. "IntInf.int" is the name the
+      // Standard Basis gives arbitrary-precision integers, though Morel has
+      // no such structure yet.
+      return "IntInf.int";
     } else if (type == Integer.class) {
       return "int";
     } else if (type == String.class) {
