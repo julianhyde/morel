@@ -80,52 +80,50 @@ public class RelTest {
       return core.record(typeSystem, nameExps);
     }
 
-    Core.Rel scan(Core.Exp exp) {
-      return core.scan(exp);
+    Core.Exp greaterThan(Core.Exp a0, Core.Exp a1) {
+      return core.greaterThan(typeSystem, a0, a1);
     }
   }
 
   /**
-   * Tests a leaf, a filter and a projection, and that the element type of a
+   * Tests a filter and a projection over a leaf, and that the element type of a
    * projection is simply the type of its expression.
+   *
+   * <p>A leaf is any collection-valued expression -- here the list {@code [1,
+   * 2]} -- and prints as itself, with no operator of its own.
    */
   @Test
   void testFilterProject() {
     final Fixture f = new Fixture();
-    final Core.Rel scan = f.scan(f.list12);
     final Core.Rel filter =
-        core.filter(
-            scan, core.greaterThan(f.typeSystem, f.input0, f.intLiteral(1)));
+        core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1)));
     final Core.Rel project =
         core.project(f.typeSystem, filter, f.record(f.input0, f.intLiteral(0)));
 
-    assertThat(scan.type.moniker(), is("int list"));
     assertThat(filter.type.moniker(), is("int list"));
     assertThat(project.type.moniker(), is("{a:int, b:int} list"));
     assertThat(
         project.describe(),
         is(
-            "project [{a = $0, b = 0}]\n"
+            "project [{a = $0, b = 0}]\n" //
                 + "  filter [$0 > 1]\n"
-                + "    scan [[1, 2]]\n"));
+                + "    [1, 2]\n"));
   }
 
   /**
    * Tests that {@code planEx}-style output prints the collection type of every
-   * node.
+   * node, and of a leaf.
    */
   @Test
   void testDescribeWithTypes() {
     final Fixture f = new Fixture();
     final Core.Rel filter =
-        core.filter(
-            f.scan(f.list12),
-            core.greaterThan(f.typeSystem, f.input0, f.intLiteral(1)));
+        core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1)));
     assertThat(
         filter.describe(true),
         is(
             "filter [$0 > 1] : int list\n" //
-                + "  scan [[1, 2]] : int list\n"));
+                + "  [1, 2] : int list\n"));
   }
 
   /**
@@ -138,25 +136,25 @@ public class RelTest {
     final Core.Rel join =
         core.join(
             f.typeSystem,
-            f.scan(f.list12),
-            f.scan(f.list34),
+            f.list12,
+            f.list34,
             core.equal(f.typeSystem, f.input0, f.input1),
             f.record(f.input0, f.input1));
     assertThat(join.type.moniker(), is("{a:int, b:int} list"));
     assertThat(
         join.describe(),
         is(
-            "join [$0 = $1] [{a = $0, b = $1}]\n"
-                + "  scan [[1, 2]]\n"
-                + "  scan [[3, 4]]\n"));
+            "join [$0 = $1] [{a = $0, b = $1}]\n" //
+                + "  [1, 2]\n"
+                + "  [3, 4]\n"));
 
     // A join with a bag input is a bag; a nested loop over a bag has no
     // order to preserve.
     final Core.Rel join2 =
         core.join(
             f.typeSystem,
-            f.scan(f.list12),
-            f.scan(f.bag56),
+            f.list12,
+            f.bag56,
             core.boolLiteral(true),
             f.record(f.input0, f.input1));
     assertThat(join2.type.moniker(), is("{a:int, b:int} bag"));
@@ -165,25 +163,25 @@ public class RelTest {
     assertThat(
         join2.describe(),
         is(
-            "join [{a = $0, b = $1}]\n"
-                + "  scan [[1, 2]]\n"
-                + "  scan [#fromList Bag ([5, 6])]\n"));
+            "join [{a = $0, b = $1}]\n" //
+                + "  [1, 2]\n"
+                + "  #fromList Bag ([5, 6])\n"));
 
     // An outer join prints its kind.
     final Core.Rel join3 =
         core.join(
             f.typeSystem,
             Core.Rel.JoinType.LEFT,
-            f.scan(f.list12),
-            f.scan(f.list34),
+            f.list12,
+            f.list34,
             core.boolLiteral(true),
             f.record(f.input0, f.input1));
     assertThat(
         join3.describe(),
         is(
-            "join [left] [{a = $0, b = $1}]\n"
-                + "  scan [[1, 2]]\n"
-                + "  scan [[3, 4]]\n"));
+            "join [left] [{a = $0, b = $1}]\n" //
+                + "  [1, 2]\n"
+                + "  [3, 4]\n"));
   }
 
   /**
@@ -197,32 +195,37 @@ public class RelTest {
     final Core.IdPat dPat = core.idPat(f.intType, "d", 0);
     final Core.Id dId = core.id(dPat);
 
-    // from d in [1, 2], e in [3, 4] yield {a = d, b = e}
-    //   -- but the body's leaf mentions d, so it is correlated
+    // The body's leaf mentions d, so the node is correlated.
     final Core.Rel body =
         core.project(
             f.typeSystem,
-            f.scan(core.list(f.typeSystem, dId, f.intLiteral(4))),
+            core.list(f.typeSystem, dId, f.intLiteral(4)),
             f.record(dId, f.input0));
     final Core.Rel projectMany =
-        core.projectMany(f.typeSystem, f.scan(f.list12), dPat, body);
+        core.projectMany(f.typeSystem, f.list12, dPat, body);
 
     assertThat(projectMany.type.moniker(), is("{a:int, b:int} list"));
     assertThat(
         projectMany.describe(),
         is(
-            "projectMany\n"
-                + "  scan [[1, 2]]\n"
+            "projectMany\n" //
+                + "  [1, 2]\n"
                 + "  fn d =>\n"
                 + "    project [{a = d, b = $0}]\n"
-                + "      scan [[d, 4]]\n"));
+                + "      [d, 4]\n"));
 
     // A bag body makes the output a bag, as a dependent scan over a bag
-    // does today.
-    final Core.Rel body2 = f.scan(f.bag56);
+    // does today. This body is a leaf, so it prints as one.
     final Core.Rel projectMany2 =
-        core.projectMany(f.typeSystem, f.scan(f.list12), dPat, body2);
+        core.projectMany(f.typeSystem, f.list12, dPat, f.bag56);
     assertThat(projectMany2.type.moniker(), is("int bag"));
+    assertThat(
+        projectMany2.describe(),
+        is(
+            "projectMany\n" //
+                + "  [1, 2]\n"
+                + "  fn d =>\n"
+                + "    #fromList Bag ([5, 6])\n"));
   }
 
   /**
@@ -232,12 +235,11 @@ public class RelTest {
   @Test
   void testGroup() {
     final Fixture f = new Fixture();
-    final Core.Rel scan = f.scan(f.list12);
 
     final Core.Rel group1 =
         core.group(
             f.typeSystem,
-            scan,
+            f.list12,
             ImmutableSortedMap.of("j", (Core.Exp) f.input0),
             ImmutableSortedMap.of());
     assertThat(group1.type.moniker(), is("int list"));
@@ -245,12 +247,12 @@ public class RelTest {
         group1.describe(),
         is(
             "group [j = $0]\n" //
-                + "  scan [[1, 2]]\n"));
+                + "  [1, 2]\n"));
 
     final Core.Rel group2 =
         core.group(
             f.typeSystem,
-            scan,
+            f.list12,
             ImmutableSortedMap.<String, Core.Exp>orderedBy(RecordType.ORDERING)
                 .put("i", f.input0)
                 .put("j", f.input0)
@@ -260,55 +262,45 @@ public class RelTest {
   }
 
   /**
-   * Tests the kind signatures of {@code order}, {@code unorder}, {@code skip},
+   * Tests the kind signatures of {@code sort}, {@code unorder}, {@code skip},
    * {@code take} and the set operators.
    */
   @Test
   void testKinds() {
     final Fixture f = new Fixture();
-    final Core.Rel scanList = f.scan(f.list12);
-    final Core.Rel scanBag = f.scan(f.bag56);
 
-    // order : coll -> list; unorder : coll -> bag
+    // sort : coll -> list; unorder : coll -> bag
     assertThat(
-        core.order(f.typeSystem, scanBag, f.input0).type.moniker(),
+        core.sort(f.typeSystem, f.bag56, f.input0).type.moniker(),
         is("int list"));
     assertThat(
-        core.unorder(f.typeSystem, scanList).type.moniker(), is("int bag"));
+        core.unorder(f.typeSystem, f.list12).type.moniker(), is("int bag"));
 
     // skip and take preserve the kind, and print their counts
-    final Core.Rel skip = core.skip(scanList, f.intLiteral(1));
+    final Core.Rel skip = core.skip(f.list12, f.intLiteral(1));
     assertThat(skip.type.moniker(), is("int list"));
     assertThat(
         core.take(skip, f.intLiteral(2)).describe(),
         is(
             "take [2]\n" //
                 + "  skip [1]\n"
-                + "    scan [[1, 2]]\n"));
+                + "    [1, 2]\n"));
 
     // a set operator is a list only if every input is a list
     assertThat(
-        core.setRel(
-                f.typeSystem,
-                Core.Rel.SetOp.UNION,
-                true,
-                Arrays.asList(scanList, f.scan(f.list34)))
+        core.union(f.typeSystem, true, Arrays.asList(f.list12, f.list34))
             .type
             .moniker(),
         is("int list"));
     final Core.Rel union =
-        core.setRel(
-            f.typeSystem,
-            Core.Rel.SetOp.UNION,
-            false,
-            Arrays.asList(scanList, scanBag));
+        core.union(f.typeSystem, false, Arrays.asList(f.list12, f.bag56));
     assertThat(union.type.moniker(), is("int bag"));
     assertThat(
         union.describe(),
         is(
-            "union [all]\n"
-                + "  scan [[1, 2]]\n"
-                + "  scan [#fromList Bag ([5, 6])]\n"));
+            "union [all]\n" //
+                + "  [1, 2]\n"
+                + "  #fromList Bag ([5, 6])\n"));
   }
 }
 
