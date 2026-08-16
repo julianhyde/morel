@@ -19,7 +19,6 @@
 package net.hydromatic.morel;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.ast.RelBuilder.rel;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -37,8 +36,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests the relational tree, {@link Rel}: the element type and kind that {@link
- * net.hydromatic.morel.ast.RelBuilder} derives for each node, and the plan text
- * that a tree prints.
+ * net.hydromatic.morel.ast.CoreBuilder} derives for each node, and the plan
+ * text that a tree prints.
  *
  * <p>The derivations are those in {@code spec.md} sections 3 and 4, and the
  * plan text is the one in section 6; both are the contract that morel-rust and
@@ -57,10 +56,10 @@ public class RelTest {
     final PrimitiveType intType = PrimitiveType.INT;
 
     /** {@code $0}, the element of a node's input, of type {@code int}. */
-    final Core.Id input0 = rel.input0(intType);
+    final Core.Id input0 = core.input0(intType);
 
     /** {@code $1}, the element of a join's right input. */
-    final Core.Id input1 = rel.input1(intType);
+    final Core.Id input1 = core.input1(intType);
 
     final Core.Exp list12 = core.list(typeSystem, intLiteral(1), intLiteral(2));
     final Core.Exp list34 = core.list(typeSystem, intLiteral(3), intLiteral(4));
@@ -83,7 +82,7 @@ public class RelTest {
     }
 
     Rel scan(Core.Exp exp) {
-      return rel.scan(exp);
+      return core.scan(exp);
     }
   }
 
@@ -96,10 +95,10 @@ public class RelTest {
     final Fixture f = new Fixture();
     final Rel scan = f.scan(f.list12);
     final Rel filter =
-        rel.filter(
+        core.filter(
             scan, core.greaterThan(f.typeSystem, f.input0, f.intLiteral(1)));
     final Rel project =
-        rel.project(f.typeSystem, filter, f.record(f.input0, f.intLiteral(0)));
+        core.project(f.typeSystem, filter, f.record(f.input0, f.intLiteral(0)));
 
     assertThat(scan.type.moniker(), is("int list"));
     assertThat(filter.type.moniker(), is("int list"));
@@ -120,7 +119,7 @@ public class RelTest {
   void testDescribeWithTypes() {
     final Fixture f = new Fixture();
     final Rel filter =
-        rel.filter(
+        core.filter(
             f.scan(f.list12),
             core.greaterThan(f.typeSystem, f.input0, f.intLiteral(1)));
     assertThat(
@@ -138,7 +137,7 @@ public class RelTest {
   void testJoin() {
     final Fixture f = new Fixture();
     final Rel join =
-        rel.join(
+        core.join(
             f.typeSystem,
             f.scan(f.list12),
             f.scan(f.list34),
@@ -155,7 +154,7 @@ public class RelTest {
     // A join with a bag input is a bag; a nested loop over a bag has no
     // order to preserve.
     final Rel join2 =
-        rel.join(
+        core.join(
             f.typeSystem,
             f.scan(f.list12),
             f.scan(f.bag56),
@@ -173,7 +172,7 @@ public class RelTest {
 
     // An outer join prints its kind.
     final Rel join3 =
-        rel.join(
+        core.join(
             f.typeSystem,
             Rel.JoinType.LEFT,
             f.scan(f.list12),
@@ -202,12 +201,12 @@ public class RelTest {
     // from d in [1, 2], e in [3, 4] yield {a = d, b = e}
     //   -- but the body's leaf mentions d, so it is correlated
     final Rel body =
-        rel.project(
+        core.project(
             f.typeSystem,
             f.scan(core.list(f.typeSystem, dId, f.intLiteral(4))),
             f.record(dId, f.input0));
     final Rel projectMany =
-        rel.projectMany(f.typeSystem, f.scan(f.list12), dPat, body);
+        core.projectMany(f.typeSystem, f.scan(f.list12), dPat, body);
 
     assertThat(projectMany.type.moniker(), is("{a:int, b:int} list"));
     assertThat(
@@ -223,7 +222,7 @@ public class RelTest {
     // does today.
     final Rel body2 = f.scan(f.bag56);
     final Rel projectMany2 =
-        rel.projectMany(f.typeSystem, f.scan(f.list12), dPat, body2);
+        core.projectMany(f.typeSystem, f.scan(f.list12), dPat, body2);
     assertThat(projectMany2.type.moniker(), is("int bag"));
   }
 
@@ -237,7 +236,7 @@ public class RelTest {
     final Rel scan = f.scan(f.list12);
 
     final Rel group1 =
-        rel.group(
+        core.group(
             f.typeSystem,
             scan,
             ImmutableSortedMap.of("j", (Core.Exp) f.input0),
@@ -250,7 +249,7 @@ public class RelTest {
                 + "  scan [[1, 2]]\n"));
 
     final Rel group2 =
-        rel.group(
+        core.group(
             f.typeSystem,
             scan,
             ImmutableSortedMap.<String, Core.Exp>orderedBy(RecordType.ORDERING)
@@ -273,16 +272,16 @@ public class RelTest {
 
     // order : coll -> list; unorder : coll -> bag
     assertThat(
-        rel.order(f.typeSystem, scanBag, f.input0).type.moniker(),
+        core.order(f.typeSystem, scanBag, f.input0).type.moniker(),
         is("int list"));
     assertThat(
-        rel.unorder(f.typeSystem, scanList).type.moniker(), is("int bag"));
+        core.unorder(f.typeSystem, scanList).type.moniker(), is("int bag"));
 
     // skip and take preserve the kind, and print their counts
-    final Rel skip = rel.skip(scanList, f.intLiteral(1));
+    final Rel skip = core.skip(scanList, f.intLiteral(1));
     assertThat(skip.type.moniker(), is("int list"));
     assertThat(
-        rel.take(skip, f.intLiteral(2)).describe(),
+        core.take(skip, f.intLiteral(2)).describe(),
         is(
             "take [2]\n" //
                 + "  skip [1]\n"
@@ -290,7 +289,7 @@ public class RelTest {
 
     // a set operator is a list only if every input is a list
     assertThat(
-        rel.setRel(
+        core.setRel(
                 f.typeSystem,
                 Rel.SetOp.UNION,
                 true,
@@ -299,7 +298,7 @@ public class RelTest {
             .moniker(),
         is("int list"));
     final Rel union =
-        rel.setRel(
+        core.setRel(
             f.typeSystem,
             Rel.SetOp.UNION,
             false,
