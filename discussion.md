@@ -37,20 +37,74 @@ becomes a property of the physical strategy rather than of the IR,
 which is where it belongs; a future hash join is the first thing that
 would break left-deep-ness, and it is out of scope.
 
-## 2. Scalar expressions: open expressions vs lambdas vs matches
+## 2. Scalar fields: lambdas vs expressions over numbered inputs
 
-All three are equally expressive (any wraps any of the others); the
-question is where names are stored. Open expressions require an
-implicit "current element" convention, which quietly reintroduces the
-ambient accumulated environment the tree exists to eliminate, and
-they cannot address atomized elements (`from i in ints where i > 5`
-has element type `int` — no label to reference) or destructured scans
-(`from (a, b) in pairs`). Lambdas store names in their parameter
-patterns, make scoping ordinary lambda calculus, and are what the
-executor's closures already are. Resolution: lambdas uniformly —
-`condition : elem -> bool`, `by : elem -> key`, projections
-`elem -> elem'`. Record-pattern punning (`fn {d, e} => ...`) makes
-binder names coincide with record labels in the common case.
+Conditions, projections, sort keys and group keys have to address
+the element(s) flowing into their node. Three forms were considered —
+open expressions over an ambient environment, lambdas whose parameter
+pattern binds the element, and expressions over inputs the node names
+— and all three are equally expressive, so the question is only where
+names are stored.
+
+Open expressions over the *accumulated* environment are the step
+list's own convention and are rejected for the reason the tree exists:
+what an expression may reference depends on how far along the pipeline
+it sits, so a node is not readable in isolation and rewrites must
+recompute scopes.
+
+Lambdas (`condition : elem -> bool`, `by : elem -> key`, projections
+`elem -> elem'`) make scoping ordinary lambda calculus, are
+α-renamable, are what the executor's closures already are, and reify
+as plain Morel. Their cost is a layer of indirection that every rule
+pays: matching `Filter(input, cond)` means matching through
+`Fn(pat, body)` and inverting the parameter *pattern* — which may be a
+record pattern, a tuple pattern, a wildcard, or a variable — before a
+rule can tell what the condition reads. Worse for the
+cross-implementation contract, α-equivalent spellings are the same
+plan, so the printer needs a canonical naming convention anyway, and
+the convention then exists in two places (the printer's and the
+translator's).
+
+**Resolution: expressions over numbered inputs.** A one-input node
+(`filter`, `project`, `group`, `order`, `projectMany`) binds `$0` to
+its input element; a two-input node (`join`) binds `$0` and `$1` to
+its left and right input elements. Those names are in scope in
+addition to the environment enclosing the tree, and in place of
+nothing else: an expression sees its node's inputs and the outside
+world, never the bindings of nodes further down.
+
+That last clause is what separates this from the open-expression form
+it superficially resembles. `$0` does not accumulate; every node
+rebinds it to its own input. `Filter` under a five-node chain reads
+exactly what `Filter` over a leaf reads, so a node remains readable —
+and matchable — in isolation, which was the whole point.
+
+Atomization needs no special case, because `$0` denotes the element
+whatever its type: `from i in ints where i > 5` is `filter ($0 > 5)`
+over a leaf of element type `int`, with no label to invent, and a
+destructured scan `from (a, b) in pairs` addresses components as
+`#1 $0` and `#2 $0`. Names for the *output* still come from record
+construction in the projection or the join's yield, so §3's
+semantic-label argument is untouched: `$0` and `$1` are how a node
+reads, never how a type is spelled.
+
+Well-formedness, checked by the validator:
+
+* `$0` (and `$1`) occur only in expressions the node evaluates per
+  row.
+* Expressions evaluated before the first row — the arguments of
+  `skip` and `take` (SKIP and LIMIT), which the tree evaluates before
+  it has an element — are evaluated once in the enclosing environment,
+  and an occurrence of `$0` in them is an error. This is a real rule,
+  not a formality: it is what makes `take` and `skip` arguments
+  constant-foldable and hoistable, and it is the reason they cannot
+  silently become correlated.
+* An expression that contains a nested tree rebinds `$0` inside it;
+  see §8.
+
+Reification (#359) loses nothing: a node's expression wraps
+mechanically as `fn $0 => e`, which is the lambda form, recovered on
+demand rather than carried everywhere.
 
 ## 3. Where names come from, and whether they are semantic
 
@@ -59,9 +113,16 @@ live in element types, are observable (the default yield of
 `from e in emps, d in depts` has type `{d: dept, e: emp}`), and are
 canonically alphabetical. Binder names live in patterns and are
 α-renamable. Because record labels are canonically sorted, position
-carries no information; labels are the only addressing mechanism.
-`$0`/`$1` would not be "positions with default names" — they would be
-genuine labels, visible in output types.
+carries no information; labels are the only addressing mechanism
+*within* an element.
+
+`$0` and `$1` (§2) are not a counter-example. They are input
+references, bound by a node and consumed by its own expressions; they
+never appear in an element type, never become record labels, and are
+not an ordinal encoding of a field. Positions address *inputs*, where
+position is exactly the right thing — a join's left and right are
+genuinely ordered — and labels address *fields*, where sorting has
+made position meaningless.
 
 Advisory (non-semantic) names were considered and rejected on the rot
 argument: names that carry no semantics but must be permuted in
@@ -181,23 +242,69 @@ Join must then say what value it emits:
   construction in a Yield above) — rejected: n-ary joins nest pairs,
   reassociation re-nests, downstream accesses re-path. The ordinal
   tax in structural clothing.
-* *Parameterized yield* (join carries
-  `leftElem * rightElem -> outElem`) — adopted: commute swaps the
-  lambda's arguments locally; reassociation recomposes the two
-  lambdas involved; nothing above the node rewrites, because the
-  output element type is pinned. Names live in the yield's record
-  construction, checker-enforced. Conditions are lambdas.
-  Correlation is `right : leftElem -> collection`. Everything
-  reifies as plain Morel; planEx prints a real type at every node;
-  MEMO groups key on (semantics, element type) with no side-channel
-  metadata.
+* *Parameterized yield* (join carries a yield expression over `$0`
+  and `$1`, e.g. `{d = $1, e = $0}`) — adopted: commute swaps the
+  two inputs and substitutes `$0`↔`$1` in the yield and the
+  condition, a purely local textual rewrite; reassociation composes
+  the two yields involved; nothing above the node rewrites, because
+  the output element type is pinned. Names live in the yield's
+  record construction, checker-enforced. Conditions are expressions
+  over `$0` and `$1`. Correlation is `projectMany` (§8). planEx
+  prints a real type at every node; MEMO groups key on (semantics,
+  element type) with no side-channel metadata.
 
 **Resolution: value-passing with parameterized-yield join is the
 destination.** The bindings form is not a way-station (that would pay
 plan-text churn and rewrite ports twice); it survives permanently as
 the internal lowering IR for RowSink, unprinted.
 
-## 8. Sequencing principle
+## 8. Correlation: `projectMany`
+
+`project` maps an element to one element; `projectMany` maps it to
+many. Its expression is evaluated with `$0` bound to the input
+element and must have a collection type; the node's element type is
+that collection's element type, and its kind follows the usual
+signatures. `from e in emps, d in e.depts` is a `projectMany` whose
+expression mentions `$0`; `from e in emps, d in depts` is one whose
+expression does not.
+
+This is why there is no separate `dependentJoin` constructor.
+Dependence is not a mode of a node, it is a property visible in the
+node's expression — an occurrence of `$0` under a collection-typed
+expression — and the validator can see it, a rule can guard on it,
+and no metadata records it. Decorrelation becomes a rule with a
+syntactic guard: when the collection expression stops mentioning
+`$0` (because a preceding rule pulled the correlated part out), the
+node is a cross join and `join` replaces it.
+
+**Open: how the outer element reaches the pairing.** `projectMany`
+emits the inner elements, but `from e in emps, d in e.depts` must
+emit pairs, so something has to combine `$0` with each inner
+element. Where the combination is an ordinary Morel expression
+(`List.map (fn d => {d, e = $0}) $0.depts`) nothing is at stake, but
+that spelling buries a projection inside a scalar expression where no
+rule can see it. Where the expression is instead a nested tree, that
+tree's own nodes rebind `$0` to *their* input, so the outer element
+is shadowed and the pairing cannot be written at all. Candidates:
+
+* **(a) A sigil for enclosing scopes**, so an inner expression can
+  name an outer element (Calcite's correlation variables, with
+  lexical numbering instead of a global counter). Keeps `projectMany`
+  honest to its name; adds a second naming scheme, and decorrelation
+  has to rewrite inside the nested tree.
+* **(b) A yield on `projectMany`**, over `$0` (outer) and `$1`
+  (inner), defaulting to `$1` — with the default it is exactly the
+  flat-map its name describes, and with a yield it is a dependent
+  join whose numbering, commute and decorrelation are uniform with
+  `join`. Adds no naming scheme; the constructor does two jobs.
+
+(b) is the recommendation, on the strength of decorrelation being
+local: `projectMany(input, coll, yield)` where `coll` does not
+mention `$0` becomes `join(input, coll, yield)` with no traversal
+into a nested tree. Pending confirmation; whichever is chosen must
+be fixed in step 0, because the plan-text grammar prints it.
+
+## 9. Sequencing principle
 
 The two expensive costs are plan-text churn (test files plus the
 cross-implementation contract) and rewrite ports. A coherent sequence
@@ -210,7 +317,7 @@ it honest); reification and MEMO last, as views and engines over a
 datatype that already exists. Unorder pushdown and decorrelation are
 clients of the sequence, not steps in it.
 
-## 9. Miscellany settled along the way
+## 10. Miscellany settled along the way
 
 `UNORDER` must be in the constructor set (it was the motivating
 rewrite) and every constructor needs a stated bag/list kind signature

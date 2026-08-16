@@ -21,25 +21,28 @@ License.
 # Plan: Core query representation, step list → balanced tree
 
 Destination: value-passing relational tree (parameterized-yield join,
-lambdas for scalar fields, self-describing element types), able to
-apply rewrite rules. Each step keeps all tests green. Plan text and
-rewrite ports are each paid exactly once.
+expressions over numbered inputs for scalar fields, self-describing
+element types), able to apply rewrite rules. Each step keeps all
+tests green. Plan text and rewrite ports are each paid exactly once.
 
 ## Step 0 — Freeze the datatype and the plan-text grammar
 
 - [ ] Constructor set: SCAN-free leaves (bare expressions), FILTER,
-      JOIN (with yield lambda `leftElem * rightElem -> outElem`),
-      DEPENDENT_JOIN semantics via `right : leftElem -> collection`
-      (decide: distinct constructor vs detectable-by-use), PROJECT,
-      GROUP (key/agg shapes), ORDER, UNORDER, LIMIT, SKIP, UNION,
-      INTERSECT, EXCEPT, COMPUTE; DISTINCT desugars to GROUP; AND/OR
-      n-ary.
+      JOIN (with yield expression over `$0` and `$1`), PROJECT_MANY
+      (collection-typed expression over `$0`; subsumes the dependent
+      scan), PROJECT, GROUP (key/agg shapes), ORDER, UNORDER, LIMIT,
+      SKIP, UNION, INTERSECT, EXCEPT, COMPUTE; DISTINCT desugars to
+      GROUP; AND/OR n-ary.
 - [ ] Per-constructor bag/list kind signatures, transcribed from
       current step semantics (ORDER : bag -> list; UNORDER; kind of
       join; set operators).
-- [ ] Scoping invariants: free variables of every embedded lambda
-      body beyond its parameters must be bound by enclosing dependent
-      joins or the environment outside the tree; per-node label
+- [ ] Scoping invariants: a one-input node binds `$0` to its input
+      element, a two-input node binds `$0` and `$1` to its left and
+      right input elements, in addition to the environment enclosing
+      the tree; expressions evaluated before the first row (SKIP and
+      LIMIT arguments) see the enclosing environment only, and `$0`
+      in them is an error; every other free variable of an embedded
+      expression is bound outside the tree; per-node label
       distinctness; deterministic rename convention at scope merges.
 - [ ] Element-type derivation specified normatively, including
       singleton atomization and the zero-binding (unit) case.
@@ -47,14 +50,15 @@ rewrite ports are each paid exactly once.
       final form: this is the contract morel-rust and morel-go
       implement. planEx prints the element type at every node.
       Pin the collation of generated labels against user labels.
-- [ ] Record rejected alternatives (pair-based join; advisory names;
-      row-representation Plans A/B/B′) in discussion.md.
+- [ ] Record rejected alternatives (pair-based join; lambdas for
+      scalar fields; advisory names; row-representation Plans A/B/B′)
+      in discussion.md.
 
 ## Step 1 — Shadow tree (no behavior change)
 
 - [ ] Datatype, AST→tree translation (variable elimination: pattern
-      bindings become lambda parameters and record constructions),
-      type derivation, validator, printer.
+      bindings become `$0`/`$1` references, field accesses and record
+      constructions), type derivation, validator, printer.
 - [ ] tree→From converter as scaffolding.
 - [ ] CI asserts, for every query in the suite: round-trip fidelity
       (AST→tree→From equals AST→From) and agreement of derived
@@ -71,8 +75,9 @@ rewrite ports are each paid exactly once.
 ## Step 3 — Flip execution
 
 - [ ] Lowering: tree → left-deep environment-passing form → RowSink;
-      lambda patterns dictate EvalEnv slots; name→slot gathers where
-      canonical label order diverges from construction order.
+      `$0`/`$1` and the field accesses on them dictate EvalEnv slots;
+      name→slot gathers where canonical label order diverges from
+      construction order.
 - [ ] Delete the AST→From path. From's step list becomes an
       unprinted lowering artifact or dissolves into the lowerer.
 - [ ] Script tests unchanged and passing (behavior identical).
@@ -105,8 +110,9 @@ rewrite ports are each paid exactly once.
 
 - Unorder pushdown (the motivating rewrite; needs the step-0 kind
   signatures).
-- Decorrelation (dependent join → join where the correlated set
-  empties; exercises the scope-merge rename convention).
+- Decorrelation (PROJECT_MANY → JOIN where the collection expression
+  stops mentioning `$0`; exercises the scope-merge rename
+  convention).
 - Row-representation revisit (Plans A/B/B′ per discussion.md §5),
   motivated by making rules easier to write.
 - Physical operators beyond left-deep nested loops (hash join), at
