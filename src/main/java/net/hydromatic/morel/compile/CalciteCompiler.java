@@ -578,21 +578,21 @@ public class CalciteCompiler extends Compiler {
           RelContext cx, int i, Core.FromStep fromStep) {
         switch (fromStep.op) {
           case EXCEPT:
-            return setStep(cx, (Core.Except) fromStep);
+            return setStep(cx, (Core.ExceptStep) fromStep);
           case GROUP:
-            return group(cx, (Core.Group) fromStep);
+            return group(cx, (Core.GroupStep) fromStep);
           case INTERSECT:
-            return setStep(cx, (Core.Intersect) fromStep);
+            return setStep(cx, (Core.IntersectStep) fromStep);
           case ORDER:
             return order(cx, (Core.Order) fromStep);
           case SCAN:
             return join(cx, i, (Core.Scan) fromStep);
           case SKIP:
-            return skip(cx, (Core.Skip) fromStep);
+            return skip(cx, (Core.SkipStep) fromStep);
           case TAKE:
-            return take(cx, (Core.Take) fromStep);
+            return take(cx, (Core.TakeStep) fromStep);
           case UNION:
-            return setStep(cx, (Core.Union) fromStep);
+            return setStep(cx, (Core.UnionStep) fromStep);
           case WHERE:
             return where(cx, (Core.Where) fromStep);
           case YIELD:
@@ -896,7 +896,7 @@ public class CalciteCompiler extends Compiler {
     return cx;
   }
 
-  private RelContext skip(RelContext cx, Core.Skip skip) {
+  private RelContext skip(RelContext cx, Core.SkipStep skip) {
     if (skip.exp.op != Op.INT_LITERAL) {
       throw new AssertionError("skip requires literal: " + skip.exp);
     }
@@ -906,7 +906,7 @@ public class CalciteCompiler extends Compiler {
     return cx;
   }
 
-  private RelContext take(RelContext cx, Core.Take take) {
+  private RelContext take(RelContext cx, Core.TakeStep take) {
     if (take.exp.op != Op.INT_LITERAL) {
       throw new AssertionError("take requires literal: " + take.exp);
     }
@@ -975,7 +975,7 @@ public class CalciteCompiler extends Compiler {
     }
   }
 
-  private @Nullable RelContext group(RelContext cx, Core.Group group) {
+  private @Nullable RelContext group(RelContext cx, Core.GroupStep group) {
     // Calcite's native MIN and MAX order values differently from Morel for some
     // types ('word', which it compares as a signed BIGINT) or not at all
     // (tuples, records, lists, and datatypes such as 'option'). If a 'max' or
