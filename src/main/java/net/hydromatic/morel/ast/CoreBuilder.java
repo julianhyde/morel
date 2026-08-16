@@ -594,18 +594,6 @@ public enum CoreBuilder {
     return fromBuilder(typeSystem, (Supplier<Environment>) null);
   }
 
-  /**
-   * Creates a function at a given position. Use this where the function comes
-   * from the user's source, so that an error about it can say where it is.
-   */
-  public Core.Fn fn(Pos pos, FnType type, Core.IdPat idPat, Core.Exp exp) {
-    return new Core.Fn(pos, type, idPat, exp);
-  }
-
-  /**
-   * Creates a function that the compiler synthesized. It stands at the position
-   * of the expression it wraps.
-   */
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {
     return new Core.Fn(exp.pos, type, idPat, exp);
   }
@@ -619,21 +607,22 @@ public enum CoreBuilder {
       final Core.Match match = matchList.get(0);
       if (match.pat instanceof Core.IdPat) {
         // Simple function, "fn x => exp". Does not need 'case'.
-        return fn(pos, type, (Core.IdPat) match.pat, match.exp);
+        return new Core.Fn(pos, type, (Core.IdPat) match.pat, match.exp);
       }
       if (match.pat instanceof Core.TuplePat
           && ((Core.TuplePat) match.pat).args.isEmpty()) {
         // Simple function with unit arg, "fn () => exp";
         // needs a new variable, but doesn't need case, "fn (v0: unit) => exp"
         final Core.IdPat idPat = idPat(type.paramType, "v", nameGenerator);
-        return fn(pos, type, idPat, match.exp);
+        return new Core.Fn(pos, type, idPat, match.exp);
       }
     }
     // Complex function, "fn (x, y) => exp";
     // needs intermediate variable and case, "fn v => case v of (x, y) => exp"
     final Core.IdPat idPat = idPat(type.paramType, "v", nameGenerator);
     final Core.Id id = id(idPat);
-    return fn(pos, type, idPat, caseOf(pos, type.resultType, id, matchList));
+    return new Core.Fn(
+        pos, type, idPat, caseOf(pos, type.resultType, id, matchList));
   }
 
   /** Creates a {@link Core.Apply}. */
