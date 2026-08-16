@@ -199,6 +199,15 @@ public enum Op {
   INTO,
   THROUGH,
   AGGREGATE,
+
+  // relational tree (see Core.Rel); GROUP, SKIP, TAKE, UNORDER, UNION,
+  // INTERSECT and EXCEPT are shared with the from-steps of the same name
+  FILTER,
+  PROJECT,
+  PROJECT_MANY,
+  JOIN,
+  SORT,
+
   IF,
   RAISE,
   OVER_DECL;

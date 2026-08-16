@@ -52,9 +52,11 @@ Two things that `Core.From` carries today do not exist here:
   type `real` because `$0.sal : real`, and nothing had to decide.
 
 The tree is a closed algebra: every constructor takes collections and
-returns a collection. It is embedded in Core as an expression, so a
-query may appear anywhere an expression may, including inside the
-expressions of another tree (§3.3).
+returns a collection. A node *is* a Core expression — `Core.Rel`
+extends `Core.Exp` — whose type is a collection type. Hence a query
+may appear anywhere an expression may, including inside the
+expressions of another tree (§3.3), and an input needs no wrapper: it
+is just an expression (§3.1).
 
 ## 2. Names
 
@@ -101,16 +103,16 @@ expressions of the node may name beyond the enclosing environment.
 
 ### 3.1 Leaves
 
-| Constructor | Arguments | Element type | Scope |
-| --- | --- | --- | --- |
-| `scan` | `e` of collection type | element type of `e` | — |
+There is no leaf constructor. A node is itself an expression whose
+type is a collection type, so a node's input is simply an expression:
+another node, or a leaf — a global (`scott.emps`), a variable, a list
+literal, a function application, anything of collection type. The
+boundary between the tree and the rest of Core is therefore not
+marked by an operator; it is wherever the expression stops being a
+node.
 
-A leaf is any Core expression of collection type: a global (`scott
-.emps`), a variable, a list literal, a function application, or a
-tree-valued expression that the translator chose not to inline. It is
-the boundary between the tree and the rest of Core. There is no
-`scan` pattern: a scan binds nothing, because the element flows out
-as a value and the node above names it `$0`.
+A leaf binds nothing: its element flows out as a value, and the node
+above it names that value `$0`.
 
 ### 3.2 One input
 
@@ -119,7 +121,7 @@ as a value and the node above names it `$0`.
 | `filter` | `cond : bool` | `τ` | `$0` |
 | `project` | `e` | type of `e` | `$0` |
 | `group` | keys `l₁ = e₁, …`, aggregates `m₁ = a₁, …` | record of the key and aggregate types, or the single field's type if there is exactly one | `$0` |
-| `order` | `e` | `τ` | `$0` |
+| `sort` | `e` | `τ` | `$0` |
 | `unorder` | — | `τ` | — |
 | `skip` | `n : int` | `τ` | — (§2 rule 1) |
 | `take` | `n : int` | `τ` | — (§2 rule 1) |
@@ -149,7 +151,7 @@ from d in depts, e in d.emps yield {d, e}
 is
 
 ```
-projectMany depts (fn d => project (scan d.emps) [{d = d, e = $0}])
+projectMany depts (fn d => project d.emps [{d = d, e = $0}])
 ```
 
 Dependence is not a mode of the node; it is the presence of a free
@@ -185,16 +187,16 @@ are transcribed from current step behavior, not redesigned; the
 
 | Constructor | Output kind | Checked by |
 | --- | --- | --- |
-| `scan e` | kind of `e` | — |
+| leaf `e` | kind of `e` | — |
 | `filter`, `project`, `skip`, `take` | kind of input | `from i in [1,2] where i > 1` is a `list` |
 | `projectMany` | `list` if the input is a `list` and the lambda's body is a `list`, else `bag` | `from i in [1,2,3], j in bag [i]` is a `bag` |
 | `join` | `list` if both inputs are `list`, else `bag` | as above (a join is a nested loop) |
 | `group` | kind of input | `from i in [1,2,3] group j = i` is a `list` |
-| `order` | `list` | — |
+| `sort` | `list` | — |
 | `unorder` | `bag` | — |
 | `union`, `intersect`, `except` | `list` if every input is a `list`, else `bag` | `from i in [1,2] union [3]` is a `list` |
 
-`order : coll -> list` and `unorder : coll -> bag` are the pair that
+`sort : coll -> list` and `unorder : coll -> bag` are the pair that
 `unorder` pushdown manipulates, and the reason kinds are in the
 signature rather than a property of the runtime value.
 
@@ -243,8 +245,9 @@ that is `$0`) are omitted.
 ```
 plan     ::= node
 node     ::= indent op arg* '\n' node*
-op       ::= 'scan' | 'filter' | 'project' | 'projectMany'
-           | 'join' | 'group' | 'order' | 'unorder'
+           | indent exp '\n'                    -- a leaf
+op       ::= 'filter' | 'project' | 'projectMany'
+           | 'join' | 'group' | 'sort' | 'unorder'
            | 'skip' | 'take' | 'union' | 'intersect' | 'except'
 arg      ::= '[' exp ']' | '[' label '=' exp (',' label '=' exp)* ']'
            | '[' word ']'
@@ -280,8 +283,8 @@ from e in scott.emps
 
 ```
 join [$0.deptno = $1.deptno] [{dname = $1.dname, e = $0, id = $1.deptno}]
-  scan [scott.emps]
-  scan [scott.depts]
+  scott.emps
+  scott.depts
 ```
 
 The pattern's binders (`dname`, `id`) and the record punning have
@@ -296,19 +299,18 @@ from d in scott.depts, e in d.emps where e.sal > 1000 yield {d, e}
 
 ```
 projectMany
-  scan [scott.depts]
+  scott.depts
   fn d =>
     project [{d = d, e = $0}]
       filter [$0.sal > 1000]
-        scan [d.emps]
+        d.emps
 ```
 
 *Review.* A lambda whose body is a tree cannot print inside brackets
 on the operator's line and stay readable, so `projectMany` prints its
-input as its first child and its lambda as a second child, headed by
-`fn v =>`. A lambda whose body is not a tree —
-`fn d => List.filter p d.emps` — prints on that header line instead,
-as `fn d => [exp]`.
+input as its first child, then a `fn v =>` header, then the body as a
+further-indented child — a node if the body is a node, a leaf line if
+it is a plain expression such as `d.emps`.
 
 Group:
 
@@ -319,7 +321,7 @@ from e in scott.emps
 
 ```
 group [deptno = $0.deptno] [total = sum over $0.sal]
-  scan [scott.emps]
+  scott.emps
 ```
 
 ## 8. What this replaces
