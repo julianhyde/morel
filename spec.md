@@ -185,10 +185,32 @@ constructor.
 | `join` | kind ∈ {inner, left, right, full}, `cond : bool`, yield `e` | type of `e` | `$0` (left element), `$1` (right element) |
 | `union`, `intersect`, `except` | `r₀ … rₙ`, `distinct : bool` | `τ₀` | — |
 
-For an outer join the absent side is an `option`: in a `left` join
-`$1 : τ₁ option`, in a `right` join `$0 : τ₀ option`, in a `full`
-join both. This transcribes current behavior — `from a in [1, 2] left
-join b in [1] on a = b` has type `{a: int, b: int option} list`.
+For an outer join the absent side is an `option`, which transcribes
+current behavior: `from a in [1, 2] left join b in [1] on a = b` has
+type `{a: int, b: int option} list`.
+
+**The condition and the yield see different types on that side.** The
+condition is evaluated on candidate pairs, where both elements are
+present, so it sees `$0 : τ₀` and `$1 : τ₁` whatever the join's kind.
+The yield is evaluated once per output row, including rows that
+matched nothing, so on a side the join can leave absent it sees an
+`option`: `$1 : τ₁ option` in a `left` join, `$0 : τ₀ option` in a
+`right` join, both in a `full` join.
+
+The asymmetry is the standard one — it is what every relational
+executor does, and it is what makes `on a = b` mean what it says
+rather than `valOf`-ing an option that is never `NONE` at that point.
+It costs the reader one rule, and the alternative (an option in the
+condition too) costs every outer join a partial function in its plan
+text. So, for `from a in [1, 2] left join b in [1] on a = b`:
+
+```
+join [left] [$0 = $1] [{a = $0, b = $1}]
+  [1, 2]
+  [1]
+```
+
+where `$1` is `int` in the condition and `int option` in the yield.
 
 Set operators require the element types of all their inputs to be
 equal. They are n-ary; `distinct` distinguishes `union` from `union
