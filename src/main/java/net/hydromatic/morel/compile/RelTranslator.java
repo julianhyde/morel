@@ -91,7 +91,8 @@ public class RelTranslator {
 
   private Core.@Nullable Exp from(Core.From from) {
     if (from.steps.isEmpty()) {
-      return null;
+      // Bare 'from' iterates over a single element, which is unit.
+      return unitCollection();
     }
     for (Core.FromStep step : from.steps) {
       if (!step(step)) {
@@ -107,11 +108,7 @@ public class RelTranslator {
     if (exp == null && step.op != Op.SCAN) {
       // A 'from' with no scan -- 'from where p', 'from yield e' -- iterates
       // over a single element, which is unit.
-      exp =
-          core.list(
-              typeSystem,
-              PrimitiveType.UNIT,
-              ImmutableList.of(core.unitLiteral()));
+      exp = unitCollection();
     }
     switch (step.op) {
       case SCAN:
@@ -163,6 +160,15 @@ public class RelTranslator {
       default:
         return false;
     }
+  }
+
+  /**
+   * Returns the collection that a scanless {@code from} iterates over: a list
+   * containing one unit element.
+   */
+  private Core.Exp unitCollection() {
+    return core.list(
+        typeSystem, PrimitiveType.UNIT, ImmutableList.of(core.unitLiteral()));
   }
 
   /**
@@ -323,7 +329,15 @@ public class RelTranslator {
   private void normalize(Core.StepEnv env) {
     final Type wanted = elementType(env);
     if (!requireExp().type.elementType().equals(wanted)) {
-      exp = core.project(typeSystem, requireExp(), element(access, wanted));
+      // A step that computes its own element -- a yield, a group -- differs
+      // from what the bindings describe only in whether a lone value is
+      // wrapped in a record; a scan differs in more, and its access map says
+      // how.
+      final Core.@Nullable Exp aligned = align(requireExp(), wanted);
+      exp =
+          aligned != null
+              ? aligned
+              : core.project(typeSystem, requireExp(), element(access, wanted));
     }
     final Core.Exp element = core.input0(wanted);
     access.clear();
