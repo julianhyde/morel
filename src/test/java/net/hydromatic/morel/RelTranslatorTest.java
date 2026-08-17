@@ -34,6 +34,7 @@ import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.RelShadow;
 import net.hydromatic.morel.compile.RelTranslator;
 import net.hydromatic.morel.compile.RelValidator;
 import net.hydromatic.morel.compile.Resolver;
@@ -53,6 +54,11 @@ import org.junit.jupiter.api.Test;
  * The tree is a shadow -- nothing executes it yet -- so what these tests pin
  * down is that the translation preserves the element type and eliminates the
  * binders in favour of {@code $0}.
+ *
+ * <p>Breadth comes from elsewhere: {@link
+ * net.hydromatic.morel.compile.RelShadow} translates and checks every query
+ * that the suite compiles, so the scripts exercise paths -- set-operator branch
+ * alignment, for one -- that are awkward to write by hand.
  */
 public class RelTranslatorTest {
   /**
@@ -99,6 +105,10 @@ public class RelTranslatorTest {
                     + step.env.bindings
                     + " atom="
                     + step.env.atom));
+    // The shadow does the same for every query the test suite compiles; check
+    // that it is happy with this one too.
+    assertThat(RelShadow.check(typeSystem, valDecl2), is(true));
+
     final Core.Exp rel = RelTranslator.toRel(typeSystem, froms[0]);
     if (rel == null) {
       return null;
@@ -207,6 +217,33 @@ public class RelTranslatorTest {
             "union [all]\n" //
                 + "  [1, 2]\n"
                 + "  [3]\n"));
+  }
+
+  /**
+   * Tests a {@code from} with no scan, which iterates over a single unit
+   * element.
+   */
+  @Test
+  void testNoScan() {
+    assertThat(
+        plan("from yield 1 + 2"),
+        is(
+            "project [1 + 2]\n" //
+                + "  [()]\n"));
+  }
+
+  /**
+   * Tests that the shadow runs. It is an {@code assert} statement, so it does
+   * nothing unless the test JVM enables assertions.
+   */
+  @Test
+  void testAssertionsEnabled() {
+    boolean assertionsEnabled = false;
+    assert assertionsEnabled = true;
+    assertThat(
+        "the relational-tree shadow only runs when assertions are enabled",
+        assertionsEnabled,
+        is(true));
   }
 
   /**
