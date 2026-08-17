@@ -31,6 +31,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
@@ -112,14 +113,16 @@ public class RelTranslator {
     }
     switch (step.op) {
       case SCAN:
-        return scan((Core.Scan) step);
+        return scan((Core.Scan) step, Core.Rel.JoinType.INNER);
 
       case LEFT_JOIN:
+        return scan((Core.Scan) step, Core.Rel.JoinType.LEFT);
+
       case RIGHT_JOIN:
+        return scan((Core.Scan) step, Core.Rel.JoinType.RIGHT);
+
       case FULL_JOIN:
-        // An outer join makes the absent side an option; the condition and the
-        // yield need care that this translator does not yet take.
-        return false;
+        return scan((Core.Scan) step, Core.Rel.JoinType.FULL);
 
       case WHERE:
         exp = core.filter(requireExp(), rewrite(((Core.Where) step).exp));
@@ -176,10 +179,15 @@ public class RelTranslator {
    * does not depend on the bindings so far is a join; one that does depend on
    * them is a {@code projectMany}.
    */
-  private boolean scan(Core.Scan scan) {
+  private boolean scan(Core.Scan scan, Core.Rel.JoinType joinType) {
     final Type rightElementType = scan.exp.type.elementType();
 
     if (exp == null) {
+      if (joinType != Core.Rel.JoinType.INNER) {
+        // An outer join cannot be the first step; there is nothing to be
+        // outer to.
+        return false;
+      }
       // The first scan is a leaf, and the pattern's binders are paths into its
       // element.
       exp = scan.exp;
@@ -196,6 +204,11 @@ public class RelTranslator {
     final Type wanted = elementType(scan.env);
 
     if (dependsOnBindings(scan.exp)) {
+      if (joinType != Core.Rel.JoinType.INNER) {
+        // An outer apply: a left element whose collection is empty still
+        // yields a row, which projectMany cannot express.
+        return false;
+      }
       // A correlated scan. The lambda's parameter names the left element,
       // because the body is a tree, and a tree would shadow $0.
       final Core.IdPat param = param(left.type.elementType());
@@ -220,15 +233,79 @@ public class RelTranslator {
     if (!destructure(scan.pat, core.input1(rightElementType), rightAccess)) {
       return false;
     }
-    final Map<Core.NamedPat, Core.Exp> combined = both(access, rightAccess);
+    // The condition sees both elements as they are, because it is evaluated
+    // on candidate pairs; the yield sees an option on a side that an outer
+    // join can leave absent.
+    final Map<Core.NamedPat, Core.Exp> condAccess = both(access, rightAccess);
+    final Map<Core.NamedPat, Core.Exp> yieldAccess;
+    if (joinType == Core.Rel.JoinType.INNER) {
+      yieldAccess = condAccess;
+    } else {
+      yieldAccess = new LinkedHashMap<>();
+      if (!side(yieldAccess, access, 0, joinType.leftIsOption(), scan.env)
+          || !side(
+              yieldAccess,
+              rightAccess,
+              1,
+              joinType.rightIsOption(),
+              scan.env)) {
+        return false;
+      }
+    }
     exp =
         core.join(
             typeSystem,
+            joinType,
             left,
             scan.exp,
-            substitute(scan.condition, combined),
-            element(combined, wanted));
+            substitute(scan.condition, condAccess),
+            element(yieldAccess, wanted));
     return true;
+  }
+
+  /**
+   * Adds one side of an outer join's yield to an access map.
+   *
+   * <p>On a side that the join can leave absent, every binder becomes an
+   * option, and this translator can express that only when the side has a
+   * single binder whose value is the whole element -- then the binder is the
+   * option-typed input reference. A destructuring pattern would need each
+   * binder mapped through the option, and is declined.
+   */
+  private boolean side(
+      Map<Core.NamedPat, Core.Exp> yieldAccess,
+      Map<Core.NamedPat, Core.Exp> sideAccess,
+      int i,
+      boolean option,
+      Core.StepEnv env) {
+    if (!option) {
+      yieldAccess.putAll(sideAccess);
+      return true;
+    }
+    if (sideAccess.size() != 1) {
+      return false;
+    }
+    final Map.Entry<Core.NamedPat, Core.Exp> only =
+        sideAccess.entrySet().iterator().next();
+    if (only.getValue().op != Op.ID) {
+      return false;
+    }
+    final Core.@Nullable NamedPat binding = binding(env, only.getKey().name);
+    if (binding == null) {
+      return false;
+    }
+    yieldAccess.put(only.getKey(), core.input(binding.type, i));
+    return true;
+  }
+
+  /** Returns the binding of a given name in a step's environment, or null. */
+  private Core.@Nullable NamedPat binding(Core.StepEnv env, String name) {
+    for (Binding b : env.bindings) {
+      if (b.id.name.equals(name)) {
+        return b.id;
+      }
+    }
+    return null;
   }
 
   /**
