@@ -247,14 +247,48 @@ public class RelTranslatorTest {
   }
 
   /**
+   * Tests an outer join: the condition sees both elements as they are, and the
+   * yield sees an option on the side that can be absent.
+   */
+  @Test
+  void testOuterJoin() {
+    assertThat(
+        plan("from i in [1, 2, 3] left join j in [1, 2] on i = j"),
+        is(
+            "join [left] [$0 = $1] [{i = $0, j = $1}]\n" //
+                + "  [1, 2, 3]\n"
+                + "  [1, 2]\n"));
+    assertThat(
+        plan("from i in [1, 2] right join j in [3, 4] on i = j"),
+        is(
+            "join [right] [$0 = $1] [{i = $0, j = $1}]\n" //
+                + "  [1, 2]\n"
+                + "  [3, 4]\n"));
+    assertThat(
+        plan("from i in [1, 2] full join j in [3, 4] on i = j"),
+        is(
+            "join [full] [$0 = $1] [{i = $0, j = $1}]\n" //
+                + "  [1, 2]\n"
+                + "  [3, 4]\n"));
+  }
+
+  /**
    * Tests that the translator declines what it cannot yet do, rather than
    * guessing.
    */
   @Test
   void testUnsupported() {
-    // An outer join binds the right side as an option.
+    // On a side that an outer join can leave absent, a destructuring pattern
+    // would need each binder mapped through the option.
     assertThat(
-        plan("from i in [1, 2] left join j in [3] on i = j"), nullValue());
+        plan("from i in [1, 2] left join (j, k) in [(1, 2)] on i = j"),
+        nullValue());
+    // An outer apply: a left element with no matches still yields a row.
+    assertThat(
+        plan(
+            "from r in [{id = 1, items = [2]}] "
+                + "left join i in r.items on i > 2"),
+        nullValue());
     // A pattern that can fail to match also filters.
     assertThat(plan("from SOME i in [SOME 1, NONE]"), nullValue());
   }
