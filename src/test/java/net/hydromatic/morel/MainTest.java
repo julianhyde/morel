@@ -44,6 +44,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasToString;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -52,6 +53,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -3220,6 +3222,43 @@ public class MainTest {
         .assertError(
             "stdIn:3.5-3.46 Error: clauses don't all have same "
                 + "function name");
+  }
+
+  /**
+   * Tests that a property takes a value of a type it can be read from. A
+   * property of arbitrary precision takes an "int" or a numeral in a string,
+   * and holds a {@link BigInteger} either way.
+   */
+  @Test
+  void testPropLenientValue() {
+    final Map<Prop, Object> map = new LinkedHashMap<>();
+
+    Prop.RANGE_MAX_LENGTH.setLenient(map, 100);
+    assertThat(map.get(Prop.RANGE_MAX_LENGTH), is(BigInteger.valueOf(100)));
+
+    // 2^72, more than a "long" can hold, let alone a Morel "int".
+    Prop.RANGE_MAX_LENGTH.setLenient(map, "4722366482869645213696");
+    assertThat(
+        Prop.RANGE_MAX_LENGTH.bigIntegerValue(map),
+        is(BigInteger.ONE.shiftLeft(72)));
+
+    // What "setLenient" takes is what "isValid" calls valid when lenient, and
+    // what it calls invalid otherwise.
+    assertThat(Prop.RANGE_MAX_LENGTH.isValid(100, true), is(true));
+    assertThat(Prop.RANGE_MAX_LENGTH.isValid(100, false), is(false));
+    assertThat(Prop.RANGE_MAX_LENGTH.isValid("100", true), is(true));
+    assertThat(Prop.RANGE_MAX_LENGTH.isValid("many", true), is(false));
+    assertThat(Prop.OUTPUT.isValid("tabular", true), is(true));
+    assertThat(Prop.OUTPUT.isValid("nosuch", true), is(false));
+    assertThat(Prop.LINE_WIDTH.isValid("80", true), is(false));
+
+    // A value it cannot read is refused, and says why.
+    assertThat(
+        assertThrows(
+                RuntimeException.class,
+                () -> Prop.RANGE_MAX_LENGTH.setLenient(map, "many"))
+            .getMessage(),
+        is("value must be a number: many"));
   }
 }
 

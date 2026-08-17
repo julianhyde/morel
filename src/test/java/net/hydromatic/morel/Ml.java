@@ -623,7 +623,12 @@ class Ml {
   }
 
   Ml with(Prop prop, Object value) {
-    return new Ml(ml, pos, dataSetMap, plus(propMap, prop, value), tracer);
+    // Convert the value to the property's type, so that the map holds what
+    // the property says it holds. An "int" will do for a property of
+    // arbitrary precision, as it will in "Sys.set".
+    final Map<Prop, Object> map = new LinkedHashMap<>(propMap);
+    prop.setLenient(map, value);
+    return new Ml(ml, pos, dataSetMap, map, tracer);
   }
 
   Ml withTracer(Tracer tracer) {
