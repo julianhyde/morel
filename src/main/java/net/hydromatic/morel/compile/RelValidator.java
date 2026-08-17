@@ -112,13 +112,26 @@ public class RelValidator {
         violation(
             "projectMany body must be list or bag: %s", projectMany.body.type);
       }
+      if (projectMany.ifEmpty != null) {
+        // Evaluated where the body yields nothing, so it sees the parameter
+        // and not $0.
+        scope(projectMany.ifEmpty, NONE, "projectMany ifEmpty");
+        if (!projectMany.ifEmpty.type.equals(
+            projectMany.body.type.elementType())) {
+          violation(
+              "projectMany ifEmpty must have the element type %s: %s",
+              projectMany.body.type.elementType().moniker(),
+              projectMany.ifEmpty.type.moniker());
+        }
+      }
       requireDerivedType(
           rel,
           core.projectMany(
               typeSystem,
               projectMany.input,
               projectMany.param,
-              projectMany.body));
+              projectMany.body,
+              projectMany.ifEmpty));
     } else if (rel instanceof Core.Join) {
       final Core.Join join = (Core.Join) rel;
       input(join.left);

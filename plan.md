@@ -67,12 +67,11 @@ tests green. Plan text and rewrite ports are each paid exactly once.
       `assert`): the tree's type is the query's type, and the
       validator accepts it. Declined constructs are counted, not
       guessed at.
-- [ ] Remaining translator gaps: an outer apply (a correlated outer
-      join), whose unmatched left element still yields a row; and a
-      destructuring pattern on the absent side of an outer join,
-      where each binder separately becomes an option. One query in
-      relational.smli, simple.smli and blog.smli is declined; 802
-      translate.
+- [x] No translator gaps: every query in the script suite
+      translates -- 1534 of them, none declined. The last three to
+      land were a scan whose pattern can fail to match, an outer
+      apply (`projectMany` with `ifEmpty`), and an outer join whose
+      absent side has more than one binder.
 - [ ] tree→From converter as scaffolding, and round-trip fidelity
       (AST→tree→From equals AST→From, up to binder renaming).
 
