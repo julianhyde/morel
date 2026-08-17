@@ -202,9 +202,9 @@ public class MartelliUnifier extends Unifier {
   }
 
   /**
-   * Renders a term for an error message, printing a collection term {@code
-   * collection(e, ordered)} as {@code list(e)} and {@code $collection(e,
-   * $unordered)} as {@code bag(e)}.
+   * Renders a term for an error message, in the syntax a type is written in
+   * rather than the unifier's internal form: {@code int * int} rather than
+   * {@code tuple(int, int)}, {@code T list} rather than {@code list(T)}.
    */
   private static String render(Term term) {
     if (term instanceof Sequence) {
@@ -220,20 +220,71 @@ public class MartelliUnifier extends Unifier {
             ORDERED_OP.equals(orderednessAtom(seq.terms.get(1)))
                 ? "list"
                 : "bag";
-        return kind + "(" + render(seq.terms.get(0)) + ")";
+        return atomic(seq.terms.get(0)) + " " + kind;
+      }
+      if (seq.operator.equals(TUPLE_OP) && !seq.terms.isEmpty()) {
+        return join(seq.terms, " * ");
+      }
+      if (seq.operator.equals(FN_OP) && seq.terms.size() == 2) {
+        return render(seq.terms.get(0)) + " -> " + render(seq.terms.get(1));
+      }
+      if (seq.operator.startsWith(RECORD_OP + ":")) {
+        final List<String> names = fieldNames(seq);
+        if (names.size() == seq.terms.size()) {
+          final StringBuilder b = new StringBuilder("{");
+          for (int i = 0; i < seq.terms.size(); i++) {
+            if (i > 0) {
+              b.append(", ");
+            }
+            b.append(names.get(i)).append(':').append(render(seq.terms.get(i)));
+          }
+          return b.append('}').toString();
+        }
       }
       if (!seq.terms.isEmpty()) {
-        final StringBuilder b = new StringBuilder(seq.operator).append('(');
-        for (int i = 0; i < seq.terms.size(); i++) {
-          if (i > 0) {
-            b.append(", ");
-          }
-          b.append(render(seq.terms.get(i)));
-        }
-        return b.append(')').toString();
+        // A type constructor applied to arguments, e.g. "int option".
+        return (seq.terms.size() == 1
+                ? atomic(seq.terms.get(0))
+                : "(" + join(seq.terms, ", ") + ")")
+            + " "
+            + seq.operator;
       }
     }
     return term.toString();
+  }
+
+  private static final String TUPLE_OP = "tuple";
+  private static final String FN_OP = "fn";
+  private static final String RECORD_OP = "record";
+
+  /**
+   * Renders a term, parenthesized if it would otherwise bind less tightly than
+   * the postfix type constructor it is the argument of: {@code (int * int)
+   * list}, not {@code int * int list}.
+   */
+  private static String atomic(Term term) {
+    final String s = render(term);
+    return s.indexOf(' ') < 0 || s.startsWith("(") || s.startsWith("{")
+        ? s
+        : "(" + s + ")";
+  }
+
+  /** Renders terms, separated. */
+  private static String join(List<Term> terms, String separator) {
+    final StringBuilder b = new StringBuilder();
+    for (int i = 0; i < terms.size(); i++) {
+      if (i > 0) {
+        b.append(separator);
+      }
+      b.append(render(terms.get(i)));
+    }
+    return b.toString();
+  }
+
+  /** Field names of a record term, whose operator is e.g. "record:a:b". */
+  private static List<String> fieldNames(Sequence seq) {
+    return ImmutableList.copyOf(
+        seq.operator.substring(RECORD_OP.length() + 1).split(":"));
   }
 
   private void act(
