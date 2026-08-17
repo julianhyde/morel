@@ -698,7 +698,21 @@ public enum AstBuilder {
 
   public Ast.TypeBind typeBind(
       Pos pos, Ast.Id name, Iterable<Ast.TyVar> tyVars, Ast.Type type) {
-    return new Ast.TypeBind(pos, ImmutableList.copyOf(tyVars), name, type);
+    return typeBind(pos, name, tyVars, type, ImmutableList.of());
+  }
+
+  public Ast.TypeBind typeBind(
+      Pos pos,
+      Ast.Id name,
+      Iterable<Ast.TyVar> tyVars,
+      Ast.Type type,
+      Iterable<Ast.Match> checks) {
+    return new Ast.TypeBind(
+        pos,
+        ImmutableList.copyOf(tyVars),
+        name,
+        type,
+        ImmutableList.copyOf(checks));
   }
 
   public Ast.DatatypeDecl datatypeDecl(
