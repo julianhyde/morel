@@ -57,18 +57,32 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 
 ## Step 1 — Shadow tree (no behavior change)
 
-- [ ] Datatype, AST→tree translation (variable elimination: pattern
-      bindings become `$0`/`$1` references, field accesses and record
-      constructions), type derivation, validator, printer.
-- [ ] tree→From converter as scaffolding.
-- [ ] CI asserts, for every query in the suite: round-trip fidelity
-      (AST→tree→From equals AST→From) and agreement of derived
-      element types with the typechecker.
+- [x] Datatype (`Core.Rel`), type derivation (`CoreBuilder`),
+      validator (`RelValidator`), printer.
+- [x] Translation (variable elimination: pattern bindings become
+      `$0`/`$1` references, field accesses and record constructions).
+      From the step list rather than from the AST, which reuses type
+      resolution and is what step 3 replaces.
+- [x] CI asserts, for every query in the suite (`RelShadow`, under
+      `assert`): the tree's type is the query's type, and the
+      validator accepts it. Declined constructs are counted, not
+      guessed at.
+- [ ] Remaining translator gaps: outer joins, and patterns that can
+      fail to match (a constructor, a literal, a list), which filter
+      as well as scan.
+- [ ] tree→From converter as scaffolding, and round-trip fidelity
+      (AST→tree→From equals AST→From, up to binder renaming).
 
 ## Step 2 — Flip observability
 
 - [ ] Sys.plan and Sys.planEx print the tree.
 - [ ] Script-convert test expectations (one flip, final format).
+      These changes are benign by construction: only plan text moves,
+      because execution does not change until step 3. A query with no
+      scan gains a visible `[()]` leaf (spec.md §3.1) and a set
+      operator may gain a projection that aligns its branches; both
+      queries return exactly what they returned before. A test whose
+      *result* changes in this step is a bug, not a re-baseline.
 - [ ] Plan text is now frozen; golden files are the
       cross-implementation contract. Rust (morel-rust#33) and Go
       work can begin here, in parallel with steps 3–5.
