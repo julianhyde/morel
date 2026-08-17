@@ -67,12 +67,12 @@ tests green. Plan text and rewrite ports are each paid exactly once.
       `assert`): the tree's type is the query's type, and the
       validator accepts it. Declined constructs are counted, not
       guessed at.
-- [ ] Remaining translator gaps: patterns that can fail to match (a
-      constructor, a literal, a list), which filter as well as scan;
-      an outer apply (a correlated outer join), whose unmatched left
-      element still yields a row; and a destructuring pattern on the
-      absent side of an outer join, where each binder separately
-      becomes an option.
+- [ ] Remaining translator gaps: an outer apply (a correlated outer
+      join), whose unmatched left element still yields a row; and a
+      destructuring pattern on the absent side of an outer join,
+      where each binder separately becomes an option. One query in
+      relational.smli, simple.smli and blog.smli is declined; 802
+      translate.
 - [ ] tree→From converter as scaffolding, and round-trip fidelity
       (AST→tree→From equals AST→From, up to binder renaming).
 
