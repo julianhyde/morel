@@ -95,16 +95,6 @@ public class RelTranslatorTest {
       return null;
     }
 
-    System.out.println("  core: " + froms[0] + " : " + froms[0].type.moniker());
-    froms[0].steps.forEach(
-        step ->
-            System.out.println(
-                "  step "
-                    + step.op
-                    + " bindings="
-                    + step.env.bindings
-                    + " atom="
-                    + step.env.atom));
     // The shadow does the same for every query the test suite compiles; check
     // that it is happy with this one too.
     assertThat(RelShadow.check(typeSystem, valDecl2), is(true));
@@ -233,6 +223,30 @@ public class RelTranslatorTest {
   }
 
   /**
+   * Tests a scan whose pattern can fail to match, which filters as well as
+   * binds: it becomes a {@code projectMany} whose body yields one element where
+   * the pattern matches and none where it does not.
+   */
+  @Test
+  void testFailablePattern() {
+    assertThat(
+        plan("from (i, 2) in [(1, 2), (3, 4)]"),
+        is(
+            "projectMany\n" //
+                + "  [(1, 2), (3, 4)]\n"
+                + "  fn v$1 =>\n"
+                + "    case v$1 of (i, 2) => [i] | _ => []\n"));
+    assertThat(
+        plan("from (x :: xs) in [[1, 2], []] yield x"),
+        is(
+            "project [#x $0]\n" //
+                + "  projectMany\n"
+                + "    [[1, 2], []]\n"
+                + "    fn v$1 =>\n"
+                + "      case v$1 of op ::((x, xs)) => [{x = x, xs = xs}] | _ => []\n"));
+  }
+
+  /**
    * Tests that the shadow runs. It is an {@code assert} statement, so it does
    * nothing unless the test JVM enables assertions.
    */
@@ -289,8 +303,6 @@ public class RelTranslatorTest {
             "from r in [{id = 1, items = [2]}] "
                 + "left join i in r.items on i > 2"),
         nullValue());
-    // A pattern that can fail to match also filters.
-    assertThat(plan("from SOME i in [SOME 1, NONE]"), nullValue());
   }
 }
 

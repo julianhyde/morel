@@ -29,6 +29,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
@@ -192,7 +193,15 @@ public class RelTranslator {
       // element.
       exp = scan.exp;
       if (!destructure(scan.pat, core.input0(rightElementType), access)) {
-        return false;
+        // The pattern can fail to match, so the scan filters as well as
+        // binds.
+        access.clear();
+        final Core.@Nullable Exp exp2 =
+            matchMany(scan.exp, scan.pat, elementType(scan.env));
+        if (exp2 == null) {
+          return false;
+        }
+        exp = exp2;
       }
       if (!scan.condition.isBoolLiteral(true)) {
         exp = core.filter(exp, rewrite(scan.condition));
@@ -261,6 +270,42 @@ public class RelTranslator {
             substitute(scan.condition, condAccess),
             element(yieldAccess, wanted));
     return true;
+  }
+
+  /**
+   * Returns a collection of the elements that match a pattern, for a scan whose
+   * pattern can fail: a {@code projectMany} whose body yields one element where
+   * the pattern matches and none where it does not.
+   *
+   * <p>The pattern binds its own names, as a lambda's parameter does, so the
+   * element is built from those names rather than from {@code $0}.
+   */
+  private Core.@Nullable Exp matchMany(
+      Core.Exp collection, Core.Pat pat, Type wanted) {
+    final Map<Core.NamedPat, Core.Exp> binderAccess = new LinkedHashMap<>();
+    for (Core.NamedPat binder : pat.expand()) {
+      binderAccess.put(binder, core.id(binder));
+    }
+    final Core.Exp element = element(binderAccess, wanted);
+    final Type elementType = collection.type.elementType();
+    final Core.IdPat param =
+        core.idPat(elementType, typeSystem.nameGenerator.get(), 0);
+    final Core.Exp body =
+        core.caseOf(
+            Pos.ZERO,
+            typeSystem.listType(element.type),
+            core.id(param),
+            ImmutableList.of(
+                core.match(
+                    Pos.ZERO,
+                    pat,
+                    core.list(
+                        typeSystem, element.type, ImmutableList.of(element))),
+                core.match(
+                    Pos.ZERO,
+                    core.wildcardPat(elementType),
+                    core.list(typeSystem, element.type, ImmutableList.of()))));
+    return core.projectMany(typeSystem, collection, param, body);
   }
 
   /**
