@@ -23,7 +23,6 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.common.base.CaseFormat;
 import com.google.common.base.Enums;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
 import java.io.File;
@@ -414,20 +413,72 @@ public enum Prop {
       checkArgument(
           !required, "required property %s must have default value", camelName);
     } else {
-      checkArgument(validValue(type, defaultValue));
+      checkArgument(isValid(defaultValue));
     }
   }
 
-  private boolean validValue(Class<?> type, Object value) {
-    if (type == BigInteger.class
+  /** Returns whether a given value is valid for this property. */
+  public boolean isValid(Object value) {
+    return isValid(value, false);
+  }
+
+  /**
+   * Returns whether a given value is valid for this property, allowing
+   * conversions if {@code lenient}.
+   */
+  public boolean isValid(Object value, boolean lenient) {
+    return isPropertyType(type)
+        && (type.isInstance(value) || lenient && convert(value) != null);
+  }
+
+  /** Returns whether a property may have a given type. */
+  private static boolean isPropertyType(Class<?> type) {
+    return type == BigInteger.class
         || type == Boolean.class
         || type == File.class
         || type == Integer.class
         || type == String.class
-        || type.isEnum()) {
-      return type.isInstance(value);
+        || type.isEnum();
+  }
+
+  /**
+   * Converts a property value to the correct type. Assumes that it is not null
+   * and is not the correct type. Returns null if it cannot be converted.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private @Nullable Object convert(Object value) {
+    if (type.isEnum() && value instanceof String) {
+      final String name = ((String) value).toUpperCase(Locale.ROOT);
+      return Enums.getIfPresent((Class<Enum>) type, name).orNull();
     }
-    return false;
+    if (type == BigInteger.class) {
+      if (value instanceof Integer) {
+        return BigInteger.valueOf((Integer) value);
+      }
+      if (value instanceof String) {
+        try {
+          return new BigInteger((String) value);
+        } catch (NumberFormatException e) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Returns the message to give for a value this property cannot take. */
+  private String invalidValueMessage(Object value) {
+    if (type.isEnum()) {
+      String values =
+          Arrays.stream((Enum[]) type.getEnumConstants())
+              .map(Enum::name)
+              .collect(Collectors.joining("', '", "'", "'"));
+      return "value must be one of: " + values;
+    }
+    if (type == BigInteger.class) {
+      return "value must be a number: " + value;
+    }
+    return "value for property must have type " + type;
   }
 
   /** Looks up a property by name. Throws if not found; never returns null. */
@@ -468,11 +519,11 @@ public enum Prop {
     return this.<Integer>typeValue(o);
   }
 
-  /** Returns the value of this property as a {@link BigInteger}. */
+  /** Returns the value of a {@link BigInteger} property. */
   public BigInteger bigIntegerValue(Map<Prop, Object> map) {
     checkType(BigInteger.class);
     Object o = map.get(this);
-    return this.<BigInteger>typeValue(o);
+    return this.typeValue(o);
   }
 
   /** Returns the value of a string property. */
@@ -509,39 +560,13 @@ public enum Prop {
   }
 
   /** Sets the value of a property, allowing strings for enum types. */
-  @SuppressWarnings({"rawtypes", "unchecked"})
   public void setLenient(Map<Prop, Object> map, @Nullable Object value) {
-    if (type.isEnum() && value instanceof String) {
-      Optional<Enum> optional =
-          Enums.getIfPresent(
-              (Class<Enum>) type, ((String) value).toUpperCase(Locale.ROOT));
-      if (!optional.isPresent()) {
-        String values =
-            Arrays.stream((Enum[]) type.getEnumConstants())
-                .map(Enum::name)
-                .collect(Collectors.joining("', '", "'", "'"));
-        throw new RuntimeException("value must be one of: " + values);
+    if (value != null && !type.isInstance(value)) {
+      @Nullable Object converted = convert(value);
+      if (converted == null) {
+        throw new RuntimeException(invalidValueMessage(value));
       }
-      set(map, optional.get());
-      return;
-    }
-    if (type == BigInteger.class && !(value instanceof BigInteger)) {
-      // A Morel "int" stops at 2^31 - 1, so a larger value is written as a
-      // numeral in a string.
-      if (value instanceof Integer) {
-        set(map, BigInteger.valueOf((Integer) value));
-        return;
-      }
-      if (value instanceof String) {
-        final BigInteger bigInteger;
-        try {
-          bigInteger = new BigInteger((String) value);
-        } catch (NumberFormatException e) {
-          throw new RuntimeException("value must be a number: " + value);
-        }
-        set(map, bigInteger);
-        return;
-      }
+      value = converted;
     }
     set(map, value);
   }
