@@ -73,6 +73,7 @@ public final class Parsers {
           "andalso",
           "as",
           "case",
+          "check",
           "compute",
           "current",
           "datatype",

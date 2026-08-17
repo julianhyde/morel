@@ -1,0 +1,52 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Tests constrained types, i.e. a 'type' declaration with a 'check' clause.
+ *)
+
+Sys.set ("lineWidth", 78);
+> val it = () : unit
+
+(* A 'check' clause on a type declaration states a constraint on the type.
+ * The constraint is parsed but not yet enforced. *)
+type nat = int check i => i >= 0;
+> type nat = int
+val n: nat = 5;
+> val n = 5 : nat
+
+(*) A clause may be repeated; each adds a constraint.
+type batchSize = int check i => i >= 1 check j => j <= 12;
+> type batchSize = int
+
+(*) The match may have more than one branch, and need not be exhaustive.
+type badPair = (bool * int) check
+    (true, 0) => true
+  | (false, i) => i mod 2 = 0;
+> type badPair = bool * int
+
+(*) The value the match binds may be destructured.
+type parityPair = {i: int, j: int} check {i, j} => i mod 2 = j mod 2;
+> type parityPair = {i:int, j:int}
+
+(*) A type without a clause is unaffected.
+type plain = int;
+> type plain = int
+val p: plain = 5;
+> val p = 5 : plain
+
+(*) End check.smli

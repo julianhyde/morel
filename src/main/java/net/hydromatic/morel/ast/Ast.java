@@ -1531,12 +1531,23 @@ public class Ast {
     public final List<TyVar> tyVars;
     public final Id name;
     public final Type type;
+    /**
+     * Constraints on the type, one per {@code check} clause, each a match from
+     * a value of the type to {@code bool}. Empty if the type is unconstrained.
+     */
+    public final List<Match> checks;
 
-    TypeBind(Pos pos, ImmutableList<TyVar> tyVars, Id name, Type type) {
+    TypeBind(
+        Pos pos,
+        ImmutableList<TyVar> tyVars,
+        Id name,
+        Type type,
+        ImmutableList<Match> checks) {
       super(pos, Op.TYPE_DECL);
       this.tyVars = requireNonNull(tyVars);
       this.name = requireNonNull(name);
       this.type = requireNonNull(type);
+      this.checks = requireNonNull(checks);
     }
 
     @Override
@@ -1550,7 +1561,8 @@ public class Ast {
           || o instanceof TypeBind
               && name.equals(((TypeBind) o).name)
               && tyVars.equals(((TypeBind) o).tyVars)
-              && type.equals(((TypeBind) o).type);
+              && type.equals(((TypeBind) o).type)
+              && checks.equals(((TypeBind) o).checks);
     }
 
     public TypeBind accept(Shuttle shuttle) {
@@ -1564,10 +1576,14 @@ public class Ast {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return TyVar.unparseList(w, tyVars)
+      TyVar.unparseList(w, tyVars)
           .id(name.name)
           .append(" = ")
           .append(type, 0, 0);
+      for (Match check : checks) {
+        w.append(" check ").append(check, 0, 0);
+      }
+      return w;
     }
   }
 

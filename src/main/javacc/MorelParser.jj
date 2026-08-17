@@ -1822,14 +1822,20 @@ void typeBind(List<Ast.TypeBind> typeBinds) :
   final Ast.Id id;
   final List<TyCon> tyCons = new ArrayList<>();
   final Type type;
+  final List<Match> checks = new ArrayList<>();
+  List<Match> matchList;
 }
 {
   tyVars = tyVars()
   id = identifier()
   <EQ>
-  type = type() {
+  type = type()
+  (
+    <CHECK> matchList = matchList() { checks.addAll(matchList); }
+  )*
+  {
     final Pos pos = tyVars.left.plus(type.pos);
-    typeBinds.add(ast.typeBind(pos, id, tyVars.right, type));
+    typeBinds.add(ast.typeBind(pos, id, tyVars.right, type, checks));
   }
 }
 
@@ -2548,6 +2554,7 @@ AstNode statementEof() :
 | < ANDALSO: "andalso" >
 | < AS: "as" >
 | < CASE: "case" >
+| < CHECK: "check" >
 | < DATATYPE: "datatype" >
 | < DIV: "div" >
 | < ELSE: "else" >
