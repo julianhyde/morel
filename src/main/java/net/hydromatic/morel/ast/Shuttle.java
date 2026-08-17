@@ -691,7 +691,8 @@ public class Shuttle {
         typeSystem,
         projectMany.input.accept(this),
         projectMany.param.accept(this),
-        projectMany.body.accept(this));
+        projectMany.body.accept(this),
+        projectMany.ifEmpty == null ? null : projectMany.ifEmpty.accept(this));
   }
 
   protected Core.Join visit(Core.Join join) {

@@ -213,9 +213,10 @@ public class RelTranslator {
     final Type wanted = elementType(scan.env);
 
     if (dependsOnBindings(scan.exp)) {
-      if (joinType != Core.Rel.JoinType.INNER) {
-        // An outer apply: a left element whose collection is empty still
-        // yields a row, which projectMany cannot express.
+      if (joinType == Core.Rel.JoinType.RIGHT
+          || joinType == Core.Rel.JoinType.FULL) {
+        // Every element of a correlated collection comes from some left
+        // element, so there is nothing for the other side to be outer to.
         return false;
       }
       // A correlated scan. The lambda's parameter names the left element,
@@ -226,14 +227,37 @@ public class RelTranslator {
       if (!destructure(scan.pat, core.input0(rightElementType), rightAccess)) {
         return false;
       }
+      final Map<Core.NamedPat, Core.Exp> yieldAccess =
+          new LinkedHashMap<>(outerAccess);
+      final Map<Core.NamedPat, Core.Exp> emptyAccess =
+          new LinkedHashMap<>(outerAccess);
+      // A correlated outer join yields SOME of each right binder where the
+      // collection has elements, and NONE for all of them where it does not.
+      for (Map.Entry<Core.NamedPat, Core.Exp> entry : rightAccess.entrySet()) {
+        if (joinType == Core.Rel.JoinType.INNER) {
+          yieldAccess.put(entry.getKey(), entry.getValue());
+          continue;
+        }
+        final Core.@Nullable NamedPat binding =
+            binding(scan.env, entry.getKey().name);
+        if (binding == null) {
+          return false;
+        }
+        yieldAccess.put(entry.getKey(), some(binding.type, entry.getValue()));
+        emptyAccess.put(entry.getKey(), none(binding.type));
+      }
       final Map<Core.NamedPat, Core.Exp> combined =
           both(outerAccess, rightAccess);
       Core.Exp body = substitute(scan.exp, outerAccess);
       if (!scan.condition.isBoolLiteral(true)) {
         body = core.filter(body, substitute(scan.condition, combined));
       }
-      body = core.project(typeSystem, body, element(combined, wanted));
-      exp = core.projectMany(typeSystem, left, param, body);
+      body = core.project(typeSystem, body, element(yieldAccess, wanted));
+      final Core.@Nullable Exp ifEmpty =
+          joinType == Core.Rel.JoinType.INNER
+              ? null
+              : element(emptyAccess, wanted);
+      exp = core.projectMany(typeSystem, left, param, body, ifEmpty);
       return true;
     }
 
@@ -251,13 +275,20 @@ public class RelTranslator {
       yieldAccess = condAccess;
     } else {
       yieldAccess = new LinkedHashMap<>();
-      if (!side(yieldAccess, access, 0, joinType.leftIsOption(), scan.env)
+      if (!side(
+              yieldAccess,
+              access,
+              0,
+              joinType.leftIsOption(),
+              scan.env,
+              left.type.elementType())
           || !side(
               yieldAccess,
               rightAccess,
               1,
               joinType.rightIsOption(),
-              scan.env)) {
+              scan.env,
+              rightElementType)) {
         return false;
       }
     }
@@ -322,25 +353,75 @@ public class RelTranslator {
       Map<Core.NamedPat, Core.Exp> sideAccess,
       int i,
       boolean option,
-      Core.StepEnv env) {
+      Core.StepEnv env,
+      Type rawElementType) {
     if (!option) {
       yieldAccess.putAll(sideAccess);
       return true;
     }
-    if (sideAccess.size() != 1) {
-      return false;
+    final Core.Id rawRef = core.input(rawElementType, i);
+    final Core.Id optionRef = core.input(typeSystem.option(rawElementType), i);
+    for (Map.Entry<Core.NamedPat, Core.Exp> entry : sideAccess.entrySet()) {
+      final Core.@Nullable NamedPat binding = binding(env, entry.getKey().name);
+      if (binding == null) {
+        return false;
+      }
+      yieldAccess.put(
+          entry.getKey(),
+          optionize(entry.getValue(), rawRef, optionRef, binding.type));
     }
-    final Map.Entry<Core.NamedPat, Core.Exp> only =
-        sideAccess.entrySet().iterator().next();
-    if (only.getValue().op != Op.ID) {
-      return false;
-    }
-    final Core.@Nullable NamedPat binding = binding(env, only.getKey().name);
-    if (binding == null) {
-      return false;
-    }
-    yieldAccess.put(only.getKey(), core.input(binding.type, i));
     return true;
+  }
+
+  /**
+   * Re-expresses an access into an element as an access into an option of that
+   * element, for the yield of an outer join.
+   *
+   * <p>Where the binder is the whole element, the option-typed input reference
+   * is the access. Otherwise the access is mapped through the option, because
+   * Morel makes each binder of the absent side an option, not the side as a
+   * whole: {@code left join (j, k) in pairs} binds {@code j : int option} and
+   * {@code k : int option}, not {@code (int * int) option}.
+   */
+  private Core.Exp optionize(
+      Core.Exp access, Core.Id rawRef, Core.Id optionRef, Type optionType) {
+    if (access.op == Op.ID) {
+      return optionRef;
+    }
+    final Core.IdPat param =
+        core.idPat(rawRef.type, typeSystem.nameGenerator.get(), 0);
+    final Core.Exp body =
+        access.accept(
+            new Shuttle(typeSystem) {
+              @Override
+              protected Core.Exp visit(Core.Id id) {
+                return id.idPat.name.equals(rawRef.idPat.name)
+                    ? core.id(param)
+                    : id;
+              }
+            });
+    final Core.Fn fn =
+        core.fn(typeSystem.fnType(rawRef.type, body.type), param, body);
+    final Core.Exp map = core.functionLiteral(typeSystem, BuiltIn.OPTION_MAP);
+    return core.apply(
+        Pos.ZERO,
+        optionType,
+        core.apply(
+            Pos.ZERO, typeSystem.fnType(optionRef.type, optionType), map, fn),
+        optionRef);
+  }
+
+  /** Wraps a value in {@code SOME}. */
+  private Core.Exp some(Type optionType, Core.Exp value) {
+    final Core.Id someId =
+        core.id(
+            core.idPat(typeSystem.fnType(value.type, optionType), "SOME", 0));
+    return core.apply(Pos.ZERO, optionType, someId, value);
+  }
+
+  /** Returns {@code NONE} of a given option type. */
+  private Core.Exp none(Type optionType) {
+    return core.id(core.idPat(optionType, "NONE", 0));
   }
 
   /** Returns the binding of a given name in a step's environment, or null. */

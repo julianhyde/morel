@@ -829,12 +829,31 @@ public enum CoreBuilder {
    */
   public Core.ProjectMany projectMany(
       TypeSystem typeSystem, Core.Exp input, Core.IdPat param, Core.Exp body) {
+    return projectMany(typeSystem, input, param, body, null);
+  }
+
+  /**
+   * Creates a {@code projectMany} that, if {@code ifEmpty} is not null, yields
+   * that element where the body yields none -- an outer apply.
+   */
+  public Core.ProjectMany projectMany(
+      TypeSystem typeSystem,
+      Core.Exp input,
+      Core.IdPat param,
+      Core.Exp body,
+      Core.@Nullable Exp ifEmpty) {
     checkCollection(input);
     checkCollection(body);
+    final Type elementType = body.type.elementType();
+    if (ifEmpty != null && !ifEmpty.type.equals(elementType)) {
+      throw new IllegalArgumentException(
+          format(
+              "ifEmpty must have the element type %s: %s",
+              elementType, ifEmpty.type));
+    }
     final boolean ordered = isOrdered(input) && isOrdered(body);
-    final Type type =
-        collectionType(typeSystem, ordered, body.type.elementType());
-    return new Core.ProjectMany(type, input, param, body);
+    final Type type = collectionType(typeSystem, ordered, elementType);
+    return new Core.ProjectMany(type, input, param, body, ifEmpty);
   }
 
   /** Creates an inner join. */

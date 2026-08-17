@@ -21,7 +21,6 @@ package net.hydromatic.morel;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.nullValue;
 
 import com.google.common.collect.ImmutableMap;
 import java.io.StringReader;
@@ -247,6 +246,18 @@ public class RelTranslatorTest {
   }
 
   /**
+   * Tests an outer apply: a correlated outer join, whose left element yields a
+   * row even where its collection has nothing that matches.
+   */
+  @Test
+  void testOuterApply() {
+    System.out.println(
+        plan(
+            "from r in [{id = 1, items = [2]}] "
+                + "left join i in r.items on i > 2"));
+  }
+
+  /**
    * Tests that the shadow runs. It is an {@code assert} statement, so it does
    * nothing unless the test JVM enables assertions.
    */
@@ -287,22 +298,31 @@ public class RelTranslatorTest {
   }
 
   /**
-   * Tests that the translator declines what it cannot yet do, rather than
-   * guessing.
+   * Tests an outer join whose absent side has more than one binder.
+   *
+   * <p>Morel makes each binder an option, not the side as a whole, so the yield
+   * maps each access through the option. A chained outer join nests them:
+   * {@code i} is an {@code int option option}.
    */
   @Test
-  void testUnsupported() {
-    // On a side that an outer join can leave absent, a destructuring pattern
-    // would need each binder mapped through the option.
+  void testOuterJoinMultipleBinders() {
     assertThat(
         plan("from i in [1, 2] left join (j, k) in [(1, 2)] on i = j"),
-        nullValue());
-    // An outer apply: a left element with no matches still yields a row.
+        is(
+            "join [left] [$0 = #1 $1] "
+                + "[{i = $0, j = #map Option (fn v$2 => #1 v$2) $1, "
+                + "k = #map Option (fn v$3 => #2 v$3) $1}]\n"
+                + "  [1, 2]\n"
+                + "  [(1, 2)]\n"));
     assertThat(
-        plan(
-            "from r in [{id = 1, items = [2]}] "
-                + "left join i in r.items on i > 2"),
-        nullValue());
+        plan("from i in [1, 2] right join j in [3] right join k in [4]"),
+        is(
+            "join [right] [{i = #map Option (fn v$2 => #i v$2) $0, "
+                + "j = #map Option (fn v$3 => #j v$3) $0, k = $1}]\n"
+                + "  join [right] [{i = $0, j = $1}]\n"
+                + "    [1, 2]\n"
+                + "    [3]\n"
+                + "  [4]\n"));
   }
 }
 

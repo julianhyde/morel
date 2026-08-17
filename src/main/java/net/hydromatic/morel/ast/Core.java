@@ -2540,10 +2540,21 @@ public class Core {
     public final IdPat param;
     public final Exp body;
 
-    ProjectMany(Type type, Exp input, IdPat param, Exp body) {
+    /**
+     * Element to yield where the body yields none, or null if such an input
+     * element yields nothing. It is an expression over {@link #param}, and it
+     * is what makes this node an outer apply: {@code from r in orders left join
+     * i in r.items on p} yields a row for an order whose items all fail the
+     * condition.
+     */
+    public final @Nullable Exp ifEmpty;
+
+    ProjectMany(
+        Type type, Exp input, IdPat param, Exp body, @Nullable Exp ifEmpty) {
       super(Op.PROJECT_MANY, type, input);
       this.param = requireNonNull(param, "param");
       this.body = requireNonNull(body, "body");
+      this.ifEmpty = ifEmpty;
     }
 
     @Override
@@ -2558,6 +2569,12 @@ public class Core {
       indent(b, indent + 2);
       b.append("fn ").append(param.name).append(" =>").append('\n');
       describeInput(body, b, indent + 4, withTypes);
+      if (ifEmpty != null) {
+        indent(b, indent + 2);
+        b.append("ifEmpty");
+        arg(b, ifEmpty);
+        b.append('\n');
+      }
     }
 
     @Override
@@ -2571,10 +2588,17 @@ public class Core {
     }
 
     public ProjectMany copy(
-        TypeSystem typeSystem, Exp input, IdPat param, Exp body) {
-      return input == this.input && param == this.param && body == this.body
+        TypeSystem typeSystem,
+        Exp input,
+        IdPat param,
+        Exp body,
+        @Nullable Exp ifEmpty) {
+      return input == this.input
+              && param == this.param
+              && body == this.body
+              && ifEmpty == this.ifEmpty
           ? this
-          : core.projectMany(typeSystem, input, param, body);
+          : core.projectMany(typeSystem, input, param, body, ifEmpty);
     }
   }
 
