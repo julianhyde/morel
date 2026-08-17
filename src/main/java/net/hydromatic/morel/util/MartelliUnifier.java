@@ -67,6 +67,8 @@ public class MartelliUnifier extends Unifier {
     // if x in vars(f(s0, ..., sk))
 
     final Map<Variable, Term> result = new LinkedHashMap<>();
+    // Alias terms that met a different type, and what they expand to.
+    final Map<Term, Term> weakened = new LinkedHashMap<>();
     final Work work = new Work(tracer, termPairs, constraints, result);
     for (int iteration = 0; ; iteration++) {
       // delete
@@ -90,6 +92,14 @@ public class MartelliUnifier extends Unifier {
           final Term left2 = headReduce(left);
           final Term right2 = headReduce(right);
           if (left2 != left || right2 != right) {
+            // An alias met a different type, so it is only as strong as what
+            // it abbreviates: remember to weaken it in the substitution.
+            if (left2 != left) {
+              weakened.put(left, left2);
+            }
+            if (right2 != right) {
+              weakened.put(right, right2);
+            }
             if (conflictsAtHead(left2, right2)) {
               // The expansions still disagree, so report the aliases that were
               // written rather than what they expand to.
@@ -181,6 +191,9 @@ public class MartelliUnifier extends Unifier {
             && constraint.termActions.size() > 1) {
           residualConstraints.add(constraint.constraint);
         }
+      }
+      if (!weakened.isEmpty()) {
+        result.replaceAll((v, t) -> weaken(t, weakened));
       }
       return SubstitutionResult.create(result, residualConstraints);
     }
@@ -282,6 +295,35 @@ public class MartelliUnifier extends Unifier {
    * TypeResolver.ALIAS_TY_CON}.
    */
   private static final String ALIAS_PREFIX = "$alias:";
+
+  /**
+   * Replaces, throughout a term, each alias that met a different type during
+   * unification with what it expands to.
+   *
+   * <p>An alias is only as strong as what it abbreviates, so where {@code nat}
+   * meets {@code int} the result is {@code int}. Without this the first type
+   * seen would win, and {@code [n, i]} and {@code [i, n]} would differ.
+   */
+  private static Term weaken(Term term, Map<Term, Term> weakened) {
+    final Term replacement = weakened.get(term);
+    if (replacement != null) {
+      return weaken(replacement, weakened);
+    }
+    if (term instanceof Sequence) {
+      final Sequence sequence = (Sequence) term;
+      final List<Term> terms = new ArrayList<>();
+      boolean changed = false;
+      for (Term t : sequence.terms) {
+        final Term t2 = weaken(t, weakened);
+        changed |= t2 != t;
+        terms.add(t2);
+      }
+      if (changed) {
+        return new Sequence(sequence.operator, terms);
+      }
+    }
+    return term;
+  }
 
   /**
    * Expands a type alias, repeatedly, or returns the term unchanged.

@@ -139,12 +139,22 @@ For a plain alias that is harmless, since the alias and its expansion are the
 same type. For a constrained type it is **unsound**, and `n - 100` is the
 plan's own first example of a value that must lose its constraint.
 
-So an overloaded operator whose result may differ from its arguments has to
-reduce a constrained argument type to its base type before choosing the result
-type. It is not enough to treat this as a special case of `-`: every operator
-that computes a new value is affected, and the ones that merely select or
-compare (`#1`, `=`, `<`) are not. The rule is the same one parametricity
-gives: a constraint survives only where the value does.
+**The meet rule handles the binary operators.** Since `+` has type `'a * 'a ->
+'a`, its two operand types meet, and an alias meeting `int` weakens to `int`.
+So `n + 1` and `n - 100` now report `int`, as Standard ML does, without
+arithmetic being special-cased.
+
+What remains is the **unary** case, where nothing meets:
+
+```sml
+~n;       (*) Morel gives 'nat'; Standard ML gives 'int'
+```
+
+`~` has type `'a -> 'a`, so the argument's type flows straight to the result.
+For an alias that is a cosmetic difference from Standard ML; for a constrained
+type it is unsound, since `~n` is negative whenever `n` is positive. An
+operator that computes a new value from a single argument must drop the
+constraint explicitly.
 
 ### The invariant
 
@@ -839,12 +849,18 @@ Each phase should land with its own tests, rather than deferring them:
 
 ## Phases
 
-1. **Abbreviations propagate.** Unify up to head-reduction rather than
-   expanding eagerly, so an abbreviation survives inference. Not required by
-   the Definition, and it changes existing printed types, so it is worth its
-   own issue. Unlike SML/NJ, when two concrete types with the same erasure
-   meet, take the weaker: order-independent, and sound once constraints are
-   involved. `check` nodes then ride on the same mechanism.
+1. ~~**Abbreviations propagate.**~~ **Done.** An alias now survives
+   inference, by unifying up to head-reduction. The design that landed differs
+   from the one sketched here: an alias reaches only the type *displayed for a
+   binding*, and every type the compiler examines has its aliases expanded, so
+   nothing that inspects a type structurally has to know an alias exists.
+   `check` nodes ride on the same mechanism.
+
+   The **meet rule** is done too: where an alias meets a different type the
+   result is the weaker of the two, so `[n, i]` and `[i, n]` are both `int
+   list`, whichever is seen first. The unifier records each alias it had to
+   expand in order to unify, and weakens it in the substitution on the way
+   out.
 2. **Syntax.** `check` in `typbind`; `as` and `asOpt` expressions; append
    `| _ => false` per the rule above — blindly if `matchCoverageEnabled` is
    false, otherwise only when `isExhaustive` says the match has a gap — before
