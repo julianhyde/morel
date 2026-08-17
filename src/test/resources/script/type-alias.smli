@@ -27,7 +27,7 @@ val x: myInt = 5;
 val x = 6 : myInt;
 > val x = 6 : myInt
 val x = (6 : myInt) + 1;
-> val x = 7 : int
+> val x = 7 : myInt
 
 (*) Deduce list type based on first element
 val list = [1: myInt];
@@ -158,5 +158,68 @@ x4;
 > val it = P4 : ?.e4
 val y4 = R4;
 > val y4 = R4 : e4
+
+(* An alias survives inference, so it is visible in the type of an expression
+ * that does not mention it. Standard ML behaves the same way. *)
+type nat2 = int;
+> type nat2 = int
+val n: nat2 = 5;
+> val n = 5 : nat2
+n;
+> val it = 5 : nat2
+[n];
+> val it = [5] : nat2 list
+{a = n};
+> val it = {a=5} : {a:nat2}
+(n, n);
+> val it = (5,5) : nat2 * nat2
+val ns: nat2 list = [1, 2];
+> val ns = [1,2] : nat2 list
+List.hd ns;
+> val it = 1 : nat2
+List.map (fn i => i) ns;
+> val it = [1,2] : nat2 list
+val p: nat2 * nat2 = (1, 2);
+> val p = (1,2) : nat2 * nat2
+#1 p;
+> val it = 1 : nat2
+
+(* It is lost where an operation needed the type it abbreviates, which is
+ * where the value may have changed. *)
+List.map (fn i => i - 1) ns;
+> val it = [0,1] : int list
+
+(*) A parameter and a result keep it.
+fun f (x: nat2) = x;
+> val f = fn : nat2 -> nat2
+fun g (x: nat2): nat2 = x;
+> val g = fn : nat2 -> nat2
+
+(* A type the compiler examines structurally has its aliases expanded, so
+ * choosing an overload, aggregating and printing all behave as they do for
+ * the underlying type. *)
+n + 1;
+> val it = 6 : nat2
+from x in ns compute sum over x;
+> val it = 3 : nat2
+List.length ns;
+> val it = 2 : int
+
+(*) Two aliases of the same type are interchangeable; of different types, not.
+type count = int;
+> type count = int
+val c: count = n;
+> val c = 5 : count
+type name = string;
+> type name = string
+val bad: name = n;
+> stdIn:1.1-1.18 Error: Cannot deduce type: conflict: name (alias for string) vs nat2 (alias for int)
+>   raised at: stdIn:1.1-1.18
+
+(*) A parameterized alias is expanded.
+type 'a my_list2 = 'a list;
+> type 'a my_list2 = 'a list
+val ml: int my_list2 = [1, 2];
+> val ml = [1,2] : int list
 
 (*) End type-alias.smli
