@@ -631,9 +631,36 @@ from p: parity_pair where p.i elem [0..2] andalso p.j elem [5..8];
 >   : {i:int, j:int} bag
 ```
 
-There is no value to check, so no narrowing can help. `Extents` already
-deduces "the set of values a variable can take", so this is where it plugs in
-— but a constraint must be *readable* by the planner, not merely callable.
+There is no value to check, so no narrowing can help; the constraint has to
+reach the planner.
+
+**Most of this now exists.** Unbounded scans over a written type landed in
+#440 and #443, and `Extents` already grounds a variable from an `elem`
+constraint. Writing the constraint by hand gives the answer the issue asks
+for, exactly:
+
+```sml
+type pair = {i: int, j: int};
+from {i, j}: pair
+  where i elem [0..2] andalso j elem [5..8]
+  andalso i mod 2 = j mod 2;
+> val it = [{i=0,j=6},{i=0,j=8},{i=1,j=5},{i=1,j=7},{i=2,j=6},{i=2,j=8}]
+>   : {i:int, j:int} list
+```
+
+So two things remain, both smaller than "teach the planner about
+constraints":
+
+1. **Conjoin the type's `check` predicate into the scan's filter.** Mechanical
+   once `check` exists, and the example above is the result.
+2. **Ground a record variable from a constraint on a field selection.** A
+   destructured pattern already works, but the issue writes `p.i elem
+   [0..2]`, and that reports "pattern 'p' is not grounded". Either teach
+   `Extents` to ground `p` from constraints on `p.i`, or accept the
+   destructured form.
+
+Note the issue's expected output says `bag`; a scan currently yields a
+`list`.
 
 ### G. The predicate itself
 
@@ -830,8 +857,9 @@ Each phase should land with its own tests, rather than deferring them:
    the blame path.
 5. **Rejections.** Constrained function types (D) and conversions between
    different erasures, with messages that say which.
-6. **Planner.** Teach `Extents` to read constraints so a constrained type can
-   be scanned (F). Overlaps #240 and #241.
+6. **Planner.** Conjoin a type's `check` predicate into the filter of a scan
+   over it, and ground a record variable from constraints on its fields (F).
+   Smaller than it looks: #440 and #443 did the hard part.
 
 Deferred: constrained function types and any recovery of a constraint that has
 reached a type variable. Both need a type-directed dispatch mechanism; #290
