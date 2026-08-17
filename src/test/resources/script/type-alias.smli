@@ -54,6 +54,22 @@ val y: int * int = x;
 val z: intPair = y;
 > val z = (4,5) : intPair
 
+(* An alias may be the argument of a type constructor. 'option' and 'bag' are
+ * datatypes, and a datatype's arguments were not being examined, so binding a
+ * value of such a type threw. *)
+type nat = int;
+> type nat = int
+val someNat: nat option = SOME 5;
+> val someNat = SOME 5 : nat option
+val natBag: nat bag = bag [1, 2];
+> val natBag = [1,2] : nat bag
+val natList: nat list = [1, 2];
+> val natList = [1,2] : nat list
+val natFn: nat -> nat = fn i => i;
+> val natFn = fn : nat -> nat
+val nested: nat option option = SOME (SOME 5);
+> val nested = SOME (SOME 5) : nat option option
+
 (*) Define two aliases at once
 type myInt = int and myRealList = real list;
 > type myInt = int
