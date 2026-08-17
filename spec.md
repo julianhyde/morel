@@ -157,7 +157,7 @@ element that the enclosing expression performs — see §6, *Review*.
 
 | Constructor | Arguments | Element type | Scope |
 | --- | --- | --- | --- |
-| `projectMany` | `fn v => c`, `c` of collection type | element type of `c` | `v` names the input element |
+| `projectMany` | `fn v => c`, `c` of collection type; optional `ifEmpty` | element type of `c` | `v` names the input element, in `c` and in `ifEmpty` |
 
 `project` maps an element to one element; `projectMany` maps it to
 many, and is exactly monadic bind: `α coll * (α -> β coll) -> β
@@ -177,6 +177,31 @@ Dependence is not a mode of the node; it is the presence of a free
 occurrence of `v` in a leaf of the body, which the validator sees and
 a rule can guard on. There is no separate dependent-join
 constructor.
+
+**`ifEmpty` makes it an outer apply.** A correlated outer join —
+`from r in orders left join i in r.items on p` — yields a row for an
+order none of whose items satisfy `p`, which plain flat-map cannot
+do, because it has no element to map. The optional `ifEmpty`
+expression is that row: it has the node's element type, it is
+evaluated in the scope of `v` alone (there is no inner element to
+name), and it is used exactly when the body yields nothing.
+
+```
+projectMany
+  scott.orders
+  fn r =>
+    project [{i = SOME $0, r = r}]
+      filter [#units $0 > 2]
+        #items r
+  ifEmpty [{i = NONE, r = r}]
+```
+
+The `SOME` and the `NONE` are written by the expressions rather than
+implied by the node, because Morel makes each binder of the absent
+side an option and has no null to fill a row with. That is also why
+this is one argument on `projectMany` rather than a kind on it, as
+`join` has: the node needs the absent row's *value*, and only the
+query knows it.
 
 ### 3.4 Two inputs
 
@@ -211,6 +236,13 @@ join [left] [$0 = $1] [{a = $0, b = $1}]
 ```
 
 where `$1` is `int` in the condition and `int option` in the yield.
+
+Morel makes each *binder* of the absent side an option, not the side
+as a whole — `left join (j, k) in pairs` binds `j : int option` and
+`k : int option`, not `(int * int) option` — so a yield that reads
+more than one binder maps each access through the option, with
+`Option.map`. The node stays simple; the arithmetic of which value
+becomes `NONE` is in the expression, where a rule can see it.
 
 Set operators require the element types of all their inputs to be
 equal. They are n-ary; `distinct` distinguishes `union` from `union
