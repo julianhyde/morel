@@ -886,14 +886,19 @@ public class UtilTest {
   @Test
   void testProp() {
     // Every property is well-formed: its type is one a property may have, its
-    // name converts between the two cases, and its default value, if it has
-    // one, is valid.
+    // name converts between the two cases, and the value it yields when unset
+    // has its type.
+    final Map<Prop, Object> emptyMap = ImmutableMap.of();
     for (Prop prop : Prop.BY_CAMEL_NAME) {
       assertThat(prop.camelName, prop.typeName(), notNullValue());
       assertThat(prop.camelName, prop.description, not(emptyString()));
+      final Object value = prop.get(emptyMap);
+      if (value != null) {
+        assertThat(prop.camelName, prop.isValid(value), is(true));
+      }
       // "defaultValue" gives the value as it is displayed -- "classic" for
-      // the enum constant CLASSIC -- so it is a value the property can be
-      // read from rather than one it already holds.
+      // the enum constant CLASSIC -- so what is displayed is a value the
+      // property can be read from, rather than one it already holds.
       final Object defaultValue = prop.defaultValue();
       if (defaultValue != null) {
         assertThat(prop.camelName, prop.isValid(defaultValue, true), is(true));
