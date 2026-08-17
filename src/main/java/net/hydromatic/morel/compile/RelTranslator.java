@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
+import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,6 +31,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
@@ -102,6 +104,15 @@ public class RelTranslator {
 
   /** Translates one step, returning false if it cannot. */
   private boolean step(Core.FromStep step) {
+    if (exp == null && step.op != Op.SCAN) {
+      // A 'from' with no scan -- 'from where p', 'from yield e' -- iterates
+      // over a single element, which is unit.
+      exp =
+          core.list(
+              typeSystem,
+              PrimitiveType.UNIT,
+              ImmutableList.of(core.unitLiteral()));
+    }
     switch (step.op) {
       case SCAN:
         return scan((Core.Scan) step);
@@ -145,16 +156,9 @@ public class RelTranslator {
         return true;
 
       case UNION:
-        exp = core.union(typeSystem, distinct(step), setInputs(step));
-        return true;
-
       case INTERSECT:
-        exp = core.intersect(typeSystem, distinct(step), setInputs(step));
-        return true;
-
       case EXCEPT:
-        exp = core.except(typeSystem, distinct(step), setInputs(step));
-        return true;
+        return setOp((Core.SetStep) step);
 
       default:
         return false;
@@ -219,6 +223,74 @@ public class RelTranslator {
             substitute(scan.condition, combined),
             element(combined, wanted));
     return true;
+  }
+
+  /**
+   * Translates a set operator. Morel aligns the branches of a {@code union}, so
+   * an input whose element is a one-field record where the step describes a
+   * bare value (or the other way about) is converted with a projection.
+   */
+  private boolean setOp(Core.SetStep step) {
+    final Type wanted = elementType(step.env);
+    final List<Core.Exp> inputs = new ArrayList<>();
+    inputs.add(requireExp());
+    step.args.forEach(arg -> inputs.add(rewrite(arg)));
+    for (int i = 0; i < inputs.size(); i++) {
+      final Core.@Nullable Exp input = align(inputs.get(i), wanted);
+      if (input == null) {
+        return false;
+      }
+      inputs.set(i, input);
+    }
+    switch (step.op) {
+      case UNION:
+        exp = core.union(typeSystem, step.distinct, inputs);
+        return true;
+      case INTERSECT:
+        exp = core.intersect(typeSystem, step.distinct, inputs);
+        return true;
+      default:
+        exp = core.except(typeSystem, step.distinct, inputs);
+        return true;
+    }
+  }
+
+  /**
+   * Converts a collection so that its element has the wanted type, returning
+   * the input unchanged if it already does, or null if the conversion is not
+   * one of the two that branch alignment allows.
+   */
+  private Core.@Nullable Exp align(Core.Exp input, Type wanted) {
+    final Type elementType = input.type.elementType();
+    if (elementType.equals(wanted)) {
+      return input;
+    }
+    if (wanted instanceof RecordLikeType) {
+      // Wrap a bare value in the one-field record the step describes.
+      final Map<String, Type> nameTypes =
+          ((RecordLikeType) wanted).argNameTypes();
+      if (nameTypes.size() == 1
+          && nameTypes.values().iterator().next().equals(elementType)) {
+        final PairList<String, Core.Exp> nameExps = PairList.of();
+        nameExps.add(
+            nameTypes.keySet().iterator().next(), core.input0(elementType));
+        return core.project(
+            typeSystem, input, core.record(typeSystem, nameExps));
+      }
+    }
+    if (elementType instanceof RecordLikeType) {
+      // Unwrap a one-field record to the bare value the step describes.
+      final Map<String, Type> nameTypes =
+          ((RecordLikeType) elementType).argNameTypes();
+      if (nameTypes.size() == 1
+          && nameTypes.values().iterator().next().equals(wanted)) {
+        return core.project(
+            typeSystem,
+            input,
+            core.field(typeSystem, core.input0(elementType), 0));
+      }
+    }
+    return null;
   }
 
   private boolean group(Core.GroupStep group) {
@@ -291,21 +363,6 @@ public class RelTranslator {
     final PairList<String, Core.Exp> nameExps = PairList.of();
     access.forEach((pat, exp) -> nameExps.add(pat.name, exp));
     return core.record(typeSystem, nameExps);
-  }
-
-  private boolean distinct(Core.FromStep step) {
-    return ((Core.SetStep) step).distinct;
-  }
-
-  /**
-   * Returns the inputs of a set operator: the tree so far, and the step's
-   * arguments.
-   */
-  private List<Core.Exp> setInputs(Core.FromStep step) {
-    final List<Core.Exp> inputs = new ArrayList<>();
-    inputs.add(requireExp());
-    ((Core.SetStep) step).args.forEach(arg -> inputs.add(rewrite(arg)));
-    return inputs;
   }
 
   /**

@@ -114,6 +114,25 @@ node.
 A leaf binds nothing: its element flows out as a value, and the node
 above it names that value `$0`.
 
+A query with no scan — `from where p`, `from yield e`, or bare
+`from` — iterates over a single element, which is unit, so its leaf
+is `[()]`. Morel's own semantics are already this: `from where false`
+and `from u in [()] where false` both evaluate to `[] : unit list`,
+and `from yield 1 + 2` and `from u in [()] yield 1 + 2` both to
+`[3] : int list`. The tree writes down the element the query left
+implicit, so such a query prints a leaf its author did not write:
+
+```
+project [1 + 2]
+  [()]
+```
+
+That is the only intended difference, and it is in the plan text
+alone. A distinguished empty leaf, printing as nothing, was
+considered and rejected: it buys a little less noise in a rare query
+shape at the price of a constructor and of an exception to "a leaf is
+just an expression".
+
 ### 3.2 One input
 
 | Constructor | Arguments | Element type | Scope |
