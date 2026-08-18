@@ -83,6 +83,40 @@ List.hd [n2];
 List.map (fn i => i) [n2];
 > val it = [5] : nat list
 
+(* A condition must be closed: it may refer only to the value it is given and
+ * to the standard basis. That is what lets a constrained type be interned like
+ * any other type -- two constrained types are the same type when their
+ * conditions are textually equal, which would not follow if a condition could
+ * also depend on an environment -- and it settles what a condition means when
+ * the values it used are re-bound, by making the question not arise.
+ *
+ * Supporting a non-closed condition, by inlining what it refers to at the
+ * declaration so that the condition becomes closed, is a possible future
+ * feature; then the type would survive, with the values it used snapshotted
+ * as they were when it was declared. *)
+val limit = 12;
+> val limit = 12 : int
+fun lessThanDozen i = i >= 1 andalso i <= limit;
+> val lessThanDozen = fn : int -> bool
+type batch = int check i => lessThanDozen i;
+> stdIn:1.1-1.17 Error: condition of constrained type 'batch' is not closed; it refers to 'lessThanDozen'
+>   raised at: stdIn:1.1-1.17
+
+(*) Written out, the same condition is closed.
+type batch = int check i => i >= 1 andalso i <= 12;
+> type batch = int check i => i >= 1 andalso i <= 12
+val six: batch = 6;
+> val six = 6 : batch
+
+(*) A reference to the standard basis is closed; a built-in is not re-bindable.
+type nonEmpty = string check s => String.size s > 0;
+> type nonEmpty = string check s => #size String s > 0
+val hi: nonEmpty = "hi";
+> val hi = "hi" : nonEmpty
+val blank: nonEmpty = "";
+> uncaught exception Constraint ["" is not a valid nonEmpty]
+>   raised at: stdIn:1.5-1.25
+
 (*) A parameterized type may not be constrained.
 type 'a myList = 'a list check l => not (List.null l);
 > stdIn:1.6-1.25 Error: cannot constrain parameterized type 'myList'
