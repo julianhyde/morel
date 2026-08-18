@@ -189,7 +189,7 @@ public class TypeMap {
     // The term might be a sequence or a variable. We only materialize a type
     // if it is a variable. Materializing a type for every sequence allocated
     // lots of temporary type variables, and created a lot of noise in ref logs.
-    final Unifier.Term term = nodeTypeTerms.get(node);
+    final Unifier.Term term = TypeResolver.unaliasTerm(nodeTypeTerms.get(node));
     if (term instanceof Unifier.Sequence) {
       final Unifier.Sequence sequence = (Unifier.Sequence) term;
       // E.g. "record:a:b" becomes record type "{a:t0, b:t1}".

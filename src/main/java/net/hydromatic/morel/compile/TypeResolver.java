@@ -2397,6 +2397,7 @@ public class TypeResolver {
    * as an unresolved flex record.
    */
   private static @Nullable List<String> termFieldNames(Term t) {
+    t = unaliasTerm(t);
     if (!(t instanceof Sequence)) {
       return null;
     }
@@ -5214,6 +5215,20 @@ public class TypeResolver {
   /** Returns the name of an alias term. */
   static String aliasTermName(Sequence sequence) {
     return sequence.operator.substring(ALIAS_TY_CON.length() + 1);
+  }
+
+  /**
+   * Expands a term until it is not an alias term.
+   *
+   * <p>An alias is transparent, so anything that reads a term's structure --
+   * asking what fields a record has, say -- must look through it. An alias
+   * term's first argument is its body.
+   */
+  static Term unaliasTerm(Term term) {
+    while (isAliasTerm(term)) {
+      term = ((Sequence) term).terms.get(0);
+    }
+    return term;
   }
 
   private Term recordTerm(NavigableMap<String, ? extends Term> labelTypes) {
