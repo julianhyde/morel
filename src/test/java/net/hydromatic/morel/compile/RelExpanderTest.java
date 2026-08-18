@@ -170,7 +170,7 @@ public class RelExpanderTest {
       final String plan = expanded("from x where x > 1");
       fail("expected error, got " + plan);
     } catch (CompileException e) {
-      assertThat(e.getMessage(), containsString("cannot bound int"));
+      assertThat(e.getMessage(), containsString("pattern is not grounded"));
     }
   }
 }
