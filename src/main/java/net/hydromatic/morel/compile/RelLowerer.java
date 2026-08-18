@@ -34,6 +34,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -44,12 +45,18 @@ import org.jspecify.annotations.Nullable;
  * <p>This is the reverse of {@link RelTranslator}, and it is what step 2 of
  * {@code plan.md} means by "the step list survives as an unprinted lowering
  * artifact". Where the translation eliminates variables, the lowering
- * reintroduces them: each node's input element gets a binder, and {@code $0}
- * and {@code $1} become references to it.
+ * reintroduces them.
  *
- * <p>It is not an inverse in the structural sense, and does not try to be. The
- * check that matters is that a query lowered from its tree returns what it
- * returned before, which is what the script suite asserts on every run.
+ * <p>It linearizes. The tree is left-deep after translation, so one step list
+ * carries the whole left spine rather than each node nesting a {@code from} of
+ * its own. What makes that work is carrying a node's element as an
+ * <em>expression</em> over the step list's bindings instead of materializing
+ * it: a projection then changes the expression, not the steps, and {@code from
+ * e in emps, d in depts where p} lowers back to the three steps it began as.
+ *
+ * <p>The element is materialized, by a {@code yield}, only where something
+ * needs the row itself: before a set operator, before an outer join (which
+ * wraps whole bindings in {@code option}), and at the end.
  */
 public class RelLowerer {
   private final TypeSystem typeSystem;
@@ -60,158 +67,168 @@ public class RelLowerer {
 
   /** Lowers a tree into an executable expression. */
   public static Core.Exp lower(TypeSystem typeSystem, Core.Exp exp) {
-    return new RelLowerer(typeSystem).lower(exp);
+    return new RelLowerer(typeSystem).lowerRel(exp);
   }
 
-  private Core.Exp lower(Core.Exp exp) {
+  private Core.Exp lowerRel(Core.Exp exp) {
     if (!(exp instanceof Core.Rel)) {
       // A leaf is already an expression.
       return exp;
     }
+    final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+    materialize(fromBuilder, lowerInto(fromBuilder, exp));
+    return fromBuilder.build();
+  }
+
+  /**
+   * Appends the steps for a node, and returns an expression, over the step
+   * list's bindings, that denotes the node's element.
+   */
+  private Core.Exp lowerInto(FromBuilder fromBuilder, Core.Exp exp) {
+    if (!(exp instanceof Core.Rel)) {
+      return scan(fromBuilder, exp);
+    }
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      final Core.IdPat v = scan(fromBuilder, filter.input);
-      fromBuilder.where(subst(filter.condition, core.id(v), null));
-      return fromBuilder.build();
+      final Core.Exp element = lowerInto(fromBuilder, filter.input);
+      fromBuilder.where(subst(filter.condition, element, null));
+      return element;
     }
     if (exp instanceof Core.Project) {
+      // A projection changes the element, not the steps; nothing is emitted
+      // unless a later step needs the row.
       final Core.Project project = (Core.Project) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      final Core.IdPat v = scan(fromBuilder, project.input);
-      fromBuilder.yield_(subst(project.exp, core.id(v), null));
-      return fromBuilder.build();
+      final Core.Exp element = lowerInto(fromBuilder, project.input);
+      return subst(project.exp, element, null);
     }
     if (exp instanceof Core.ProjectMany) {
       final Core.ProjectMany projectMany = (Core.ProjectMany) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      final Core.IdPat v = scan(fromBuilder, projectMany.input);
-      // The lambda's parameter is the input element, which the scan has just
-      // bound; the body becomes a dependent scan.
+      final Core.Exp element = lowerInto(fromBuilder, projectMany.input);
       final Core.Exp body =
-          rename(lower(projectMany.body), projectMany.param, v);
-      final Core.IdPat w = freshPat(body.type.elementType());
-      fromBuilder.scan(w, body);
-      fromBuilder.yield_(core.id(w));
-      return fromBuilder.build();
+          rename(lowerRel(projectMany.body), projectMany.param, element);
+      return scan(fromBuilder, body);
     }
     if (exp instanceof Core.IfEmpty) {
-      return lowerIfEmpty((Core.IfEmpty) exp);
+      // Needs the collection as a value, so it becomes an expression, which
+      // is then scanned.
+      return scan(fromBuilder, lowerIfEmpty((Core.IfEmpty) exp));
     }
     if (exp instanceof Core.Join) {
-      return lowerJoin((Core.Join) exp);
+      return lowerJoin(fromBuilder, (Core.Join) exp);
     }
     if (exp instanceof Core.Group) {
-      final Core.Group group = (Core.Group) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      final Core.IdPat v = scan(fromBuilder, group.input);
-      final SortedMap<Core.IdPat, Core.Exp> groupExps =
-          new TreeMap<>(Core.NamedPat.ORDERING);
-      group.keys.forEach(
-          (label, keyExp) -> {
-            final Core.Exp e = subst(keyExp, core.id(v), null);
-            groupExps.put(core.idPat(e.type, label, 0), e);
-          });
-      final SortedMap<Core.IdPat, Core.Aggregate> aggregates =
-          new TreeMap<>(Core.NamedPat.ORDERING);
-      group.aggregates.forEach(
-          (label, aggregate) ->
-              aggregates.put(
-                  core.idPat(aggregate.type, label, 0),
-                  aggregate.copy(
-                      aggregate.type,
-                      subst(aggregate.aggregate, core.id(v), null),
-                      aggregate.argument == null
-                          ? null
-                          : subst(aggregate.argument, core.id(v), null))));
-      // Atom when a single key or aggregate: the same rule the tree derives.
-      final boolean atom = groupExps.size() + aggregates.size() == 1;
-      fromBuilder.group(atom, groupExps, aggregates);
-      return fromBuilder.build();
+      return lowerGroup(fromBuilder, (Core.Group) exp);
     }
     if (exp instanceof Core.Sort) {
       final Core.Sort sort = (Core.Sort) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      final Core.IdPat v = scan(fromBuilder, sort.input);
-      fromBuilder.order(subst(sort.exp, core.id(v), null));
-      return fromBuilder.build();
+      final Core.Exp element = lowerInto(fromBuilder, sort.input);
+      fromBuilder.order(subst(sort.exp, element, null));
+      return element;
     }
     if (exp instanceof Core.Unorder) {
-      final Core.Unorder unorder = (Core.Unorder) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      scan(fromBuilder, unorder.input);
+      final Core.Exp element =
+          lowerInto(fromBuilder, ((Core.Unorder) exp).input);
       fromBuilder.unorder();
-      return fromBuilder.build();
+      return element;
     }
     if (exp instanceof Core.Skip) {
       final Core.Skip skip = (Core.Skip) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      scan(fromBuilder, skip.input);
-      fromBuilder.skip(lower(skip.count));
-      return fromBuilder.build();
+      final Core.Exp element = lowerInto(fromBuilder, skip.input);
+      fromBuilder.skip(lowerRel(skip.count));
+      return element;
     }
     if (exp instanceof Core.Take) {
       final Core.Take take = (Core.Take) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      scan(fromBuilder, take.input);
-      fromBuilder.take(lower(take.count));
-      return fromBuilder.build();
+      final Core.Exp element = lowerInto(fromBuilder, take.input);
+      fromBuilder.take(lowerRel(take.count));
+      return element;
     }
     if (exp instanceof Core.SetRel) {
-      final Core.SetRel setRel = (Core.SetRel) exp;
-      final FromBuilder fromBuilder = fromBuilder();
-      scan(fromBuilder, setRel.inputs.get(0));
-      final List<Core.Exp> args = new ArrayList<>();
-      setRel
-          .inputs
-          .subList(1, setRel.inputs.size())
-          .forEach(input -> args.add(lower(input)));
-      switch (setRel.op) {
-        case UNION:
-          fromBuilder.union(setRel.distinct, args);
-          break;
-        case INTERSECT:
-          fromBuilder.intersect(setRel.distinct, args);
-          break;
-        default:
-          fromBuilder.except(setRel.distinct, args);
-          break;
-      }
-      return fromBuilder.build();
+      return lowerSetRel(fromBuilder, (Core.SetRel) exp);
     }
     throw new AssertionError("cannot lower " + exp.op);
+  }
+
+  private Core.Exp lowerGroup(FromBuilder fromBuilder, Core.Group group) {
+    final Core.Exp element = lowerInto(fromBuilder, group.input);
+    final SortedMap<Core.IdPat, Core.Exp> groupExps =
+        new TreeMap<>(Core.NamedPat.ORDERING);
+    group.keys.forEach(
+        (label, keyExp) -> {
+          final Core.Exp e = subst(keyExp, element, null);
+          groupExps.put(core.idPat(e.type, label, 0), e);
+        });
+    final SortedMap<Core.IdPat, Core.Aggregate> aggregates =
+        new TreeMap<>(Core.NamedPat.ORDERING);
+    group.aggregates.forEach(
+        (label, aggregate) ->
+            aggregates.put(
+                core.idPat(aggregate.type, label, 0),
+                aggregate.copy(
+                    aggregate.type,
+                    subst(aggregate.aggregate, element, null),
+                    aggregate.argument == null
+                        ? null
+                        : subst(aggregate.argument, element, null))));
+    final boolean atom = groupExps.size() + aggregates.size() == 1;
+    fromBuilder.group(atom, groupExps, aggregates);
+    return naturalElement(fromBuilder);
+  }
+
+  private Core.Exp lowerSetRel(FromBuilder fromBuilder, Core.SetRel setRel) {
+    // A set operator combines rows, so the element has to be the row.
+    materialize(fromBuilder, lowerInto(fromBuilder, setRel.inputs.get(0)));
+    final List<Core.Exp> args = new ArrayList<>();
+    setRel
+        .inputs
+        .subList(1, setRel.inputs.size())
+        .forEach(input -> args.add(lowerRel(input)));
+    switch (setRel.op) {
+      case UNION:
+        fromBuilder.union(setRel.distinct, args);
+        break;
+      case INTERSECT:
+        fromBuilder.intersect(setRel.distinct, args);
+        break;
+      default:
+        fromBuilder.except(setRel.distinct, args);
+        break;
+    }
+    return naturalElement(fromBuilder);
   }
 
   /**
    * Lowers a join. The condition sees both elements as they are; the yield sees
    * an option on a side that an outer join can leave absent, which is what the
-   * step's bindings hold after the scan.
+   * bindings hold after the scan.
    */
-  private Core.Exp lowerJoin(Core.Join join) {
-    final FromBuilder fromBuilder = fromBuilder();
-    final Core.IdPat v0 = scan(fromBuilder, join.left);
-    final Core.IdPat w = freshPat(join.right.type.elementType());
-    final Core.Exp condition = subst(join.condition, core.id(v0), core.id(w));
-    fromBuilder.scan(op(join.joinType), w, lower(join.right), condition);
-    // After the scan the bindings may have been wrapped in 'option'; the yield
-    // reads those, not the raw pattern variables.
-    final @Nullable SidePair pair = outerBindings(fromBuilder, v0, w);
-    if (pair == null) {
-      throw new AssertionError("cannot lower join " + join.opName());
+  private Core.Exp lowerJoin(FromBuilder fromBuilder, Core.Join join) {
+    Core.Exp left = lowerInto(fromBuilder, join.left);
+    if (join.joinType != Core.Rel.JoinType.INNER) {
+      // An outer join wraps whole bindings in 'option', so the left element
+      // must be one binding before the join, not an expression over several.
+      left = materialize(fromBuilder, left);
     }
-    fromBuilder.yield_(subst(join.yieldExp, pair.left, pair.right));
-    return fromBuilder.build();
+    final Core.IdPat w = freshPat(join.right.type.elementType());
+    final Core.Exp condition = subst(join.condition, left, core.id(w));
+    fromBuilder.scan(op(join.joinType), w, lowerRel(join.right), condition);
+    if (join.joinType == Core.Rel.JoinType.INNER) {
+      return subst(join.yieldExp, left, core.id(w));
+    }
+    // The scan has re-typed the bindings that the join can leave absent; the
+    // yield reads those, not the pattern variables.
+    return subst(
+        join.yieldExp,
+        rebind(fromBuilder, left),
+        rebind(fromBuilder, core.id(w)));
   }
 
   /**
-   * Lowers an {@code ifEmpty}: if the input has an element, it is the input,
-   * otherwise a collection of the one expression.
-   *
-   * <p>The step list has no such step, so this becomes a conditional expression
-   * rather than a step.
+   * Lowers an {@code ifEmpty} to a conditional expression; the step list has no
+   * such step.
    */
   private Core.Exp lowerIfEmpty(Core.IfEmpty ifEmpty) {
-    final Core.Exp input = lower(ifEmpty.input);
+    final Core.Exp input = lowerRel(ifEmpty.input);
     final Core.Exp nonEmpty =
         core.apply(
             Pos.ZERO,
@@ -219,38 +236,78 @@ public class RelLowerer {
             core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_NON_EMPTY),
             input);
     final Core.Exp singleton =
-        core.list(
-            typeSystem, ifEmpty.exp.type, ImmutableList.of(lower(ifEmpty.exp)));
+        core.list(typeSystem, ifEmpty.exp.type, ImmutableList.of(ifEmpty.exp));
     return core.ifThenElse(nonEmpty, input, singleton);
   }
 
-  /** Pair of expressions that a join's yield reads for its two sides. */
-  private static class SidePair {
-    final Core.Exp left;
-    final Core.Exp right;
-
-    SidePair(Core.Exp left, Core.Exp right) {
-      this.left = left;
-      this.right = right;
-    }
+  /**
+   * Scans a collection, binding its element to a fresh variable, and returns
+   * the expression that denotes the element.
+   */
+  private Core.Exp scan(FromBuilder fromBuilder, Core.Exp collection) {
+    final Core.IdPat v = freshPat(collection.type.elementType());
+    fromBuilder.scan(v, collection);
+    return rebind(fromBuilder, core.id(v));
   }
 
   /**
-   * Returns what the yield of a join reads for each side: the binding of that
-   * side after the scan, which an outer join has wrapped in {@code option}.
+   * Materializes the element as the step list's row, if it is not that already,
+   * and returns the expression that denotes it afterwards.
    */
-  private @Nullable SidePair outerBindings(
-      FromBuilder fromBuilder, Core.IdPat v0, Core.IdPat w) {
-    Core.@Nullable Exp left = null;
-    Core.@Nullable Exp right = null;
+  private Core.Exp materialize(FromBuilder fromBuilder, Core.Exp element) {
+    if (isNatural(fromBuilder, element)) {
+      return element;
+    }
+    fromBuilder.yield_(element);
+    return naturalElement(fromBuilder);
+  }
+
+  /**
+   * Returns the expression that the step list's own bindings denote: the one
+   * binding's value, or a record of them.
+   */
+  private Core.Exp naturalElement(FromBuilder fromBuilder) {
+    final Core.StepEnv env = fromBuilder.stepEnv();
+    if (env.atom) {
+      return core.id(env.bindings.get(0).id);
+    }
+    final PairList<String, Core.Exp> nameExps = PairList.of();
+    env.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
+    return core.record(typeSystem, nameExps);
+  }
+
+  /**
+   * Returns whether an expression is already what the bindings denote, in which
+   * case a {@code yield} of it would be an identity step.
+   *
+   * <p>Compares printed forms: both expressions are built the same way here, so
+   * this is a structural comparison in practice.
+   */
+  private boolean isNatural(FromBuilder fromBuilder, Core.Exp element) {
+    // With no bindings the natural element is unit, which an element
+    // expression is only if the query says so -- 'group {}' followed by a
+    // yield still needs the yield.
+    return naturalElement(fromBuilder).toString().equals(element.toString());
+  }
+
+  /**
+   * Re-reads a reference against the current bindings, in case a step has
+   * re-typed them -- an outer join wraps a binding in {@code option} -- or the
+   * builder inlined a scan under a different name.
+   */
+  private Core.Exp rebind(FromBuilder fromBuilder, Core.Exp exp) {
+    if (exp.op != Op.ID) {
+      return exp;
+    }
+    final String name = ((Core.Id) exp).idPat.name;
     for (Binding binding : fromBuilder.stepEnv().bindings) {
-      if (binding.id.name.equals(v0.name)) {
-        left = core.id(binding.id);
-      } else if (binding.id.name.equals(w.name)) {
-        right = core.id(binding.id);
+      if (binding.id.name.equals(name)) {
+        return core.id(binding.id);
       }
     }
-    return left == null || right == null ? null : new SidePair(left, right);
+    // The builder inlined the scan and the name is gone, so the row is the
+    // element.
+    return naturalElement(fromBuilder);
   }
 
   private static Op op(Core.Rel.JoinType joinType) {
@@ -264,18 +321,6 @@ public class RelLowerer {
       default:
         return Op.SCAN;
     }
-  }
-
-  /** Scans a lowered input, binding its element to a fresh variable. */
-  private Core.IdPat scan(FromBuilder fromBuilder, Core.Exp input) {
-    final Core.Exp e = lower(input);
-    final Core.IdPat v = freshPat(e.type.elementType());
-    fromBuilder.scan(v, e);
-    return v;
-  }
-
-  private FromBuilder fromBuilder() {
-    return core.fromBuilder(typeSystem);
   }
 
   private Core.IdPat freshPat(Type type) {
@@ -307,18 +352,15 @@ public class RelLowerer {
   }
 
   /**
-   * Renames a variable, for the body of a {@code projectMany} whose parameter
-   * the lowering has rebound.
+   * Replaces a {@code projectMany} lambda's parameter with the expression that
+   * denotes the input element.
    */
-  private Core.Exp rename(Core.Exp exp, Core.IdPat from, Core.IdPat to) {
-    if (from.equals(to)) {
-      return exp;
-    }
+  private Core.Exp rename(Core.Exp exp, Core.IdPat param, Core.Exp element) {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
           protected Core.Exp visit(Core.Id id) {
-            return id.idPat.equals(from) ? core.id(to) : id;
+            return id.idPat.equals(param) ? element : id;
           }
         });
   }
