@@ -158,26 +158,39 @@ val z1: zero = 1;
 > uncaught exception Constraint [1 is not a valid zero]
 >   raised at: stdIn:1.5-1.17
 
-(* 'as' converts a value to a type, and 'asOpt' returns an option. Neither
- * enforces anything yet, so 'as' is the identity and 'asOpt' always returns
- * SOME, and both type as an annotation does. In particular the type printed
- * is the meet of the two, so converting an 'int' to an alias of 'int' prints
- * 'int'; when a constrained type is no longer an alias, the conversion will
- * have the type it converts to. *)
+(* 'as' converts a value to a type, checking the type's condition; 'asOpt'
+ * tests the condition instead, giving SOME if it holds and NONE if it does
+ * not. The type converted to is the one the user named, not the one inference
+ * deduces: inference gives the meet of the two, which for a constrained type
+ * is the type it abbreviates, so the printed type is 'int'. *)
 val i = 5;
 > val i = 5 : int
+val j = ~5;
+> val j = ~5 : int
 i as nat;
 > val it = 5 : int
-i as int;
-> val it = 5 : int
+j as nat;
+> uncaught exception Constraint [~5 is not a valid nat]
+>   raised at: stdIn:1.1-1.9
 i asOpt nat;
 > val it = SOME 5 : int option
+j asOpt nat;
+> val it = NONE : int option
+
+(*) Converting to an unconstrained type claims nothing, and cannot fail.
+i as int;
+> val it = 5 : int
+j asOpt int;
+> val it = SOME ~5 : int option
 
 (*) They bind as loosely as ':', so the whole expression is converted.
 i - 1 as nat;
 > val it = 4 : int
 (i as nat) + 1;
 > val it = 6 : int
+i - 10 as nat;
+> uncaught exception Constraint [~5 is not a valid nat]
+>   raised at: stdIn:1.1-1.14
 
 (*) They are left-associative, and mix with ':'.
 i as nat as int;

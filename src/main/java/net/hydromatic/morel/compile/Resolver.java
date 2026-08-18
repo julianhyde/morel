@@ -53,6 +53,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
@@ -457,30 +458,120 @@ public class Resolver {
    * a {@code nat}, so the condition must hold of it. Everywhere else the name
    * has reduced to the type it abbreviates, so nothing is claimed and nothing
    * need be checked.
+   */
+  private Core.Exp withChecks(Core.Exp coreExp, Core.Pat corePat, Pos pos) {
+    final AliasType aliasType = constrainedType(corePat.type);
+    return aliasType == null ? coreExp : checked(coreExp, aliasType, pos);
+  }
+
+  /**
+   * Returns a type as a constrained type, or null if it is not one.
    *
-   * <p>The expression becomes
+   * <p>Aliases are expanded everywhere the compiler looks, so a type reaches
+   * here as a constrained type only where the user named it: at a binding, a
+   * parameter, or a conversion.
+   */
+  private @Nullable AliasType constrainedType(Type type) {
+    return type instanceof AliasType && !((AliasType) type).checks.isEmpty()
+        ? (AliasType) type
+        : null;
+  }
+
+  /**
+   * Returns the constrained type that a conversion, {@code e as t}, converts
+   * to, or null if {@code t} is not a constrained type.
+   *
+   * <p>The type is looked up by the name the user wrote, rather than deduced,
+   * because inference gives the meet of the two types, which is the type the
+   * constrained type abbreviates.
+   */
+  private @Nullable AliasType constrainedType(Ast.Type type) {
+    if (type.op != Op.NAMED_TYPE) {
+      return null;
+    }
+    final Ast.NamedType namedType = (Ast.NamedType) type;
+    if (!namedType.types.isEmpty()) {
+      // A parameterized type cannot be constrained.
+      return null;
+    }
+    return constrainedType(typeMap.typeSystem.lookupOpt(namedType.name));
+  }
+
+  /**
+   * Returns an expression that evaluates to the value of {@code coreExp} if its
+   * type's condition holds of it, and otherwise raises {@code Constraint}.
    *
    * <blockquote>
    *
    * <pre>let val v = e in $check (c1 v andalso c2 v, v, "nat") end</pre>
    *
    * </blockquote>
-   *
-   * <p>The {@code let} is what stops {@code e} being evaluated twice, once for
-   * the condition and once for the result.
    */
-  private Core.Exp withChecks(Core.Exp coreExp, Core.Pat corePat, Pos pos) {
-    if (!(corePat.type instanceof AliasType)) {
-      return coreExp;
-    }
-    final AliasType aliasType = (AliasType) corePat.type;
-    if (aliasType.checks.isEmpty()) {
-      return coreExp;
-    }
+  private Core.Exp checked(Core.Exp coreExp, AliasType aliasType, Pos pos) {
     final TypeSystem typeSystem = typeMap.typeSystem;
+    return letValue(
+        coreExp,
+        pos,
+        id ->
+            core.apply(
+                pos,
+                coreExp.type,
+                core.functionLiteral(typeSystem, BuiltIn.Z_CHECK),
+                core.tuple(
+                    typeSystem,
+                    condition(aliasType, id, pos),
+                    id,
+                    core.stringLiteral(aliasType.name))));
+  }
+
+  /**
+   * Returns an expression that evaluates to {@code SOME v} if the condition of
+   * {@code aliasType} holds of {@code coreExp}, and {@code NONE} if it does
+   * not.
+   *
+   * <blockquote>
+   *
+   * <pre>let val v = e in if c1 v andalso c2 v then SOME v else NONE end</pre>
+   *
+   * </blockquote>
+   */
+  private Core.Exp checkedOpt(
+      Core.Exp coreExp, AliasType aliasType, Type optionType, Pos pos) {
+    final TypeSystem typeSystem = typeMap.typeSystem;
+    return letValue(
+        coreExp,
+        pos,
+        id ->
+            core.ifThenElse(
+                condition(aliasType, id, pos),
+                core.apply(
+                    pos,
+                    optionType,
+                    core.constructor(
+                        typeSystem, BuiltIn.Constructor.OPTION_SOME),
+                    id),
+                core.constructor(typeSystem, BuiltIn.Constructor.OPTION_NONE)));
+  }
+
+  /**
+   * Binds an expression to a name and applies {@code body} to it.
+   *
+   * <p>The {@code let} is what stops the expression being evaluated twice, once
+   * for a condition and once for the result.
+   */
+  private Core.Exp letValue(
+      Core.Exp coreExp, Pos pos, Function<Core.Id, Core.Exp> body) {
     final Core.IdPat idPat =
         core.idPat(coreExp.type, () -> nameGenerator.getPrefixed("v"));
-    final Core.Id id = core.id(idPat);
+    final Core.Exp exp = body.apply(core.id(idPat));
+    return core.let(core.nonRecValDecl(pos, idPat, null, coreExp), exp);
+  }
+
+  /**
+   * Returns the conjunction of a constrained type's conditions, of {@code id}.
+   */
+  private Core.Exp condition(AliasType aliasType, Core.Id id, Pos pos) {
+    final TypeSystem typeSystem = typeMap.typeSystem;
     Core.Exp condition = null;
     for (Core.Exp predicate : typeSystem.checkPredicates(aliasType)) {
       final Core.Exp applied =
@@ -490,17 +581,7 @@ public class Resolver {
               ? applied
               : core.andAlso(typeSystem, condition, applied);
     }
-    final Core.Exp call =
-        core.apply(
-            pos,
-            coreExp.type,
-            core.functionLiteral(typeSystem, BuiltIn.Z_CHECK),
-            core.tuple(
-                typeSystem,
-                requireNonNull(condition),
-                id,
-                core.stringLiteral(aliasType.name)));
-    return core.let(core.nonRecValDecl(pos, idPat, null, coreExp), call);
+    return requireNonNull(condition);
   }
 
   private ResolvedValDecl resolveValDecl(
@@ -919,17 +1000,28 @@ public class Resolver {
         return toCore(((Ast.AnnotatedExp) exp).exp);
 
       case AS:
-        // No enforcement yet, so a cast is erased, as an annotation is.
-        return toCore(((Ast.Cast) exp).exp);
+        final Ast.Cast cast = (Ast.Cast) exp;
+        final Core.Exp castExp = toCore(cast.exp);
+        final AliasType castType = constrainedType(cast.type);
+        // Converting to an unconstrained type claims nothing, so it is erased,
+        // as an annotation is.
+        return castType == null ? castExp : checked(castExp, castType, exp.pos);
 
       case AS_OPT:
-        // No enforcement yet, so the conversion always succeeds, and 'e asOpt
-        // t' is 'SOME e'. When constraints are enforced this becomes a test.
-        final Core.Exp coreExp = toCore(((Ast.Cast) exp).exp);
-        final Core.Id some =
-            core.constructor(
-                typeMap.typeSystem, BuiltIn.Constructor.OPTION_SOME);
-        return core.apply(exp.pos, typeMap.getType(exp), some, coreExp);
+        final Ast.Cast castOpt = (Ast.Cast) exp;
+        final Core.Exp castOptExp = toCore(castOpt.exp);
+        final Type optionType = typeMap.getType(exp);
+        final AliasType castOptType = constrainedType(castOpt.type);
+        if (castOptType == null) {
+          // Converting to an unconstrained type cannot fail.
+          return core.apply(
+              exp.pos,
+              optionType,
+              core.constructor(
+                  typeMap.typeSystem, BuiltIn.Constructor.OPTION_SOME),
+              castOptExp);
+        }
+        return checkedOpt(castOptExp, castOptType, optionType, exp.pos);
       case ID:
         return toCore((Ast.Id) exp);
       case OP_SECTION:
