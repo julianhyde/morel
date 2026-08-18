@@ -452,40 +452,28 @@ public class Resolver {
   }
 
   /**
-   * Wraps an expression in a check, if it is being bound at a constrained type.
+   * Wraps an expression in a check, if the type it is being bound at constrains
+   * anything.
    *
    * <p>This is where a value flows into a claim: the binding says the value is
-   * a {@code nat}, so the condition must hold of it. Everywhere else the name
-   * has reduced to the type it abbreviates, so nothing is claimed and nothing
-   * need be checked.
+   * an {@code employee}, so every condition the type carries -- its own, and
+   * those of its components -- must hold of it. Everywhere else the name has
+   * reduced to the type it abbreviates, so nothing is claimed and nothing need
+   * be checked.
    */
   private Core.Exp withChecks(Core.Exp coreExp, Core.Pat corePat, Pos pos) {
-    final AliasType aliasType = constrainedType(corePat.type);
-    return aliasType == null ? coreExp : checked(coreExp, aliasType, pos);
+    return checked(coreExp, corePat.type, pos);
   }
 
   /**
-   * Returns a type as a constrained type, or null if it is not one.
-   *
-   * <p>Aliases are expanded everywhere the compiler looks, so a type reaches
-   * here as a constrained type only where the user named it: at a binding, a
-   * parameter, or a conversion.
-   */
-  private @Nullable AliasType constrainedType(Type type) {
-    return type instanceof AliasType && !((AliasType) type).checks.isEmpty()
-        ? (AliasType) type
-        : null;
-  }
-
-  /**
-   * Returns the constrained type that a conversion, {@code e as t}, converts
-   * to, or null if {@code t} is not a constrained type.
+   * Returns the type that a conversion, {@code e as t}, converts to, or null if
+   * {@code t} constrains nothing.
    *
    * <p>The type is looked up by the name the user wrote, rather than deduced,
-   * because inference gives the meet of the two types, which is the type the
-   * constrained type abbreviates.
+   * because inference gives the meet of the two types, which for a constrained
+   * type is the type it abbreviates.
    */
-  private @Nullable AliasType constrainedType(Ast.Type type) {
+  private @Nullable Type claimedType(Ast.Type type) {
     if (type.op != Op.NAMED_TYPE) {
       return null;
     }
@@ -494,12 +482,116 @@ public class Resolver {
       // A parameterized type cannot be constrained.
       return null;
     }
-    return constrainedType(typeMap.typeSystem.lookupOpt(namedType.name));
+    final Type t = typeMap.typeSystem.lookupOpt(namedType.name);
+    return t != null && constrains(t) ? t : null;
+  }
+
+  /** Returns whether a type, or any type within it, carries a condition. */
+  private boolean constrains(Type type) {
+    return deepCondition(type, null, null, Pos.ZERO) != null;
+  }
+
+  /**
+   * Returns a condition that holds if {@code value} satisfies every condition
+   * its type carries, or null if the type carries none.
+   *
+   * <p>A condition on a composite type is the conjunction of the conditions of
+   * its components and its own, in that order: a type's own condition may
+   * assume that its components satisfy theirs.
+   *
+   * <p>Two types are walked in step. {@code claimedType} is the type as the
+   * user wrote it, which keeps its aliases and so knows where the conditions
+   * are; {@code erasedType} is the same type with its aliases expanded, and is
+   * what the expressions being built are typed with, because an alias must not
+   * reach Core.
+   *
+   * <p>Called with a null {@code value} to ask only whether a type constrains
+   * anything, in which case the expression it returns is a placeholder.
+   */
+  private Core.@Nullable Exp deepCondition(
+      Type claimedType,
+      @Nullable Type erasedType,
+      Core.@Nullable Exp value,
+      Pos pos) {
+    final TypeSystem typeSystem = typeMap.typeSystem;
+    if (claimedType instanceof AliasType) {
+      final AliasType aliasType = (AliasType) claimedType;
+      Core.Exp condition =
+          deepCondition(aliasType.type, erasedType, value, pos);
+      if (!aliasType.checks.isEmpty()) {
+        final Core.Exp own = condition(aliasType, value, pos);
+        condition =
+            condition == null ? own : core.andAlso(typeSystem, condition, own);
+      }
+      return condition;
+    }
+    if (claimedType instanceof RecordLikeType) {
+      final RecordLikeType recordType = (RecordLikeType) claimedType;
+      final RecordLikeType erasedRecordType =
+          erasedType == null ? null : (RecordLikeType) erasedType;
+      Core.Exp condition = null;
+      for (Map.Entry<String, Type> field :
+          recordType.argNameTypes().entrySet()) {
+        final Type erasedFieldType =
+            erasedRecordType == null
+                ? null
+                : erasedRecordType.argNameTypes().get(field.getKey());
+        final Core.Exp fieldValue =
+            value == null
+                ? null
+                : core.apply(
+                    pos,
+                    requireNonNull(erasedFieldType),
+                    core.recordSelector(
+                        typeSystem,
+                        requireNonNull(erasedRecordType),
+                        field.getKey()),
+                    value);
+        final Core.Exp fieldCondition =
+            deepCondition(field.getValue(), erasedFieldType, fieldValue, pos);
+        if (fieldCondition != null) {
+          condition =
+              condition == null
+                  ? fieldCondition
+                  : core.andAlso(typeSystem, condition, fieldCondition);
+        }
+      }
+      return condition;
+    }
+    if (claimedType instanceof ListType) {
+      final Type elementType = claimedType.elementType();
+      if (!constrains(elementType)) {
+        return null;
+      }
+      if (value == null) {
+        return core.boolLiteral(true); // placeholder; only nullness is read
+      }
+      // Every element must satisfy the element type's condition.
+      final Type erasedElementType = requireNonNull(erasedType).elementType();
+      final Core.IdPat idPat =
+          core.idPat(erasedElementType, () -> nameGenerator.getPrefixed("e"));
+      final Core.Exp elementCondition =
+          requireNonNull(
+              deepCondition(
+                  elementType, erasedElementType, core.id(idPat), pos));
+      final Core.Fn predicate =
+          core.fn(
+              typeSystem.fnType(erasedElementType, PrimitiveType.BOOL),
+              idPat,
+              elementCondition);
+      return core.apply(
+          pos,
+          PrimitiveType.BOOL,
+          core.call(
+              typeSystem, BuiltIn.LIST_ALL, erasedElementType, pos, predicate),
+          value);
+    }
+    return null;
   }
 
   /**
    * Returns an expression that evaluates to the value of {@code coreExp} if its
-   * type's condition holds of it, and otherwise raises {@code Constraint}.
+   * type's conditions hold of it, and otherwise raises {@code Constraint}.
    *
    * <blockquote>
    *
@@ -507,7 +599,10 @@ public class Resolver {
    *
    * </blockquote>
    */
-  private Core.Exp checked(Core.Exp coreExp, AliasType aliasType, Pos pos) {
+  private Core.Exp checked(Core.Exp coreExp, Type type, Pos pos) {
+    if (!constrains(type)) {
+      return coreExp;
+    }
     final TypeSystem typeSystem = typeMap.typeSystem;
     return letValue(
         coreExp,
@@ -519,15 +614,14 @@ public class Resolver {
                 core.functionLiteral(typeSystem, BuiltIn.Z_CHECK),
                 core.tuple(
                     typeSystem,
-                    condition(aliasType, id, pos),
+                    requireNonNull(deepCondition(type, coreExp.type, id, pos)),
                     id,
-                    core.stringLiteral(aliasType.name))));
+                    core.stringLiteral(type.moniker()))));
   }
 
   /**
-   * Returns an expression that evaluates to {@code SOME v} if the condition of
-   * {@code aliasType} holds of {@code coreExp}, and {@code NONE} if it does
-   * not.
+   * Returns an expression that evaluates to {@code SOME v} if the conditions of
+   * {@code type} hold of {@code coreExp}, and {@code NONE} if they do not.
    *
    * <blockquote>
    *
@@ -536,14 +630,14 @@ public class Resolver {
    * </blockquote>
    */
   private Core.Exp checkedOpt(
-      Core.Exp coreExp, AliasType aliasType, Type optionType, Pos pos) {
+      Core.Exp coreExp, Type type, Type optionType, Pos pos) {
     final TypeSystem typeSystem = typeMap.typeSystem;
     return letValue(
         coreExp,
         pos,
         id ->
             core.ifThenElse(
-                condition(aliasType, id, pos),
+                requireNonNull(deepCondition(type, coreExp.type, id, pos)),
                 core.apply(
                     pos,
                     optionType,
@@ -572,14 +666,19 @@ public class Resolver {
   }
 
   /**
-   * Returns the conjunction of a constrained type's conditions, of {@code id}.
+   * Returns the conjunction of a constrained type's own conditions, of {@code
+   * value}.
    */
-  private Core.Exp condition(AliasType aliasType, Core.Id id, Pos pos) {
+  private Core.Exp condition(
+      AliasType aliasType, Core.@Nullable Exp value, Pos pos) {
     final TypeSystem typeSystem = typeMap.typeSystem;
     Core.Exp condition = null;
     for (Core.Exp predicate : typeSystem.checkPredicates(aliasType)) {
+      if (value == null) {
+        return core.boolLiteral(true); // placeholder; only nullness is read
+      }
       final Core.Exp applied =
-          core.apply(pos, PrimitiveType.BOOL, predicate, id);
+          core.apply(pos, PrimitiveType.BOOL, predicate, value);
       condition =
           condition == null
               ? applied
@@ -1006,16 +1105,16 @@ public class Resolver {
       case AS:
         final Ast.Cast cast = (Ast.Cast) exp;
         final Core.Exp castExp = toCore(cast.exp);
-        final AliasType castType = constrainedType(cast.type);
-        // Converting to an unconstrained type claims nothing, so it is erased,
-        // as an annotation is.
+        final Type castType = claimedType(cast.type);
+        // Converting to a type that constrains nothing claims nothing, so it
+        // is erased, as an annotation is.
         return castType == null ? castExp : checked(castExp, castType, exp.pos);
 
       case AS_OPT:
         final Ast.Cast castOpt = (Ast.Cast) exp;
         final Core.Exp castOptExp = toCore(castOpt.exp);
         final Type optionType = typeMap.getType(exp);
-        final AliasType castOptType = constrainedType(castOpt.type);
+        final Type castOptType = claimedType(castOpt.type);
         if (castOptType == null) {
           // Converting to an unconstrained type cannot fail.
           return core.apply(
@@ -1648,8 +1747,8 @@ public class Resolver {
     final List<Core.Match> matchList =
         transformEager(fn.matchList, this::toCore);
     final Core.Fn coreFn = core.fn(fn.pos, type, matchList, nameGenerator::inc);
-    final AliasType aliasType = parameterType(fn);
-    if (aliasType == null) {
+    final Type paramType = parameterType(fn);
+    if (paramType == null) {
       return coreFn;
     }
     // The check goes inside the function, so it travels with the function
@@ -1675,7 +1774,7 @@ public class Resolver {
                 fn.pos,
                 coreFn.idPat,
                 null,
-                checked(core.id(paramPat), aliasType, fn.pos)),
+                checked(core.id(paramPat), paramType, fn.pos)),
             coreFn.exp));
   }
 
@@ -1692,13 +1791,13 @@ public class Resolver {
    * matches may annotate each differently, and which of them the parameter
    * claims is a question composite values raise more generally.
    */
-  private @Nullable AliasType parameterType(Ast.Fn fn) {
+  private @Nullable Type parameterType(Ast.Fn fn) {
     if (fn.matchList.size() != 1) {
       return null;
     }
     final Ast.Pat pat = fn.matchList.get(0).pat;
     return pat.op == Op.ANNOTATED_PAT
-        ? constrainedType(((Ast.AnnotatedPat) pat).type)
+        ? claimedType(((Ast.AnnotatedPat) pat).type)
         : null;
   }
 
