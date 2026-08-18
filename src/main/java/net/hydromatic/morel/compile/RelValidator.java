@@ -112,26 +112,13 @@ public class RelValidator {
         violation(
             "projectMany body must be list or bag: %s", projectMany.body.type);
       }
-      if (projectMany.ifEmpty != null) {
-        // Evaluated where the body yields nothing, so it sees the parameter
-        // and not $0.
-        scope(projectMany.ifEmpty, NONE, "projectMany ifEmpty");
-        if (!projectMany.ifEmpty.type.equals(
-            projectMany.body.type.elementType())) {
-          violation(
-              "projectMany ifEmpty must have the element type %s: %s",
-              projectMany.body.type.elementType().moniker(),
-              projectMany.ifEmpty.type.moniker());
-        }
-      }
       requireDerivedType(
           rel,
           core.projectMany(
               typeSystem,
               projectMany.input,
               projectMany.param,
-              projectMany.body,
-              projectMany.ifEmpty));
+              projectMany.body));
     } else if (rel instanceof Core.Join) {
       final Core.Join join = (Core.Join) rel;
       input(join.left);
@@ -162,6 +149,19 @@ public class RelValidator {
       requireDerivedType(
           rel,
           core.group(typeSystem, group.input, group.keys, group.aggregates));
+    } else if (rel instanceof Core.IfEmpty) {
+      final Core.IfEmpty ifEmpty = (Core.IfEmpty) rel;
+      input(ifEmpty.input);
+      // Evaluated only when there is no element, so, like a skip count, it
+      // cannot mention $0.
+      scope(ifEmpty.exp, NONE, "ifEmpty expression");
+      if (!ifEmpty.exp.type.equals(ifEmpty.input.type.elementType())) {
+        violation(
+            "ifEmpty expression must have the element type %s: %s",
+            ifEmpty.input.type.elementType().moniker(),
+            ifEmpty.exp.type.moniker());
+      }
+      requireDerivedType(rel, core.ifEmpty(ifEmpty.input, ifEmpty.exp));
     } else if (rel instanceof Core.Sort) {
       final Core.Sort sort = (Core.Sort) rel;
       input(sort.input);
@@ -292,6 +292,11 @@ public class RelValidator {
     @Override
     protected void visit(Core.Group group) {
       rel(group);
+    }
+
+    @Override
+    protected void visit(Core.IfEmpty ifEmpty) {
+      rel(ifEmpty);
     }
 
     @Override
