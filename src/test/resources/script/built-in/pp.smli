@@ -118,4 +118,15 @@ PP.render (80, PP.indent (4, PP.text "x"));
 PP.render (80, PP.`group` (PP.hcat [PP.text "a", PP.hardLine, PP.text "b"]));
 > val it = "a\nb" : string
 
+(* A group accounts for the text that a following group puts on this line
+ * before that group breaks. Laying out `d1` flat would give "ab cdefefgh",
+ * 11 characters, over the width of 10; so `d1` breaks and `d2` stays flat,
+ * and no line exceeds 10. *)
+val d1 = PP.`group` (PP.hcat [PP.text "ab", PP.line, PP.text "cdef"]);
+> val d1 = - : doc
+val d2 = PP.`group` (PP.hcat [PP.text "efgh", PP.line, PP.text "X"]);
+> val d2 = - : doc
+PP.render (10, PP.beside (d1, d2));
+> val it = "ab\ncdefefgh X" : string
+
 (*) End pp.smli

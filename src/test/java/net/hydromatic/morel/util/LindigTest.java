@@ -487,30 +487,14 @@ class LindigTest {
   // -- Exact lookahead ------------------------------------------------------
 
   /**
-   * A group must account for the text a following group puts on this line
-   * before that group breaks.
-   *
-   * <p>A fit test that stops at the next group and assumes the line ends there
-   * would keep {@code d1} flat, and {@code d2} would then append {@code "efgh"}
-   * to the line {@code d1} had already filled, overrunning the width.
-   */
-  @Test
-  void testFitsCountsFollowingGroup() {
-    final Doc d1 = group(beside(text("ab"), beside(LINE, text("cdef"))));
-    final Doc d2 = group(beside(text("efgh"), beside(LINE, text("X"))));
-    // Flat d1 would give "ab cdefefgh", 11 characters, over the width of 10;
-    // so d1 breaks and d2 stays flat, and no line exceeds 10.
-    assertThat(render(10, beside(d1, d2)), isLines("ab", "cdefefgh X"));
-  }
-
-  /**
    * A union whose narrow branch continues on the same line — an elision
    * combinator, "full form if it fits, else {@code ...}" — is measured by what
    * that branch actually emits.
    *
    * <p>This is the case a fit test cannot get right by treating a union as the
-   * end of the line; it only happens to work for {@link Lindig#fill}, whose
-   * narrow branch begins with a line break.
+   * end of the line. It happens to work for every union built today -- those of
+   * {@link Lindig#fill} and of Morel's own printer -- because each has a narrow
+   * branch that begins with a line break.
    */
   @Test
   void testFitsMeasuresChosenUnionBranch() {
