@@ -475,16 +475,35 @@ public class Resolver {
    * type is the type it abbreviates.
    */
   private @Nullable Type claimedType(Ast.Type type) {
-    if (type.op != Op.NAMED_TYPE) {
+    if (!isConcrete(type)) {
       return null;
     }
-    final Ast.NamedType namedType = (Ast.NamedType) type;
-    if (!namedType.types.isEmpty()) {
-      // A parameterized type cannot be constrained.
-      return null;
-    }
-    final Type t = typeMap.typeSystem.lookupOpt(namedType.name);
-    return t != null && constrains(t) ? t : null;
+    final Type t = TypeResolver.toType(type, typeMap.typeSystem);
+    return constrains(t) ? t : null;
+  }
+
+  /**
+   * Returns whether a type can be built without an environment.
+   *
+   * <p>A type variable is not yet known, and {@code typeof e} is a type only
+   * once its expression has been resolved; neither can name a constrained type,
+   * which must be closed and unparameterized.
+   */
+  private static boolean isConcrete(Ast.Type type) {
+    final AtomicBoolean concrete = new AtomicBoolean(true);
+    type.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.ExpressionType expressionType) {
+            concrete.set(false);
+          }
+
+          @Override
+          protected void visit(Ast.TyVar tyVar) {
+            concrete.set(false);
+          }
+        });
+    return concrete.get();
   }
 
   /** Returns whether a type, or any type within it, carries a condition. */
@@ -1165,7 +1184,15 @@ public class Resolver {
       case WORD_LITERAL:
         return core.wordLiteral((BigDecimal) ((Ast.Literal) exp).value);
       case ANNOTATED_EXP:
-        return toCore(((Ast.AnnotatedExp) exp).exp);
+        // An ascription is a claim, like a binding: '(e : nat)' says that e is
+        // a nat, so the condition must hold of it. A 'fun' declaration's
+        // result annotation reaches here as one.
+        final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) exp;
+        final Core.Exp annotatedCore = toCore(annotatedExp.exp);
+        final Type annotatedType = claimedType(annotatedExp.type);
+        return annotatedType == null
+            ? annotatedCore
+            : checked(annotatedCore, annotatedType, exp.pos);
 
       case AS:
         final Ast.Cast cast = (Ast.Cast) exp;
