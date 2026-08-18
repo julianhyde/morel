@@ -764,6 +764,19 @@ public class Resolver {
         return core.wordLiteral((BigDecimal) ((Ast.Literal) exp).value);
       case ANNOTATED_EXP:
         return toCore(((Ast.AnnotatedExp) exp).exp);
+
+      case AS:
+        // No enforcement yet, so a cast is erased, as an annotation is.
+        return toCore(((Ast.Cast) exp).exp);
+
+      case AS_OPT:
+        // No enforcement yet, so the conversion always succeeds, and 'e asOpt
+        // t' is 'SOME e'. When constraints are enforced this becomes a test.
+        final Core.Exp coreExp = toCore(((Ast.Cast) exp).exp);
+        final Core.Id some =
+            core.constructor(
+                typeMap.typeSystem, BuiltIn.Constructor.OPTION_SOME);
+        return core.apply(exp.pos, typeMap.getType(exp), some, coreExp);
       case ID:
         return toCore((Ast.Id) exp);
       case OP_SECTION:

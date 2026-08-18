@@ -131,6 +131,8 @@ public enum Op {
 
   // annotated expression "e: t"
   ANNOTATED_EXP(" : ", 0),
+  AS(" as ", 0),
+  AS_OPT(" asOpt ", 0),
 
   // attributes
   ATTRIBUTE,
