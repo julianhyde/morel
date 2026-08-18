@@ -203,16 +203,16 @@ public class RelTranslator {
       patternAccess = true;
       if (!destructure(scan.pat, core.input0(rightElementType), access)) {
         // The pattern can fail to match, so the scan filters as well as
-        // binds. The projectMany builds the element, so the access map is no
-        // longer a pattern's.
-        patternAccess = false;
-        access.clear();
+        // binds. The projectMany builds the element, so the binders read it
+        // as any later step would -- including this scan's own condition,
+        // which is why the map is set before the condition is rewritten.
         final Core.@Nullable Exp exp2 =
             matchMany(scan.exp, scan.pat, elementType(scan.env));
         if (exp2 == null) {
           return false;
         }
         exp = exp2;
+        setUniformAccess(scan.env);
       }
       if (!scan.condition.isBoolLiteral(true)) {
         exp = core.filter(exp, rewrite(scan.condition));
@@ -564,7 +564,15 @@ public class RelTranslator {
       // in rs` binds a to field b.
       exp = core.project(typeSystem, requireExp(), element(access, wanted));
     }
-    final Core.Exp element = core.input0(wanted);
+    setUniformAccess(env);
+  }
+
+  /**
+   * Points each binder at the element that the step's bindings describe: the
+   * element itself if the step atomizes, otherwise the field of the same name.
+   */
+  private void setUniformAccess(Core.StepEnv env) {
+    final Core.Exp element = core.input0(elementType(env));
     patternAccess = false;
     access.clear();
     if (env.atom) {

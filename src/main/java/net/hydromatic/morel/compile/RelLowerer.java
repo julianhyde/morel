@@ -30,6 +30,7 @@ import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
@@ -99,7 +100,14 @@ public class RelLowerer {
       // unless a later step needs the row.
       final Core.Project project = (Core.Project) exp;
       final Core.Exp element = lowerInto(fromBuilder, project.input);
-      return subst(project.exp, element, null);
+      final Core.Exp element2 = subst(project.exp, element, null);
+      if (containsOrdinal(element2)) {
+        // Except for an ordinal, which counts rows: only a step evaluates its
+        // expression exactly once per row, so deferring one would change what
+        // it counts.
+        return materialize(fromBuilder, element2);
+      }
+      return element2;
     }
     if (exp instanceof Core.ProjectMany) {
       final Core.ProjectMany projectMany = (Core.ProjectMany) exp;
@@ -308,6 +316,22 @@ public class RelLowerer {
     // The builder inlined the scan and the name is gone, so the row is the
     // element.
     return naturalElement(fromBuilder);
+  }
+
+  /** Returns whether an expression reads the ordinal of the current row. */
+  private static boolean containsOrdinal(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Apply apply) {
+            super.visit(apply);
+            if (apply.isCallTo(BuiltIn.Z_ORDINAL)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
   }
 
   private static Op op(Core.Rel.JoinType joinType) {
