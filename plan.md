@@ -101,17 +101,22 @@ something settled — §8's principle, applied to the sequence itself.
       now at worst equal to what it was, and sometimes simpler: the
       round trip removes `from i in [3,1,2] yield i` from
       optimize.smli's `nonEmpty`.
-- [ ] Three interactions block the flip, one query each:
-      * `ordinal` (relational.smli): positional, so deferring a
-        projection past it changes what it counts. The tree has
-        nothing to say about ordinals yet.
-      * `suchThat` grounding (such-that.smli): "pattern 'b' is not
-        grounded". The unbounded-variable machinery reads step
-        shapes, and the lowered shapes differ.
-      * Calcite (hybrid.smli): the hybrid path embeds Morel source in
-        the plan and re-resolves it, and a deferred projection can
-        produce a field access whose record type is not resolvable
-        out of context ("unresolved flex record").
+- [x] Route the suite through the translation and the lowering
+      (`RelShadow.viaTree`, a diagnostic rather than the flip) and
+      fix what its *results* find. Four bugs so far: a pattern that
+      permutes fields, an atomizing yield, a failable pattern whose
+      scan condition kept a dangling reference, and a projection
+      containing `ordinal` deferred past the step that counts rows.
+- [ ] The flip proper: the resolver builds trees natively, and the
+      lowering runs once. A round trip cannot be the flip, because it
+      perturbs Core shapes that other machinery reads, and no care in
+      the lowering avoids that. Two such readers, and both must move
+      to the tree with it:
+      * the grounding of unbounded variables (such-that.smli, "pattern
+        'b' is not grounded"), which plan.md already schedules for
+        step 5;
+      * the Calcite hybrid path (hybrid.smli), which embeds Morel
+        source in a plan and re-resolves it out of context.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what

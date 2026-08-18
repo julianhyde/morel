@@ -71,6 +71,17 @@ public class RelShadow {
             if (!(from2 instanceof Core.From)) {
               return from2;
             }
+            if (containsExtent((Core.From) from2)
+                || hasFailablePattern((Core.From) from2)) {
+              // Two shapes that the round trip perturbs and that machinery
+              // reading step lists depends on: an unbounded scan, whose
+              // extent is fused with the conditions that bound it, and a
+              // scan whose pattern can fail, which the tree turns into a
+              // case and so erases. The grounding of `from b where cheap b`
+              // needs to see through both. They stay on the old path until
+              // `suchThat` is ported to the tree (plan.md step 5).
+              return from2;
+            }
             final Core.Exp tree =
                 RelTranslator.toRel(typeSystem, (Core.From) from2);
             if (tree == null) {
@@ -79,6 +90,48 @@ public class RelShadow {
             return RelLowerer.lower(typeSystem, tree);
           }
         });
+  }
+
+  /**
+   * Returns whether any scan of a query has a pattern that can fail to match,
+   * which the translation turns into a case.
+   */
+  private static boolean hasFailablePattern(Core.From from) {
+    for (Core.FromStep step : from.steps) {
+      if (step instanceof Core.Scan && failable(((Core.Scan) step).pat)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean failable(Core.Pat pat) {
+    switch (pat.op) {
+      case ID_PAT:
+      case WILDCARD_PAT:
+        return false;
+      case TUPLE_PAT:
+        return ((Core.TuplePat) pat)
+            .args.stream().anyMatch(RelShadow::failable);
+      case RECORD_PAT:
+        return ((Core.RecordPat) pat)
+            .args.stream().anyMatch(RelShadow::failable);
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Returns whether any scan of a query is over an extent, which the
+   * unbounded-variable machinery bounds by reading step shapes.
+   */
+  private static boolean containsExtent(Core.From from) {
+    for (Core.FromStep step : from.steps) {
+      if (step instanceof Core.Scan && ((Core.Scan) step).exp.isExtent()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Returns the number of queries the translator declined so far. */
