@@ -42,6 +42,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.NameGenerator;
@@ -293,8 +294,9 @@ public class TypeSystem {
   }
 
   /** Creates a type that is an alias for another type. */
-  Type aliasType(String name, Type type, List<Type> arguments) {
-    final AliasType aliasType = new AliasType(name, type, arguments);
+  Type aliasType(
+      String name, Type type, List<Type> arguments, List<Ast.Fn> checks) {
+    final AliasType aliasType = new AliasType(name, type, arguments, checks);
     typeByName.put(name, aliasType);
     return aliasType;
   }

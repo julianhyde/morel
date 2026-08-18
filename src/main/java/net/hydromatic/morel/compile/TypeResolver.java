@@ -4254,7 +4254,8 @@ public class TypeResolver {
           Keys.alias(
               bind.name.name,
               keyBuilder.toTypeKey(bind.type),
-              Keys.ordinals(bind.tyVars.size())));
+              Keys.ordinals(bind.tyVars.size()),
+              bind.checks));
     }
     final List<Type> types = typeSystem.typesFor(keys);
 

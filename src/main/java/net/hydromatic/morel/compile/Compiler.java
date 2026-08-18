@@ -1692,10 +1692,15 @@ public class Compiler {
       @Nullable List<Action> actions) {
     if (actions != null) {
       for (AliasType type : types) {
-        actions.add(
-            (outLines, outBindings, evalEnv) ->
-                outLines.accept(
-                    "type " + type.moniker() + " = " + type.type.key()));
+        final StringBuilder b =
+            new StringBuilder("type ")
+                .append(type.moniker())
+                .append(" = ")
+                .append(type.type.key());
+        type.checks.forEach(
+            check -> b.append(" check ").append(check.matchListString()));
+        final String line = b.toString();
+        actions.add((outLines, outBindings, evalEnv) -> outLines.accept(line));
       }
     }
   }

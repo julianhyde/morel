@@ -23,6 +23,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.function.UnaryOperator;
+import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
 
 /**
@@ -43,11 +44,24 @@ public class AliasType extends ParameterizedType {
   public final Type type;
   public final List<Type> arguments;
 
-  AliasType(String name, Type type, List<Type> arguments) {
+  /**
+   * Constraints on this type, one per {@code check} clause, each a function
+   * from a value of the type to {@code bool}. Empty if the type is
+   * unconstrained.
+   *
+   * <p>A constraint is part of the type's identity -- two constrained types are
+   * the same type when their conditions are textually equal -- but it does not
+   * survive {@link #unalias}, so nothing that examines a type structurally sees
+   * it.
+   */
+  public final List<Ast.Fn> checks;
+
+  AliasType(String name, Type type, List<Type> arguments, List<Ast.Fn> checks) {
     super(
         Op.ALIAS_TYPE, name, computeMoniker(name, arguments), arguments.size());
     this.type = type;
     this.arguments = ImmutableList.copyOf(arguments);
+    this.checks = ImmutableList.copyOf(checks);
   }
 
   @Override
@@ -57,7 +71,8 @@ public class AliasType extends ParameterizedType {
 
   @Override
   public Key key() {
-    return Keys.alias(name, type.key(), transformEager(arguments, Type::key));
+    return Keys.alias(
+        name, type.key(), transformEager(arguments, Type::key), checks);
   }
 
   @Override
