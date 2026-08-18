@@ -723,6 +723,29 @@ public class Expander {
     }
   }
 
+  /**
+   * Grounds one pattern: registers the extent it scans, applies the constraints
+   * that bound it, and returns the best generator, or null if there is none.
+   *
+   * <p>This is what {@link #expandSteps} does for a step list, expressed
+   * without steps, so that a relational tree can use the same engine: a leaf
+   * that is an infinite extent, and the conditions of the filters above it. See
+   * {@link RelExpander}.
+   */
+  static Generators.Cache ground(
+      Generators.Cache cache,
+      Core.Pat pat,
+      Core.Exp extentExp,
+      List<Core.Exp> constraints) {
+    Generators.maybeExtent(cache, pat, extentExp);
+    Expander expander = new Expander(cache, ImmutableList.of());
+    for (Core.Exp constraint : constraints) {
+      expander = expander.plusConstraint(constraint);
+      expander.improveGenerators(cache.generators);
+    }
+    return cache;
+  }
+
   static void expandSteps(List<Core.FromStep> steps, Expander expander) {
     if (steps.isEmpty()) {
       return;
