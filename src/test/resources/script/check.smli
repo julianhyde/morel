@@ -313,4 +313,36 @@ val ep3: evenPair = (1, 3);
 > uncaught exception Constraint [(1,3) is not a valid evenPair]
 >   raised at: stdIn:1.5-1.27
 
+(* Applying a datatype constructor is a construction site, like a binding:
+ * the constructor was declared to hold a 'nat', so its argument is checked. *)
+datatype box = Box of nat;
+> datatype box = Box of nat
+Box 1;
+> val it = Box 1 : box
+Box ~1;
+> uncaught exception Constraint [~1 is not a valid nat: argument of Box]
+>   raised at: stdIn:1.1-1.4
+
+(*) The path names the component within the argument.
+datatype boxPair = BoxPair of nat * nat;
+> datatype boxPair = BoxPair of nat * nat
+BoxPair (1, ~2);
+> uncaught exception Constraint [~2 is not a valid nat: argument of BoxPair.2]
+>   raised at: stdIn:1.1-1.8
+
+(*) A constructor that holds an unconstrained type is not checked.
+datatype plainBox = PlainBox of int;
+> datatype plainBox = PlainBox of int
+PlainBox ~1;
+> val it = PlainBox ~1 : plainBox
+
+(* A record modifier yields a plain record, which claims nothing, so it is
+ * checked where its result is bound at the constrained type rather than at
+ * the modifier itself. *)
+{e replace empno = ~1};
+> val it = {empno=~1,name="Fred"} : {empno:int, name:string}
+val e3: employee = {e replace empno = ~1};
+> uncaught exception Constraint [~1 is not a valid nat: field empno]
+>   raised at: stdIn:1.5-1.42
+
 (*) End check.smli
