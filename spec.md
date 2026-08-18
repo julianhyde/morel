@@ -26,7 +26,7 @@ morel-go implement against; where it disagrees with an
 implementation, this document is right.
 
 Status: **draft for review**. It is frozen at the end of step 0, and
-after step 2 the printed form is a golden-file contract that costs a
+after step 3 the printed form is a golden-file contract that costs a
 coordinated change across three implementations to alter. Sections
 marked *Review* are the ones where a decision was made here rather
 than transcribed from current behavior. Rationale for the design is
@@ -318,7 +318,7 @@ rejects the collision.
 ## 6. Plan text
 
 *Review.* The grammar below is a proposal; §7 shows it working. Once
-step 2 flips `Sys.plan` to print it, changing it is a coordinated
+step 3 flips `Sys.plan` to print it, changing it is a coordinated
 change across three implementations and every golden file.
 
 One node per line. A node's inputs are the lines below it, indented
@@ -416,5 +416,5 @@ group [deptno = #deptno $0] [total = sum over #sal $0]
 `Core.StepEnv` stop being the logical representation. They survive as
 the lowering target: the tree linearizes left-deep, `$0` and `$1` and
 the field accesses on them become `EvalEnv` slots, and `RowSink`
-execution is unchanged. That form is no longer printed, and step 3
+execution is unchanged. That form is no longer printed, and step 2
 may dissolve it into the lowerer entirely.
