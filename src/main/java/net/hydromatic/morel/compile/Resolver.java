@@ -479,6 +479,9 @@ public class Resolver {
       return null;
     }
     final Type t = TypeResolver.toType(type, typeMap.typeSystem);
+    // Reject before the test below: a constrained function type constrains
+    // nothing that can be checked, so the test would pass it over in silence.
+    rejectConstrainedFunction(t, t, type.pos);
     return constrains(t) ? t : null;
   }
 
@@ -504,6 +507,48 @@ public class Resolver {
           }
         });
     return concrete.get();
+  }
+
+  /**
+   * Throws if a claim would place a condition on a function.
+   *
+   * <p>A check on a value is made when the value is made. A function value is
+   * not a value its type can be checked against: to check {@code nat -> nat} we
+   * would have to check every argument it is ever given and every result it
+   * ever returns, which means replacing the function with a proxy. Rather than
+   * do that silently, or -- worse -- accept the claim and check nothing, the
+   * claim is rejected.
+   *
+   * @param type the type being examined, which recursion descends into
+   * @param claimed the whole type that was claimed, for the message
+   */
+  private void rejectConstrainedFunction(Type type, Type claimed, Pos pos) {
+    if (type instanceof FnType) {
+      final FnType fnType = (FnType) type;
+      if (constrains(fnType.paramType) || constrains(fnType.resultType)) {
+        throw new CompileException(
+            format(
+                "cannot claim a constrained function type '%s'",
+                claimed.moniker()),
+            false,
+            pos);
+      }
+      return;
+    }
+    if (type instanceof AliasType) {
+      rejectConstrainedFunction(((AliasType) type).type, claimed, pos);
+      return;
+    }
+    if (type instanceof RecordLikeType) {
+      ((RecordLikeType) type)
+          .argNameTypes()
+          .values()
+          .forEach(t -> rejectConstrainedFunction(t, claimed, pos));
+      return;
+    }
+    if (type instanceof ListType) {
+      rejectConstrainedFunction(type.elementType(), claimed, pos);
+    }
   }
 
   /** Returns whether a type, or any type within it, carries a condition. */
@@ -682,6 +727,7 @@ public class Resolver {
    * constructor, say.
    */
   private Core.Exp checked(Core.Exp coreExp, Type type, String blame, Pos pos) {
+    rejectConstrainedFunction(type, type, pos);
     if (!constrains(type)) {
       return coreExp;
     }
