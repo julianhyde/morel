@@ -72,6 +72,15 @@ public class RelTranslator {
    */
   private final Map<Core.NamedPat, Core.Exp> access = new LinkedHashMap<>();
 
+  /**
+   * Counter for the binders this translation generates.
+   *
+   * <p>Per tree, so that a query's plan text does not depend on how many names
+   * were generated before it; see spec.md section 6. A `$` cannot occur in an
+   * identifier, so these cannot capture a name the query wrote.
+   */
+  private int nextName;
+
   /** The tree built so far; null before the first step. */
   private Core.@Nullable Exp exp;
 
@@ -332,8 +341,7 @@ public class RelTranslator {
     }
     final Core.Exp element = element(binderAccess, wanted);
     final Type elementType = collection.type.elementType();
-    final Core.IdPat param =
-        core.idPat(elementType, typeSystem.nameGenerator.get(), 0);
+    final Core.IdPat param = freshPat(elementType);
     final Core.Exp body =
         core.caseOf(
             Pos.ZERO,
@@ -401,8 +409,7 @@ public class RelTranslator {
     if (access.op == Op.ID) {
       return optionRef;
     }
-    final Core.IdPat param =
-        core.idPat(rawRef.type, typeSystem.nameGenerator.get(), 0);
+    final Core.IdPat param = freshPat(rawRef.type);
     final Core.Exp body =
         access.accept(
             new Shuttle(typeSystem) {
@@ -789,7 +796,14 @@ public class RelTranslator {
         return (Core.IdPat) only.getKey();
       }
     }
-    return core.idPat(elementType, typeSystem.nameGenerator.get(), 0);
+    return freshPat(elementType);
+  }
+
+  /**
+   * Creates a binder that the translation needs and the query did not write.
+   */
+  private Core.IdPat freshPat(Type type) {
+    return core.idPat(type, "v$" + nextName++, 0);
   }
 
   private Map<Core.NamedPat, Core.Exp> both(
