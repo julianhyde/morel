@@ -3405,6 +3405,15 @@ public class Ast {
     }
 
     /**
+     * Returns the match list as it would be written without the leading {@code
+     * fn}. Used where a match list appears in another form, such as the {@code
+     * check} clause of a type declaration.
+     */
+    public String matchListString() {
+      return new AstWriter().appendAll(matchList, 0, Op.BAR, 0).toString();
+    }
+
+    /**
      * Creates a copy of this {@code Fn} with given contents, or this if the
      * contents are the same.
      */

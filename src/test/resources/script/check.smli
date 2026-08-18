@@ -26,23 +26,23 @@ Sys.set ("lineWidth", 78);
 (* A 'check' clause on a type declaration states a constraint on the type.
  * The constraint is parsed but not yet enforced. *)
 type nat = int check i => i >= 0;
-> type nat = int
+> type nat = int check i => i >= 0
 val n: nat = 5;
 > val n = 5 : nat
 
 (*) A clause may be repeated; each adds a constraint.
 type batchSize = int check i => i >= 1 check j => j <= 12;
-> type batchSize = int
+> type batchSize = int check i => i >= 1 check j => j <= 12
 
 (*) The match may have more than one branch, and need not be exhaustive.
 type badPair = (bool * int) check
     (true, 0) => true
   | (false, i) => i mod 2 = 0;
-> type badPair = bool * int
+> type badPair = bool * int check (true, 0) => true | (false, i) => i mod 2 = 0
 
 (*) The value the match binds may be destructured.
 type parityPair = {i: int, j: int} check {i, j} => i mod 2 = j mod 2;
-> type parityPair = {i:int, j:int}
+> type parityPair = {i:int, j:int} check {i = i, j = j} => i mod 2 = j mod 2
 
 (*) A type without a clause is unaffected.
 type plain = int;
@@ -66,7 +66,22 @@ type notInt = int check s => String.size s > 0;
  * clause is total via its second branch; as separate clauses neither would
  * be. *)
 type evenOrZero = int check 0 => true | i => i mod 2 = 0 check i => i >= 0;
-> type evenOrZero = int
+> type evenOrZero = int check 0 => true | i => i mod 2 = 0 check i => i >= 0
+
+(* A constraint is part of the type's identity, so redeclaring the name with a
+ * different condition gives a different type; but it does not survive into
+ * the type the compiler works with, so a constrained type still behaves as
+ * the type it abbreviates. *)
+type nat = int check i => i >= 1;
+> type nat = int check i => i >= 1
+val n2: nat = 5;
+> val n2 = 5 : nat
+n2 + 1;
+> val it = 6 : int
+List.hd [n2];
+> val it = 5 : nat
+List.map (fn i => i) [n2];
+> val it = [5] : nat list
 
 (*) A parameterized type may not be constrained.
 type 'a myList = 'a list check l => not (List.null l);

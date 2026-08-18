@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.UnaryOperator;
+import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
 
 /** Type keys. */
@@ -54,7 +55,20 @@ public class Keys {
   /** Returns a key that gives a name to an existing type. */
   public static Type.Key alias(
       String name, Type.Key key, List<? extends Type.Key> arguments) {
-    return new AliasKey(name, key, ImmutableList.copyOf(arguments));
+    return alias(name, key, arguments, ImmutableList.of());
+  }
+
+  /** Returns a key that gives a name, and constraints, to an existing type. */
+  public static Type.Key alias(
+      String name,
+      Type.Key key,
+      List<? extends Type.Key> arguments,
+      List<Ast.Fn> checks) {
+    return new AliasKey(
+        name,
+        key,
+        ImmutableList.copyOf(arguments),
+        ImmutableList.copyOf(checks));
   }
 
   /**
@@ -293,12 +307,25 @@ public class Keys {
     private final String name;
     private final Type.Key key;
     private final ImmutableList<Type.Key> arguments;
+    private final ImmutableList<Ast.Fn> checks;
+    /**
+     * The constraints, rendered. A condition is closed, so its text decides
+     * whether two constrained types are the same type; an {@link Ast.Fn} does
+     * not compare by value.
+     */
+    private final String checkText;
 
-    AliasKey(String name, Type.Key key, ImmutableList<Type.Key> arguments) {
+    AliasKey(
+        String name,
+        Type.Key key,
+        ImmutableList<Type.Key> arguments,
+        ImmutableList<Ast.Fn> checks) {
       super(Op.ALIAS_TYPE);
       this.name = requireNonNull(name);
       this.key = key;
       this.arguments = requireNonNull(arguments);
+      this.checks = requireNonNull(checks);
+      this.checkText = checks.toString();
     }
 
     @Override
@@ -321,13 +348,14 @@ public class Keys {
       return obj == this
           || obj instanceof AliasKey
               && ((AliasKey) obj).name.equals(name)
-              && ((AliasKey) obj).key.equals(key);
+              && ((AliasKey) obj).key.equals(key)
+              && ((AliasKey) obj).checkText.equals(checkText);
     }
 
     @Override
     public Type toType(TypeSystem typeSystem) {
       return typeSystem.aliasType(
-          name, key.toType(typeSystem), typeSystem.typesFor(arguments));
+          name, key.toType(typeSystem), typeSystem.typesFor(arguments), checks);
     }
   }
 
