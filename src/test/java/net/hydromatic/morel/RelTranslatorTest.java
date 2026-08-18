@@ -108,26 +108,15 @@ public class RelTranslatorTest {
         is(froms[0].type));
     if (rel instanceof Core.Rel) {
       assertThat(RelValidator.violations(typeSystem, (Core.Rel) rel), empty());
-      return normalize(((Core.Rel) rel).describe());
+      return ((Core.Rel) rel).describe();
     }
-    return normalize(rel + "\n");
+    return rel + "\n";
   }
 
   /**
    * Tests that a {@code where} step becomes a filter over a leaf, and that the
    * binder {@code i} becomes {@code $0}.
    */
-  /**
-   * Replaces the ordinal of a generated binder, which depends on how many names
-   * the type system has generated before, with {@code N}.
-   *
-   * <p>Plan text has to be deterministic before step 3 freezes it; see spec.md
-   * section 6.
-   */
-  private static String normalize(String plan) {
-    return plan.replaceAll("v\\$[0-9]+", "v\\$N");
-  }
-
   @Test
   void testFilter() {
     assertThat(
@@ -244,16 +233,16 @@ public class RelTranslatorTest {
         is(
             "projectMany\n" //
                 + "  [(1, 2), (3, 4)]\n"
-                + "  fn v$N =>\n"
-                + "    case v$N of (i, 2) => [i] | _ => []\n"));
+                + "  fn v$0 =>\n"
+                + "    case v$0 of (i, 2) => [i] | _ => []\n"));
     assertThat(
         plan("from (x :: xs) in [[1, 2], []] yield x"),
         is(
             "project [#x $0]\n" //
                 + "  projectMany\n"
                 + "    [[1, 2], []]\n"
-                + "    fn v$N =>\n"
-                + "      case v$N of op ::((x, xs)) => [{x = x, xs = xs}] | _ => []\n"));
+                + "    fn v$0 =>\n"
+                + "      case v$0 of op ::((x, xs)) => [{x = x, xs = xs}] | _ => []\n"));
   }
 
   /**
@@ -321,15 +310,15 @@ public class RelTranslatorTest {
         plan("from i in [1, 2] left join (j, k) in [(1, 2)] on i = j"),
         is(
             "join [left] [$0 = #1 $1] "
-                + "[{i = $0, j = #map Option (fn v$N => #1 v$N) $1, "
-                + "k = #map Option (fn v$N => #2 v$N) $1}]\n"
+                + "[{i = $0, j = #map Option (fn v$0 => #1 v$0) $1, "
+                + "k = #map Option (fn v$1 => #2 v$1) $1}]\n"
                 + "  [1, 2]\n"
                 + "  [(1, 2)]\n"));
     assertThat(
         plan("from i in [1, 2] right join j in [3] right join k in [4]"),
         is(
-            "join [right] [{i = #map Option (fn v$N => #i v$N) $0, "
-                + "j = #map Option (fn v$N => #j v$N) $0, k = $1}]\n"
+            "join [right] [{i = #map Option (fn v$0 => #i v$0) $0, "
+                + "j = #map Option (fn v$1 => #j v$1) $0, k = $1}]\n"
                 + "  join [right] [{i = $0, j = $1}]\n"
                 + "    [1, 2]\n"
                 + "    [3]\n"
