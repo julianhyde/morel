@@ -1566,6 +1566,16 @@ public class Ast {
           || o instanceof TypeDecl && binds.equals(((TypeDecl) o).binds);
     }
 
+    /**
+     * Creates a copy of this {@code TypeDecl} with given bindings, or this if
+     * the bindings are the same.
+     */
+    public TypeDecl copy(List<TypeBind> binds) {
+      return this.binds.equals(binds)
+          ? this
+          : new TypeDecl(pos, ImmutableList.copyOf(binds));
+    }
+
     public TypeDecl accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
@@ -1592,17 +1602,22 @@ public class Ast {
     public final Id name;
     public final Type type;
     /**
-     * Constraints on the type, one per {@code check} clause, each a match from
-     * a value of the type to {@code bool}. Empty if the type is unconstrained.
+     * Constraints on the type, one per {@code check} clause, each a function
+     * from a value of the type to {@code bool}. Empty if the type is
+     * unconstrained.
+     *
+     * <p>A clause is a function, not a match, because its branches are
+     * alternatives -- the first that matches decides -- whereas separate
+     * clauses are conjoined. Flattening the two would confuse them.
      */
-    public final List<Match> checks;
+    public final List<Fn> checks;
 
     TypeBind(
         Pos pos,
         ImmutableList<TyVar> tyVars,
         Id name,
         Type type,
-        ImmutableList<Match> checks) {
+        ImmutableList<Fn> checks) {
       super(pos, Op.TYPE_DECL);
       this.tyVars = requireNonNull(tyVars);
       this.name = requireNonNull(name);
@@ -1640,10 +1655,25 @@ public class Ast {
           .id(name.name)
           .append(" = ")
           .append(type, 0, 0);
-      for (Match check : checks) {
-        w.append(" check ").append(check, 0, 0);
+      for (Fn check : checks) {
+        w.append(" check ").appendAll(check.matchList, 0, Op.BAR, 0);
       }
       return w;
+    }
+
+    /**
+     * Creates a copy of this {@code TypeBind} with given constraints, or this
+     * if the constraints are the same.
+     */
+    public TypeBind copy(List<Fn> checks) {
+      return this.checks.equals(checks)
+          ? this
+          : new TypeBind(
+              pos,
+              ImmutableList.copyOf(tyVars),
+              name,
+              type,
+              ImmutableList.copyOf(checks));
     }
   }
 

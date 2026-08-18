@@ -1830,8 +1830,9 @@ void typeBind(List<Ast.TypeBind> typeBinds) :
   final Ast.Id id;
   final List<TyCon> tyCons = new ArrayList<>();
   final Type type;
-  final List<Match> checks = new ArrayList<>();
+  final List<Ast.Fn> checks = new ArrayList<>();
   List<Match> matchList;
+  Span span;
 }
 {
   tyVars = tyVars()
@@ -1839,7 +1840,9 @@ void typeBind(List<Ast.TypeBind> typeBinds) :
   <EQ>
   type = type()
   (
-    <CHECK> matchList = matchList() { checks.addAll(matchList); }
+    <CHECK> { span = Span.of(pos()); } matchList = matchList() {
+      checks.add(ast.fn(span.end(this), matchList));
+    }
   )*
   {
     final Pos pos = tyVars.left.plus(type.pos);

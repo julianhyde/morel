@@ -50,6 +50,29 @@ type plain = int;
 val p: plain = 5;
 > val p = 5 : plain
 
+(* A clause must be a function from the type it constrains to 'bool'. The
+ * condition sees the type as the type it abbreviates: the value has not yet
+ * been admitted to the constrained type, so the constraint may not be assumed
+ * of it. *)
+type notBool = int check i => i + 1;
+> stdIn:1.1-1.36 Error: Cannot deduce type: conflict: bool vs int
+>   raised at: stdIn:1.1-1.36
+type notInt = int check s => String.size s > 0;
+> stdIn:1.1-1.47 Error: Cannot deduce type: conflict: int vs string
+>   raised at: stdIn:1.1-1.47
+
+(* The branches of a clause are alternatives, but separate clauses are
+ * conjoined, so the two may not be flattened into one list. Here the first
+ * clause is total via its second branch; as separate clauses neither would
+ * be. *)
+type evenOrZero = int check 0 => true | i => i mod 2 = 0 check i => i >= 0;
+> type evenOrZero = int
+
+(*) A parameterized type may not be constrained.
+type 'a myList = 'a list check l => not (List.null l);
+> stdIn:1.6-1.25 Error: cannot constrain parameterized type 'myList'
+>   raised at: stdIn:1.6-1.25
+
 (* 'as' converts a value to a type, and 'asOpt' returns an option. Neither
  * enforces anything yet, so 'as' is the identity and 'asOpt' always returns
  * SOME, and both type as an annotation does. In particular the type printed
