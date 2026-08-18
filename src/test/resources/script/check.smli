@@ -242,4 +242,59 @@ decr ~3;
 > uncaught exception Constraint [~3 is not a valid nat]
 >   raised at: stdIn:1.5-1.26
 
+(* A claim on a composite type is a claim about its components, so each is
+ * checked. The message names the type that was claimed, not the component
+ * that failed; a blame path would say which. *)
+type employee = {empno: nat, name: string};
+> type employee = {empno:nat, name:string}
+val e: employee = {empno = 1, name = "Fred"};
+> val e = {empno=1,name="Fred"} : employee
+val e2: employee = {empno = ~1, name = "Fred"};
+> uncaught exception Constraint [{empno=~1,name="Fred"} is not a valid employee]
+>   raised at: stdIn:1.5-1.47
+
+(*) Nesting is followed to any depth.
+type team = {lead: employee, size: nat};
+> type team = {lead:employee, size:nat}
+val t: team = {lead = {empno = ~1, name = "Fred"}, size = 2};
+> uncaught exception Constraint [{lead={empno=~1,name="Fred"},size=2} is not a valid team]
+>   raised at: stdIn:1.5-1.61
+
+(*) A tuple behaves as a record does.
+type pair = nat * nat;
+> type pair = nat * nat
+val p: pair = (1, 2);
+> val p = (1,2) : pair
+val p2: pair = (1, ~2);
+> uncaught exception Constraint [(1,~2) is not a valid pair]
+>   raised at: stdIn:1.5-1.23
+
+(*) Every element of a list must satisfy the element type's condition.
+type nats = nat list;
+> type nats = nat list
+val ns: nats = [1, 2];
+> val ns = [1,2] : nats
+val ns2: nats = [1, ~2];
+> uncaught exception Constraint [[1,~2] is not a valid nats]
+>   raised at: stdIn:1.5-1.24
+
+(* Components are checked before the whole, so a type's own condition may
+ * assume that its components satisfy theirs. *)
+type nonEmptyNats = nat list check l => not (List.null l);
+> type nonEmptyNats = nat list check l => not (#null List l)
+val q1: nonEmptyNats = [1];
+> val q1 = [1] : nonEmptyNats
+val q2: nonEmptyNats = [];
+> uncaught exception Constraint [[] is not a valid nonEmptyNats]
+>   raised at: stdIn:1.5-1.26
+val q3: nonEmptyNats = [~1];
+> uncaught exception Constraint [[~1] is not a valid nonEmptyNats]
+>   raised at: stdIn:1.5-1.28
+
+(*) A composite that constrains nothing is not checked at all.
+type plainPair = int * string;
+> type plainPair = int * string
+val pp: plainPair = (1, "a");
+> val pp = (1,"a") : plainPair
+
 (*) End check.smli
