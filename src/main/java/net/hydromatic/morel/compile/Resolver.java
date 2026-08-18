@@ -561,6 +561,10 @@ public class Resolver {
    */
   private Core.Exp letValue(
       Core.Exp coreExp, Pos pos, Function<Core.Id, Core.Exp> body) {
+    if (coreExp instanceof Core.Id) {
+      // Already a variable, so reading it twice costs nothing.
+      return body.apply((Core.Id) coreExp);
+    }
     final Core.IdPat idPat =
         core.idPat(coreExp.type, () -> nameGenerator.getPrefixed("v"));
     final Core.Exp exp = body.apply(core.id(idPat));
@@ -1643,7 +1647,59 @@ public class Resolver {
     final FnType type = (FnType) typeMap.getType(fn);
     final List<Core.Match> matchList =
         transformEager(fn.matchList, this::toCore);
-    return core.fn(fn.pos, type, matchList, nameGenerator::inc);
+    final Core.Fn coreFn = core.fn(fn.pos, type, matchList, nameGenerator::inc);
+    final AliasType aliasType = parameterType(fn);
+    if (aliasType == null) {
+      return coreFn;
+    }
+    // The check goes inside the function, so it travels with the function
+    // value and fires however the function is called -- including from
+    // polymorphic code that knows nothing of the constrained type.
+    //
+    //   fn (n: nat) => e
+    //
+    // becomes
+    //
+    //   fn v => let val n = $check (c v, v, "nat") in e end
+    //
+    // rather than checking and discarding, which an optimizer would be
+    // entitled to remove: the body reads the name the check binds, so the
+    // check cannot be dropped.
+    final Core.IdPat paramPat =
+        core.idPat(coreFn.idPat.type, () -> nameGenerator.getPrefixed("v"));
+    return core.fn(
+        (FnType) coreFn.type,
+        paramPat,
+        core.let(
+            core.nonRecValDecl(
+                fn.pos,
+                coreFn.idPat,
+                null,
+                checked(core.id(paramPat), aliasType, fn.pos)),
+            coreFn.exp));
+  }
+
+  /**
+   * Returns the constrained type of a function's parameter, or null if the
+   * parameter is not annotated with one.
+   *
+   * <p>The annotation is read rather than deduced, because the body may weaken
+   * it: {@code fun f (n: nat) = n - 1} has type {@code int -> int}, since
+   * arithmetic drops the constraint, and asking inference would silently drop
+   * the check with it.
+   *
+   * <p>Only a function of a single match is considered. A function of several
+   * matches may annotate each differently, and which of them the parameter
+   * claims is a question composite values raise more generally.
+   */
+  private @Nullable AliasType parameterType(Ast.Fn fn) {
+    if (fn.matchList.size() != 1) {
+      return null;
+    }
+    final Ast.Pat pat = fn.matchList.get(0).pat;
+    return pat.op == Op.ANNOTATED_PAT
+        ? constrainedType(((Ast.AnnotatedPat) pat).type)
+        : null;
   }
 
   private Core.Case toCore(Ast.If if_) {
