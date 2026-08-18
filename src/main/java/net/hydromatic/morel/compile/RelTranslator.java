@@ -253,11 +253,13 @@ public class RelTranslator {
         body = core.filter(body, substitute(scan.condition, combined));
       }
       body = core.project(typeSystem, body, element(yieldAccess, wanted));
-      final Core.@Nullable Exp ifEmpty =
-          joinType == Core.Rel.JoinType.INNER
-              ? null
-              : element(emptyAccess, wanted);
-      exp = core.projectMany(typeSystem, left, param, body, ifEmpty);
+      if (joinType != Core.Rel.JoinType.INNER) {
+        // An outer apply: where the collection has nothing that matches, the
+        // left element still yields a row. The node sits inside the lambda,
+        // where the parameter its expression reads is in scope.
+        body = core.ifEmpty(body, element(emptyAccess, wanted));
+      }
+      exp = core.projectMany(typeSystem, left, param, body);
       return true;
     }
 

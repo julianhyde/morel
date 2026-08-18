@@ -140,6 +140,7 @@ just an expression".
 | `filter` | `cond : bool` | `τ` | `$0` |
 | `project` | `e` | type of `e` | `$0` |
 | `group` | keys `l₁ = e₁, …`, aggregates `m₁ = a₁, …` | record of the key and aggregate types, or the single field's type if there is exactly one | `$0` |
+| `ifEmpty` | `e` of type `τ` | `τ` | — (§2 rule 1) |
 | `sort` | `e` | `τ` | `$0` |
 | `unorder` | — | `τ` | — |
 | `skip` | `n : int` | `τ` | — (§2 rule 1) |
@@ -150,6 +151,14 @@ labels `l`, `m` are the output record's labels, and must be distinct.
 `distinct` is not a constructor: it is `group` whose keys are the
 whole element and whose aggregate list is empty.
 
+`ifEmpty` yields its expression as the single element where its input
+has none, and its input's elements where it has some. The expression
+is evaluated only in the first case, when there is no element, so
+like the count of a `skip` it cannot mention `$0`; it can mention
+whatever encloses the tree, which inside the body of a `projectMany`
+includes that node's parameter. It is what makes an apply outer
+(§3.3).
+
 `compute` is `group` with no keys, plus the extraction of the single
 element that the enclosing expression performs — see §6, *Review*.
 
@@ -157,7 +166,7 @@ element that the enclosing expression performs — see §6, *Review*.
 
 | Constructor | Arguments | Element type | Scope |
 | --- | --- | --- | --- |
-| `projectMany` | `fn v => c`, `c` of collection type; optional `ifEmpty` | element type of `c` | `v` names the input element, in `c` and in `ifEmpty` |
+| `projectMany` | `fn v => c`, `c` of collection type | element type of `c` | `v` names the input element |
 
 `project` maps an element to one element; `projectMany` maps it to
 many, and is exactly monadic bind: `α coll * (α -> β coll) -> β
@@ -178,30 +187,33 @@ occurrence of `v` in a leaf of the body, which the validator sees and
 a rule can guard on. There is no separate dependent-join
 constructor.
 
-**`ifEmpty` makes it an outer apply.** A correlated outer join —
-`from r in orders left join i in r.items on p` — yields a row for an
-order none of whose items satisfy `p`, which plain flat-map cannot
-do, because it has no element to map. The optional `ifEmpty`
-expression is that row: it has the node's element type, it is
-evaluated in the scope of `v` alone (there is no inner element to
-name), and it is used exactly when the body yields nothing.
+**An outer apply is `ifEmpty` inside the lambda.** A correlated outer
+join — `from r in orders left join i in r.items on p` — yields a row
+for an order none of whose items satisfy `p`, which flat-map cannot
+do, because it has no element to map. The `ifEmpty` node (§3.2)
+supplies that row, and it sits in the body, where `v` is in scope:
 
 ```
 projectMany
-  scott.orders
+  orders
   fn r =>
-    project [{i = SOME $0, r = r}]
-      filter [#units $0 > 2]
-        #items r
-  ifEmpty [{i = NONE, r = r}]
+    ifEmpty [{i = NONE, r = r}]
+      project [{i = SOME $0, r = r}]
+        filter [#units $0 > 2]
+          #items r
 ```
 
+`projectMany` itself stays a pure bind with one argument. An earlier
+draft made `ifEmpty` a second, optional argument of `projectMany`,
+and it was wrong for a reason worth recording: its expression reads
+`r`, which only the lambda binds, so an argument of the node would
+have been printed outside the binder it depends on. As a node in the
+body it is inside that scope, and it composes — it is an ordinary
+collection→collection operator that a rule can move.
+
 The `SOME` and the `NONE` are written by the expressions rather than
-implied by the node, because Morel makes each binder of the absent
-side an option and has no null to fill a row with. That is also why
-this is one argument on `projectMany` rather than a kind on it, as
-`join` has: the node needs the absent row's *value*, and only the
-query knows it.
+implied by any node, because Morel has no null to fill a row with:
+only the query knows what the absent row's value is.
 
 ### 3.4 Two inputs
 
@@ -261,7 +273,7 @@ are transcribed from current step behavior, not redesigned; the
 | Constructor | Output kind | Checked by |
 | --- | --- | --- |
 | leaf `e` | kind of `e` | — |
-| `filter`, `project`, `skip`, `take` | kind of input | `from i in [1,2] where i > 1` is a `list` |
+| `filter`, `project`, `skip`, `take`, `ifEmpty` | kind of input | `from i in [1,2] where i > 1` is a `list` |
 | `projectMany` | `list` if the input is a `list` and the lambda's body is a `list`, else `bag` | `from i in [1,2,3], j in bag [i]` is a `bag` |
 | `join` | `list` if both inputs are `list`, else `bag` | as above (a join is a nested loop) |
 | `group` | kind of input | `from i in [1,2,3] group j = i` is a `list` |
@@ -319,7 +331,7 @@ that is `$0`) are omitted.
 plan     ::= node
 node     ::= indent op arg* '\n' node*
            | indent exp '\n'                    -- a leaf
-op       ::= 'filter' | 'project' | 'projectMany'
+op       ::= 'filter' | 'project' | 'projectMany' | 'ifEmpty'
            | 'join' | 'group' | 'sort' | 'unorder'
            | 'skip' | 'take' | 'union' | 'intersect' | 'except'
 arg      ::= '[' exp ']' | '[' label '=' exp (',' label '=' exp)* ']'
