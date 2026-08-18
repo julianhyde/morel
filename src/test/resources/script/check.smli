@@ -421,4 +421,42 @@ val bad2: nat = "abc";
 > stdIn:1.1-1.22 Error: Cannot deduce type: conflict: nat (alias for int) vs string
 >   raised at: stdIn:1.1-1.22
 
+(* A condition may itself raise. Then whether the value has the type is not
+ * false but unknown, and 'Constraint' is raised either way -- the value has
+ * not been shown to have the type -- but the message says which happened, and
+ * what went wrong. *)
+type odd = int check i => 100 div i mod 2 = 1;
+> type odd = int check i => 100 div i mod 2 = 1
+val odd1: odd = 3;
+> val odd1 = 3 : odd
+val odd2: odd = 2;
+> uncaught exception Constraint [2 is not a valid odd]
+>   raised at: stdIn:1.5-1.18
+val odd3: odd = 0;
+> uncaught exception Constraint [cannot tell whether 0 is a valid odd; Div [divide by zero]]
+>   raised at: stdIn:1.5-1.18
+
+(*) A component says which component, as it does when the condition is false.
+type odds = odd list;
+> type odds = odd list
+val os1: odds = [3, 5];
+> uncaught exception Constraint [5 is not a valid odd: element]
+>   raised at: stdIn:1.5-1.23
+val os2: odds = [3, 2];
+> uncaught exception Constraint [2 is not a valid odd: element]
+>   raised at: stdIn:1.5-1.23
+val os3: odds = [3, 0];
+> uncaught exception Constraint [cannot tell whether 0 is a valid odd: element; Div [divide by zero]]
+>   raised at: stdIn:1.5-1.23
+
+(* 'asOpt' asks rather than claims, so a condition that is false is an answer;
+ * but one that raises has no answer, so it raises too. *)
+3 asOpt odd;
+> val it = SOME 3 : int option
+2 asOpt odd;
+> val it = NONE : int option
+0 asOpt odd;
+> uncaught exception Constraint [cannot tell whether 0 is a valid odd; Div [divide by zero]]
+>   raised at: stdIn:1.1-1.12
+
 (*) End check.smli
