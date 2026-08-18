@@ -77,6 +77,7 @@ import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeShuttle;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
@@ -653,6 +654,15 @@ public class Resolver {
    * </blockquote>
    */
   private Core.Exp checked(Core.Exp coreExp, Type type, Pos pos) {
+    return checked(coreExp, type, "", pos);
+  }
+
+  /**
+   * As {@link #checked(Core.Exp, Type, Pos)}, but says what the value is of,
+   * for a value that is a component of something -- the argument of a
+   * constructor, say.
+   */
+  private Core.Exp checked(Core.Exp coreExp, Type type, String blame, Pos pos) {
     if (!constrains(type)) {
       return coreExp;
     }
@@ -668,10 +678,10 @@ public class Resolver {
                 core.tuple(
                     typeSystem,
                     requireNonNull(
-                        deepCondition(type, coreExp.type, id, "", pos)),
+                        deepCondition(type, coreExp.type, id, blame, pos)),
                     id,
                     core.stringLiteral(type.moniker()),
-                    core.stringLiteral(""))));
+                    core.stringLiteral(blame))));
   }
 
   /**
@@ -1238,6 +1248,27 @@ public class Resolver {
     return core.id(idPat);
   }
 
+  /**
+   * Wraps the argument of a datatype constructor in a check, if the constructor
+   * declares a constrained type for it.
+   *
+   * <p>Applying a constructor is a construction site, like a binding: {@code
+   * Box ~1} claims that {@code ~1} is a {@code nat}, because that is what
+   * {@code Box} was declared to hold.
+   */
+  private Core.Exp withConstructorCheck(Ast.Exp fn, Core.Exp coreArg) {
+    if (fn.op != Op.ID) {
+      return coreArg;
+    }
+    final String name = ((Ast.Id) fn).name;
+    final TypeCon tyCon = typeMap.typeSystem.lookupTyCon(name);
+    if (tyCon == null) {
+      return coreArg;
+    }
+    final Type argType = tyCon.argTypeKey.toType(typeMap.typeSystem);
+    return checked(coreArg, argType, "argument of " + name, fn.pos);
+  }
+
   private Core.Exp toCore(Ast.OpSection opSection) {
     final Binding binding = env.getOpt("op " + opSection.name);
     checkNotNull(binding, "not found", opSection);
@@ -1334,7 +1365,7 @@ public class Resolver {
   }
 
   private Core.Apply toCore(Ast.Apply apply) {
-    final Core.Exp coreArg = toCore(apply.arg);
+    final Core.Exp coreArg = withConstructorCheck(apply.fn, toCore(apply.arg));
     Type type = typeMap.getType(apply);
     final Core.Exp coreFn;
     if (apply.fn.op == Op.RECORD_SELECTOR) {
