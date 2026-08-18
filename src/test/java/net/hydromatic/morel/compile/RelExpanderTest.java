@@ -21,6 +21,8 @@ package net.hydromatic.morel.compile;
 import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.google.common.collect.ImmutableMap;
 import java.io.StringReader;
@@ -46,46 +48,60 @@ import org.junit.jupiter.api.Test;
  */
 public class RelExpanderTest {
   /**
-   * Compiles a query, translates it to a tree, and returns the generator of its
-   * first infinite-extent leaf, as a string.
+   * A query compiled as far as Core, with the type system and environment that
+   * compiled it.
+   */
+  private static class Fixture {
+    final TypeSystem typeSystem = new TypeSystem();
+    final Environment env;
+    final Core.From from;
+
+    Fixture(String ml) {
+      final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
+      final AstNode statement = parser.statementEofSafe();
+      final Session session = null;
+      env = Environments.env(typeSystem, session, ImmutableMap.of());
+      final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
+      final Consumer<CompileException> ignoreWarnings = w -> {};
+      final TypeResolver.Resolved resolved =
+          TypeResolver.deduceType(env, valDecl, typeSystem, ignoreWarnings);
+      final Resolver resolver = Resolver.of(resolved.typeMap, env, null);
+      // Inline once, as Compiles does: until then a built-in such as 'elem'
+      // is an Id, not the function literal that the engine matches on.
+      final Core.ValDecl valDecl2 =
+          (Core.ValDecl)
+              resolver
+                  .toCore((Ast.ValDecl) resolved.node)
+                  .accept(Inliner.of(typeSystem, env, null));
+      final Core.From[] froms = {null};
+      valDecl2.accept(
+          new Visitor() {
+            @Override
+            protected void visit(Core.From from) {
+              super.visit(from);
+              if (froms[0] == null) {
+                froms[0] = from;
+              }
+            }
+          });
+      from = froms[0];
+    }
+
+    Core.Exp tree() {
+      return requireNonNull(
+          RelTranslator.toRel(typeSystem, from),
+          "translator declined a query these tests need a tree for");
+    }
+  }
+
+  /**
+   * Returns the generator of the first infinite-extent leaf of a query's tree,
+   * as a string.
    */
   private static String generator(String ml) {
-    final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
-    final AstNode statement = parser.statementEofSafe();
-    final TypeSystem typeSystem = new TypeSystem();
-    final Session session = null;
-    final Environment env =
-        Environments.env(typeSystem, session, ImmutableMap.of());
-    final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
-    final Consumer<CompileException> ignoreWarnings = w -> {};
-    final TypeResolver.Resolved resolved =
-        TypeResolver.deduceType(env, valDecl, typeSystem, ignoreWarnings);
-    final Resolver resolver = Resolver.of(resolved.typeMap, env, null);
-    // Inline once, as Compiles does: until then a built-in such as 'elem' is
-    // an Id, not the function literal that the engine matches on.
-    final Core.ValDecl valDecl2 =
-        (Core.ValDecl)
-            resolver
-                .toCore((Ast.ValDecl) resolved.node)
-                .accept(Inliner.of(typeSystem, env, null));
-
-    final Core.From[] froms = {null};
-    valDecl2.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Core.From from) {
-            super.visit(from);
-            if (froms[0] == null) {
-              froms[0] = from;
-            }
-          }
-        });
-    final Core.Exp tree =
-        requireNonNull(
-            RelTranslator.toRel(typeSystem, froms[0]),
-            "translator declined a query these tests need a tree for");
+    final Fixture f = new Fixture(ml);
     final Map<Core.Exp, Generator> generators =
-        RelExpander.ground(typeSystem, env, tree);
+        RelExpander.ground(f.typeSystem, f.env, f.tree());
     if (generators.isEmpty()) {
       return "no extent";
     }
@@ -93,6 +109,18 @@ public class RelExpanderTest {
     return generator == null
         ? "not grounded"
         : generator.exp + " : " + generator.cardinality;
+  }
+
+  /**
+   * Returns the plan text of a query's tree, with its infinite-extent leaves
+   * replaced by what bounds them.
+   */
+  private static String expanded(String ml) {
+    final Fixture f = new Fixture(ml);
+    final Core.Exp tree = RelExpander.expand(f.typeSystem, f.env, f.tree());
+    return tree instanceof Core.Rel
+        ? ((Core.Rel) tree).describe()
+        : tree + "\n";
   }
 
   /** Tests that a leaf constrained by 'elem' is grounded by the list. */
@@ -118,6 +146,32 @@ public class RelExpanderTest {
   @Test
   void testBounded() {
     assertThat(generator("from x in [1, 2] where x > 1"), is("no extent"));
+  }
+
+  /**
+   * Tests that the leaf is replaced by what bounds it, so that an unbounded
+   * query becomes one that can run.
+   */
+  @Test
+  void testExpand() {
+    assertThat(
+        expanded("from x where x elem [1, 2, 3]"),
+        // The condition stays; the generator's provenance says it is
+        // redundant, and dropping it is an optimization not written yet.
+        is(
+            "filter [op elem ($0, [1, 2, 3])]\n" //
+                + "  [1, 2, 3]\n"));
+  }
+
+  /** Tests that a query that cannot be bounded is an error. */
+  @Test
+  void testExpandUnbounded() {
+    try {
+      final String plan = expanded("from x where x > 1");
+      fail("expected error, got " + plan);
+    } catch (CompileException e) {
+      assertThat(e.getMessage(), containsString("cannot bound int"));
+    }
   }
 }
 
