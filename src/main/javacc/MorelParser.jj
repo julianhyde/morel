@@ -1306,6 +1306,14 @@ Exp expression() :
     <COLON> t = type() {
       e = ast.annotatedExp(e.pos.plus(t.pos), e, t);
     }
+  |
+    <AS> t = type() {
+      e = ast.cast(e.pos.plus(t.pos), Op.AS, e, t);
+    }
+  |
+    <AS_OPT> t = type() {
+      e = ast.cast(e.pos.plus(t.pos), Op.AS_OPT, e, t);
+    }
   )*
   { return e; }
 }
@@ -2553,6 +2561,7 @@ AstNode statementEof() :
 // lint: sort until '^$'
 | < ANDALSO: "andalso" >
 | < AS: "as" >
+| < AS_OPT: "asOpt" >
 | < CASE: "case" >
 | < CHECK: "check" >
 | < DATATYPE: "datatype" >

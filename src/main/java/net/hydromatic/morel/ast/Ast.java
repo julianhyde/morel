@@ -583,6 +583,66 @@ public class Ast {
   }
 
   /** Parse tree node of an expression annotated with a type. */
+  /**
+   * Parse tree node of a conversion, "{@code exp as type}" or "{@code exp asOpt
+   * type}".
+   *
+   * <p>Both narrow a value to a type whose constraints may not hold of it; they
+   * differ in how they report failure. `as` raises, and has the type it
+   * converts to; `asOpt` returns an option, and has that type wrapped in
+   * `option`.
+   */
+  public static class Cast extends Exp {
+    public final Exp exp;
+    public final Type type;
+
+    Cast(Pos pos, Op op, Exp exp, Type type) {
+      super(pos, op);
+      checkArgument(op == Op.AS || op == Op.AS_OPT);
+      this.exp = requireNonNull(exp);
+      this.type = requireNonNull(type);
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(op, exp, type);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj
+          || obj instanceof Cast
+              && op == ((Cast) obj).op
+              && exp.equals(((Cast) obj).exp)
+              && type.equals(((Cast) obj).type);
+    }
+
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.infix(left, exp, op, type, right);
+    }
+
+    @Override
+    public Cast withPos(Pos pos) {
+      return pos.equals(this.pos) ? this : new Cast(pos, op, exp, type);
+    }
+
+    /** Creates a copy of this {@code Cast}, or {@code this} if unchanged. */
+    public Cast copy(Exp exp, Type type) {
+      return this.exp.equals(exp) && this.type.equals(type)
+          ? this
+          : new Cast(pos, op, exp, type);
+    }
+  }
+
   public static class AnnotatedExp extends Exp {
     public final Type type;
     public final Exp exp;

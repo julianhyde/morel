@@ -101,6 +101,10 @@ public class Shuttle {
     return ordinal;
   }
 
+  protected Ast.Exp visit(Ast.Cast cast) {
+    return cast.copy(cast.exp.accept(this), cast.type.accept(this));
+  }
+
   protected Ast.Exp visit(Ast.AnnotatedExp annotatedExp) {
     return ast.annotatedExp(
         annotatedExp.pos,

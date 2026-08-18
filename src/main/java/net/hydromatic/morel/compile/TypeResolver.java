@@ -1099,6 +1099,24 @@ public class TypeResolver {
     }
   }
 
+  /**
+   * Deduces the type of a conversion, {@code e as t} or {@code e asOpt t}.
+   *
+   * <p>{@code as} has the type it converts to, and constrains {@code e} to the
+   * same type; {@code asOpt} has that type wrapped in {@code option}. Once
+   * constraints are enforced this is where the check goes; for now both behave
+   * as a type annotation.
+   */
+  private Ast.Exp deduceCastType(TypeEnv env, Ast.Cast cast, Variable v) {
+    final Variable vExp = cast.op == Op.AS ? v : unifier.variable();
+    final Ast.Type type = deduceTypeType(env, cast.type, vExp);
+    final Ast.Exp exp = deduceExpType(env, cast.exp, vExp);
+    final Ast.Cast cast2 = cast.copy(exp, type);
+    return cast.op == Op.AS
+        ? reg(cast2, v)
+        : reg(cast2, v, unifier.apply(OPTION_TY_CON, vExp));
+  }
+
   private Ast.Exp deduceExpType(TypeEnv env, Ast.Exp node, Variable v) {
     final List<Ast.Exp> args2;
     final Variable v2;
@@ -1125,6 +1143,10 @@ public class TypeResolver {
       case WORD_LITERAL:
         checkLiteralRange(node, PrimitiveType.WORD);
         return reg(node, v, toTerm(PrimitiveType.WORD));
+
+      case AS:
+      case AS_OPT:
+        return deduceCastType(env, (Ast.Cast) node, v);
 
       case ANNOTATED_EXP:
         final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) node;

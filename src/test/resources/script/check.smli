@@ -16,7 +16,8 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Tests constrained types, i.e. a 'type' declaration with a 'check' clause.
+ * Tests constrained types, i.e. a 'type' declaration with a
+ * 'check' clause.
  *)
 
 Sys.set ("lineWidth", 78);
@@ -48,5 +49,38 @@ type plain = int;
 > type plain = int
 val p: plain = 5;
 > val p = 5 : plain
+
+(* 'as' converts a value to a type, and 'asOpt' returns an option. Neither
+ * enforces anything yet, so 'as' is the identity and 'asOpt' always returns
+ * SOME, and both type as an annotation does. In particular the type printed
+ * is the meet of the two, so converting an 'int' to an alias of 'int' prints
+ * 'int'; when a constrained type is no longer an alias, the conversion will
+ * have the type it converts to. *)
+val i = 5;
+> val i = 5 : int
+i as nat;
+> val it = 5 : int
+i as int;
+> val it = 5 : int
+i asOpt nat;
+> val it = SOME 5 : int option
+
+(*) They bind as loosely as ':', so the whole expression is converted.
+i - 1 as nat;
+> val it = 4 : int
+(i as nat) + 1;
+> val it = 6 : int
+
+(*) They are left-associative, and mix with ':'.
+i as nat as int;
+> val it = 5 : int
+(i : int) as nat;
+> val it = 5 : int
+
+(* A conversion between types with different erasures is an ordinary type
+ * error, reported by the unifier without any constraint reasoning. *)
+"abc" as nat;
+> stdIn:1.1-1.13 Error: Cannot deduce type: conflict: nat (alias for int) vs string
+>   raised at: stdIn:1.1-1.13
 
 (*) End check.smli
