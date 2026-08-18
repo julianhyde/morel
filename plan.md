@@ -132,7 +132,16 @@ something settled — §8's principle, applied to the sequence itself.
         it. So the front end is: name the element of each
         infinite-extent leaf, substitute that name for `$0` in the
         filters above it, and make those two calls. Order 200 lines
-        against an engine that does not change.
+        against an engine that does not change. Done, in
+        `RelExpander`: it grounds a leaf and replaces it with what
+        bounds it, projecting where the generator binds a tuple of
+        which the element is one component. What remains before it
+        can stand in for `Expander`: pushing a condition through a
+        projection (conditions stop at one today); a generator with
+        free variables, which needs a dependent scan; dropping the
+        conditions that a sealed generator subsumes; and the
+        diagnostic, because "pattern 'b' is not grounded" names a
+        binder that the tree has erased.
 
         Ported in place, as one engine with two front ends, not as a
         second engine. The split is not even: `Fbbt` and `Extents`

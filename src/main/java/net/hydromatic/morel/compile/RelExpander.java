@@ -57,6 +57,137 @@ public class RelExpander {
   }
 
   /**
+   * Replaces every infinite-extent leaf of a tree with a collection that bounds
+   * it, and throws if there is none.
+   *
+   * <p>This is what {@link Expander#expandFrom} does for a step list.
+   */
+  public static Core.Exp expand(
+      TypeSystem typeSystem, Environment env, Core.Exp tree) {
+    return new RelExpander(typeSystem, env).expand(tree, ImmutableList.of());
+  }
+
+  /**
+   * Rewrites a node, carrying the conditions of the filters passed on the way
+   * down, and replacing each infinite-extent leaf with what grounds it.
+   */
+  private Core.Exp expand(Core.Exp exp, List<Core.Exp> conditions) {
+    if (!(exp instanceof Core.Rel)) {
+      return exp.isExtent() ? bound(exp, conditions) : exp;
+    }
+    if (exp instanceof Core.Filter) {
+      final Core.Filter filter = (Core.Filter) exp;
+      final List<Core.Exp> conditions2 = new ArrayList<>(conditions);
+      conditions2.addAll(core.decomposeAnd(filter.condition));
+      return filter.copy(expand(filter.input, conditions2), filter.condition);
+    }
+    if (exp instanceof Core.Project) {
+      final Core.Project project = (Core.Project) exp;
+      return project.copy(
+          typeSystem, expand(project.input, ImmutableList.of()), project.exp);
+    }
+    if (exp instanceof Core.Sort) {
+      final Core.Sort sort = (Core.Sort) exp;
+      return sort.copy(
+          typeSystem, expand(sort.input, ImmutableList.of()), sort.exp);
+    }
+    if (exp instanceof Core.Unorder) {
+      final Core.Unorder unorder = (Core.Unorder) exp;
+      return unorder.copy(
+          typeSystem, expand(unorder.input, ImmutableList.of()));
+    }
+    if (exp instanceof Core.Skip) {
+      final Core.Skip skip = (Core.Skip) exp;
+      return skip.copy(expand(skip.input, ImmutableList.of()), skip.count);
+    }
+    if (exp instanceof Core.Take) {
+      final Core.Take take = (Core.Take) exp;
+      return take.copy(expand(take.input, ImmutableList.of()), take.count);
+    }
+    if (exp instanceof Core.Join) {
+      final Core.Join join = (Core.Join) exp;
+      return join.copy(
+          typeSystem,
+          join.joinType,
+          expand(join.left, ImmutableList.of()),
+          expand(join.right, ImmutableList.of()),
+          join.condition,
+          join.yieldExp);
+    }
+    // A node whose element does not come from a leaf below it in a way this
+    // pass understands: leave its inputs alone.
+    return exp;
+  }
+
+  /**
+   * Returns the collection that bounds an infinite-extent leaf.
+   *
+   * <p>If the generator binds a pattern other than the element itself -- it
+   * bounds a tuple of which the element is one component -- the collection is
+   * projected down to the element.
+   */
+  private Core.Exp bound(Core.Exp leaf, List<Core.Exp> conditions) {
+    final Core.IdPat pat = elementPat(leaf);
+    final Generator generator = ground(leaf, conditions, pat);
+    if (generator == null
+        || generator.cardinality == Generator.Cardinality.INFINITE) {
+      // The step list names the user's pattern here; a tree has erased it.
+      throw new CompileException(
+          "cannot bound "
+              + leaf.type.elementType().moniker()
+              + " from the conditions of this query",
+          false,
+          leaf.pos);
+    }
+    if (!generator.freePats.isEmpty()) {
+      // A generator that reads other variables needs them bound first, which
+      // is a dependent scan; not yet.
+      throw new CompileException(
+          "generator for this query depends on " + generator.freePats,
+          false,
+          leaf.pos);
+    }
+    if (generator.exp.type.elementType().equals(leaf.type.elementType())
+        && generator.pat instanceof Core.IdPat) {
+      return generator.exp;
+    }
+    final Core.Exp element =
+        path(generator.pat, core.input0(generator.exp.type.elementType()), pat);
+    if (element == null) {
+      throw new CompileException(
+          "generator binds "
+              + generator.pat
+              + ", which does not contain the "
+              + "element of this query",
+          false,
+          leaf.pos);
+    }
+    return core.project(typeSystem, generator.exp, element);
+  }
+
+  /**
+   * Returns the expression that reads a pattern's binder out of an element, or
+   * null if the pattern does not bind it.
+   */
+  private Core.@Nullable Exp path(
+      Core.Pat pat, Core.Exp element, Core.NamedPat target) {
+    if (pat instanceof Core.NamedPat) {
+      return pat.equals(target) ? element : null;
+    }
+    if (pat instanceof Core.TuplePat) {
+      final List<Core.Pat> args = ((Core.TuplePat) pat).args;
+      for (int i = 0; i < args.size(); i++) {
+        final Core.@Nullable Exp exp =
+            path(args.get(i), core.field(typeSystem, element, i), target);
+        if (exp != null) {
+          return exp;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Returns a generator for each infinite-extent leaf of a tree, or null for a
    * leaf that cannot be grounded.
    *
@@ -114,8 +245,16 @@ public class RelExpander {
    * that name, and asks the engine.
    */
   private @Nullable Generator ground(Core.Exp leaf, List<Core.Exp> conditions) {
-    final Core.IdPat pat =
-        core.idPat(leaf.type.elementType(), "g$" + nextName++, 0);
+    return ground(leaf, conditions, elementPat(leaf));
+  }
+
+  /** Creates the name that the engine keys on for a leaf's element. */
+  private Core.IdPat elementPat(Core.Exp leaf) {
+    return core.idPat(leaf.type.elementType(), "g$" + nextName++, 0);
+  }
+
+  private @Nullable Generator ground(
+      Core.Exp leaf, List<Core.Exp> conditions, Core.IdPat pat) {
     final List<Core.Exp> constraints = new ArrayList<>();
     conditions.forEach(
         condition -> constraints.add(subst(condition, core.id(pat))));
