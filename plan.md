@@ -62,7 +62,7 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 - [x] Translation (variable elimination: pattern bindings become
       `$0`/`$1` references, field accesses and record constructions).
       From the step list rather than from the AST, which reuses type
-      resolution and is what step 3 replaces.
+      resolution and is what step 2 replaces.
 - [x] CI asserts, for every query in the suite (`RelShadow`, under
       `assert`): the tree's type is the query's type, and the
       validator accepts it. Declined constructs are counted, not
@@ -72,32 +72,49 @@ tests green. Plan text and rewrite ports are each paid exactly once.
       land were a scan whose pattern can fail to match, an outer
       apply (`projectMany` with `ifEmpty`), and an outer join whose
       absent side has more than one binder.
-- [ ] tree→From converter as scaffolding, and round-trip fidelity
-      (AST→tree→From equals AST→From, up to binder renaming).
+- [x] No tree→From converter for its own sake. A round-trip
+      comparison cannot be structural — the translation normalizes,
+      inserting a projection after a destructuring scan and
+      unwrapping an atomizing yield — so the assertion would have to
+      be weakened until it proved little. The converter is worth
+      writing as the *lowerer* instead, in step 2, where results
+      check it.
 
-## Step 2 — Flip observability
+## Step 2 — Flip execution
 
-- [ ] Sys.plan and Sys.planEx print the tree.
-- [ ] Script-convert test expectations (one flip, final format).
-      These changes are benign by construction: only plan text moves,
-      because execution does not change until step 3. A query with no
-      scan gains a visible `[()]` leaf (spec.md §3.1) and a set
-      operator may gain a projection that aligns its branches; both
-      queries return exactly what they returned before. A test whose
-      *result* changes in this step is a bug, not a re-baseline.
-- [ ] Plan text is now frozen; golden files are the
-      cross-implementation contract. Rust (morel-rust#33) and Go
-      work can begin here, in parallel with steps 3–5.
-
-## Step 3 — Flip execution
+Execution moves before observability, reversing the original order.
+The plan text that step 3 freezes is a contract that three
+implementations then follow, and freezing it on trees that have never
+run risks churning it when a semantic bug surfaces. Results are the
+only real check on a translation, so earn them first. The cost is
+that the ports start later; the saving is that they start against
+something settled — §8's principle, applied to the sequence itself.
 
 - [ ] Lowering: tree → left-deep environment-passing form → RowSink;
       `$0`/`$1` and the field accesses on them dictate EvalEnv slots;
       name→slot gathers where canonical label order diverges from
-      construction order.
-- [ ] Delete the AST→From path. From's step list becomes an
-      unprinted lowering artifact or dissolves into the lowerer.
-- [ ] Script tests unchanged and passing (behavior identical).
+      construction order. The step list survives as that form: an
+      unprinted lowering artifact, or dissolved into the lowerer.
+- [ ] Every query flows through the tree, so the whole script suite
+      checks the translation by its results. Expectations do not
+      change at all in this step: a test that needs re-baselining is
+      a bug.
+- [ ] Delete the AST→From path; the resolver builds trees natively.
+
+## Step 3 — Flip observability
+
+- [ ] Sys.plan and Sys.planEx print the tree.
+- [ ] Script-convert test expectations (one flip, final format).
+      These changes are benign by construction: only plan text moves,
+      because execution changed in step 2 without changing results. A
+      query with no scan gains a visible `[()]` leaf (spec.md §3.1)
+      and a set operator may gain a projection that aligns its
+      branches; both return exactly what they returned before. A test
+      whose *result* changes in this step is a bug, not a
+      re-baseline.
+- [ ] Plan text is now frozen; golden files are the
+      cross-implementation contract. Rust (morel-rust#33) and Go
+      work can begin here, in parallel with steps 4–5.
 
 ## Step 4 — Rule framework
 
@@ -139,7 +156,8 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 
 ## Milestones for morel-rust and morel-go
 
-Fork after step 2. Implement the datatype, type derivation,
-validator, printer, and lowering against the frozen plan-text golden
-files; script tests are shared. The rule framework ports after the
+Fork after step 3, when the plan text is frozen. Implement the
+datatype, type derivation, validator, printer, and lowering against
+the frozen plan-text golden files; script tests are shared. The rule
+framework ports after the
 Java version stabilizes in step 4–5.
