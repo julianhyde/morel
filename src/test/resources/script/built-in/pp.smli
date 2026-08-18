@@ -27,18 +27,18 @@ PP;
 > val it =
 >   {align=fn,beside=fn,braces=fn,brackets=fn,cat=fn,empty=-,encloseSep=fn,
 >    fillCat=fn,fillSep=fn,`group`=fn,hang=fn,hardLine=-,hcat=fn,hsep=fn,
->    indent=fn,line=-,lineBreak=-,nest=fn,parens=fn,punctuate=fn,render=fn,
->    sep=fn,softBreak=-,softLine=-,text=fn,vcat=fn,vsep=fn}
+>    indent=fn,line=-,lineBreak=-,nest=fn,pack=fn,parens=fn,punctuate=fn,
+>    render=fn,sep=fn,softBreak=-,softLine=-,text=fn,vcat=fn,vsep=fn}
 >   : {align:doc -> doc, beside:doc * doc -> doc, braces:doc -> doc,
 >       brackets:doc -> doc, cat:doc list -> doc, empty:doc,
 >       encloseSep:doc * doc * doc * doc list -> doc, fillCat:doc list -> doc,
 >       fillSep:doc list -> doc, `group`:doc -> doc, hang:int * doc -> doc,
 >       hardLine:doc, hcat:doc list -> doc, hsep:doc list -> doc,
 >       indent:int * doc -> doc, line:doc, lineBreak:doc, nest:int * doc -> doc,
->       parens:doc -> doc, punctuate:doc * doc list -> doc list,
->       render:int * doc -> string, sep:doc list -> doc, softBreak:doc,
->       softLine:doc, text:string -> doc, vcat:doc list -> doc,
->       vsep:doc list -> doc}
+>       pack:doc * doc list -> doc, parens:doc -> doc,
+>       punctuate:doc * doc list -> doc list, render:int * doc -> string,
+>       sep:doc list -> doc, softBreak:doc, softLine:doc, text:string -> doc,
+>       vcat:doc list -> doc, vsep:doc list -> doc}
 
 (*) `text` builds a document; `render` lays it out.
 PP.render (80, PP.text "hello");
@@ -89,6 +89,37 @@ PP.render (80, PP.cat [PP.text "a", PP.text "b", PP.text "c"]);
 PP.render (5,
   PP.fillSep [PP.text "a", PP.text "b", PP.text "c", PP.text "d"]);
 > val it = "a b c\nd" : string
+
+(*) `pack` packs as many documents onto each line as fit, joined by `glue`.
+val atoms = [PP.text "1,", PP.text "2,", PP.text "3,", PP.text "4,",
+  PP.text "5"];
+> val atoms = [-,-,-,-,-] : doc list
+PP.render (80, PP.align (PP.pack (PP.empty, atoms)));
+> val it = "1,2,3,4,5" : string
+PP.render (4, PP.align (PP.pack (PP.empty, atoms)));
+> val it = "1,2,\n3,4,\n5" : string
+
+(* `pack` treats each document as an indivisible unit, so a list of records
+ * wraps between records; `fillCat`, whose gap lets the following record
+ * break internally, splits `[c d]` instead. *)
+val r1 = PP.`group` (PP.brackets (PP.fillSep [PP.text "a", PP.text "b"]));
+> val r1 = - : doc
+val r2 = PP.`group` (PP.brackets (PP.fillSep [PP.text "c", PP.text "d"]));
+> val r2 = - : doc
+val r3 = PP.`group` (PP.brackets (PP.fillSep [PP.text "e", PP.text "f"]));
+> val r3 = - : doc
+val recs = [PP.beside (r1, PP.text ","), PP.beside (r2, PP.text ","), r3];
+> val recs = [-,-,-] : doc list
+PP.render (80, PP.align (PP.pack (PP.empty, recs)));
+> val it = "[a b],[c d],[e f]" : string
+PP.render (9, PP.align (PP.pack (PP.empty, recs)));
+> val it = "[a b],\n[c d],\n[e f]" : string
+PP.render (9, PP.align (PP.fillCat recs));
+> val it = "[a b],[c\nd],[e f]" : string
+
+(*) `pack` of no documents is empty.
+PP.render (80, PP.pack (PP.empty, []));
+> val it = "" : string
 
 (*) `punctuate` inserts a separator between documents.
 PP.render (80,

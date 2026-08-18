@@ -250,51 +250,14 @@ class LindigTest {
     final Doc doc =
         fillSep(
             words(
-                "the fill combinator lays out words one"
+                "the fillSep combinator lays out words one"
                     + " at a time fitting as many on each line as possible"));
     assertThat(
         render(40, doc),
         isLines(
-            "the fill combinator lays out words one",
-            "at a time fitting as many on each line",
-            "as possible"));
-  }
-
-  // -- fill -----------------------------------------------------------------
-
-  /** {@code fill} packs atoms onto as many lines as fit. */
-  @Test
-  void testFillAtoms() {
-    final List<Doc> docs =
-        ImmutableList.of(
-            text("1,"), text("2,"), text("3,"), text("4,"), text("5"));
-    final Doc doc = align(Lindig.fill(EMPTY, docs));
-    assertThat(render(80, doc), is("1,2,3,4,5"));
-    assertThat(render(4, doc), isLines("1,2,", "3,4,", "5"));
-  }
-
-  /**
-   * {@code fill} treats each element as an indivisible unit: a list of records
-   * wraps between records (not within one), which {@code fillSep} cannot do.
-   */
-  @Test
-  void testFillTreatsElementsAsUnits() {
-    // Each "record" is itself a group that could break internally.
-    final Doc r1 = group(brackets(fillSep(words("a b"))));
-    final Doc r2 = group(brackets(fillSep(words("c d"))));
-    final Doc r3 = group(brackets(fillSep(words("e f"))));
-    final Doc doc =
-        align(
-            Lindig.fill(
-                EMPTY,
-                ImmutableList.of(
-                    beside(r1, text(",")),
-                    beside(r2, text(",")),
-                    beside(r3, text("")))));
-    // Wide: all on one line.
-    assertThat(render(80, doc), is("[a b],[c d],[e f]"));
-    // Narrow: wraps between records, each record kept intact.
-    assertThat(render(8, doc), isLines("[a b],", "[c d],", "[e f]"));
+            "the fillSep combinator lays out words",
+            "one at a time fitting as many on each",
+            "line as possible"));
   }
 
   // -- punctuate ------------------------------------------------------------
@@ -493,7 +456,7 @@ class LindigTest {
    *
    * <p>This is the case a fit test cannot get right by treating a union as the
    * end of the line. It happens to work for every union built today -- those of
-   * {@link Lindig#fill} and of Morel's own printer -- because each has a narrow
+   * {@link Lindig#pack} and of Morel's own printer -- because each has a narrow
    * branch that begins with a line break.
    */
   @Test

@@ -189,7 +189,7 @@ public class Lindig {
    *
    * <p>Unlike {@link Group}, the two alternatives may have different structure;
    * {@code wide} is typically more flattened than {@code narrow}. This is what
-   * {@link #fill} needs: each gap lays the following element out flat for the
+   * {@link #pack} needs: each gap lays the following element out flat for the
    * fit-test but leaves it free to break in the real layout.
    */
   static final class Union extends Doc {
@@ -327,7 +327,7 @@ public class Lindig {
    * flat layout. The caller must ensure {@code wide} is at least as flat as
    * {@code narrow} (typically {@code wide} is {@link #flatten(Doc) flattened}),
    * so that "fits" implies "is a valid layout". This is the primitive behind
-   * {@link #fill}.
+   * {@link #pack}.
    */
   public static Doc union(Doc wide, Doc narrow) {
     return new Union(wide, narrow);
@@ -438,7 +438,7 @@ public class Lindig {
    *     (often a space, or {@link #EMPTY})
    * @param docs documents to pack
    */
-  public static Doc fill(Doc glue, List<Doc> docs) {
+  public static Doc pack(Doc glue, List<Doc> docs) {
     if (docs.isEmpty()) {
       return EMPTY;
     }
