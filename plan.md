@@ -123,7 +123,25 @@ something settled — §8's principle, applied to the sequence itself.
         above it constraining `$0` or paths into it. Arguably cleaner
         there — one element to constrain rather than a set of names —
         but it is the largest single piece of work in the sequence,
-        and step 5 already owns it;
+        and step 5 already owns it.
+
+        Ported in place, as one engine with two front ends, not as a
+        second engine. The split is not even: `Fbbt` and `Extents`
+        never mention a step, and `Generators` mentions `Core.Exp`
+        306 times against 15 step references, so the inversion is
+        expression-shaped and shared; what is step-shaped is
+        `Expander`, the smallest of them, and the `pat`/`exp` pair a
+        `Generator` returns. So: abstract what is being grounded (a
+        `NamedPat` today, a leaf's element read as `$0` or a path
+        into it tomorrow), keep one inversion core, and write a small
+        tree front end beside `Expander`, which goes away when the
+        resolver flips. Two engines would diverge into "compiles one
+        way, errors the other" over the months of the transition,
+        which is the worst kind of bug to chase; and the usual risk
+        of an in-place port — no caller until the flip — is answered
+        by `RelShadow.viaTree`, which runs all 1534 queries through
+        the tree and can check the new front end against the old
+        engine's answers;
       * the Calcite hybrid path (hybrid.smli), which embeds Morel
         source in a plan and re-resolves it out of context.
 - [ ] Then flip for real: every query flows through the tree, and the
