@@ -5221,9 +5221,10 @@ public enum BuiltIn {
 
   /**
    * Internal operator that enforces a constrained type, of type "bool * &alpha;
-   * * string &rarr; &alpha;". Given the result of the type's condition, the
-   * value, and the type's name, it returns the value, or raises {@code
-   * Constraint} if the condition did not hold.
+   * * string * string &rarr; &alpha;". Given the result of the type's
+   * condition, the value, the type's name, and what the value is of (empty at
+   * the outermost level), it returns the value, or raises {@code Constraint} if
+   * the condition did not hold.
    *
    * <p>Its type cannot be derived, because the value is polymorphic and the
    * operator is never written in code.
@@ -5276,6 +5277,17 @@ public enum BuiltIn {
 
   /** Internal operator "orelse", of type "bool * bool &rarr; bool". */
   Z_ORELSE("$", "orelse", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
+
+  /**
+   * Internal operator that enforces a constrained type on a component of a
+   * value, of type "bool * &alpha; * string * string &rarr; bool".
+   *
+   * <p>It takes the same arguments as {@link #Z_CHECK} but returns {@code true}
+   * rather than the value, so that it can be a conjunct of the condition of the
+   * value that contains it. That is what lets a message name the component that
+   * failed, and quote the component rather than the whole.
+   */
+  Z_REQUIRE("$", "$require", ts -> UNIT),
 
   /** Internal relational sum operator "sum", of type "int * int &rarr; int". */
   Z_SUM_INT("$", "sum:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
