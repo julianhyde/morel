@@ -93,16 +93,25 @@ something settled — §8's principle, applied to the sequence itself.
 - [x] Lowering (`RelLowerer`): tree → the environment-passing form
       that RowSink runs. Every query in the suite lowers, and the
       lowered form has the query's type, which `RelShadow` asserts.
-- [ ] Linearize. The lowering gives each node its own `from`, so a
-      chain nests instead of running down one step list, and leaves
-      identity yields behind. This costs plan quality, not
-      correctness, but it costs it in two visible ways: `Sys.plan`
-      output grows, and the Calcite push-down in hybrid.smli stops
-      firing, because `CalciteCompiler` matches on step shapes.
-- [ ] Two failures to chase, found by routing execution through the
-      tree: a `NullPointerException` in relational.smli, and
-      "pattern 'b' is not grounded" in such-that.smli, where the
-      lowered form defeats the unbounded-variable machinery.
+- [x] Linearize: one step list carries the left spine, because a
+      node's element is carried as an expression over the bindings
+      rather than materialized. A projection then costs no step, and
+      a `yield` appears only where something needs the row — before a
+      set operator, before an outer join, at the end. Plan text is
+      now at worst equal to what it was, and sometimes simpler: the
+      round trip removes `from i in [3,1,2] yield i` from
+      optimize.smli's `nonEmpty`.
+- [ ] Three interactions block the flip, one query each:
+      * `ordinal` (relational.smli): positional, so deferring a
+        projection past it changes what it counts. The tree has
+        nothing to say about ordinals yet.
+      * `suchThat` grounding (such-that.smli): "pattern 'b' is not
+        grounded". The unbounded-variable machinery reads step
+        shapes, and the lowered shapes differ.
+      * Calcite (hybrid.smli): the hybrid path embeds Morel source in
+        the plan and re-resolves it, and a deferred projection can
+        produce a field access whose record type is not resolvable
+        out of context ("unresolved flex record").
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
