@@ -131,19 +131,17 @@ public class RelExpander {
     final Generator generator = ground(leaf, conditions, pat);
     if (generator == null
         || generator.cardinality == Generator.Cardinality.INFINITE) {
-      // The step list names the user's pattern here; a tree has erased it.
-      throw new CompileException(
-          "cannot bound "
-              + leaf.type.elementType().moniker()
-              + " from the conditions of this query",
-          false,
-          leaf.pos);
+      // The step list names the pattern here -- "pattern 'b' is not
+      // grounded" -- and the tree has erased the name. The position has not
+      // been erased, and points at what the user wrote, so the message says
+      // the same thing without the name. See discussion.md section 11.
+      throw new CompileException("pattern is not grounded", false, leaf.pos);
     }
     if (!generator.freePats.isEmpty()) {
       // A generator that reads other variables needs them bound first, which
       // is a dependent scan; not yet.
       throw new CompileException(
-          "generator for this query depends on " + generator.freePats,
+          "pattern is not grounded until " + generator.freePats + " is bound",
           false,
           leaf.pos);
     }
@@ -154,13 +152,7 @@ public class RelExpander {
     final Core.Exp element =
         path(generator.pat, core.input0(generator.exp.type.elementType()), pat);
     if (element == null) {
-      throw new CompileException(
-          "generator binds "
-              + generator.pat
-              + ", which does not contain the "
-              + "element of this query",
-          false,
-          leaf.pos);
+      throw new CompileException("pattern is not grounded", false, leaf.pos);
     }
     return core.project(typeSystem, generator.exp, element);
   }

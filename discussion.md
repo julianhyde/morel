@@ -349,3 +349,32 @@ identically. Root-type preservation, asserted by the validator after
 every rule firing, is the cheap litmus that catches most rule bugs;
 type-invariance of join reordering over a fixed binding set is a
 theorem the validator can assert after every rewrite.
+
+## 11. Diagnostics when the IR has erased the name
+
+The step list can say `pattern 'b' is not grounded`, because the scan
+holds `b`. The tree holds a leaf `extent "int"` whose element is
+`$0`, and there is no `b` in it, so the same failure could only be
+reported as "cannot bound an `int`" — a regression in a message whose
+whole job is to say *which* variable was not bounded.
+
+Two ways to get a name back. A **diagnostic hint** on the leaf: a
+field holding what the user wrote, ignored by typing, printing and
+rewriting, read only when building a message. Or **positions**: the
+leaf already carries a `Pos`, Morel's errors already print source
+spans, and the span of `b` identifies the variable without naming it.
+
+**Resolution: positions.** A hint is the advisory name of §3 in
+another costume — every rewrite must carry it in tandem or it lies —
+and although a rotted hint can only spoil a message, a message that
+confidently names the *wrong* variable is worse than one that names
+none, in exactly the situation where the reader is already confused.
+Positions have the same tandem problem, but they are already carried,
+already imperfect in the same way, and already the thing every other
+Morel error points with; a span that drifts points at nearby code
+rather than asserting something false. So the message becomes
+`pattern is not grounded`, at the position of the pattern.
+
+If that proves too vague in practice, the hint is the fallback, under
+a rule that keeps it from lying: set once, at translation, and
+dropped — not guessed — by any rewrite that replaces the leaf.
