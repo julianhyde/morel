@@ -624,13 +624,23 @@ public class Compiler {
    * Creates a code that returns a value if its type's condition holds of it,
    * and otherwise raises {@code Constraint}.
    *
+   * <p>{@code returnsValue} distinguishes the two operators: {@code $check}
+   * returns the value, and {@code $require} returns true, so that a check on a
+   * component can be a conjunct of the condition of the value that contains it.
+   *
    * <p>The message quotes the value, so the code keeps the value's type and
    * renders it as the shell would. It renders with the default properties
    * rather than the session's: a message is not a binding, and should not elide
    * or wrap because the session was told to print narrowly.
    */
   private Code constraintCode(
-      Code conditionCode, Code valueCode, Type type, String name, Pos pos) {
+      Code conditionCode,
+      Code valueCode,
+      Type type,
+      String name,
+      String blame,
+      boolean returnsValue,
+      Pos pos) {
     final Map<Prop, Object> map = ImmutableMap.of();
     final Pretty pretty =
         new Pretty(
@@ -647,11 +657,14 @@ public class Compiler {
       public Object eval(Stack stack) {
         final Object value = valueCode.eval(stack);
         if ((Boolean) conditionCode.eval(stack)) {
-          return value;
+          return returnsValue ? value : Boolean.TRUE;
         }
         final StringBuilder b = new StringBuilder();
         pretty.prettyValue(b, type, value);
         b.append(" is not a valid ").append(name);
+        if (!blame.isEmpty()) {
+          b.append(": ").append(blame);
+        }
         throw new Codes.MorelRuntimeException(
             Codes.BuiltInExn.CONSTRAINT,
             new Codes.Description(b.toString()),
@@ -665,7 +678,8 @@ public class Compiler {
             d ->
                 d.arg("condition", conditionCode)
                     .arg("value", valueCode)
-                    .arg("", name));
+                    .arg("", name)
+                    .arg("", blame));
       }
     };
   }
@@ -694,8 +708,9 @@ public class Compiler {
             argCodes = compileArgs(cx, ((Core.Tuple) apply.arg).args);
             return Codes.list(argCodes);
           case Z_CHECK:
-            // Argument is always a triple: the condition, the value, and the
-            // name of the constrained type.
+          case Z_REQUIRE:
+            // Argument is always a quadruple: the condition, the value, the
+            // name of the constrained type, and what the value is of.
             final List<Core.Exp> checkArgs = ((Core.Tuple) apply.arg).args;
             argCodes = compileArgs(cx, checkArgs);
             return constraintCode(
@@ -703,6 +718,8 @@ public class Compiler {
                 argCodes.get(1),
                 checkArgs.get(1).type,
                 ((Core.Literal) checkArgs.get(2)).unwrap(String.class),
+                ((Core.Literal) checkArgs.get(3)).unwrap(String.class),
+                builtIn == BuiltIn.Z_CHECK,
                 apply.pos);
           case Z_ORDINAL:
             if (cx.ordinalSlots == null) {

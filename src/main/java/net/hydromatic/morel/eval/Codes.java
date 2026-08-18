@@ -7772,6 +7772,7 @@ public abstract class Codes {
     b.add(BuiltIn.Z_NTH, Unit.INSTANCE);
     b.add(BuiltIn.Z_ORDINAL, 0);
     b.add(BuiltIn.Z_ORELSE, Unit.INSTANCE);
+    b.add(BuiltIn.Z_REQUIRE, Unit.INSTANCE);
     b.add(BuiltIn.Z_SUM_INT, Z_SUM_INT);
     b.add(BuiltIn.Z_SUM_REAL, Z_SUM_REAL);
     b.add(BuiltIn.Z_TEST_OVER_COUNT_BAG, Z_TEST_OVER_COUNT_BAG);

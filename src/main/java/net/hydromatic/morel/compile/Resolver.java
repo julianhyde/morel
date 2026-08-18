@@ -488,7 +488,7 @@ public class Resolver {
 
   /** Returns whether a type, or any type within it, carries a condition. */
   private boolean constrains(Type type) {
-    return deepCondition(type, null, null, Pos.ZERO) != null;
+    return deepCondition(type, null, null, "", Pos.ZERO) != null;
   }
 
   /**
@@ -505,6 +505,12 @@ public class Resolver {
    * what the expressions being built are typed with, because an alias must not
    * reach Core.
    *
+   * <p>{@code blame} says what the value is of -- "field empno", "component 1",
+   * "element" -- and is empty at the outermost level, where the value is the
+   * whole. A condition on a component raises with the blame, and quotes the
+   * component; the outermost condition raises without one, and quotes the
+   * whole.
+   *
    * <p>Called with a null {@code value} to ask only whether a type constrains
    * anything, in which case the expression it returns is a placeholder.
    */
@@ -512,14 +518,31 @@ public class Resolver {
       Type claimedType,
       @Nullable Type erasedType,
       Core.@Nullable Exp value,
+      String blame,
       Pos pos) {
     final TypeSystem typeSystem = typeMap.typeSystem;
     if (claimedType instanceof AliasType) {
       final AliasType aliasType = (AliasType) claimedType;
       Core.Exp condition =
-          deepCondition(aliasType.type, erasedType, value, pos);
+          deepCondition(aliasType.type, erasedType, value, blame, pos);
       if (!aliasType.checks.isEmpty()) {
-        final Core.Exp own = condition(aliasType, value, pos);
+        Core.Exp own = condition(aliasType, value, pos);
+        if (!blame.isEmpty() && value != null) {
+          // A component raises for itself, so that the message names it and
+          // quotes it. The outermost condition is left bare, for the $check
+          // that wraps the whole value to report.
+          own =
+              core.apply(
+                  pos,
+                  PrimitiveType.BOOL,
+                  core.functionLiteral(typeSystem, BuiltIn.Z_REQUIRE),
+                  core.tuple(
+                      typeSystem,
+                      own,
+                      value,
+                      core.stringLiteral(aliasType.name),
+                      core.stringLiteral(blame)));
+        }
         condition =
             condition == null ? own : core.andAlso(typeSystem, condition, own);
       }
@@ -548,7 +571,12 @@ public class Resolver {
                         field.getKey()),
                     value);
         final Core.Exp fieldCondition =
-            deepCondition(field.getValue(), erasedFieldType, fieldValue, pos);
+            deepCondition(
+                field.getValue(),
+                erasedFieldType,
+                fieldValue,
+                append(blame, fieldBlame(recordType, field.getKey())),
+                pos);
         if (fieldCondition != null) {
           condition =
               condition == null
@@ -573,7 +601,11 @@ public class Resolver {
       final Core.Exp elementCondition =
           requireNonNull(
               deepCondition(
-                  elementType, erasedElementType, core.id(idPat), pos));
+                  elementType,
+                  erasedElementType,
+                  core.id(idPat),
+                  append(blame, "element"),
+                  pos));
       final Core.Fn predicate =
           core.fn(
               typeSystem.fnType(erasedElementType, PrimitiveType.BOOL),
@@ -587,6 +619,27 @@ public class Resolver {
           value);
     }
     return null;
+  }
+
+  /**
+   * Returns how to describe a field of a record or a tuple.
+   *
+   * <p>A tuple's fields are named "1", "2", so "component 1" names the same
+   * component that {@code #1} selects. (The plan says "component 0"; matching
+   * the selector seems less surprising.)
+   */
+  private static String fieldBlame(RecordLikeType recordType, String field) {
+    return (recordType instanceof TupleType ? "component " : "field ") + field;
+  }
+
+  /** Appends a segment to a blame path. */
+  private static String append(String blame, String segment) {
+    if (blame.isEmpty()) {
+      return segment;
+    }
+    // Within an outer path only the name is added, e.g. "field lead.empno".
+    final int space = segment.indexOf(' ');
+    return blame + "." + (space < 0 ? segment : segment.substring(space + 1));
   }
 
   /**
@@ -614,9 +667,11 @@ public class Resolver {
                 core.functionLiteral(typeSystem, BuiltIn.Z_CHECK),
                 core.tuple(
                     typeSystem,
-                    requireNonNull(deepCondition(type, coreExp.type, id, pos)),
+                    requireNonNull(
+                        deepCondition(type, coreExp.type, id, "", pos)),
                     id,
-                    core.stringLiteral(type.moniker()))));
+                    core.stringLiteral(type.moniker()),
+                    core.stringLiteral(""))));
   }
 
   /**
@@ -637,7 +692,7 @@ public class Resolver {
         pos,
         id ->
             core.ifThenElse(
-                requireNonNull(deepCondition(type, coreExp.type, id, pos)),
+                requireNonNull(deepCondition(type, coreExp.type, id, "", pos)),
                 core.apply(
                     pos,
                     optionType,
