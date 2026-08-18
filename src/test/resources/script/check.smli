@@ -380,4 +380,45 @@ idNat ~1;
 > uncaught exception Constraint [~1 is not a valid nat]
 >   raised at: stdIn:1.28
 
+(* A check on a value is made when the value is made, and a function value is
+ * not a value its type can be checked against: to check 'nat -> nat' every
+ * argument it is ever given and every result it ever returns would have to be
+ * checked, which means replacing the function with a proxy. Rather than do
+ * that silently, or accept the claim and check nothing, the claim is
+ * rejected. *)
+val h: nat -> nat = fn i => i - 1;
+> stdIn:1.5-1.34 Error: cannot claim a constrained function type 'nat -> nat'
+>   raised at: stdIn:1.5-1.34
+val h2: int -> nat = fn i => i;
+> stdIn:1.5-1.31 Error: cannot claim a constrained function type 'int -> nat'
+>   raised at: stdIn:1.5-1.31
+val h3: nat -> int = fn i => i;
+> stdIn:1.5-1.31 Error: cannot claim a constrained function type 'nat -> int'
+>   raised at: stdIn:1.5-1.31
+
+(*) A function type nested inside another type is rejected too.
+val h4: {f: nat -> nat} = {f = fn i => i};
+> stdIn:1.5-1.42 Error: cannot claim a constrained function type '{f:nat -> nat}'
+>   raised at: stdIn:1.5-1.42
+
+(*) So is one claimed at a parameter, or by an ascription or a conversion.
+fun apply2 (g: nat -> nat) = g 1;
+> stdIn:1.16-1.26 Error: cannot claim a constrained function type 'nat -> nat'
+>   raised at: stdIn:1.16-1.26
+val h5 = (fn i => i) : nat -> nat;
+> stdIn:1.24-1.34 Error: cannot claim a constrained function type 'nat -> nat'
+>   raised at: stdIn:1.24-1.34
+
+(*) A function type that constrains nothing is unaffected.
+val h6: int -> int = fn i => i;
+> val h6 = fn : int -> int
+val h7: plain -> plain = fn i => i;
+> val h7 = fn : plain -> plain
+
+(* A conversion between types with different erasures is an ordinary type
+ * error; the unifier names both, and says which is an alias. *)
+val bad2: nat = "abc";
+> stdIn:1.1-1.22 Error: Cannot deduce type: conflict: nat (alias for int) vs string
+>   raised at: stdIn:1.1-1.22
+
 (*) End check.smli
