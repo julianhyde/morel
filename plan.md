@@ -90,15 +90,23 @@ only real check on a translation, so earn them first. The cost is
 that the ports start later; the saving is that they start against
 something settled — §8's principle, applied to the sequence itself.
 
-- [ ] Lowering: tree → left-deep environment-passing form → RowSink;
-      `$0`/`$1` and the field accesses on them dictate EvalEnv slots;
-      name→slot gathers where canonical label order diverges from
-      construction order. The step list survives as that form: an
-      unprinted lowering artifact, or dissolved into the lowerer.
-- [ ] Every query flows through the tree, so the whole script suite
-      checks the translation by its results. Expectations do not
-      change at all in this step: a test that needs re-baselining is
-      a bug.
+- [x] Lowering (`RelLowerer`): tree → the environment-passing form
+      that RowSink runs. Every query in the suite lowers, and the
+      lowered form has the query's type, which `RelShadow` asserts.
+- [ ] Linearize. The lowering gives each node its own `from`, so a
+      chain nests instead of running down one step list, and leaves
+      identity yields behind. This costs plan quality, not
+      correctness, but it costs it in two visible ways: `Sys.plan`
+      output grows, and the Calcite push-down in hybrid.smli stops
+      firing, because `CalciteCompiler` matches on step shapes.
+- [ ] Two failures to chase, found by routing execution through the
+      tree: a `NullPointerException` in relational.smli, and
+      "pattern 'b' is not grounded" in such-that.smli, where the
+      lowered form defeats the unbounded-variable machinery.
+- [ ] Then flip for real: every query flows through the tree, and the
+      suite checks the translation by its results. `Sys.plan` output
+      changes (it prints the *executable* plan, which is exactly what
+      this step changes); query results must not.
 - [ ] Delete the AST→From path; the resolver builds trees natively.
 
 ## Step 3 — Flip observability
