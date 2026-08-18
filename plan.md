@@ -113,8 +113,17 @@ something settled — §8's principle, applied to the sequence itself.
       the lowering avoids that. Two such readers, and both must move
       to the tree with it:
       * the grounding of unbounded variables (such-that.smli, "pattern
-        'b' is not grounded"), which plan.md already schedules for
-        step 5;
+        'b' is not grounded"). Bigger than it looked: `Generators`,
+        `Expander`, `Fbbt` and `Extents` are ~6,400 lines that reason
+        about *patterns* — `Expander` walks scans whose expression is
+        an infinite extent and inverts predicates to find a generator
+        for each `NamedPat` the pattern binds. The tree erases
+        patterns, which is the point of it, so this is a port, not an
+        adaptation: a leaf that is an infinite extent, and filters
+        above it constraining `$0` or paths into it. Arguably cleaner
+        there — one element to constrain rather than a set of names —
+        but it is the largest single piece of work in the sequence,
+        and step 5 already owns it;
       * the Calcite hybrid path (hybrid.smli), which embeds Morel
         source in a plan and re-resolves it out of context.
 - [ ] Then flip for real: every query flows through the tree, and the
