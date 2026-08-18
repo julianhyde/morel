@@ -767,7 +767,17 @@ public class Resolver {
         pos,
         id ->
             core.ifThenElse(
-                requireNonNull(deepCondition(type, coreExp.type, id, "", pos)),
+                core.apply(
+                    pos,
+                    PrimitiveType.BOOL,
+                    core.functionLiteral(typeSystem, BuiltIn.Z_ATTEMPT),
+                    core.tuple(
+                        typeSystem,
+                        requireNonNull(
+                            deepCondition(type, coreExp.type, id, "", pos)),
+                        id,
+                        core.stringLiteral(type.moniker()),
+                        core.stringLiteral(""))),
                 core.apply(
                     pos,
                     optionType,

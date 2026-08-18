@@ -7764,6 +7764,7 @@ public abstract class Codes {
     b.add(BuiltIn.WORD_WORD_SIZE, WORD_WORD_SIZE);
     b.add(BuiltIn.WORD_XORB, WORD_XORB);
     b.add(BuiltIn.Z_ANDALSO, Unit.INSTANCE);
+    b.add(BuiltIn.Z_ATTEMPT, Unit.INSTANCE);
     b.add(BuiltIn.Z_CHECK, Unit.INSTANCE);
     b.add(BuiltIn.Z_CURRENT, Unit.INSTANCE);
     b.add(BuiltIn.Z_ELEMENTS, Unit.INSTANCE);
@@ -8027,6 +8028,11 @@ public abstract class Codes {
       this.pos = requireNonNull(pos);
     }
 
+    /** Returns which built-in exception this is. */
+    public BuiltInExn builtInExn() {
+      return e;
+    }
+
     @Override
     public String toString() {
       return e.mlName() + " at " + pos;
@@ -8034,7 +8040,7 @@ public abstract class Codes {
 
     @Override
     public StringBuilder describeTo(StringBuilder buf) {
-      buf.append("uncaught exception ").append(e.mlName());
+      buf.append(UNCAUGHT_PREFIX).append(e.mlName());
       if (payload instanceof Description) {
         buf.append(" [").append(payload).append("]");
       } else if (payload != null) {
@@ -8054,6 +8060,9 @@ public abstract class Codes {
       return pos;
     }
   }
+
+  /** How a description of an uncaught exception begins. */
+  public static final String UNCAUGHT_PREFIX = "uncaught exception ";
 
   /**
    * Payload of a {@link MorelRuntimeException} that describes the failure in
