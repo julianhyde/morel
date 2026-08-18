@@ -345,4 +345,39 @@ val e3: employee = {e replace empno = ~1};
 > uncaught exception Constraint [~1 is not a valid nat: field empno]
 >   raised at: stdIn:1.5-1.42
 
+(* An ascription is a claim, like a binding, so it is checked wherever it
+ * appears -- not only where its value is bound. *)
+(~1 : nat);
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.1-1.11
+([1, ~2] : nat list);
+> uncaught exception Constraint [~2 is not a valid nat: element]
+>   raised at: stdIn:1.1-1.21
+val fm = fn () => (~1 : nat);
+> val fm = fn : unit -> int
+fm ();
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.19-1.29
+
+(* A 'fun' declaration's result annotation reaches Resolver as an ascription
+ * on the body, so a result is checked too. The declared type is still 'int':
+ * the annotation and the body's type meet, and the meet of a constrained type
+ * and the type it abbreviates is the latter. *)
+fun neg () : nat = ~1;
+> val neg = fn : unit -> int
+neg ();
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.20-1.22
+fun pos () : nat = 1;
+> val pos = fn : unit -> int
+pos ();
+> val it = 1 : int
+fun idNat (x: int) : nat = x;
+> val idNat = fn : int -> int
+idNat 1;
+> val it = 1 : int
+idNat ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.28
+
 (*) End check.smli
