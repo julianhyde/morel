@@ -43,6 +43,7 @@ import java.util.SortedMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import net.hydromatic.morel.ast.Ast;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.NameGenerator;
@@ -294,6 +295,31 @@ public class TypeSystem {
   }
 
   /** Creates a type that is an alias for another type. */
+  /**
+   * Conditions of constrained types, compiled, by the type they constrain.
+   *
+   * <p>An {@link AliasType} holds its conditions as they were written, which is
+   * enough to print and to key the type, but a condition can only be converted
+   * to Core in the {@link net.hydromatic.morel.compile.TypeMap} of the
+   * declaration that resolved it. So it is converted once, when the declaration
+   * is resolved, and kept here for the bindings that later claim the type.
+   */
+  private final Map<Type.Key, List<Core.Exp>> checkPredicates = new HashMap<>();
+
+  /** Records the compiled conditions of a constrained type. */
+  public void setCheckPredicates(Type type, List<Core.Exp> predicates) {
+    checkPredicates.put(type.key(), ImmutableList.copyOf(predicates));
+  }
+
+  /**
+   * Returns the compiled conditions of a constrained type, or an empty list if
+   * the type is unconstrained.
+   */
+  public List<Core.Exp> checkPredicates(Type type) {
+    final List<Core.Exp> predicates = checkPredicates.get(type.key());
+    return predicates == null ? ImmutableList.of() : predicates;
+  }
+
   Type aliasType(
       String name, Type type, List<Type> arguments, List<Ast.Fn> checks) {
     final AliasType aliasType = new AliasType(name, type, arguments, checks);
