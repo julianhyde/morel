@@ -88,6 +88,42 @@ type 'a myList = 'a list check l => not (List.null l);
 > stdIn:1.6-1.25 Error: cannot constrain parameterized type 'myList'
 >   raised at: stdIn:1.6-1.25
 
+(* A binding at a constrained type is where a value flows into a claim, so the
+ * condition is checked there. It is not checked anywhere else: the value is
+ * already known to satisfy it. *)
+val ok: nat = 5;
+> val ok = 5 : nat
+val notOk: nat = ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.5-1.20
+
+(*) Every clause must hold.
+val small: batchSize = 6;
+> val small = 6 : batchSize
+val tooBig: batchSize = 13;
+> uncaught exception Constraint [13 is not a valid batchSize]
+>   raised at: stdIn:1.5-1.27
+val tooSmall: batchSize = 0;
+> uncaught exception Constraint [0 is not a valid batchSize]
+>   raised at: stdIn:1.5-1.28
+
+(*) The whole value is quoted in the message, however big.
+val evens: parityPair = {i = 2, j = 4};
+> val evens = {i=2,j=4} : parityPair
+val mixed: parityPair = {i = 1, j = 2};
+> uncaught exception Constraint [{i=1,j=2} is not a valid parityPair]
+>   raised at: stdIn:1.5-1.39
+
+(* A condition need not match every value; a value it does not match does not
+ * satisfy it. Without this the condition would raise 'Match'. *)
+type zero = int check 0 => true;
+> type zero = int check 0 => true
+val z0: zero = 0;
+> val z0 = 0 : zero
+val z1: zero = 1;
+> uncaught exception Constraint [1 is not a valid zero]
+>   raised at: stdIn:1.5-1.17
+
 (* 'as' converts a value to a type, and 'asOpt' returns an option. Neither
  * enforces anything yet, so 'as' is the identity and 'asOpt' always returns
  * SOME, and both type as an annotation does. In particular the type printed
