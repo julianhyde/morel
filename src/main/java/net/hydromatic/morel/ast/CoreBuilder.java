@@ -833,31 +833,27 @@ public enum CoreBuilder {
    */
   public Core.ProjectMany projectMany(
       TypeSystem typeSystem, Core.Exp input, Core.IdPat param, Core.Exp body) {
-    return projectMany(typeSystem, input, param, body, null);
+    checkCollection(input);
+    checkCollection(body);
+    final boolean ordered = isOrdered(input) && isOrdered(body);
+    final Type type =
+        collectionType(typeSystem, ordered, body.type.elementType());
+    return new Core.ProjectMany(type, input, param, body);
   }
 
   /**
-   * Creates a {@code projectMany} that, if {@code ifEmpty} is not null, yields
-   * that element where the body yields none -- an outer apply.
+   * Creates an {@code ifEmpty}, which yields one element where its input has
+   * none. It is what makes an apply outer.
    */
-  public Core.ProjectMany projectMany(
-      TypeSystem typeSystem,
-      Core.Exp input,
-      Core.IdPat param,
-      Core.Exp body,
-      Core.@Nullable Exp ifEmpty) {
+  public Core.IfEmpty ifEmpty(Core.Exp input, Core.Exp exp) {
     checkCollection(input);
-    checkCollection(body);
-    final Type elementType = body.type.elementType();
-    if (ifEmpty != null && !ifEmpty.type.equals(elementType)) {
+    if (!exp.type.equals(input.type.elementType())) {
       throw new IllegalArgumentException(
           format(
-              "ifEmpty must have the element type %s: %s",
-              elementType, ifEmpty.type));
+              "ifEmpty expression must have the element type %s: %s",
+              input.type.elementType(), exp.type));
     }
-    final boolean ordered = isOrdered(input) && isOrdered(body);
-    final Type type = collectionType(typeSystem, ordered, elementType);
-    return new Core.ProjectMany(type, input, param, body, ifEmpty);
+    return new Core.IfEmpty(input, exp);
   }
 
   /** Creates an inner join. */
