@@ -5220,6 +5220,17 @@ public enum BuiltIn {
   Z_ANDALSO("$", "andalso", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
   /**
+   * Internal operator that tests a constrained type, of type "bool * &alpha; *
+   * string * string &rarr; bool".
+   *
+   * <p>It takes the same arguments as {@link #Z_CHECK} but returns the result
+   * of the condition rather than raising when it does not hold, so that {@code
+   * asOpt} can answer NONE. It still raises {@code Constraint} if evaluating
+   * the condition raised, because then the question has no answer.
+   */
+  Z_ATTEMPT("$", "$attempt", ts -> UNIT),
+
+  /**
    * Internal operator that enforces a constrained type, of type "bool * &alpha;
    * * string * string &rarr; &alpha;". Given the result of the type's
    * condition, the value, the type's name, and what the value is of (empty at
