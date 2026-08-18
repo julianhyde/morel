@@ -22,6 +22,7 @@ import static java.lang.String.format;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.TypeSystem;
 
@@ -51,6 +52,33 @@ public class RelShadow {
    */
   public static int translatedCount() {
     return TRANSLATED.get();
+  }
+
+  /**
+   * Replaces each query with the lowering of its tree, so that execution goes
+   * through the relational tree.
+   *
+   * <p>A query the translator declines is left as it was; a query it translates
+   * is executed as {@link RelLowerer} lowers it, and the script suite checks by
+   * its results that the two are the same query.
+   */
+  public static Core.Decl viaTree(TypeSystem typeSystem, Core.Decl decl) {
+    return decl.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.From from) {
+            final Core.Exp from2 = super.visit(from);
+            if (!(from2 instanceof Core.From)) {
+              return from2;
+            }
+            final Core.Exp tree =
+                RelTranslator.toRel(typeSystem, (Core.From) from2);
+            if (tree == null) {
+              return from2;
+            }
+            return RelLowerer.lower(typeSystem, tree);
+          }
+        });
   }
 
   /** Returns the number of queries the translator declined so far. */
@@ -95,6 +123,18 @@ public class RelShadow {
     }
     if (exp instanceof Core.Rel) {
       RelValidator.checkValid(typeSystem, (Core.Rel) exp);
+    }
+    final Core.Exp lowered;
+    try {
+      lowered = RelLowerer.lower(typeSystem, exp);
+    } catch (RuntimeException e) {
+      throw new AssertionError("cannot lower the tree for: " + from, e);
+    }
+    if (!lowered.type.equals(from.type)) {
+      throw new AssertionError(
+          format(
+              "lowered tree for '%s' has type %s but the query has type %s",
+              from, lowered.type.moniker(), from.type.moniker()));
     }
     TRANSLATED.incrementAndGet();
   }

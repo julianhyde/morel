@@ -75,6 +75,13 @@ public class RelTranslator {
   /** The tree built so far; null before the first step. */
   private Core.@Nullable Exp exp;
 
+  /**
+   * Whether the access map came from destructuring a scan's pattern, rather
+   * than from an element that a step computed. Only such a map can read the
+   * fields in an order the bindings do not describe.
+   */
+  private boolean patternAccess;
+
   private RelTranslator(TypeSystem typeSystem) {
     this.typeSystem = typeSystem;
   }
@@ -107,6 +114,7 @@ public class RelTranslator {
 
   /** Translates one step, returning false if it cannot. */
   private boolean step(Core.FromStep step) {
+    patternAccess = false;
     if (exp == null && step.op != Op.SCAN) {
       // A 'from' with no scan -- 'from where p', 'from yield e' -- iterates
       // over a single element, which is unit.
@@ -192,9 +200,12 @@ public class RelTranslator {
       // The first scan is a leaf, and the pattern's binders are paths into its
       // element.
       exp = scan.exp;
+      patternAccess = true;
       if (!destructure(scan.pat, core.input0(rightElementType), access)) {
         // The pattern can fail to match, so the scan filters as well as
-        // binds.
+        // binds. The projectMany builds the element, so the access map is no
+        // longer a pattern's.
+        patternAccess = false;
         access.clear();
         final Core.@Nullable Exp exp2 =
             matchMany(scan.exp, scan.pat, elementType(scan.env));
@@ -533,6 +544,10 @@ public class RelTranslator {
    */
   private void normalize(Core.StepEnv env) {
     final Type wanted = elementType(env);
+    // The element must not only have the right type: the binders must read
+    // the right fields of it. A pattern can permute them -- `from {b = a, a =
+    // b} in rs` binds a to field b -- and then the types agree while the
+    // access map does not, so compare the map, not just the type.
     if (!requireExp().type.elementType().equals(wanted)) {
       // A step that computes its own element -- a yield, a group -- differs
       // from what the bindings describe only in whether a lone value is
@@ -543,14 +558,74 @@ public class RelTranslator {
           aligned != null
               ? aligned
               : core.project(typeSystem, requireExp(), element(access, wanted));
+    } else if (patternAccess && !isUniform(env, wanted)) {
+      // The element has the right type but the binders read the wrong fields
+      // of it, which a pattern that permutes them does: `from {b = a, a = b}
+      // in rs` binds a to field b.
+      exp = core.project(typeSystem, requireExp(), element(access, wanted));
     }
     final Core.Exp element = core.input0(wanted);
+    patternAccess = false;
     access.clear();
     if (env.atom) {
       access.put(env.bindings.get(0).id, element);
     } else {
       env.bindings.forEach(b -> access.put(b.id, field(element, b.id.name)));
     }
+  }
+
+  /**
+   * Returns whether each binder already reads the element the way the uniform
+   * map would: the element itself if the step atomizes, otherwise the field of
+   * the same name.
+   */
+  private boolean isUniform(Core.StepEnv env, Type wanted) {
+    if (env.bindings.size() != access.size()) {
+      return false;
+    }
+    for (Binding binding : env.bindings) {
+      final Core.@Nullable Exp exp = access.get(binding.id);
+      if (exp == null) {
+        return false;
+      }
+      if (env.atom) {
+        if (!isInput0(exp)) {
+          return false;
+        }
+      } else {
+        if (exp.op != Op.APPLY) {
+          return false;
+        }
+        final Core.Apply apply = (Core.Apply) exp;
+        if (apply.fn.op != Op.RECORD_SELECTOR || !isInput0(apply.arg)) {
+          return false;
+        }
+        if (((Core.RecordSelector) apply.fn).slot
+            != slot(wanted, binding.id.name)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  private static boolean isInput0(Core.Exp exp) {
+    return exp.op == Op.ID && ((Core.Id) exp).idPat.name.equals(INPUT_0);
+  }
+
+  /** Returns the ordinal of a field in a record type, or -1. */
+  private static int slot(Type type, String name) {
+    if (!(type instanceof RecordLikeType)) {
+      return -1;
+    }
+    int i = 0;
+    for (String fieldName : ((RecordLikeType) type).argNameTypes().keySet()) {
+      if (fieldName.equals(name)) {
+        return i;
+      }
+      ++i;
+    }
+    return -1;
   }
 
   /**
