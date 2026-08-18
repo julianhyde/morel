@@ -207,6 +207,7 @@ public enum Op {
   PROJECT_MANY,
   JOIN,
   SORT,
+  IF_EMPTY,
 
   IF,
   RAISE,
