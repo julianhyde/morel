@@ -2540,21 +2540,10 @@ public class Core {
     public final IdPat param;
     public final Exp body;
 
-    /**
-     * Element to yield where the body yields none, or null if such an input
-     * element yields nothing. It is an expression over {@link #param}, and it
-     * is what makes this node an outer apply: {@code from r in orders left join
-     * i in r.items on p} yields a row for an order whose items all fail the
-     * condition.
-     */
-    public final @Nullable Exp ifEmpty;
-
-    ProjectMany(
-        Type type, Exp input, IdPat param, Exp body, @Nullable Exp ifEmpty) {
+    ProjectMany(Type type, Exp input, IdPat param, Exp body) {
       super(Op.PROJECT_MANY, type, input);
       this.param = requireNonNull(param, "param");
       this.body = requireNonNull(body, "body");
-      this.ifEmpty = ifEmpty;
     }
 
     @Override
@@ -2569,12 +2558,6 @@ public class Core {
       indent(b, indent + 2);
       b.append("fn ").append(param.name).append(" =>").append('\n');
       describeInput(body, b, indent + 4, withTypes);
-      if (ifEmpty != null) {
-        indent(b, indent + 2);
-        b.append("ifEmpty");
-        arg(b, ifEmpty);
-        b.append('\n');
-      }
     }
 
     @Override
@@ -2588,17 +2571,10 @@ public class Core {
     }
 
     public ProjectMany copy(
-        TypeSystem typeSystem,
-        Exp input,
-        IdPat param,
-        Exp body,
-        @Nullable Exp ifEmpty) {
-      return input == this.input
-              && param == this.param
-              && body == this.body
-              && ifEmpty == this.ifEmpty
+        TypeSystem typeSystem, Exp input, IdPat param, Exp body) {
+      return input == this.input && param == this.param && body == this.body
           ? this
-          : core.projectMany(typeSystem, input, param, body, ifEmpty);
+          : core.projectMany(typeSystem, input, param, body);
     }
   }
 
@@ -2734,6 +2710,54 @@ public class Core {
               && aggregates.equals(this.aggregates)
           ? this
           : core.group(typeSystem, input, keys, aggregates);
+    }
+  }
+
+  /**
+   * Yields one element where the input has none, and the input's elements where
+   * it has some.
+   *
+   * <p>This is what makes an apply outer: {@code from r in orders left join i
+   * in r.items on p} keeps an order none of whose items match, and the element
+   * to keep it as -- `{i = NONE, r = r}` -- is this node's expression.
+   *
+   * <p>The expression is evaluated only when there is no element, so, like the
+   * count of a {@link Skip}, it cannot mention {@code $0}. It can mention
+   * whatever the tree's enclosing environment binds, which inside the body of a
+   * {@link ProjectMany} includes that node's parameter.
+   */
+  public static class IfEmpty extends SingleRel {
+    public final Exp exp;
+
+    IfEmpty(Exp input, Exp exp) {
+      super(Op.IF_EMPTY, input.type, input);
+      this.exp = requireNonNull(exp, "exp");
+    }
+
+    @Override
+    public String opName() {
+      return "ifEmpty";
+    }
+
+    @Override
+    protected void describeArgs(StringBuilder b) {
+      arg(b, exp);
+    }
+
+    @Override
+    public IfEmpty accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public IfEmpty copy(Exp input, Exp exp) {
+      return input == this.input && exp == this.exp
+          ? this
+          : core.ifEmpty(input, exp);
     }
   }
 

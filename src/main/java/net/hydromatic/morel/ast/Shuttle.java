@@ -691,8 +691,7 @@ public class Shuttle {
         typeSystem,
         projectMany.input.accept(this),
         projectMany.param.accept(this),
-        projectMany.body.accept(this),
-        projectMany.ifEmpty == null ? null : projectMany.ifEmpty.accept(this));
+        projectMany.body.accept(this));
   }
 
   protected Core.Join visit(Core.Join join) {
@@ -711,6 +710,10 @@ public class Shuttle {
         group.input.accept(this),
         visitSortedMap(group.keys),
         visitSortedMap(group.aggregates));
+  }
+
+  protected Core.IfEmpty visit(Core.IfEmpty ifEmpty) {
+    return ifEmpty.copy(ifEmpty.input.accept(this), ifEmpty.exp.accept(this));
   }
 
   protected Core.Sort visit(Core.Sort sort) {

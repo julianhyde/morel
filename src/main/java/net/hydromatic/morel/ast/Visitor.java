@@ -536,9 +536,11 @@ public class Visitor {
     projectMany.input.accept(this);
     projectMany.param.accept(this);
     projectMany.body.accept(this);
-    if (projectMany.ifEmpty != null) {
-      projectMany.ifEmpty.accept(this);
-    }
+  }
+
+  protected void visit(Core.IfEmpty ifEmpty) {
+    ifEmpty.input.accept(this);
+    ifEmpty.exp.accept(this);
   }
 
   protected void visit(Core.Join join) {
