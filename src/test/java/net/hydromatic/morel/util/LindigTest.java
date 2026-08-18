@@ -484,6 +484,45 @@ class LindigTest {
         isLines("before", "alpha", "bravo", "charlie", "after"));
   }
 
+  // -- Exact lookahead ------------------------------------------------------
+
+  /**
+   * A group must account for the text a following group puts on this line
+   * before that group breaks.
+   *
+   * <p>A fit test that stops at the next group and assumes the line ends there
+   * would keep {@code d1} flat, and {@code d2} would then append {@code "efgh"}
+   * to the line {@code d1} had already filled, overrunning the width.
+   */
+  @Test
+  void testFitsCountsFollowingGroup() {
+    final Doc d1 = group(beside(text("ab"), beside(LINE, text("cdef"))));
+    final Doc d2 = group(beside(text("efgh"), beside(LINE, text("X"))));
+    // Flat d1 would give "ab cdefefgh", 11 characters, over the width of 10;
+    // so d1 breaks and d2 stays flat, and no line exceeds 10.
+    assertThat(render(10, beside(d1, d2)), isLines("ab", "cdefefgh X"));
+  }
+
+  /**
+   * A union whose narrow branch continues on the same line — an elision
+   * combinator, "full form if it fits, else {@code ...}" — is measured by what
+   * that branch actually emits.
+   *
+   * <p>This is the case a fit test cannot get right by treating a union as the
+   * end of the line; it only happens to work for {@link Lindig#fill}, whose
+   * narrow branch begins with a line break.
+   */
+  @Test
+  void testFitsMeasuresChosenUnionBranch() {
+    final Doc elided = Lindig.union(text("alpha bravo charlie"), text("..."));
+    final Doc doc = beside(text("["), beside(elided, text("] tail")));
+    // Wide: the full form fits.
+    assertThat(render(80, doc), is("[alpha bravo charlie] tail"));
+    // Narrow: the full form does not, so the narrow branch is taken -- and the
+    // enclosing scan measures "...", not an assumed end of line.
+    assertThat(render(10, doc), is("[...] tail"));
+  }
+
   // -- Stack safety and scalability -----------------------------------------
 
   /**
@@ -528,6 +567,30 @@ class LindigTest {
     assertThat(s, containsString("leaf"));
     assertThat(s.chars().filter(c -> c == '(').count(), is((long) depth));
     assertThat(s.chars().filter(c -> c == '\n').count(), is((long) depth * 2));
+  }
+
+  /**
+   * Renders a wide tuple whose elements each wrap in their own group — one
+   * nested decision point per separator.
+   *
+   * <p>A fit test that re-decides each downstream group re-scans the same
+   * suffix at every level, so this costs O(2<sup>n</sup>); scanning the shared
+   * output stream instead makes it linear. At n=30 the exponential version
+   * takes about 12 seconds, and n=1000 is out of reach.
+   */
+  @Test
+  void testWideTupleOfGroups() {
+    final int size = 1_000;
+    final List<Doc> elements = new ArrayList<>();
+    for (int n = 0; n < size; n++) {
+      elements.add(group(text(Integer.toString(n))));
+    }
+    final Doc doc = encloseSep(text("("), text(")"), text(","), elements);
+    final String s = render(79, doc);
+    assertThat(s.chars().filter(c -> c == ',').count(), is((long) size - 1));
+    for (String line : s.split("\n", -1)) {
+      assertThat(line.length() <= 79, is(true));
+    }
   }
 
   /** Renders a wide list with many elements without overflowing the stack. */
