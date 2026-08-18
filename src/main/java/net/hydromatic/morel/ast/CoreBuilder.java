@@ -771,7 +771,7 @@ public enum CoreBuilder {
   }
 
   // Relational tree (Core.Rel) nodes. These will replace the step builders
-  // above when step 3 of plan.md deletes Core.From's step list.
+  // above when step 2 of plan.md lowers trees instead of building steps.
 
   /** Name that an expression uses for the element of a node's input. */
   public static final String INPUT_0 = "$0";
