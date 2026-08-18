@@ -121,9 +121,18 @@ something settled — §8's principle, applied to the sequence itself.
         patterns, which is the point of it, so this is a port, not an
         adaptation: a leaf that is an infinite extent, and filters
         above it constraining `$0` or paths into it. Arguably cleaner
-        there — one element to constrain rather than a set of names —
-        but it is the largest single piece of work in the sequence,
-        and step 5 already owns it.
+        there — one element to constrain rather than a set of names.
+
+        Smaller than the line count suggests. `Expander.expandSteps`
+        reaches the engine through two calls: `maybeExtent(cache,
+        pat, exp)` for a scan, and a constraint per `where` conjunct.
+        Everything else is inversion, and `Generators.Cache` already
+        keys on a variable *and on field accesses into it*
+        (`patForExp`, `fieldPats`), which is the shape a tree hands
+        it. So the front end is: name the element of each
+        infinite-extent leaf, substitute that name for `$0` in the
+        filters above it, and make those two calls. Order 200 lines
+        against an engine that does not change.
 
         Ported in place, as one engine with two front ends, not as a
         second engine. The split is not even: `Fbbt` and `Extents`
