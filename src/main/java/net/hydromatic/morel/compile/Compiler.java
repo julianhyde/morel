@@ -620,6 +620,56 @@ public class Compiler {
     }
   }
 
+  /**
+   * Creates a code that returns a value if its type's condition holds of it,
+   * and otherwise raises {@code Constraint}.
+   *
+   * <p>The message quotes the value, so the code keeps the value's type and
+   * renders it as the shell would. It renders with the default properties
+   * rather than the session's: a message is not a binding, and should not elide
+   * or wrap because the session was told to print narrowly.
+   */
+  private Code constraintCode(
+      Code conditionCode, Code valueCode, Type type, String name, Pos pos) {
+    final Map<Prop, Object> map = ImmutableMap.of();
+    final Pretty pretty =
+        new Pretty(
+            typeSystem,
+            -1,
+            Prop.Output.CLASSIC,
+            Prop.PRINT_LENGTH.intValue(map),
+            Prop.PRINT_DEPTH.intValue(map),
+            Prop.STRING_DEPTH.intValue(map),
+            0,
+            BagPrinter.NATURAL);
+    return new Code() {
+      @Override
+      public Object eval(Stack stack) {
+        final Object value = valueCode.eval(stack);
+        if ((Boolean) conditionCode.eval(stack)) {
+          return value;
+        }
+        final StringBuilder b = new StringBuilder();
+        pretty.prettyValue(b, type, value);
+        b.append(" is not a valid ").append(name);
+        throw new Codes.MorelRuntimeException(
+            Codes.BuiltInExn.CONSTRAINT,
+            new Codes.Description(b.toString()),
+            pos);
+      }
+
+      @Override
+      public Describer describe(Describer describer) {
+        return describer.start(
+            "check",
+            d ->
+                d.arg("condition", conditionCode)
+                    .arg("value", valueCode)
+                    .arg("", name));
+      }
+    };
+  }
+
   protected Code compileApply(Context cx, Core.Apply apply) {
     return compileApply(cx, apply, false);
   }
@@ -643,6 +693,17 @@ public class Compiler {
           case Z_LIST:
             argCodes = compileArgs(cx, ((Core.Tuple) apply.arg).args);
             return Codes.list(argCodes);
+          case Z_CHECK:
+            // Argument is always a triple: the condition, the value, and the
+            // name of the constrained type.
+            final List<Core.Exp> checkArgs = ((Core.Tuple) apply.arg).args;
+            argCodes = compileArgs(cx, checkArgs);
+            return constraintCode(
+                argCodes.get(0),
+                argCodes.get(1),
+                checkArgs.get(1).type,
+                ((Core.Literal) checkArgs.get(2)).unwrap(String.class),
+                apply.pos);
           case Z_ORDINAL:
             if (cx.ordinalSlots == null) {
               // Nothing is counting rows here. Only a 'yield' installs a

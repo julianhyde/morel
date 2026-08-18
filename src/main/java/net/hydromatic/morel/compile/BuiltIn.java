@@ -5220,6 +5220,17 @@ public enum BuiltIn {
   Z_ANDALSO("$", "andalso", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
   /**
+   * Internal operator that enforces a constrained type, of type "bool * &alpha;
+   * * string &rarr; &alpha;". Given the result of the type's condition, the
+   * value, and the type's name, it returns the value, or raises {@code
+   * Constraint} if the condition did not hold.
+   *
+   * <p>Its type cannot be derived, because the value is polymorphic and the
+   * operator is never written in code.
+   */
+  Z_CHECK("$", "$check", ts -> UNIT),
+
+  /**
    * Internal value "$current", of type "unit". It is used to implement the
    * {@code current} keyword and its type is not necessarily {@code unit}. This
    * enum member is mainly to provide a single definition for the name.
@@ -5791,6 +5802,7 @@ public enum BuiltIn {
         h ->
             h.tyCon(Constructor.EXN_BIND)
                 .tyCon(Constructor.EXN_CHR)
+                .tyCon(Constructor.EXN_CONSTRAINT)
                 .tyCon(Constructor.EXN_DIV)
                 .tyCon(Constructor.EXN_DOMAIN)
                 .tyCon(Constructor.EXN_EMPTY)
@@ -6060,6 +6072,7 @@ public enum BuiltIn {
     // Codes.BuiltInExn can refer to them by name.
     EXN_BIND(Datatype.EXN, "Bind"),
     EXN_CHR(Datatype.EXN, "Chr"),
+    EXN_CONSTRAINT(Datatype.EXN, "Constraint"),
     EXN_DATE(Datatype.EXN, "Date"),
     EXN_DIV(Datatype.EXN, "Div"),
     EXN_DOMAIN(Datatype.EXN, "Domain"),

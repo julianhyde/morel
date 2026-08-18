@@ -449,6 +449,59 @@ public class Resolver {
     return corePat;
   }
 
+  /**
+   * Wraps an expression in a check, if it is being bound at a constrained type.
+   *
+   * <p>This is where a value flows into a claim: the binding says the value is
+   * a {@code nat}, so the condition must hold of it. Everywhere else the name
+   * has reduced to the type it abbreviates, so nothing is claimed and nothing
+   * need be checked.
+   *
+   * <p>The expression becomes
+   *
+   * <blockquote>
+   *
+   * <pre>let val v = e in $check (c1 v andalso c2 v, v, "nat") end</pre>
+   *
+   * </blockquote>
+   *
+   * <p>The {@code let} is what stops {@code e} being evaluated twice, once for
+   * the condition and once for the result.
+   */
+  private Core.Exp withChecks(Core.Exp coreExp, Core.Pat corePat, Pos pos) {
+    if (!(corePat.type instanceof AliasType)) {
+      return coreExp;
+    }
+    final AliasType aliasType = (AliasType) corePat.type;
+    if (aliasType.checks.isEmpty()) {
+      return coreExp;
+    }
+    final TypeSystem typeSystem = typeMap.typeSystem;
+    final Core.IdPat idPat =
+        core.idPat(coreExp.type, () -> nameGenerator.getPrefixed("v"));
+    final Core.Id id = core.id(idPat);
+    Core.Exp condition = null;
+    for (Core.Exp predicate : typeSystem.checkPredicates(aliasType)) {
+      final Core.Exp applied =
+          core.apply(pos, PrimitiveType.BOOL, predicate, id);
+      condition =
+          condition == null
+              ? applied
+              : core.andAlso(typeSystem, condition, applied);
+    }
+    final Core.Exp call =
+        core.apply(
+            pos,
+            coreExp.type,
+            core.functionLiteral(typeSystem, BuiltIn.Z_CHECK),
+            core.tuple(
+                typeSystem,
+                requireNonNull(condition),
+                id,
+                core.stringLiteral(aliasType.name)));
+    return core.let(core.nonRecValDecl(pos, idPat, null, coreExp), call);
+  }
+
   private ResolvedValDecl resolveValDecl(
       Ast.ValDecl valDecl, List<Binding> bindings) {
     final boolean composite = valDecl.valBinds.size() > 1;
@@ -499,7 +552,11 @@ public class Resolver {
                           typeMap.typeSystem.qualifiedType(
                               matching, corePat.type));
             }
-            patExps.add(new PatExp(corePat, coreExp, pat.pos.plus(exp.pos)));
+            patExps.add(
+                new PatExp(
+                    corePat,
+                    withChecks(coreExp, corePat, pat.pos.plus(exp.pos)),
+                    pat.pos.plus(exp.pos)));
           });
       patExps.forEach(
           x -> Compiles.acceptBinding(typeMap.typeSystem, x.pat, bindings));
@@ -701,7 +758,54 @@ public class Resolver {
   }
 
   private AliasType toCore(Ast.TypeBind bind) {
-    return (AliasType) typeMap.typeSystem.lookup(bind.name.name);
+    final AliasType aliasType =
+        (AliasType) typeMap.typeSystem.lookup(bind.name.name);
+    if (!bind.checks.isEmpty()) {
+      // A condition can only be converted here, in the TypeMap that resolved
+      // it; a binding that later claims the type is a separate statement, with
+      // a TypeMap that has never seen these nodes.
+      typeMap.typeSystem.setCheckPredicates(
+          aliasType, transformEager(bind.checks, f -> total(toCore(f))));
+    }
+    return aliasType;
+  }
+
+  /**
+   * Makes a condition total, by appending {@code _ => false} if it does not
+   * already match every value.
+   *
+   * <p>A condition need not be exhaustive: {@code type z = int check 0 => true}
+   * says that zero is the only value of the type, and reads better than
+   * spelling out the other case. Without this the condition would raise {@code
+   * Match} on any other value, rather than rejecting it.
+   *
+   * <p>This runs before the general coverage pass, so the condition never looks
+   * non-exhaustive to it.
+   */
+  private Core.Exp total(Core.Exp predicate) {
+    if (!(predicate instanceof Core.Fn)) {
+      return predicate;
+    }
+    final Core.Fn fn = (Core.Fn) predicate;
+    if (!(fn.exp instanceof Core.Case)) {
+      return predicate;
+    }
+    final Core.Case case_ = (Core.Case) fn.exp;
+    final TypeSystem typeSystem = typeMap.typeSystem;
+    final List<Core.Pat> pats = transformEager(case_.matchList, m -> m.pat);
+    if (PatternCoverageChecker.isExhaustive(typeSystem, pats)) {
+      return predicate;
+    }
+    final List<Core.Match> matchList = new ArrayList<>(case_.matchList);
+    matchList.add(
+        core.match(
+            case_.pos,
+            core.wildcardPat(case_.exp.type),
+            core.boolLiteral(false)));
+    return core.fn(
+        (FnType) fn.type,
+        fn.idPat,
+        core.caseOf(case_.pos, case_.type, case_.exp, matchList));
   }
 
   private DataType toCore(Ast.DatatypeBind bind) {

@@ -4241,6 +4241,7 @@ public class TypeResolver {
         });
 
     final List<Type.Key> keys = new ArrayList<>();
+    final List<Ast.TypeBind> binds = new ArrayList<>();
     for (Ast.TypeBind bind : typeDecl.binds) {
       // Check that every type-constructor reference in the body has the right
       // number of arguments before we materialize the key.
@@ -4249,23 +4250,23 @@ public class TypeResolver {
       checkBoundTyVars(bind.tyVars, ImmutableList.of(bind.type));
       final KeyBuilder keyBuilder = new KeyBuilder(displacedKeys);
       bind.tyVars.forEach(keyBuilder::toTypeKey);
+      final Type.Key bodyKey = keyBuilder.toTypeKey(bind.type);
 
+      // Resolve the conditions before the key is built, so that the type holds
+      // the resolved nodes; Resolver converts them to Core by looking them up
+      // in this TypeMap, and would not find the originals.
+      final Ast.TypeBind bind2 = check(env, bind, bodyKey.toType(typeSystem));
+      binds.add(bind2);
       keys.add(
           Keys.alias(
-              bind.name.name,
-              keyBuilder.toTypeKey(bind.type),
-              Keys.ordinals(bind.tyVars.size()),
-              bind.checks));
+              bind2.name.name,
+              bodyKey,
+              Keys.ordinals(bind2.tyVars.size()),
+              bind2.checks));
     }
     final List<Type> types = typeSystem.typesFor(keys);
 
-    final List<Ast.TypeBind> binds = new ArrayList<>();
-    forEach(
-        typeDecl.binds,
-        types,
-        (bind, type) -> binds.add(check(env, bind, type)));
     final Ast.TypeDecl typeDecl2 = typeDecl.copy(binds);
-
     map.put(typeDecl2, toTerm(PrimitiveType.UNIT));
     return typeDecl2;
   }
@@ -4280,7 +4281,7 @@ public class TypeResolver {
    * check i => i >= 0} would be checking a value that it already claims is a
    * {@code nat}.
    */
-  private Ast.TypeBind check(TypeEnv env, Ast.TypeBind bind, Type type) {
+  private Ast.TypeBind check(TypeEnv env, Ast.TypeBind bind, Type baseType) {
     if (bind.checks.isEmpty()) {
       return bind;
     }
@@ -4290,7 +4291,6 @@ public class TypeResolver {
           false,
           bind.pos);
     }
-    final Type baseType = type.unalias();
     final Term checkTerm =
         unifier.apply(
             FN_TY_CON,

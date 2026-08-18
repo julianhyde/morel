@@ -101,6 +101,17 @@ class Pretty {
     return prettyClassic(buf, typedVal);
   }
 
+  /**
+   * Renders a value on its own, without the binding and type that {@link
+   * #pretty} surrounds it with. Used in messages that quote a value, such as
+   * the one a failed type constraint raises.
+   */
+  StringBuilder prettyValue(StringBuilder buf, Type type, Object value) {
+    final Doc doc = flatten(valueDoc(type, value, 1));
+    final int width = lineWidth < 0 ? Integer.MAX_VALUE : lineWidth - 1;
+    return buf.append(render(width, doc));
+  }
+
   private StringBuilder prettyPrimitive(
       StringBuilder buf, PrimitiveType primitiveType, Object value) {
     String s;
