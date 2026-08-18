@@ -351,6 +351,22 @@ here so that three implementations agree: labels compare as Morel
 strings compare, which puts `$`-prefixed names before alphabetic
 ones.
 
+**Generated binders are numbered per tree**, from zero, in the order
+the translation creates them: `v$0`, `v$1`, and so on. The counter
+must not be shared with anything outside the tree, or the same query
+prints differently depending on what was compiled before it, and no
+other implementation could reproduce the text. A `$` cannot occur in
+an identifier, so a generated name cannot capture one the query
+wrote.
+
+*Review.* A tree nested inside another tree's expressions numbers its
+own binders from zero, which is unambiguous only because the two
+scopes do not overlap today: a nested query is still a step list, and
+becomes a tree in its own right. When the resolver builds trees
+natively (plan.md step 2), nested trees will share a scope with their
+enclosing lambda's parameter, and the rule needs an extension --
+numbering by position in the tree, or a prefix per nesting level.
+
 *Review.* `compute` has no line of its own: `from … compute` prints
 as its `group`, and the extraction of the single element belongs to
 the Core expression that wraps the tree. The alternative — a
