@@ -645,6 +645,10 @@ public enum AstBuilder {
     return new Ast.InfixPat(pos, op, p0, p1);
   }
 
+  public Ast.Cast cast(Pos pos, Op op, Ast.Exp exp, Ast.Type type) {
+    return new Ast.Cast(pos, op, exp, type);
+  }
+
   public Ast.AnnotatedExp annotatedExp(
       Pos pos, Ast.Exp expression, Ast.Type type) {
     return new Ast.AnnotatedExp(pos, expression, type);

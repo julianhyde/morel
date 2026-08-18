@@ -62,6 +62,7 @@ public class MorelHighlighter {
           "and",
           "andalso",
           "as",
+          "asOpt",
           "case",
           "check",
           "datatype",

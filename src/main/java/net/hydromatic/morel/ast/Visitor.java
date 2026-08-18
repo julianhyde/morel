@@ -46,6 +46,11 @@ public class Visitor {
 
   protected void visit(Ast.Ordinal ordinal) {}
 
+  protected void visit(Ast.Cast cast) {
+    cast.exp.accept(this);
+    cast.type.accept(this);
+  }
+
   protected void visit(Ast.AnnotatedExp annotatedExp) {
     annotatedExp.exp.accept(this);
     annotatedExp.type.accept(this);
