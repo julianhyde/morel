@@ -204,4 +204,42 @@ i as nat as int;
 > stdIn:1.1-1.13 Error: Cannot deduce type: conflict: nat (alias for int) vs string
 >   raised at: stdIn:1.1-1.13
 
+(* A parameter's check is compiled inside the function, so it travels with
+ * the function value and fires however the function is called. The position
+ * reported is the function's, not the call's, for that reason. *)
+fun f (n: nat) = n;
+> val f = fn : nat -> nat
+f 5;
+> val it = 5 : int
+f ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.5-1.19
+val k = fn (n: nat) => n + 1;
+> val k = fn : int -> int
+k ~3;
+> uncaught exception Constraint [~3 is not a valid nat]
+>   raised at: stdIn:1.9-1.29
+
+(* So a constrained value may be passed through a polymorphic function that
+ * knows nothing of the constraint, and is still checked. This is why such a
+ * function needs no reified type or handler. *)
+List.map f [1, 2];
+> val it = [1,2] : int list
+List.map f [1, ~2];
+> uncaught exception Constraint [~2 is not a valid nat]
+>   raised at: stdIn:1.5-1.19
+List.filter (fn i => i > 0) [1, ~2];
+> val it = [1] : int list
+
+(* The annotation is read, not deduced, because the body may weaken it:
+ * arithmetic drops the constraint, so this function's type is 'int -> int',
+ * but its parameter is still checked. *)
+fun decr (n: nat) = n - 1;
+> val decr = fn : int -> int
+decr 3;
+> val it = 2 : int
+decr ~3;
+> uncaught exception Constraint [~3 is not a valid nat]
+>   raised at: stdIn:1.5-1.26
+
 (*) End check.smli
