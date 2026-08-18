@@ -47,6 +47,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -764,10 +765,58 @@ public class Resolver {
       // A condition can only be converted here, in the TypeMap that resolved
       // it; a binding that later claims the type is a separate statement, with
       // a TypeMap that has never seen these nodes.
-      typeMap.typeSystem.setCheckPredicates(
-          aliasType, transformEager(bind.checks, f -> total(toCore(f))));
+      final List<Core.Exp> predicates =
+          transformEager(bind.checks, f -> total(toCore(f)));
+      predicates.forEach(p -> checkClosed(bind, p));
+      typeMap.typeSystem.setCheckPredicates(aliasType, predicates);
     }
     return aliasType;
+  }
+
+  /**
+   * Throws if a condition refers to anything but the value it is given and the
+   * standard basis.
+   *
+   * <p>A condition must be closed. That is what lets a constrained type be
+   * interned like any other type: two constrained types are the same type when
+   * their conditions are textually equal, which would not follow if a condition
+   * could also depend on an environment. It also settles what a condition means
+   * when the values it used are re-bound, by making the question not arise.
+   *
+   * <p>A reference to the basis is closed enough: a built-in is not
+   * re-bindable, so the condition cannot change under it.
+   *
+   * <p>So {@code check i => i >= 1 andalso i <= 12} is closed, and {@code check
+   * i => lessThanDozen i} is not, and must be written out.
+   */
+  private void checkClosed(Ast.TypeBind bind, Core.Exp predicate) {
+    final Set<Core.NamedPat> bound = new LinkedHashSet<>();
+    final List<Core.Id> ids = new ArrayList<>();
+    predicate.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.IdPat idPat) {
+            bound.add(idPat);
+            super.visit(idPat);
+          }
+
+          @Override
+          protected void visit(Core.Id id) {
+            ids.add(id);
+            super.visit(id);
+          }
+        });
+    for (Core.Id id : ids) {
+      if (!bound.contains(id.idPat) && !Environments.isBuiltIn(id.idPat.name)) {
+        throw new CompileException(
+            format(
+                "condition of constrained type '%s' is not closed; "
+                    + "it refers to '%s'",
+                bind.name.name, id.idPat.name),
+            false,
+            bind.pos);
+      }
+    }
   }
 
   /**
