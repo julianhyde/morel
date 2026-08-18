@@ -4258,8 +4258,49 @@ public class TypeResolver {
     }
     final List<Type> types = typeSystem.typesFor(keys);
 
-    map.put(typeDecl, toTerm(PrimitiveType.UNIT));
-    return typeDecl;
+    final List<Ast.TypeBind> binds = new ArrayList<>();
+    forEach(
+        typeDecl.binds,
+        types,
+        (bind, type) -> binds.add(check(env, bind, type)));
+    final Ast.TypeDecl typeDecl2 = typeDecl.copy(binds);
+
+    map.put(typeDecl2, toTerm(PrimitiveType.UNIT));
+    return typeDecl2;
+  }
+
+  /**
+   * Deduces the type of a {@code check} clause, which must be a function from
+   * the type it constrains to {@code bool}.
+   *
+   * <p>The condition sees the type as the type it abbreviates. The value being
+   * checked has not yet been admitted to the constrained type, so the
+   * constraint may not be assumed of it; without this, {@code type nat = int
+   * check i => i >= 0} would be checking a value that it already claims is a
+   * {@code nat}.
+   */
+  private Ast.TypeBind check(TypeEnv env, Ast.TypeBind bind, Type type) {
+    if (bind.checks.isEmpty()) {
+      return bind;
+    }
+    if (!bind.tyVars.isEmpty()) {
+      throw new CompileException(
+          format("cannot constrain parameterized type '%s'", bind.name.name),
+          false,
+          bind.pos);
+    }
+    final Type baseType = type.unalias();
+    final Term checkTerm =
+        unifier.apply(
+            FN_TY_CON,
+            toTerm(baseType, Subst.EMPTY),
+            toTerm(PrimitiveType.BOOL));
+    final List<Ast.Fn> checks = new ArrayList<>();
+    for (Ast.Fn check : bind.checks) {
+      final Variable v = equiv(unifier.variable(), checkTerm);
+      checks.add((Ast.Fn) deduceExpType(env, check, v));
+    }
+    return bind.copy(checks);
   }
 
   /**

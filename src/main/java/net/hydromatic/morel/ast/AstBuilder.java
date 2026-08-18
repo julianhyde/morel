@@ -710,7 +710,7 @@ public enum AstBuilder {
       Ast.Id name,
       Iterable<Ast.TyVar> tyVars,
       Ast.Type type,
-      Iterable<Ast.Match> checks) {
+      Iterable<Ast.Fn> checks) {
     return new Ast.TypeBind(
         pos,
         ImmutableList.copyOf(tyVars),
