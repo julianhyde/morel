@@ -346,6 +346,33 @@ public class MainTest {
     ml("type myInt = int and myRealList = real list").assertParseSame();
     ml("type emp = {empno: int, pets: string list}").assertParseSame();
 
+    // A type may carry a 'check' clause, and may carry several; a clause may
+    // have several branches.
+    ml("type nat = int check i => i >= 0").assertParseSame();
+    ml("type batch = int check i => i >= 1 check j => j <= 12")
+        .assertParseSame();
+    ml("type zero = int check 0 => true | _ => false").assertParseSame();
+    ml("type pp = {i: int, j: int} check {i = i, j = j} => i = j")
+        .assertParseSame();
+
+    // 'check' binds more loosely than anything else in a type, so it applies
+    // to the whole type unless the type is parenthesized.
+    ml("type t = int * int check c => true")
+        .assertParseEquivalent("type t = (int * int) check c => true");
+    ml("type t = (int check c => true) * int").assertParseSame();
+    ml("type t = int -> int check c => true")
+        .assertParseEquivalent("type t = (int -> int) check c => true");
+    ml("type t = (int check c => true) -> int").assertParseSame();
+    ml("type t = (int check c => true) list").assertParseSame();
+
+    // A condition is an expression, and extends as far as it can, so a type
+    // written after one is read as part of it: 'list' is an operand of the
+    // condition, not a type constructor, and is reported as an unbound
+    // variable when the declaration is resolved. Parenthesize to end the
+    // condition.
+    ml("type t = int check c => c >= 0 list").assertParseSame();
+    ml("type t = (int check c => c >= 0) list").assertParseSame();
+
     // various types as annotations
     ml("fn x : int => 0").assertParseSame();
     ml("fn x : boolean => 0").assertParseSame();
