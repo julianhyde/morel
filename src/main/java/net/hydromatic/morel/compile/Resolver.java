@@ -553,7 +553,7 @@ public class Resolver {
 
   /** Returns whether a type, or any type within it, carries a condition. */
   private boolean constrains(Type type) {
-    return deepCondition(type, null, null, "", Pos.ZERO) != null;
+    return deepCondition(type, null, null, "", true, Pos.ZERO) != null;
   }
 
   /**
@@ -576,6 +576,11 @@ public class Resolver {
    * component; the outermost condition raises without one, and quotes the
    * whole.
    *
+   * <p>{@code raising} says whether a component that fails should raise for
+   * itself. A claim wants that, so that the message names the component; a scan
+   * over the type does not, because there the condition decides which values
+   * the type has rather than judging a value that must have it.
+   *
    * <p>Called with a null {@code value} to ask only whether a type constrains
    * anything, in which case the expression it returns is a placeholder.
    */
@@ -584,15 +589,16 @@ public class Resolver {
       @Nullable Type erasedType,
       Core.@Nullable Exp value,
       String blame,
+      boolean raising,
       Pos pos) {
     final TypeSystem typeSystem = typeMap.typeSystem;
     if (claimedType instanceof AliasType) {
       final AliasType aliasType = (AliasType) claimedType;
       Core.Exp condition =
-          deepCondition(aliasType.type, erasedType, value, blame, pos);
+          deepCondition(aliasType.type, erasedType, value, blame, raising, pos);
       if (!aliasType.checks.isEmpty()) {
         Core.Exp own = condition(aliasType, value, pos);
-        if (!blame.isEmpty() && value != null) {
+        if (raising && !blame.isEmpty() && value != null) {
           // A component raises for itself, so that the message names it and
           // quotes it. The outermost condition is left bare, for the $check
           // that wraps the whole value to report.
@@ -641,6 +647,7 @@ public class Resolver {
                 erasedFieldType,
                 fieldValue,
                 append(blame, fieldBlame(recordType, field.getKey())),
+                raising,
                 pos);
         if (fieldCondition != null) {
           condition =
@@ -670,6 +677,7 @@ public class Resolver {
                   erasedElementType,
                   core.id(idPat),
                   append(blame, "element"),
+                  raising,
                   pos));
       final Core.Fn predicate =
           core.fn(
@@ -743,7 +751,8 @@ public class Resolver {
                 core.tuple(
                     typeSystem,
                     requireNonNull(
-                        deepCondition(type, coreExp.type, id, blame, pos)),
+                        deepCondition(
+                            type, coreExp.type, id, blame, true, pos)),
                     id,
                     core.stringLiteral(type.moniker()),
                     core.stringLiteral(blame))));
@@ -774,7 +783,8 @@ public class Resolver {
                     core.tuple(
                         typeSystem,
                         requireNonNull(
-                            deepCondition(type, coreExp.type, id, "", pos)),
+                            deepCondition(
+                                type, coreExp.type, id, "", true, pos)),
                         id,
                         core.stringLiteral(type.moniker()),
                         core.stringLiteral(""))),
@@ -2663,6 +2673,71 @@ public class Resolver {
                   .withOrdinalPat(null)
                   .toCore(scan.condition);
       fromBuilder.scan(scan.op, corePat, coreExp, coreCondition);
+      // The type's condition becomes a step of its own rather than part of
+      // the scan's condition, which only a join reads.
+      final Core.Exp typeCondition =
+          scanTypeCondition(scan.pat, corePat, scan.pat.pos);
+      if (typeCondition != null) {
+        fromBuilder.where(typeCondition);
+      }
+    }
+
+    /**
+     * Returns the condition of the constrained type a scan is over, or null if
+     * it is not over one.
+     *
+     * <p>A scan over a constrained type enumerates the values of that type, so
+     * the type's condition belongs in the scan's filter, where the planner can
+     * use it to generate the values rather than generate and reject them. It
+     * does not raise: which values the type has is the question being asked,
+     * not something already claimed of a value in hand.
+     */
+    private Core.@Nullable Exp scanTypeCondition(
+        Ast.Pat pat, Core.Pat corePat, Pos pos) {
+      if (pat.op != Op.ANNOTATED_PAT) {
+        return null;
+      }
+      final Type type = claimedType(((Ast.AnnotatedPat) pat).type);
+      if (type == null) {
+        return null;
+      }
+      // The erased type comes from the value, not the pattern: a record
+      // pattern reaches Core as a tuple, whose fields are named 1, 2.
+      final Core.Exp value = rowValue(corePat, type.unalias());
+      return value == null
+          ? null
+          : deepCondition(type, value.type, value, "", false, pos);
+    }
+
+    /**
+     * Returns an expression for the row a scan's pattern binds, or null if the
+     * pattern is one this does not know how to reassemble.
+     */
+    private Core.@Nullable Exp rowValue(Core.Pat corePat, Type erasedType) {
+      if (corePat instanceof Core.NamedPat) {
+        return core.id((Core.NamedPat) corePat);
+      }
+      if (corePat instanceof Core.TuplePat
+          && erasedType instanceof RecordLikeType) {
+        // A record pattern, '{i, j}', reaches Core as a tuple of the fields in
+        // field order, so the names come from the type the user wrote, not
+        // from the pattern, whose fields are named 1, 2.
+        final Core.TuplePat tuplePat = (Core.TuplePat) corePat;
+        final RecordLikeType recordType = (RecordLikeType) erasedType;
+        final PairList<String, Core.Exp> nameExps = PairList.of();
+        forEach(
+            recordType.argNameTypes().keySet(),
+            tuplePat.args,
+            (name, arg) -> {
+              if (arg instanceof Core.NamedPat) {
+                nameExps.add(name, core.id((Core.NamedPat) arg));
+              }
+            });
+        return nameExps.size() == tuplePat.args.size()
+            ? core.record(typeMap.typeSystem, nameExps)
+            : null;
+      }
+      return null;
     }
 
     @Override
