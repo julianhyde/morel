@@ -218,7 +218,7 @@ val k = fn (n: nat) => n + 1;
 > val k = fn : int -> int
 k ~3;
 > uncaught exception Constraint [~3 is not a valid nat]
->   raised at: stdIn:1.9-1.29
+>   raised at: stdIn:1.12-1.29
 
 (* So a constrained value may be passed through a polymorphic function that
  * knows nothing of the constraint, and is still checked. This is why such a
@@ -503,7 +503,7 @@ val fnVal = fn (n: nat) => n;
 > val fnVal = fn : nat -> nat
 fnVal ~1;
 > uncaught exception Constraint [~1 is not a valid nat]
->   raised at: stdIn:1.13-1.29
+>   raised at: stdIn:1.16-1.29
 
 (*) An annotation on a component of a pattern claims that component.
 val (compA: nat, compB) = (~1, 2);
@@ -514,6 +514,29 @@ fun compFn (x: nat, y: int) = x;
 compFn (~1, 2);
 > uncaught exception Constraint [~1 is not a valid nat: component 1]
 >   raised at: stdIn:1.5-1.32
+
+(* Entering a branch whose pattern claims a type is where a value flows into
+ * the claim, so that is where the check goes. A pattern stays irrefutable: it
+ * still matches every value, and may then raise. *)
+case ~1 of (n: nat) => n;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.12-1.25
+case 1 of (n: nat) => n;
+> val it = 1 : int
+
+(* A branch is what a function's parameter and a 'case' have in common, so a
+ * function of several branches is checked in whichever branch claims. The
+ * parameter of the function as a whole claims nothing -- another branch may
+ * match instead -- and its type is 'int -> int'. *)
+fun firstOrNat 0 = 0 | firstOrNat (n: nat) = n;
+> val firstOrNat = fn : int -> int
+firstOrNat 0;
+> val it = 0 : int
+firstOrNat 5;
+> val it = 5 : int
+firstOrNat ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.24-1.47
 
 (* A record pattern claims per field, as a tuple pattern claims per
  * component. A field the pattern does not mention claims nothing. *)
