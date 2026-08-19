@@ -208,6 +208,11 @@ public class Visitor {
     namedType.types.forEach(this::accept);
   }
 
+  protected void visit(Ast.ConstrainedType constrainedType) {
+    constrainedType.type.accept(this);
+    constrainedType.checks.forEach(f -> f.accept(this));
+  }
+
   protected void visit(Ast.TyVar tyVar) {}
 
   // declarations

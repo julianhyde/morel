@@ -323,7 +323,10 @@ public class TypeSystem {
   Type aliasType(
       String name, Type type, List<Type> arguments, List<Ast.Fn> checks) {
     final AliasType aliasType = new AliasType(name, type, arguments, checks);
-    typeByName.put(name, aliasType);
+    if (!name.isEmpty()) {
+      // A constrained type that is not named has no name to look up by.
+      typeByName.put(name, aliasType);
+    }
     return aliasType;
   }
 

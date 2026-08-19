@@ -568,9 +568,9 @@ case {x = ~1, y = 2} of {x: nat, y: int} => x;
 (* A schema: a record whose fields are tables. Constraints apply at three
  * levels -- a row, a whole table, and the schema that relates the tables --
  * and each is a condition on the type at that level. *)
-type emp = {deptno: int, empno: int, mgrno: int option, sal: real}
-  check e => e.sal > 0.0;
-> type emp = {deptno:int, empno:int, mgrno:int option, sal:real} check e => #sal e > 0.0
+type emp = {deptno: int, empno: int, mgrno: int option,
+    sal: real check s => s > 0.0};
+> type emp = {deptno:int, empno:int, mgrno:int option, sal:real check s => s > 0.0}
 type dept = {deptno: int, dname: string};
 > type dept = {deptno:int, dname:string}
 
@@ -622,7 +622,7 @@ val hrDup: hr = {hr0 replace emps = from e in hr0.emps
  * constraint is checked at the level that states it. *)
 val hrUnpaid: hr = {hr0 replace emps = from e in hr0.emps
   union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 0.0}]};
-> uncaught exception Constraint [{deptno=10,empno=3,mgrno=SOME 1,sal=0} is not a valid emp: field emps.element]
+> uncaught exception Constraint [0 is not a valid value: field emps.element.sal]
 >   raised at: stdIn:1.5-2.63
 
 (*) Raising someone above their manager breaks the table.
@@ -689,6 +689,38 @@ val hr1Moved: hr1 = {hr1 replace emps = from e in hr1.emps
   yield (if e.empno = 2 then {e replace deptno = 99} else e)};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr1]
 >   raised at: stdIn:1.5-2.62
+
+(* --- Constraints on types that are not named -------------------- *)
+
+(* A type may carry a condition wherever it is written, not only where it is
+ * declared, so a constraint can sit on the thing it is about. *)
+type point = {x: int check i => i >= 0, y: int check i => i >= 0};
+> type point = {x:int check i => i >= 0, y:int check i => i >= 0}
+val p1: point = {x = 1, y = 2};
+> val p1 = {x=1,y=2} : point
+val p2: point = {x = 1, y = ~2};
+> uncaught exception Constraint [~2 is not a valid value: field y]
+>   raised at: stdIn:1.5-1.32
+
+(* A type that is not named is called "value" in a message. It has no name to
+ * give, and printing its condition would repeat what the message already says
+ * failed; the blame path says which value it was. *)
+
+(*) Two such types written the same way are the same type.
+type same1 = {v: int check i => i > 0};
+> type same1 = {v:int check i => i > 0}
+type same2 = {v: int check i => i > 0};
+> type same2 = {v:int check i => i > 0}
+val s1: same1 = {v = 1};
+> val s1 = {v=1} : same1
+val s2: same2 = s1;
+> val s2 = {v=1} : same2
+
+(* A condition is compiled where its type is declared, so one written anywhere
+ * else would be a type that claims something with nothing to check it. *)
+val direct: (int check i => i >= 0) list = [1];
+> stdIn:1.13-1.36 Error: a 'check' may only be written in a type declaration
+>   raised at: stdIn:1.13-1.36
 
 (* Whether a reference is to the basis is decided by the binding, not by the
  * name. A user who shadows a basis name has declared a value of their own,

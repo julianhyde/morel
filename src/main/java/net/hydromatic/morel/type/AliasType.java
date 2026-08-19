@@ -58,10 +58,29 @@ public class AliasType extends ParameterizedType {
 
   AliasType(String name, Type type, List<Type> arguments, List<Ast.Fn> checks) {
     super(
-        Op.ALIAS_TYPE, name, computeMoniker(name, arguments), arguments.size());
+        Op.ALIAS_TYPE,
+        name,
+        moniker(name, type, arguments, checks),
+        arguments.size());
     this.type = type;
     this.arguments = ImmutableList.copyOf(arguments);
     this.checks = ImmutableList.copyOf(checks);
+  }
+
+  /**
+   * Returns how to write this type.
+   *
+   * <p>A named type is written by its name. One that is not named has only its
+   * body and its conditions to be written by, so it is written in full.
+   */
+  private static String moniker(
+      String name, Type type, List<Type> arguments, List<Ast.Fn> checks) {
+    if (!name.isEmpty()) {
+      return computeMoniker(name, arguments);
+    }
+    final StringBuilder b = new StringBuilder(type.moniker());
+    checks.forEach(c -> b.append(" check ").append(c.matchListString()));
+    return b.toString();
   }
 
   @Override

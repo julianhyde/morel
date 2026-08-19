@@ -4252,12 +4252,13 @@ public class TypeResolver {
       checkBoundTyVars(bind.tyVars, ImmutableList.of(bind.type));
       final KeyBuilder keyBuilder = new KeyBuilder(displacedKeys);
       bind.tyVars.forEach(keyBuilder::toTypeKey);
-      final Type.Key bodyKey = keyBuilder.toTypeKey(bind.type);
+      final Ast.TypeBind bind0 = bind.copy(checkTypes(env, bind.type));
+      final Type.Key bodyKey = keyBuilder.toTypeKey(bind0.type);
 
       // Resolve the conditions before the key is built, so that the type holds
       // the resolved nodes; Resolver converts them to Core by looking them up
       // in this TypeMap, and would not find the originals.
-      final Ast.TypeBind bind2 = check(env, bind, bodyKey.toType(typeSystem));
+      final Ast.TypeBind bind2 = check(env, bind0, bodyKey.toType(typeSystem));
       binds.add(bind2);
       keys.add(
           Keys.alias(
@@ -4271,6 +4272,68 @@ public class TypeResolver {
     final Ast.TypeDecl typeDecl2 = typeDecl.copy(binds);
     map.put(typeDecl2, toTerm(PrimitiveType.UNIT));
     return typeDecl2;
+  }
+
+  /**
+   * Resolves the conditions of every constrained type written inside a type,
+   * returning the type with the resolved conditions in place.
+   *
+   * <p>A condition must be resolved before the key is built, so that the type
+   * holds nodes this {@link TypeMap} knows; {@link Resolver} converts them to
+   * Core by looking them up here.
+   */
+  private Ast.Type checkTypes(TypeEnv env, Ast.Type type) {
+    switch (type.op) {
+      case CONSTRAINED_TYPE:
+        final Ast.ConstrainedType constrainedType = (Ast.ConstrainedType) type;
+        final Ast.Type body = checkTypes(env, constrainedType.type);
+        return ast.constrainedType(
+            constrainedType.pos,
+            body,
+            deduceChecks(
+                env, toType(body, typeSystem), constrainedType.checks));
+
+      case RECORD_TYPE:
+        final Ast.RecordType recordType = (Ast.RecordType) type;
+        final Map<String, Ast.Type> fieldTypes = new LinkedHashMap<>();
+        recordType.fieldTypes.forEach(
+            (name, t) -> fieldTypes.put(name, checkTypes(env, t)));
+        return fieldTypes.equals(recordType.fieldTypes)
+            ? type
+            : ast.recordType(type.pos, fieldTypes);
+
+      case TUPLE_TYPE:
+        if (!(type instanceof Ast.TupleType)) {
+          // A composite type shares this op, and is reported elsewhere.
+          return type;
+        }
+        final Ast.TupleType tupleType = (Ast.TupleType) type;
+        final List<Ast.Type> types =
+            transformEager(tupleType.types, t -> checkTypes(env, t));
+        return types.equals(tupleType.types)
+            ? type
+            : ast.tupleType(type.pos, types);
+
+      case FUNCTION_TYPE:
+        final Ast.FunctionType functionType = (Ast.FunctionType) type;
+        final Ast.Type paramType = checkTypes(env, functionType.paramType);
+        final Ast.Type resultType = checkTypes(env, functionType.resultType);
+        return paramType.equals(functionType.paramType)
+                && resultType.equals(functionType.resultType)
+            ? type
+            : ast.functionType(type.pos, paramType, resultType);
+
+      case NAMED_TYPE:
+        final Ast.NamedType namedType = (Ast.NamedType) type;
+        final List<Ast.Type> args =
+            transformEager(namedType.types, t -> checkTypes(env, t));
+        return args.equals(namedType.types)
+            ? type
+            : ast.namedType(type.pos, args, namedType.name);
+
+      default:
+        return type;
+    }
   }
 
   /**
@@ -4293,17 +4356,23 @@ public class TypeResolver {
           false,
           bind.pos);
     }
+    return bind.copy(deduceChecks(env, baseType, bind.checks));
+  }
+
+  /** Deduces the type of each condition of a constrained type. */
+  private List<Ast.Fn> deduceChecks(
+      TypeEnv env, Type baseType, List<Ast.Fn> checks) {
     final Term checkTerm =
         unifier.apply(
             FN_TY_CON,
             toTerm(baseType, Subst.EMPTY),
             toTerm(PrimitiveType.BOOL));
-    final List<Ast.Fn> checks = new ArrayList<>();
-    for (Ast.Fn check : bind.checks) {
+    final List<Ast.Fn> checks2 = new ArrayList<>();
+    for (Ast.Fn check : checks) {
       final Variable v = equiv(unifier.variable(), checkTerm);
-      checks.add((Ast.Fn) deduceExpType(env, check, v));
+      checks2.add((Ast.Fn) deduceExpType(env, check, v));
     }
-    return bind.copy(checks);
+    return checks2;
   }
 
   /**
@@ -4551,6 +4620,17 @@ public class TypeResolver {
           } else {
             return Keys.apply(nameKey(namedType.name), typeList);
           }
+
+        case CONSTRAINED_TYPE:
+          // A constrained type that is not named is keyed by its body and its
+          // conditions, so two written the same way are the same type.
+          final Ast.ConstrainedType constrainedType =
+              (Ast.ConstrainedType) type;
+          return Keys.alias(
+              "",
+              toTypeKey(constrainedType.type),
+              ImmutableList.of(),
+              constrainedType.checks);
 
         case TY_VAR:
           final Ast.TyVar tyVar = (Ast.TyVar) type;
