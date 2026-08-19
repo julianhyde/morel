@@ -563,6 +563,8 @@ case (~1, 2) of (n: nat, m) => n;
 case {x = ~1, y = 2} of {x: nat, y: int} => x;
 > val it = ~1 : int
 
+(* --- A schema of tables, each level a named type ---------------- *)
+
 (* A schema: a record whose fields are tables. Constraints apply at three
  * levels -- a row, a whole table, and the schema that relates the tables --
  * and each is a condition on the type at that level. *)
@@ -640,6 +642,53 @@ val hrClosed: hr = {hr0 replace depts = from d in hr0.depts
   where d.deptno <> 20};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr]
 >   raised at: stdIn:1.5-2.24
+
+
+(* --- The same schema as a single type --------------------------- *)
+
+(* The same schema written as one type, with the row and table types inline.
+ * Only a 'type' declaration carries a 'check', so a type that is not named
+ * cannot state one, and every condition belongs to 'hr1'. *)
+type hr1 = {
+    depts: {deptno: int, dname: string} bag,
+    emps: {deptno: int, empno: int, mgrno: int option, sal: real} bag}
+  check h => not (exists e in h.emps where e.sal <= 0.0)
+  check h => h.emps.length ()
+      = (from e in h.emps yield e.empno distinct).length ()
+  check h => not (exists e in h.emps, m in h.emps
+      where e.mgrno = SOME m.empno andalso e.sal > m.sal)
+  check h => not (exists e in h.emps
+      where not (exists d in h.depts where d.deptno = e.deptno));
+> type hr1 = {depts:{deptno:int, dname:string} bag, emps:{deptno:int, empno:int, mgrno:int option, sal:real} bag} check h => not (exists e in #emps h where #sal e <= 0.0) check h => #length Bag (#emps h) = #length Bag (from e in #emps h yield #empno e distinct) check h => not (exists e in #emps h, m in #emps h where #mgrno e = SOME (#empno m) andalso #sal e > #sal m) check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
+
+val hr1: hr1 = {
+  depts = bag [{deptno = 10, dname = "Sales"},
+               {deptno = 20, dname = "Research"}],
+  emps = bag [{empno = 1, deptno = 10, mgrno = NONE, sal = 9.0},
+              {empno = 2, deptno = 20, mgrno = SOME 1, sal = 5.0}]};
+> val hr1 =
+>   {depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],
+>    emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},
+>          {deptno=20,empno=2,mgrno=SOME 1,sal=5}]} : hr1
+
+(* The same derivations are rejected, but every message names 'hr1' and
+ * quotes the whole schema, because that is the only type there is. Naming the
+ * levels is what buys a message that says which level failed, and quotes only
+ * that much of the value. *)
+val hr1Unpaid: hr1 = {hr1 replace emps = from e in hr1.emps
+  union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 0.0}]};
+> uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5},{deptno=10,empno=3,mgrno=SOME 1,sal=0}]} is not a valid hr1]
+>   raised at: stdIn:1.5-2.63
+
+val hr1Dup: hr1 = {hr1 replace emps = from e in hr1.emps
+  union [{empno = 2, deptno = 10, mgrno = SOME 1, sal = 4.0}]};
+> uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5},{deptno=10,empno=2,mgrno=SOME 1,sal=4}]} is not a valid hr1]
+>   raised at: stdIn:1.5-2.63
+
+val hr1Moved: hr1 = {hr1 replace emps = from e in hr1.emps
+  yield (if e.empno = 2 then {e replace deptno = 99} else e)};
+> uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr1]
+>   raised at: stdIn:1.5-2.62
 
 (* Whether a reference is to the basis is decided by the binding, not by the
  * name. A user who shadows a basis name has declared a value of their own,
