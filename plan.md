@@ -923,6 +923,74 @@ Also not done: values from outside (E). A foreign row never passes through a
 Morel constructor, so a claim over a Calcite-backed bag would have to walk it,
 turning a streamed query into a materialized one.
 
+## Messages when a constraint fails
+
+Requirements collected for a follow-up issue. The messages today are
+serviceable, not good, and the `hr` example in `check.smli` shows where they
+fall short. They are accepted as they are for now.
+
+Today a message reads `<value> is not a valid <type>[: <blame>]`, where
+`<type>` is the type's moniker and `<blame>` is a path such as `field
+emps.element`. The value is rendered as the shell would render it.
+
+### Name the type when it has one
+
+`~1 is not a valid nat` is right when the condition belongs to a type the user
+named. A condition on a type that is not named has no such name to give, and
+should say `is not a valid value` rather than invent one or print the whole
+condition.
+
+### Name the constraint
+
+A type may carry several `check` clauses, and a message says only that one of
+them failed:
+
+```sml
+type emps = emp bag
+  check es => ...          (*) numbers are unique
+  check es => ...;         (*) nobody out-earns their manager
+```
+
+Both failures read `is not a valid emps`. A syntax that names a clause would
+let the message say which, and would give the reader a name to look up. It
+would also let a constraint be referred to elsewhere -- in a diagnostic, or a
+tool that lists what a schema requires.
+
+### Control how the value is printed
+
+This is the largest gap. A constraint on a collection quotes the entire
+collection, and a constraint on a schema quotes every table in it. In the
+single-type version of the `hr` example, hiring one unpaid employee prints the
+whole schema.
+
+What a reader wants instead:
+
+* **The relation's name.** "in `emps`" rather than the rows of `emps`.
+* **The offending row, identified by key.** `empno 1` rather than the row, and
+  certainly rather than the table. This needs a notion of a primary key on a
+  record collection, which Morel does not have yet; declaring one would serve
+  more than messages.
+* **Only the part that failed.** Naming the levels already buys this -- see
+  below -- but a condition that is genuinely about the whole collection, such
+  as uniqueness, has no smaller part to point at, and needs the two above.
+
+### Naming the levels already helps
+
+The two versions of the `hr` example differ only in whether the row and table
+types are named, and the messages differ sharply:
+
+```
+(*) named
+~1 is not a valid emp: field emps.element
+
+(*) inline
+{depts=[...],emps=[...]} is not a valid hr1
+```
+
+So naming a level is not only documentation: it is what buys a message that
+says which level failed and quotes only that much of the value. Any scheme
+here should keep that property, and give the anonymous case a way to reach it.
+
 ## Open questions
 
 1. ~~**Closed conditions: reject or inline?**~~ **Resolved: reject.** A
@@ -946,9 +1014,9 @@ turning a streamed query into a materialized one.
    than being wrapped again. `asOpt` needed a third operator, `$attempt`: its
    condition was evaluated by the `if` that chooses between SOME and NONE,
    outside any check, so a raise escaped unwrapped.
-3. **Naming an anonymous constrained type in a message.** Still open. With a
-   closed condition, printing the condition itself is probably the answer:
-   `uncaught exception Constraint [~1 does not satisfy 'i => i >= 0']`.
+3. **Naming an anonymous constrained type in a message.** Folded into
+   "Messages when a constraint fails" above, which collects this and the rest
+   of what those messages need.
 4. **What `assert` returns.** Still open. #239 says the #242 operators "return
    their operand, of the same type, but with additional constraints known to
    the system", but #242 says "Both have type `bool`". This plan follows #242.
@@ -960,9 +1028,11 @@ turning a streamed query into a materialized one.
 7. **Repeated narrowing.** Still open, and now real: a value bound at a
    constrained type and then passed to something else expecting it is walked
    twice, and an ascription inside a binding checks twice over.
-8. **Hiding constraints when printing.** Still open. An anonymous constrained
-   type prints in full, which is noisy in a wide record. A variant of
-   `type_string` that elides constraints is proposed for later.
+8. **Hiding constraints when printing.** Still open, and now pressing: the
+   four-condition `hr1` declaration echoes as one very long line, desugared
+   (`#length Bag (#emps h)`). Two things would help, and are separable: a
+   variant of `type_string` that elides constraints, and an unparser that
+   renders a record-selector application as `x.f`.
 
 ## Departures from this plan
 
