@@ -136,12 +136,17 @@ something settled — §8's principle, applied to the sequence itself.
         `RelExpander`: it grounds a leaf and replaces it with what
         bounds it, projecting where the generator binds a tuple of
         which the element is one component. What remains before it
-        can stand in for `Expander`: pushing a condition through a
-        projection (conditions stop at one today); a generator with
-        free variables, which needs a dependent scan; dropping the
-        conditions that a sealed generator subsumes; and the
-        diagnostic, because "pattern 'b' is not grounded" names a
-        binder that the tree has erased.
+        can stand in for `Expander`: a generator with free variables,
+        which needs a dependent scan, and dropping the conditions
+        that a sealed generator subsumes. Conditions reach the leaf
+        through `sort`, `unorder`, `skip` and `take`, and stop at a
+        projection — parity with the step list on both counts, which
+        ignores every step but a scan and a `where`, and so does not
+        push a condition through a `yield` either. Pushing one
+        through would ground `from x yield {y = x} where y elem
+        [2, 3]`, which errors today; that is a change to the
+        language, not to this port. The diagnostic now points at the
+        pattern rather than naming it (discussion.md §11).
 
         Ported in place, as one engine with two front ends, not as a
         second engine. The split is not even: `Fbbt` and `Extents`
