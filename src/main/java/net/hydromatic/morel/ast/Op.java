@@ -121,7 +121,6 @@ public enum Op {
   // 't1 * t2 * t3' are three distinct types in SML.
   TUPLE_TYPE(" * ", 7, Assoc.NONE),
   COMPOSITE_TYPE,
-  // A constraint binds more loosely than anything else in a type.
   CONSTRAINED_TYPE(" check ", 5),
   FUNCTION_TYPE(" -> ", 6, Assoc.RIGHT),
   NAMED_TYPE(" ", 8),
