@@ -459,4 +459,31 @@ val os3: odds = [3, 0];
 > uncaught exception Constraint [cannot tell whether 0 is a valid odd; Div [divide by zero]]
 >   raised at: stdIn:1.1-1.12
 
+(* A scan over a constrained type enumerates the values of that type, so the
+ * type's condition belongs in the query, where the planner can use it to
+ * generate the values rather than generate and reject them. It does not
+ * raise: which values the type has is the question being asked, not something
+ * already claimed of a value in hand. *)
+type parityPair = {i: int, j: int} check {i, j} => i mod 2 = j mod 2;
+> type parityPair = {i:int, j:int} check {i = i, j = j} => i mod 2 = j mod 2
+from {i, j}: parityPair where i elem [0..2] andalso j elem [5..8];
+> val it = [{i=0,j=6},{i=0,j=8},{i=1,j=5},{i=1,j=7},{i=2,j=6},{i=2,j=8}]
+>   : {i:int, j:int} list
+
+(*) The condition restricts a scalar scan too.
+from n: nat where n elem [~2..2];
+> val it = [0,1,2] : int list
+
+(*) A scan over an unconstrained type is unaffected.
+type plainPair = {i: int, j: int};
+> type plainPair = {i:int, j:int}
+from {i, j}: plainPair where i elem [0..1] andalso j elem [0..1];
+> val it = [{i=0,j=0},{i=0,j=1},{i=1,j=0},{i=1,j=1}] : {i:int, j:int} list
+
+(* Grounding a record variable from a constraint on a field selection is not
+ * implemented, so the destructured form above is the one to write. *)
+from p: parityPair where p.i elem [0..2] andalso p.j elem [5..8];
+> stdIn:1.6-1.19 Error: pattern 'p' is not grounded
+>   raised at: stdIn:1.6-1.19
+
 (*) End check.smli
