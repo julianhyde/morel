@@ -173,8 +173,30 @@ something settled — §8's principle, applied to the sequence itself.
         by `RelShadow.viaTree`, which runs all 1534 queries through
         the tree and can check the new front end against the old
         engine's answers;
-      * the Calcite hybrid path (hybrid.smli), which embeds Morel
-        source in a plan and re-resolves it out of context.
+      * the Calcite hybrid path (hybrid.smli). Sized: the channel is
+        text. `CalciteCompiler` emits a fragment as `exp.toString()`
+        and `CalciteFunctions` re-parses and re-type-resolves it from
+        scratch, in an environment built from `RelContext.map`, which
+        binds Morel variables *by name* to Calcite fields. So the
+        channel depends on two things the tree changes: what the
+        binders are called, and that a value is a materialized row
+        rather than an expression. Hence `#deptno v$108` arriving as
+        text with no way to know what record `v$108` is — "unresolved
+        flex record".
+
+        Three ways out. Materialize more in the lowering, which
+        cannot work, because whether a fragment crosses the Calcite
+        boundary is decided inside `CalciteCompiler`, long after
+        lowering. Emit types with the text, which is local — a
+        printing mode that annotates binders — and keeps plans
+        readable, but leaves a lossy channel in place. Or translate
+        the tree to `RelNode`s directly, which is where this was
+        always going: 1,223 lines of which the step-shaped part is
+        small (`Core.FromStep` twice, `Core.Scan` three times), the
+        bulk being expression conversion and `RelContext` (52
+        mentions) that a tree needs as much as a step list. The issue
+        itself gives the reason: a tree is closer to `RelNode` than a
+        step list is.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
