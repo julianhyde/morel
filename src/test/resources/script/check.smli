@@ -563,6 +563,84 @@ case (~1, 2) of (n: nat, m) => n;
 case {x = ~1, y = 2} of {x: nat, y: int} => x;
 > val it = ~1 : int
 
+(* A schema: a record whose fields are tables. Constraints apply at three
+ * levels -- a field of a row, a whole table, and the schema that relates the
+ * tables -- and each is a condition on the type at that level. *)
+type emp = {deptno: int, empno: int, mgrno: int, sal: real};
+> type emp = {deptno:int, empno:int, mgrno:int, sal:real}
+type dept = {deptno: int, dname: string};
+> type dept = {deptno:int, dname:string}
+
+(* Intra-relation constraints, on the table: an employee number identifies at
+ * most one employee, and nobody earns more than their manager. *)
+type emps = emp bag
+  check es => not (exists e in es, f in es
+      where e.empno = f.empno andalso e <> f)
+  check es => not (exists e in es, m in es
+      where m.empno = e.mgrno andalso e.sal > m.sal);
+> type emps = emp bag check es => not (exists e in es, f in es where #empno e = #empno f andalso e <> f) check es => not (exists e in es, m in es where #empno m = #mgrno e andalso #sal e > #sal m)
+
+(* An inter-relation constraint, on the schema: every employee's department
+ * exists. Only the schema can state it, because only it sees both tables. *)
+type hr = {depts: dept bag, emps: emps}
+  check h => not (exists e in h.emps
+      where not (exists d in h.depts where d.deptno = e.deptno));
+> type hr = {depts:dept bag, emps:emps} check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
+
+val hr0: hr = {
+  depts = bag [{deptno = 10, dname = "Sales"},
+               {deptno = 20, dname = "Research"}],
+  emps = bag [{empno = 1, deptno = 10, mgrno = 1, sal = 9.0},
+              {empno = 2, deptno = 20, mgrno = 1, sal = 5.0}]};
+> val hr0 =
+>   {depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],
+>    emps=[{deptno=10,empno=1,mgrno=1,sal=9},
+>          {deptno=20,empno=2,mgrno=1,sal=5}]} : hr
+
+(* A schema derived by replacing a table is checked where it is bound. The
+ * modifier itself yields a plain record, which claims nothing. *)
+val hrOk: hr = {hr0 replace
+  emps = bag [{empno = 1, deptno = 10, mgrno = 1, sal = 9.0}]};
+> val hrOk =
+>   {depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],
+>    emps=[{deptno=10,empno=1,mgrno=1,sal=9}]} : hr
+
+(*) Two employees with the same number breach the table's first condition.
+val hrDup: hr = {hr0 replace
+  emps = bag [{empno = 1, deptno = 10, mgrno = 1, sal = 9.0},
+              {empno = 1, deptno = 20, mgrno = 1, sal = 5.0}]};
+> uncaught exception Constraint [[{deptno=10,empno=1,mgrno=1,sal=9},{deptno=20,empno=1,mgrno=1,sal=5}] is not a valid emps: field emps]
+>   raised at: stdIn:1.5-3.63
+
+(*) An employee earning more than their manager breaches the second.
+val hrRich: hr = {hr0 replace
+  emps = bag [{empno = 1, deptno = 10, mgrno = 1, sal = 9.0},
+              {empno = 2, deptno = 20, mgrno = 1, sal = 99.0}]};
+> uncaught exception Constraint [[{deptno=10,empno=1,mgrno=1,sal=9},{deptno=20,empno=2,mgrno=1,sal=99}] is not a valid emps: field emps]
+>   raised at: stdIn:1.5-3.64
+
+(* An employee in no department breaches the schema's condition. The table is
+ * checked before the schema, so a table that is itself sound gets as far as
+ * the condition that relates it to the other. *)
+val hrOrphan: hr = {hr0 replace
+  emps = bag [{empno = 1, deptno = 10, mgrno = 1, sal = 9.0},
+              {empno = 2, deptno = 99, mgrno = 1, sal = 5.0}]};
+> uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=1,sal=9},{deptno=99,empno=2,mgrno=1,sal=5}]} is not a valid hr]
+>   raised at: stdIn:1.5-3.63
+
+(*) Removing a department breaches it from the other side.
+val hrNoDept: hr = {hr0 replace
+  depts = bag [{deptno = 10, dname = "Sales"}]};
+> uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"}],emps=[{deptno=10,empno=1,mgrno=1,sal=9},{deptno=20,empno=2,mgrno=1,sal=5}]} is not a valid hr]
+>   raised at: stdIn:1.5-2.48
+
+(*) A row that breaks a table condition is blamed on the table, not the schema.
+val hrBoth: hr = {hr0 replace
+  emps = bag [{empno = 1, deptno = 99, mgrno = 1, sal = 9.0},
+              {empno = 1, deptno = 99, mgrno = 1, sal = 5.0}]};
+> uncaught exception Constraint [[{deptno=99,empno=1,mgrno=1,sal=9},{deptno=99,empno=1,mgrno=1,sal=5}] is not a valid emps: field emps]
+>   raised at: stdIn:1.5-3.63
+
 (* Whether a reference is to the basis is decided by the binding, not by the
  * name. A user who shadows a basis name has declared a value of their own,
  * and a condition that referred to it would take its meaning from the
