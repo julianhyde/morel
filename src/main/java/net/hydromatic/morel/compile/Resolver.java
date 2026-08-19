@@ -2060,7 +2060,14 @@ public class Resolver {
     if (fn.matchList.size() != 1) {
       return null;
     }
-    return claimedPatType(fn.matchList.get(0).pat, erasedType);
+    final Ast.Pat pat = fn.matchList.get(0).pat;
+    if (pat.op == Op.ANNOTATED_PAT
+        && ((Ast.AnnotatedPat) pat).pat.op == Op.ID_PAT) {
+      // The branch checks this one for itself; see toCore(Ast.Match). Doing it
+      // here as well would check every argument twice.
+      return null;
+    }
+    return claimedPatType(pat, erasedType);
   }
 
   private Core.Case toCore(Ast.If if_) {
@@ -2260,6 +2267,36 @@ public class Resolver {
     final List<Binding> bindings = new ArrayList<>();
     Compiles.acceptBinding(typeMap.typeSystem, pat, bindings);
     final Core.Exp exp = withEnv(bindings).toCore(match.exp);
+    final Type claimed = claimedPatType(match.pat, pat.type);
+    if (claimed != null && pat instanceof Core.NamedPat) {
+      // Entering a branch whose pattern claims a type is where a value flows
+      // into the claim, so that is where the check goes. A branch is what a
+      // function's parameter and a 'case' have in common, so both are checked
+      // here, and a function of several branches is checked in whichever
+      // branch claims -- the parameter of the function as a whole claims
+      // nothing, because another branch may match instead.
+      //
+      //   (n: nat) => e
+      //
+      // becomes
+      //
+      //   v => let val n = $check (c v, v, "nat", "") in e end
+      //
+      // rather than checking and discarding, which an optimizer would be
+      // entitled to remove: the body reads the name the check binds.
+      final Core.IdPat rawPat =
+          core.idPat(pat.type, () -> nameGenerator.getPrefixed("v"));
+      return core.match(
+          match.pos,
+          rawPat,
+          core.let(
+              core.nonRecValDecl(
+                  match.pos,
+                  (Core.NamedPat) pat,
+                  null,
+                  checked(core.id(rawPat), claimed, match.pos)),
+              exp));
+    }
     return core.match(match.pos, pat, exp);
   }
 
