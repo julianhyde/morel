@@ -136,8 +136,14 @@ something settled — §8's principle, applied to the sequence itself.
         `RelExpander`: it grounds a leaf and replaces it with what
         bounds it, projecting where the generator binds a tuple of
         which the element is one component. What remains before it
-        can stand in for `Expander`: a generator with free variables,
-        which needs a dependent scan. The conditions a sealed
+        can stand in for `Expander`: none that is known. A generator
+        that reads another variable turns the join into a
+        `projectMany`, whose lambda binds the element it reads —
+        `from x in [1, 2], y where y elem [x, x + 1]` becomes a
+        `projectMany` over `[1, 2]` whose body scans `[g$0, g$0 + 1]`.
+        What remains is to run it against the suite, in place of
+        `Expander`, and see what the scripts say. The conditions a
+        sealed
         generator subsumes are now dropped, so `from x where x elem
         [1, 2, 3]` expands to the list itself, and a filter survives
         only for what the generator does not enforce. Conditions reach the leaf
