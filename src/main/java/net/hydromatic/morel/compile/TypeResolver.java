@@ -3708,6 +3708,7 @@ public class TypeResolver {
    */
   private static @Nullable Term lookupField(
       Term t, String fieldName, Unifier.Substitution substitution) {
+    t = unaliasTerm(t);
     if (t instanceof Sequence) {
       final Sequence sequence = (Sequence) t;
       final List<String> fieldList = fieldList(sequence);
@@ -3804,7 +3805,7 @@ public class TypeResolver {
     final Variable v2 = unifier.variable();
     final Ast.Exp e2b = deduceExpType(env, case_.exp, v2);
     final NavigableSet<String> labelNames = new TreeSet<>();
-    final Term argType = map.get(e2b);
+    final Term argType = unaliasTerm(map.get(e2b));
     if (argType instanceof Sequence) {
       final List<String> fieldList = fieldList((Sequence) argType);
       if (fieldList != null) {
@@ -5010,8 +5011,9 @@ public class TypeResolver {
               // We now know the type of the source record, say
               // "{a: int, b: real}". So, now we can fill out the ellipsis.
               assert v == v3;
-              if (t instanceof Sequence) {
-                final Sequence sequence = (Sequence) t;
+              final Term t2 = unaliasTerm(t);
+              if (t2 instanceof Sequence) {
+                final Sequence sequence = (Sequence) t2;
                 final List<String> fieldList = fieldList(sequence);
                 if (fieldList != null) {
                   final NavigableMap<String, Term> labelTerms2 = mutableMap();

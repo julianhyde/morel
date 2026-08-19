@@ -573,14 +573,15 @@ type dept = {deptno: int, dname: string};
 > type dept = {deptno:int, dname:string}
 
 (* Intra-relation constraints, on the table: an employee number identifies at
- * most one employee, and nobody earns more than their manager. A manager is
- * optional, so the employee at the top of the tree has none. *)
+ * most one employee -- there are as many distinct numbers as rows -- and
+ * nobody earns more than their manager. A manager is optional, so the
+ * employee at the top of the tree has none. *)
 type emps = emp bag
-  check es => not (exists e in es, f in es
-      where e.empno = f.empno andalso e <> f)
+  check es => Bag.length es
+      = Bag.length (from e in es yield e.empno distinct)
   check es => not (exists e in es, m in es
       where e.mgrno = SOME m.empno andalso e.sal > m.sal);
-> type emps = emp bag check es => not (exists e in es, f in es where #empno e = #empno f andalso e <> f) check es => not (exists e in es, m in es where #mgrno e = SOME (#empno m) andalso #sal e > #sal m)
+> type emps = emp bag check es => #length Bag es = #length Bag (from e in es yield #empno e distinct) check es => not (exists e in es, m in es where #mgrno e = SOME (#empno m) andalso #sal e > #sal m)
 
 (* An inter-relation constraint, on the schema: every employee's department
  * exists. Only the schema can state it, because only it sees both tables. *)
