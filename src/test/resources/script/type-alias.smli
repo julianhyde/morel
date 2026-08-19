@@ -257,6 +257,21 @@ val pt: point = {x = 1, y = 2};
 {pt extend z = 4};
 > val it = {x=1,y=2,z=4} : {x:int, y:int, z:int}
 
+(* A query over a collection whose element type is an alias must be able to
+ * see the fields of that type, so field selection looks through the alias.
+ * Before this, a query that projected a field failed to convert to Core:
+ * "expected ['a bag] actual [int bag]". *)
+type rec1 = {i: int, j: string};
+> type rec1 = {i:int, j:string}
+val recs: rec1 bag = bag [{i = 1, j = "a"}, {i = 2, j = "b"}];
+> val recs = [{i=1,j="a"},{i=2,j="b"}] : rec1 bag
+from r in recs yield r.i;
+> val it = [1,2] : int bag
+Bag.length (from r in recs yield r.i);
+> val it = 2 : int
+case {i = 3, j = "c"} : rec1 of {i, j} => i;
+> val it = 3 : int
+
 (*) A parameterized alias is expanded.
 type 'a my_list2 = 'a list;
 > type 'a my_list2 = 'a list
