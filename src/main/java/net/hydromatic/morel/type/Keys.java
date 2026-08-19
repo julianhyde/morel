@@ -330,12 +330,19 @@ public class Keys {
 
     @Override
     public String toString() {
-      return name;
+      return describe(new StringBuilder(), 0, 0).toString();
     }
 
     @Override
     public StringBuilder describe(StringBuilder buf, int left, int right) {
-      return describeParameterized(buf, name, arguments);
+      if (!name.isEmpty()) {
+        return describeParameterized(buf, name, arguments);
+      }
+      // A constrained type that is not named has only its body and its
+      // conditions to be written by, so write it in full.
+      key.describe(buf, left, right);
+      checks.forEach(c -> buf.append(" check ").append(c.matchListString()));
+      return buf;
     }
 
     @Override

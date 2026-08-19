@@ -991,6 +991,36 @@ So naming a level is not only documentation: it is what buys a message that
 says which level failed and quotes only that much of the value. Any scheme
 here should keep that property, and give the anonymous case a way to reach it.
 
+### Types that are not named
+
+A type may carry a condition wherever it is written, so a constraint can sit on
+the thing it is about:
+
+```sml
+type emp = {deptno: int, empno: int, mgrno: int option,
+    sal: real check s => s > 0.0};
+```
+
+This is what moves a constraint towards the leaves, and it improves the
+message, which now quotes the value that failed rather than the row that
+contains it: `0 is not a valid value: field emps.element.sal`.
+
+Such a type is keyed by its body and its conditions, so two written the same
+way are the same type, and it is called "value" in a message, having no name
+to give.
+
+Two limits remain:
+
+* A condition is compiled where its type is declared, so one written anywhere
+  else -- in an annotation, say -- is rejected: "a `check` may only be written
+  in a type declaration". Lifting this means compiling conditions wherever a
+  claim reads a type.
+* A type that is not named may not sit under a type constructor: `{contents:
+  (int check ...) list}` declares, but a value cannot be bound to it. `unalias`
+  erases only the outermost type, so the value's type and the type claimed do
+  not match. A deep erasure would fix it, and is the same rule -- an alias must
+  not reach Core -- applied one level further in.
+
 ## Open questions
 
 1. ~~**Closed conditions: reject or inline?**~~ **Resolved: reject.** A

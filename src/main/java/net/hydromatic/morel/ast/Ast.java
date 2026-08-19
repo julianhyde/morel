@@ -875,6 +875,64 @@ public class Ast {
     }
   }
 
+  /**
+   * Parse tree node of a type with a constraint, e.g. "{@code real check s => s
+   * > 0.0}".
+   *
+   * <p>The type has no name of its own. A {@code type} declaration whose body
+   * is one of these lifts the constraints onto the name it declares; anywhere
+   * else the type is anonymous.
+   */
+  public static class ConstrainedType extends Type {
+    public final Type type;
+    public final List<Fn> checks;
+
+    ConstrainedType(Pos pos, Type type, ImmutableList<Fn> checks) {
+      super(pos, Op.CONSTRAINED_TYPE);
+      this.type = requireNonNull(type);
+      this.checks = requireNonNull(checks);
+      checkArgument(!checks.isEmpty());
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(type, checks);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o == this
+          || o instanceof ConstrainedType
+              && type.equals(((ConstrainedType) o).type)
+              && checks.equals(((ConstrainedType) o).checks);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(type, left, 0);
+      for (Fn check : checks) {
+        w.append(" check ").appendAll(check.matchList, 0, Op.BAR, 0);
+      }
+      return w;
+    }
+
+    @Override
+    public Type withPos(Pos pos) {
+      return pos.equals(this.pos)
+          ? this
+          : new ConstrainedType(pos, type, ImmutableList.copyOf(checks));
+    }
+
+    public Type accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+  }
+
   /** Parse tree for a named type (e.g. "int" or "(int, string) list"). */
   public static class NamedType extends Type {
     public final List<Type> types;
@@ -1665,6 +1723,21 @@ public class Ast {
      * Creates a copy of this {@code TypeBind} with given constraints, or this
      * if the constraints are the same.
      */
+    /**
+     * Creates a copy of this {@code TypeBind} with a given body, or this if the
+     * body is the same.
+     */
+    public TypeBind copy(Type type) {
+      return this.type.equals(type)
+          ? this
+          : new TypeBind(
+              pos,
+              ImmutableList.copyOf(tyVars),
+              name,
+              type,
+              ImmutableList.copyOf(checks));
+    }
+
     public TypeBind copy(List<Fn> checks) {
       return this.checks.equals(checks)
           ? this

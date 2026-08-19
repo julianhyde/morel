@@ -700,6 +700,11 @@ public enum AstBuilder {
     return new Ast.TypeDecl(pos, ImmutableList.copyOf(binds));
   }
 
+  public Ast.Type constrainedType(
+      Pos pos, Ast.Type type, Iterable<Ast.Fn> checks) {
+    return new Ast.ConstrainedType(pos, type, ImmutableList.copyOf(checks));
+  }
+
   public Ast.TypeBind typeBind(
       Pos pos, Ast.Id name, Iterable<Ast.TyVar> tyVars, Ast.Type type) {
     return typeBind(pos, name, tyVars, type, ImmutableList.of());
