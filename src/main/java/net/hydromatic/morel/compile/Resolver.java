@@ -1255,7 +1255,13 @@ public class Resolver {
       // Ask the binding, not the name: the user may shadow a basis name, and
       // then a reference to it is to their value, not the basis one.
       final Binding binding = env.getOpt(id.idPat);
-      if (binding == null || !binding.builtIn) {
+      if (binding == null) {
+        // Not in the environment, so bound within the condition itself -- by a
+        // query step, say, which binds names the visitor above does not see as
+        // patterns. Nothing outside is referred to.
+        continue;
+      }
+      if (!binding.builtIn) {
         throw new CompileException(
             format(
                 "condition of constrained type '%s' is not closed; "
