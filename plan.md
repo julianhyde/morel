@@ -180,6 +180,17 @@ something settled — §8's principle, applied to the sequence itself.
       changes (it prints the *executable* plan, which is exactly what
       this step changes); query results must not.
 - [ ] Delete the AST→From path; the resolver builds trees natively.
+      Build them through a *builder*, not by constructing nodes
+      directly and not by aping `FromBuilder`. Which needs research
+      first: what the resolver should own and what the builder
+      should. `FromBuilder` is the cautionary example — it carries
+      bindings, inlines nested queries, drops useless steps and
+      decides atomization, because the step list made all of that its
+      business. A tree builder should own less: derive types and
+      kinds (`CoreBuilder` already does), keep the element-expression
+      bookkeeping that `RelTranslator` and `RelLowerer` each
+      reinvented, and leave scoping and name resolution to the
+      resolver.
 
 ## Step 3 — Flip observability
 
