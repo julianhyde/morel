@@ -387,19 +387,19 @@ idNat ~1;
  * that silently, or accept the claim and check nothing, the claim is
  * rejected. *)
 val h: nat -> nat = fn i => i - 1;
-> stdIn:1.5-1.34 Error: cannot claim a constrained function type 'nat -> nat'
->   raised at: stdIn:1.5-1.34
+> stdIn:1.8-1.18 Error: cannot claim a constrained function type 'nat -> nat'
+>   raised at: stdIn:1.8-1.18
 val h2: int -> nat = fn i => i;
-> stdIn:1.5-1.31 Error: cannot claim a constrained function type 'int -> nat'
->   raised at: stdIn:1.5-1.31
+> stdIn:1.9-1.19 Error: cannot claim a constrained function type 'int -> nat'
+>   raised at: stdIn:1.9-1.19
 val h3: nat -> int = fn i => i;
-> stdIn:1.5-1.31 Error: cannot claim a constrained function type 'nat -> int'
->   raised at: stdIn:1.5-1.31
+> stdIn:1.9-1.19 Error: cannot claim a constrained function type 'nat -> int'
+>   raised at: stdIn:1.9-1.19
 
 (*) A function type nested inside another type is rejected too.
 val h4: {f: nat -> nat} = {f = fn i => i};
-> stdIn:1.5-1.42 Error: cannot claim a constrained function type '{f:nat -> nat}'
->   raised at: stdIn:1.5-1.42
+> stdIn:1.9-1.24 Error: cannot claim a constrained function type '{f:nat -> nat}'
+>   raised at: stdIn:1.9-1.24
 
 (*) So is one claimed at a parameter, or by an ascription or a conversion.
 fun apply2 (g: nat -> nat) = g 1;
@@ -485,5 +485,34 @@ from {i, j}: plainPair where i elem [0..1] andalso j elem [0..1];
 from p: parityPair where p.i elem [0..2] andalso p.j elem [5..8];
 > stdIn:1.6-1.19 Error: pattern 'p' is not grounded
 >   raised at: stdIn:1.6-1.19
+
+(* A claim is an annotation the user wrote, not a type inference deduced. So
+ * a 'let val' is checked exactly as a top-level 'val' is; both read the same
+ * annotation, through the same code. *)
+val topLevel: nat = ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.5-1.23
+let val inLet: nat = ~1 in inLet end;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.9-1.24
+
+(* And a type inference deduces is not a claim. Here the user claimed nothing:
+ * the function checks its own parameter, and 'nat -> nat' is what inference
+ * made of that, so there is nothing to reject and nothing to check twice. *)
+val fnVal = fn (n: nat) => n;
+> val fnVal = fn : nat -> nat
+fnVal ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.13-1.29
+
+(*) An annotation on a component of a pattern claims that component.
+val (compA: nat, compB) = (~1, 2);
+> uncaught exception Constraint [~1 is not a valid nat: component 1]
+>   raised at: stdIn:1.5-1.34
+fun compFn (x: nat, y: int) = x;
+> val compFn = fn : nat * int -> nat
+compFn (~1, 2);
+> uncaught exception Constraint [~1 is not a valid nat: component 1]
+>   raised at: stdIn:1.5-1.32
 
 (*) End check.smli

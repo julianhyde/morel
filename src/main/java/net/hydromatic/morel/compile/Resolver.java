@@ -462,8 +462,63 @@ public class Resolver {
    * reduced to the type it abbreviates, so nothing is claimed and nothing need
    * be checked.
    */
-  private Core.Exp withChecks(Core.Exp coreExp, Core.Pat corePat, Pos pos) {
-    return checked(coreExp, corePat.type, pos);
+  private Core.Exp withChecks(Core.Exp coreExp, Ast.Pat pat, Pos pos) {
+    final Type type = claimedPatType(pat, coreExp.type);
+    return type == null ? coreExp : checked(coreExp, type, pos);
+  }
+
+  /**
+   * Returns the type a pattern claims, or null if it claims nothing.
+   *
+   * <p>A claim is an annotation the user wrote, not a type inference deduced.
+   * The two differ: inference gives the meet, which for a constrained type is
+   * the type it abbreviates, so a deduced type has no condition left to check.
+   * They differ the other way too -- {@code val h = fn (n: nat) => n} is
+   * deduced {@code nat -> nat}, but the user claimed nothing there, and the
+   * function checks its own parameter.
+   *
+   * <p>Reading the annotation is also what lets a {@code val} and a {@code let
+   * val} behave alike. A deduced type reaches a bound pattern only at the top
+   * level, so driving from it left a {@code let} unchecked.
+   *
+   * @param erasedType the type the value has, used for the parts of the pattern
+   *     that claim nothing
+   */
+  private @Nullable Type claimedPatType(Ast.Pat pat, Type erasedType) {
+    switch (pat.op) {
+      case ANNOTATED_PAT:
+        final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) pat;
+        final Type type = claimedType(annotatedPat.type);
+        // The annotation may constrain nothing and still contain a pattern
+        // that claims something, as in '(x: nat, y): int * int'.
+        return type != null
+            ? type
+            : claimedPatType(annotatedPat.pat, erasedType);
+
+      case TUPLE_PAT:
+        final Ast.TuplePat tuplePat = (Ast.TuplePat) pat;
+        if (!(erasedType instanceof RecordLikeType)) {
+          return null;
+        }
+        final List<Type> erasedArgs =
+            ImmutableList.copyOf(
+                ((RecordLikeType) erasedType).argNameTypes().values());
+        if (erasedArgs.size() != tuplePat.args.size()) {
+          return null;
+        }
+        final List<Type> claimedArgs = new ArrayList<>();
+        boolean claims = false;
+        for (int i = 0; i < erasedArgs.size(); i++) {
+          final Type argType =
+              claimedPatType(tuplePat.args.get(i), erasedArgs.get(i));
+          claims |= argType != null;
+          claimedArgs.add(argType == null ? erasedArgs.get(i) : argType);
+        }
+        return claims ? typeMap.typeSystem.tupleType(claimedArgs) : null;
+
+      default:
+        return null;
+    }
   }
 
   /**
@@ -890,7 +945,7 @@ public class Resolver {
             patExps.add(
                 new PatExp(
                     corePat,
-                    withChecks(coreExp, corePat, pat.pos.plus(exp.pos)),
+                    withChecks(coreExp, pat, pat.pos.plus(exp.pos)),
                     pat.pos.plus(exp.pos)));
           });
       patExps.forEach(
@@ -1926,7 +1981,7 @@ public class Resolver {
     final List<Core.Match> matchList =
         transformEager(fn.matchList, this::toCore);
     final Core.Fn coreFn = core.fn(fn.pos, type, matchList, nameGenerator::inc);
-    final Type paramType = parameterType(fn);
+    final Type paramType = parameterType(fn, coreFn.idPat.type);
     if (paramType == null) {
       return coreFn;
     }
@@ -1970,14 +2025,11 @@ public class Resolver {
    * matches may annotate each differently, and which of them the parameter
    * claims is a question composite values raise more generally.
    */
-  private @Nullable Type parameterType(Ast.Fn fn) {
+  private @Nullable Type parameterType(Ast.Fn fn, Type erasedType) {
     if (fn.matchList.size() != 1) {
       return null;
     }
-    final Ast.Pat pat = fn.matchList.get(0).pat;
-    return pat.op == Op.ANNOTATED_PAT
-        ? claimedType(((Ast.AnnotatedPat) pat).type)
-        : null;
+    return claimedPatType(fn.matchList.get(0).pat, erasedType);
   }
 
   private Core.Case toCore(Ast.If if_) {
