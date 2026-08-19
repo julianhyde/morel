@@ -24,12 +24,10 @@ import static net.hydromatic.morel.util.Static.SKIP;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.shorterThan;
 
-import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -61,32 +59,6 @@ public abstract class Environments {
       EmptyEnvironment.INSTANCE
           .bind(core.idPat(PrimitiveType.BOOL, "true", 0), true)
           .bind(core.idPat(PrimitiveType.BOOL, "false", 0), false);
-
-  /**
-   * Names bound in the built-in environment.
-   *
-   * <p>Used to decide whether a reference is to the standard basis or to
-   * something the user declared, which is what makes the condition of a
-   * constrained type closed or not. It is built on a throwaway type system,
-   * because only the names are wanted.
-   *
-   * <p>A name here that the user has shadowed still counts as built-in, so a
-   * condition could capture the shadowing value. Shadowing a basis name with
-   * one of a compatible type is obscure enough to leave for now.
-   */
-  private static final Supplier<Set<String>> BUILT_IN_NAMES =
-      Suppliers.memoize(
-          () -> {
-            final ImmutableSet.Builder<String> names = ImmutableSet.builder();
-            env(new TypeSystem(), null, ImmutableMap.of())
-                .forEachValue((name, value) -> names.add(name));
-            return names.build();
-          });
-
-  /** Returns whether a name is bound in the built-in environment. */
-  public static boolean isBuiltIn(String name) {
-    return BUILT_IN_NAMES.get().contains(name);
-  }
 
   private Environments() {}
 
@@ -192,6 +164,10 @@ public abstract class Environments {
                   requireNonNull(emptyEnv.getOpt(structure.name))));
         });
 
+    // Everything bound so far is the standard basis. A foreign value is not:
+    // it comes from outside, and a condition that referred to one would not be
+    // closed.
+    bindings.replaceAll(Binding::withBuiltIn);
     foreignBindings(typeSystem, valueMap, bindings);
     return bind(environment, bindings);
   }
