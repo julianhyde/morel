@@ -339,9 +339,18 @@ public class Keys {
         return describeParameterized(buf, name, arguments);
       }
       // A constrained type that is not named has only its body and its
-      // conditions to be written by, so write it in full.
-      key.describe(buf, left, right);
+      // conditions to be written by, so write it in full. A condition binds
+      // more loosely than anything else in a type, so parenthesize wherever
+      // this is not the whole type.
+      final boolean parens = left > 0 || right > 0;
+      if (parens) {
+        buf.append('(');
+      }
+      key.describe(buf, 0, 0);
       checks.forEach(c -> buf.append(" check ").append(c.matchListString()));
+      if (parens) {
+        buf.append(')');
+      }
       return buf;
     }
 
