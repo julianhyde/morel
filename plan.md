@@ -141,8 +141,31 @@ something settled — §8's principle, applied to the sequence itself.
         `projectMany`, whose lambda binds the element it reads —
         `from x in [1, 2], y where y elem [x, x + 1]` becomes a
         `projectMany` over `[1, 2]` whose body scans `[g$0, g$0 + 1]`.
-        What remains is to run it against the suite, in place of
-        `Expander`, and see what the scripts say. The conditions a
+        Run against the suite beside `Expander` (`RelShadow`
+        .groundingAgrees, under `assert`, on every unbounded query
+        the suite compiles). It fails the build if the tree grounds a
+        query the step list rejects — a change in what compiles —
+        and counts the reverse. Three gaps found, all one shape:
+        the front end grounds one leaf at a time, and the engine
+        grounds a set of variables together.
+        * Ranges. `from i : int where i > 0 andalso i < 10` grounds
+          in the step list because `expandFrom` runs Fbbt first to
+          turn the comparisons into bounds; the tree path does not
+          run it.
+        * Several leaves under a join. `from x : string join
+          y : string where (x, y) elem pairs` needs both leaves
+          grounded from one constraint; the walk grounds the right
+          one and loses the constraints on the way to the left.
+        * A generator that binds a tuple. The same shape from the
+          other side: the engine answers with a generator for
+          several variables at once, which a one-leaf caller cannot
+          use.
+
+        So the front end wants the shape the step engine has: collect
+        the extent leaves under a join tree with the conditions above
+        them, ground them together, and then replace them together.
+        That subsumes the correlated case, which is the same question
+        asked of one leaf. The conditions a
         sealed
         generator subsumes are now dropped, so `from x where x elem
         [1, 2, 3]` expands to the list itself, and a filter survives
