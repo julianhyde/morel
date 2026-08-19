@@ -849,9 +849,9 @@ Each phase should land with its own tests, rather than deferring them:
 
 ## Phases
 
-1. ~~**Abbreviations propagate.**~~ **Done.** An alias now survives
-   inference, by unifying up to head-reduction. The design that landed differs
-   from the one sketched here: an alias reaches only the type *displayed for a
+1. ~~**Abbreviations propagate.**~~ **Done.** An alias now survives inference,
+   by unifying up to head-reduction. The design that landed differs from the
+   one sketched here: an alias reaches only the type *displayed for a
    binding*, and every type the compiler examines has its aliases expanded, so
    nothing that inspects a type structurally has to know an alias exists.
    `check` nodes ride on the same mechanism.
@@ -861,47 +861,119 @@ Each phase should land with its own tests, rather than deferring them:
    list`, whichever is seen first. The unifier records each alias it had to
    expand in order to unify, and weakens it in the substitution on the way
    out.
-2. **Syntax.** `check` in `typbind`; `as` and `asOpt` expressions; append
-   `| _ => false` per the rule above — blindly if `matchCoverageEnabled` is
-   false, otherwise only when `isExhaustive` says the match has a gap — before
-   the general coverage pass runs.
-3. **Narrowing.** `Constraint` in `BuiltInExn`; checks at bindings, parameters
-   and results (A); `as` and `asOpt`; static elision where the surface type
-   already satisfies the target.
-4. **Composites.** Deep checks for records, tuples, lists, datatype
-   constructors and record modifiers (B); component-before-whole ordering and
-   the blame path.
-5. **Rejections.** Constrained function types (D) and conversions between
-   different erasures, with messages that say which.
-6. **Planner.** Conjoin a type's `check` predicate into the filter of a scan
-   over it, and ground a record variable from constraints on its fields (F).
-   Smaller than it looks: #440 and #443 did the hard part.
+2. ~~**Syntax.**~~ **Done.** `check` in `typbind`; `as` and `asOpt`
+   expressions; `| _ => false` appended to a condition that is not exhaustive.
+   The condition is also type-checked, as `base -> bool`, and must be closed;
+   a parameterized type may not be constrained.
+
+   Two things the sketch did not anticipate. A `check` clause holds a *list of
+   functions*, one per clause, not a flat list of matches: the branches of a
+   clause are alternatives, whereas separate clauses are conjoined, and
+   flattening confused the two. And the `| _ => false` is appended in
+   `Resolver`, not `TypeResolver`, because exhaustiveness is decided on Core
+   patterns.
+3. ~~**Narrowing.**~~ **Done.** `Constraint` in `BuiltInExn`; checks at
+   bindings, parameters, results, ascriptions, `as` and `asOpt`.
+
+   Every one of these reads the type *the user wrote* rather than the type
+   inference deduces. Inference gives the meet, which for a constrained type
+   is the type it abbreviates, so a deduced type has no condition left to
+   check: `fun decr (n: nat) = n - 1` has type `int -> int`. This is the
+   single most important thing the sketch got wrong.
+4. ~~**Composites.**~~ **Done.** Records, tuples, lists and datatype
+   constructors are followed, to any depth; components are checked before the
+   whole; the message names the component that failed and quotes it.
+
+   `deepCondition` walks *two* types in step -- the claimed type, which keeps
+   its aliases and so knows where the conditions are, and the erased type,
+   which the expressions being built are typed with. A single walk builds a
+   selector typed `nat`, which a predicate typed `int -> bool` rejects.
+
+   Record modifiers need no site of their own, contrary to this plan: a
+   modifier's result is a plain record, which claims nothing, so it is checked
+   where the result is bound.
+5. ~~**Rejections.**~~ **Done.** A claim of a constrained function type is
+   rejected. Until then it was a silent hole -- `constrains` looks for
+   conditions in positions a value can be checked at, so it passed a function
+   type over and the claim went unenforced.
+
+   A conversion between different erasures needed no work: it is an ordinary
+   type error, and the unifier's message names both types and says which is an
+   alias.
+6. **Planner.** *Half done.* A type's `check` condition is conjoined into a
+   scan over it, and the issue's example gives the answer it asks for. A scan
+   is the one site whose condition does not raise: which values the type has
+   is the question being asked, not something claimed of a value in hand.
+
+   Grounding a record variable from a constraint on a field selection is not
+   done. It is **not a constrained-types problem**: `from p: {i: int, j: int}
+   where p.i elem [0..2]` reports that `p` is not grounded with no `check`
+   anywhere. `Generators.patForExp` already turns `#i p` into a field pattern
+   and `deriveFieldGenerators` already builds a record generator from field
+   generators, so the machinery half-exists; why it does not fire here wants
+   its own investigation, and its own issue.
 
 Deferred: constrained function types and any recovery of a constraint that has
 reached a type variable. Both need a type-directed dispatch mechanism; #290
 needs one too, for comparators, so they should share it. Under this design
-neither is a soundness hole — the constraint is erased, so nothing is claimed
-— which is why they can wait.
+neither is a soundness hole -- the constraint is erased, so nothing is claimed
+-- which is why they can wait.
+
+Also not done: values from outside (E). A foreign row never passes through a
+Morel constructor, so a claim over a Calcite-backed bag would have to walk it,
+turning a streamed query into a materialized one.
 
 ## Open questions
 
-1. **Closed conditions: reject or inline?** The issue's `batchSize` example is
-   not closed. Rejecting it is simpler; inlining preserves it and matches the
-   semantics the issue states. Blocks phase 3, not the phase 1 spike.
-2. **Predicate that raises.** Propagate the underlying exception, or wrap it
-   as `Constraint`?
-3. **Naming an anonymous constrained type in a message.** With a closed
-   condition, printing the condition itself is probably the answer:
+1. ~~**Closed conditions: reject or inline?**~~ **Resolved: reject.** A
+   condition may refer only to the value it is given and to the standard
+   basis; a reference to anything the user declared is an error. Inlining --
+   substituting what the condition refers to, so that it becomes closed and
+   the issue's `batchSize` survives -- is recorded in the tests as a possible
+   future feature.
+
+   One hole remains: a basis name the user has shadowed still counts as
+   built-in, so a condition could capture the shadowing value. It bites only
+   if the shadowing binding has a compatible type; closing it properly needs a
+   built-in marker on `Binding`.
+2. ~~**Predicate that raises.**~~ **Resolved: wrap as `Constraint`, but say
+   which.** Whether the value has the type is then not false but unknown, so
+   `Constraint` is right either way -- the value has not been shown to have
+   the type -- but "is not a valid nat" would be a lie. The message reads
+   `cannot tell whether 0 is a valid odd; Div [divide by zero]`.
+
+   A `Constraint` from a check on a component passes through untouched rather
+   than being wrapped again. `asOpt` needed a third operator, `$attempt`: its
+   condition was evaluated by the `if` that chooses between SOME and NONE,
+   outside any check, so a raise escaped unwrapped.
+3. **Naming an anonymous constrained type in a message.** Still open. With a
+   closed condition, printing the condition itself is probably the answer:
    `uncaught exception Constraint [~1 does not satisfy 'i => i >= 0']`.
-4. **What `assert` returns.** #239 says the #242 operators "return their
-   operand, of the same type, but with additional constraints known to the
-   system", but #242 says "Both have type `bool`". This plan follows #242.
+4. **What `assert` returns.** Still open. #239 says the #242 operators "return
+   their operand, of the same type, but with additional constraints known to
+   the system", but #242 says "Both have type `bool`". This plan follows #242.
 5. **Two edits the issue needs.** It still requires the `check` match to be
    exhaustive, and its capture-semantics section is superseded by the closed
    condition above.
-6. **Foreign data (E).** Check on entry, or declare the boundary untrusted?
-7. **Repeated narrowing.** A value narrowed to `nat list` and passed to
-   something else expecting `nat list` is walked twice. Acceptable?
-8. **Hiding constraints when printing.** An anonymous constrained type prints
-   in full, which is noisy in a wide record. A variant of `type_string` that
-   elides constraints is proposed for later.
+6. **Foreign data (E).** Still open. Check on entry, or declare the boundary
+   untrusted?
+7. **Repeated narrowing.** Still open, and now real: a value bound at a
+   constrained type and then passed to something else expecting it is walked
+   twice, and an ascription inside a binding checks twice over.
+8. **Hiding constraints when printing.** Still open. An anonymous constrained
+   type prints in full, which is noisy in a wide record. A variant of
+   `type_string` that elides constraints is proposed for later.
+
+## Departures from this plan
+
+Recorded here so that the plan and the code agree.
+
+* **A tuple's components are numbered from 1**, not 0: "component 1" is what
+  `#1` selects. Matching Morel's own selector seemed less surprising than
+  matching this plan.
+* **A list element has no index.** `List.all`, which walks the list, does not
+  offer one, so "element 1" is just "element".
+* **A record modifier does not raise.** Its result claims nothing; the binding
+  that receives it does.
+* **"Cannot claim", not "cannot convert"**, a constrained function type: the
+  same message serves a binding and a parameter as well as a conversion.
