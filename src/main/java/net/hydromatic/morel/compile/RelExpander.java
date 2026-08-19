@@ -82,27 +82,33 @@ public class RelExpander {
       return filter.copy(expand(filter.input, conditions2), filter.condition);
     }
     if (exp instanceof Core.Project) {
+      // A projection changes what $0 means. A condition above it could be
+      // pushed through by substitution, but the step list does not do that
+      // either -- `from x yield {y = x} where y elem [2, 3]` is not grounded
+      // today -- so the conditions stop here, for parity.
       final Core.Project project = (Core.Project) exp;
       return project.copy(
           typeSystem, expand(project.input, ImmutableList.of()), project.exp);
     }
+    // A step that neither changes the element nor drops rows by position
+    // passes the conditions down. The step list does the same, by ignoring
+    // every step but a scan and a where, so `from x take 3 where x elem
+    // [1, 2, 3]` bounds x and then takes 3 of what remains.
     if (exp instanceof Core.Sort) {
       final Core.Sort sort = (Core.Sort) exp;
-      return sort.copy(
-          typeSystem, expand(sort.input, ImmutableList.of()), sort.exp);
+      return sort.copy(typeSystem, expand(sort.input, conditions), sort.exp);
     }
     if (exp instanceof Core.Unorder) {
       final Core.Unorder unorder = (Core.Unorder) exp;
-      return unorder.copy(
-          typeSystem, expand(unorder.input, ImmutableList.of()));
+      return unorder.copy(typeSystem, expand(unorder.input, conditions));
     }
     if (exp instanceof Core.Skip) {
       final Core.Skip skip = (Core.Skip) exp;
-      return skip.copy(expand(skip.input, ImmutableList.of()), skip.count);
+      return skip.copy(expand(skip.input, conditions), skip.count);
     }
     if (exp instanceof Core.Take) {
       final Core.Take take = (Core.Take) exp;
-      return take.copy(expand(take.input, ImmutableList.of()), take.count);
+      return take.copy(expand(take.input, conditions), take.count);
     }
     if (exp instanceof Core.Join) {
       final Core.Join join = (Core.Join) exp;
@@ -215,14 +221,13 @@ public class RelExpander {
       ground(filter.input, conditions2, generators);
       return;
     }
-    if (exp instanceof Core.Project || exp instanceof Core.Sort) {
-      // A projection changes what $0 means, so a condition above it does not
-      // constrain the leaf below without being pushed through it; a sort does
-      // not constrain at all. Neither is a filter, so the conditions stop
-      // here.
-      ((Core.Rel) exp)
-          .inputs()
-          .forEach(input -> ground(input, ImmutableList.of(), generators));
+    if (exp instanceof Core.Sort
+        || exp instanceof Core.Unorder
+        || exp instanceof Core.Skip
+        || exp instanceof Core.Take) {
+      // None of these changes the element, so the conditions still describe
+      // it, as they do in the step list.
+      ground(((Core.Rel) exp).inputs().get(0), conditions, generators);
       return;
     }
     // Any other node: its inputs are grounded, but the conditions collected
