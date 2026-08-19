@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.TypeSystem;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -138,6 +139,10 @@ public class RelExpander {
     }
     if (exp instanceof Core.Join) {
       final Core.Join join = (Core.Join) exp;
+      final Core.@Nullable Exp correlated = correlate(join, conditions);
+      if (correlated != null) {
+        return correlated;
+      }
       return join.copy(
           typeSystem,
           join.joinType,
@@ -149,6 +154,66 @@ public class RelExpander {
     // A node whose element does not come from a leaf below it in a way this
     // pass understands: leave its inputs alone.
     return exp;
+  }
+
+  /**
+   * Bounds the right input of a join, where what bounds it reads the left
+   * element, by turning the join into a {@code projectMany}.
+   *
+   * <p>{@code from x in [1, 2], y where y elem [x, x + 1]} is a join of {@code
+   * [1, 2]} and the extent of {@code int}; the extent is bounded by {@code [x,
+   * x + 1]}, which reads the left element, so the right input cannot simply be
+   * replaced -- it becomes the body of a lambda over the left element, which is
+   * what a {@code projectMany} is.
+   *
+   * <p>Returns null if this does not apply, leaving the join to be expanded
+   * side by side.
+   */
+  private Core.@Nullable Exp correlate(
+      Core.Join join, List<Core.Exp> conditions) {
+    if (join.joinType != Core.Rel.JoinType.INNER
+        || conditions.isEmpty()
+        || join.right instanceof Core.Rel
+        || !join.right.isExtent()) {
+      return null;
+    }
+    final Core.IdPat leftPat = elementPat(join.left);
+    final Core.IdPat rightPat = elementPat(join.right);
+    // A condition above the join describes the joined element, which the
+    // yield builds from the two; naming both turns it into a constraint the
+    // engine can read.
+    final Core.Exp element =
+        subst(join.yieldExp, core.id(leftPat), core.id(rightPat));
+    final List<Core.Exp> pushed = new ArrayList<>();
+    conditions.forEach(condition -> pushed.add(subst(condition, element)));
+    final Generator generator =
+        ground(join.right, pushed, rightPat, conditions);
+    if (generator == null
+        || generator.cardinality == Generator.Cardinality.INFINITE
+        || !containsOnly(generator.freePats, leftPat)) {
+      return null;
+    }
+    // The body yields what the join yielded, with the left element named by
+    // the lambda's parameter and the right element the body's own.
+    final Core.Exp body =
+        core.project(
+            typeSystem,
+            generator.exp,
+            subst(
+                join.yieldExp,
+                core.id(leftPat),
+                core.input0(generator.exp.type.elementType())));
+    return core.projectMany(
+        typeSystem, expand(join.left, ImmutableList.of()), leftPat, body);
+  }
+
+  /**
+   * Returns whether every free variable of a generator is the one name that the
+   * lambda will bind.
+   */
+  private static boolean containsOnly(
+      List<Core.NamedPat> freePats, Core.NamedPat pat) {
+    return freePats.stream().allMatch(pat::equals);
   }
 
   /**
@@ -288,6 +353,31 @@ public class RelExpander {
           originals.put(constraint, condition);
           constraints.add(constraint);
         });
+    return ground(leaf, pat, constraints, originals);
+  }
+
+  /**
+   * Grounds a leaf against constraints that are already in terms of the
+   * element's name, recording what a sealed generator subsumes against the
+   * conditions those constraints came from.
+   */
+  private @Nullable Generator ground(
+      Core.Exp leaf,
+      List<Core.Exp> constraints,
+      Core.IdPat pat,
+      List<Core.Exp> originalConditions) {
+    final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
+    for (int i = 0; i < constraints.size(); i++) {
+      originals.put(constraints.get(i), originalConditions.get(i));
+    }
+    return ground(leaf, pat, constraints, originals);
+  }
+
+  private @Nullable Generator ground(
+      Core.Exp leaf,
+      Core.IdPat pat,
+      List<Core.Exp> constraints,
+      Map<Core.Exp, Core.Exp> originals) {
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     Expander.ground(cache, pat, leaf, constraints);
     final Generator generator = cache.bestGenerator(pat);
@@ -308,11 +398,51 @@ public class RelExpander {
    * key on.
    */
   private Core.Exp subst(Core.Exp exp, Core.Exp element) {
+    return subst(exp, element, null);
+  }
+
+  /** Replaces {@code $0} and {@code $1} with expressions. */
+  private Core.Exp subst(Core.Exp exp, Core.Exp e0, Core.@Nullable Exp e1) {
+    final Core.Exp exp2 =
+        exp.accept(
+            new Shuttle(typeSystem) {
+              @Override
+              protected Core.Exp visit(Core.Id id) {
+                if (id.idPat.name.equals("$0")) {
+                  return e0;
+                }
+                if (e1 != null && id.idPat.name.equals("$1")) {
+                  return e1;
+                }
+                return id;
+              }
+            });
+    return simplify(exp2);
+  }
+
+  /**
+   * Folds a field access applied to a record that is built right there.
+   *
+   * <p>Substituting a join's yield into a condition produces {@code #y {x = a,
+   * y = b}}, and the engine looks for a reference to a variable, not for a
+   * record it could have taken apart. Folding it to {@code b} is what lets the
+   * engine see the constraint.
+   */
+  private Core.Exp simplify(Core.Exp exp) {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.Exp visit(Core.Id id) {
-            return id.idPat.name.equals("$0") ? element : id;
+          protected Core.Exp visit(Core.Apply apply) {
+            final Core.Exp exp2 = super.visit(apply);
+            if (exp2 instanceof Core.Apply) {
+              final Core.Apply apply2 = (Core.Apply) exp2;
+              if (apply2.fn.op == Op.RECORD_SELECTOR
+                  && apply2.arg.op == Op.TUPLE) {
+                return ((Core.Tuple) apply2.arg)
+                    .args.get(((Core.RecordSelector) apply2.fn).slot);
+              }
+            }
+            return exp2;
           }
         });
   }

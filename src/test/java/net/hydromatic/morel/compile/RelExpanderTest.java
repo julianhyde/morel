@@ -168,6 +168,22 @@ public class RelExpanderTest {
                 + "  [1, 2, 3]\n"));
   }
 
+  /**
+   * Tests a generator that reads another variable: the join becomes a {@code
+   * projectMany}, whose lambda binds the left element that the generator needs.
+   */
+  @Test
+  void testCorrelated() {
+    assertThat(
+        expanded("from x in [1, 2], y where y elem [x, x + 1]"),
+        is(
+            "projectMany\n" //
+                + "  [1, 2]\n"
+                + "  fn g$0 =>\n"
+                + "    project [{x = g$0, y = $0}]\n"
+                + "      [g$0, g$0 + 1]\n"));
+  }
+
   /** Tests that a query that cannot be bounded is an error. */
   @Test
   void testExpandUnbounded() {
