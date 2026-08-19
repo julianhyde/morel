@@ -22,9 +22,12 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.TypeSystem;
@@ -50,6 +53,14 @@ public class RelExpander {
   private final TypeSystem typeSystem;
   private final Environment env;
   private int nextName;
+
+  /**
+   * Conditions that a sealed generator subsumes, and that the filter they came
+   * from can therefore drop. Identity, as in {@code Expander}: the same
+   * expression written twice is not the same constraint.
+   */
+  private final Set<Core.Exp> subsumed =
+      Collections.newSetFromMap(new IdentityHashMap<>());
 
   private RelExpander(TypeSystem typeSystem, Environment env) {
     this.typeSystem = typeSystem;
@@ -77,9 +88,24 @@ public class RelExpander {
     }
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
+      final List<Core.Exp> conjuncts = core.decomposeAnd(filter.condition);
       final List<Core.Exp> conditions2 = new ArrayList<>(conditions);
-      conditions2.addAll(core.decomposeAnd(filter.condition));
-      return filter.copy(expand(filter.input, conditions2), filter.condition);
+      conditions2.addAll(conjuncts);
+      final Core.Exp input = expand(filter.input, conditions2);
+      // A conjunct that a sealed generator subsumes is now enforced by the
+      // collection that replaced the leaf, so the filter need not test it
+      // again; if that was all it tested, the filter goes.
+      final List<Core.Exp> remaining = new ArrayList<>();
+      conjuncts.forEach(
+          conjunct -> {
+            if (!subsumed.contains(conjunct)) {
+              remaining.add(conjunct);
+            }
+          });
+      if (remaining.isEmpty()) {
+        return input;
+      }
+      return filter.copy(input, core.andAlso(typeSystem, remaining));
     }
     if (exp instanceof Core.Project) {
       // A projection changes what $0 means. A condition above it could be
@@ -252,12 +278,29 @@ public class RelExpander {
 
   private @Nullable Generator ground(
       Core.Exp leaf, List<Core.Exp> conditions, Core.IdPat pat) {
+    // The engine sees the conditions with the element named, so remember
+    // which condition each one came from, to know what a generator subsumes.
+    final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
     final List<Core.Exp> constraints = new ArrayList<>();
     conditions.forEach(
-        condition -> constraints.add(subst(condition, core.id(pat))));
+        condition -> {
+          final Core.Exp constraint = subst(condition, core.id(pat));
+          originals.put(constraint, condition);
+          constraints.add(constraint);
+        });
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     Expander.ground(cache, pat, leaf, constraints);
-    return cache.bestGenerator(pat);
+    final Generator generator = cache.bestGenerator(pat);
+    if (generator != null && generator.sealed) {
+      generator.provenance.forEach(
+          constraint -> {
+            final Core.Exp original = originals.get(constraint);
+            if (original != null) {
+              subsumed.add(original);
+            }
+          });
+    }
+    return generator;
   }
 
   /**
