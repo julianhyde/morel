@@ -563,4 +563,17 @@ case (~1, 2) of (n: nat, m) => n;
 case {x = ~1, y = 2} of {x: nat, y: int} => x;
 > val it = ~1 : int
 
+(* Whether a reference is to the basis is decided by the binding, not by the
+ * name. A user who shadows a basis name has declared a value of their own,
+ * and a condition that referred to it would take its meaning from the
+ * environment: before this was checked, the condition below was accepted, and
+ * admitted ~1 though it reads as "not negative".
+ *
+ * This shadows 'not' for everything after it, so it comes last. *)
+val not = fn (b: bool) => true;
+> val not = fn : bool -> bool
+type shadowed = int check i => not (i < 0);
+> stdIn:1.1-1.20 Error: condition of constrained type 'shadowed' is not closed; it refers to 'not'
+>   raised at: stdIn:1.1-1.20
+
 (*) End check.smli

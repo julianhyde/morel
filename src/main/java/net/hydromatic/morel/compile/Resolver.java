@@ -1187,8 +1187,12 @@ public class Resolver {
       // a TypeMap that has never seen these nodes.
       final List<Core.Exp> predicates =
           transformEager(bind.checks, f -> total(toCore(f)));
-      predicates.forEach(p -> checkClosed(bind, p));
+      // Record before checking, not after. The type is interned by the time we
+      // get here, so a declaration that throws would otherwise leave a type
+      // that has conditions but nothing to evaluate, and using it later threw
+      // a NullPointerException.
       typeMap.typeSystem.setCheckPredicates(aliasType, predicates);
+      predicates.forEach(p -> checkClosed(bind, p));
     }
     return aliasType;
   }
@@ -1204,7 +1208,10 @@ public class Resolver {
    * when the values it used are re-bound, by making the question not arise.
    *
    * <p>A reference to the basis is closed enough: a built-in is not
-   * re-bindable, so the condition cannot change under it.
+   * re-bindable, so the condition cannot change under it. The binding decides
+   * this, not the name: a user who shadows a basis name has declared a value of
+   * their own, and a condition that referred to it would take its meaning from
+   * the environment.
    *
    * <p>So {@code check i => i >= 1 andalso i <= 12} is closed, and {@code check
    * i => lessThanDozen i} is not, and must be written out.
@@ -1227,7 +1234,13 @@ public class Resolver {
           }
         });
     for (Core.Id id : ids) {
-      if (!bound.contains(id.idPat) && !Environments.isBuiltIn(id.idPat.name)) {
+      if (bound.contains(id.idPat)) {
+        continue;
+      }
+      // Ask the binding, not the name: the user may shadow a basis name, and
+      // then a reference to it is to their value, not the basis one.
+      final Binding binding = env.getOpt(id.idPat);
+      if (binding == null || !binding.builtIn) {
         throw new CompileException(
             format(
                 "condition of constrained type '%s' is not closed; "
