@@ -137,8 +137,10 @@ something settled — §8's principle, applied to the sequence itself.
         bounds it, projecting where the generator binds a tuple of
         which the element is one component. What remains before it
         can stand in for `Expander`: a generator with free variables,
-        which needs a dependent scan, and dropping the conditions
-        that a sealed generator subsumes. Conditions reach the leaf
+        which needs a dependent scan. The conditions a sealed
+        generator subsumes are now dropped, so `from x where x elem
+        [1, 2, 3]` expands to the list itself, and a filter survives
+        only for what the generator does not enforce. Conditions reach the leaf
         through `sort`, `unorder`, `skip` and `take`, and stop at a
         projection — parity with the step list on both counts, which
         ignores every step but a scan and a `where`, and so does not

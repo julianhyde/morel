@@ -151,15 +151,23 @@ public class RelExpanderTest {
   /**
    * Tests that the leaf is replaced by what bounds it, so that an unbounded
    * query becomes one that can run.
+   *
+   * <p>The filter goes too: the generator is sealed, so the collection that
+   * replaced the leaf already enforces the condition, and the filter tested
+   * nothing else.
    */
   @Test
   void testExpand() {
+    assertThat(expanded("from x where x elem [1, 2, 3]"), is("[1, 2, 3]\n"));
+  }
+
+  /** Tests that a condition a generator does not subsume is kept. */
+  @Test
+  void testExpandKeepsOtherConditions() {
     assertThat(
-        expanded("from x where x elem [1, 2, 3]"),
-        // The condition stays; the generator's provenance says it is
-        // redundant, and dropping it is an optimization not written yet.
+        expanded("from x where x elem [1, 2, 3] andalso x > 1"),
         is(
-            "filter [op elem ($0, [1, 2, 3])]\n" //
+            "filter [$0 > 1]\n" //
                 + "  [1, 2, 3]\n"));
   }
 
