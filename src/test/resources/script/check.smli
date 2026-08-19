@@ -681,6 +681,30 @@ val p2: point = {x = 1, y = ~2};
  * give, and printing its condition would repeat what the message already says
  * failed; the blame path says which value it was. *)
 
+(* A condition binds more loosely than anything else in a type, so it applies
+ * to the whole type: here the condition is given the pair, not the second
+ * component. *)
+type wholePair = int * int check c => #1 c >= 0;
+> type wholePair = int * int check c => #1 c >= 0
+val wp: wholePair = (~1, 2);
+> uncaught exception Constraint [(~1,2) is not a valid wholePair]
+>   raised at: stdIn:1.5-1.28
+
+(*) Parenthesizing puts the condition on a component instead.
+type partPair = (int check c => c >= 0) * int;
+> type partPair = (int check c => c >= 0) * int
+val pp2: partPair = (~1, 2);
+> uncaught exception Constraint [~1 is not a valid value: component 1]
+>   raised at: stdIn:1.5-1.28
+
+(* A condition is an expression, and extends as far as it can, so a type that
+ * follows one is read as part of it. Parenthesize to end the condition. *)
+type swallowed = int check c => c >= 0 list;
+> stdIn:1.40-1.44 Error: unbound variable or constructor: list
+>   raised at: stdIn:1.40-1.44
+type notSwallowed = (int check c => c >= 0) list;
+> type notSwallowed = (int check c => c >= 0) list
+
 (*) Two such types written the same way are the same type.
 type same1 = {v: int check i => i > 0};
 > type same1 = {v:int check i => i > 0}
