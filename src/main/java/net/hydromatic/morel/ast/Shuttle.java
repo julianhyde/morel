@@ -287,6 +287,10 @@ public class Shuttle {
     return namedType; // leaf
   }
 
+  protected Ast.Type visit(Ast.ConstrainedType constrainedType) {
+    return constrainedType;
+  }
+
   protected Ast.TyVar visit(Ast.TyVar tyVar) {
     return tyVar; // leaf
   }

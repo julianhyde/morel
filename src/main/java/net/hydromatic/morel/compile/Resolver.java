@@ -564,11 +564,32 @@ public class Resolver {
     if (!isConcrete(type)) {
       return null;
     }
+    rejectUnnamedCheck(type);
     final Type t = TypeResolver.toType(type, typeMap.typeSystem);
     // Reject before the test below: a constrained function type constrains
     // nothing that can be checked, so the test would pass it over in silence.
     rejectConstrainedFunction(t, t, type.pos);
     return constrains(t) ? t : null;
+  }
+
+  /**
+   * Throws if a type written here carries a condition.
+   *
+   * <p>A condition is compiled where its type is declared, so one written
+   * anywhere else -- in an annotation, say -- would be a type that claims
+   * something and has nothing to check it with.
+   */
+  private static void rejectUnnamedCheck(Ast.Type type) {
+    type.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.ConstrainedType constrainedType) {
+            throw new CompileException(
+                "a 'check' may only be written in a type declaration",
+                false,
+                constrainedType.pos);
+          }
+        });
   }
 
   /**
@@ -637,6 +658,20 @@ public class Resolver {
     }
   }
 
+  /**
+   * Returns how to call a type in a message.
+   *
+   * <p>A constrained type that is not named has nothing to be called but
+   * "value". Writing its condition instead would repeat what the message
+   * already says failed, at length.
+   */
+  private static String typeName(Type type) {
+    if (type instanceof AliasType && ((AliasType) type).name.isEmpty()) {
+      return "value";
+    }
+    return type.moniker();
+  }
+
   /** Returns whether a type, or any type within it, carries a condition. */
   private boolean constrains(Type type) {
     return deepCondition(type, null, null, "", true, Pos.ZERO) != null;
@@ -697,7 +732,7 @@ public class Resolver {
                       typeSystem,
                       own,
                       value,
-                      core.stringLiteral(aliasType.name),
+                      core.stringLiteral(typeName(aliasType)),
                       core.stringLiteral(blame)));
         }
         condition =
@@ -842,7 +877,7 @@ public class Resolver {
                         deepCondition(
                             type, coreExp.type, id, blame, true, pos)),
                     id,
-                    core.stringLiteral(type.moniker()),
+                    core.stringLiteral(typeName(type)),
                     core.stringLiteral(blame))));
   }
 
@@ -874,7 +909,7 @@ public class Resolver {
                             deepCondition(
                                 type, coreExp.type, id, "", true, pos)),
                         id,
-                        core.stringLiteral(type.moniker()),
+                        core.stringLiteral(typeName(type)),
                         core.stringLiteral(""))),
                 core.apply(
                     pos,
@@ -1209,6 +1244,21 @@ public class Resolver {
       typeMap.typeSystem.setCheckPredicates(aliasType, predicates);
       predicates.forEach(p -> checkClosed(bind, p));
     }
+    // A constrained type written inside the body has no name of its own, so
+    // its conditions are compiled here too, against the type its key builds.
+    bind.type.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.ConstrainedType constrainedType) {
+            super.visit(constrainedType);
+            final Type type =
+                TypeResolver.toType(constrainedType, typeMap.typeSystem);
+            final List<Core.Exp> predicates =
+                transformEager(constrainedType.checks, f -> total(toCore(f)));
+            typeMap.typeSystem.setCheckPredicates(type, predicates);
+            predicates.forEach(p -> checkClosed(bind, p));
+          }
+        });
     return aliasType;
   }
 

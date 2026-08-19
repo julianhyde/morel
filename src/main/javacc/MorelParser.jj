@@ -1829,22 +1829,23 @@ void typeBind(List<Ast.TypeBind> typeBinds) :
   final Pair<Pos, List<TyVar>> tyVars;
   final Ast.Id id;
   final List<TyCon> tyCons = new ArrayList<>();
-  final Type type;
+  Type type;
   final List<Ast.Fn> checks = new ArrayList<>();
-  List<Match> matchList;
-  Span span;
 }
 {
   tyVars = tyVars()
   id = identifier()
   <EQ>
   type = type()
-  (
-    <CHECK> { span = Span.of(pos()); } matchList = matchList() {
-      checks.add(ast.fn(span.end(this), matchList));
-    }
-  )*
   {
+    // 'type()' has taken any 'check' clauses, because a type may carry one
+    // wherever it is written. Here they belong to the name being declared,
+    // so lift them off the body.
+    if (type instanceof Ast.ConstrainedType) {
+      final Ast.ConstrainedType constrainedType = (Ast.ConstrainedType) type;
+      checks.addAll(constrainedType.checks);
+      type = constrainedType.type;
+    }
     final Pos pos = tyVars.left.plus(type.pos);
     typeBinds.add(ast.typeBind(pos, id, tyVars.right, type, checks));
   }
@@ -2379,6 +2380,9 @@ Ast.Type type6() :
 Ast.Type type() :
 {
   final List<Type> types = new ArrayList<>();
+  final List<Ast.Fn> checks = new ArrayList<>();
+  List<Match> matchList;
+  Span span;
   Type t;
 }
 {
@@ -2387,8 +2391,16 @@ Ast.Type type() :
     <RTHINARROW> t = type6() { types.add(t); }
   )*
   {
-    return types.size() == 1 ? t
-        : ast.foldFunctionType(types);
+    t = types.size() == 1 ? t : ast.foldFunctionType(types);
+  }
+  (
+    <CHECK> { span = Span.of(pos()); } matchList = matchList() {
+      checks.add(ast.fn(span.end(this), matchList));
+    }
+  )*
+  {
+    return checks.isEmpty() ? t
+        : ast.constrainedType(t.pos.plus(pos()), t, checks);
   }
 }
 
