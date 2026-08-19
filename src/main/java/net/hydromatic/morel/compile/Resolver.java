@@ -601,7 +601,7 @@ public class Resolver {
           .forEach(t -> rejectConstrainedFunction(t, claimed, pos));
       return;
     }
-    if (type instanceof ListType) {
+    if (type.isCollection()) {
       rejectConstrainedFunction(type.elementType(), claimed, pos);
     }
   }
@@ -713,7 +713,7 @@ public class Resolver {
       }
       return condition;
     }
-    if (claimedType instanceof ListType) {
+    if (claimedType.isCollection()) {
       final Type elementType = claimedType.elementType();
       if (!constrains(elementType)) {
         return null;
@@ -739,11 +739,13 @@ public class Resolver {
               typeSystem.fnType(erasedElementType, PrimitiveType.BOOL),
               idPat,
               elementCondition);
+      // A bag is walked by Bag.all, a list by List.all.
+      final BuiltIn all =
+          claimedType instanceof ListType ? BuiltIn.LIST_ALL : BuiltIn.BAG_ALL;
       return core.apply(
           pos,
           PrimitiveType.BOOL,
-          core.call(
-              typeSystem, BuiltIn.LIST_ALL, erasedElementType, pos, predicate),
+          core.call(typeSystem, all, erasedElementType, pos, predicate),
           value);
     }
     return null;
@@ -877,8 +879,21 @@ public class Resolver {
   private Core.Exp condition(
       AliasType aliasType, Core.@Nullable Exp value, Pos pos) {
     final TypeSystem typeSystem = typeMap.typeSystem;
+    final List<Core.Exp> predicates = typeSystem.checkPredicates(aliasType);
+    if (predicates.isEmpty()) {
+      // A type is interned when it is declared, but its conditions are
+      // compiled afterwards, so a declaration that failed leaves a type that
+      // has conditions and no way to evaluate them. Using such a type is an
+      // error; before this it dereferenced null.
+      throw new CompileException(
+          format(
+              "constrained type '%s' was not declared successfully",
+              aliasType.name),
+          false,
+          pos);
+    }
     Core.Exp condition = null;
-    for (Core.Exp predicate : typeSystem.checkPredicates(aliasType)) {
+    for (Core.Exp predicate : predicates) {
       if (value == null) {
         return core.boolLiteral(true); // placeholder; only nullness is read
       }
