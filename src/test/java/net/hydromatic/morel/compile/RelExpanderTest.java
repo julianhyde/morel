@@ -173,6 +173,40 @@ public class RelExpanderTest {
       assertThat(e.getMessage(), containsString("pattern is not grounded"));
     }
   }
+
+  /**
+   * Tests that a condition reaches the leaf through the steps that do not
+   * change the element, as it does in the step list: {@code from x take 3 where
+   * x elem [1, 2, 3]} bounds x and then takes 3 of what remains.
+   */
+  @Test
+  void testThroughOrderTakeSkip() {
+    assertThat(
+        generator("from x order x where x elem [1, 2, 3]"),
+        is("[1, 2, 3] : FINITE"));
+    assertThat(
+        generator("from x take 3 where x elem [1, 2, 3]"),
+        is("[1, 2, 3] : FINITE"));
+    assertThat(
+        generator("from x skip 1 where x elem [1, 2, 3]"),
+        is("[1, 2, 3] : FINITE"));
+  }
+
+  /**
+   * Tests that a condition does not reach the leaf through a projection, which
+   * changes what the condition is about.
+   *
+   * <p>Parity with the step list, which does not push a condition through a
+   * yield either: {@code from x yield {y = x} where y elem [2, 3]} is not
+   * grounded today. Substituting the projection into the condition would ground
+   * both, and is a change to the language, not to this port.
+   */
+  @Test
+  void testNotThroughProjection() {
+    assertThat(
+        generator("from x yield {y = x} where y elem [2, 3]"),
+        is("extent \"int\" : INFINITE"));
+  }
 }
 
 // End RelExpanderTest.java
