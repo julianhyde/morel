@@ -43,6 +43,9 @@ import net.hydromatic.morel.type.TypeSystem;
 public class RelShadow {
   private static final AtomicInteger TRANSLATED = new AtomicInteger();
   private static final AtomicInteger DECLINED = new AtomicInteger();
+  private static final AtomicInteger GROUNDING_AGREED = new AtomicInteger();
+  private static final AtomicInteger GROUNDING_DIVERGED = new AtomicInteger();
+  private static final AtomicInteger GROUNDING_UNEXAMINED = new AtomicInteger();
 
   private RelShadow() {}
 
@@ -93,6 +96,73 @@ public class RelShadow {
   }
 
   /**
+   * Checks that grounding a query through its tree reaches the same verdict as
+   * grounding its step list.
+   *
+   * <p>Always returns true, so that it can be called from an {@code assert};
+   * throws {@link AssertionError} if the two disagree. A query the translator
+   * declines is counted as unexamined rather than as agreement: the point is to
+   * find divergence, not to claim coverage where there is none.
+   */
+  public static boolean groundingAgrees(
+      TypeSystem typeSystem,
+      Environment env,
+      Core.From from,
+      boolean stepGrounded) {
+    final Core.Exp tree = RelTranslator.toRel(typeSystem, from);
+    if (tree == null) {
+      GROUNDING_UNEXAMINED.incrementAndGet();
+      return true;
+    }
+    boolean treeGrounded;
+    try {
+      final Core.Exp expanded = RelExpander.expand(typeSystem, env, tree);
+      // An extent that survives expansion is one the walk did not reach or
+      // could not bound; either way the tree has not grounded the query.
+      treeGrounded = !containsExtent(expanded);
+    } catch (CompileException e) {
+      treeGrounded = false;
+    } catch (RuntimeException e) {
+      // The engine can answer with a generator that binds several variables
+      // at once -- a tuple that one constraint ties together -- which a front
+      // end that grounds one leaf at a time cannot use. Incompleteness, of
+      // the same kind as grounding less, so counted rather than thrown.
+      treeGrounded = false;
+    }
+    if (treeGrounded && !stepGrounded) {
+      // The tree grounds a query the step list rejects. Whatever the merits,
+      // it is a change in what compiles, and the flip must not make one
+      // silently.
+      throw new AssertionError(
+          format("tree grounds a query that the step list does not: %s", from));
+    }
+    if (!treeGrounded && stepGrounded) {
+      // The tree grounds less than the step list. A known incompleteness --
+      // see plan.md -- so counted rather than thrown, until it is closed.
+      GROUNDING_DIVERGED.incrementAndGet();
+      return true;
+    }
+    GROUNDING_AGREED.incrementAndGet();
+    return true;
+  }
+
+  /** Returns whether an expression contains an infinite extent. */
+  private static boolean containsExtent(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Apply apply) {
+            super.visit(apply);
+            if (apply.isExtent()) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
+  }
+
+  /**
    * Returns whether any scan of a query has a pattern that can fail to match,
    * which the translation turns into a case.
    */
@@ -132,6 +202,21 @@ public class RelShadow {
       }
     }
     return false;
+  }
+
+  /** Returns how many queries the two grounding engines agreed on. */
+  public static int groundingAgreedCount() {
+    return GROUNDING_AGREED.get();
+  }
+
+  /** Returns how many queries the tree grounds less well than the step list. */
+  public static int groundingDivergedCount() {
+    return GROUNDING_DIVERGED.get();
+  }
+
+  /** Returns how many queries the tree grounding did not examine. */
+  public static int groundingUnexaminedCount() {
+    return GROUNDING_UNEXAMINED.get();
   }
 
   /** Returns the number of queries the translator declined so far. */

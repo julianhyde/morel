@@ -112,6 +112,7 @@ public class Expander {
                 || generator.cardinality == Generator.Cardinality.INFINITE) {
               final String message =
                   format("pattern '%s' is not grounded", namedPat.name);
+              assert RelShadow.groundingAgrees(typeSystem, env, from, false);
               throw new CompileException(message, false, scan.exp.pos);
             }
           }
@@ -133,6 +134,7 @@ public class Expander {
       // as an error rather than crashing the builder.
       return from;
     }
+    assert RelShadow.groundingAgrees(typeSystem, env, from, true);
     return from2.equals(from) ? from : from2;
   }
 
