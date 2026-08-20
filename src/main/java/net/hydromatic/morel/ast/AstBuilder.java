@@ -700,6 +700,10 @@ public enum AstBuilder {
     return new Ast.TypeDecl(pos, ImmutableList.copyOf(binds));
   }
 
+  public Ast.Exp checkExp(Pos pos, Ast.Exp exp, Iterable<Ast.Fn> checks) {
+    return new Ast.CheckExp(pos, exp, ImmutableList.copyOf(checks));
+  }
+
   public Ast.Type constrainedType(
       Pos pos, Ast.Type type, Iterable<Ast.Fn> checks) {
     return new Ast.ConstrainedType(pos, type, ImmutableList.copyOf(checks));

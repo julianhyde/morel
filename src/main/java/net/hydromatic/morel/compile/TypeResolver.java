@@ -649,6 +649,25 @@ public class TypeResolver {
             }
           };
       for (Ast.ValBind valBind : ((Ast.ValDecl) decl).valBinds) {
+        if (valBind.exp instanceof Ast.CheckExp) {
+          // 'val x = e check m' gives x the type of e with the conditions
+          // added. That type is not written anywhere, and its base is not
+          // known until now, so it is built here rather than by the key
+          // builder. The expression and the pattern were deduced into the same
+          // variable, so the pattern's type is the base.
+          final Type baseType = typeMap.getTypeOpt(valBind.pat);
+          if (baseType != null) {
+            realTypes.put(
+                valBind.pat,
+                Keys.alias(
+                        "",
+                        baseType.key(),
+                        ImmutableList.of(),
+                        ((Ast.CheckExp) valBind.exp).checks)
+                    .toType(typeSystem));
+          }
+          continue;
+        }
         deduceRealType(valBind.pat, null, valBind.exp, consumer);
       }
     }
@@ -1111,6 +1130,26 @@ public class TypeResolver {
    * constraints are enforced this is where the check goes; for now both behave
    * as a type annotation.
    */
+  private Ast.Exp deduceAnnotatedExpType(
+      TypeEnv env, Ast.AnnotatedExp annotatedExp, Variable v) {
+    final Ast.Type type = deduceTypeType(env, annotatedExp.type, v);
+    final Ast.Exp exp = deduceExpType(env, annotatedExp.exp, v);
+    return reg(annotatedExp.copy(exp, type), v);
+  }
+
+  /**
+   * Deduces the type of an expression with a condition, {@code e check m}.
+   *
+   * <p>The condition is typed against the same variable the expression is, so
+   * the base type need never be materialized.
+   */
+  private Ast.Exp deduceCheckExpType(
+      TypeEnv env, Ast.CheckExp checkExp, Variable v) {
+    final Ast.Exp exp = deduceExpType(env, checkExp.exp, v);
+    final List<Ast.Fn> checks = deduceChecks(env, v, checkExp.checks);
+    return reg(ast.checkExp(checkExp.pos, exp, checks), v);
+  }
+
   private Ast.Exp deduceCastType(TypeEnv env, Ast.Cast cast, Variable v) {
     final Variable vExp = cast.op == Op.AS ? v : unifier.variable();
     final Ast.Type type = deduceTypeType(env, cast.type, vExp);
@@ -1152,12 +1191,11 @@ public class TypeResolver {
       case AS_OPT:
         return deduceCastType(env, (Ast.Cast) node, v);
 
+      case CHECK_EXP:
+        return deduceCheckExpType(env, (Ast.CheckExp) node, v);
+
       case ANNOTATED_EXP:
-        final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) node;
-        final Ast.Type type2 = deduceTypeType(env, annotatedExp.type, v);
-        final Ast.Exp exp2 = deduceExpType(env, annotatedExp.exp, v);
-        final Ast.AnnotatedExp annotatedExp2 = annotatedExp.copy(exp2, type2);
-        return reg(annotatedExp2, v);
+        return deduceAnnotatedExpType(env, (Ast.AnnotatedExp) node, v);
 
       case ANDALSO:
       case ORELSE:
@@ -4369,11 +4407,21 @@ public class TypeResolver {
   /** Deduces the type of each condition of a constrained type. */
   private List<Ast.Fn> deduceChecks(
       TypeEnv env, Type baseType, List<Ast.Fn> checks) {
+    return deduceChecks(env, toTerm(baseType, Subst.EMPTY), checks);
+  }
+
+  /**
+   * As {@link #deduceChecks(TypeEnv, Type, List)}, against a term rather than a
+   * type.
+   *
+   * <p>An expression's condition is typed against the variable the expression
+   * was deduced into, which is what lets the base type be unknown: it need
+   * never be materialized, and it is not written anywhere.
+   */
+  private List<Ast.Fn> deduceChecks(
+      TypeEnv env, Term baseTerm, List<Ast.Fn> checks) {
     final Term checkTerm =
-        unifier.apply(
-            FN_TY_CON,
-            toTerm(baseType, Subst.EMPTY),
-            toTerm(PrimitiveType.BOOL));
+        unifier.apply(FN_TY_CON, baseTerm, toTerm(PrimitiveType.BOOL));
     final List<Ast.Fn> checks2 = new ArrayList<>();
     for (Ast.Fn check : checks) {
       final Variable v = equiv(unifier.variable(), checkTerm);
