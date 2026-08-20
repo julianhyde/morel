@@ -202,6 +202,24 @@ public class RelExpanderTest {
         is("[2, 3] : FINITE"));
   }
 
+  /**
+   * Tests that leaves which one generator binds together become one scan.
+   *
+   * <p>Replacing them separately would enumerate the collection once per leaf
+   * and pair every value with every other; the step list makes them one scan
+   * because the user wrote one pattern, and a tree has to notice.
+   */
+  @Test
+  void testLeavesOneGeneratorBinds() {
+    assertThat(
+        expanded(
+            "from i : int join j : string "
+                + "where (i, j) elem [(1, \"a\"), (2, \"b\")]"),
+        is(
+            "project [{i = #1 $0, j = #2 $0}]\n" //
+                + "  [(1, \"a\"), (2, \"b\")]\n"));
+  }
+
   /** Tests that a query that cannot be bounded is an error. */
   @Test
   void testExpandUnbounded() {
