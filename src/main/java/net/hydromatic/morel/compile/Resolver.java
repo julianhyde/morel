@@ -564,12 +564,38 @@ public class Resolver {
     if (!isConcrete(type)) {
       return null;
     }
-    rejectUnnamedCheck(type);
+    compileUnnamedChecks(type);
     final Type t = TypeResolver.toType(type, typeMap.typeSystem);
     // Reject before the test below: a constrained function type constrains
     // nothing that can be checked, so the test would pass it over in silence.
     rejectConstrainedFunction(t, t, type.pos);
     return constrains(t) ? t : null;
+  }
+
+  /**
+   * Compiles the conditions of any type written here that carries one.
+   *
+   * <p>A condition is compiled where the type that carries it is written. In a
+   * declaration that is {@link #toCore(Ast.TypeBind)}; a type written anywhere
+   * else, such as an annotation, is compiled here.
+   */
+  private void compileUnnamedChecks(Ast.Type type) {
+    type.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Ast.ConstrainedType constrainedType) {
+            super.visit(constrainedType);
+            final Type t =
+                TypeResolver.toType(constrainedType, typeMap.typeSystem);
+            if (typeMap.typeSystem.checkPredicates(t).isEmpty()) {
+              final List<Core.Exp> predicates =
+                  transformEager(constrainedType.checks, f -> total(toCore(f)));
+              typeMap.typeSystem.setCheckPredicates(t, predicates);
+              predicates.forEach(
+                  p -> checkClosed(null, constrainedType.pos, p));
+            }
+          }
+        });
   }
 
   /**
@@ -1293,6 +1319,14 @@ public class Resolver {
    * i => lessThanDozen i} is not, and must be written out.
    */
   private void checkClosed(Ast.TypeBind bind, Core.Exp predicate) {
+    checkClosed(bind.name.name, bind.pos, predicate);
+  }
+
+  /**
+   * As {@link #checkClosed(Ast.TypeBind, Core.Exp)}, for a type that may have
+   * no name.
+   */
+  private void checkClosed(@Nullable String name, Pos pos, Core.Exp predicate) {
     final Set<Core.NamedPat> bound = new LinkedHashSet<>();
     final List<Core.Id> ids = new ArrayList<>();
     predicate.accept(
@@ -1324,12 +1358,15 @@ public class Resolver {
       }
       if (!binding.builtIn) {
         throw new CompileException(
-            format(
-                "condition of constrained type '%s' is not closed; "
-                    + "it refers to '%s'",
-                bind.name.name, id.idPat.name),
+            name == null
+                ? format(
+                    "condition is not closed; it refers to '%s'", id.idPat.name)
+                : format(
+                    "condition of constrained type '%s' is not closed; "
+                        + "it refers to '%s'",
+                    name, id.idPat.name),
             false,
-            bind.pos);
+            pos);
       }
     }
   }

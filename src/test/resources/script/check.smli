@@ -836,11 +836,22 @@ val s1: same1 = {v = 1};
 val s2: same2 = s1;
 > val s2 = {v=1} : same2
 
-(* A condition is compiled where its type is declared, so one written anywhere
- * else would be a type that claims something with nothing to check it. *)
+(* A condition may be written wherever a type is written, not only where a
+ * type is declared: in an annotation, or on a parameter. Parentheses are
+ * needed, because a condition extends as far right as it can and would
+ * otherwise swallow what follows. *)
 val direct: (int check i => i >= 0) list = [1];
-> stdIn:1.13-1.36 Error: a 'check' may only be written in a type declaration
->   raised at: stdIn:1.13-1.36
+> val direct = [1] : int list
+val notNat: (int check i => i >= 0) = ~1;
+> uncaught exception Constraint [~1 is not a valid value]
+>   raised at: stdIn:1.5-1.41
+fun mustBeNat (n: (int check i => i >= 0)) = n;
+> val mustBeNat = fn : int -> int
+mustBeNat 3;
+> val it = 3 : int
+mustBeNat ~3;
+> uncaught exception Constraint [~3 is not a valid value]
+>   raised at: stdIn:1.5-1.47
 
 (* Whether a reference is to the basis is decided by the binding, not by the
  * name. A user who shadows a basis name has declared a value of their own,

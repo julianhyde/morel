@@ -639,8 +639,12 @@ public class TypeResolver {
     if (decl instanceof Ast.ValDecl) {
       final BiConsumer<Ast.Pat, Type> consumer =
           (pat, realType) -> {
-            Type deducedType = typeMap.getType(pat);
-            if (!realType.equals(deducedType)) {
+            // A pattern whose annotation carried a condition was rebuilt when
+            // the condition was resolved, so the pattern written here is not
+            // the one that has a type. There is nothing to display for it that
+            // the rebuilt one does not already have.
+            final Type deducedType = typeMap.getTypeOpt(pat);
+            if (deducedType != null && !realType.equals(deducedType)) {
               realTypes.put(pat, realType);
             }
           };
@@ -1408,7 +1412,10 @@ public class TypeResolver {
   private Ast.Type deduceTypeType(TypeEnv env, Ast.Type type, Variable v) {
     final Map<String, Variable> scope =
         tyVarScopes.isEmpty() ? ImmutableMap.of() : tyVarScopes.peek();
-    return new TypeToTermConverter(env, scope).typeTerm(type, v);
+    // A type written here may carry a condition, and the condition has to be
+    // resolved for Resolver to compile it, exactly as in a declaration.
+    final Ast.Type type2 = checkTypes(env, type);
+    return new TypeToTermConverter(env, scope).typeTerm(type2, v);
   }
 
   private Ast.Query deduceQueryType(TypeEnv env, Ast.Query query, Variable v) {
