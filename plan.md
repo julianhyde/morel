@@ -1108,15 +1108,33 @@ lost.
 
 ## Adding and removing conditions
 
-**Removing needs no syntax.** Ascribing to the base type widens, and widening
-is free -- a value that satisfies a condition satisfies the type the condition
-refines:
+**Removing is rarely needed, but has no practical syntax when it is.** Widening
+is implicit at a use site, so a value never has to be widened in order to be
+used:
 
 ```sml
-val n: nat = 5;
-val m: int = n;
-> val m = 5 : int
+fun f (i: int) = i + 1;
+f n;
+> val it = 6 : int
 ```
+
+and widening is free, because a value that satisfies a condition satisfies the
+type the condition refines. What is missing is a way to give a *binding* the
+base type deliberately. Ascription does it -- `val m: int = n` -- but only if
+the base type can be named and written out, which fails exactly where it
+matters: a large record type, or a checked type that is not named and so has
+no base to write.
+
+So a type-level operator is wanted, say `unchecked t`, usable wherever a type
+is: `val m: unchecked nat = n`, `fun f (x: unchecked emp)`, `unchecked (typeof
+e)`. It pairs with `check` -- one adds a condition to a type, the other strips
+them -- and being type-level it composes, where an expression-level form would
+not.
+
+It should be deep, removing conditions anywhere within the type rather than
+only the outermost. That is the same deep erasure the "types that are not
+named" section needs: `unalias` erases only the outermost type, which is why a
+checked type may not sit under a type constructor.
 
 **Adding to an expression does need syntax, and has none.** There is no way to
 introduce a checked value without declaring a named type:
@@ -1153,6 +1171,9 @@ acceptable, but it is an asymmetry rather than an oversight.
 * **`e check match`, to add a condition to an expression**, per the section
   above. Includes lifting the restriction that a condition may only be written
   in a type declaration.
+* **`unchecked t`, to strip conditions from a type**, per the section above.
+  Shares its deep erasure with the fix for a checked type under a type
+  constructor.
 * **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve`
   has no case for a type declaration. Unrelated to conditions.
 * **`local ... in ... end` is not implemented.** It is how Standard ML
