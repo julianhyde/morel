@@ -252,6 +252,21 @@ public class RelExpander {
       return bounded(node, frame.leaves.get(node), cache);
     }
     final Core.Join join = (Core.Join) node;
+    final @Nullable Generator common = commonGenerator(join, frame, cache);
+    if (common != null) {
+      // One generator binds the names of every leaf under this join -- `where
+      // {deptno = dno, dname = name} elem depts` binds both -- so the leaves
+      // and the join between them become one scan of that generator, read
+      // through the paths that its pattern gives each name. Replacing them
+      // separately would enumerate the collection once per leaf and pair
+      // every value with every other.
+      final Core.Exp element =
+          rename(
+              frame.elements.get(join),
+              core.input0(common.exp.type.elementType()),
+              common.pat);
+      return core.project(typeSystem, common.exp, element);
+    }
     final Core.Exp right = join.right;
     final @Nullable Generator rightGenerator =
         right.isExtent() ? generator(frame.leaves.get(right), cache) : null;
@@ -285,6 +300,87 @@ public class RelExpander {
         rebuild(right, frame, cache),
         join.condition,
         join.yieldExp);
+  }
+
+  /**
+   * Returns the generator that binds the names of every leaf under a node, if
+   * one does.
+   *
+   * <p>Null if the leaves have different generators, if any is not an extent,
+   * or if a condition of the joins between them is not one the generator
+   * enforces -- in which case they are replaced one at a time, as before.
+   */
+  private @Nullable Generator commonGenerator(
+      Core.Exp node, Frame frame, Generators.Cache cache) {
+    @Nullable Generator common = null;
+    for (Map.Entry<Core.Exp, Core.Pat> entry : frame.leaves.entrySet()) {
+      if (!contains(node, entry.getKey())) {
+        continue;
+      }
+      if (!entry.getKey().isExtent()) {
+        return null;
+      }
+      for (Core.NamedPat name : entry.getValue().expand()) {
+        final @Nullable Generator generator = cache.bestGenerator(name);
+        if (generator == null
+            || generator.cardinality == Generator.Cardinality.INFINITE
+            || !free(generator).isEmpty()) {
+          return null;
+        }
+        if (common == null) {
+          common = generator;
+        } else if (common != generator) {
+          return null;
+        }
+      }
+    }
+    if (common == null || common.pat instanceof Core.NamedPat) {
+      // A generator that binds one name grounds one leaf, which the ordinary
+      // path handles.
+      return null;
+    }
+    return contains(node, node) && conditionsEnforced(node) ? common : null;
+  }
+
+  /** Returns whether a node contains another, by identity. */
+  private static boolean contains(Core.Exp node, Core.Exp target) {
+    if (node == target) {
+      return true;
+    }
+    if (!(node instanceof Core.Join)) {
+      return false;
+    }
+    final Core.Join join = (Core.Join) node;
+    return contains(join.left, target) || contains(join.right, target);
+  }
+
+  /**
+   * Returns whether every join under a node has a trivial condition, or one
+   * that a generator has taken over.
+   */
+  private boolean conditionsEnforced(Core.Exp node) {
+    if (!(node instanceof Core.Join)) {
+      return true;
+    }
+    final Core.Join join = (Core.Join) node;
+    return join.condition.isBoolLiteral(true)
+        && conditionsEnforced(join.left)
+        && conditionsEnforced(join.right);
+  }
+
+  /**
+   * Replaces each name of a pattern with the path that reads it out of an
+   * element.
+   */
+  private Core.Exp rename(Core.Exp exp, Core.Exp element, Core.Pat pat) {
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            final Core.@Nullable Exp path = path(pat, element, id.idPat);
+            return path != null ? path : id;
+          }
+        });
   }
 
   /** Returns the generator of a leaf named by a single variable, or null. */
@@ -395,6 +491,12 @@ public class RelExpander {
     final Map<Core.Exp, Core.Pat> leaves;
     final List<Core.Exp> constraints;
 
+    /**
+     * Element expression of every node of the tree, in terms of the names of
+     * the leaves below it.
+     */
+    final Map<Core.Exp, Core.Exp> elements = new IdentityHashMap<>();
+
     Frame(
         Core.Exp element,
         Map<Core.Exp, Core.Pat> leaves,
@@ -469,14 +571,19 @@ public class RelExpander {
     if (pat instanceof Core.NamedPat) {
       return pat.equals(target) ? element : null;
     }
+    final List<Core.Pat> args;
     if (pat instanceof Core.TuplePat) {
-      final List<Core.Pat> args = ((Core.TuplePat) pat).args;
-      for (int i = 0; i < args.size(); i++) {
-        final Core.@Nullable Exp exp =
-            path(args.get(i), core.field(typeSystem, element, i), target);
-        if (exp != null) {
-          return exp;
-        }
+      args = ((Core.TuplePat) pat).args;
+    } else if (pat instanceof Core.RecordPat) {
+      args = ((Core.RecordPat) pat).args;
+    } else {
+      return null;
+    }
+    for (int i = 0; i < args.size(); i++) {
+      final Core.@Nullable Exp exp =
+          path(args.get(i), core.field(typeSystem, element, i), target);
+      if (exp != null) {
+        return exp;
       }
     }
     return null;
@@ -588,7 +695,9 @@ public class RelExpander {
       final Core.Pat pat = elementPat(node);
       final Map<Core.Exp, Core.Pat> leaves = new IdentityHashMap<>();
       leaves.put(node, pat);
-      return new Frame(patExp(pat), leaves, new ArrayList<>());
+      final Frame frame = new Frame(patExp(pat), leaves, new ArrayList<>());
+      frame.elements.put(node, frame.element);
+      return frame;
     }
     final Core.Join join = (Core.Join) node;
     final Frame left = collect(join.left);
@@ -600,8 +709,15 @@ public class RelExpander {
     if (!join.condition.isBoolLiteral(true)) {
       constraints.add(subst(join.condition, left.element, right.element));
     }
-    return new Frame(
-        subst(join.yieldExp, left.element, right.element), leaves, constraints);
+    final Frame frame =
+        new Frame(
+            subst(join.yieldExp, left.element, right.element),
+            leaves,
+            constraints);
+    frame.elements.putAll(left.elements);
+    frame.elements.putAll(right.elements);
+    frame.elements.put(node, frame.element);
+    return frame;
   }
 
   /** Returns the expression that a pattern's variables denote. */
