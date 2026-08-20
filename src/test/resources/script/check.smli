@@ -245,8 +245,9 @@ decr ~3;
 (* A claim on a composite type is a claim about its components, so each is
  * checked. The message names the component that failed and quotes it, rather
  * than the whole value. A tuple's components are numbered as its selectors
- * are, so 'component 2' is what '#2' selects. A list element has no index;
- * 'List.all', which walks the list, does not offer one. *)
+ * are, so 'component 2' is what '#2' selects. An element is written '[_]',
+ * a subscript with nothing known about which element it was; if a collection
+ * ever declares a key, that is where the key would go. *)
 type employee = {empno: nat, name: string};
 > type employee = {empno:nat, name:string}
 val e: employee = {empno = 1, name = "Fred"};
@@ -277,7 +278,7 @@ type nats = nat list;
 val ns: nats = [1, 2];
 > val ns = [1,2] : nats
 val ns2: nats = [1, ~2];
-> uncaught exception Constraint [~2 is not a valid nat: element]
+> uncaught exception Constraint [~2 is not a valid nat: [_]]
 >   raised at: stdIn:1.5-1.24
 
 (* Components are checked before the whole, so a type's own condition may
@@ -290,7 +291,7 @@ val q2: nonEmptyNats = [];
 > uncaught exception Constraint [[] is not a valid nonEmptyNats]
 >   raised at: stdIn:1.5-1.26
 val q3: nonEmptyNats = [~1];
-> uncaught exception Constraint [~1 is not a valid nat: element]
+> uncaught exception Constraint [~1 is not a valid nat: [_]]
 >   raised at: stdIn:1.5-1.28
 
 (*) A composite that constrains nothing is not checked at all.
@@ -351,7 +352,7 @@ val e3: employee = {e replace empno = ~1};
 > uncaught exception Constraint [~1 is not a valid nat]
 >   raised at: stdIn:1.1-1.11
 ([1, ~2] : nat list);
-> uncaught exception Constraint [~2 is not a valid nat: element]
+> uncaught exception Constraint [~2 is not a valid nat: [_]]
 >   raised at: stdIn:1.1-1.21
 val fm = fn () => (~1 : nat);
 > val fm = fn : unit -> int
@@ -440,13 +441,13 @@ val odd3: odd = 0;
 type odds = odd list;
 > type odds = odd list
 val os1: odds = [3, 5];
-> uncaught exception Constraint [5 is not a valid odd: element]
+> uncaught exception Constraint [5 is not a valid odd: [_]]
 >   raised at: stdIn:1.5-1.23
 val os2: odds = [3, 2];
-> uncaught exception Constraint [2 is not a valid odd: element]
+> uncaught exception Constraint [2 is not a valid odd: [_]]
 >   raised at: stdIn:1.5-1.23
 val os3: odds = [3, 0];
-> uncaught exception Constraint [cannot tell whether 0 is a valid odd: element; Div [divide by zero]]
+> uncaught exception Constraint [cannot tell whether 0 is a valid odd: [_]; Div [divide by zero]]
 >   raised at: stdIn:1.5-1.23
 
 (* 'asOpt' asks rather than claims, so a condition that is false is an answer;
@@ -622,7 +623,7 @@ val hrDup: hr = {hr0 replace emps = from e in hr0.emps
  * constraint is checked at the level that states it. *)
 val hrUnpaid: hr = {hr0 replace emps = from e in hr0.emps
   union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 0.0}]};
-> uncaught exception Constraint [0 is not a valid value: field emps.element.sal]
+> uncaught exception Constraint [0 is not a valid value: field emps[_].sal]
 >   raised at: stdIn:1.5-2.63
 
 (*) Raising someone above their manager breaks the table.
@@ -725,7 +726,7 @@ val hr2: hr2 = {
  * is called "value", and the blame path says which one. *)
 val hr2Unpaid: hr2 = {hr2 replace emps = from e in hr2.emps
   union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 0.0}]};
-> uncaught exception Constraint [0 is not a valid value: field emps.element.sal]
+> uncaught exception Constraint [0 is not a valid value: field emps[_].sal]
 >   raised at: stdIn:1.5-2.63
 
 val hr2Dup: hr2 = {hr2 replace emps = from e in hr2.emps

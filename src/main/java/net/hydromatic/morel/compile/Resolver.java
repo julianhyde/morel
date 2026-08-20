@@ -797,7 +797,7 @@ public class Resolver {
                   elementType,
                   erasedElementType,
                   core.id(idPat),
-                  append(blame, "element"),
+                  appendElement(blame),
                   raising,
                   pos));
       final Core.Fn predicate =
@@ -826,6 +826,17 @@ public class Resolver {
    */
   private static String fieldBlame(RecordLikeType recordType, String field) {
     return (recordType instanceof TupleType ? "component " : "field ") + field;
+  }
+
+  /**
+   * Appends a collection element to a blame path.
+   *
+   * <p>An element is written {@code [_]}, as a subscript with nothing known
+   * about which element it was. If a collection ever declares a key, that is
+   * where the key would go.
+   */
+  private static String appendElement(String blame) {
+    return blame + "[_]";
   }
 
   /** Appends a segment to a blame path. */
