@@ -1277,6 +1277,38 @@ it is worth noting that the divergence appeared only when an alias began to
 survive inference. Every operator that renders or reifies a type has to be
 checked against that.
 
+## Refining the environment (follow-up)
+
+`assert`, `assume`, `prove` and `where` all establish that something is true
+for the rest of a scope. Today nothing is learned from them.
+
+The important point is that **what is learned is not a type**. `assert x > y`
+says nothing about `x` alone or `y` alone; neither variable's type changes.
+What it adds is a predicate relating them, to an environment of predicates
+that holds over the scope. So this is not occurrence typing, where a test
+narrows one variable's type; it is a path condition, as in Liquid Types.
+
+The four differ in what they do with the predicate:
+
+* `assert p` -- check it at run time, and assume it afterwards.
+* `assume p` -- assume it without checking. Useful and unsound, so it should
+  be visible.
+* `prove p` -- discharge it statically, from what is already known.
+* `where p`, in a query -- assume it for the steps that follow, where it is
+  true by construction.
+
+This is the general form of something this plan already has in a degenerate
+form. Elision computes a **residual**: the part of a target's condition not
+discharged by what is already known, and an empty residual means no check.
+Today "what is already known" is only the value's own type, matched by textual
+equality. An environment of predicates is the same idea with a larger
+premise set, and would let `n as nat` be free after `assert n >= 0`, and let
+the planner use a `where` for more than filtering.
+
+It needs entailment, which this plan deliberately kept off the critical path.
+So it is opt-in and later, and no program that is accepted today would change
+-- only checks would be removed.
+
 ## Issues to log
 
 * **Record modifiers and conditions**, per the section above.
@@ -1297,6 +1329,9 @@ checked against that.
   `asOpt` and `e check m` derivable.
 * **`typeof e` erases, and `type t = typeof e` crashes**, per "Is there a
   complete algebra?" above.
+* **Refine the environment after `assert`, `assume`, `prove` and `where`**,
+  per the section above. Note that what is learned is a predicate, not a type:
+  `assert x > y` changes neither variable's type.
 * **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve`
   has no case for a type declaration. Unrelated to conditions.
 * **`local ... in ... end` is not implemented.** It is how Standard ML
@@ -1331,9 +1366,14 @@ checked against that.
 3. **Naming an anonymous constrained type in a message.** Folded into
    "Messages when a constraint fails" above, which collects this and the rest
    of what those messages need.
-4. **What `assert` returns.** Still open. #239 says the #242 operators "return
-   their operand, of the same type, but with additional constraints known to
-   the system", but #242 says "Both have type `bool`". This plan follows #242.
+4. ~~**What `assert` returns.**~~ **Resolved: `bool`**, as #242 says. The
+   disagreement dissolves rather than needing a winner. #239 asked for an
+   operator that returns its operand with the constraint attached, and that is
+   `e check m` -- see "Adding and removing conditions" -- so refinement is
+   delivered by an operator designed for it, and `assert` stays a `bool`,
+   which also lets it appear inside a `check` condition.
+
+   Refining the *environment* is a separate and larger idea, recorded below.
 5. **Two edits the issue needs.** It still requires the `check` match to be
    exhaustive, and its capture-semantics section is superseded by the closed
    condition above.
