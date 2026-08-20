@@ -1199,8 +1199,42 @@ checked again.
 
 `e check match` is the anonymous counterpart of `as`: `e as nat` converts to a
 named checked type and checks, and this does the same with the type written
-inline. Same precedence -- loose, left-associative -- and it must check, or
-the type would claim something that was never verified.
+inline. It must check, or the type would claim something that was never
+verified.
+
+**But `check` cannot be its spelling.** A condition is an expression, and a
+type may carry several conditions, so the two uses collide:
+
+```sml
+type batchSize = int check i => i >= 1 check j => j <= 12;
+```
+
+The type-level loop parses the first condition's body with the expression
+parser. If that parser also accepts `check`, it takes `check j => j <= 12` as
+a condition on `i >= 1`, and the second clause never reaches the type. Every
+multi-clause declaration breaks, which was confirmed by building it: the whole
+`hr` example failed with "conflict: int vs bool".
+
+Three ways out, none free:
+
+* **A different keyword for the expression form.** Cheapest and clearest.
+  Nothing else changes.
+* **A restricted expression inside a type-level condition**, so the body stops
+  at `check` unless parenthesized. Needs the expression grammar duplicated,
+  and re-entering the full grammar inside parentheses.
+* **Require the earlier conditions to be parenthesized** in a multi-clause
+  declaration. Breaks existing syntax, and the reading is not obvious.
+
+The type-level use is older, is what the `hr` example depends on, and reads
+better, so it should keep the keyword.
+
+An implementation note, since the rest of it worked: the base type need never
+be materialized. The condition is typed against the same unification variable
+as the expression, and the checked type is built afterwards, where the
+expression's type is known. What that does not give is a type that
+participates in inference -- `val a = e check m` displays as `int check ...`
+but a later reference to `a` is only `int` -- because the term language has no
+way to carry a condition.
 
 Two notes. It unlocks the annotation form as well: `val x: int check i => i <
 100 = e` is rejected today only because nothing compiles a condition outside a
