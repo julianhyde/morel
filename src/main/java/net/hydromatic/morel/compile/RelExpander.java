@@ -34,6 +34,8 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.type.TupleType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
@@ -58,6 +60,18 @@ public class RelExpander {
   private final TypeSystem typeSystem;
   private final Environment env;
   private int nextName;
+
+  /**
+   * Whether to name a leaf whose element is a tuple by one variable per
+   * component.
+   *
+   * <p>A step list is told which to do, because the user wrote a pattern:
+   * {@code from t : int * bool} names the element once, and {@code from (b, i)
+   * : bool * int} names each component, and the engine grounds accordingly -- a
+   * whole-tuple constraint for the first, a constraint per component for the
+   * second. A tree has erased the pattern, so it tries one and then the other.
+   */
+  private boolean destructure;
 
   /**
    * Conditions that a sealed generator subsumes, and that the filter they came
@@ -160,6 +174,16 @@ public class RelExpander {
    * in terms of the leaves by substituting the yields on the way down.
    */
   private Core.Exp expandJoinTree(Core.Join join, List<Core.Exp> conditions) {
+    try {
+      return expandJoinTree(join, conditions, false);
+    } catch (CompileException e) {
+      return expandJoinTree(join, conditions, true);
+    }
+  }
+
+  private Core.Exp expandJoinTree(
+      Core.Join join, List<Core.Exp> conditions, boolean destructure) {
+    this.destructure = destructure;
     final Frame frame = collect(join);
     final List<Core.Exp> constraints = new ArrayList<>(frame.constraints);
     final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
@@ -187,26 +211,27 @@ public class RelExpander {
     }
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     Expander.ground(cache, extents, strengthen(constraints, extents));
-    final Map<Core.Exp, Generator> generators = new IdentityHashMap<>();
     frame.leaves.forEach(
         (leaf, pat) -> {
           if (leaf.isExtent()) {
-            final Generator generator = cache.bestGenerator(pat);
-            if (generator != null) {
-              generators.put(leaf, generator);
-              if (generator.sealed) {
-                generator.provenance.forEach(
-                    constraint -> {
-                      final Core.Exp original = originals.get(constraint);
-                      if (original != null) {
-                        subsumed.add(original);
+            pat.expand()
+                .forEach(
+                    name -> {
+                      final Generator generator = cache.bestGenerator(name);
+                      if (generator != null && generator.sealed) {
+                        generator.provenance.forEach(
+                            constraint -> {
+                              final Core.Exp original =
+                                  originals.get(constraint);
+                              if (original != null) {
+                                subsumed.add(original);
+                              }
+                            });
                       }
                     });
-              }
-            }
           }
         });
-    return rebuild(join, frame, generators);
+    return rebuild(join, frame, cache);
   }
 
   /**
@@ -214,29 +239,27 @@ public class RelExpander {
    * bounds it. A leaf whose generator reads another leaf's element makes the
    * join a {@code projectMany}, whose lambda binds what it reads.
    */
-  private Core.Exp rebuild(
-      Core.Exp node, Frame frame, Map<Core.Exp, Generator> generators) {
+  private Core.Exp rebuild(Core.Exp node, Frame frame, Generators.Cache cache) {
     if (!(node instanceof Core.Join)) {
-      final Generator generator = generators.get(node);
-      if (generator == null) {
-        if (node.isExtent()) {
-          throw new CompileException(
-              "pattern is not grounded", false, node.pos);
-        }
+      if (!node.isExtent()) {
         return node instanceof Core.Rel
             ? expand(node, ImmutableList.of())
             : node;
       }
       // A leaf that `collect` reached, so `leaves` has a pattern for it.
-      return project(
-          generator, requireNonNull(frame.leaves.get(node)), node.pos);
+      return bounded(node, requireNonNull(frame.leaves.get(node)), cache);
     }
     final Core.Join join = (Core.Join) node;
     final Core.Exp right = join.right;
-    final Generator rightGenerator = generators.get(right);
+    final @Nullable Generator rightGenerator =
+        right.isExtent()
+            ? generator(requireNonNull(frame.leaves.get(right)), cache)
+            : null;
     if (rightGenerator != null && !free(rightGenerator).isEmpty()) {
       // Correlated: the right side reads a name that the left side binds.
-      final Core.IdPat param = frame.leaves.get(join.left);
+      final Core.Pat leftPat = frame.leaves.get(join.left);
+      final Core.@Nullable NamedPat param =
+          leftPat instanceof Core.NamedPat ? (Core.NamedPat) leftPat : null;
       if (param == null
           || !free(rightGenerator).stream().allMatch(param::equals)) {
         throw new CompileException("pattern is not grounded", false, right.pos);
@@ -250,15 +273,77 @@ public class RelExpander {
                   core.id(param),
                   core.input0(rightGenerator.exp.type.elementType())));
       return core.projectMany(
-          typeSystem, rebuild(join.left, frame, generators), param, body);
+          typeSystem,
+          rebuild(join.left, frame, cache),
+          (Core.IdPat) param,
+          body);
     }
     return join.copy(
         typeSystem,
         join.joinType,
-        rebuild(join.left, frame, generators),
-        rebuild(right, frame, generators),
+        rebuild(join.left, frame, cache),
+        rebuild(right, frame, cache),
         join.condition,
         join.yieldExp);
+  }
+
+  /** Returns the generator of a leaf named by a single variable, or null. */
+  private @Nullable Generator generator(Core.Pat pat, Generators.Cache cache) {
+    return pat instanceof Core.NamedPat
+        ? cache.bestGenerator((Core.NamedPat) pat)
+        : null;
+  }
+
+  /**
+   * Returns the collection that bounds a leaf.
+   *
+   * <p>A leaf named by a tuple of variables has a generator per component, each
+   * bounded by a different constraint, so what bounds the leaf is their product
+   * -- which is what the step list writes as several scans.
+   */
+  private Core.Exp bounded(
+      Core.Exp leaf, Core.Pat pat, Generators.Cache cache) {
+    final List<Core.NamedPat> names = pat.expand();
+    if (names.size() == 1) {
+      final @Nullable Generator generator = cache.bestGenerator(names.get(0));
+      if (generator == null) {
+        throw new CompileException("pattern is not grounded", false, leaf.pos);
+      }
+      return project(generator, names.get(0), leaf.pos);
+    }
+    Core.@Nullable Exp product = null;
+    List<Core.Exp> access = new ArrayList<>();
+    for (Core.NamedPat name : names) {
+      final @Nullable Generator generator = cache.bestGenerator(name);
+      if (generator == null || !free(generator).isEmpty()) {
+        // Either nothing bounds this component, or something that another
+        // component binds does, which would need the product to be a
+        // dependent join.
+        throw new CompileException("pattern is not grounded", false, leaf.pos);
+      }
+      final Core.Exp component = project(generator, name, leaf.pos);
+      if (product == null) {
+        product = component;
+        access = new ArrayList<>();
+        access.add(core.input0(component.type.elementType()));
+        continue;
+      }
+      final List<Core.Exp> args = new ArrayList<>(access);
+      args.add(core.input1(component.type.elementType()));
+      product =
+          core.join(
+              typeSystem,
+              product,
+              component,
+              core.boolLiteral(true),
+              core.tuple(typeSystem, args.toArray(new Core.Exp[0])));
+      final Core.Exp element = core.input0(product.type.elementType());
+      access = new ArrayList<>();
+      for (int i = 0; i < args.size(); i++) {
+        access.add(core.field(typeSystem, element, i));
+      }
+    }
+    return requireNonNull(product, "product");
   }
 
   /**
@@ -285,7 +370,7 @@ public class RelExpander {
   }
 
   /** Projects a generator's collection down to one leaf's element. */
-  private Core.Exp project(Generator generator, Core.IdPat pat, Pos pos) {
+  private Core.Exp project(Generator generator, Core.NamedPat pat, Pos pos) {
     if (generator.cardinality == Generator.Cardinality.INFINITE) {
       throw new CompileException("pattern is not grounded", false, pos);
     }
@@ -302,17 +387,17 @@ public class RelExpander {
 
   /**
    * What a join tree looks like from above: the expression that denotes its
-   * element in terms of a name per leaf, a name for each leaf, and the
-   * conditions that its own joins impose.
+   * element in terms of a name per leaf, the pattern that names each leaf, and
+   * the conditions that its own joins impose.
    */
   private static class Frame {
     final Core.Exp element;
-    final Map<Core.Exp, Core.IdPat> leaves;
+    final Map<Core.Exp, Core.Pat> leaves;
     final List<Core.Exp> constraints;
 
     Frame(
         Core.Exp element,
-        Map<Core.Exp, Core.IdPat> leaves,
+        Map<Core.Exp, Core.Pat> leaves,
         List<Core.Exp> constraints) {
       this.element = element;
       this.leaves = leaves;
@@ -321,141 +406,58 @@ public class RelExpander {
   }
 
   /**
-   * Names the leaves of a join tree and works out what its element is in terms
-   * of those names.
-   */
-  private Frame collect(Core.Exp node) {
-    if (!(node instanceof Core.Join)) {
-      final Core.IdPat pat = elementPat(node);
-      final Map<Core.Exp, Core.IdPat> leaves = new IdentityHashMap<>();
-      leaves.put(node, pat);
-      return new Frame(core.id(pat), leaves, new ArrayList<>());
-    }
-    final Core.Join join = (Core.Join) node;
-    final Frame left = collect(join.left);
-    final Frame right = collect(join.right);
-    final Map<Core.Exp, Core.IdPat> leaves = new IdentityHashMap<>(left.leaves);
-    leaves.putAll(right.leaves);
-    final List<Core.Exp> constraints = new ArrayList<>(left.constraints);
-    constraints.addAll(right.constraints);
-    if (!join.condition.isBoolLiteral(true)) {
-      constraints.add(subst(join.condition, left.element, right.element));
-    }
-    return new Frame(
-        subst(join.yieldExp, left.element, right.element), leaves, constraints);
-  }
-
-  /**
-   * Bounds the right input of a join, where what bounds it reads the left
-   * element, by turning the join into a {@code projectMany}.
-   *
-   * <p>{@code from x in [1, 2], y where y elem [x, x + 1]} is a join of {@code
-   * [1, 2]} and the extent of {@code int}; the extent is bounded by {@code [x,
-   * x + 1]}, which reads the left element, so the right input cannot simply be
-   * replaced -- it becomes the body of a lambda over the left element, which is
-   * what a {@code projectMany} is.
-   *
-   * <p>Returns null if this does not apply, leaving the join to be expanded
-   * side by side.
-   */
-  private Core.@Nullable Exp correlate(
-      Core.Join join, List<Core.Exp> conditions) {
-    if (join.joinType != Core.Rel.JoinType.INNER
-        || conditions.isEmpty()
-        || join.right instanceof Core.Rel
-        || !join.right.isExtent()) {
-      return null;
-    }
-    final Core.IdPat leftPat = elementPat(join.left);
-    final Core.IdPat rightPat = elementPat(join.right);
-    // A condition above the join describes the joined element, which the
-    // yield builds from the two; naming both turns it into a constraint the
-    // engine can read.
-    final Core.Exp element =
-        subst(join.yieldExp, core.id(leftPat), core.id(rightPat));
-    final List<Core.Exp> pushed = new ArrayList<>();
-    conditions.forEach(condition -> pushed.add(subst(condition, element)));
-    final Generator generator =
-        ground(join.right, pushed, rightPat, conditions);
-    if (generator == null
-        || generator.cardinality == Generator.Cardinality.INFINITE
-        || !containsOnly(free(generator), leftPat)) {
-      return null;
-    }
-    // The body yields what the join yielded, with the left element named by
-    // the lambda's parameter and the right element the body's own.
-    final Core.Exp body =
-        core.project(
-            typeSystem,
-            generator.exp,
-            subst(
-                join.yieldExp,
-                core.id(leftPat),
-                core.input0(generator.exp.type.elementType())));
-    return core.projectMany(
-        typeSystem, expand(join.left, ImmutableList.of()), leftPat, body);
-  }
-
-  /**
-   * Returns the names a generator reads that something else must bind.
-   *
-   * <p>{@code Generator.freePats} counts every name the expression mentions,
-   * including constructors such as {@code OPEN} and globals; the environment
-   * binds those already, and only the rest make a generator depend on another
-   * leaf.
-   */
-  private List<Core.NamedPat> free(Generator generator) {
-    final List<Core.NamedPat> free = new ArrayList<>();
-    generator.freePats.forEach(
-        pat -> {
-          if (env.getOpt(pat) == null) {
-            free.add(pat);
-          }
-        });
-    return free;
-  }
-
-  private static boolean containsOnly(
-      List<Core.NamedPat> freePats, Core.NamedPat pat) {
-    return freePats.stream().allMatch(pat::equals);
-  }
-
-  /**
-   * Returns the collection that bounds an infinite-extent leaf.
-   *
-   * <p>If the generator binds a pattern other than the element itself -- it
-   * bounds a tuple of which the element is one component -- the collection is
-   * projected down to the element.
+   * Returns the collection that bounds a leaf that stands alone rather than
+   * under a join.
    */
   private Core.Exp bound(Core.Exp leaf, List<Core.Exp> conditions) {
-    final Core.IdPat pat = elementPat(leaf);
-    final Generator generator = ground(leaf, conditions, pat);
-    if (generator == null
-        || generator.cardinality == Generator.Cardinality.INFINITE) {
-      // The step list names the pattern here -- "pattern 'b' is not
-      // grounded" -- and the tree has erased the name. The position has not
-      // been erased, and points at what the user wrote, so the message says
-      // the same thing without the name. See discussion.md section 11.
-      throw new CompileException("pattern is not grounded", false, leaf.pos);
+    try {
+      return bound(leaf, conditions, false);
+    } catch (CompileException e) {
+      return bound(leaf, conditions, true);
     }
-    if (!free(generator).isEmpty()) {
-      // A generator that reads other variables needs them bound first, which
-      // is a dependent scan; not yet.
-      throw new CompileException(
-          "pattern is not grounded until " + free(generator) + " is bound",
-          false,
-          leaf.pos);
-    }
-    if (generator.exp.type.elementType().equals(leaf.type.elementType())
-        && generator.pat instanceof Core.IdPat) {
-      return generator.exp;
-    }
-    final Core.Exp element =
-        path(generator.pat, core.input0(generator.exp.type.elementType()), pat);
-    if (element == null) {
-      throw new CompileException("pattern is not grounded", false, leaf.pos);
-    }
-    return core.project(typeSystem, generator.exp, element);
+  }
+
+  private Core.Exp bound(
+      Core.Exp leaf, List<Core.Exp> conditions, boolean destructure) {
+    this.destructure = destructure;
+    final Core.Pat pat = elementPat(leaf);
+    final Core.Exp element = patExp(pat);
+    final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
+    final List<Core.Exp> constraints = new ArrayList<>();
+    conditions.forEach(
+        condition -> {
+          final Core.Exp constraint = subst(condition, element);
+          originals.put(constraint, condition);
+          constraints.add(constraint);
+        });
+    final PairList<Core.Pat, Core.Exp> extents = PairList.of();
+    extents.add(pat, leaf);
+    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
+    Expander.ground(cache, extents, strengthen(constraints, extents));
+    recordSubsumed(pat, cache, originals);
+    return bounded(leaf, pat, cache);
+  }
+
+  /**
+   * Remembers the conditions that a sealed generator enforces, so that the
+   * filter they came from can drop them.
+   */
+  private void recordSubsumed(
+      Core.Pat pat, Generators.Cache cache, Map<Core.Exp, Core.Exp> originals) {
+    pat.expand()
+        .forEach(
+            name -> {
+              final @Nullable Generator generator = cache.bestGenerator(name);
+              if (generator != null && generator.sealed) {
+                generator.provenance.forEach(
+                    constraint -> {
+                      final Core.Exp original = originals.get(constraint);
+                      if (original != null) {
+                        subsumed.add(original);
+                      }
+                    });
+              }
+            });
   }
 
   /**
@@ -533,69 +535,94 @@ public class RelExpander {
   }
 
   /**
-   * Grounds one leaf: names its element, rewrites the conditions in terms of
-   * that name, and asks the engine.
+   * Grounds one leaf and returns the generator of its first name, for the
+   * diagnostic walk.
    */
   private @Nullable Generator ground(Core.Exp leaf, List<Core.Exp> conditions) {
-    return ground(leaf, conditions, elementPat(leaf));
-  }
-
-  /** Creates the name that the engine keys on for a leaf's element. */
-  private Core.IdPat elementPat(Core.Exp leaf) {
-    return core.idPat(leaf.type.elementType(), "g$" + nextName++, 0);
-  }
-
-  private @Nullable Generator ground(
-      Core.Exp leaf, List<Core.Exp> conditions, Core.IdPat pat) {
-    // The engine sees the conditions with the element named, so remember
-    // which condition each one came from, to know what a generator subsumes.
-    final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
+    final Core.Pat pat = elementPat(leaf);
+    final Core.Exp element = patExp(pat);
     final List<Core.Exp> constraints = new ArrayList<>();
-    conditions.forEach(
-        condition -> {
-          final Core.Exp constraint = subst(condition, core.id(pat));
-          originals.put(constraint, condition);
-          constraints.add(constraint);
-        });
-    return ground(leaf, pat, constraints, originals);
+    conditions.forEach(condition -> constraints.add(subst(condition, element)));
+    final PairList<Core.Pat, Core.Exp> extents = PairList.of();
+    extents.add(pat, leaf);
+    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
+    Expander.ground(cache, extents, strengthen(constraints, extents));
+    return cache.bestGenerator(pat.expand().get(0));
   }
 
   /**
-   * Grounds a leaf against constraints that are already in terms of the
-   * element's name, recording what a sealed generator subsumes against the
-   * conditions those constraints came from.
+   * Creates the pattern that the engine keys on for a leaf's element.
+   *
+   * <p>A leaf whose element is a tuple is named by a tuple of variables, one
+   * per component, because that is how a step list names it -- {@code from (b,
+   * i) : bool * int} -- and it is what lets the engine ground the components
+   * separately, from a different constraint each.
    */
-  private @Nullable Generator ground(
-      Core.Exp leaf,
-      List<Core.Exp> constraints,
-      Core.IdPat pat,
-      List<Core.Exp> originalConditions) {
-    final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
-    for (int i = 0; i < constraints.size(); i++) {
-      originals.put(constraints.get(i), originalConditions.get(i));
-    }
-    return ground(leaf, pat, constraints, originals);
+  private Core.Pat elementPat(Core.Exp leaf) {
+    return pat(leaf.type.elementType());
   }
 
-  private @Nullable Generator ground(
-      Core.Exp leaf,
-      Core.IdPat pat,
-      List<Core.Exp> constraints,
-      Map<Core.Exp, Core.Exp> originals) {
-    final PairList<Core.Pat, Core.Exp> extents = PairList.of(pat, leaf);
-    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
-    Expander.ground(cache, extents, strengthen(constraints, extents));
-    final Generator generator = cache.bestGenerator(pat);
-    if (generator != null && generator.sealed) {
-      generator.provenance.forEach(
-          constraint -> {
-            final Core.Exp original = originals.get(constraint);
-            if (original != null) {
-              subsumed.add(original);
-            }
-          });
+  private Core.Pat pat(Type type) {
+    if (destructure && type instanceof TupleType) {
+      final List<Core.Pat> args = new ArrayList<>();
+      ((TupleType) type).argTypes.forEach(argType -> args.add(pat(argType)));
+      return core.tuplePat(typeSystem, args);
     }
-    return generator;
+    return core.idPat(type, "g$" + nextName++, 0);
+  }
+
+  /**
+   * Names the leaves of a join tree and works out what its element is in terms
+   * of those names.
+   */
+  private Frame collect(Core.Exp node) {
+    if (!(node instanceof Core.Join)) {
+      final Core.Pat pat = elementPat(node);
+      final Map<Core.Exp, Core.Pat> leaves = new IdentityHashMap<>();
+      leaves.put(node, pat);
+      return new Frame(patExp(pat), leaves, new ArrayList<>());
+    }
+    final Core.Join join = (Core.Join) node;
+    final Frame left = collect(join.left);
+    final Frame right = collect(join.right);
+    final Map<Core.Exp, Core.Pat> leaves = new IdentityHashMap<>(left.leaves);
+    leaves.putAll(right.leaves);
+    final List<Core.Exp> constraints = new ArrayList<>(left.constraints);
+    constraints.addAll(right.constraints);
+    if (!join.condition.isBoolLiteral(true)) {
+      constraints.add(subst(join.condition, left.element, right.element));
+    }
+    return new Frame(
+        subst(join.yieldExp, left.element, right.element), leaves, constraints);
+  }
+
+  /** Returns the expression that a pattern's variables denote. */
+  private Core.Exp patExp(Core.Pat pat) {
+    if (pat instanceof Core.TuplePat) {
+      final List<Core.Exp> args = new ArrayList<>();
+      ((Core.TuplePat) pat).args.forEach(arg -> args.add(patExp(arg)));
+      return core.tuple(typeSystem, args.toArray(new Core.Exp[0]));
+    }
+    return core.id((Core.NamedPat) pat);
+  }
+
+  /**
+   * Returns the names a generator reads that something else must bind.
+   *
+   * <p>{@code Generator.freePats} counts every name the expression mentions,
+   * including constructors such as {@code OPEN} and globals; the environment
+   * binds those already, and only the rest make a generator depend on another
+   * leaf.
+   */
+  private List<Core.NamedPat> free(Generator generator) {
+    final List<Core.NamedPat> free = new ArrayList<>();
+    generator.freePats.forEach(
+        pat -> {
+          if (env.getOpt(pat) == null) {
+            free.add(pat);
+          }
+        });
+    return free;
   }
 
   /**

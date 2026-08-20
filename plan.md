@@ -177,9 +177,24 @@ something settled — §8's principle, applied to the sequence itself.
         step list registers the pattern, so the engine grounds `b`
         and `i` separately, one from the `bool` extent and one from
         the `elem`; the tree names the leaf's element once, so the
-        engine is asked to bound a tuple. The fix is to name a leaf
-        by pattern rather than by variable where its element is a
-        tuple, which is what the scan's pattern was doing all along.
+        engine is asked to bound a tuple.
+
+        Naming a leaf by pattern, and trying that when naming it by
+        variable fails, is written and is needed — but it does not
+        move the number, because of what sits between the filter and
+        the leaf. `from (b, i) : bool * int where p` translates to a
+        filter over a *projection* over the leaf: the query's element
+        is the record `{b, i}` that the bindings describe, and the
+        leaf's is the tuple, so the translation normalizes between
+        them. Conditions stop at a projection, for parity, so they
+        never reach the leaf and the leaf is grounded against nothing.
+
+        Pushing a condition through a projection — substituting the
+        projection into it — would fix this, and would also ground
+        `from x yield {y = x} where y elem [2, 3]`, which errors
+        today. So it is not parity: it grounds strictly more than the
+        step list, and queries that error would start working. That
+        is a decision about the language, not about this port.
 
         The conditions a
         sealed
