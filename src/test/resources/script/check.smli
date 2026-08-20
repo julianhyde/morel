@@ -739,6 +739,47 @@ val hr2DupDept: hr2 = {hr2 replace depts = from d in hr2.depts
 > uncaught exception Constraint [[{deptno=10,dname="Sales"},{deptno=20,dname="Research"},{deptno=10,dname="Field"}] is not a valid value: field depts]
 >   raised at: stdIn:1.5-2.42
 
+(* --- A condition on an expression ------------------------------- *)
+
+(* 'e check m' adds a condition to the type deduced for e: the counterpart of
+ * 'as' for a type that is not named. It checks, and the binding carries the
+ * type. *)
+val y = 1;
+> val y = 1 : int
+val small = y + 1 check i => i < 100;
+> val small = 2 : int check i => i < 100
+val big = y + 1 check i => i < 2;
+> uncaught exception Constraint [2 is not a valid value]
+>   raised at: stdIn:1.11-1.33
+val nonEmpty = "ab" check s => String.size s > 1;
+> val nonEmpty = "ab" : string check s => #size String s > 1
+
+(* A match ends where a 'check' begins, which is what lets a type carry
+ * several conditions: the first condition here ends at the second 'check'
+ * rather than swallowing it. *)
+type twice = int check i => i >= 1 check j => j <= 12;
+> type twice = int check i => i >= 1 check j => j <= 12
+val six: twice = 6;
+> val six = 6 : twice
+val thirteen: twice = 13;
+> uncaught exception Constraint [13 is not a valid twice]
+>   raised at: stdIn:1.5-1.25
+
+(* The same rule means an expression-level condition inside a match must be
+ * parenthesized, since otherwise the match would have ended. *)
+val guarded = (fn i => (i check j => j > 0)) 3;
+> val guarded = 3 : int
+val guardedBad = (fn i => (i check j => j > 0)) ~3;
+> uncaught exception Constraint [~3 is not a valid value]
+>   raised at: stdIn:1.27-1.47
+
+(* A condition on an expression may itself be followed by another. Both are
+ * checked, but only the outer one is displayed: a checked type built this way
+ * does not take part in inference, so the inner one is not in the type the
+ * outer one is added to. *)
+val twiceChecked = y + 1 check i => i > 0 check i => i < 100;
+> val twiceChecked = 2 : int check i => i < 100
+
 (* --- Constraints on types that are not named -------------------- *)
 
 (* A type may carry a condition wherever it is written, not only where it is

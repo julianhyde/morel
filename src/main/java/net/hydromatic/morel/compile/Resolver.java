@@ -70,6 +70,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
+import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.QualifiedType;
@@ -1446,6 +1447,27 @@ public class Resolver {
         return annotatedType == null
             ? annotatedCore
             : checked(annotatedCore, annotatedType, exp.pos);
+
+      case CHECK_EXP:
+        // The type is not written anywhere, so build it here, where the
+        // expression's type is known: the base is what was deduced, and the
+        // conditions are the ones written.
+        final Ast.CheckExp checkExp = (Ast.CheckExp) exp;
+        final Core.Exp checkCore = toCore(checkExp.exp);
+        final Type checkType =
+            Keys.alias(
+                    "",
+                    checkCore.type.key(),
+                    ImmutableList.of(),
+                    checkExp.checks)
+                .toType(typeMap.typeSystem);
+        if (typeMap.typeSystem.checkPredicates(checkType).isEmpty()) {
+          final List<Core.Exp> predicates =
+              transformEager(checkExp.checks, f -> total(toCore(f)));
+          typeMap.typeSystem.setCheckPredicates(checkType, predicates);
+          predicates.forEach(p -> checkClosed(null, checkExp.pos, p));
+        }
+        return checked(checkCore, checkType, exp.pos);
 
       case AS:
         final Ast.Cast cast = (Ast.Cast) exp;

@@ -291,6 +291,10 @@ public class Shuttle {
     return constrainedType;
   }
 
+  protected Ast.Exp visit(Ast.CheckExp checkExp) {
+    return checkExp.copy(checkExp.exp.accept(this));
+  }
+
   protected Ast.TyVar visit(Ast.TyVar tyVar) {
     return tyVar; // leaf
   }

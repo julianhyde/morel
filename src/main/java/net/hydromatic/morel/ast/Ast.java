@@ -876,6 +876,58 @@ public class Ast {
   }
 
   /**
+   * Parse tree node of an expression with a condition, "{@code e check i => i >
+   * 0}".
+   *
+   * <p>It is the counterpart of {@code as} for a type that is not named: {@code
+   * e as nat} converts to a named checked type, and this converts to one
+   * written inline, whose base is the type deduced for {@code e}.
+   */
+  public static class CheckExp extends Exp {
+    public final Exp exp;
+    public final List<Fn> checks;
+
+    CheckExp(Pos pos, Exp exp, ImmutableList<Fn> checks) {
+      super(pos, Op.CHECK_EXP);
+      this.exp = requireNonNull(exp);
+      this.checks = requireNonNull(checks);
+      checkArgument(!checks.isEmpty());
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(exp, left, op.left);
+      for (Fn check : checks) {
+        w.append(" check ").appendAll(check.matchList, 0, Op.BAR, 0);
+      }
+      return w;
+    }
+
+    @Override
+    public Exp withPos(Pos pos) {
+      return pos.equals(this.pos)
+          ? this
+          : new CheckExp(pos, exp, ImmutableList.copyOf(checks));
+    }
+
+    /** Creates a copy of this {@code CheckExp} with a given expression. */
+    public CheckExp copy(Exp exp) {
+      return exp.equals(this.exp)
+          ? this
+          : new CheckExp(pos, exp, ImmutableList.copyOf(checks));
+    }
+
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+  }
+
+  /**
    * Parse tree node of a type with a constraint, e.g. "{@code real check s => s
    * > 0.0}".
    *
