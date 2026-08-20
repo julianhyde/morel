@@ -738,7 +738,19 @@ public class Expander {
       Core.Pat pat,
       Core.Exp extentExp,
       List<Core.Exp> constraints) {
-    Generators.maybeExtent(cache, pat, extentExp);
+    return ground(cache, PairList.of(pat, extentExp), constraints);
+  }
+
+  /**
+   * Grounds several patterns at once, as a step list does: every extent is
+   * registered before any constraint is applied, so that a constraint tying two
+   * variables together can generate for both.
+   */
+  static Generators.Cache ground(
+      Generators.Cache cache,
+      PairList<Core.Pat, Core.Exp> extents,
+      List<Core.Exp> constraints) {
+    extents.forEach((pat, exp) -> Generators.maybeExtent(cache, pat, exp));
     Expander expander = new Expander(cache, ImmutableList.of());
     for (Core.Exp constraint : constraints) {
       expander = expander.plusConstraint(constraint);
