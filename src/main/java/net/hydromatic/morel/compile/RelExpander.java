@@ -127,13 +127,16 @@ public class RelExpander {
       return filter.copy(input, core.andAlso(typeSystem, remaining));
     }
     if (exp instanceof Core.Project) {
-      // A projection changes what $0 means. A condition above it could be
-      // pushed through by substitution, but the step list does not do that
-      // either -- `from x yield {y = x} where y elem [2, 3]` is not grounded
-      // today -- so the conditions stop here, for parity.
+      // A projection changes what $0 means, and substituting the projection
+      // into a condition says the same thing about the element below it. The
+      // step list cannot do this -- it has no expression to substitute, only
+      // steps -- so a tree grounds strictly more; see discussion.md §12.
       final Core.Project project = (Core.Project) exp;
+      final List<Core.Exp> pushed = new ArrayList<>();
+      conditions.forEach(
+          condition -> pushed.add(subst(condition, project.exp)));
       return project.copy(
-          typeSystem, expand(project.input, ImmutableList.of()), project.exp);
+          typeSystem, expand(project.input, pushed), project.exp);
     }
     // A step that neither changes the element nor drops rows by position
     // passes the conditions down. The step list does the same, by ignoring
@@ -516,6 +519,14 @@ public class RelExpander {
       final List<Core.Exp> conditions2 = new ArrayList<>(conditions);
       conditions2.addAll(core.decomposeAnd(filter.condition));
       ground(filter.input, conditions2, generators);
+      return;
+    }
+    if (exp instanceof Core.Project) {
+      final Core.Project project = (Core.Project) exp;
+      final List<Core.Exp> pushed = new ArrayList<>();
+      conditions.forEach(
+          condition -> pushed.add(subst(condition, project.exp)));
+      ground(project.input, pushed, generators);
       return;
     }
     if (exp instanceof Core.Sort

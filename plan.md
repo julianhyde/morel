@@ -189,12 +189,23 @@ something settled — §8's principle, applied to the sequence itself.
         them. Conditions stop at a projection, for parity, so they
         never reach the leaf and the leaf is grounded against nothing.
 
-        Pushing a condition through a projection — substituting the
-        projection into it — would fix this, and would also ground
-        `from x yield {y = x} where y elem [2, 3]`, which errors
-        today. So it is not parity: it grounds strictly more than the
-        step list, and queries that error would start working. That
-        is a decision about the language, not about this port.
+        Conditions are now pushed through a projection, by
+        substituting the projection into them (discussion.md §12).
+        The tree therefore grounds strictly more than the step list —
+        `from x yield {y = x} where y elem [2, 3]` errors today and
+        grounds in a tree — which is deliberate, and which the script
+        expectations record at the flip.
+
+        Agreement is 247 of 300. The 53 that remain are one shape: a
+        constraint that ties *several leaves* together, as in `from
+        dno : int join name : string where {deptno = dno, dname =
+        name, loc = "CHICAGO"} elem depts`. A step list makes those
+        one scan, because the user wrote one pattern; a tree has a
+        leaf each, and replacing them separately would enumerate
+        `depts` twice and pair every dno with every name. Doing it
+        properly means collapsing the leaves the generator binds
+        together into a single scan and removing the join between
+        them. Until then the front end declines, which is safe.
 
         The conditions a
         sealed
