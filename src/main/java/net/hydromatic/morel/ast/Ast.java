@@ -876,6 +876,79 @@ public class Ast {
   }
 
   /**
+   * Parse tree node of an expression with a condition, "{@code e check i => i >
+   * 0}".
+   *
+   * <p>It is the counterpart of {@code as} for a type that is not named: {@code
+   * e as nat} converts to a named checked type, and this converts to one
+   * written inline, whose base is the type deduced for {@code e}.
+   */
+  public static class CheckExp extends Exp {
+    public final Exp exp;
+    public final List<Fn> checks;
+
+    CheckExp(Pos pos, Exp exp, ImmutableList<Fn> checks) {
+      super(pos, Op.CHECK_EXP);
+      this.exp = requireNonNull(exp);
+      this.checks = requireNonNull(checks);
+      checkArgument(!checks.isEmpty());
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(exp, left, op.left);
+      for (Fn check : checks) {
+        w.append(" check ").appendAll(check.matchList, 0, Op.BAR, 0);
+      }
+      return w;
+    }
+
+    @Override
+    public Exp withPos(Pos pos) {
+      return pos.equals(this.pos)
+          ? this
+          : new CheckExp(pos, exp, ImmutableList.copyOf(checks));
+    }
+
+    @Override
+    public int hashCode() {
+      return hash(exp, checks);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o == this
+          || o instanceof CheckExp
+              && exp.equals(((CheckExp) o).exp)
+              && checks.equals(((CheckExp) o).checks);
+    }
+
+    /** Creates a copy of this {@code CheckExp} with a given expression. */
+    public CheckExp copy(Exp exp) {
+      return copy(exp, checks);
+    }
+
+    /**
+     * Creates a copy of this {@code CheckExp} with a given expression and
+     * conditions.
+     */
+    public CheckExp copy(Exp exp, List<Fn> checks) {
+      return exp.equals(this.exp) && checks.equals(this.checks)
+          ? this
+          : new CheckExp(pos, exp, ImmutableList.copyOf(checks));
+    }
+
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+  }
+
+  /**
    * Parse tree node of a type with a constraint, e.g. "{@code real check s => s
    * > 0.0}".
    *
@@ -905,6 +978,16 @@ public class Ast {
           || o instanceof ConstrainedType
               && type.equals(((ConstrainedType) o).type)
               && checks.equals(((ConstrainedType) o).checks);
+    }
+
+    /**
+     * Creates a copy of this {@code ConstrainedType} with a given base type and
+     * conditions.
+     */
+    public ConstrainedType copy(Type type, List<Fn> checks) {
+      return type.equals(this.type) && checks.equals(this.checks)
+          ? this
+          : new ConstrainedType(pos, type, ImmutableList.copyOf(checks));
     }
 
     @Override
