@@ -1022,6 +1022,20 @@ Such a type is keyed by its body and its conditions, so two written the same
 way are the same type, and it is called "value" in a message, having no name
 to give.
 
+The `hr` example in `check.smli` is written three ways, and the messages are
+what tells them apart:
+
+| form | message when a salary is not positive |
+| ---- | ---- |
+| a named type per level | `0 is not a valid value: field emps.element.sal` |
+| one type, conditions at the top | `{depts=[...],emps=[...]} is not a valid hr1` |
+| one type, conditions pushed down | `0 is not a valid value: field emps.element.sal` |
+
+So precision comes from *where the condition is written*, not from naming the
+levels. Naming buys only the name: a type that is not named is called "value",
+and the blame path says which one. That is what the "name the constraint"
+requirement above is for.
+
 Two limits remain:
 
 * A condition is compiled where its type is declared, so one written anywhere
