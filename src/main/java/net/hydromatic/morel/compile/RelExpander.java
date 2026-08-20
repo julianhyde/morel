@@ -25,13 +25,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.PairList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -138,11 +141,41 @@ public class RelExpander {
       return take.copy(expand(take.input, conditions), take.count);
     }
     if (exp instanceof Core.Join) {
-      final Core.Join join = (Core.Join) exp;
-      final Core.@Nullable Exp correlated = correlate(join, conditions);
-      if (correlated != null) {
-        return correlated;
-      }
+      return expandJoinTree((Core.Join) exp, conditions);
+    }
+    // A node whose element does not come from a leaf below it in a way this
+    // pass understands: leave its inputs alone.
+    return exp;
+  }
+
+  /**
+   * Grounds every extent leaf of a join tree at once.
+   *
+   * <p>A step list grounds all of a query's patterns together, because a
+   * constraint can tie two of them to each other: {@code from x, y where (x, y)
+   * elem pairs} generates for both from one constraint. A tree says the same
+   * thing with a join, so the leaves of a join tree are grounded together too.
+   * The conditions above the tree describe the joined element, so they are read
+   * in terms of the leaves by substituting the yields on the way down.
+   */
+  private Core.Exp expandJoinTree(Core.Join join, List<Core.Exp> conditions) {
+    final Frame frame = collect(join);
+    final List<Core.Exp> constraints = new ArrayList<>(frame.constraints);
+    final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
+    conditions.forEach(
+        condition -> {
+          final Core.Exp constraint = subst(condition, frame.element);
+          originals.put(constraint, condition);
+          constraints.add(constraint);
+        });
+    final PairList<Core.Pat, Core.Exp> extents = PairList.of();
+    frame.leaves.forEach(
+        (leaf, pat) -> {
+          if (leaf.isExtent()) {
+            extents.add(pat, leaf);
+          }
+        });
+    if (extents.isEmpty()) {
       return join.copy(
           typeSystem,
           join.joinType,
@@ -151,9 +184,162 @@ public class RelExpander {
           join.condition,
           join.yieldExp);
     }
-    // A node whose element does not come from a leaf below it in a way this
-    // pass understands: leave its inputs alone.
-    return exp;
+    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
+    Expander.ground(cache, extents, strengthen(constraints, extents));
+    final Map<Core.Exp, Generator> generators = new IdentityHashMap<>();
+    frame.leaves.forEach(
+        (leaf, pat) -> {
+          if (leaf.isExtent()) {
+            final Generator generator = cache.bestGenerator(pat);
+            if (generator != null) {
+              generators.put(leaf, generator);
+              if (generator.sealed) {
+                generator.provenance.forEach(
+                    constraint -> {
+                      final Core.Exp original = originals.get(constraint);
+                      if (original != null) {
+                        subsumed.add(original);
+                      }
+                    });
+              }
+            }
+          }
+        });
+    return rebuild(join, frame, generators);
+  }
+
+  /**
+   * Rebuilds a join tree with each extent leaf replaced by the collection that
+   * bounds it. A leaf whose generator reads another leaf's element makes the
+   * join a {@code projectMany}, whose lambda binds what it reads.
+   */
+  private Core.Exp rebuild(
+      Core.Exp node, Frame frame, Map<Core.Exp, Generator> generators) {
+    if (!(node instanceof Core.Join)) {
+      final Generator generator = generators.get(node);
+      if (generator == null) {
+        if (node.isExtent()) {
+          throw new CompileException(
+              "pattern is not grounded", false, node.pos);
+        }
+        return node instanceof Core.Rel
+            ? expand(node, ImmutableList.of())
+            : node;
+      }
+      return project(generator, frame.leaves.get(node), node.pos);
+    }
+    final Core.Join join = (Core.Join) node;
+    final Core.Exp right = join.right;
+    final Generator rightGenerator = generators.get(right);
+    if (rightGenerator != null && !free(rightGenerator).isEmpty()) {
+      // Correlated: the right side reads a name that the left side binds.
+      final Core.IdPat param = frame.leaves.get(join.left);
+      if (param == null
+          || !free(rightGenerator).stream().allMatch(param::equals)) {
+        throw new CompileException("pattern is not grounded", false, right.pos);
+      }
+      final Core.Exp body =
+          core.project(
+              typeSystem,
+              rightGenerator.exp,
+              subst(
+                  join.yieldExp,
+                  core.id(param),
+                  core.input0(rightGenerator.exp.type.elementType())));
+      return core.projectMany(
+          typeSystem, rebuild(join.left, frame, generators), param, body);
+    }
+    return join.copy(
+        typeSystem,
+        join.joinType,
+        rebuild(join.left, frame, generators),
+        rebuild(right, frame, generators),
+        join.condition,
+        join.yieldExp);
+  }
+
+  /**
+   * Deduces tighter bounds for the leaves, as {@code expandFrom} does before
+   * grounding a step list.
+   *
+   * <p>Without this, {@code from i : int where i > 0 andalso i < 10} does not
+   * ground: the engine looks for a constraint that generates, and a pair of
+   * comparisons only becomes one once Fbbt has turned them into a range.
+   */
+  private List<Core.Exp> strengthen(
+      List<Core.Exp> constraints, PairList<Core.Pat, Core.Exp> extents) {
+    if (constraints.isEmpty()) {
+      return constraints;
+    }
+    final Set<Core.NamedPat> unbounded = new LinkedHashSet<>();
+    extents.forEach((pat, exp) -> unbounded.addAll(pat.expand()));
+    final Core.Exp strengthened =
+        Fbbt.strengthen(
+            typeSystem, unbounded, core.andAlso(typeSystem, constraints));
+    // The conjuncts of the original survive as themselves, so what a
+    // generator subsumes can still be matched by identity.
+    return core.decomposeAnd(strengthened);
+  }
+
+  /** Projects a generator's collection down to one leaf's element. */
+  private Core.Exp project(Generator generator, Core.IdPat pat, Pos pos) {
+    if (generator.cardinality == Generator.Cardinality.INFINITE) {
+      throw new CompileException("pattern is not grounded", false, pos);
+    }
+    if (generator.pat instanceof Core.IdPat) {
+      return generator.exp;
+    }
+    final Core.@Nullable Exp element =
+        path(generator.pat, core.input0(generator.exp.type.elementType()), pat);
+    if (element == null) {
+      throw new CompileException("pattern is not grounded", false, pos);
+    }
+    return core.project(typeSystem, generator.exp, element);
+  }
+
+  /**
+   * What a join tree looks like from above: the expression that denotes its
+   * element in terms of a name per leaf, a name for each leaf, and the
+   * conditions that its own joins impose.
+   */
+  private static class Frame {
+    final Core.Exp element;
+    final Map<Core.Exp, Core.IdPat> leaves;
+    final List<Core.Exp> constraints;
+
+    Frame(
+        Core.Exp element,
+        Map<Core.Exp, Core.IdPat> leaves,
+        List<Core.Exp> constraints) {
+      this.element = element;
+      this.leaves = leaves;
+      this.constraints = constraints;
+    }
+  }
+
+  /**
+   * Names the leaves of a join tree and works out what its element is in terms
+   * of those names.
+   */
+  private Frame collect(Core.Exp node) {
+    if (!(node instanceof Core.Join)) {
+      final Core.IdPat pat = elementPat(node);
+      final Map<Core.Exp, Core.IdPat> leaves = new IdentityHashMap<>();
+      leaves.put(node, pat);
+      return new Frame(core.id(pat), leaves, new ArrayList<>());
+    }
+    final Core.Join join = (Core.Join) node;
+    final Frame left = collect(join.left);
+    final Frame right = collect(join.right);
+    final Map<Core.Exp, Core.IdPat> leaves = new IdentityHashMap<>(left.leaves);
+    leaves.putAll(right.leaves);
+    final List<Core.Exp> constraints = new ArrayList<>(left.constraints);
+    constraints.addAll(right.constraints);
+    if (!join.condition.isBoolLiteral(true)) {
+      constraints.add(subst(join.condition, left.element, right.element));
+    }
+    return new Frame(
+        subst(join.yieldExp, left.element, right.element), leaves, constraints);
   }
 
   /**
@@ -190,7 +376,7 @@ public class RelExpander {
         ground(join.right, pushed, rightPat, conditions);
     if (generator == null
         || generator.cardinality == Generator.Cardinality.INFINITE
-        || !containsOnly(generator.freePats, leftPat)) {
+        || !containsOnly(free(generator), leftPat)) {
       return null;
     }
     // The body yields what the join yielded, with the left element named by
@@ -211,6 +397,25 @@ public class RelExpander {
    * Returns whether every free variable of a generator is the one name that the
    * lambda will bind.
    */
+  /**
+   * Returns the names a generator reads that something else must bind.
+   *
+   * <p>{@code Generator.freePats} counts every name the expression mentions,
+   * including constructors such as {@code OPEN} and globals; the environment
+   * binds those already, and only the rest make a generator depend on another
+   * leaf.
+   */
+  private List<Core.NamedPat> free(Generator generator) {
+    final List<Core.NamedPat> free = new ArrayList<>();
+    generator.freePats.forEach(
+        pat -> {
+          if (env.getOpt(pat) == null) {
+            free.add(pat);
+          }
+        });
+    return free;
+  }
+
   private static boolean containsOnly(
       List<Core.NamedPat> freePats, Core.NamedPat pat) {
     return freePats.stream().allMatch(pat::equals);
@@ -234,11 +439,11 @@ public class RelExpander {
       // the same thing without the name. See discussion.md section 11.
       throw new CompileException("pattern is not grounded", false, leaf.pos);
     }
-    if (!generator.freePats.isEmpty()) {
+    if (!free(generator).isEmpty()) {
       // A generator that reads other variables needs them bound first, which
       // is a dependent scan; not yet.
       throw new CompileException(
-          "pattern is not grounded until " + generator.freePats + " is bound",
+          "pattern is not grounded until " + free(generator) + " is bound",
           false,
           leaf.pos);
     }
@@ -378,8 +583,9 @@ public class RelExpander {
       Core.IdPat pat,
       List<Core.Exp> constraints,
       Map<Core.Exp, Core.Exp> originals) {
+    final PairList<Core.Pat, Core.Exp> extents = PairList.of(pat, leaf);
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
-    Expander.ground(cache, pat, leaf, constraints);
+    Expander.ground(cache, extents, strengthen(constraints, extents));
     final Generator generator = cache.bestGenerator(pat);
     if (generator != null && generator.sealed) {
       generator.provenance.forEach(
