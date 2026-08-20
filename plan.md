@@ -161,11 +161,27 @@ something settled — §8's principle, applied to the sequence itself.
           several variables at once, which a one-leaf caller cannot
           use.
 
-        So the front end wants the shape the step engine has: collect
-        the extent leaves under a join tree with the conditions above
-        them, ground them together, and then replace them together.
-        That subsumes the correlated case, which is the same question
-        asked of one leaf. The conditions a
+        So the front end took the shape the step engine has: the
+        extent leaves under a join tree are collected with the
+        conditions above them, grounded together in one cache, and
+        replaced together; the correlated case is the same question
+        asked of one leaf. With Fbbt run first, as `expandFrom` runs
+        it, and with the names a generator merely *mentions*
+        (constructors such as `OPEN`, and globals) no longer mistaken
+        for names another leaf must bind.
+
+        Agreement over such-that.smli and relational.smli went from
+        187 queries to 235, with 65 still grounding less. Those are
+        one shape: a scan whose pattern destructures an extent —
+        `from (b, i) : bool * int where i elem [3, 5] andalso b`. The
+        step list registers the pattern, so the engine grounds `b`
+        and `i` separately, one from the `bool` extent and one from
+        the `elem`; the tree names the leaf's element once, so the
+        engine is asked to bound a tuple. The fix is to name a leaf
+        by pattern rather than by variable where its element is a
+        tuple, which is what the scan's pattern was doing all along.
+
+        The conditions a
         sealed
         generator subsumes are now dropped, so `from x where x elem
         [1, 2, 3]` expands to the list itself, and a filter survives
