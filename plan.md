@@ -196,16 +196,24 @@ something settled — §8's principle, applied to the sequence itself.
         grounds in a tree — which is deliberate, and which the script
         expectations record at the flip.
 
-        Agreement is 247 of 300. The 53 that remain are one shape: a
-        constraint that ties *several leaves* together, as in `from
-        dno : int join name : string where {deptno = dno, dname =
-        name, loc = "CHICAGO"} elem depts`. A step list makes those
-        one scan, because the user wrote one pattern; a tree has a
-        leaf each, and replacing them separately would enumerate
-        `depts` twice and pair every dno with every name. Doing it
-        properly means collapsing the leaves the generator binds
-        together into a single scan and removing the join between
-        them. Until then the front end declines, which is safe.
+        Leaves that one generator binds together are collapsed into
+        a single scan, with the join between them removed and each
+        name read through the path its pattern gives it. Replacing
+        them separately would enumerate the collection once per leaf
+        and pair every value with every other, which is why the front
+        end used to decline.
+
+        Agreement is 259 of 300. What remains, in three shapes:
+        * A join of leaves with *different* generators, one already
+          finite: `from b in extent "bool" join i : int where b
+          andalso i > 5 andalso i < 15`.
+        * The same, with three leaves, one of them a record.
+        * Grounding through a `case` over a datatype: `from
+          e : (int, 'a) either where case e of INL n => n >= 5 ...`.
+
+        The invariant to reach before the flip is that the tree never
+        grounds less than the step list; until then any query the
+        tree declines would stop compiling.
 
         The conditions a
         sealed
