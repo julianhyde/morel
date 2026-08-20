@@ -892,10 +892,23 @@ Each phase should land with its own tests, rather than deferring them:
    Record modifiers need no site of their own, contrary to this plan: a
    modifier's result is a plain record, which claims nothing, so it is checked
    where the result is bound.
-5. ~~**Rejections.**~~ **Done.** A claim of a constrained function type is
-   rejected. Until then it was a silent hole -- `constrains` looks for
-   conditions in positions a value can be checked at, so it passed a function
-   type over and the claim went unenforced.
+5. ~~**Rejections.**~~ **Done**, and finer-grained than this plan said. What
+   is rejected is a condition on a function's *parameter or result*, which
+   would have to check every argument the function is ever given. A condition
+   on the function type itself is given the function value, and is checked
+   like any other:
+
+   ```sml
+   type fnFalse = (int -> int) check c => false;
+   val ff: fnFalse = fn i => i;
+   > uncaught exception Constraint [fn is not a valid fnFalse]
+   ```
+
+   Where the condition lands is decided by parenthesization, so `int -> int
+   check c => ...` is allowed and `(int check c => ...) -> int` is not. Until
+   this was rejected it was a silent hole -- `constrains` looks for conditions
+   in positions a value can be checked at, so it passed a function type over
+   and the claim went unenforced.
 
    A conversion between different erasures needed no work: it is an ordinary
    type error, and the unifier's message names both types and says which is an
