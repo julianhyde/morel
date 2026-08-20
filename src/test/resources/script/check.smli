@@ -575,10 +575,15 @@ type emp = {deptno: int, empno: int, mgrno: int option,
 type dept = {deptno: int, dname: string};
 > type dept = {deptno:int, dname:string}
 
-(* Intra-relation constraints, on the table: an employee number identifies at
- * most one employee -- there are as many distinct numbers as rows -- and
- * nobody earns more than their manager. A manager is optional, so the
- * employee at the top of the tree has none. *)
+(* Intra-relation constraints, on a table: a department number identifies at
+ * most one department -- there are as many distinct numbers as rows. *)
+type depts = dept bag
+  check ds => ds.length ()
+      = (from d in ds yield d.deptno distinct).length ();
+> type depts = dept bag check ds => #length Bag ds = #length Bag (from d in ds yield #deptno d distinct)
+
+(* The same for employees, and nobody earns more than their manager. A manager
+ * is optional, so the employee at the top of the tree has none. *)
 type emps = emp bag
   check es => es.length ()
       = (from e in es yield e.empno distinct).length ()
@@ -588,10 +593,10 @@ type emps = emp bag
 
 (* An inter-relation constraint, on the schema: every employee's department
  * exists. Only the schema can state it, because only it sees both tables. *)
-type hr = {depts: dept bag, emps: emps}
+type hr = {depts: depts, emps: emps}
   check h => not (exists e in h.emps
       where not (exists d in h.depts where d.deptno = e.deptno));
-> type hr = {depts:dept bag, emps:emps} check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
+> type hr = {depts:depts, emps:emps} check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
 
 val hr0: hr = {
   depts = bag [{deptno = 10, dname = "Sales"},
@@ -644,6 +649,12 @@ val hrClosed: hr = {hr0 replace depts = from d in hr0.depts
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr]
 >   raised at: stdIn:1.5-2.24
 
+(*) Opening a department whose number is in use breaks the other table.
+val hrDupDept: hr = {hr0 replace depts = from d in hr0.depts
+  union [{deptno = 10, dname = "Field"}]};
+> uncaught exception Constraint [[{deptno=10,dname="Sales"},{deptno=20,dname="Research"},{deptno=10,dname="Field"}] is not a valid depts: field depts]
+>   raised at: stdIn:1.5-2.42
+
 
 (* --- The same schema as a single type --------------------------- *)
 
@@ -654,13 +665,15 @@ type hr1 = {
     depts: {deptno: int, dname: string} bag,
     emps: {deptno: int, empno: int, mgrno: int option, sal: real} bag}
   check h => not (exists e in h.emps where e.sal <= 0.0)
+  check h => h.depts.length ()
+      = (from d in h.depts yield d.deptno distinct).length ()
   check h => h.emps.length ()
       = (from e in h.emps yield e.empno distinct).length ()
   check h => not (exists e in h.emps, m in h.emps
       where e.mgrno = SOME m.empno andalso e.sal > m.sal)
   check h => not (exists e in h.emps
       where not (exists d in h.depts where d.deptno = e.deptno));
-> type hr1 = {depts:{deptno:int, dname:string} bag, emps:{deptno:int, empno:int, mgrno:int option, sal:real} bag} check h => not (exists e in #emps h where #sal e <= 0.0) check h => #length Bag (#emps h) = #length Bag (from e in #emps h yield #empno e distinct) check h => not (exists e in #emps h, m in #emps h where #mgrno e = SOME (#empno m) andalso #sal e > #sal m) check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
+> type hr1 = {depts:{deptno:int, dname:string} bag, emps:{deptno:int, empno:int, mgrno:int option, sal:real} bag} check h => not (exists e in #emps h where #sal e <= 0.0) check h => #length Bag (#depts h) = #length Bag (from d in #depts h yield #deptno d distinct) check h => #length Bag (#emps h) = #length Bag (from e in #emps h yield #empno e distinct) check h => not (exists e in #emps h, m in #emps h where #mgrno e = SOME (#empno m) andalso #sal e > #sal m) check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
 
 val hr1: hr1 = {
   depts = bag [{deptno = 10, dname = "Sales"},
@@ -691,6 +704,11 @@ val hr1Moved: hr1 = {hr1 replace emps = from e in hr1.emps
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr1]
 >   raised at: stdIn:1.5-2.62
 
+val hr1DupDept: hr1 = {hr1 replace depts = from d in hr1.depts
+  union [{deptno = 10, dname = "Field"}]};
+> uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"},{deptno=10,dname="Field"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr1]
+>   raised at: stdIn:1.5-2.42
+
 
 (* --- The same schema, conditions pushed down -------------------- *)
 
@@ -699,7 +717,9 @@ val hr1Moved: hr1 = {hr1 replace emps = from e in hr1.emps
  * carry a condition wherever it is written, so a condition can sit on the
  * field, on the table, and on the schema. *)
 type hr2 = {
-    depts: {deptno: int, dname: string} bag,
+    depts: {deptno: int, dname: string} bag
+      check ds => ds.length ()
+          = (from d in ds yield d.deptno distinct).length (),
     emps: {deptno: int, empno: int, mgrno: int option,
         sal: real check s => s > 0.0} bag
       check es => es.length ()
@@ -708,7 +728,7 @@ type hr2 = {
           where e.mgrno = SOME m.empno andalso e.sal > m.sal)}
   check h => not (exists e in h.emps
       where not (exists d in h.depts where d.deptno = e.deptno));
-> type hr2 = {depts:{deptno:int, dname:string} bag, emps:{deptno:int, empno:int, mgrno:int option, sal:real check s => s > 0.0} bag check es => #length Bag es = #length Bag (from e in es yield #empno e distinct) check es => not (exists e in es, m in es where #mgrno e = SOME (#empno m) andalso #sal e > #sal m)} check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
+> type hr2 = {depts:{deptno:int, dname:string} bag check ds => #length Bag ds = #length Bag (from d in ds yield #deptno d distinct), emps:{deptno:int, empno:int, mgrno:int option, sal:real check s => s > 0.0} bag check es => #length Bag es = #length Bag (from e in es yield #empno e distinct) check es => not (exists e in es, m in es where #mgrno e = SOME (#empno m) andalso #sal e > #sal m)} check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
 
 val hr2: hr2 = {
   depts = bag [{deptno = 10, dname = "Sales"},
@@ -738,6 +758,11 @@ val hr2Moved: hr2 = {hr2 replace emps = from e in hr2.emps
   yield (if e.empno = 2 then {e replace deptno = 99} else e)};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr2]
 >   raised at: stdIn:1.5-2.62
+
+val hr2DupDept: hr2 = {hr2 replace depts = from d in hr2.depts
+  union [{deptno = 10, dname = "Field"}]};
+> uncaught exception Constraint [[{deptno=10,dname="Sales"},{deptno=20,dname="Research"},{deptno=10,dname="Field"}] is not a valid value: field depts]
+>   raised at: stdIn:1.5-2.42
 
 (* --- Constraints on types that are not named -------------------- *)
 
