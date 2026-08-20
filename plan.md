@@ -1173,6 +1173,57 @@ agree with each other. They are not, and here is what is missing.
 | from a value | | `e : t`, `e as t`, `e asOpt t`, `e check m` |
 | from a type | `type_string e` produces a string | |
 
+### Driven by the operations, not the table
+
+The matrix above lists what exists. What it should list is what is wanted, and
+one operation is missing from it entirely: **extracting a type's predicate**,
+as a value. Write it `predicate t`, of type `unchecked t -> bool`.
+
+It is worth having for its own sake. It expresses "filter rather than abort",
+which is the shape case E wants for foreign data, and which today cannot be
+written without restating the condition:
+
+```sml
+List.filter (predicate nat) xs
+```
+
+And it collapses the value operators into one primitive plus sugar:
+
+```
+e asOpt t  ==  if predicate t e then SOME e else NONE
+e as t     ==  if predicate t e then e else raise Constraint ...
+e check m  ==  e : (typeof e check m)          (given a faithful typeof)
+```
+
+So `asOpt` having no anonymous counterpart is not a missing operator; it is a
+missing decomposition. The irreducible set is `t check m` to add a condition,
+`unchecked t` to remove one, `predicate t` to extract one, `typeof e` to take
+an expression's type into type space, and `e : t` to claim.
+
+Some laws, which are the test of whether it is closed:
+
+```
+unchecked (t check m)    =  unchecked t          (idempotent)
+predicate (unchecked t)  =  fn _ => true
+t check (predicate t)    =  t                    (round-trip)
+```
+
+**Reifying is the tool.** Each of these takes something from type space into
+value space: `type_string` a type as a string, lossily and for display;
+`predicate` its checkable content, as a function. This plan already says that
+constrained function types and #290's comparators both need type-directed
+dispatch and should share it. A general "reify a type as a value" is that
+mechanism, and `predicate` is its smallest well-scoped instance -- a reason to
+build it early rather than as a convenience.
+
+**One cost of the decomposition, honestly.** `as` desugared through
+`predicate` loses its message: the type's name and the blame path come from
+the primitive. Either the messages get worse, or what is reified has to carry
+enough to rebuild them. That is a reason the primitives may earn their keep
+even once the sugar is available.
+
+### The gaps that remain
+
 Three gaps, in increasing order of how much they matter.
 
 1. **`asOpt` has no anonymous counterpart.** `e as t` pairs with `e check m`,
@@ -1206,10 +1257,13 @@ checked against that.
   above. Includes lifting the restriction that a condition may only be written
   in a type declaration.
 * **`unchecked t`, to strip conditions from a type**, per the section above.
-* **`typeof e` erases, and `type t = typeof e` crashes**, per "Is there a
-  complete algebra?" above.
   Shares its deep erasure with the fix for a checked type under a type
   constructor.
+* **`predicate t`, to extract a type's condition as a value**, per "Driven by
+  the operations" above. Expresses "filter rather than abort", and makes `as`,
+  `asOpt` and `e check m` derivable.
+* **`typeof e` erases, and `type t = typeof e` crashes**, per "Is there a
+  complete algebra?" above.
 * **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve`
   has no case for a type declaration. Unrelated to conditions.
 * **`local ... in ... end` is not implemented.** It is how Standard ML
