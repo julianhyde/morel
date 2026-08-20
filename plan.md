@@ -1050,6 +1050,79 @@ Two limits remain:
   not match. A deep erasure would fix it, and is the same rule -- an alias must
   not reach Core -- applied one level further in.
 
+## Record modifiers and conditions
+
+To be logged as an issue; notes here so the reasoning is not lost.
+
+Today a modifier keeps the constraints on fields it does not touch, and drops
+the record type's own condition:
+
+```sml
+type box = {a: int, b: nat} check r => r.a < 10;
+val v0: box = {a = 1, b = 2};
+val v1 = {v0 extend c = 5};    (*) {a:int, b:nat, c:int} -- condition gone
+val v2 = {v0 remove a};        (*) {b:nat}
+val v3 = {v0 replace a = 9};   (*) {a:int, b:nat}
+```
+
+That is sound -- the result claims nothing it has not been shown -- but it
+throws away more than it needs to.
+
+**A rule that covers all four modifiers.** Inherit a condition if and only if
+every field it depends on is unchanged; otherwise drop it. Then:
+
+* `extend` inherits every condition, and **needs no check**: the fields the
+  conditions range over are untouched, so they are already known to hold. This
+  is the case that most obviously wants fixing.
+* `remove` inherits a condition that does not mention a removed field, also
+  for free. One that does mention it cannot be inherited -- it no longer
+  typechecks -- so `{r remove y}` where the condition is `r.x > r.y` drops it,
+  and is allowed. Projecting a column away drops the constraints that mention
+  it, as it does in a database.
+* `rename` inherits a condition with the field renamed inside it.
+* `replace` is the only one that can falsify a condition, so it must drop the
+  condition or inherit it *and check*. Dropping is what happens today, and is
+  why a derived schema is unchecked unless it is annotated -- which is a
+  footgun, because every realistic derivation of a schema goes through
+  `replace`.
+
+The asymmetry between `extend` and `replace` is principled, not arbitrary: one
+cannot invalidate a condition and the other can.
+
+**The obstacle is typing, not semantics.** A condition is typed against the
+exact record type, and records are not width-subtyped, so an inherited
+condition must re-type against the new record. `r => r.a < 10` only selects
+fields, and re-types fine; `{a, b} => a < 10` destructures, and will not match
+a record with another field. That would make inheritance depend on how the
+condition was written.
+
+The way out is to desugar a destructuring condition into a selecting one when
+the type is declared -- `{a, b} => a < 10` becomes `r => let val a = r.a and b
+= r.b in a < 10 end` -- which is mechanical, since the fields are known. Then
+every condition is inheritable and the rule has no exceptions.
+
+**Not a laundering hole, either way.** `{{bad extend x = 1} remove x}` yields
+an unnamed record that claims nothing, so re-claiming it at the original type
+checks it. Both dropping and inheriting are sound; this is about how much is
+lost.
+
+## Issues to log
+
+* **Record modifiers and conditions**, per the section above.
+* **Capture for a condition that is not closed**, so that the issue's
+  `batchSize` example works: inline what the condition refers to at the
+  declaration, so that it becomes closed. Note that `local` is not
+  implemented and a `type` may not be declared in a `let`, so a free variable
+  can only be a top-level binding today; implementing either would widen this.
+* **Messages when a constraint fails**, per the requirements above.
+* **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve`
+  has no case for a type declaration. Unrelated to conditions.
+* **`local ... in ... end` is not implemented.** It is how Standard ML
+  declares a type locally.
+* **Ground a record variable from a constraint on a field selection**, so that
+  `from p: pair where p.i elem [0..2]` works. Not a constrained-types problem:
+  it reports that `p` is not grounded with no `check` anywhere.
+
 ## Open questions
 
 1. ~~**Closed conditions: reject or inline?**~~ **Resolved: reject.** A
