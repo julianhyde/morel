@@ -1159,6 +1159,40 @@ and this needs the same lifting. And `asOpt` has no anonymous counterpart
 under this scheme; naming the type is always available, so that seems
 acceptable, but it is an asymmetry rather than an oversight.
 
+## Is there a complete algebra?
+
+`e as t` converts a value to a named checked type; `e check m` would do the
+same with the type written inline. That parallel suggests asking whether the
+operators that move between expressions, types and strings are complete and
+agree with each other. They are not, and here is what is missing.
+
+| | produces a type | produces a value |
+| ---- | ---- | ---- |
+| from an expression | `typeof e` | |
+| from a type | `t list`, `t * u`, `t -> u`, `t check m`, `unchecked t` | |
+| from a value | | `e : t`, `e as t`, `e asOpt t`, `e check m` |
+| from a type | `type_string e` produces a string | |
+
+Three gaps, in increasing order of how much they matter.
+
+1. **`asOpt` has no anonymous counterpart.** `e as t` pairs with `e check m`,
+   but `e asOpt t` pairs with nothing. Naming the type is always available, so
+   this may be acceptable.
+2. **`typeof e` erases.** `1 : typeof n` is `int`, not `nat`, so `typeof` does
+   not recover the type that was displayed. If it kept the condition, `e check
+   m` would be derivable rather than primitive -- it would be exactly `e :
+   (typeof e check m)` -- which is a good sign that the algebra is closed. As
+   it stands the expression form has to be primitive.
+3. **`type t = typeof e` throws an AssertionError.** `KeyBuilder` has no case
+   for an expression type. So `typeof` may be used in an annotation but not in
+   a declaration, and the failure is a crash rather than a message.
+
+`type_string` was a fourth: it erased, so a value the shell printed as `foo`
+reported `"int"`. That is now fixed -- it renders the type as displayed -- but
+it is worth noting that the divergence appeared only when an alias began to
+survive inference. Every operator that renders or reifies a type has to be
+checked against that.
+
 ## Issues to log
 
 * **Record modifiers and conditions**, per the section above.
@@ -1172,6 +1206,8 @@ acceptable, but it is an asymmetry rather than an oversight.
   above. Includes lifting the restriction that a condition may only be written
   in a type declaration.
 * **`unchecked t`, to strip conditions from a type**, per the section above.
+* **`typeof e` erases, and `type t = typeof e` crashes**, per "Is there a
+  complete algebra?" above.
   Shares its deep erasure with the fix for a checked type under a type
   constructor.
 * **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve`

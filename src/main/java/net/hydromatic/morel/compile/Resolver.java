@@ -1560,7 +1560,13 @@ public class Resolver {
   private Core.Exp toCore(Ast.TypeString typeString) {
     // Render the operand's inferred type to a string. The operand is not
     // converted to Core, so it is never evaluated.
-    final Type type = typeMap.getType(typeString.exp);
+    //
+    // Prefer the type as it would be displayed, which keeps an alias and any
+    // condition; 'getType' expands them, and would say "int" for a value the
+    // shell prints as 'foo'.
+    final Type aliased = typeMap.getAliasedType(typeString.exp);
+    final Type type =
+        aliased != null ? aliased : typeMap.getType(typeString.exp);
     return core.stringLiteral(type.moniker());
   }
 
