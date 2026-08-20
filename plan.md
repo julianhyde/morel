@@ -921,10 +921,27 @@ Each phase should land with its own tests, rather than deferring them:
    Grounding a record variable from a constraint on a field selection is not
    done. It is **not a constrained-types problem**: `from p: {i: int, j: int}
    where p.i elem [0..2]` reports that `p` is not grounded with no `check`
-   anywhere. `Generators.patForExp` already turns `#i p` into a field pattern
-   and `deriveFieldGenerators` already builds a record generator from field
-   generators, so the machinery half-exists; why it does not fire here wants
-   its own investigation, and its own issue.
+   anywhere.
+
+   The machinery is all there, and works for one field:
+
+   ```sml
+   type one = {i: int};
+   from p: one where p.i elem [0,1,2];
+   > val it = [{i=0},{i=1},{i=2}] : one list
+   ```
+
+   `patForExp` turns `#i p` into a synthetic field pattern, a generator is
+   built for it, and `deriveFieldGenerators` assembles a record generator for
+   `p`. Two fields fail because the constraint scan takes **at most one
+   generator per pattern** -- `elemMatch == null` guards the match, so once
+   `p.i elem ...` is found, `p.j elem ...` is skipped -- while
+   `deriveFieldGenerators` requires every field to be covered, sees one of
+   two, and gives up. The range form, which `[0..2]` desugars into, has the
+   same shape.
+
+   So the fix is to collect a generator per field rather than one per pattern,
+   not to build anything new.
 
 Deferred: constrained function types and any recovery of a constraint that has
 reached a type variable. Both need a type-directed dispatch mechanism; #290
