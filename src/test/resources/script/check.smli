@@ -665,6 +665,54 @@ val hr1Moved: hr1 = {hr1 replace emps = from e in hr1.emps
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr1]
 >   raised at: stdIn:1.5-2.62
 
+
+(* --- The same schema, conditions pushed down -------------------- *)
+
+(* The same schema again, still one named type, but with each condition
+ * written on the type it is about rather than lifted to the top. A type may
+ * carry a condition wherever it is written, so a condition can sit on the
+ * field, on the table, and on the schema. *)
+type hr2 = {
+    depts: {deptno: int, dname: string} bag,
+    emps: {deptno: int, empno: int, mgrno: int option,
+        sal: real check s => s > 0.0} bag
+      check es => es.length ()
+          = (from e in es yield e.empno distinct).length ()
+      check es => not (exists e in es, m in es
+          where e.mgrno = SOME m.empno andalso e.sal > m.sal)}
+  check h => not (exists e in h.emps
+      where not (exists d in h.depts where d.deptno = e.deptno));
+> type hr2 = {depts:{deptno:int, dname:string} bag, emps:{deptno:int, empno:int, mgrno:int option, sal:real check s => s > 0.0} bag check es => #length Bag es = #length Bag (from e in es yield #empno e distinct) check es => not (exists e in es, m in es where #mgrno e = SOME (#empno m) andalso #sal e > #sal m)} check h => not (exists e in #emps h where not (exists d in #depts h where #deptno d = #deptno e))
+
+val hr2: hr2 = {
+  depts = bag [{deptno = 10, dname = "Sales"},
+               {deptno = 20, dname = "Research"}],
+  emps = bag [{empno = 1, deptno = 10, mgrno = NONE, sal = 9.0},
+              {empno = 2, deptno = 20, mgrno = SOME 1, sal = 5.0}]};
+> val hr2 =
+>   {depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],
+>    emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},
+>          {deptno=20,empno=2,mgrno=SOME 1,sal=5}]} : hr2
+
+(* Now each message points at the level whose condition failed, and quotes
+ * only that much of the value -- as the version with a type per level does.
+ * What is lost by not naming the levels is the name: a type that is not named
+ * is called "value", and the blame path says which one. *)
+val hr2Unpaid: hr2 = {hr2 replace emps = from e in hr2.emps
+  union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 0.0}]};
+> uncaught exception Constraint [0 is not a valid value: field emps.element.sal]
+>   raised at: stdIn:1.5-2.63
+
+val hr2Dup: hr2 = {hr2 replace emps = from e in hr2.emps
+  union [{empno = 2, deptno = 10, mgrno = SOME 1, sal = 4.0}]};
+> uncaught exception Constraint [[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5},{deptno=10,empno=2,mgrno=SOME 1,sal=4}] is not a valid value: field emps]
+>   raised at: stdIn:1.5-2.63
+
+val hr2Moved: hr2 = {hr2 replace emps = from e in hr2.emps
+  yield (if e.empno = 2 then {e replace deptno = 99} else e)};
+> uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr2]
+>   raised at: stdIn:1.5-2.62
+
 (* --- Constraints on types that are not named -------------------- *)
 
 (* A type may carry a condition wherever it is written, not only where it is
