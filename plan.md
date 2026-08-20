@@ -1080,11 +1080,44 @@ every field it depends on is unchanged; otherwise drop it. Then:
   and is allowed. Projecting a column away drops the constraints that mention
   it, as it does in a database.
 * `rename` inherits a condition with the field renamed inside it.
-* `replace` is the only one that can falsify a condition, so it must drop the
-  condition or inherit it *and check*. Dropping is what happens today, and is
-  why a derived schema is unchecked unless it is annotated -- which is a
-  footgun, because every realistic derivation of a schema goes through
-  `replace`.
+* `replace` is the only one that can falsify a condition, so it must inherit
+  it *and check*. Dropping is what happens today, and is why a derived schema
+  is unchecked unless it is annotated -- a footgun, because every realistic
+  derivation of a schema goes through `replace`.
+
+**Decided: a modifier claims the type it modifies**, with the obvious
+exceptions -- a modifier that adds or removes a field, or changes a field's
+type, produces a different type and cannot claim the old one.
+
+`replace` already says it "preserves the field's type", and enforces it by
+unification, so a different base type is caught:
+
+```sml
+type box = {n: nat, s: string};
+val b: box = {n = 1, s = "a"};
+{b replace n = "x"};
+> Error: Cannot deduce type: conflict: string vs nat (alias for int)
+```
+
+But the meet rule lets a condition drop silently, because `int` and `nat`
+unify:
+
+```sml
+{b replace n = b.n + 1};
+> val it = {n=2,s="a"} : {n:int, s:string}
+```
+
+The field's type did not have to change -- `n + 1` may well be a `nat` -- so
+it should not have. What should happen is that the field keeps its declared
+type and the value is narrowed to it: the result is `box`, `{b replace n =
+b.n + 1}` checks that 2 is a `nat`, and `{b replace n = ~5}` raises. The
+record's own conditions must be checked too, since they may depend on the
+field that changed.
+
+That gives `lenient` a meaning for checked types, and a useful one: it is the
+escape hatch that says "I know this widens". `{b replace lenient n = ~5}`
+yields `{n:int, s:string}` and checks nothing, which is what it already does.
+So the two forms stop being interchangeable, as they are today.
 
 The asymmetry between `extend` and `replace` is principled, not arbitrary: one
 cannot invalidate a condition and the other can.
