@@ -146,7 +146,12 @@ public class RelShadow {
     return true;
   }
 
-  /** Returns whether an expression contains an infinite extent. */
+  /**
+   * Returns whether an expression contains an extent that cannot be enumerated.
+   *
+   * <p>A finite extent is a perfectly good bound -- {@code extent "bool"} is
+   * two values -- so only an infinite one means the query is still unbounded.
+   */
   private static boolean containsExtent(Core.Exp exp) {
     final boolean[] found = {false};
     exp.accept(
@@ -154,7 +159,7 @@ public class RelShadow {
           @Override
           protected void visit(Core.Apply apply) {
             super.visit(apply);
-            if (apply.isExtent()) {
+            if (Extents.isInfinite(apply)) {
               found[0] = true;
             }
           }

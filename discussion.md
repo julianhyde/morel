@@ -378,3 +378,37 @@ rather than asserting something false. So the message becomes
 If that proves too vague in practice, the hint is the fallback, under
 a rule that keeps it from lying: set once, at translation, and
 dropped — not guessed — by any rewrite that replaces the leaf.
+
+## 12. Grounding through a tree is stronger
+
+Grounding an unbounded variable means finding a collection that
+bounds it, by inverting the conditions. A step list can only pass
+conditions along the list, so a `yield` between the scan and the
+`where` stops it: `from x yield {y = x} where y elem [2, 3]` fails
+today with `pattern 'x' is not grounded`, though `y` plainly is `x`.
+
+A tree can do better, and cheaply. A condition above a projection is
+a condition about the projection's expression, so substituting that
+expression into the condition says the same thing about the element
+below — and then the leaf is grounded by `[2, 3]`, as it should be.
+It is one substitution, and the machinery was already there for
+pushing conditions through a join.
+
+**Resolution: the tree grounds strictly more, deliberately.** The
+alternative was to keep parity by declining to push, which meant
+carrying a limitation across the port for no reason other than that
+it existed. Two consequences to plan for:
+
+* Queries that error today start working. That is a change to the
+  language, and the script expectations record it at the flip.
+* The differential shadow can no longer treat "the tree grounds a
+  query the step list rejects" as a failure. It counts it; what it
+  guards instead is the reverse — a query the tree grounds *less*
+  well is a gap, and the invariant to reach is that there are none.
+
+The same substitution is why the translation's own projections stop
+mattering. `from (b, i) : bool * int where p` translates to a filter
+over a projection over the leaf, because the query's element is the
+record the bindings describe while the leaf's is a tuple; pushing
+through that projection is what lets the conditions reach the leaf at
+all.
