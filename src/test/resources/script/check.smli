@@ -705,6 +705,28 @@ type swallowed = int check c => c >= 0 list;
 type notSwallowed = (int check c => c >= 0) list;
 > type notSwallowed = (int check c => c >= 0) list
 
+(* A function type behaves the same way, and where the condition lands decides
+ * whether the type may be claimed at all. A condition on the function type
+ * itself is given the function value, and is checked like any other; one on
+ * the parameter would have to check every argument the function is ever
+ * given, and is rejected. *)
+type fnWhole = int -> int check c => true;
+> type fnWhole = int -> int check c => true
+type fnPart = (int check c => c >= 0) -> int;
+> type fnPart = (int check c => c >= 0) -> int
+val fw: fnWhole = fn i => i;
+> val fw = fn : fnWhole
+val fp: fnPart = fn i => i;
+> stdIn:1.9-1.15 Error: cannot claim a constrained function type 'fnPart'
+>   raised at: stdIn:1.9-1.15
+
+(*) So a condition on a function type can fail, like any other.
+type fnFalse = (int -> int) check c => false;
+> type fnFalse = int -> int check c => false
+val ff: fnFalse = fn i => i;
+> uncaught exception Constraint [fn is not a valid fnFalse]
+>   raised at: stdIn:1.5-1.28
+
 (*) Two such types written the same way are the same type.
 type same1 = {v: int check i => i > 0};
 > type same1 = {v:int check i => i > 0}
