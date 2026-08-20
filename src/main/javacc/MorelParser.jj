@@ -1299,17 +1299,24 @@ Exp expression() :
 {
   Exp e;
   List<Match> matchList;
+  final List<Ast.Fn> checks = new ArrayList<>();
   Span span;
+  Pos pos = null;
 }
 {
   e = expressionNoCheck()
   (
     <CHECK> { span = Span.of(pos()); } matchList = matchList() {
-      e = ast.checkExp(e.pos.plus(span.end(this)), e,
-          ImmutableList.of(ast.fn(span.end(this), matchList)));
+      pos = span.end(this);
+      checks.add(ast.fn(pos, matchList));
     }
   )*
-  { return e; }
+  {
+    // Several conditions belong to one expression, as they do to one type
+    // declaration; nesting them would put each in the type of the last, and
+    // only the last would be seen.
+    return checks.isEmpty() ? e : ast.checkExp(e.pos.plus(pos), e, checks);
+  }
 }
 
 /** Parses an expression that does not extend over a following {@code check}.

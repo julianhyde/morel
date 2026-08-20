@@ -798,12 +798,17 @@ val guardedBad = (fn i => (i check j => j > 0)) ~3;
 > uncaught exception Constraint [~3 is not a valid value]
 >   raised at: stdIn:1.27-1.47
 
-(* A condition on an expression may itself be followed by another. Both are
- * checked, but only the outer one is displayed: a checked type built this way
- * does not take part in inference, so the inner one is not in the type the
- * outer one is added to. *)
+(* Several conditions belong to one expression, as they do to one type
+ * declaration. Nesting them would put each in the type of the last, and only
+ * the last would be seen. *)
 val twiceChecked = y + 1 check i => i > 0 check i => i < 100;
-> val twiceChecked = 2 : int check i => i < 100
+> val twiceChecked = 2 : int check i => i > 0 check i => i < 100
+val failsFirst = y + 1 check i => i > 5 check i => i < 100;
+> uncaught exception Constraint [2 is not a valid value]
+>   raised at: stdIn:1.18-1.59
+val failsSecond = y + 1 check i => i > 0 check i => i < 2;
+> uncaught exception Constraint [2 is not a valid value]
+>   raised at: stdIn:1.19-1.58
 
 (* --- Constraints on types that are not named -------------------- *)
 
