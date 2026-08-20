@@ -1223,12 +1223,16 @@ condition inside a match body must be parenthesized -- `fn i => (i check j =>
 j > 0)` -- which is the same parenthesis `case` and `fn` already need where
 they nest.
 
-An implementation note: the base type need never be materialized. The condition is typed against the same unification variable
-as the expression, and the checked type is built afterwards, where the
-expression's type is known. What that does not give is a type that
-participates in inference -- `val a = e check m` displays as `int check ...`
-but a later reference to `a` is only `int` -- because the term language has no
-way to carry a condition.
+An implementation note: the base type need never be materialized. The
+condition is typed against the same unification variable as the expression,
+and the checked type is built afterwards, where the expression's type is
+known. What that does not give is a type that participates in inference --
+`val a = e check m` displays as `int check ...`, but a later reference to `a`
+is only `int` -- because the term language has no way to carry a condition.
+
+Several conditions on one expression therefore have to be one node, not
+nested: nesting would put each in the type of the last, and the last would be
+the only one seen. A type declaration already treats them that way.
 
 Two notes. It unlocks the annotation form as well: `val x: int check i => i <
 100 = e` is rejected today only because nothing compiles a condition outside a
