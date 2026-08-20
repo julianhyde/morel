@@ -187,6 +187,21 @@ public class RelExpanderTest {
                 + "      [g$0, g$0 + 1]\n"));
   }
 
+  /**
+   * Tests that a condition reaches a leaf through a projection, which the step
+   * list cannot do.
+   *
+   * <p>`from x yield {y = x} where y elem [2, 3]` errors today with "pattern
+   * 'x' is not grounded"; a tree substitutes the projection into the condition
+   * and grounds it. See discussion.md section 12.
+   */
+  @Test
+  void testThroughProjection() {
+    assertThat(
+        generator("from x yield {y = x} where y elem [2, 3]"),
+        is("[2, 3] : FINITE"));
+  }
+
   /** Tests that a query that cannot be bounded is an error. */
   @Test
   void testExpandUnbounded() {
@@ -214,22 +229,6 @@ public class RelExpanderTest {
     assertThat(
         generator("from x skip 1 where x elem [1, 2, 3]"),
         is("[1, 2, 3] : FINITE"));
-  }
-
-  /**
-   * Tests that a condition does not reach the leaf through a projection, which
-   * changes what the condition is about.
-   *
-   * <p>Parity with the step list, which does not push a condition through a
-   * yield either: {@code from x yield {y = x} where y elem [2, 3]} is not
-   * grounded today. Substituting the projection into the condition would ground
-   * both, and is a change to the language, not to this port.
-   */
-  @Test
-  void testNotThroughProjection() {
-    assertThat(
-        generator("from x yield {y = x} where y elem [2, 3]"),
-        is("extent \"int\" : INFINITE"));
   }
 }
 
