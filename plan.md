@@ -982,7 +982,9 @@ What a reader wants instead:
 * **The offending row, identified by key.** `empno 1` rather than the row, and
   certainly rather than the table. This needs a notion of a primary key on a
   record collection, which Morel does not have yet; declaring one would serve
-  more than messages.
+  more than messages. A blame path already writes an element as `emps[_]`, a
+  subscript with nothing known about which element it was, so a key has
+  somewhere to go: `emps[empno 1].sal`.
 * **Only the part that failed.** Naming the levels already buys this -- see
   below -- but a condition that is genuinely about the whole collection, such
   as uniqueness, has no smaller part to point at, and needs the two above.
