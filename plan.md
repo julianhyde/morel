@@ -1106,6 +1106,41 @@ an unnamed record that claims nothing, so re-claiming it at the original type
 checks it. Both dropping and inheriting are sound; this is about how much is
 lost.
 
+## Adding and removing conditions
+
+**Removing needs no syntax.** Ascribing to the base type widens, and widening
+is free -- a value that satisfies a condition satisfies the type the condition
+refines:
+
+```sml
+val n: nat = 5;
+val m: int = n;
+> val m = 5 : int
+```
+
+**Adding to an expression does need syntax, and has none.** There is no way to
+introduce a checked value without declaring a named type:
+
+```sml
+val x = y + z check i => i < 100;
+```
+
+is a syntax error today. It should give `x` the type `int check i => i < 100`,
+so that `x` can later be used where that condition is required, without being
+checked again.
+
+`e check match` is the anonymous counterpart of `as`: `e as nat` converts to a
+named checked type and checks, and this does the same with the type written
+inline. Same precedence -- loose, left-associative -- and it must check, or
+the type would claim something that was never verified.
+
+Two notes. It unlocks the annotation form as well: `val x: int check i => i <
+100 = e` is rejected today only because nothing compiles a condition outside a
+`type` declaration, which is an implementation limit rather than a design one,
+and this needs the same lifting. And `asOpt` has no anonymous counterpart
+under this scheme; naming the type is always available, so that seems
+acceptable, but it is an asymmetry rather than an oversight.
+
 ## Issues to log
 
 * **Record modifiers and conditions**, per the section above.
@@ -1115,6 +1150,9 @@ lost.
   implemented and a `type` may not be declared in a `let`, so a free variable
   can only be a top-level binding today; implementing either would widen this.
 * **Messages when a constraint fails**, per the requirements above.
+* **`e check match`, to add a condition to an expression**, per the section
+  above. Includes lifting the restriction that a condition may only be written
+  in a type declaration.
 * **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve`
   has no case for a type declaration. Unrelated to conditions.
 * **`local ... in ... end` is not implemented.** It is how Standard ML
