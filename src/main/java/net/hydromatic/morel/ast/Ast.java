@@ -896,7 +896,10 @@ public class Ast {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(exp, left, op.left);
+      // An operand that ends in a type -- 'e : t', 'e as t' -- must be
+      // parenthesized, because the type would otherwise take the 'check':
+      // 'e : int check c' reads as 'e : (int check c)'.
+      w.append(exp, left, Op.ANNOTATED_EXP.right + 1);
       for (Fn check : checks) {
         w.append(" check ").appendAll(check.matchList, 0, Op.BAR, 0);
       }

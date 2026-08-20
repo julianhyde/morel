@@ -874,6 +874,59 @@ mustBeNat ~3;
 > uncaught exception Constraint [~3 is not a valid value]
 >   raised at: stdIn:1.5-1.47
 
+(* --- Parentheses, when a condition is unparsed ------------------ *)
+
+(* 'Sys.parseTree' parses a statement and prints the tree, so it shows which
+ * parentheses survive: a condition should get the ones it needs, and no
+ * others. *)
+Sys.set ("stringDepth", ~1);
+> val it = () : unit
+
+(*) A condition on the whole type needs none.
+Sys.parseTree "type t = int check c => c >= 0";
+> val it = "(type_decl type t = int check c => c >= 0)" : string
+Sys.parseTree "type t = int * int check c => true";
+> val it = "(type_decl type t = int * int check c => true)" : string
+
+(*) Redundant parentheses are dropped.
+Sys.parseTree "type t = (int check c => c >= 0)";
+> val it = "(type_decl type t = int check c => c >= 0)" : string
+
+(*) Parentheses that put the condition on a component are kept.
+Sys.parseTree "type t = (int check c => c >= 0) * int";
+> val it = "(type_decl type t = (int check c => c >= 0) * int)" : string
+Sys.parseTree "type t = (int check c => c >= 0) list";
+> val it = "(type_decl type t = (int check c => c >= 0) list)" : string
+
+(* A type written after a condition is an operand of it, so no parentheses are
+ * added -- and none would help; the type is already part of the condition. *)
+Sys.parseTree "type t = int check c => c >= 0 list";
+> val it = "(type_decl type t = int check c => c >= 0 list)" : string
+
+(*) An expression whose operand binds tighter needs none.
+Sys.parseTree "val x = e check c => c > 0";
+> val it = "(val (valBind (idPat x) (check_exp e check c => c > 0)))" : string
+Sys.parseTree "val x = e + 1 check c => c > 0";
+> val it = "(val (valBind (idPat x) (check_exp e + 1 check c => c > 0)))"
+>   : string
+
+(* An operand that ends in a type must be parenthesized, or the type would
+ * take the condition: 'e : int check c' reads as 'e : (int check c)'. The two
+ * are different trees. *)
+Sys.parseTree "val x = (e : int) check c => c > 0";
+> val it = "(val (valBind (idPat x) (check_exp (e : int) check c => c > 0)))"
+>   : string
+Sys.parseTree "val x = e : (int check c => c > 0)";
+> val it =
+>   "(val (valBind (idPat x) (annotatedExp (id e) (constrained_type int check c => c > 0))))"
+>   : string
+
+(*) A condition inside a match body keeps its parentheses.
+Sys.parseTree "val x = fn i => (i check j => j > 0)";
+> val it =
+>   "(val (valBind (idPat x) (fn (match (idPat i) (check_exp i check j => j > 0)))))"
+>   : string
+
 (* Whether a reference is to the basis is decided by the binding, not by the
  * name. A user who shadows a basis name has declared a value of their own,
  * and a condition that referred to it would take its meaning from the
