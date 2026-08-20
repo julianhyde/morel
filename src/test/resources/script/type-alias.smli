@@ -272,6 +272,19 @@ Bag.length (from r in recs yield r.i);
 case {i = 3, j = "c"} : rec1 of {i, j} => i;
 > val it = 3 : int
 
+(* 'type_string' renders the type as it would be displayed, so it agrees with
+ * what the shell prints, alias and all. *)
+type foo = int;
+> type foo = int
+val fv: foo = 1;
+> val fv = 1 : foo
+type_string fv;
+> val it = "foo" : string
+type_string [fv];
+> val it = "foo list" : string
+type_string 1;
+> val it = "int" : string
+
 (*) A parameterized alias is expanded.
 type 'a my_list2 = 'a list;
 > type 'a my_list2 = 'a list
