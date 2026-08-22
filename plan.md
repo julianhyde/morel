@@ -1069,9 +1069,10 @@ Two limits remain:
 
 ## Record modifiers and conditions
 
-To be logged as an issue; notes here so the reasoning is not lost.
+**Done**, except for inheriting a condition into a record of a different
+shape, which is recorded below as what remains.
 
-Today a modifier keeps the constraints on fields it does not touch, and drops
+A modifier used to keep the constraints on fields it does not touch, and drop
 the record type's own condition:
 
 ```sml
@@ -1082,8 +1083,9 @@ val v2 = {v0 remove a};        (*) {b:nat}
 val v3 = {v0 replace a = 9};   (*) {a:int, b:nat}
 ```
 
-That is sound -- the result claims nothing it has not been shown -- but it
-throws away more than it needs to.
+That was sound -- the result claimed nothing it had not been shown -- but it
+threw away more than it needed to, and `v3` is the footgun: a derived schema
+was unchecked unless it was annotated.
 
 **A rule that covers all four modifiers.** Inherit a condition if and only if
 every field it depends on is unchanged; otherwise drop it. Then:
@@ -1102,11 +1104,32 @@ every field it depends on is unchanged; otherwise drop it. Then:
   is unchecked unless it is annotated -- a footgun, because every realistic
   derivation of a schema goes through `replace`.
 
-**Decided: a modifier claims the type it modifies**, with the obvious
-exceptions -- a modifier that adds or removes a field, or changes a field's
-type, produces a different type and cannot claim the old one.
+**Done: a modifier claims the type it modifies**, with the obvious exceptions
+-- a modifier that adds or removes a field, or changes a field's type,
+produces a different type and cannot claim the old one.
 
-**Attempted three ways; the desugaring must move.** A modifier is desugared
+The rule that landed is stated on the modifier's *shape*, and falls out of one
+test rather than a case per verb. Applying a modifier gives, for each field of
+the result, where its value comes from: a field kept from the record it was
+applied to, a value assigned, or a field of an `all` argument. The chain claims
+the base's type if every modifier leaves that list looking like the one it was
+given -- same labels, in the same places, each keeping the type it had. So
+`replace` and `replace all` claim, `extend`, `remove` and `rename` do not,
+`lenient` does not, and a verb that skips claims by having done nothing. No
+verb is named anywhere in the test.
+
+The claim is checked **at the modifier**, because nobody else wrote the type
+down. The check runs when some modifier put a value into a field that has a
+declared type; a field being added has no type to keep, and one kept, removed
+or renamed carries a value that was checked when it was put there. So `extend`
+is free, as this plan asked.
+
+Where the shape does change, the assigned field takes the type of the value,
+so `{e replace empno = ~1 extend hired = true}` is `{empno:int, ...}` and is
+neither claimed nor checked. That is sound -- the printed type says `int` --
+and it is the price of the rule being about shape.
+
+**Attempted three ways; the desugaring had to move.** A modifier was desugared
 into a destructure and a fresh record literal:
 
 ```sml
@@ -1140,10 +1163,19 @@ expression as written:
   a condition is checked;
 * `lenient` opts out, and the result is then a different type.
 
-and the desugaring moves to `Resolver`, which builds the `let` and the record
-in Core, where the types are already settled. That is a change to how
-modifiers are typed rather than something that can be added around the
+and the desugaring moved to `Resolver`, which builds the `let` and the record
+in Core, where the types are already settled. That was a change to how
+modifiers are typed rather than something that could be added around the
 desugaring, and it is the substance of this issue.
+
+Two things fell out of the record surviving into the tree. The
+unresolved-flex-record check could no longer be "a record still has
+modifiers", since now they all do, so unresolved records are collected as they
+are found; and a `yield` step reads the fields it binds from the modifiers'
+result rather than from the expression, which has none of its own.
+
+A value that a verb skips used to vanish with the desugaring, and so was never
+typed. It is typed now, because the user wrote it.
 
 `replace` already says it "preserves the field's type", and enforces it by
 unification, so a different base type is caught:
@@ -1178,9 +1210,15 @@ So the two forms stop being interchangeable, as they are today.
 The asymmetry between `extend` and `replace` is principled, not arbitrary: one
 cannot invalidate a condition and the other can.
 
-**The obstacle is typing, not semantics.** A condition is typed against the
-exact record type, and records are not width-subtyped, so an inherited
-condition must re-type against the new record. `r => r.a < 10` only selects
+**Still open: inheriting a condition into a different shape.** `extend`,
+`remove` and `rename` still drop the record's own conditions, because they
+claim nothing; the rule above only keeps a type that is kept whole. Carrying a
+condition into a record of a different shape is a further step, and this is
+what it needs.
+
+A condition is typed against the exact record type, and records are not
+width-subtyped, so an inherited condition must re-type against the new
+record. `r => r.a < 10` only selects
 fields, and re-types fine; `{a, b} => a < 10` destructures, and will not match
 a record with another field. That would make inheritance depend on how the
 condition was written.
@@ -1399,12 +1437,15 @@ So it is opt-in and later, and no program that is accepted today would change
 
 ## Issues to log
 
-* **Record modifiers and conditions**, per the section above.
 * **Capture for a condition that is not closed**, so that the issue's
   `batchSize` example works: inline what the condition refers to at the
   declaration, so that it becomes closed. Note that `local` is not
   implemented and a `type` may not be declared in a `let`, so a free variable
   can only be a top-level binding today; implementing either would widen this.
+* **Inherit a record's condition into a modifier that changes its shape**, per
+  the last part of "Record modifiers and conditions" above. A modifier that
+  keeps the shape now claims the type; `extend`, `remove` and `rename` still
+  drop the record's own condition.
 * **Messages when a constraint fails**, per the requirements above.
 * **`e check match`, to add a condition to an expression**, per the section
   above. Includes lifting the restriction that a condition may only be written
@@ -1485,7 +1526,9 @@ Recorded here so that the plan and the code agree.
   matching this plan.
 * **A list element has no index.** `List.all`, which walks the list, does not
   offer one, so "element 1" is just "element".
-* **A record modifier does not raise.** Its result claims nothing; the binding
-  that receives it does.
+* **A record modifier raises after all.** This plan first recorded that it did
+  not -- its result claimed nothing, and the binding that received it did the
+  checking. Now a modifier that assigns claims the type it modifies, and that
+  claim is checked where it is made.
 * **"Cannot claim", not "cannot convert"**, a constrained function type: the
   same message serves a binding and a parameter as well as a conversion.

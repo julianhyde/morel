@@ -1681,11 +1681,11 @@ public class Resolver {
       Map<Ast.Exp, Core.Id> operands) {
     if (i == exps.size()) {
       return modify(
-          record.modifiers,
+          record,
           0,
           requireNonNull(operands.get(record.base)),
           operands,
-          record.pos);
+          false);
     }
     final Ast.Exp exp = exps.get(i);
     return letValue(
@@ -1697,15 +1697,30 @@ public class Resolver {
         });
   }
 
-  /** Applies the modifiers of a record, from {@code i} onwards. */
+  /**
+   * Applies the modifiers of a record, from {@code i} onwards.
+   *
+   * <p>{@code claimed} says whether a modifier already applied put a value into
+   * a field that has a declared type. If one did, the record claims that the
+   * value has that type, and the claim is checked here -- at the modifier, not
+   * where its result is bound, because nobody else wrote the type down. A
+   * modifier that only adds, removes or renames a field claims nothing new:
+   * every value it carries over was checked when it was put there.
+   */
   private Core.Exp modify(
-      List<Ast.Modifier> modifiers,
+      Ast.Record record,
       int i,
       Core.Exp value,
       Map<Ast.Exp, Core.Id> operands,
-      Pos pos) {
+      boolean claimed) {
+    final List<Ast.Modifier> modifiers = record.modifiers;
+    final Pos pos = record.pos;
     if (i == modifiers.size()) {
-      return value;
+      if (!claimed) {
+        return value;
+      }
+      final Type type = typeMap.getAliasedType(record);
+      return type == null ? value : checked(value, type, pos);
     }
     final Ast.Modifier modifier = modifiers.get(i);
     final Core.Id allId =
@@ -1740,11 +1755,11 @@ public class Resolver {
               pos,
               r ->
                   r.modify(
-                      modifiers,
+                      record,
                       i + 1,
                       r.build(sources, id, allId, pos),
                       operands,
-                      pos));
+                      claimed || RecordModifiers.claims(sources)));
         });
   }
 
