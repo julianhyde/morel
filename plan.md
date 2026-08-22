@@ -203,13 +203,26 @@ something settled — §8's principle, applied to the sequence itself.
         and pair every value with every other, which is why the front
         end used to decline.
 
-        Agreement is 259 of 300. What remains, in three shapes:
-        * A join of leaves with *different* generators, one already
-          finite: `from b in extent "bool" join i : int where b
-          andalso i > 5 andalso i < 15`.
-        * The same, with three leaves, one of them a record.
-        * Grounding through a `case` over a datatype: `from
-          e : (int, 'a) either where case e of INL n => n >= 5 ...`.
+        Agreement is 259 of 300, and the 41 that remain are a long
+        tail rather than one shape. Traced:
+        * One leaf grounds another. `from dno : int join name :
+          string join v : {deptno, dname, loc} where v elem depts
+          andalso #deptno v = dno` grounds `v` from `depts` and then
+          `dno` from `v`. The tree handles correlation only between a
+          join's own two sides, not between leaves further apart.
+        * Patterns that nothing refers to. `from w : 'a join x : int
+          join y : 'b where (x, 2) elem pairs` grounds in the step
+          list because `Expander` skips a pattern that no step reads
+          when the rows are only counted. The tree front end has no
+          such notion.
+        * Grounding by solving. `from x : int where (x + 2) * (x - 3)
+          = 0` is grounded by the step list; the tree's constraints
+          reach the engine but nothing generates.
+
+        Naming a leaf from the constraints rather than by trial was
+        tried and reverted: it is a better rule, but it moved nothing
+        -- none of the tail is a naming problem -- and unpaid
+        complexity is worse than the trial it replaced.
 
         The invariant to reach before the flip is that the tree never
         grounds less than the step list; until then any query the
