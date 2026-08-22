@@ -147,24 +147,27 @@ public class RelShadow {
   }
 
   /**
-   * Returns whether an expression contains an extent that cannot be enumerated.
+   * Returns whether a tree still has a leaf that cannot be enumerated.
    *
-   * <p>A finite extent is a perfectly good bound -- {@code extent "bool"} is
-   * two values -- so only an infinite one means the query is still unbounded.
+   * <p>Only the tree's own leaves count. A nested query inside an expression --
+   * {@code where nonEmpty (from y : int where ...)} -- has an unbounded pattern
+   * of its own, which the step list grounds when it reaches that query, and for
+   * which this one is not answerable.
+   *
+   * <p>A finite extent is a perfectly good bound: {@code extent "bool"} is two
+   * values.
    */
   private static boolean containsExtent(Core.Exp exp) {
-    final boolean[] found = {false};
-    exp.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Core.Apply apply) {
-            super.visit(apply);
-            if (Extents.isInfinite(apply)) {
-              found[0] = true;
-            }
-          }
-        });
-    return found[0];
+    if (!(exp instanceof Core.Rel)) {
+      return Extents.isInfinite(exp);
+    }
+    for (Core.Exp input : ((Core.Rel) exp).inputs()) {
+      if (containsExtent(input)) {
+        return true;
+      }
+    }
+    return exp instanceof Core.ProjectMany
+        && containsExtent(((Core.ProjectMany) exp).body);
   }
 
   /**
