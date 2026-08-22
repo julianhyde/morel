@@ -1055,6 +1055,29 @@ levels. Naming buys only the name: a type that is not named is called "value",
 and the blame path says which one. That is what the "name the constraint"
 requirement above is for.
 
+### Such a type survives inference
+
+A term identifies an alias by name, and a constrained type that is not named
+has none, so its condition used to reach only the binding it was written on: a
+later reference saw the body. It is given a name derived from its conditions,
+and the conditions are remembered for the term to be converted back, the way a
+displaced datatype already is.
+
+The name is derived from the conditions and from nothing else. That is what
+decides identity -- a condition is closed, so its text is the whole of it --
+and the body is not in the name because the term carries the body as its first
+argument, so two terms with the same conditions unify only if their bodies do.
+Everything else follows the rules a named alias already obeys: the meet is the
+weaker of the two, so arithmetic drops the condition, and two types written
+differently meet at the body they share.
+
+One thing had to be fixed with it. A named alias is written by its name, which
+never needs parentheses, and a type that is not named is written in full, so
+`Pretty` had been rendering an alias without regard to precedence. A condition
+binds more loosely than anything else in a type, so `(int check i => i >= 0)
+-> (int check i => i >= 0)` needs the parentheses that `AliasKey.describe`
+already gave it and the pretty-printer did not.
+
 Two limits remain:
 
 * A condition is compiled where its type is declared, so one written anywhere
@@ -1303,9 +1326,13 @@ they nest.
 An implementation note: the base type need never be materialized. The
 condition is typed against the same unification variable as the expression,
 and the checked type is built afterwards, where the expression's type is
-known. What that does not give is a type that participates in inference --
-`val a = e check m` displays as `int check ...`, but a later reference to `a`
-is only `int` -- because the term language has no way to carry a condition.
+known.
+
+That first gave a type that did not participate in inference -- `val a = e
+check m` displayed as `int check ...`, but a later reference to `a` was only
+`int` -- because a term identifies an alias by name, and a constrained type
+that is not named has none. **That is fixed**, per the section below, and a
+condition now reaches a later use.
 
 Several conditions on one expression therefore have to be one node, not
 nested: nesting would put each in the type of the last, and the last would be

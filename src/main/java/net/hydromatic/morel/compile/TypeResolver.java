@@ -148,6 +148,20 @@ public class TypeResolver {
   private final Map<String, Type> displacedTypes = new HashMap<>();
 
   /**
+   * Conditions of constrained types that have no name, by the name their term
+   * is given.
+   *
+   * <p>A term identifies an alias by name, and a constrained type that is not
+   * named has none, so without these its conditions could not be recovered from
+   * the term and would reach only the binding they were written on. The name is
+   * derived from the conditions, so that two types written the same way get the
+   * same name and are the same type.
+   *
+   * @see TypeMap#unnamedChecks
+   */
+  private final Map<String, List<Ast.Fn>> unnamedChecks = new HashMap<>();
+
+  /**
    * Names of user-defined functions whose first parameter is named {@code self}
    * (curried form); these can be invoked as methods.
    */
@@ -324,7 +338,8 @@ public class TypeResolver {
               map,
               (Substitution) result,
               ImmutableMap.of(),
-              displacedTypes);
+              displacedTypes,
+              unnamedChecks);
 
       // If any value bindings have aliased types (e.g. 'myInt' rather than
       // the expanded type 'int'), populate a map with those types.
@@ -338,7 +353,8 @@ public class TypeResolver {
                   map,
                   (Substitution) result,
                   realTypes,
-                  displacedTypes);
+                  displacedTypes,
+                  unnamedChecks);
 
       while (!preferredTypes.isEmpty()) {
         Map.Entry<Variable, PrimitiveType> x = preferredTypes.remove(0);
@@ -4069,7 +4085,13 @@ public class TypeResolver {
       return null;
     }
     final TypeMap tempTypeMap =
-        new TypeMap(typeSystem, map, subst, ImmutableMap.of(), displacedTypes);
+        new TypeMap(
+            typeSystem,
+            map,
+            subst,
+            ImmutableMap.of(),
+            displacedTypes,
+            unnamedChecks);
     final List<QualifiedType.Predicate> predicates = new ArrayList<>();
     for (Constraint c : ((SubstitutionResult) result).residualConstraints) {
       if (c.name == null || c.result == null) {
@@ -5321,6 +5343,21 @@ public class TypeResolver {
     return unifier.apply(ALIAS_TY_CON + ":" + name, terms);
   }
 
+  /**
+   * Returns the name a constrained type that has none is known by in a term.
+   *
+   * <p>It is derived from the conditions, and from nothing else, so that it is
+   * the same wherever the same conditions are written -- which is what decides
+   * whether two constrained types are the same type. The body is not in it; the
+   * term carries the body as its first argument, so two terms with these
+   * conditions unify only if their bodies do.
+   */
+  static String unnamedCheckName(List<Ast.Fn> checks) {
+    final StringBuilder b = new StringBuilder("$check");
+    checks.forEach(c -> b.append(':').append(c.matchListString()));
+    return b.toString();
+  }
+
   /** Returns whether a term is a type alias, as built by {@link #aliasTerm}. */
   static boolean isAliasTerm(Term term) {
     return term instanceof Sequence
@@ -5386,8 +5423,16 @@ public class TypeResolver {
         // first argument, and the unifier expands it -- head-reduction --
         // only when it meets a term with a different operator.
         final AliasType aliasType = (AliasType) type;
+        String aliasName = aliasType.name;
+        if (aliasName.isEmpty() && !aliasType.checks.isEmpty()) {
+          // A constrained type that is not named has no name to look up by, so
+          // give it one derived from its conditions, and remember them for
+          // TypeMap to convert back.
+          aliasName = unnamedCheckName(aliasType.checks);
+          unnamedChecks.put(aliasName, aliasType.checks);
+        }
         return aliasTerm(
-            aliasType.name,
+            aliasName,
             toTerm(aliasType.type, subst),
             toTerms(aliasType.arguments, subst));
       case DATA_TYPE:
