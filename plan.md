@@ -203,17 +203,18 @@ something settled — §8's principle, applied to the sequence itself.
         and pair every value with every other, which is why the front
         end used to decline.
 
-        Agreement is 259 of 300. The 41 that remain, from the
+        Agreement is 273 of 300. The 41 that remain, from the
         divergence trace — and note that a query both engines decline
         is agreement, not a gap; `from x where (x + 2) * (x - 3) = 0`
         errors in both, as such-that.smli says it should, for want of
         symbolic maths:
-        * Grounding through a nested query, the largest group: `from
-          x : int where nonEmpty (from y : int where (x, y) elem
-          pairs)`. The engine has machinery for this
-          (`ExistsFilterGenerator`), and the tree front end grounds
-          the `exists` spelling of it in isolation, so what fails in
-          the suite is not yet understood.
+        * Grounding through a nested query was never failing: the
+          shadow was. It asked whether *any* infinite extent survived
+          anywhere in the expanded expression, and a nested query in
+          a condition -- `where nonEmpty (from y : int where ...)` --
+          has an unbounded pattern of its own that the step list
+          grounds when it reaches that query. Now only the tree's own
+          leaves count.
         * Correlation chains. `from dno : int join name : string join
           v : {deptno, dname, loc} where v elem depts andalso #deptno
           v = dno` grounds `v` and then `dno` from `v`. The tree
