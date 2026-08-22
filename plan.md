@@ -235,10 +235,12 @@ something settled — §8's principle, applied to the sequence itself.
           collapse must not swallow it. Reverted, and left for a
           version that does all three together.
 
-        Naming a leaf from the constraints rather than by trial was
-        tried and reverted: it is a better rule, but it moved nothing
-        -- none of the tail is a naming problem -- and unpaid
-        complexity is worse than the trial it replaced.
+        Naming a leaf by pattern, and retrying that way when naming
+        by variable fails, is worth five queries: 284 of 300 with
+        the retry, 279 without. Naming from the constraints rather
+        than by trial was tried and reverted: it is a better rule,
+        but it moved nothing -- none of the tail is a naming problem
+        -- and unpaid complexity is worse than the trial it replaced.
 
         The invariant to reach before the flip is that the tree never
         grounds less than the step list; until then any query the
