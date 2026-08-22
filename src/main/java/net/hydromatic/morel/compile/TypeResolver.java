@@ -188,6 +188,14 @@ public class TypeResolver {
   private final Map<Ast.Exp, List<String>> fieldNames = new IdentityHashMap<>();
 
   /**
+   * Conditions carried by the type of an expression that a record modifier is
+   * applied to, cached beside {@link #fieldNames} and learned at the same time,
+   * from the same resolved term.
+   */
+  private final Map<Ast.Exp, List<Ast.Fn>> fieldChecks =
+      new IdentityHashMap<>();
+
+  /**
    * Fields of each record with modifiers that was typed on this attempt.
    *
    * <p>A record with modifiers has no fields of its own to read them from, and
@@ -2445,6 +2453,8 @@ public class TypeResolver {
       final List<String> names = fieldNames.get(exp);
       if (names != null) {
         operands.names.put(exp, names);
+        operands.checks.put(
+            exp, fieldChecks.getOrDefault(exp, ImmutableList.of()));
       } else {
         unknown.add(exp, v);
       }
@@ -2456,13 +2466,16 @@ public class TypeResolver {
       final @Nullable Substitution substitution = solve();
       unknown.forEach(
           (exp, variable) -> {
+            final Term resolved =
+                substitution == null ? null : substitution.resolve(variable);
             final List<String> names =
-                substitution == null
-                    ? null
-                    : termFieldNames(substitution.resolve(variable));
+                resolved == null ? null : termFieldNames(resolved);
             if (names != null) {
+              final List<Ast.Fn> checks = termChecks(resolved);
               fieldNames.put(exp, names);
+              fieldChecks.put(exp, checks);
               operands.names.put(exp, names);
+              operands.checks.put(exp, checks);
             } else {
               actionMap.put(
                   variable,
@@ -2482,6 +2495,7 @@ public class TypeResolver {
   private void rememberFields(Ast.Exp exp, Term t) {
     final List<String> names = termFieldNames(t);
     if (names != null && fieldNames.putIfAbsent(exp, names) == null) {
+      fieldChecks.put(exp, termChecks(t));
       ++fieldsLearned;
     }
   }
@@ -2540,12 +2554,19 @@ public class TypeResolver {
    * derived schema keeps the conditions the schema it derives from carries. The
    * assembled record is what an assignment weakens a field to, and is the type
    * this claim will be checked against.
+   *
+   * <p>A modifier that does change the shape gives a record the base's name no
+   * longer fits, but the base's conditions need not all be lost with it: one
+   * that depends only on fields the modifier left alone is carried over, and
+   * the result is a constrained type that has no name. Nothing is checked --
+   * every value carried over was checked when it was put there.
    */
   private Ast.Exp deduceModifiedRecordType(
       TypeEnv env, Ast.Record record, Operands operands, Variable v) {
     final Ast.Exp base = requireNonNull(record.base);
     NavigableMap<String, Variable> fields0 = fieldVariables(operands, base);
     final List<Ast.Modifier> modifiers = new ArrayList<>();
+    List<Ast.Fn> checks = operands.checks(base);
     boolean claims = true;
     for (Ast.Modifier modifier : record.modifiers) {
       final NavigableMap<String, Variable> fields = fields0;
@@ -2562,6 +2583,7 @@ public class TypeResolver {
                   : ImmutableList.copyOf(allFields.keySet()));
 
       claims &= RecordModifiers.preserves(sources, fields.keySet());
+      checks = inheritChecks(checks, sources);
 
       final TypeEnv env2 = bindFields(env, fields);
       final NavigableMap<String, Variable> fields2 =
@@ -2580,7 +2602,92 @@ public class TypeResolver {
         record.copy(operands.exp(base), ImmutableList.of(), modifiers);
     modifiedFields.put(record2, fields0);
     return reg(
-        record2, v, claims ? operands.variable(base) : recordTerm(fields0));
+        record2, v, modifiedTerm(env, operands, base, fields0, checks, claims));
+  }
+
+  /**
+   * Returns the type of a modified record: the base's, if the modifiers left
+   * its shape alone; otherwise a record assembled from the fields, carrying
+   * whichever of the base's conditions were carried over.
+   */
+  private Term modifiedTerm(
+      TypeEnv env,
+      Operands operands,
+      Ast.Exp base,
+      NavigableMap<String, Variable> fields,
+      List<Ast.Fn> checks,
+      boolean claims) {
+    if (claims) {
+      return operands.variable(base);
+    }
+    final Term recordTerm = recordTerm(fields);
+    if (checks.isEmpty()) {
+      return recordTerm;
+    }
+    // The conditions were written for the record the modifiers were applied
+    // to, so they are typed again here, against the record they produced.
+    final List<Ast.Fn> checks2 = deduceChecks(env, recordTerm, checks);
+    final String name = unnamedCheckName(checks2);
+    unnamedChecks.put(name, checks2);
+    return aliasTerm(name, recordTerm, ImmutableList.of());
+  }
+
+  /**
+   * Returns the conditions that survive a modifier, rewritten for the record it
+   * produced.
+   *
+   * <p>A field the modifier kept is still there, under whatever label it kept
+   * it at; one it assigned to holds a value that was never shown to satisfy
+   * anything, and one it removed is not there at all. So a condition is carried
+   * over if it depends only on fields that were kept, and is rewritten to name
+   * them as the result names them.
+   */
+  private List<Ast.Fn> inheritChecks(
+      List<Ast.Fn> checks, PairList<String, RecordModifiers.Source> sources) {
+    if (checks.isEmpty()) {
+      return checks;
+    }
+    final Map<String, String> fields = new LinkedHashMap<>();
+    sources.forEach(
+        (label, source) -> {
+          if (source instanceof RecordModifiers.Kept) {
+            fields.put(((RecordModifiers.Kept) source).field, label);
+          }
+        });
+    final List<Ast.Fn> checks2 = new ArrayList<>();
+    for (Ast.Fn check : checks) {
+      final Ast.Fn check2 = Conditions.inherit(typeSystem, check, fields);
+      if (check2 != null) {
+        checks2.add(check2);
+      }
+    }
+    return checks2;
+  }
+
+  /**
+   * Returns the conditions a term carries, from every alias it is wrapped in.
+   *
+   * <p>A type may be an alias for an alias, and each layer may constrain, so
+   * they are collected from the outside in, down to the type the aliases
+   * abbreviate.
+   */
+  private List<Ast.Fn> termChecks(Term t) {
+    final List<Ast.Fn> checks = new ArrayList<>();
+    while (t instanceof Sequence && isAliasTerm((Sequence) t)) {
+      final Sequence sequence = (Sequence) t;
+      final String name = aliasTermName(sequence);
+      final List<Ast.Fn> named = unnamedChecks.get(name);
+      if (named != null) {
+        checks.addAll(named);
+      } else {
+        final Type type = typeSystem.lookupOpt(name);
+        if (type instanceof AliasType) {
+          checks.addAll(((AliasType) type).checks);
+        }
+      }
+      t = sequence.terms.get(0);
+    }
+    return checks;
   }
 
   /**
@@ -2715,6 +2822,9 @@ public class TypeResolver {
     /** The field names of each operand whose type is a known record. */
     final Map<Ast.Exp, List<String>> names = new IdentityHashMap<>();
 
+    /** The conditions each operand's type carries. */
+    final Map<Ast.Exp, List<Ast.Fn>> checks = new IdentityHashMap<>();
+
     /** Whether every operand's field names are known. */
     boolean complete;
 
@@ -2728,6 +2838,10 @@ public class TypeResolver {
 
     List<String> fieldNames(Ast.Exp exp) {
       return requireNonNull(names.get(exp), "operand");
+    }
+
+    List<Ast.Fn> checks(Ast.Exp exp) {
+      return checks.getOrDefault(exp, ImmutableList.of());
     }
   }
 
