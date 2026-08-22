@@ -1532,3 +1532,62 @@ Recorded here so that the plan and the code agree.
   claim is checked where it is made.
 * **"Cannot claim", not "cannot convert"**, a constrained function type: the
   same message serves a binding and a parameter as well as a conversion.
+
+## Preparing the branch for main
+
+The branch is a working record: 79 commits, of which 22 touch only this file,
+plus a revert and the two commits it undid. That is the right way to explore
+and the wrong way to merge. Before merging, reorder, squash and amend so the
+history reads as a design rather than a diary.
+
+### What can move out in front
+
+**"Type a modified record as written, and build it in Resolver" is
+independent of constrained types**, and belongs before them. It is a fix to
+the record modifiers of #432: a modifier was desugared into a destructure and
+a record literal before it was typed, and the destructure erased the type of
+the record being modified. Nothing about that reasoning mentions a condition;
+conditions are only what made it matter.
+
+Verified rather than assumed. Cherry-picked onto `d4eeff5a`, the last commit
+before this work began, it applies with no conflicts, and the whole suite
+passes (516 tests). It needs one thing carried with it: `Resolver.letValue`,
+a ten-line helper that binds an expression to a name, which the check work
+introduced but does not own.
+
+So the merge order should be:
+
+1. **Type a modified record as written**, as a fix in its own right. It stands
+   without the rest, and it fixes a footgun that is there today.
+2. Everything else, in the order it was built.
+3. **A record modifier claims the type it modifies** stays where it is: it
+   needs both the typing rule and the check machinery.
+
+"A check must ask for the stack slots its condition needs" is a real bug with
+a test of its own, and should stay a commit of its own, but it cannot move
+before the check work -- the code it fixes arrives with "Enforce a check
+condition at a binding" (`6b55a382`). Squashing it into that commit is the
+alternative, and loses a fix worth reading on its own.
+
+### What should collapse
+
+* **The alias revert cluster.** `A type alias should survive inference`
+  (`c6d599d4`), `A parameterized alias survives inference in a function
+  signature` (`9773d2f6`), the revert of both (`e6fbff1b`), and the second
+  attempt (`2c646400`) with `Where a type alias meets a different type, take
+  the weaker of the two` (`04012445`) should become one commit: the design
+  that stayed. The first attempt is not history anyone needs.
+* **The plan-only commits.** Each records a finding; most are followed by the
+  commit that acts on it. Squash each into the commit that acts on it, so the
+  reasoning arrives with the code rather than a step ahead of it. The ones
+  that record a decision with no code -- the phases, the open questions --
+  belong in whatever this file becomes.
+
+### What to decide
+
+**Whether `plan.md` merges at all.** It is a scratch design document, and much
+of it is now either implemented or superseded. The parts worth keeping are the
+requirements for constraint-failure messages, the open questions, and the
+issues to log; the parts recording how the design was arrived at are not
+documentation. Either cut it down to the parts that survive and put them where
+documentation goes, or file the issues it lists and drop the file.
