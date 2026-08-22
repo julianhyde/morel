@@ -1106,6 +1106,30 @@ every field it depends on is unchanged; otherwise drop it. Then:
 exceptions -- a modifier that adds or removes a field, or changes a field's
 type, produces a different type and cannot claim the old one.
 
+**Attempted, and it needs the modifier to be typed directly.** A modifier is
+desugared into a destructure and a fresh record literal:
+
+```sml
+{r replace a = v}
+==>
+let val {a, b} = r in {a = v, b = b} end
+```
+
+so the result's type is built from the literal's components and has no
+connection to `r`'s. Reconnecting it afterwards does not work. Annotating the
+result with `typeof r` unifies the two, and the meet of a checked type and the
+type it refines is the latter, so the conditions are gone before they can be
+checked. Claiming without unifying -- deducing `typeof r` into a variable of
+its own -- leaves the claim correct but finds `r` already carrying its erased
+type by that point, because the declaration is re-deduced by the retry loop
+that resolves field names.
+
+So the modifier needs a typing rule of its own: the result's type is `r`'s
+type, with the assigned field's type taken from the declaration rather than
+from the value, and the conditions checked. That is a change to how modifiers
+are typed, not something that can be added around the desugaring, and it is
+the substance of this issue.
+
 `replace` already says it "preserves the field's type", and enforces it by
 unification, so a different base type is caught:
 
