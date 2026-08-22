@@ -590,15 +590,28 @@ public class Resolver {
             super.visit(constrainedType);
             final Type t =
                 TypeResolver.toType(constrainedType, typeMap.typeSystem);
-            if (typeMap.typeSystem.checkPredicates(t).isEmpty()) {
-              final List<Core.Exp> predicates =
-                  transformEager(constrainedType.checks, f -> total(toCore(f)));
-              typeMap.typeSystem.setCheckPredicates(t, predicates);
-              predicates.forEach(
-                  p -> checkClosed(null, constrainedType.pos, p));
-            }
+            compileChecks(t, constrainedType.checks, constrainedType.pos);
           }
         });
+  }
+
+  /**
+   * Compiles the conditions of a constrained type, unless they are compiled
+   * already.
+   *
+   * <p>A type is interned by its conditions' text, so a type that has been seen
+   * before has them compiled already, and the conditions here are equal to the
+   * ones that were compiled -- but they may be a different, and untyped, copy
+   * of them, which is why this must not compile them again.
+   */
+  private void compileChecks(Type type, List<Ast.Fn> checks, Pos pos) {
+    if (!checks.isEmpty()
+        && typeMap.typeSystem.checkPredicates(type).isEmpty()) {
+      final List<Core.Exp> predicates =
+          transformEager(checks, f -> total(toCore(f)));
+      typeMap.typeSystem.setCheckPredicates(type, predicates);
+      predicates.forEach(p -> checkClosed(null, pos, p));
+    }
   }
 
   /**
@@ -1494,12 +1507,7 @@ public class Resolver {
                     ImmutableList.of(),
                     checkExp.checks)
                 .toType(typeMap.typeSystem);
-        if (typeMap.typeSystem.checkPredicates(checkType).isEmpty()) {
-          final List<Core.Exp> predicates =
-              transformEager(checkExp.checks, f -> total(toCore(f)));
-          typeMap.typeSystem.setCheckPredicates(checkType, predicates);
-          predicates.forEach(p -> checkClosed(null, checkExp.pos, p));
-        }
+        compileChecks(checkType, checkExp.checks, checkExp.pos);
         return checked(checkCore, checkType, exp.pos);
 
       case AS:
@@ -1747,10 +1755,18 @@ public class Resolver {
     final List<Ast.Modifier> modifiers = record.modifiers;
     final Pos pos = record.pos;
     if (i == modifiers.size()) {
+      final Type type = typeMap.getAliasedType(record);
+      if (type instanceof AliasType) {
+        // A modifier that changed the record's shape may have carried
+        // conditions over into a type that has no name, and so was never
+        // declared. Compile them, so that the type can be used.
+        compileChecks(type, ((AliasType) type).checks, pos);
+      }
       if (!claimed) {
+        // Nothing was assigned, so nothing is claimed that has not been shown:
+        // every value the result carries was checked when it was put there.
         return value;
       }
-      final Type type = typeMap.getAliasedType(record);
       return type == null ? value : checked(value, type, pos);
     }
     final Ast.Modifier modifier = modifiers.get(i);

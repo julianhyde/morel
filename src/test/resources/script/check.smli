@@ -392,6 +392,80 @@ val e3: employee = {e replace empno = ~1};
 {e replace empno = ~1 remove name};
 > val it = {empno=~1} : {empno:int}
 
+(* --- A modifier inherits the record's own condition ------------- *)
+
+(* A modifier that changes the record's shape cannot claim its type, but the
+ * type's own conditions need not be lost with the name. A condition is
+ * carried over if every field it depends on was left alone, and rewritten to
+ * name them as the result names them. The result is a constrained type that
+ * has no name. *)
+type crate = {a: int, b: nat} check r => r.a < 10;
+> type crate = {a:int, b:nat} check r => #a r < 10
+val v0: crate = {a = 1, b = 2};
+> val v0 = {a=1,b=2} : crate
+
+(*) 'extend' leaves every field alone, so every condition is carried over.
+{v0 extend c = 5};
+> val it = {a=1,b=2,c=5} : {a:int, b:nat, c:int} check r => #a r < 10
+
+(* 'remove' drops a condition that mentions the field it removed -- the
+ * condition would no longer typecheck -- and keeps one that does not.
+ * Projecting a column away drops the constraints that mention it, as it does
+ * in a database. *)
+{v0 remove a};
+> val it = {b=2} : {b:nat}
+{v0 remove b};
+> val it = {a=1} : {a:int} check r => #a r < 10
+
+(*) 'rename' carries the condition over with the field renamed inside it.
+{v0 rename z = a};
+> val it = {b=2,z=1} : {b:nat, z:int} check r => #z r < 10
+
+(* The condition is carried into the type, not just displayed on it, so it is
+ * enforced where the derived record is modified again. This is what the
+ * inheritance is for: a schema derived by 'extend' keeps its invariants. *)
+val v1 = {v0 extend c = 5};
+> val v1 = {a=1,b=2,c=5} : {a:int, b:nat, c:int} check r => #a r < 10
+{v1 replace a = 3};
+> val it = {a=3,b=2,c=5} : {a:int, b:nat, c:int} check r => #a r < 10
+{v1 replace a = 20};
+> uncaught exception Constraint [{a=20,b=2,c=5} is not a valid value]
+>   raised at: stdIn:1.1-1.20
+
+(* A condition that depends on a field the modifier assigned to is dropped:
+ * the value that is there now was never shown to satisfy it. *)
+{v0 replace a = 3 extend c = 1};
+> val it = {a=3,b=2,c=1} : {a:int, b:nat, c:int}
+{v0 replace b = 3 extend c = 1};
+> val it = {a=1,b=3,c=1} : {a:int, b:int, c:int} check r => #a r < 10
+
+(* A condition written by destructuring is rewritten to select instead, so
+ * that it holds of a record with fields its pattern does not mention.
+ * Otherwise whether a condition could be inherited would depend on how it
+ * happened to be written. *)
+type parity = {i: int, j: int} check {i, j} => i mod 2 = j mod 2;
+> type parity = {i:int, j:int} check {i = i, j = j} => i mod 2 = j mod 2
+val p0: parity = {i = 2, j = 4};
+> val p0 = {i=2,j=4} : parity
+val p1 = {p0 extend k = 1};
+> val p1 = {i=2,j=4,k=1}
+>   : {i:int, j:int, k:int} check $r => let val i = #i $r and j = #j $r in i mod 2 = j mod 2 end
+{p1 replace i = 4};
+> val it = {i=4,j=4,k=1}
+>   : {i:int, j:int, k:int} check $r => let val i = #i $r and j = #j $r in i mod 2 = j mod 2 end
+{p1 replace i = 3};
+> uncaught exception Constraint [{i=3,j=4,k=1} is not a valid value]
+>   raised at: stdIn:1.1-1.19
+
+(* A condition that uses the record as a whole, rather than by selecting
+ * fields from it, is dropped: a record of another shape is not that record. *)
+type whole = {i: int, j: int} check r => r = {i = 1, j = 2};
+> type whole = {i:int, j:int} check r => r = {i = 1, j = 2}
+val w0: whole = {i = 1, j = 2};
+> val w0 = {i=1,j=2} : whole
+{w0 extend k = 9};
+> val it = {i=1,j=2,k=9} : {i:int, j:int, k:int}
+
 (* An ascription is a claim, like a binding, so it is checked wherever it
  * appears -- not only where its value is bound. *)
 (~1 : nat);

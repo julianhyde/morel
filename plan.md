@@ -1233,11 +1233,28 @@ So the two forms stop being interchangeable, as they are today.
 The asymmetry between `extend` and `replace` is principled, not arbitrary: one
 cannot invalidate a condition and the other can.
 
-**Still open: inheriting a condition into a different shape.** `extend`,
-`remove` and `rename` still drop the record's own conditions, because they
-claim nothing; the rule above only keeps a type that is kept whole. Carrying a
-condition into a record of a different shape is a further step, and this is
-what it needs.
+**Done: a condition is inherited into a different shape.** `extend`, `remove`
+and `rename` claim nothing, but the record's own conditions need not be lost
+with the name. A condition is carried over if every field it depends on was
+left alone, and rewritten to name those fields as the result names them; the
+result is a constrained type that has no name, which is what the previous
+section made possible.
+
+The rule reads off the same list of sources the claim does. A field the
+modifier kept is still there, under whatever label it kept it at; one it
+assigned to holds a value that was never shown to satisfy anything; one it
+removed is not there at all. So `extend` carries every condition over,
+`remove` drops one that mentions the field it removed, `rename` rewrites the
+field inside it, and an assignment in a chain that changes shape drops
+whatever depended on what it assigned. Nothing is checked -- every value
+carried over was checked when it was put there.
+
+Two conditions cannot be carried over, and are dropped, which is sound because
+a type that claims less claims nothing false: one that uses the record as a
+whole rather than by selecting fields from it, since a record of another shape
+is not that record; and one whose match this cannot rewrite -- more than one
+branch, or a refutable sub-pattern, which decides by not matching where a
+`val` would raise `Bind`.
 
 A condition is typed against the exact record type, and records are not
 width-subtyped, so an inherited condition must re-type against the new
@@ -1246,10 +1263,22 @@ fields, and re-types fine; `{a, b} => a < 10` destructures, and will not match
 a record with another field. That would make inheritance depend on how the
 condition was written.
 
-The way out is to desugar a destructuring condition into a selecting one when
-the type is declared -- `{a, b} => a < 10` becomes `r => let val a = r.a and b
-= r.b in a < 10 end` -- which is mechanical, since the fields are known. Then
-every condition is inheritable and the rule has no exceptions.
+The way out is to desugar a destructuring condition into a selecting one --
+`{a, b} => a < 10` becomes `$r => let val a = $r.a and b = $r.b in a < 10 end`
+-- which is mechanical, since the fields are known. Then every condition is
+inheritable and the rule has no exceptions.
+
+**Done, but at the point of inheritance, not at the declaration** as this plan
+said. Two reasons. An inherited condition has to be re-typed against the new
+record wherever the rewriting happens, so doing it early saves nothing; and
+doing it early would make every type that was declared with a destructuring
+condition *print* in the desugared form, which is a poor trade for a form the
+user did not write. Rewriting at the point of inheritance leaves a declared
+type printing as it was written, and only the derived type shows the longer
+form.
+
+The cost is that a derived type prints its condition at length, which is the
+same thing open question 8 records about `hr1`.
 
 **Not a laundering hole, either way.** `{{bad extend x = 1} remove x}` yields
 an unnamed record that claims nothing, so re-claiming it at the original type
@@ -1469,10 +1498,6 @@ So it is opt-in and later, and no program that is accepted today would change
   declaration, so that it becomes closed. Note that `local` is not
   implemented and a `type` may not be declared in a `let`, so a free variable
   can only be a top-level binding today; implementing either would widen this.
-* **Inherit a record's condition into a modifier that changes its shape**, per
-  the last part of "Record modifiers and conditions" above. A modifier that
-  keeps the shape now claims the type; `extend`, `remove` and `rename` still
-  drop the record's own condition.
 * **Messages when a constraint fails**, per the requirements above.
 * **`e check match`, to add a condition to an expression**, per the section
   above. Includes lifting the restriction that a condition may only be written
