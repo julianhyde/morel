@@ -168,6 +168,37 @@ public class RelExpander {
     if (exp instanceof Core.Join) {
       return expandJoinTree((Core.Join) exp, conditions);
     }
+    // The remaining nodes build their element, so a condition above one says
+    // nothing about the element below it; but what is below still has to be
+    // expanded, or an unbounded leaf survives under a group.
+    if (exp instanceof Core.Group) {
+      final Core.Group group = (Core.Group) exp;
+      return group.copy(
+          typeSystem,
+          expand(group.input, ImmutableList.of()),
+          group.keys,
+          group.aggregates);
+    }
+    if (exp instanceof Core.ProjectMany) {
+      final Core.ProjectMany projectMany = (Core.ProjectMany) exp;
+      return projectMany.copy(
+          typeSystem,
+          expand(projectMany.input, ImmutableList.of()),
+          projectMany.param,
+          expand(projectMany.body, ImmutableList.of()));
+    }
+    if (exp instanceof Core.IfEmpty) {
+      final Core.IfEmpty ifEmpty = (Core.IfEmpty) exp;
+      return ifEmpty.copy(
+          expand(ifEmpty.input, ImmutableList.of()), ifEmpty.exp);
+    }
+    if (exp instanceof Core.SetRel) {
+      final Core.SetRel setRel = (Core.SetRel) exp;
+      final List<Core.Exp> inputs = new ArrayList<>();
+      setRel.inputs.forEach(
+          input -> inputs.add(expand(input, ImmutableList.of())));
+      return setRel.copy(typeSystem, setRel.distinct, inputs);
+    }
     // A node whose element does not come from a leaf below it in a way this
     // pass understands: leave its inputs alone.
     return exp;
