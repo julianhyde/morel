@@ -74,6 +74,13 @@ public class RelExpander {
   private boolean destructure;
 
   /**
+   * Leaves to name by one variable per component, decided by how the
+   * constraints address them.
+   */
+  private final Map<Core.Exp, Boolean> destructureLeaf =
+      new IdentityHashMap<>();
+
+  /**
    * Conditions that a sealed generator subsumes, and that the filter they came
    * from can therefore drop. Identity, as in {@code Expander}: the same
    * expression written twice is not the same constraint.
