@@ -657,6 +657,16 @@ public class Compiler {
             BagPrinter.NATURAL);
     return new Code() {
       @Override
+      public int maxSlots() {
+        // The value and the condition are evaluated one after the other, in
+        // this frame, so the deeper of the two decides. Returning the default
+        // 0 said that a check needs no slots, and a closure whose body was one
+        // -- a condition on the element type of a collection, say -- was given
+        // a frame too small to evaluate it in.
+        return Math.max(valueCode.maxSlots(), conditionCode.maxSlots());
+      }
+
+      @Override
       public Object eval(Stack stack) {
         final Object value = valueCode.eval(stack);
         final boolean holds;
