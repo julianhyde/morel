@@ -337,14 +337,60 @@ datatype plainBox = PlainBox of int;
 PlainBox ~1;
 > val it = PlainBox ~1 : plainBox
 
-(* A record modifier yields a plain record, which claims nothing, so it is
- * checked where its result is bound at the constrained type rather than at
- * the modifier itself. *)
+(* A record modifier that assigns to a field claims the type of the record it
+ * modifies -- the field keeps its declared type, so the value must have it --
+ * and the claim is checked at the modifier. Nobody else wrote the type down,
+ * so nowhere else would check it. *)
 {e replace empno = ~1};
-> val it = {empno=~1,name="Fred"} : {empno:int, name:string}
+> uncaught exception Constraint [~1 is not a valid nat: field empno]
+>   raised at: stdIn:1.1-1.23
 val e3: employee = {e replace empno = ~1};
 > uncaught exception Constraint [~1 is not a valid nat: field empno]
->   raised at: stdIn:1.5-1.42
+>   raised at: stdIn:1.20-1.42
+
+(*) A value that satisfies the field's type gives back the type unchanged.
+{e replace empno = 2};
+> val it = {empno=2,name="Fred"} : employee
+
+(* 'lenient' says the field need not keep its type, so nothing is claimed of
+ * the value and nothing is checked. The result is a different type. *)
+{e replace lenient empno = ~1};
+> val it = {empno=~1,name="Fred"} : {empno:int, name:string}
+
+(* A modifier that adds, removes or renames a field cannot claim the type: the
+ * result has a different shape. It needs no check either -- every value it
+ * carries over was checked when it was put there. *)
+{e extend hired = true};
+> val it = {empno=1,hired=true,name="Fred"}
+>   : {empno:nat, hired:bool, name:string}
+{e remove name};
+> val it = {empno=1} : {empno:nat}
+
+(*) 'replace all' assigns too, so it claims and checks.
+{e replace all {empno = ~1}};
+> uncaught exception Constraint [~1 is not a valid nat: field empno]
+>   raised at: stdIn:1.1-1.29
+{e replace all {empno = 2}};
+> val it = {empno=2,name="Fred"} : employee
+
+(* A verb that skips assigns nothing, so the record is the one it was given,
+ * and the type comes back with it. *)
+{e replace or skip hired = true};
+> val it = {empno=1,name="Fred"} : employee
+
+(* Every modifier in a chain must leave the shape alone; one that does not
+ * gives a record the name no longer fits, so the chain claims nothing, and an
+ * assigned field takes the type of the value rather than keeping its own.
+ * Nothing is claimed of '~1' -- the field it is in is an 'int' -- so nothing
+ * is checked, and the type that is printed says so. *)
+{e replace empno = 2 extend hired = true};
+> val it = {empno=2,hired=true,name="Fred"}
+>   : {empno:int, hired:bool, name:string}
+{e replace empno = ~1 extend hired = true};
+> val it = {empno=~1,hired=true,name="Fred"}
+>   : {empno:int, hired:bool, name:string}
+{e replace empno = ~1 remove name};
+> val it = {empno=~1} : {empno:int}
 
 (* An ascription is a claim, like a binding, so it is checked wherever it
  * appears -- not only where its value is bound. *)
@@ -616,8 +662,8 @@ val hr0: hr = {
 >    emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},
 >          {deptno=20,empno=2,mgrno=SOME 1,sal=5}]} : hr
 
-(* A schema derived from another is checked where it is bound; the derivation
- * itself yields a plain record, which claims nothing. Hiring is an append. *)
+(* A schema derived from another claims the type it derives from, so it is
+ * checked at the derivation. Hiring is an append. *)
 val hrHired: hr = {hr0 replace emps = from e in hr0.emps
   union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 4.0}]};
 > val hrHired =
@@ -630,38 +676,38 @@ val hrHired: hr = {hr0 replace emps = from e in hr0.emps
 val hrDup: hr = {hr0 replace emps = from e in hr0.emps
   union [{empno = 2, deptno = 10, mgrno = SOME 1, sal = 4.0}]};
 > uncaught exception Constraint [[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5},{deptno=10,empno=2,mgrno=SOME 1,sal=4}] is not a valid emps: field emps]
->   raised at: stdIn:1.5-2.63
+>   raised at: stdIn:1.17-2.63
 
 (* Hiring someone unpaid breaks the row, and is blamed on the row: a
  * constraint is checked at the level that states it. *)
 val hrUnpaid: hr = {hr0 replace emps = from e in hr0.emps
   union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 0.0}]};
 > uncaught exception Constraint [0 is not a valid value: field emps[_].sal]
->   raised at: stdIn:1.5-2.63
+>   raised at: stdIn:1.20-2.63
 
 (*) Raising someone above their manager breaks the table.
 val hrRaise: hr = {hr0 replace emps = from e in hr0.emps
   yield (if e.empno = 2 then {e replace sal = 99.0} else e)};
 > uncaught exception Constraint [[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=99}] is not a valid emps: field emps]
->   raised at: stdIn:1.5-2.61
+>   raised at: stdIn:1.19-2.61
 
 (*) Moving someone to a department that does not exist breaks the schema.
 val hrMoved: hr = {hr0 replace emps = from e in hr0.emps
   yield (if e.empno = 2 then {e replace deptno = 99} else e)};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr]
->   raised at: stdIn:1.5-2.62
+>   raised at: stdIn:1.19-2.62
 
 (*) Closing a department that still has employees breaks it from the other side.
 val hrClosed: hr = {hr0 replace depts = from d in hr0.depts
   where d.deptno <> 20};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr]
->   raised at: stdIn:1.5-2.24
+>   raised at: stdIn:1.20-2.24
 
 (*) Opening a department whose number is in use breaks the other table.
 val hrDupDept: hr = {hr0 replace depts = from d in hr0.depts
   union [{deptno = 10, dname = "Field"}]};
 > uncaught exception Constraint [[{deptno=10,dname="Sales"},{deptno=20,dname="Research"},{deptno=10,dname="Field"}] is not a valid depts: field depts]
->   raised at: stdIn:1.5-2.42
+>   raised at: stdIn:1.21-2.42
 
 
 (* --- The same schema as a single type --------------------------- *)
@@ -700,22 +746,22 @@ val hr1: hr1 = {
 val hr1Unpaid: hr1 = {hr1 replace emps = from e in hr1.emps
   union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 0.0}]};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5},{deptno=10,empno=3,mgrno=SOME 1,sal=0}]} is not a valid hr1]
->   raised at: stdIn:1.5-2.63
+>   raised at: stdIn:1.22-2.63
 
 val hr1Dup: hr1 = {hr1 replace emps = from e in hr1.emps
   union [{empno = 2, deptno = 10, mgrno = SOME 1, sal = 4.0}]};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5},{deptno=10,empno=2,mgrno=SOME 1,sal=4}]} is not a valid hr1]
->   raised at: stdIn:1.5-2.63
+>   raised at: stdIn:1.19-2.63
 
 val hr1Moved: hr1 = {hr1 replace emps = from e in hr1.emps
   yield (if e.empno = 2 then {e replace deptno = 99} else e)};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr1]
->   raised at: stdIn:1.5-2.62
+>   raised at: stdIn:1.21-2.62
 
 val hr1DupDept: hr1 = {hr1 replace depts = from d in hr1.depts
   union [{deptno = 10, dname = "Field"}]};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"},{deptno=10,dname="Field"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr1]
->   raised at: stdIn:1.5-2.42
+>   raised at: stdIn:1.23-2.42
 
 
 (* --- The same schema, conditions pushed down -------------------- *)
@@ -755,22 +801,22 @@ val hr2: hr2 = {
 val hr2Unpaid: hr2 = {hr2 replace emps = from e in hr2.emps
   union [{empno = 3, deptno = 10, mgrno = SOME 1, sal = 0.0}]};
 > uncaught exception Constraint [0 is not a valid value: field emps[_].sal]
->   raised at: stdIn:1.5-2.63
+>   raised at: stdIn:1.22-2.63
 
 val hr2Dup: hr2 = {hr2 replace emps = from e in hr2.emps
   union [{empno = 2, deptno = 10, mgrno = SOME 1, sal = 4.0}]};
 > uncaught exception Constraint [[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=20,empno=2,mgrno=SOME 1,sal=5},{deptno=10,empno=2,mgrno=SOME 1,sal=4}] is not a valid value: field emps]
->   raised at: stdIn:1.5-2.63
+>   raised at: stdIn:1.19-2.63
 
 val hr2Moved: hr2 = {hr2 replace emps = from e in hr2.emps
   yield (if e.empno = 2 then {e replace deptno = 99} else e)};
 > uncaught exception Constraint [{depts=[{deptno=10,dname="Sales"},{deptno=20,dname="Research"}],emps=[{deptno=10,empno=1,mgrno=NONE,sal=9},{deptno=99,empno=2,mgrno=SOME 1,sal=5}]} is not a valid hr2]
->   raised at: stdIn:1.5-2.62
+>   raised at: stdIn:1.21-2.62
 
 val hr2DupDept: hr2 = {hr2 replace depts = from d in hr2.depts
   union [{deptno = 10, dname = "Field"}]};
 > uncaught exception Constraint [[{deptno=10,dname="Sales"},{deptno=20,dname="Research"},{deptno=10,dname="Field"}] is not a valid value: field depts]
->   raised at: stdIn:1.5-2.42
+>   raised at: stdIn:1.23-2.42
 
 (* --- A condition on an expression ------------------------------- *)
 

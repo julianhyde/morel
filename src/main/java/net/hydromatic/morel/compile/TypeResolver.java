@@ -174,6 +174,17 @@ public class TypeResolver {
   private final Map<Ast.Exp, List<String>> fieldNames = new IdentityHashMap<>();
 
   /**
+   * Fields of each record with modifiers that was typed on this attempt.
+   *
+   * <p>A record with modifiers has no fields of its own to read them from, and
+   * one that claims the type of the record it modifies has a variable for its
+   * term rather than a record term, so they cannot be read back from that
+   * either. A {@code yield} step needs them, in order to bind them.
+   */
+  private final Map<Ast.Record, NavigableMap<String, Variable>> modifiedFields =
+      new IdentityHashMap<>();
+
+  /**
    * Records with modifiers that could not be applied on this attempt, because
    * the fields of an operand were not known. Cleared at the start of each
    * attempt; any that survives the last one is an unresolved flex record.
@@ -274,6 +285,7 @@ public class TypeResolver {
   private Resolved deduceType_(Environment env, Ast.Decl decl) {
     // Clean up from previous attempt.
     validations.clear();
+    modifiedFields.clear();
     unresolvedRecords.clear();
     final int fieldsLearned0 = fieldsLearned;
 
@@ -2038,23 +2050,32 @@ public class TypeResolver {
 
     final Ast.Exp yieldExp3 = letBody(yieldExp2);
     if (yield.binder == null && yieldExp3.op == Op.RECORD) {
-      // The fields are read from the record's type, not from the expression,
-      // because a record with modifiers has no fields of its own. One whose
-      // modifiers could not be applied has no record type either; it will be
-      // deduced again, or the attempt will end in an error.
-      final Term term = map.get(yieldExp3);
-      final List<String> labels =
-          term instanceof Sequence ? fieldList((Sequence) term) : null;
-      if (labels != null) {
+      final Ast.Record record2 = (Ast.Record) yieldExp3;
+      final NavigableMap<String, Variable> fields = modifiedFields.get(record2);
+      if (fields != null) {
+        // A record with modifiers; its fields are the ones they produced.
         fieldVars.clear();
-        forEach(
-            labels,
-            ((Sequence) term).terms,
+        fields.forEach(
             (label, t) -> {
-              fieldVars.add(ast.id(Pos.ZERO, label), toVariable(t));
+              fieldVars.add(ast.id(Pos.ZERO, label), t);
               envs.bind(label, t);
             });
+      } else if (record2.base == null) {
+        final Term term = map.get(yieldExp3);
+        if (term instanceof Sequence) {
+          final Sequence sequence = (Sequence) term;
+          fieldVars.clear();
+          forEach(
+              record2.args.leftList(),
+              sequence.terms,
+              (id, t) -> {
+                fieldVars.add(id, toVariable(t));
+                envs.bind(id.name, t);
+              });
+        }
       }
+      // A record whose modifiers could not be applied has no fields to bind;
+      // it will be deduced again, or the attempt will end in an error.
     } else {
       final Ast.Id label = getLabel(yield.binder, yield.exp);
       envs.bind(label.name, v6);
@@ -2497,12 +2518,19 @@ public class TypeResolver {
    * simultaneous, because each reads the fields as they were before that
    * modifier. An operand -- the base, or the argument of an {@code all}
    * modifier -- is outside every modifier, and sees no fields at all.
+   *
+   * <p>If every modifier leaves the record's shape alone, the result claims the
+   * base's type, rather than a record assembled from the fields, so that a
+   * derived schema keeps the conditions the schema it derives from carries. The
+   * assembled record is what an assignment weakens a field to, and is the type
+   * this claim will be checked against.
    */
   private Ast.Exp deduceModifiedRecordType(
       TypeEnv env, Ast.Record record, Operands operands, Variable v) {
     final Ast.Exp base = requireNonNull(record.base);
     NavigableMap<String, Variable> fields0 = fieldVariables(operands, base);
     final List<Ast.Modifier> modifiers = new ArrayList<>();
+    boolean claims = true;
     for (Ast.Modifier modifier : record.modifiers) {
       final NavigableMap<String, Variable> fields = fields0;
       final NavigableMap<String, Variable> allFields =
@@ -2517,6 +2545,8 @@ public class TypeResolver {
                   ? null
                   : ImmutableList.copyOf(allFields.keySet()));
 
+      claims &= RecordModifiers.preserves(sources, fields.keySet());
+
       final TypeEnv env2 = bindFields(env, fields);
       final NavigableMap<String, Variable> fields2 =
           new TreeMap<>(RecordType.ORDERING);
@@ -2530,10 +2560,11 @@ public class TypeResolver {
       modifiers.add(copyModifier(env2, modifier, operands, assigned));
       fields0 = fields2;
     }
+    final Ast.Record record2 =
+        record.copy(operands.exp(base), ImmutableList.of(), modifiers);
+    modifiedFields.put(record2, fields0);
     return reg(
-        record.copy(operands.exp(base), ImmutableList.of(), modifiers),
-        v,
-        recordTerm(fields0));
+        record2, v, claims ? operands.variable(base) : recordTerm(fields0));
   }
 
   /**
