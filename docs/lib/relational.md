@@ -38,9 +38,9 @@ val <a id='count' href="#count-impl">count</a> : 'a bag -> int
 val <a id='empty' href="#empty-impl">empty</a> : 'a bag -> bool
 val <a id='iterate' href="#iterate-impl">iterate</a> : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
 val <a id='max' href="#max-impl">max</a> : 'a bag -> 'a
-val <a id='maxBy' href="#maxBy-impl">maxBy</a> : ('a -> 'b) -> 'a list -> 'a
+val <a id='maxBy' href="#maxBy-impl">maxBy</a> : ('a -> 'b) -> 'a bag -> 'a
 val <a id='min' href="#min-impl">min</a> : 'a bag -> 'a
-val <a id='minBy' href="#minBy-impl">minBy</a> : ('a -> 'b) -> 'a list -> 'a
+val <a id='minBy' href="#minBy-impl">minBy</a> : ('a -> 'b) -> 'a bag -> 'a
 val <a id='nonEmpty' href="#nonEmpty-impl">nonEmpty</a> : 'a bag -> bool
 val <a id='only' href="#only-impl">only</a> : 'a bag -> 'a
 val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
@@ -100,10 +100,18 @@ max of e.id`.
 <a id="maxBy-impl"></a>
 <h3><code>maxBy</code></h3>
 
-`maxBy f list` returns the element of the list that maximizes the key
-extracted by `f`. Used for whole-row deduplication:
-`from h in horses group h.horse_id compute {latest =
-(maxBy #file_modified_at) over h}`.
+`maxBy keyFn list` returns the element of `list` for which `keyFn` gives the greatest key,
+for example `maxBy String.size ["john", "paul", "george", "ringo"]`,
+which returns `"george"`.
+
+Often used with `group` to deduplicate whole rows, for example
+`from p in product_versions group p.id compute latest = maxBy
+#version over p`.
+
+If several elements are tied for the greatest key, and the input is
+unordered, it is not specified which of them is returned.
+
+Raises `Empty` if `list` is empty.
 
 <a id="min-impl"></a>
 <h3><code>min</code></h3>
@@ -115,8 +123,14 @@ min of e.id`.
 <a id="minBy-impl"></a>
 <h3><code>minBy</code></h3>
 
-`minBy f list` returns the element of the list that minimizes the key
-extracted by `f`.
+`minBy keyFn list` returns the element of `list` for which `keyFn` gives the least key,
+for example `minBy String.size ["john", "paul", "george", "ringo"]`,
+which returns `"john"`.
+
+If several elements are tied for the least key, and the input is
+unordered, it is not specified which of them is returned.
+
+Raises `Empty` if `list` is empty.
 
 <a id="nonEmpty-impl"></a>
 <h3><code>nonEmpty</code></h3>

@@ -672,6 +672,7 @@ Limitations include:
 
 * `min` and `max` cannot be pushed down for `word` values or composite
   values (tuples, records, lists, and datatypes such as `option`).
+* `maxBy` and `minBy` cannot be pushed down.
 
 ## The shell
 

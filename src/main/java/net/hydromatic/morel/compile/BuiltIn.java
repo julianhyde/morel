@@ -3913,16 +3913,29 @@ public enum BuiltIn {
 
   /**
    * Function "Relational.maxBy", aka "maxBy", of type "(&alpha; &rarr; &beta;)
-   * &rarr; &alpha; bag &rarr; &alpha;".
+   * &rarr; &alpha; collection &rarr; &alpha;" (where &beta; must be
+   * comparable); the collection is a list or a bag, whichever the argument is.
    *
-   * <p>Returns the element with the maximum key. Used for whole-row
-   * deduplication:
+   * <p>"maxBy keyFn collection" returns the element of {@code collection} for
+   * which {@code keyFn} gives the greatest key. For example,
    *
    * <pre>{@code
-   * from h in horses
-   *   group h.horse_id
-   *     compute latest = maxBy #file_modified_at over h
+   * maxBy String.size ["john", "paul", "george", "ringo"]
    * }</pre>
+   *
+   * <p>returns {@code "george"}.
+   *
+   * <p>Often used with {@code group} to deduplicate whole rows:
+   *
+   * <pre>{@code
+   * from p in product_versions
+   * group {p.id}
+   *   compute {latest = maxBy #version over p}
+   * }</pre>
+   *
+   * <p>If several elements are tied for the greatest key, and the input is
+   * unordered, it is not specified which of them is returned. It raises {@link
+   * BuiltInExn#EMPTY Empty} if the collection is empty.
    */
   RELATIONAL_MAX_BY(
       "Relational",
@@ -3933,7 +3946,9 @@ public enum BuiltIn {
               2,
               h ->
                   ts.fnType(
-                      ts.fnType(h.get(0), h.get(1)), h.list(0), h.get(0)))),
+                      ts.fnType(h.get(0), h.get(1)),
+                      h.collection(0),
+                      h.get(0)))),
 
   /**
    * Function "Relational.min", aka "min", of type "&alpha; collection &rarr;
@@ -3948,9 +3963,21 @@ public enum BuiltIn {
 
   /**
    * Function "Relational.minBy", aka "minBy", of type "(&alpha; &rarr; &beta;)
-   * &rarr; &alpha; list &rarr; &alpha;".
+   * &rarr; &alpha; collection &rarr; &alpha;" (where &beta; must be
+   * comparable); the collection is a list or a bag, whichever the argument is.
    *
-   * <p>Returns the element with the minimum key.
+   * <p>"minBy keyFn collection" returns the element of {@code collection} for
+   * which {@code keyFn} gives the least key. For example,
+   *
+   * <pre>{@code
+   * minBy String.size ["john", "paul", "george", "ringo"]
+   * }</pre>
+   *
+   * <p>returns {@code "john"}.
+   *
+   * <p>If several elements are tied for the least key, and the input is
+   * unordered, it is not specified which of them is returned. It raises {@link
+   * BuiltInExn#EMPTY Empty} if the collection is empty.
    */
   RELATIONAL_MIN_BY(
       "Relational",
@@ -3961,7 +3988,9 @@ public enum BuiltIn {
               2,
               h ->
                   ts.fnType(
-                      ts.fnType(h.get(0), h.get(1)), h.list(0), h.get(0)))),
+                      ts.fnType(h.get(0), h.get(1)),
+                      h.collection(0),
+                      h.get(0)))),
 
   /**
    * Function "Relational.nonEmpty", of type "&alpha; collection &rarr; bool";
