@@ -360,6 +360,14 @@ fm ();
 > uncaught exception Constraint [~1 is not a valid nat]
 >   raised at: stdIn:1.19-1.29
 
+(* An ascription inside a binding is checked twice over, and each check walks
+ * the bag with a predicate of its own. A check said that it needed no stack
+ * slots, which was true of the check and false of the condition inside it, so
+ * the predicate was given a frame with no room to evaluate the condition on a
+ * field of the element. *)
+val twice: {empno: nat} bag = (bag [{empno = 1}] : {empno: nat} bag);
+> val twice = [{empno=1}] : {empno:nat} bag
+
 (* A 'fun' declaration's result annotation reaches Resolver as an ascription
  * on the body, so a result is checked too. The declared type is still 'int':
  * the annotation and the body's type meet, and the meet of a constrained type
