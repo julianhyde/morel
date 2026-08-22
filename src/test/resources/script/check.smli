@@ -808,6 +808,36 @@ val big = y + 1 check i => i < 2;
 val nonEmpty = "ab" check s => String.size s > 1;
 > val nonEmpty = "ab" : string check s => #size String s > 1
 
+(* A type that is not named survives inference, as a named one does, so its
+ * condition reaches a later use rather than stopping at the binding it was
+ * written on. A term identifies an alias by name and this type has none, so
+ * it is given one derived from its conditions. *)
+val small2 = small;
+> val small2 = 2 : int check i => i < 100
+[small, small2];
+> val it = [2,2] : (int check i => i < 100) list
+
+(*) Arithmetic drops it, as it drops a named one: the meet is the body.
+val sum = small + 1;
+> val sum = 3 : int
+
+(* The name is derived from the conditions and nothing else, so two written
+ * the same way are the same type -- a condition is closed, so its text
+ * decides -- and two written differently meet at the body they share. *)
+val alsoSmall = 3 check i => i < 100;
+> val alsoSmall = 3 : int check i => i < 100
+[small, alsoSmall];
+> val it = [2,3] : (int check i => i < 100) list
+val positive = 3 check i => i > 0;
+> val positive = 3 : int check i => i > 0
+[small, positive];
+> val it = [2,3] : int list
+
+(* A condition binds more loosely than anything else in a type, so it is
+ * parenthesized wherever it is not the whole type. *)
+fun keepSmall (n: (int check i => i < 100)) = n;
+> val keepSmall = fn : (int check i => i < 100) -> (int check i => i < 100)
+
 (* A match ends where a 'check' begins, which is what lets a type carry
  * several conditions: the first condition here ends at the second 'check'
  * rather than swallowing it. *)
@@ -921,7 +951,7 @@ val notNat: (int check i => i >= 0) = ~1;
 > uncaught exception Constraint [~1 is not a valid value]
 >   raised at: stdIn:1.5-1.41
 fun mustBeNat (n: (int check i => i >= 0)) = n;
-> val mustBeNat = fn : int -> int
+> val mustBeNat = fn : (int check i => i >= 0) -> (int check i => i >= 0)
 mustBeNat 3;
 > val it = 3 : int
 mustBeNat ~3;

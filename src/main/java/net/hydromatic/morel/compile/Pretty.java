@@ -447,6 +447,17 @@ class Pretty {
     // "myInt" (an alias for "int") prints its type as "myInt", not "int".
     final Op op = type.op();
     switch (op) {
+      case ALIAS_TYPE:
+        // A named alias is written by its name, which never needs parentheses.
+        // One that is not named is written in full, body and conditions, and a
+        // condition binds more loosely than anything else in a type, so it
+        // needs them wherever it is not the whole type.
+        final Doc aliasDoc = text(typeSystem.displayMoniker(type));
+        return ((AliasType) type).name.isEmpty()
+                && (leftPrec > 0 || rightPrec > 0)
+            ? parenthesize(aliasDoc)
+            : aliasDoc;
+
       case DATA_TYPE:
         if (type.isCollection()) {
           return collectionTypeDoc(
@@ -454,7 +465,6 @@ class Pretty {
         }
         // fall through
       case ID:
-      case ALIAS_TYPE:
       case TY_VAR:
         return text(typeSystem.displayMoniker(type));
 
