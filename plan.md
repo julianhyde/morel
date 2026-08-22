@@ -1106,8 +1106,8 @@ every field it depends on is unchanged; otherwise drop it. Then:
 exceptions -- a modifier that adds or removes a field, or changes a field's
 type, produces a different type and cannot claim the old one.
 
-**Attempted, and it needs the modifier to be typed directly.** A modifier is
-desugared into a destructure and a fresh record literal:
+**Attempted three ways; the desugaring must move.** A modifier is desugared
+into a destructure and a fresh record literal:
 
 ```sml
 {r replace a = v}
@@ -1124,11 +1124,26 @@ its own -- leaves the claim correct but finds `r` already carrying its erased
 type by that point, because the declaration is re-deduced by the retry loop
 that resolves field names.
 
-So the modifier needs a typing rule of its own: the result's type is `r`'s
-type, with the assigned field's type taken from the declaration rather than
-from the value, and the conditions checked. That is a change to how modifiers
-are typed, not something that can be added around the desugaring, and it is
-the substance of this issue.
+Equating the result's variable with the base's, and typing the desugared form
+on a variable of its own, fails too -- and shows where the type is actually
+lost. It is the **destructure**, not the literal: `val {n, s} = r` meets `r`'s
+alias with a record pattern's term, which head-reduces, so `r` itself carries
+the erased type from that point on. Anything that desugars before typing loses
+the type, however the result is wired up afterwards.
+
+So the modifier needs a typing rule of its own, applied to the record
+expression as written:
+
+* the result's type is `r`'s type;
+* an assigned value is deduced against the declared type of the field it
+  assigns to, not the other way about, so a `nat` field narrows the value and
+  a condition is checked;
+* `lenient` opts out, and the result is then a different type.
+
+and the desugaring moves to `Resolver`, which builds the `let` and the record
+in Core, where the types are already settled. That is a change to how
+modifiers are typed rather than something that can be added around the
+desugaring, and it is the substance of this issue.
 
 `replace` already says it "preserves the field's type", and enforces it by
 unification, so a different base type is caught:
