@@ -203,7 +203,7 @@ something settled — §8's principle, applied to the sequence itself.
         and pair every value with every other, which is why the front
         end used to decline.
 
-        Agreement is 273 of 300. The 41 that remain, from the
+        Agreement is 284 of 300. The 41 that remain, from the
         divergence trace — and note that a query both engines decline
         is agreement, not a gap; `from x where (x + 2) * (x - 3) = 0`
         errors in both, as such-that.smli says it should, for want of
@@ -215,14 +215,25 @@ something settled — §8's principle, applied to the sequence itself.
           has an unbounded pattern of its own that the step list
           grounds when it reaches that query. Now only the tree's own
           leaves count.
-        * Correlation chains. `from dno : int join name : string join
-          v : {deptno, dname, loc} where v elem depts andalso #deptno
-          v = dno` grounds `v` and then `dno` from `v`. The tree
-          handles correlation between a join's own two sides, not
-          between leaves further apart, which would need the join
-          reordered so that what grounds comes first.
-        * Several leaves tied by a user predicate: `from x : int join
-          y : int where edge (x, y) join z : int where edge (y, z)`.
+        * Correlation chains, six queries. `from dno : int join name
+          : string join v : {deptno, dname, loc} where v elem depts
+          andalso #deptno v = dno` grounds `v` and then `dno` from
+          `v`. The tree handles correlation between a join's own two
+          sides, not between leaves further apart, which would need
+          the join reordered so that what grounds comes first.
+        * Patterns that nothing reads, when the rows are only
+          counted: `from w : 'a join x : int where x = 3`. `'a`
+          cannot be enumerated at all; `Expander` is entitled to skip
+          the pattern because the query sits inside an `exists`. The
+          tree front end is not told whether the rows are used, so it
+          tries to ground `w` and fails.
+        * A filter *between* two joins, one query. `collect` treats
+          any non-join as a leaf, so the filter's conditions are lost
+          and the filter itself is named as though it were a leaf.
+          Fixing `collect` alone made things worse: `rebuild` and the
+          collapse have to see through the filter too, and the
+          collapse must not swallow it. Reverted, and left for a
+          version that does all three together.
 
         Naming a leaf from the constraints rather than by trial was
         tried and reverted: it is a better rule, but it moved nothing
