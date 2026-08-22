@@ -41,6 +41,9 @@ import net.hydromatic.morel.type.TypeSystem;
  * in the translation, not a gap in it.
  */
 public class RelShadow {
+  // Counters, read by a test that checks the shadow is running, and by the
+  // throwaway probes that measure agreement while the port is in progress;
+  // plan.md quotes their numbers.
   private static final AtomicInteger TRANSLATED = new AtomicInteger();
   private static final AtomicInteger DECLINED = new AtomicInteger();
   private static final AtomicInteger GROUNDING_AGREED = new AtomicInteger();
