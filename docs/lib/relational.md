@@ -38,7 +38,9 @@ val <a id='count' href="#count-impl">count</a> : 'a bag -> int
 val <a id='empty' href="#empty-impl">empty</a> : 'a bag -> bool
 val <a id='iterate' href="#iterate-impl">iterate</a> : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
 val <a id='max' href="#max-impl">max</a> : 'a bag -> 'a
+val <a id='maxBy' href="#maxBy-impl">maxBy</a> : ('a -> 'b) -> 'a list -> 'a
 val <a id='min' href="#min-impl">min</a> : 'a bag -> 'a
+val <a id='minBy' href="#minBy-impl">minBy</a> : ('a -> 'b) -> 'a list -> 'a
 val <a id='nonEmpty' href="#nonEmpty-impl">nonEmpty</a> : 'a bag -> bool
 val <a id='only' href="#only-impl">only</a> : 'a bag -> 'a
 val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
@@ -95,12 +97,26 @@ iteration when it returns `newList`.
 `group`, for example `from e in emps group e.deptno compute maxId =
 max of e.id`.
 
+<a id="maxBy-impl"></a>
+<h3><code>maxBy</code></h3>
+
+`maxBy f list` returns the element of the list that maximizes the key
+extracted by `f`. Used for whole-row deduplication:
+`from h in horses group h.horse_id compute {latest =
+(maxBy #file_modified_at) over h}`.
+
 <a id="min-impl"></a>
 <h3><code>min</code></h3>
 
 `min list` (or `list.min ()`) returns the least element of `list`. Often used with
 `group`, for example `from e in emps group e.deptno compute minId =
 min of e.id`.
+
+<a id="minBy-impl"></a>
+<h3><code>minBy</code></h3>
+
+`minBy f list` returns the element of the list that minimizes the key
+extracted by `f`.
 
 <a id="nonEmpty-impl"></a>
 <h3><code>nonEmpty</code></h3>

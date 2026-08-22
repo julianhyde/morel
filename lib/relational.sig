@@ -79,11 +79,25 @@ sig
   val max : 'a bag -> 'a [@@method] [@@prototype "max list"]
 
   (**
+   * returns the element of the list that maximizes the key
+   * extracted by `f`. Used for whole-row deduplication:
+   * `from h in horses group h.horse_id compute {latest =
+   * (maxBy #file_modified_at) over h}`.
+   *)
+  val maxBy : ('a -> 'b) -> 'a list -> 'a [@@prototype "maxBy f list"]
+
+  (**
    * returns the least element of `list`. Often used with
    * `group`, for example `from e in emps group e.deptno compute minId =
    * min of e.id`.
    *)
   val min : 'a bag -> 'a [@@method] [@@prototype "min list"]
+
+  (**
+   * returns the element of the list that minimizes the key
+   * extracted by `f`.
+   *)
+  val minBy : ('a -> 'b) -> 'a list -> 'a [@@prototype "minBy f list"]
 
   (**
    * returns whether the list has at least one element, for

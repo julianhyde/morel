@@ -3927,15 +3927,13 @@ public enum BuiltIn {
   RELATIONAL_MAX_BY(
       "Relational",
       "maxBy",
-      "maxBy",
       false,
       ts ->
           ts.forallType(
               2,
               h ->
                   ts.fnType(
-                      ts.fnType(h.get(0), h.get(1)),
-                      ts.fnType(h.list(0), h.get(0))))),
+                      ts.fnType(h.get(0), h.get(1)), h.list(0), h.get(0)))),
 
   /**
    * Function "Relational.min", aka "min", of type "&alpha; collection &rarr;
@@ -3957,15 +3955,13 @@ public enum BuiltIn {
   RELATIONAL_MIN_BY(
       "Relational",
       "minBy",
-      "minBy",
       false,
       ts ->
           ts.forallType(
               2,
               h ->
                   ts.fnType(
-                      ts.fnType(h.get(0), h.get(1)),
-                      ts.fnType(h.list(0), h.get(0))))),
+                      ts.fnType(h.get(0), h.get(1)), h.list(0), h.get(0)))),
 
   /**
    * Function "Relational.nonEmpty", of type "&alpha; collection &rarr; bool";
@@ -5539,7 +5535,9 @@ public enum BuiltIn {
     consumer.accept("empty", RELATIONAL_EMPTY);
     consumer.accept("iterate", RELATIONAL_ITERATE);
     consumer.accept("max", RELATIONAL_MAX);
+    consumer.accept("maxBy", RELATIONAL_MAX_BY);
     consumer.accept("min", RELATIONAL_MIN);
+    consumer.accept("minBy", RELATIONAL_MIN_BY);
     consumer.accept("nonEmpty", RELATIONAL_NON_EMPTY);
     consumer.accept("only", RELATIONAL_ONLY);
     consumer.accept("sum", RELATIONAL_SUM);
