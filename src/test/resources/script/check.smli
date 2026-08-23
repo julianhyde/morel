@@ -337,6 +337,43 @@ datatype plainBox = PlainBox of int;
 PlainBox ~1;
 > val it = PlainBox ~1 : plainBox
 
+(* A condition reached through a datatype's type parameter is checked too.
+ * The datatype is walked, as a record and a collection are: the value must
+ * satisfy whatever the type it was given carries. Without this the claim was
+ * made and never checked -- 'nat option' printed, holding a value that is not
+ * one. *)
+val someNat: nat option = SOME 1;
+> val someNat = SOME 1 : nat option
+val someNotNat: nat option = SOME ~1;
+> uncaught exception Constraint [~1 is not a valid nat: SOME]
+>   raised at: stdIn:1.5-1.37
+
+(*) A constructor that carries nothing has nothing to check.
+val noNat: nat option = NONE;
+> val noNat = NONE : nat option
+
+(*) The same goes for a datatype the user declared.
+datatype 'a bx = Bx of 'a;
+> datatype 'a bx = Bx of 'a
+val bxNat: nat bx = Bx ~1;
+> uncaught exception Constraint [~1 is not a valid nat: Bx]
+>   raised at: stdIn:1.5-1.26
+
+(* A datatype may contain itself, so the walk is a function that is applied to
+ * the value rather than an expansion, and a recursive datatype calls it. The
+ * value is checked however deep the condition is reached. *)
+datatype 'a tree = Leaf | Node of 'a * 'a tree;
+> datatype 'a tree = Leaf | Node of 'a * 'a tree
+val goodTree: nat tree = Node (1, Node (2, Leaf));
+> val goodTree = Node (1,Node (2,Leaf)) : nat tree
+val badTree: nat tree = Node (1, Node (~2, Leaf));
+> uncaught exception Constraint [~2 is not a valid nat: Node.1]
+>   raised at: stdIn:1.5-1.50
+
+(*) A datatype whose parameter carries no condition is not walked.
+val plainTree: int tree = Node (1, Node (~2, Leaf));
+> val plainTree = Node (1,Node (~2,Leaf)) : int tree
+
 (* A record modifier that assigns to a field claims the type of the record it
  * modifies -- the field keeps its declared type, so the value must have it --
  * and the claim is checked at the modifier. Nobody else wrote the type down,

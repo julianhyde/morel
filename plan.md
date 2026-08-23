@@ -1080,11 +1080,23 @@ Two limits remain:
   else -- in an annotation, say -- is rejected: "a `check` may only be written
   in a type declaration". Lifting this means compiling conditions wherever a
   claim reads a type.
-* A type that is not named may not sit under a type constructor: `{contents:
-  (int check ...) list}` declares, but a value cannot be bound to it. `unalias`
-  erases only the outermost type, so the value's type and the type claimed do
-  not match. A deep erasure would fix it, and is the same rule -- an alias must
-  not reach Core -- applied one level further in.
+* ~~A type that is not named may not sit under a type constructor.~~ Fixed.
+  `{contents: (int check ...) list}` declares, and a value bound to it is
+  checked, blaming `field contents[_]`. The same goes for a nested list and for
+  a datatype constructor's argument.
+
+  A narrower hole survived underneath that claim, and is fixed too: a condition
+  reached through a datatype's *type parameter* was claimed and never checked.
+  `val w: nat option = SOME ~1` printed `nat option` -- a claim the user wrote,
+  which the shell then repeated -- and held a value that is not one. `option` is
+  a plain datatype, so `constrains` passed it over, exactly as it once passed a
+  function type over.
+
+  A datatype is now walked, as a record and a collection are: a `case` over the
+  value, one arm per constructor, checking what each carries at the type the
+  parameter was given. Because a datatype may contain itself, the walk is a
+  function applied to the value rather than an expansion, and a datatype met
+  again calls the function being built. So `nat tree` is checked to any depth.
 
 ## Record modifiers and conditions
 
@@ -1307,9 +1319,8 @@ them -- and being type-level it composes, where an expression-level form would
 not.
 
 It should be deep, removing conditions anywhere within the type rather than
-only the outermost. That is the same deep erasure the "types that are not
-named" section needs: `unalias` erases only the outermost type, which is why a
-checked type may not sit under a type constructor.
+only the outermost, wherever a condition can now be reached: through a record,
+a collection, or a datatype's type parameter.
 
 **Adding to an expression does need syntax, and has none.** There is no way to
 introduce a checked value without declaring a named type:
@@ -1499,8 +1510,7 @@ So it is opt-in and later, and no program that is accepted today would change
   above. Includes lifting the restriction that a condition may only be written
   in a type declaration.
 * **`unchecked t`, to strip conditions from a type**, per the section above.
-  Shares its deep erasure with the fix for a checked type under a type
-  constructor.
+  It must be as deep as the walk that checks them.
 * **`predicate t`, to extract a type's condition as a value**, per "Driven by
   the operations" above. Expresses "filter rather than abort", and makes `as`,
   `asOpt` and `e check m` derivable.
