@@ -242,6 +242,31 @@ decr ~3;
 > uncaught exception Constraint [~3 is not a valid nat]
 >   raised at: stdIn:1.5-1.26
 
+(* What drops the constraint is the operator, not the operands. 'n - 1' loses
+ * it because the '1' is an 'int' that the 'nat' has to meet, and a meet takes
+ * the weaker of the two; but an operator applied to operands of its own type
+ * has nothing to meet. Such an operator computes a value the type has not
+ * been shown to contain, so it drops the constraint whatever it was applied
+ * to, and a unary operator drops it too. *)
+~n2;
+> val it = ~5 : int
+n2 + n2;
+> val it = 10 : int
+abs n2;
+> val it = 5 : int
+type small = int check i => i < 100;
+> type small = int check i => i < 100
+val s: small = 60;
+> val s = 60 : small
+s + s;
+> val it = 120 : int
+s * s;
+> val it = 3600 : int
+fun dbl (i: small) = i + i;
+> val dbl = fn : int -> int
+dbl 60;
+> val it = 120 : int
+
 (* A check is made where the value flows into the claim, whatever the body
  * then does with the name it binds. Raising is a check's only effect, so an
  * optimizer that reasons about values alone would be entitled to discard one
