@@ -104,24 +104,18 @@ class RecordModifiers {
    */
   static boolean preserves(
       PairList<String, Source> sources, Collection<String> fields) {
-    if (sources.size() != fields.size()) {
-      return false;
-    }
-    for (Map.Entry<String, Source> entry : sources) {
-      final Source source = entry.getValue();
-      if (source instanceof Kept) {
-        if (!((Kept) source).field.equals(entry.getKey())) {
-          return false; // renamed
-        }
-      } else if (source instanceof Taken) {
-        if (!((Taken) source).sameType) {
-          return false;
-        }
-      } else if (!((Assigned) source).sameType) {
-        return false;
-      }
-    }
-    return true;
+    return sources.size() == fields.size()
+        && sources.allMatch(
+            (label, source) -> {
+              if (source instanceof Kept) {
+                // A field that kept its own name, rather than another's.
+                return ((Kept) source).field.equals(label);
+              } else if (source instanceof Taken) {
+                return ((Taken) source).sameType;
+              } else {
+                return ((Assigned) source).sameType;
+              }
+            });
   }
 
   /**
@@ -134,14 +128,10 @@ class RecordModifiers {
    * checked when it was put there.
    */
   static boolean claims(PairList<String, Source> sources) {
-    for (Map.Entry<String, Source> entry : sources) {
-      final Source source = entry.getValue();
-      if (source instanceof Assigned && ((Assigned) source).sameType
-          || source instanceof Taken && ((Taken) source).sameType) {
-        return true;
-      }
-    }
-    return false;
+    return sources.anyMatch(
+        (label, source) ->
+            source instanceof Assigned && ((Assigned) source).sameType
+                || source instanceof Taken && ((Taken) source).sameType);
   }
 
   /**
