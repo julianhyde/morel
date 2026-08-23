@@ -1550,6 +1550,68 @@ it is worth noting that the divergence appeared only when an alias began to
 survive inference. Every operator that renders or reifies a type has to be
 checked against that.
 
+## The internal operators
+
+`$check`, `$require` and `$attempt` are three names for one implementation.
+`Compiler.constraintCode` takes the same quadruple for each -- the condition,
+the value, the type's name, and what the value is of -- evaluates them the same
+way, wraps a raise from the condition the same way, and consults which operator
+it is only at the end:
+
+| | condition holds | condition false | condition raised |
+| ---- | ---- | ---- | ---- |
+| `$check` | the value | raises `Constraint` | raises, "cannot tell whether" |
+| `$require` | `true` | raises `Constraint` | as above |
+| `$attempt` | `true` | `false` | as above |
+
+**Two things vary, and only one of them is semantic.** Whether falsity raises
+or is answered is the difference between claiming and asking, and that is
+real. The other -- the value or `true` -- is a property of the position the
+operator is written in: `$require` answers `true` so that it can be a conjunct
+of the condition of the value that contains it, and `$check` answers the value
+so that it can stand where the value stood. Nothing about the check differs.
+
+So they are not three operators. They are one operator and a mode, which is
+what the compiler already says: `constraintCode` takes the `BuiltIn` as an
+argument and switches on it twice.
+
+**`$check` is derivable from `$require`.** `$check (c, v, n, b)` is `let val _
+= $require (c, v, n, b) in v end`, and nothing is evaluated twice -- the caller
+has already bound the value to a name, so `v` is an identifier. It had to be a
+primitive only while a dead binding could be discarded; that is now fixed, so
+keeping it is a convenience rather than a necessity.
+
+**`$attempt` is the one that is mis-factored.** It exists because `asOpt`
+evaluates the condition inside an `if`, which is outside any check, so a raise
+from the condition escaped unwrapped. The operator was introduced to pull the
+condition back inside something that wraps -- but it answers `bool` and leaves
+the `if` where it was, so the shape that caused the problem is still there. An
+operator that answered `α option`, SOME or NONE, would fold the `if` in and
+leave nothing outside to get wrong.
+
+### What `assert`, `assume` and `prove` would need
+
+* **`assume p`** needs nothing. It is believed without being checked, so it has
+  no run-time behavior at all; what it changes is the environment of
+  predicates.
+* **`prove p`** needs nothing either. It is discharged statically, and a
+  premise set that cannot discharge it is a compile error, not a raise.
+* **`assert p`** does need an operator, and it is not `$require`. Its argument
+  is a bare predicate: there is no value to blame, no type to name, and "0 is
+  not a valid nat" is not the message it wants. It raises when the predicate
+  does not hold and returns `bool` when it does, which is `$require`'s shape
+  with a different message and a different exception.
+
+So of the six, three of them -- `check`, `as`, `asOpt` -- are what these
+operators were built for, two need no operator, and `assert` needs the message
+and the exception to stop being baked in. Parameterize those and one operator
+with a mode covers all of it.
+
+**Two changes worth making, neither urgent.** Fold the three into one operator
+that takes its mode, since that is what the compiler does with them anyway; and
+give the asking mode the option type, so that `asOpt` has nothing outside the
+operator that can raise.
+
 ## Refining the environment (follow-up)
 
 `assert`, `assume`, `prove` and `where` all establish that something is true
