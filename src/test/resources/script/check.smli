@@ -242,6 +242,33 @@ decr ~3;
 > uncaught exception Constraint [~3 is not a valid nat]
 >   raised at: stdIn:1.5-1.26
 
+(* A check is made where the value flows into the claim, whatever the body
+ * then does with the name it binds. Raising is a check's only effect, so an
+ * optimizer that reasons about values alone would be entitled to discard one
+ * whose name is never read, or to defer one to wherever its name is read;
+ * either would lose the check. *)
+fun ignores (i: nat) = 0;
+> val ignores = fn : nat -> int
+ignores 5;
+> val it = 0 : int
+ignores ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.5-1.25
+
+(*) Read only in a branch that is not taken.
+fun branches (i: nat) = if false then i else 0;
+> val branches = fn : int -> int
+branches ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.5-1.47
+
+(*) Read only inside a function that is never called.
+val delays = fn (i: nat) => fn () => i;
+> val delays = fn : nat -> unit -> nat
+delays ~1;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.17-1.39
+
 (* A claim on a composite type is a claim about its components, so each is
  * checked. The message names the component that failed and quotes it, rather
  * than the whole value. A tuple's components are numbered as its selectors
