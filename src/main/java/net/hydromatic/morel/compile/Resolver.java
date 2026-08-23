@@ -36,6 +36,7 @@ import static org.apache.calcite.util.Util.first;
 import static org.apache.calcite.util.Util.intersects;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
@@ -70,6 +71,7 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
+import net.hydromatic.morel.type.DummyType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.Keys;
@@ -754,11 +756,32 @@ public class Resolver {
       String blame,
       boolean raising,
       Pos pos) {
+    return deepCondition(
+        claimedType, erasedType, value, blame, raising, pos, ImmutableMap.of());
+  }
+
+  /**
+   * As {@link #deepCondition(Type, Type, Core.Exp, String, boolean, Pos)}, but
+   * carrying the datatypes whose walk is in progress.
+   *
+   * <p>A datatype may contain itself, so walking one cannot be an expansion:
+   * {@code walking} maps each datatype being walked to the predicate being
+   * built for it, and a datatype met again is called rather than expanded.
+   */
+  private Core.@Nullable Exp deepCondition(
+      Type claimedType,
+      @Nullable Type erasedType,
+      Core.@Nullable Exp value,
+      String blame,
+      boolean raising,
+      Pos pos,
+      Map<Type.Key, Core.@Nullable IdPat> walking) {
     final TypeSystem typeSystem = typeMap.typeSystem;
     if (claimedType instanceof AliasType) {
       final AliasType aliasType = (AliasType) claimedType;
       Core.Exp condition =
-          deepCondition(aliasType.type, erasedType, value, blame, raising, pos);
+          deepCondition(
+              aliasType.type, erasedType, value, blame, raising, pos, walking);
       if (!aliasType.checks.isEmpty()) {
         Core.Exp own = condition(aliasType, value, pos);
         if (raising && !blame.isEmpty() && value != null) {
@@ -811,7 +834,8 @@ public class Resolver {
                 fieldValue,
                 append(blame, fieldBlame(recordType, field.getKey())),
                 raising,
-                pos);
+                pos,
+                walking);
         if (fieldCondition != null) {
           condition =
               condition == null
@@ -823,7 +847,8 @@ public class Resolver {
     }
     if (claimedType.isCollection()) {
       final Type elementType = claimedType.elementType();
-      if (!constrains(elementType)) {
+      if (deepCondition(elementType, null, null, "", raising, pos, walking)
+          == null) {
         return null;
       }
       if (value == null) {
@@ -841,7 +866,8 @@ public class Resolver {
                   core.id(idPat),
                   appendElement(blame),
                   raising,
-                  pos));
+                  pos,
+                  walking));
       final Core.Fn predicate =
           core.fn(
               typeSystem.fnType(erasedElementType, PrimitiveType.BOOL),
@@ -856,7 +882,133 @@ public class Resolver {
           core.call(typeSystem, all, erasedElementType, pos, predicate),
           value);
     }
+    if (claimedType instanceof DataType) {
+      return datatypeCondition(
+          (DataType) claimedType,
+          erasedType,
+          value,
+          blame,
+          raising,
+          pos,
+          walking);
+    }
     return null;
+  }
+
+  /**
+   * Returns a condition that holds if every value a datatype's constructors
+   * carry satisfies the conditions its type arguments carry.
+   *
+   * <p>Without this, a condition under a type parameter is claimed and never
+   * checked: {@code val w: nat option = SOME ~1} printed {@code nat option} and
+   * held a value that is not one. Records and collections were already walked;
+   * a datatype is the remaining way to reach a type.
+   *
+   * <p>The condition is a function rather than an expression, and is applied to
+   * the value, because a datatype may contain itself. A recursive datatype
+   * calls the function being built; a datatype that does not recurse builds one
+   * all the same, and the inliner takes it away.
+   */
+  private Core.@Nullable Exp datatypeCondition(
+      DataType dataType,
+      @Nullable Type erasedType,
+      Core.@Nullable Exp value,
+      String blame,
+      boolean raising,
+      Pos pos,
+      Map<Type.Key, Core.@Nullable IdPat> walking) {
+    final TypeSystem typeSystem = typeMap.typeSystem;
+    if (walking.containsKey(dataType.key())) {
+      // Met again, so this datatype contains itself. Call the predicate being
+      // built for it rather than expanding it a second time. Asked only
+      // whether anything is constrained, answer no: the recursion constrains
+      // nothing that the walk does not find elsewhere. (There is no predicate
+      // to call while that is being asked, which is why the value may be null.)
+      final Core.IdPat walkingPat = walking.get(dataType.key());
+      return value == null || walkingPat == null
+          ? null
+          : core.apply(pos, PrimitiveType.BOOL, core.id(walkingPat), value);
+    }
+    final Map<String, Type> constructors =
+        dataType.typeConstructors(typeSystem);
+
+    // Ask first whether anything is constrained, so that a datatype that
+    // carries no condition costs no names and no code.
+    final Map<Type.Key, Core.@Nullable IdPat> walking2 = new HashMap<>(walking);
+    walking2.put(dataType.key(), null); // no predicate yet; only re-entry
+    boolean constrains = false;
+    for (Type argType : constructors.values()) {
+      if (argType != DummyType.INSTANCE
+          && deepCondition(argType, null, null, "", raising, pos, walking2)
+              != null) {
+        constrains = true;
+        break;
+      }
+    }
+    if (!constrains) {
+      return null;
+    }
+    if (value == null) {
+      return core.boolLiteral(true); // placeholder; only nullness is read
+    }
+    if (!(erasedType instanceof DataType)) {
+      return null;
+    }
+
+    final DataType erasedDataType = (DataType) erasedType;
+    final Map<String, Type> erasedConstructors =
+        erasedDataType.typeConstructors(typeSystem);
+    final FnType fnType = typeSystem.fnType(erasedDataType, PrimitiveType.BOOL);
+    final Core.IdPat predicatePat =
+        core.idPat(fnType, () -> nameGenerator.getPrefixed("con"));
+    walking2.put(dataType.key(), predicatePat);
+
+    final List<Core.Match> matches = new ArrayList<>();
+    constructors.forEach(
+        (name, argType) -> {
+          if (argType == DummyType.INSTANCE) {
+            // A constructor with no argument carries nothing to check.
+            matches.add(
+                core.match(
+                    pos,
+                    core.con0Pat(erasedDataType, name),
+                    core.boolLiteral(true)));
+            return;
+          }
+          final Type erasedArgType =
+              requireNonNull(erasedConstructors.get(name));
+          final Core.IdPat argPat =
+              core.idPat(erasedArgType, () -> nameGenerator.getPrefixed("a"));
+          final Core.Exp argCondition =
+              deepCondition(
+                  argType,
+                  erasedArgType,
+                  core.id(argPat),
+                  append(blame, name),
+                  raising,
+                  pos,
+                  walking2);
+          matches.add(
+              core.match(
+                  pos,
+                  core.conPat(erasedDataType, name, argPat),
+                  argCondition == null
+                      ? core.boolLiteral(true)
+                      : argCondition));
+        });
+
+    final Core.IdPat valuePat =
+        core.idPat(erasedDataType, () -> nameGenerator.getPrefixed("v"));
+    final Core.Fn predicate =
+        core.fn(
+            fnType,
+            valuePat,
+            core.caseOf(pos, PrimitiveType.BOOL, core.id(valuePat), matches));
+    return core.let(
+        core.recValDecl(
+            ImmutableList.of(
+                core.nonRecValDecl(pos, predicatePat, null, predicate))),
+        core.apply(pos, PrimitiveType.BOOL, core.id(predicatePat), value));
   }
 
   /**
