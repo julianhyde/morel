@@ -111,7 +111,8 @@ public class RelShadow {
       TypeSystem typeSystem,
       Environment env,
       Core.From from,
-      boolean stepGrounded) {
+      boolean stepGrounded,
+      boolean rowsUsed) {
     final Core.Exp tree = RelTranslator.toRel(typeSystem, from);
     if (tree == null) {
       GROUNDING_UNEXAMINED.incrementAndGet();
@@ -119,7 +120,8 @@ public class RelShadow {
     }
     boolean treeGrounded;
     try {
-      final Core.Exp expanded = RelExpander.expand(typeSystem, env, tree);
+      final Core.Exp expanded =
+          RelExpander.expand(typeSystem, env, tree, rowsUsed);
       // An extent that survives expansion is one the walk did not reach or
       // could not bound; either way the tree has not grounded the query.
       treeGrounded = !containsExtent(expanded);
