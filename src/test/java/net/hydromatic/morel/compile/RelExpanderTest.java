@@ -179,9 +179,9 @@ public class RelExpanderTest {
         is(
             "projectMany\n" //
                 + "  [1, 2]\n"
-                + "  fn g$0 =>\n"
-                + "    project [{x = g$0, y = $0}]\n"
-                + "      [g$0, g$0 + 1]\n"));
+                + "  fn g$2 =>\n"
+                + "    project [{x = g$2, y = $0}]\n"
+                + "      [g$2, g$2 + 1]\n"));
   }
 
   /**
@@ -235,6 +235,53 @@ public class RelExpanderTest {
             ? ((Core.Rel) expanded).describe()
             : expanded + "\n",
         is("[3]\n"));
+  }
+
+  /**
+   * Tests that a filter between two joins constrains the leaves below it.
+   *
+   * <p>The tree is a join whose left input is a filter over another join, so
+   * the walk has to see through the filter to reach the leaves, and gather its
+   * conjuncts as it passes: {@code j} is bounded by a condition above the
+   * filter and {@code i} by one below it.
+   */
+  @Test
+  void testFilterBetweenJoins() {
+    assertThat(
+        expanded(
+            "from i : int join j : int where i elem [1, 2] "
+                + "join k : int where j elem [3, 4] andalso k elem [5, 6]"),
+        is(
+            "join [{i = #i $0, j = #j $0, k = $1}]\n" //
+                + "  join [{i = $0, j = $1}]\n"
+                + "    [1, 2]\n"
+                + "    [3, 4]\n"
+                + "  [5, 6]\n"));
+  }
+
+  /**
+   * Tests a generator that reads a name bound deeper in the left subtree.
+   *
+   * <p>{@code z} is correlated with {@code y}, which is not the join's left
+   * input but a leaf inside it, so the {@code projectMany} binds the left
+   * element and reads {@code y} out of it by path.
+   */
+  @Test
+  void testCorrelatedWithSubtree() {
+    assertThat(
+        expanded(
+            "from x in [1, 2] join y where y elem [x] "
+                + "join z where z elem [y, y + 1]"),
+        is(
+            "projectMany\n" //
+                + "  projectMany\n"
+                + "    [1, 2]\n"
+                + "    fn g$4 =>\n"
+                + "      project [{x = g$4, y = $0}]\n"
+                + "        [g$4]\n"
+                + "  fn g$3 =>\n"
+                + "    project [{x = #x g$3, y = #y g$3, z = $0}]\n"
+                + "      [#y g$3, #y g$3 + 1]\n"));
   }
 
   /** Tests that a query that cannot be bounded is an error. */
