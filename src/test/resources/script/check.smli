@@ -503,6 +503,18 @@ val w0: whole = {i = 1, j = 2};
 {w0 extend k = 9};
 > val it = {i=1,j=2,k=9} : {i:int, j:int, k:int}
 
+(* 'typeof e' names the type 'e' was shown to have, conditions and all, so an
+ * annotation that uses it claims what that type claims. It used to reduce the
+ * type to what inference made of it, which left the claim unchecked. *)
+val fromTypeof: typeof n = 5;
+> val fromTypeof = 5 : nat
+val fromTypeofBad: typeof n = ~5;
+> uncaught exception Constraint [~5 is not a valid nat]
+>   raised at: stdIn:1.5-1.33
+(~5 : typeof n);
+> uncaught exception Constraint [~5 is not a valid nat]
+>   raised at: stdIn:1.1-1.16
+
 (* An ascription is a claim, like a binding, so it is checked wherever it
  * appears -- not only where its value is bound. *)
 (~1 : nat);

@@ -156,6 +156,21 @@ public class TypeMap {
     return termToType(term);
   }
 
+  /**
+   * Returns the key of the type displayed for an AST node -- aliases and
+   * conditions intact -- or null if it has no type.
+   *
+   * <p>This is what {@code typeof e} names: the type {@code e} was shown to
+   * have, not the type inference reduced it to.
+   */
+  public Type.@Nullable Key displayedKey(AstNode node) {
+    Type type = getAliasedType(node);
+    if (type == null) {
+      type = getTypeOpt(node);
+    }
+    return type == null ? null : type.key();
+  }
+
   /** Returns an AST node's data type, or null if no type is known. */
   public @Nullable Type getTypeOpt(AstNode node) {
     final Unifier.Term term = nodeTypeTerms.get(node);
