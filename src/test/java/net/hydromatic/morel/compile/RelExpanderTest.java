@@ -220,6 +220,26 @@ public class RelExpanderTest {
                 + "  [(1, \"a\"), (2, \"b\")]\n"));
   }
 
+  /**
+   * Tests that a leaf nothing constrains is dropped when the rows are only
+   * counted.
+   *
+   * <p>{@code 'a} cannot be enumerated, so grounding `w` is impossible; but
+   * inside an `exists` the rows do not matter, and neither does `w`.
+   */
+  @Test
+  void testRowsNotUsed() {
+    final Fixture f = new Fixture("from w : int join x : int where x = 3");
+    final Core.Exp expanded =
+        RelExpander.expand(f.typeSystem, f.env, f.tree(), false);
+    // `w` is gone, and so is the condition, which the generator enforces.
+    assertThat(
+        expanded instanceof Core.Rel
+            ? ((Core.Rel) expanded).describe()
+            : expanded + "\n",
+        is("[3]\n"));
+  }
+
   /** Tests that a query that cannot be bounded is an error. */
   @Test
   void testExpandUnbounded() {
