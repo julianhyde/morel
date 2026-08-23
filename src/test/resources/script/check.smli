@@ -609,11 +609,29 @@ type plainPair = {i: int, j: int};
 from {i, j}: plainPair where i elem [0..1] andalso j elem [0..1];
 > val it = [{i=0,j=0},{i=0,j=1},{i=1,j=0},{i=1,j=1}] : {i:int, j:int} list
 
-(* Grounding a record variable from a constraint on a field selection is not
- * implemented, so the destructured form above is the one to write. *)
+(* A record variable is grounded by constraining every one of its fields, so
+ * the selecting form gives what the destructured form above gives. Each field
+ * yields a generator of its own, and they are assembled into one for 'p'; the
+ * type's condition is conjoined into the scan as before. *)
 from p: parityPair where p.i elem [0..2] andalso p.j elem [5..8];
+> val it = [{i=0,j=6},{i=0,j=8},{i=1,j=5},{i=1,j=7},{i=2,j=6},{i=2,j=8}]
+>   : parityPair list
+
+(*) A field left unconstrained leaves the record ungrounded.
+from p: parityPair where p.i elem [0..2];
 > stdIn:1.6-1.19 Error: pattern 'p' is not grounded
 >   raised at: stdIn:1.6-1.19
+
+(*) The forms may be mixed, and there may be more than two fields.
+type triple = {i: int, j: int, k: int};
+> type triple = {i:int, j:int, k:int}
+from p: triple where p.i elem [0,1] andalso p.j elem [2] andalso p.k elem [3..4];
+> val it = [{i=0,j=2,k=3},{i=0,j=2,k=4},{i=1,j=2,k=3},{i=1,j=2,k=4}]
+>   : triple list
+
+(*) A tuple is grounded the same way, by its components.
+from p: int * int where #1 p elem [0,1] andalso #2 p elem [2,3];
+> val it = [(0,2),(0,3),(1,2),(1,3)] : (int * int) list
 
 (* A claim is an annotation the user wrote, not a type inference deduced. So
  * a 'let val' is checked exactly as a top-level 'val' is; both read the same
