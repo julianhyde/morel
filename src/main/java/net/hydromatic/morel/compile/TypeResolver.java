@@ -275,6 +275,23 @@ public class TypeResolver {
     return typeSystem.typeFor(toTypeKey(type));
   }
 
+  /**
+   * Converts a type AST to a type, resolving {@code typeof e} with {@code
+   * expKeys}.
+   *
+   * <p>The type of an expression is not known syntactically, so a caller that
+   * knows it -- one that has a {@link TypeMap} -- must supply it. One that does
+   * not calls {@link #toType(Ast.Type, TypeSystem)}, and a {@code typeof} is
+   * then an error rather than a type.
+   */
+  public static Type toType(
+      Ast.Type type,
+      TypeSystem typeSystem,
+      Function<Ast.Exp, Type.@Nullable Key> expKeys) {
+    return typeSystem.typeFor(
+        new KeyBuilder(ImmutableMap.of(), expKeys).toTypeKey(type));
+  }
+
   /** Converts a type AST to a type key. */
   public static Type.Key toTypeKey(Ast.Type type) {
     return new KeyBuilder().toTypeKey(type);
@@ -707,43 +724,29 @@ public class TypeResolver {
           }
           continue;
         }
-        deduceRealType(valBind.pat, null, valBind.exp, consumer);
+        deduceRealType(
+            valBind.pat, null, valBind.exp, consumer, typeMap::displayedKey);
       }
     }
     return realTypes;
-  }
-
-  /**
-   * Whether a type AST contains a {@code typeof}, whose type only inference
-   * knows. {@link #toType} converts a type AST syntactically, and has no case
-   * for such a type; a caller that would reach one must skip it.
-   */
-  private static boolean containsExpressionType(Ast.Type type) {
-    final AtomicBoolean found = new AtomicBoolean();
-    type.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Ast.ExpressionType expressionType) {
-            found.set(true);
-          }
-        });
-    return found.get();
   }
 
   private @Nullable Type deduceRealType(
       Ast.Pat pat,
       @Nullable Type annotatedType,
       Ast.Exp exp,
-      BiConsumer<Ast.Pat, Type> consumer) {
-    // An annotation that uses 'typeof' is skipped, here and below. It
-    // never names an alias -- it gives the binding exactly the type that is
-    // deduced for it -- so there is no real type to record.
-    if (pat instanceof Ast.AnnotatedPat
-        && !containsExpressionType(((Ast.AnnotatedPat) pat).type)) {
+      BiConsumer<Ast.Pat, Type> consumer,
+      Function<Ast.Exp, Type.@Nullable Key> expKeys) {
+    // An annotation that uses 'typeof' names the type its expression was shown
+    // to have, so it is resolved here rather than skipped: 'val x: typeof n'
+    // displays what 'val x: nat' displays.
+    if (pat instanceof Ast.AnnotatedPat) {
       final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) pat;
-      final Type annotatedType2 = toType(annotatedPat.type, typeSystem);
+      final Type annotatedType2 =
+          toType(annotatedPat.type, typeSystem, expKeys);
       final Type realType =
-          deduceRealType(annotatedPat.pat, annotatedType2, exp, consumer);
+          deduceRealType(
+              annotatedPat.pat, annotatedType2, exp, consumer, expKeys);
       if (realType != null) {
         consumer.accept(pat, realType);
         return realType;
@@ -755,12 +758,13 @@ public class TypeResolver {
         return annotatedType;
       }
     }
-    if (exp instanceof Ast.AnnotatedExp
-        && !containsExpressionType(((Ast.AnnotatedExp) exp).type)) {
+    if (exp instanceof Ast.AnnotatedExp) {
       final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) exp;
-      final Type annotatedType2 = toType(annotatedExp.type, typeSystem);
+      final Type annotatedType2 =
+          toType(annotatedExp.type, typeSystem, expKeys);
       final Type realType =
-          deduceRealType(pat, annotatedType2, annotatedExp.exp, consumer);
+          deduceRealType(
+              pat, annotatedType2, annotatedExp.exp, consumer, expKeys);
       if (realType != null) {
         consumer.accept(pat, realType);
         return realType;
@@ -774,7 +778,7 @@ public class TypeResolver {
                 ? annotatedType.elementType()
                 : null;
         final Type elementType =
-            deduceRealType(annotatedType2, listExp.args.get(0));
+            deduceRealType(annotatedType2, listExp.args.get(0), expKeys);
         if (elementType != null) {
           final Type realType = typeSystem.listType(elementType);
           consumer.accept(pat, realType);
@@ -786,11 +790,15 @@ public class TypeResolver {
   }
 
   private @Nullable Type deduceRealType(
-      @Nullable Type annotatedType, Ast.Exp exp) {
+      @Nullable Type annotatedType,
+      Ast.Exp exp,
+      Function<Ast.Exp, Type.@Nullable Key> expKeys) {
     if (exp instanceof Ast.AnnotatedExp) {
       final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) exp;
-      final Type annotatedType2 = toType(annotatedExp.type, typeSystem);
-      final Type realType = deduceRealType(annotatedType2, annotatedExp.exp);
+      final Type annotatedType2 =
+          toType(annotatedExp.type, typeSystem, expKeys);
+      final Type realType =
+          deduceRealType(annotatedType2, annotatedExp.exp, expKeys);
       if (realType != null) {
         return realType;
       }
@@ -803,7 +811,7 @@ public class TypeResolver {
                 ? annotatedType.elementType()
                 : null;
         final Type elementType =
-            deduceRealType(annotatedType2, listExp.args.get(0));
+            deduceRealType(annotatedType2, listExp.args.get(0), expKeys);
         if (elementType != null) {
           return typeSystem.listType(elementType);
         }
@@ -4720,12 +4728,25 @@ public class TypeResolver {
      */
     final ImmutableMap<String, Type.Key> displacedKeys;
 
+    /**
+     * How to resolve {@code typeof e}, or null if this builder cannot: the type
+     * of an expression is not known syntactically.
+     */
+    final @Nullable Function<Ast.Exp, Type.@Nullable Key> expKeys;
+
     KeyBuilder() {
       this(ImmutableMap.of());
     }
 
     KeyBuilder(Map<String, Type.Key> displacedKeys) {
+      this(displacedKeys, null);
+    }
+
+    KeyBuilder(
+        Map<String, Type.Key> displacedKeys,
+        @Nullable Function<Ast.Exp, Type.@Nullable Key> expKeys) {
       this.displacedKeys = ImmutableMap.copyOf(displacedKeys);
+      this.expKeys = expKeys;
     }
 
     /**
@@ -4805,6 +4826,20 @@ public class TypeResolver {
           final Ast.TyVar tyVar = (Ast.TyVar) type;
           return Keys.ordinal(
               tyVarMap.computeIfAbsent(tyVar.name, name -> tyVarMap.size()));
+
+        case EXPRESSION_TYPE:
+          final Ast.ExpressionType expressionType = (Ast.ExpressionType) type;
+          final Type.Key expKey =
+              expKeys == null ? null : expKeys.apply(expressionType.exp);
+          if (expKey == null) {
+            // A type declaration is elaborated before anything in it has been
+            // deduced, so there is no type to resolve 'typeof' to.
+            throw new CompileException(
+                "'typeof' may not be used in a type declaration",
+                false,
+                type.pos);
+          }
+          return expKey;
 
         default:
           throw new AssertionError(
