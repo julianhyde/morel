@@ -87,13 +87,6 @@ public class RelExpander {
   private boolean destructure;
 
   /**
-   * Leaves to name by one variable per component, decided by how the
-   * constraints address them.
-   */
-  private final Map<Core.Exp, Boolean> destructureLeaf =
-      new IdentityHashMap<>();
-
-  /**
    * Conditions that a sealed generator subsumes, and that the filter they came
    * from can therefore drop. Identity, as in {@code Expander}: the same
    * expression written twice is not the same constraint.
@@ -256,7 +249,8 @@ public class RelExpander {
     this.destructure = destructure;
     final Frame frame = collect(join);
     final List<Core.Exp> constraints = new ArrayList<>(frame.constraints);
-    final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
+    final Map<Core.Exp, Core.Exp> originals =
+        new IdentityHashMap<>(frame.originals);
     conditions.forEach(
         condition -> {
           final Core.Exp constraint = subst(condition, frame.element);
@@ -310,6 +304,25 @@ public class RelExpander {
    * join a {@code projectMany}, whose lambda binds what it reads.
    */
   private Core.Exp rebuild(Core.Exp node, Frame frame, Generators.Cache cache) {
+    if (node instanceof Core.Filter) {
+      // The filter's conjuncts were grounded with the rest of the tree's
+      // constraints, so what a sealed generator now enforces comes out, and
+      // the filter goes if that was all of it.
+      final Core.Filter filter = (Core.Filter) node;
+      final Core.Exp input = rebuild(filter.input, frame, cache);
+      final List<Core.Exp> remaining = new ArrayList<>();
+      core.decomposeAnd(filter.condition)
+          .forEach(
+              conjunct -> {
+                if (!subsumed.contains(conjunct)) {
+                  remaining.add(conjunct);
+                }
+              });
+      if (remaining.isEmpty()) {
+        return input;
+      }
+      return filter.copy(input, core.andAlso(typeSystem, remaining));
+    }
     if (!(node instanceof Core.Join)) {
       if (!node.isExtent()) {
         return node instanceof Core.Rel
@@ -351,27 +364,43 @@ public class RelExpander {
             ? generator(requireNonNull(frame.leaves.get(right)), cache)
             : null;
     if (rightGenerator != null && !free(rightGenerator).isEmpty()) {
-      // Correlated: the right side reads a name that the left side binds.
-      final Core.Pat leftPat = frame.leaves.get(join.left);
-      final Core.@Nullable NamedPat param =
-          leftPat instanceof Core.NamedPat ? (Core.NamedPat) leftPat : null;
-      if (param == null
-          || !free(rightGenerator).stream().allMatch(param::equals)) {
+      // Correlated: the right side reads names that the left side binds. The
+      // join becomes a `projectMany` whose lambda binds the left element, and
+      // each name the generator reads becomes the path that reads it out of
+      // that element. The left side need not be a leaf: `from x, y where edge
+      // (x, y) join y2 where y2 = y` reads `y` out of a pair.
+      final Core.Exp leftElement = frame.elements.get(join.left);
+      final Core.IdPat param =
+          core.idPat(join.left.type.elementType(), "g$" + nextName++, 0);
+      final Map<Core.NamedPat, Core.Exp> paths = new LinkedHashMap<>();
+      for (Core.NamedPat name : free(rightGenerator)) {
+        final Core.@Nullable Exp path =
+            leftElement == null
+                ? null
+                : pathTo(leftElement, core.id(param), name);
+        if (path == null) {
+          // What the generator reads is not bound on the left -- it is a leaf
+          // further away, which would need the join reordered.
+          throw new CompileException(
+              "pattern is not grounded", false, right.pos);
+        }
+        paths.put(name, path);
+      }
+      if (!join.condition.isBoolLiteral(true)) {
+        // The `projectMany` has nowhere to put the join's own condition.
         throw new CompileException("pattern is not grounded", false, right.pos);
       }
+      final Core.Exp collection = replace(rightGenerator.exp, paths);
       final Core.Exp body =
           core.project(
               typeSystem,
-              rightGenerator.exp,
+              collection,
               subst(
                   join.yieldExp,
                   core.id(param),
-                  core.input0(rightGenerator.exp.type.elementType())));
+                  core.input0(collection.type.elementType())));
       return core.projectMany(
-          typeSystem,
-          rebuild(join.left, frame, cache),
-          (Core.IdPat) param,
-          body);
+          typeSystem, rebuild(join.left, frame, cache), param, body);
     }
     return join.copy(
         typeSystem,
@@ -427,6 +456,9 @@ public class RelExpander {
     if (node == target) {
       return true;
     }
+    if (node instanceof Core.Filter) {
+      return contains(((Core.Filter) node).input, target);
+    }
     if (!(node instanceof Core.Join)) {
       return false;
     }
@@ -439,6 +471,13 @@ public class RelExpander {
    * that a generator has taken over.
    */
   private boolean conditionsEnforced(Core.Exp node) {
+    if (node instanceof Core.Filter) {
+      // Collapsing the leaves under a filter into one scan would discard the
+      // filter with the join it replaces. A generator that subsumes the
+      // filter's conjuncts would make that safe; short of knowing so, leave
+      // the leaves to be replaced one at a time, with the filter in place.
+      return false;
+    }
     if (!(node instanceof Core.Join)) {
       return true;
     }
@@ -459,6 +498,46 @@ public class RelExpander {
           protected Core.Exp visit(Core.Id id) {
             final Core.@Nullable Exp path = path(pat, element, id.idPat);
             return path != null ? path : id;
+          }
+        });
+  }
+
+  /**
+   * Returns the expression that reads a name out of an element, given the
+   * expression that says what the element is made of, or null if the element
+   * does not contain the name.
+   *
+   * <p>The inverse of {@link Frame#elements}: that maps a node to its element
+   * written in terms of the names of the leaves below it, and this reads one of
+   * those names back out.
+   */
+  private Core.@Nullable Exp pathTo(
+      Core.Exp element, Core.Exp accessor, Core.NamedPat name) {
+    if (element instanceof Core.Id) {
+      return ((Core.Id) element).idPat.equals(name) ? accessor : null;
+    }
+    if (element.op == Op.TUPLE) {
+      final List<Core.Exp> args = ((Core.Tuple) element).args;
+      for (int i = 0; i < args.size(); i++) {
+        final Core.@Nullable Exp exp =
+            pathTo(args.get(i), core.field(typeSystem, accessor, i), name);
+        if (exp != null) {
+          return exp;
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Replaces each name of a map with the expression it maps to. */
+  private Core.Exp replace(
+      Core.Exp exp, Map<Core.NamedPat, Core.Exp> replacements) {
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            final Core.@Nullable Exp exp = replacements.get(id.idPat);
+            return exp != null ? exp : id;
           }
         });
   }
@@ -612,6 +691,13 @@ public class RelExpander {
     final Core.Exp element;
     final Map<Core.Exp, Core.Pat> leaves;
     final List<Core.Exp> constraints;
+
+    /**
+     * The conjunct a constraint came from, for the constraints contributed by a
+     * filter inside the tree, so that the filter can drop what a sealed
+     * generator has taken over. Identity, as everywhere here.
+     */
+    final Map<Core.Exp, Core.Exp> originals = new IdentityHashMap<>();
 
     /**
      * Element expression of every node of the tree, in terms of the names of
@@ -813,6 +899,23 @@ public class RelExpander {
    * of those names.
    */
   private Frame collect(Core.Exp node) {
+    if (node instanceof Core.Filter) {
+      // A filter between two joins constrains the leaves below it just as a
+      // `where` between two scans constrains the patterns before it, so its
+      // conjuncts join the tree's own constraints rather than the tree
+      // stopping here and the leaves below going unconstrained.
+      final Core.Filter filter = (Core.Filter) node;
+      final Frame input = collect(filter.input);
+      core.decomposeAnd(filter.condition)
+          .forEach(
+              conjunct -> {
+                final Core.Exp constraint = subst(conjunct, input.element);
+                input.originals.put(constraint, conjunct);
+                input.constraints.add(constraint);
+              });
+      input.elements.put(node, input.element);
+      return input;
+    }
     if (!(node instanceof Core.Join)) {
       final Core.Pat pat = elementPat(node);
       final Map<Core.Exp, Core.Pat> leaves = new IdentityHashMap<>();
@@ -839,6 +942,8 @@ public class RelExpander {
     frame.elements.putAll(left.elements);
     frame.elements.putAll(right.elements);
     frame.elements.put(node, frame.element);
+    frame.originals.putAll(left.originals);
+    frame.originals.putAll(right.originals);
     return frame;
   }
 
