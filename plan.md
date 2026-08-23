@@ -1644,6 +1644,88 @@ It needs entailment, which this plan deliberately kept off the critical path.
 So it is opt-in and later, and no program that is accepted today would change
 -- only checks would be removed.
 
+## Weakening a check to its residual
+
+A check that is partly known to hold should cost only the part that is not.
+Given `type pct = int check i => i >= 0 check i => i <= 100` and a value known
+to be greater than 50, the check that survives is `i <= 100`; and `i as nat`
+where `i` is known to be greater than 50 should compile to `i`.
+
+Today elision is all or nothing, and "known" means only that the source type's
+condition is *textually* the target's. Three pieces turn that into a residual.
+
+### 1. The residual is a list of conjuncts, not a boolean
+
+`Resolver.condition` conjoins one applied predicate per clause with `andalso`,
+and `TypeSystem.checkPredicates` returns them as a list -- one per `check`
+clause. So the conjunct structure is already there, and the residual is a
+sub-list of it. Nothing has to be invented; the filter has nowhere to get its
+premises yet.
+
+What is missing is that the conjuncts a *user* writes need not line up with the
+clauses. `check i => i >= 0 check i => i <= 100` decomposes and `check i => i
+>= 0 andalso i <= 100` does not, though they mean the same thing. So the
+predicate list should be built by splitting on `andalso` in the body, and then
+how the condition was written stops mattering.
+
+Two things have to agree with the residual once it exists. `constrains` decides
+whether a check is emitted at all, and would otherwise wrap a `$check` around
+an empty condition. And `deepCondition` walks the claimed type, so a
+component's conjuncts are discharged against what is known of that component,
+independently of the whole.
+
+### 2. A premise set, keyed to bindings rather than names
+
+What is known comes from three places: the value's own type, as today; a path
+condition -- `assert p`, a query's `where`, the taken branch of an `if`, a
+`case` guard; and `assert p` itself, which both checks `p` and adds it for the
+rest of the scope.
+
+Morel is pure and a binding is immutable, so a premise about `i` holds for the
+life of that `i`. But shadowing rebinds the name, so a premise must be keyed to
+the `Core.NamedPat` and not to the string. `Bounds.Term` already does exactly
+that.
+
+### 3. Entailment by interval, not by decision procedure
+
+`Fbbt` is feasibility-based bound tightening: it takes a conjunction, tightens
+each variable's feasible interval by propagating each conjunct, and iterates to
+a fixed point. Its dialect -- `(varA + kA) OP (varB + kB)`, `abs x OP c`, `a *
+b OP c` -- is the shape these conditions are written in, and it shares
+`Bounds.Term` with the range extractor and the pushdown.
+
+Point it at the premise set instead of a `where` clause and the example above
+falls out: the premises tighten `i` to `[51, ∞)`; the conjunct `i >= 0` is
+implied by the interval and drops; `i <= 100` is not and stays. `i as nat`
+after `assert i > 50` has an empty residual and compiles to `i`.
+
+That is deliberately weaker than a solver and much stronger than textual
+equality, and it reuses the machinery rather than adding a second way to reason
+about numbers. It also fixes the type-to-type case this plan already records as
+a miss: `k as nat` where `k` is `int check z => z > 0`.
+
+### What must not break
+
+* **Elision changes the code, never the type.** `i as nat` weakened to `i`
+  still has type `nat`. The claim stands and only the check goes; otherwise the
+  invariant stops being about claims.
+* **Conservative in one direction only.** Cannot prove, so keep the check. A
+  bug in the entailment must cost time and never soundness -- which argues for
+  a property that turns elision off, and a run of the suite with it off and on
+  that differs only in how long it takes.
+* **A premise from `assume` is believed, not checked**, so a check discharged
+  by one is only as good as the assumption. Either keep `assume` out of the
+  premise set or mark what it discharged, so that the unsoundness stays
+  visible.
+* **The message is unaffected**, because it names the type rather than the
+  conjunct: a value that fails the surviving conjunct is still "not a valid
+  pct". Worth stating, because it is the reason the residual can be a sub-list
+  rather than something that has to rebuild a message.
+
+Open question 7, repeated narrowing, is what this is really for: a value bound
+at a constrained type and passed to something expecting it is walked twice
+today, and the second walk is exactly a residual that is empty.
+
 ## Issues to log
 
 * **Capture for a condition that is not closed**, so that the issue's
