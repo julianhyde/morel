@@ -406,16 +406,6 @@ public class Discretes {
    * <p>Runtime values: nullary constructor {@code C} is {@code ["C"]}; unary
    * constructor {@code C of t} is {@code ["C", tValue]}.
    */
-  /**
-   * {@link Discrete} implementation for a sum DataType (all constructors are
-   * either nullary or wrap a discrete argument type).
-   *
-   * <p>Handles both pure enums (e.g., {@code order}) and mixed types (e.g.,
-   * {@code (order, bool) either}).
-   *
-   * <p>Runtime values: nullary constructor {@code C} is {@code ["C"]}; unary
-   * constructor {@code C of t} is {@code ["C", tValue]}.
-   */
   private static final class SumDiscrete implements Discrete<Object> {
     private final Comparator<Object> cmp;
     private final ImmutableList<String> ctorNames;

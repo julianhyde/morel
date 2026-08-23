@@ -2848,7 +2848,6 @@ public class Resolver {
     }
   }
 
-  /** Helper for initialization. */
   /**
    * Resolved declaration. It can be converted to an expression given a result
    * expression; depending on sub-type, that expression will either be a {@code
