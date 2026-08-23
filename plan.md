@@ -203,7 +203,7 @@ something settled — §8's principle, applied to the sequence itself.
         and pair every value with every other, which is why the front
         end used to decline.
 
-        Agreement is 284 of 300. The 41 that remain, from the
+        Agreement is 291 of 300. The 41 that remain, from the
         divergence trace — and note that a query both engines decline
         is agreement, not a gap; `from x where (x + 2) * (x - 3) = 0`
         errors in both, as such-that.smli says it should, for want of
@@ -222,11 +222,11 @@ something settled — §8's principle, applied to the sequence itself.
           sides, not between leaves further apart, which would need
           the join reordered so that what grounds comes first.
         * Patterns that nothing reads, when the rows are only
-          counted: `from w : 'a join x : int where x = 3`. `'a`
-          cannot be enumerated at all; `Expander` is entitled to skip
-          the pattern because the query sits inside an `exists`. The
-          tree front end is not told whether the rows are used, so it
-          tries to ground `w` and fails.
+          counted, are now dropped rather than grounded, as
+          `Expander` drops them: `rowsUsed` is threaded from
+          `expandFrom` through the shadow, and a leaf that no
+          constraint mentions is removed from its join. Seven
+          queries.
         * A filter *between* two joins, one query. `collect` treats
           any non-join as a leaf, so the filter's conditions are lost
           and the filter itself is named as though it were a leaf.
