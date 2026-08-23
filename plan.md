@@ -139,22 +139,41 @@ For a plain alias that is harmless, since the alias and its expansion are the
 same type. For a constrained type it is **unsound**, and `n - 100` is the
 plan's own first example of a value that must lose its constraint.
 
-**The meet rule handles the binary operators.** Since `+` has type `'a * 'a ->
-'a`, its two operand types meet, and an alias meeting `int` weakens to `int`.
-So `n + 1` and `n - 100` now report `int`, as Standard ML does, without
-arithmetic being special-cased.
-
-What remains is the **unary** case, where nothing meets:
+**The meet rule was not enough.** Since `+` has type `'a * 'a -> 'a`, its two
+operand types meet, and an alias meeting `int` weakens to `int`, so `n + 1`
+and `n - 100` reported `int` as Standard ML does, without arithmetic being
+special-cased. But what made them meet was the *literal*, not the operator:
 
 ```sml
-~n;       (*) Morel gives 'nat'; Standard ML gives 'int'
+type small = int check i => i < 100;
+val s: small = 60;
+s + s;    (*) 120, reported as a 'small'
+~n;       (*) ~5, reported as a 'nat'
 ```
 
-`~` has type `'a -> 'a`, so the argument's type flows straight to the result.
-For an alias that is a cosmetic difference from Standard ML; for a constrained
-type it is unsound, since `~n` is negative whenever `n` is positive. An
-operator that computes a new value from a single argument must drop the
-constraint explicitly.
+Nothing meets in either, so the constraint flowed straight through `'a * 'a ->
+'a`, and `fun dbl (n: small) = n + n` had type `small -> small`. It is not
+unary against binary, and not really arithmetic: what breaks a condition is an
+operator whose result has the type of its operands and computes a new value
+from them. Where a meet did happen it was luck.
+
+Every *claimed* position still checked -- `val a: small = s + s` raised, as
+did a constructor argument, a list element and a `small` parameter -- so no
+value was smuggled past a claim. What was broken is that a **deduced** type
+carried a condition its value failed, and `fun dbl (n: small) = n + n` printed
+`small -> small` as fact.
+
+**So the operator decides, not the operands.** `+`, `-`, `*`, `~`, `abs`,
+`div` and `mod` -- those overloaded at their operand's own type -- each compute
+a value that type has not been shown to contain, so each drops the condition
+whatever it was applied to. The type is weakened throughout the substitution,
+exactly as a meet weakens it, so `fun dbl (n: small) = n + n` has type `int ->
+int`, as `fun decr (n: nat) = n - 1` already did. The parameter is still
+checked: a check reads the annotation the user wrote, never the type inference
+deduced.
+
+`Int.abs` and `Int.max` needed nothing: they are declared at a concrete `int`,
+so an alias reaching them meets a different type and the meet does the work.
 
 ### The invariant
 
