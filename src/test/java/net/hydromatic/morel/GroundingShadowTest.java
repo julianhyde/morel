@@ -60,12 +60,9 @@ public class GroundingShadowTest {
    */
   @Test
   void testGroundingShadowRuns() {
-    final int before =
-        RelShadow.groundingAgreedCount() + RelShadow.groundingDivergedCount();
+    final int before = RelShadow.groundingAgreedCount();
     Ml.ml("from i where i elem [1, 2, 3]").assertEval();
-    assertThat(
-        RelShadow.groundingAgreedCount() + RelShadow.groundingDivergedCount(),
-        greaterThan(before));
+    assertThat(RelShadow.groundingAgreedCount(), greaterThan(before));
   }
 }
 
