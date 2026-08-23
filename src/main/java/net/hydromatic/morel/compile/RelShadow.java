@@ -47,7 +47,6 @@ public class RelShadow {
   private static final AtomicInteger TRANSLATED = new AtomicInteger();
   private static final AtomicInteger DECLINED = new AtomicInteger();
   private static final AtomicInteger GROUNDING_AGREED = new AtomicInteger();
-  private static final AtomicInteger GROUNDING_DIVERGED = new AtomicInteger();
   private static final AtomicInteger GROUNDING_UNEXAMINED = new AtomicInteger();
 
   private RelShadow() {}
@@ -106,6 +105,12 @@ public class RelShadow {
    * throws {@link AssertionError} if the two disagree. A query the translator
    * declines is counted as unexamined rather than as agreement: the point is to
    * find divergence, not to claim coverage where there is none.
+   *
+   * <p>Disagreement in either direction is an error. It used to be an error one
+   * way and a counter the other, while the tree front end was catching up; it
+   * has caught up, so the invariant the flip needs -- that the tree grounds
+   * neither less nor more than the step list -- is now enforced rather than
+   * measured.
    */
   public static boolean groundingAgrees(
       TypeSystem typeSystem,
@@ -134,18 +139,15 @@ public class RelShadow {
       // the same kind as grounding less, so counted rather than thrown.
       treeGrounded = false;
     }
-    if (treeGrounded && !stepGrounded) {
-      // The tree grounds a query the step list rejects. Whatever the merits,
-      // it is a change in what compiles, and the flip must not make one
-      // silently.
+    if (treeGrounded != stepGrounded) {
+      // Whichever way round, it is a change in what compiles, and the flip
+      // must not make one silently.
       throw new AssertionError(
-          format("tree grounds a query that the step list does not: %s", from));
-    }
-    if (!treeGrounded && stepGrounded) {
-      // The tree grounds less than the step list. A known incompleteness --
-      // see plan.md -- so counted rather than thrown, until it is closed.
-      GROUNDING_DIVERGED.incrementAndGet();
-      return true;
+          format(
+              "the %s grounds a query that the %s does not: %s",
+              treeGrounded ? "tree" : "step list",
+              treeGrounded ? "step list" : "tree",
+              from));
     }
     GROUNDING_AGREED.incrementAndGet();
     return true;
@@ -220,11 +222,6 @@ public class RelShadow {
   /** Returns how many queries the two grounding engines agreed on. */
   public static int groundingAgreedCount() {
     return GROUNDING_AGREED.get();
-  }
-
-  /** Returns how many queries the tree grounds less well than the step list. */
-  public static int groundingDivergedCount() {
-    return GROUNDING_DIVERGED.get();
   }
 
   /** Returns how many queries the tree grounding did not examine. */
