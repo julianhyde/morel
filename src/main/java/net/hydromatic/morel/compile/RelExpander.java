@@ -22,6 +22,7 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -295,7 +296,7 @@ public class RelExpander {
                     });
           }
         });
-    return rebuild(join, frame, cache);
+    return rebuild(join, frame, cache, ImmutableMap.of());
   }
 
   /**
@@ -303,13 +304,17 @@ public class RelExpander {
    * bounds it. A leaf whose generator reads another leaf's element makes the
    * join a {@code projectMany}, whose lambda binds what it reads.
    */
-  private Core.Exp rebuild(Core.Exp node, Frame frame, Generators.Cache cache) {
+  private Core.Exp rebuild(
+      Core.Exp node,
+      Frame frame,
+      Generators.Cache cache,
+      Map<Core.NamedPat, Core.Exp> bound) {
     if (node instanceof Core.Filter) {
       // The filter's conjuncts were grounded with the rest of the tree's
       // constraints, so what a sealed generator now enforces comes out, and
       // the filter goes if that was all of it.
       final Core.Filter filter = (Core.Filter) node;
-      final Core.Exp input = rebuild(filter.input, frame, cache);
+      final Core.Exp input = rebuild(filter.input, frame, cache, bound);
       final List<Core.Exp> remaining = new ArrayList<>();
       core.decomposeAnd(filter.condition)
           .forEach(
@@ -330,20 +335,22 @@ public class RelExpander {
             : node;
       }
       // A leaf that `collect` reached, so `leaves` has a pattern for it.
-      return bounded(node, requireNonNull(frame.leaves.get(node)), cache);
+      return bounded(
+          node, requireNonNull(frame.leaves.get(node)), cache, bound);
     }
     final Core.Join join = (Core.Join) node;
     if (!rowsUsed) {
       // Nothing looks at the rows, so a side that nothing constrains cannot
       // affect the answer, and need not be enumerated.
       if (droppable(join.right, frame, cache)) {
-        return rebuild(join.left, frame, cache);
+        return rebuild(join.left, frame, cache, bound);
       }
       if (droppable(join.left, frame, cache)) {
-        return rebuild(join.right, frame, cache);
+        return rebuild(join.right, frame, cache, bound);
       }
     }
-    final @Nullable Generator common = commonGenerator(join, frame, cache);
+    final @Nullable Generator common =
+        commonGenerator(join, frame, cache, bound);
     if (common != null) {
       // One generator binds the names of every leaf under this join -- `where
       // {deptno = dno, dname = name} elem depts` binds both -- so the leaves
@@ -351,19 +358,20 @@ public class RelExpander {
       // through the paths that its pattern gives each name. Replacing them
       // separately would enumerate the collection once per leaf and pair
       // every value with every other.
+      final Core.Exp collection = replace(common.exp, bound);
       final Core.Exp element =
           rename(
               requireNonNull(frame.elements.get(join)),
-              core.input0(common.exp.type.elementType()),
+              core.input0(collection.type.elementType()),
               common.pat);
-      return core.project(typeSystem, common.exp, element);
+      return core.project(typeSystem, collection, element);
     }
     final Core.Exp right = join.right;
     final @Nullable Generator rightGenerator =
         right.isExtent()
             ? generator(requireNonNull(frame.leaves.get(right)), cache)
             : null;
-    if (rightGenerator != null && !free(rightGenerator).isEmpty()) {
+    if (rightGenerator != null && !free(rightGenerator, bound).isEmpty()) {
       // Correlated: the right side reads names that the left side binds. The
       // join becomes a `projectMany` whose lambda binds the left element, and
       // each name the generator reads becomes the path that reads it out of
@@ -373,7 +381,7 @@ public class RelExpander {
       final Core.IdPat param =
           core.idPat(join.left.type.elementType(), "g$" + nextName++, 0);
       final Map<Core.NamedPat, Core.Exp> paths = new LinkedHashMap<>();
-      for (Core.NamedPat name : free(rightGenerator)) {
+      for (Core.NamedPat name : free(rightGenerator, bound)) {
         final Core.@Nullable Exp path =
             leftElement == null
                 ? null
@@ -390,6 +398,7 @@ public class RelExpander {
         // The `projectMany` has nowhere to put the join's own condition.
         throw new CompileException("pattern is not grounded", false, right.pos);
       }
+      paths.putAll(bound);
       final Core.Exp collection = replace(rightGenerator.exp, paths);
       final Core.Exp body =
           core.project(
@@ -400,15 +409,75 @@ public class RelExpander {
                   core.id(param),
                   core.input0(collection.type.elementType())));
       return core.projectMany(
-          typeSystem, rebuild(join.left, frame, cache), param, body);
+          typeSystem, rebuild(join.left, frame, cache, bound), param, body);
+    }
+    if (rightGenerator != null
+        && join.condition.isBoolLiteral(true)
+        && reads(join.left, frame, cache, bound, frame.leaves.get(right))) {
+      // The other way round: the right side grounds on its own and the left
+      // side reads it, so the right comes first. `from dno, name, v where v
+      // elem depts andalso #deptno v = dno` scans `depts` and reads `dno` out
+      // of each row; the step list reorders the same way, deferring `dno`
+      // until after `v`, as such-that.smli's comment says.
+      final Core.Pat rightPat = requireNonNull(frame.leaves.get(right));
+      final Core.IdPat param =
+          core.idPat(right.type.elementType(), "g$" + nextName++, 0);
+      final Map<Core.NamedPat, Core.Exp> bound2 = new LinkedHashMap<>(bound);
+      rightPat
+          .expand()
+          .forEach(
+              name ->
+                  bound2.put(
+                      name,
+                      requireNonNull(path(rightPat, core.id(param), name))));
+      final Core.Exp left = rebuild(join.left, frame, cache, bound2);
+      final Core.Exp body =
+          core.project(
+              typeSystem,
+              left,
+              subst(
+                  join.yieldExp,
+                  core.input0(left.type.elementType()),
+                  core.id(param)));
+      return core.projectMany(
+          typeSystem, bounded(right, rightPat, cache, bound), param, body);
     }
     return join.copy(
         typeSystem,
         join.joinType,
-        rebuild(join.left, frame, cache),
-        rebuild(right, frame, cache),
+        rebuild(join.left, frame, cache, bound),
+        rebuild(right, frame, cache, bound),
         join.condition,
         join.yieldExp);
+  }
+
+  /**
+   * Returns whether any extent leaf under a node has a generator that reads a
+   * name the given pattern binds.
+   */
+  private boolean reads(
+      Core.Exp node,
+      Frame frame,
+      Generators.Cache cache,
+      Map<Core.NamedPat, Core.Exp> bound,
+      Core.@Nullable Pat pat) {
+    if (pat == null) {
+      return false;
+    }
+    final Set<Core.NamedPat> names = new LinkedHashSet<>(pat.expand());
+    for (Map.Entry<Core.Exp, Core.Pat> entry : frame.leaves.entrySet()) {
+      if (!contains(node, entry.getKey()) || !entry.getKey().isExtent()) {
+        continue;
+      }
+      for (Core.NamedPat name : entry.getValue().expand()) {
+        final @Nullable Generator generator = cache.bestGenerator(name);
+        if (generator != null
+            && free(generator, bound).stream().anyMatch(names::contains)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -420,7 +489,10 @@ public class RelExpander {
    * enforces -- in which case they are replaced one at a time, as before.
    */
   private @Nullable Generator commonGenerator(
-      Core.Exp node, Frame frame, Generators.Cache cache) {
+      Core.Exp node,
+      Frame frame,
+      Generators.Cache cache,
+      Map<Core.NamedPat, Core.Exp> bound) {
     @Nullable Generator common = null;
     for (Map.Entry<Core.Exp, Core.Pat> entry : frame.leaves.entrySet()) {
       if (!contains(node, entry.getKey())) {
@@ -433,7 +505,7 @@ public class RelExpander {
         final @Nullable Generator generator = cache.bestGenerator(name);
         if (generator == null
             || generator.cardinality == Generator.Cardinality.INFINITE
-            || !free(generator).isEmpty()) {
+            || !free(generator, bound).isEmpty()) {
           return null;
         }
         if (common == null) {
@@ -599,26 +671,29 @@ public class RelExpander {
    * -- which is what the step list writes as several scans.
    */
   private Core.Exp bounded(
-      Core.Exp leaf, Core.Pat pat, Generators.Cache cache) {
+      Core.Exp leaf,
+      Core.Pat pat,
+      Generators.Cache cache,
+      Map<Core.NamedPat, Core.Exp> bound) {
     final List<Core.NamedPat> names = pat.expand();
     if (names.size() == 1) {
       final @Nullable Generator generator = cache.bestGenerator(names.get(0));
       if (generator == null) {
         throw new CompileException("pattern is not grounded", false, leaf.pos);
       }
-      return project(generator, names.get(0), leaf.pos);
+      return project(generator, names.get(0), leaf.pos, bound);
     }
     Core.@Nullable Exp product = null;
     List<Core.Exp> access = new ArrayList<>();
     for (Core.NamedPat name : names) {
       final @Nullable Generator generator = cache.bestGenerator(name);
-      if (generator == null || !free(generator).isEmpty()) {
+      if (generator == null || !free(generator, bound).isEmpty()) {
         // Either nothing bounds this component, or something that another
         // component binds does, which would need the product to be a
         // dependent join.
         throw new CompileException("pattern is not grounded", false, leaf.pos);
       }
-      final Core.Exp component = project(generator, name, leaf.pos);
+      final Core.Exp component = project(generator, name, leaf.pos, bound);
       if (product == null) {
         product = component;
         access = new ArrayList<>();
@@ -667,19 +742,24 @@ public class RelExpander {
   }
 
   /** Projects a generator's collection down to one leaf's element. */
-  private Core.Exp project(Generator generator, Core.NamedPat pat, Pos pos) {
+  private Core.Exp project(
+      Generator generator,
+      Core.NamedPat pat,
+      Pos pos,
+      Map<Core.NamedPat, Core.Exp> bound) {
     if (generator.cardinality == Generator.Cardinality.INFINITE) {
       throw new CompileException("pattern is not grounded", false, pos);
     }
+    final Core.Exp exp = replace(generator.exp, bound);
     if (generator.pat instanceof Core.IdPat) {
-      return generator.exp;
+      return exp;
     }
     final Core.@Nullable Exp element =
-        path(generator.pat, core.input0(generator.exp.type.elementType()), pat);
+        path(generator.pat, core.input0(exp.type.elementType()), pat);
     if (element == null) {
       throw new CompileException("pattern is not grounded", false, pos);
     }
-    return core.project(typeSystem, generator.exp, element);
+    return core.project(typeSystem, exp, element);
   }
 
   /**
@@ -745,7 +825,7 @@ public class RelExpander {
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     Expander.ground(cache, extents, strengthen(constraints, extents));
     recordSubsumed(pat, cache, originals);
-    return bounded(leaf, pat, cache);
+    return bounded(leaf, pat, cache, ImmutableMap.of());
   }
 
   /**
@@ -965,11 +1045,12 @@ public class RelExpander {
    * binds those already, and only the rest make a generator depend on another
    * leaf.
    */
-  private List<Core.NamedPat> free(Generator generator) {
+  private List<Core.NamedPat> free(
+      Generator generator, Map<Core.NamedPat, Core.Exp> bound) {
     final List<Core.NamedPat> free = new ArrayList<>();
     generator.freePats.forEach(
         pat -> {
-          if (env.getOpt(pat) == null) {
+          if (env.getOpt(pat) == null && !bound.containsKey(pat)) {
             free.add(pat);
           }
         });
