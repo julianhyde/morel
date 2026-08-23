@@ -582,7 +582,6 @@ public class Ast {
     }
   }
 
-  /** Parse tree node of an expression annotated with a type. */
   /**
    * Parse tree node of a conversion, "{@code exp as type}" or "{@code exp asOpt
    * type}".
@@ -643,6 +642,7 @@ public class Ast {
     }
   }
 
+  /** Parse tree node of an expression annotated with a type. */
   public static class AnnotatedExp extends Exp {
     public final Type type;
     public final Exp exp;
