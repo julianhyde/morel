@@ -768,13 +768,17 @@ public class TypeResolver {
           // known until now, so it is built here rather than by the key
           // builder. The expression and the pattern were deduced into the same
           // variable, so the pattern's type is the base.
-          final Type baseType = typeMap.getTypeOpt(valBind.pat);
-          if (baseType != null) {
+          //
+          // The base is the type displayed for the expression, not the type it
+          // reduces to: 'm' adds a condition to whatever 'e' was shown to
+          // satisfy, and does not take away what it already claimed.
+          final Type.Key baseKey = typeMap.displayedKey(valBind.pat);
+          if (baseKey != null) {
             realTypes.put(
                 valBind.pat,
                 Keys.alias(
                         "",
-                        baseType.key(),
+                        baseKey,
                         ImmutableList.of(),
                         ((Ast.CheckExp) valBind.exp).checks)
                     .toType(typeSystem));
@@ -1244,13 +1248,23 @@ public class TypeResolver {
   /**
    * Deduces the type of an expression with a condition, {@code e check m}.
    *
-   * <p>The condition is typed against the same variable the expression is, so
-   * the base type need never be materialized.
+   * <p>The condition is typed against the type the expression's own conditions
+   * are written against -- the type its aliases abbreviate -- so the base type
+   * need never be materialized.
+   *
+   * <p>Typing it against the expression's own type would weaken that type. A
+   * condition compares the value with something, {@code i < 100} with an {@code
+   * int}, and where an alias meets a different type the meet takes the weaker
+   * of the two; so writing a condition on a {@code nat} would take away the
+   * condition that made it one. A condition is added to what the expression
+   * already claims, never in place of it.
    */
   private Ast.Exp deduceCheckExpType(
       TypeEnv env, Ast.CheckExp checkExp, Variable v) {
     final Ast.Exp exp = deduceExpType(env, checkExp.exp, v);
-    final List<Ast.Fn> checks = deduceChecks(env, v, checkExp.checks);
+    final Term term = requireNonNull(map.get(exp));
+    final List<Ast.Fn> checks =
+        deduceChecks(env, unaliasTerm(term), checkExp.checks);
     return reg(ast.checkExp(checkExp.pos, exp, checks), v);
   }
 

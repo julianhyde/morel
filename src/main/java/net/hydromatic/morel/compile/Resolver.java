@@ -1647,12 +1647,20 @@ public class Resolver {
         // The type is not written anywhere, so build it here, where the
         // expression's type is known: the base is what was deduced, and the
         // conditions are the ones written.
+        //
+        // The base is the type displayed for the expression, conditions and
+        // all, rather than the type it reduces to. A condition is added to
+        // what the expression already claimed, so 'n check m' where 'n' is a
+        // 'nat' must check both, and the deep walk finds each condition on the
+        // way down.
         final Ast.CheckExp checkExp = (Ast.CheckExp) exp;
         final Core.Exp checkCore = toCore(checkExp.exp);
+        final Type.@Nullable Key checkBaseKey =
+            typeMap.displayedKey(checkExp.exp);
         final Type checkType =
             Keys.alias(
                     "",
-                    checkCore.type.key(),
+                    checkBaseKey == null ? checkCore.type.key() : checkBaseKey,
                     ImmutableList.of(),
                     checkExp.checks)
                 .toType(typeMap.typeSystem);

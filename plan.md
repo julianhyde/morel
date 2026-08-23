@@ -1411,9 +1411,24 @@ j > 0)` -- which is the same parenthesis `case` and `fn` already need where
 they nest.
 
 An implementation note: the base type need never be materialized. The
-condition is typed against the same unification variable as the expression,
-and the checked type is built afterwards, where the expression's type is
-known.
+condition is typed against the term the expression was deduced to, and the
+checked type is built afterwards, where the expression's type is known.
+
+**A condition is added to what the expression already claims, never in place
+of it.** Typing the condition against the expression's own type takes the
+claim away: a condition compares the value with something -- `i < 100` with an
+`int` -- and where an alias meets a different type the meet takes the weaker of
+the two, so writing a condition on a `nat` removed the one that made it a
+`nat`. The condition is therefore typed against the type the expression's own
+conditions are typed against, the type its aliases abbreviate; then the
+expression's type survives, and the type built on it carries both. Only a
+condition that mentioned nothing of the value gave the right answer before,
+which is why this was easy to miss.
+
+The same rule decides `(e check m1) check m2`: the conditions are conjoined
+into one node, as `e check m1 check m2` already was, rather than the outer one
+being written on a type the inner one had made. Nesting them would put each in
+the type of the last.
 
 That first gave a type that did not participate in inference -- `val a = e
 check m` displayed as `int check ...`, but a later reference to `a` was only
@@ -1593,6 +1608,21 @@ So it is opt-in and later, and no program that is accepted today would change
   has no case for a type declaration. Unrelated to conditions.
 * **`local ... in ... end` is not implemented.** It is how Standard ML
   declares a type locally.
+* **A redeclared constrained type checks the condition it used to have**, if a
+  binding still holds the old one:
+
+  ```sml
+  type nat = int check i => i >= 0;
+  val n: nat = 5;
+  type nat = int check i => i >= 1;
+  val m: nat = 0;                    (*) accepted; 0 is not >= 1
+  ```
+
+  Without the binding in the middle it is rejected, as it should be. A term
+  names an alias by name, and `displacedTypes` recovers the type a name used to
+  have; here it is consulted for a name that has not been displaced so much as
+  redeclared. Found while testing the above; unrelated to conditions except that
+  a condition is what makes it visible.
 
 ## Open questions
 

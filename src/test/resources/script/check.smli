@@ -1087,6 +1087,37 @@ val failsSecond = y + 1 check i => i > 0 check i => i < 2;
 > uncaught exception Constraint [2 is not a valid value]
 >   raised at: stdIn:1.19-1.58
 
+(* A condition is added to what the expression already claims, not put in
+ * place of it, so the type that results carries both. The condition is
+ * therefore typed against the type the expression's own conditions are typed
+ * against -- the type they abbreviate -- because typing 'i < 100' against a
+ * 'nat' would make the alias meet an 'int', and the meet would take away the
+ * condition that made it one. *)
+type positive = int check i => i >= 1;
+> type positive = int check i => i >= 1
+val one: positive = 1;
+> val one = 1 : positive
+val bounded = one check i => i < 100;
+> val bounded = 1 : positive check i => i < 100
+val boundedLow: typeof bounded = 0;
+> uncaught exception Constraint [0 is not a valid value]
+>   raised at: stdIn:1.5-1.35
+val boundedHigh: typeof bounded = 200;
+> uncaught exception Constraint [200 is not a valid value]
+>   raised at: stdIn:1.5-1.38
+val boundedOk: typeof bounded = 7;
+> val boundedOk = 7 : positive check i => i < 100
+
+(*) The same, where what the expression claims has no name.
+val stacked = (5 check i => i > 0) check i => i < 100;
+> val stacked = 5 : int check i => i > 0 check i => i < 100
+val stackedLow: typeof stacked = ~1;
+> uncaught exception Constraint [~1 is not a valid value]
+>   raised at: stdIn:1.5-1.36
+val stackedHigh: typeof stacked = 200;
+> uncaught exception Constraint [200 is not a valid value]
+>   raised at: stdIn:1.5-1.38
+
 (* --- Constraints on types that are not named -------------------- *)
 
 (* A type may carry a condition wherever it is written, not only where it is
