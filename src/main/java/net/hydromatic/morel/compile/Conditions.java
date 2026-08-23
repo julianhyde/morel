@@ -145,8 +145,8 @@ class Conditions {
       return ast.fn(
           match.pos, ast.match(pos, ast.idPat(pos, RECORD), match.exp));
     }
-    final List<Ast.ValBind> valBinds = new ArrayList<>();
-    binds.forEach((pat, exp) -> valBinds.add(ast.valBind(pos, pat, exp)));
+    final List<Ast.ValBind> valBinds =
+        binds.transform((pat, exp) -> ast.valBind(pos, pat, exp));
     final Ast.Exp let =
         ast.let(
             pos,
