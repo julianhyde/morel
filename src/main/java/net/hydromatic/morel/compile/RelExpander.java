@@ -34,6 +34,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -59,6 +60,18 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class RelExpander {
   private final TypeSystem typeSystem;
   private final Environment env;
+
+  /**
+   * Whether the rows of the query are used, rather than only counted or tested
+   * for existence.
+   *
+   * <p>When they are not, a leaf that no constraint mentions can be dropped
+   * rather than grounded -- which is the only thing to be done with {@code from
+   * w : 'a join x : int where x = 3}, since {@code 'a} cannot be enumerated at
+   * all. {@code Expander} does the same.
+   */
+  private final boolean rowsUsed;
+
   private int nextName;
 
   /**
@@ -88,9 +101,11 @@ public class RelExpander {
   private final Set<Core.Exp> subsumed =
       Collections.newSetFromMap(new IdentityHashMap<>());
 
-  private RelExpander(TypeSystem typeSystem, Environment env) {
+  private RelExpander(
+      TypeSystem typeSystem, Environment env, boolean rowsUsed) {
     this.typeSystem = typeSystem;
     this.env = env;
+    this.rowsUsed = rowsUsed;
   }
 
   /**
@@ -101,7 +116,21 @@ public class RelExpander {
    */
   public static Core.Exp expand(
       TypeSystem typeSystem, Environment env, Core.Exp tree) {
-    return new RelExpander(typeSystem, env).expand(tree, ImmutableList.of());
+    return expand(typeSystem, env, tree, true);
+  }
+
+  /**
+   * Replaces every infinite-extent leaf of a tree with a collection that bounds
+   * it, and throws if there is none.
+   *
+   * <p>If {@code rowsUsed} is false the query's rows are only counted, or
+   * tested for existence, so a leaf that nothing constrains need not be
+   * bounded: it is dropped.
+   */
+  public static Core.Exp expand(
+      TypeSystem typeSystem, Environment env, Core.Exp tree, boolean rowsUsed) {
+    return new RelExpander(typeSystem, env, rowsUsed)
+        .expand(tree, ImmutableList.of());
   }
 
   /**
@@ -290,6 +319,16 @@ public class RelExpander {
       return bounded(node, frame.leaves.get(node), cache);
     }
     final Core.Join join = (Core.Join) node;
+    if (!rowsUsed) {
+      // Nothing looks at the rows, so a side that nothing constrains cannot
+      // affect the answer, and need not be enumerated.
+      if (droppable(join.right, frame, cache)) {
+        return rebuild(join.left, frame, cache);
+      }
+      if (droppable(join.left, frame, cache)) {
+        return rebuild(join.right, frame, cache);
+      }
+    }
     final @Nullable Generator common = commonGenerator(join, frame, cache);
     if (common != null) {
       // One generator binds the names of every leaf under this join -- `where
@@ -419,6 +458,47 @@ public class RelExpander {
             return path != null ? path : id;
           }
         });
+  }
+
+  /**
+   * Returns whether a side of a join is an infinite extent that no constraint
+   * mentions, and can therefore be dropped when the rows are not used.
+   */
+  private boolean droppable(
+      Core.Exp node, Frame frame, Generators.Cache cache) {
+    if (!(node instanceof Core.Rel)
+        && Extents.isInfinite(node)
+        && frame.leaves.containsKey(node)) {
+      for (Core.NamedPat name : frame.leaves.get(node).expand()) {
+        if (cache.bestGenerator(name) != null
+            && cache.bestGenerator(name).cardinality
+                != Generator.Cardinality.INFINITE) {
+          // Something bounds it after all.
+          return false;
+        }
+        if (frame.constraints.stream()
+            .anyMatch(constraint -> mentions(constraint, name))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /** Returns whether an expression mentions a name. */
+  private static boolean mentions(Core.Exp exp, Core.NamedPat name) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (id.idPat.equals(name)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
   }
 
   /** Returns the generator of a leaf named by a single variable, or null. */
@@ -636,7 +716,7 @@ public class RelExpander {
    */
   public static Map<Core.Exp, @Nullable Generator> ground(
       TypeSystem typeSystem, Environment env, Core.Exp tree) {
-    final RelExpander expander = new RelExpander(typeSystem, env);
+    final RelExpander expander = new RelExpander(typeSystem, env, true);
     final Map<Core.Exp, @Nullable Generator> generators = new LinkedHashMap<>();
     expander.ground(tree, ImmutableList.of(), generators);
     return generators;
