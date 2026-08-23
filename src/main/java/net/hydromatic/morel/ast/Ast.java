@@ -1775,10 +1775,6 @@ public class Ast {
     }
 
     /**
-     * Creates a copy of this {@code TypeBind} with given constraints, or this
-     * if the constraints are the same.
-     */
-    /**
      * Creates a copy of this {@code TypeBind} with a given body, or this if the
      * body is the same.
      */
@@ -1793,6 +1789,10 @@ public class Ast {
               ImmutableList.copyOf(checks));
     }
 
+    /**
+     * Creates a copy of this {@code TypeBind} with given constraints, or this
+     * if the constraints are the same.
+     */
     public TypeBind copy(List<Fn> checks) {
       return this.checks.equals(checks)
           ? this
