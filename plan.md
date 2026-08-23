@@ -1738,6 +1738,19 @@ alternative, and loses a fix worth reading on its own.
   that record a decision with no code -- the phases, the open questions --
   belong in whatever this file becomes.
 
+### What to tidy while squashing
+
+Small things, each worth doing as the commit that introduced them is rewritten
+rather than as a cleanup commit of its own.
+
+* **`RecordModifiers.claims` should use `PairList.anyMatch`.** It is a loop
+  over `Map.Entry` that returns true on the first match, which is what
+  `anyMatch(BiPredicate)` is; the loop also names the key it never reads.
+* **Review the other uses of `PairList` added since `origin/main`**, for the
+  same reason: a `PairList` used through the collection interface it inherits,
+  a list built from a `PairList` an element at a time, or a `PairList` built
+  from parallel lists, where the class already offers the operation.
+
 ### What to decide
 
 **Whether `plan.md` merges at all.** It is a scratch design document, and much
