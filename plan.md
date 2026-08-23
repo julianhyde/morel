@@ -171,6 +171,38 @@ something real: consulting the substitution is only sound when the binding
 came from a metavariable. Where two concrete types meet, an extra rule is
 needed; see below.
 
+### A check is an effect
+
+The invariant is a statement about the code the compiler emits, and that is not
+enough on its own: the check has to still be there when the code runs.
+
+Raising is a check's only effect. A parameter's check is emitted as
+
+```sml
+fn v => let val n = $check (c v, v, "nat") in body end
+```
+
+which was written that way deliberately -- the body reads the name the check
+binds, so the check cannot be discarded. That reasoning holds only when the
+body does read it:
+
+```sml
+fun ignores (n: nat) = 0;                          (*) never read
+fun branches (n: nat) = if false then n else 0;    (*) read in a dead branch
+val delays = fn (n: nat) => fn () => n;            (*) read in a closure
+```
+
+The first binding was dead and was dropped outright; the other two were used
+once, and were substituted into the place the name was read, so the check
+happened only if that branch was taken or that function was called. All three
+accepted `~1` in silence.
+
+An optimizer that reasons about values alone is entitled to all three, so the
+rule belongs to the optimizer rather than to the shape of the code emitted: a
+declaration whose value checks a condition stays where it is, however often its
+name is read. One rule, in one place, covering discarding it and moving it
+alike.
+
 ### This is not in the Definition, and we cannot adopt it unchanged
 
 Two caveats, both of which matter.
