@@ -1740,16 +1740,38 @@ alternative, and loses a fix worth reading on its own.
 
 ### What to tidy while squashing
 
-Small things, each worth doing as the commit that introduced them is rewritten
-rather than as a cleanup commit of its own.
+Small things, each of which belongs in the commit that introduced it rather
+than in a cleanup commit of its own. Each review should therefore produce
+`fixup!` commits, so that `git rebase --autosquash` puts each edit back where
+it came from.
 
-* **`RecordModifiers.claims` should use `PairList.anyMatch`.** It is a loop
-  over `Map.Entry` that returns true on the first match, which is what
-  `anyMatch(BiPredicate)` is; the loop also names the key it never reads.
-* **Review the other uses of `PairList` added since `origin/main`**, for the
-  same reason: a `PairList` used through the collection interface it inherits,
-  a list built from a `PairList` an element at a time, or a `PairList` built
-  from parallel lists, where the class already offers the operation.
+* ~~**Uses of `PairList` added since `origin/main`.**~~ **Done**, as two
+  fixups. `claims` and `preserves` were loops over `Map.Entry` that return on
+  the first decision -- `anyMatch` and `allMatch` -- and both named a key they
+  read only in one branch (`fixup! A record modifier claims the type it
+  modifies`); and `Conditions.select` built a list from a `PairList` an element
+  at a time, which is `transform` (`fixup! Inherit a record's condition into a
+  modifier that changes its shape`).
+
+  Three other sites were considered and left: `Resolver.build` needs a
+  `SortedMap` under `RecordType.ORDERING`, which neither `toImmutableSortedMap`
+  nor `withSortedKeys` gives; and `inheritChecks` and the `assign` case filter
+  as well as map, which `transform` cannot.
+* **Rename "constrained type" to "checked type"**, in the specification, the
+  implementation and the comments. The type is written with `check`, the
+  operator that adds one is `check`, and the exception is `Constraint`; calling
+  the type "constrained" is a third word for the same idea.
+
+  92 lines carry the phrase, and `git blame` attributes them to **33 commits**,
+  so this is 33 fixups. The split is 26 lines in this file, 15 in `check.smli`
+  and 51 in the code, mostly `Resolver` and `TypeResolver`. Do the code and the
+  tests first: whether the 26 in this file are worth a fixup depends on what is
+  decided below about the file itself.
+
+  The identifiers are a separate, smaller job that no fixup can do line by
+  line: `Ast.ConstrainedType`, `Op.CONSTRAINED_TYPE`, the builder, the parser
+  production, and the `Visitor`/`Shuttle` cases -- 17 references over 7 files.
+  Rename them in whichever commit first introduces each.
 
 ### What to decide
 
