@@ -294,7 +294,6 @@ public class TypeSystem {
     return dataType;
   }
 
-  /** Creates a type that is an alias for another type. */
   /**
    * Conditions of constrained types, compiled, by the type they constrain.
    *
@@ -320,6 +319,7 @@ public class TypeSystem {
     return predicates == null ? ImmutableList.of() : predicates;
   }
 
+  /** Creates a type that is an alias for another type. */
   Type aliasType(
       String name, Type type, List<Type> arguments, List<Ast.Fn> checks) {
     final AliasType aliasType = new AliasType(name, type, arguments, checks);
