@@ -1446,19 +1446,37 @@ even once the sugar is available.
 
 ### The gaps that remain
 
-Three gaps, in increasing order of how much they matter.
+Three gaps, in increasing order of how much they matter. Two are now closed;
+what remains of them is recorded with each.
 
 1. **`asOpt` has no anonymous counterpart.** `e as t` pairs with `e check m`,
    but `e asOpt t` pairs with nothing. Naming the type is always available, so
    this may be acceptable.
-2. **`typeof e` erases.** `1 : typeof n` is `int`, not `nat`, so `typeof` does
-   not recover the type that was displayed. If it kept the condition, `e check
-   m` would be derivable rather than primitive -- it would be exactly `e :
-   (typeof e check m)` -- which is a good sign that the algebra is closed. As
-   it stands the expression form has to be primitive.
-3. **`type t = typeof e` throws an AssertionError.** `KeyBuilder` has no case
-   for an expression type. So `typeof` may be used in an annotation but not in
-   a declaration, and the failure is a crash rather than a message.
+2. ~~**`typeof e` erases.**~~ **Fixed.** It named the type inference had
+   reduced the expression to, not the type the expression was shown to have,
+   so `1 : typeof n` claimed nothing and `~1 : typeof n` was accepted. It now
+   names the displayed type -- alias, conditions and all -- so an annotation
+   that uses it claims what that type claims, and a binding displays what a
+   binding at the named type displays.
+
+   The cause was that a type AST is converted syntactically, and a `typeof`
+   has no syntax to convert: `KeyBuilder` had no case for it, and every caller
+   that would reach one skipped it. The key builder now takes a way to resolve
+   one, and the two callers that know the answer -- the claim in `Resolver`,
+   the displayed type in `TypeResolver` -- supply it from the `TypeMap`.
+
+   **What it does not give is the derivation.** `e check m` is still primitive,
+   not `e : (typeof e check m)`, because a condition is typed against its base
+   *while the declaration is being deduced*, and that is exactly when the
+   expression's type is not yet known. Both the term for a constrained type and
+   the type its condition is checked against are built from the key, before
+   unification has run. `typeof e check m` therefore reports rather than works.
+   Closing it needs the deduce-again loop that a record modifier uses to learn
+   its base's fields.
+3. ~~**`type t = typeof e` throws an AssertionError.**~~ **Fixed**, as far as
+   it goes: it is a message rather than a crash. It cannot be made to work for
+   the same reason as the derivation above -- a type declaration is elaborated
+   before anything in it has been deduced.
 
 `type_string` was a fourth: it erased, so a value the shell printed as `foo`
 reported `"int"`. That is now fixed -- it renders the type as displayed -- but
@@ -1514,8 +1532,9 @@ So it is opt-in and later, and no program that is accepted today would change
 * **`predicate t`, to extract a type's condition as a value**, per "Driven by
   the operations" above. Expresses "filter rather than abort", and makes `as`,
   `asOpt` and `e check m` derivable.
-* **`typeof e` erases, and `type t = typeof e` crashes**, per "Is there a
-  complete algebra?" above.
+* **Make `typeof e check m` work**, so that `e check m` is derivable rather
+  than primitive, per "The gaps that remain" above. It needs a condition to be
+  typed after its base is known, which today it is not.
 * **Refine the environment after `assert`, `assume`, `prove` and `where`**,
   per the section above. Note that what is learned is a predicate, not a type:
   `assert x > y` changes neither variable's type.

@@ -539,7 +539,8 @@ public class Resolver {
       return null;
     }
     compileUnnamedChecks(type);
-    final Type t = TypeResolver.toType(type, typeMap.typeSystem);
+    final Type t =
+        TypeResolver.toType(type, typeMap.typeSystem, typeMap::displayedKey);
     // Reject before the test below: a constrained function type constrains
     // nothing that can be checked, so the test would pass it over in silence.
     rejectConstrainedFunction(t, t, type.pos);
@@ -560,7 +561,8 @@ public class Resolver {
           protected void visit(Ast.ConstrainedType constrainedType) {
             super.visit(constrainedType);
             final Type t =
-                TypeResolver.toType(constrainedType, typeMap.typeSystem);
+                TypeResolver.toType(
+                    constrainedType, typeMap.typeSystem, typeMap::displayedKey);
             compileChecks(t, constrainedType.checks, constrainedType.pos);
           }
         });
@@ -616,11 +618,6 @@ public class Resolver {
     final AtomicBoolean concrete = new AtomicBoolean(true);
     type.accept(
         new Visitor() {
-          @Override
-          protected void visit(Ast.ExpressionType expressionType) {
-            concrete.set(false);
-          }
-
           @Override
           protected void visit(Ast.TyVar tyVar) {
             concrete.set(false);
