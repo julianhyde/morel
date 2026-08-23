@@ -203,11 +203,13 @@ something settled — §8's principle, applied to the sequence itself.
         and pair every value with every other, which is why the front
         end used to decline.
 
-        Agreement is 293 of 300. The seven that remain, from the
-        divergence trace — and note that a query both engines decline
-        is agreement, not a gap; `from x where (x + 2) * (x - 3) = 0`
-        errors in both, as such-that.smli says it should, for want of
-        symbolic maths:
+        Agreement is 300 of 300: the tree grounds every unbounded
+        query in such-that.smli and relational.smli that the step
+        list grounds, and no query that it does not. Note that a
+        query both engines decline is agreement, not a gap; `from x
+        where (x + 2) * (x - 3) = 0` errors in both, as
+        such-that.smli says it should, for want of symbolic maths.
+        What the trace found, in the order it was closed:
         * Grounding through a nested query was never failing: the
           shadow was. It asked whether *any* infinite extent survived
           anywhere in the expanded expression, and a nested query in
@@ -215,16 +217,22 @@ something settled — §8's principle, applied to the sequence itself.
           has an unbounded pattern of its own that the step list
           grounds when it reaches that query. Now only the tree's own
           leaves count.
-        * Correlation chains, five queries. `from dno : int join name
+        * Correlation chains, six queries. `from dno : int join name
           : string join v : {deptno, dname, loc} where v elem depts
           andalso #deptno v = dno` grounds `v` and then `dno` from
-          `v`. A generator that reads the left side no longer needs
-          the left side to *be* a leaf: the `projectMany` binds
-          whatever element the left subtree has and reads the name
-          out of it by path, which is the inverse of the element
-          expression `collect` already builds. What is left is the
-          chains that read the *right* side, and they need the join
-          reordered so that what grounds comes first.
+          `v`. Two changes closed them. A generator that reads the
+          left side no longer needs the left side to *be* a leaf: the
+          `projectMany` binds whatever element the left subtree has
+          and reads the name out of it by path, which is the inverse
+          of the element expression `collect` already builds. And
+          where the correlation runs the other way -- the right side
+          grounds on its own and the left reads it -- the join is
+          reordered, the right side coming first and the names it
+          binds carried down as a substitution that `rebuild` applies
+          to each generator it uses. The step list defers the same
+          way, which is what the script's "forward references are
+          required" comment is about, so reordering the rows is
+          parity rather than licence.
         * Patterns that nothing reads, when the rows are only
           counted, are now dropped rather than grounded, as
           `Expander` drops them: `rowsUsed` is threaded from
@@ -246,9 +254,13 @@ something settled — §8's principle, applied to the sequence itself.
         but it moved nothing -- none of the tail is a naming problem
         -- and unpaid complexity is worse than the trial it replaced.
 
-        The invariant to reach before the flip is that the tree never
-        grounds less than the step list; until then any query the
-        tree declines would stop compiling.
+        The invariant to reach before the flip was that the tree
+        never grounds less than the step list, since any query the
+        tree declined would stop compiling. It holds over the suite.
+        It is checked, not assumed: `RelShadow.groundingAgrees` runs
+        on every unbounded query the suite compiles and fails the
+        build on a disagreement in either direction. The counter for
+        the tree grounding less is gone with the gap it measured.
 
         The conditions a
         sealed

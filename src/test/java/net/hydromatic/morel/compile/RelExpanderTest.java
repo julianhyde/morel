@@ -284,6 +284,29 @@ public class RelExpanderTest {
                 + "      [#y g$3, #y g$3 + 1]\n"));
   }
 
+  /**
+   * Tests a chain that grounds only if the join is reordered.
+   *
+   * <p>{@code dno} is unbounded until the condition {@code #deptno v = dno} is
+   * seen, and by then {@code v} has not been declared; so {@code v} comes
+   * first, and {@code dno} is read out of each of its rows. The step list
+   * defers in the same way, which is what such-that.smli's "forward references
+   * are required" comment is about.
+   */
+  @Test
+  void testReordersToGroundAChain() {
+    assertThat(
+        expanded(
+            "from dno : int join v : int list "
+                + "where v elem [[1], [2]] andalso dno elem v"),
+        is(
+            "projectMany\n" //
+                + "  [[1], [2]]\n"
+                + "  fn g$2 =>\n"
+                + "    project [{dno = $0, v = g$2}]\n"
+                + "      g$2\n"));
+  }
+
   /** Tests that a query that cannot be bounded is an error. */
   @Test
   void testExpandUnbounded() {
