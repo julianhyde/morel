@@ -913,35 +913,31 @@ Each phase should land with its own tests, rather than deferring them:
    A conversion between different erasures needed no work: it is an ordinary
    type error, and the unifier's message names both types and says which is an
    alias.
-6. **Planner.** *Half done.* A type's `check` condition is conjoined into a
+6. ~~**Planner.**~~ **Done.** A type's `check` condition is conjoined into a
    scan over it, and the issue's example gives the answer it asks for. A scan
    is the one site whose condition does not raise: which values the type has
    is the question being asked, not something claimed of a value in hand.
 
-   Grounding a record variable from a constraint on a field selection is not
-   done. It is **not a constrained-types problem**: `from p: {i: int, j: int}
-   where p.i elem [0..2]` reports that `p` is not grounded with no `check`
-   anywhere.
+   Grounding a record variable from a constraint on a field selection is done
+   too. It was **not a constrained-types problem**: `from p: {i: int, j: int}
+   where p.i elem [0..2] andalso p.j elem [5..8]` reported that `p` was not
+   grounded with no `check` anywhere.
 
-   The machinery is all there, and works for one field:
+   The diagnosis was right -- collect a generator per field rather than one
+   per pattern -- and three more things were needed once that was done, each
+   of them a place where the machinery had only ever been asked about one
+   field:
 
-   ```sml
-   type one = {i: int};
-   from p: one where p.i elem [0,1,2];
-   > val it = [{i=0},{i=1},{i=2}] : one list
-   ```
-
-   `patForExp` turns `#i p` into a synthetic field pattern, a generator is
-   built for it, and `deriveFieldGenerators` assembles a record generator for
-   `p`. Two fields fail because the constraint scan takes **at most one
-   generator per pattern** -- `elemMatch == null` guards the match, so once
-   `p.i elem ...` is found, `p.j elem ...` is skipped -- while
-   `deriveFieldGenerators` requires every field to be covered, sees one of
-   two, and gives up. The range form, which `[0..2]` desugars into, has the
-   same shape.
-
-   So the fix is to collect a generator per field rather than one per pattern,
-   not to build anything new.
+   * A `Range.contains` constraint could only match the pattern itself, never
+     a field of it, and asked discreteness of the pattern rather than of the
+     value being generated. A record is not discrete; its fields may be. So
+     `p.i elem [0..2]` could not ground a field while `p.i elem [0,1,2]`
+     could.
+   * The derived value was built at a type deduced from its fields, giving
+     `int * int` where the pattern's type was `{i:int, j:int}`.
+   * Joining the field generators wrapped each scan's pattern in a tuple
+     pattern, and a one-element tuple pattern throws. With one field there was
+     no join to do, so nothing had wrapped anything before.
 
 Deferred: constrained function types and any recovery of a constraint that has
 reached a type variable. Both need a type-directed dispatch mechanism; #290
@@ -1517,9 +1513,6 @@ So it is opt-in and later, and no program that is accepted today would change
   has no case for a type declaration. Unrelated to conditions.
 * **`local ... in ... end` is not implemented.** It is how Standard ML
   declares a type locally.
-* **Ground a record variable from a constraint on a field selection**, so that
-  `from p: pair where p.i elem [0..2]` works. Not a constrained-types problem:
-  it reports that `p` is not grounded with no `check` anywhere.
 
 ## Open questions
 
