@@ -136,6 +136,16 @@ public class TypeResolver {
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
   private final List<Constraint> constraints = new ArrayList<>();
+
+  /**
+   * Variables that hold the result of an operator that computes a new value
+   * from operands of its own type, and must therefore drop any condition they
+   * carry.
+   *
+   * @see #eraseConstraints
+   */
+  private final List<Variable> erasedVariables = new ArrayList<>();
+
   private final Deque<AggFrame> aggregateTripleStack = new ArrayDeque<>();
 
   /**
@@ -346,7 +356,8 @@ public class TypeResolver {
       final List<TermTerm> termPairs = new ArrayList<>();
       terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
       final Result result =
-          unifier.unify(termPairs, actionMap, constraints, tracer);
+          eraseConstraints(
+              unifier.unify(termPairs, actionMap, constraints, tracer));
       if (result instanceof Failure) {
         final String extra =
             ";\n"
@@ -447,6 +458,52 @@ public class TypeResolver {
       }
       return Resolved.of(env, decl, node2, typeMap);
     }
+  }
+
+  /**
+   * Drops the condition on each type that reached an operator that computes a
+   * new value, in the substitution unification produced.
+   *
+   * <p>{@code n - 1} already gave {@code int}, but only because the {@code 1}
+   * is an {@code int} that the {@code nat} had to meet, and a meet takes the
+   * weaker of the two. Nothing meets in {@code ~n} or in {@code n + n}, so the
+   * condition flowed through {@code 'a * 'a -> 'a} and {@code s + s} claimed a
+   * type it had just broken. What decides is the operator, not the operands:
+   * such an operator computes a value that has not been shown to satisfy the
+   * condition, so the condition is dropped whatever it was applied to.
+   *
+   * <p>The type is weakened throughout the substitution, as a meet is: a
+   * constrained type is only as strong as what it abbreviates once it has
+   * reached such an operator, so {@code fun dbl (n: small) = n + n} has type
+   * {@code int -> int}, exactly as {@code fun sub (n: nat) = n - 1} does. The
+   * parameter is still checked -- a check reads the annotation the user wrote,
+   * not the type inference deduced.
+   */
+  private Result eraseConstraints(Result result) {
+    if (erasedVariables.isEmpty() || !(result instanceof SubstitutionResult)) {
+      return result;
+    }
+    final SubstitutionResult substitutionResult = (SubstitutionResult) result;
+    final Substitution resolved = substitutionResult.resolve();
+    final Map<Term, Term> weakened = new LinkedHashMap<>();
+    for (Variable variable : erasedVariables) {
+      final Term term = resolved.resultMap.get(variable);
+      if (term != null) {
+        final Term term2 = unaliasTerm(term);
+        if (term2 != term) {
+          weakened.put(term, term2);
+        }
+      }
+    }
+    if (weakened.isEmpty()) {
+      return result;
+    }
+    final Map<Variable, Term> resultMap = new LinkedHashMap<>();
+    resolved.resultMap.forEach(
+        (variable, term) ->
+            resultMap.put(variable, Unifier.weaken(term, weakened)));
+    return SubstitutionResult.create(
+        resultMap, substitutionResult.residualConstraints);
   }
 
   /**
@@ -3036,6 +3093,11 @@ public class TypeResolver {
       final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(((Ast.Id) fn2).name);
       if (builtIn != null && builtIn.preferredType != null) {
         preferredTypes.add(v, builtIn.preferredType);
+        // '+', '-', '*', '~', 'abs', 'div' and 'mod' are the operators whose
+        // result has the type of their operands, and each of them computes a
+        // value the operands' type has not been shown to contain. So the
+        // result drops whatever condition the operands carry.
+        erasedVariables.add(v);
       }
     }
     return reg(apply.copy(fn2, arg2), v);
