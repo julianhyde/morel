@@ -700,7 +700,26 @@ public enum AstBuilder {
     return new Ast.TypeDecl(pos, ImmutableList.copyOf(binds));
   }
 
+  /**
+   * Creates a {@code CheckExp}, an expression with a condition.
+   *
+   * <p>A condition written on an expression that has one already is conjoined
+   * with it, rather than nesting: nesting would put each condition in the type
+   * of the last, and only the last would be seen. So "{@code (e check m1) check
+   * m2}" is the same expression as "{@code e check m1 check m2}", which the
+   * parser builds as one node.
+   */
   public Ast.Exp checkExp(Pos pos, Ast.Exp exp, Iterable<Ast.Fn> checks) {
+    if (exp instanceof Ast.CheckExp) {
+      final Ast.CheckExp checkExp = (Ast.CheckExp) exp;
+      return checkExp(
+          pos,
+          checkExp.exp,
+          ImmutableList.<Ast.Fn>builder()
+              .addAll(checkExp.checks)
+              .addAll(checks)
+              .build());
+    }
     return new Ast.CheckExp(pos, exp, ImmutableList.copyOf(checks));
   }
 
