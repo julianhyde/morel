@@ -521,7 +521,38 @@ public class Resolver {
         }
         return claims ? typeMap.typeSystem.tupleType(claimedArgs) : null;
 
+      case RECORD_PAT:
+        // A record pattern claims per field, as a tuple pattern claims per
+        // component. A field the pattern does not mention -- which '...'
+        // allows -- claims nothing, and keeps the type it has.
+        final Ast.RecordPat recordPat = (Ast.RecordPat) pat;
+        if (!(erasedType instanceof RecordLikeType)) {
+          return null;
+        }
+        final SortedMap<String, Type> claimedFields =
+            new TreeMap<>(RecordType.ORDERING);
+        boolean fieldClaims = false;
+        for (Map.Entry<String, Type> field :
+            ((RecordLikeType) erasedType).argNameTypes().entrySet()) {
+          final Ast.Pat fieldPat = recordPat.args.get(field.getKey());
+          final Type fieldType =
+              fieldPat == null
+                  ? null
+                  : claimedPatType(fieldPat, field.getValue());
+          fieldClaims |= fieldType != null;
+          claimedFields.put(
+              field.getKey(), fieldType == null ? field.getValue() : fieldType);
+        }
+        return fieldClaims
+            ? typeMap.typeSystem.recordType(claimedFields)
+            : null;
+
       default:
+        // A list, a cons or a constructor pattern cannot say what it claims:
+        // the claim is a type, and those types name one element type for every
+        // element, so an annotation on one of them would be read as a claim
+        // about all. '[a: nat, b]' claims that the first element is a nat, and
+        // 'nat list' claims it of both.
         return null;
     }
   }

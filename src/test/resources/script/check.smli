@@ -763,6 +763,31 @@ compFn (~1, 2);
 > uncaught exception Constraint [~1 is not a valid nat: component 1]
 >   raised at: stdIn:1.5-1.32
 
+(* A record pattern claims per field, as a tuple pattern claims per
+ * component. A field the pattern does not mention claims nothing. *)
+val {x = fieldX: nat, y = fieldY} = {x = ~1, y = 2};
+> uncaught exception Constraint [~1 is not a valid nat: field x]
+>   raised at: stdIn:1.5-1.52
+fun fieldFn {x: nat, y: int} = x;
+> val fieldFn = fn : {x:nat, y:int} -> nat
+fieldFn {x = ~1, y = 2};
+> uncaught exception Constraint [~1 is not a valid nat: field x]
+>   raised at: stdIn:1.5-1.33
+fieldFn {x = 1, y = 2};
+> val it = 1 : int
+val {x = ellipsisX: nat, ...} = {x = ~1, y = 2};
+> uncaught exception Constraint [~1 is not a valid nat: field x]
+>   raised at: stdIn:1.5-1.48
+
+(* A pattern that destructures inside a 'case' branch is not checked: the
+ * check is put on a name the pattern binds, and this one binds none that
+ * covers the whole value. The same is true of a tuple, so this is a limit of
+ * where the check is inserted rather than anything to do with records. *)
+case (~1, 2) of (n: nat, m) => n;
+> val it = ~1 : int
+case {x = ~1, y = 2} of {x: nat, y: int} => x;
+> val it = ~1 : int
+
 (* Entering a branch whose pattern claims a type is where a value flows into
  * the claim, so that is where the check goes. A pattern stays irrefutable: it
  * still matches every value, and may then raise. *)
