@@ -914,6 +914,9 @@ public class LintTest {
                 && !line.line().contains("<pre class=") // pre blocks w/ attrs
                 && !line.line().contains("<div class=") // div blocks w/ attrs
                 && !line.line().matches("^[-|:]+$") // table separator
+                // Working documents, written a paragraph to a line so that
+                // they diff by paragraph; they do not merge.
+                && !filenameIs(line, "plan.md")
                 && !lintSkip(line),
         line ->
             line.state()
