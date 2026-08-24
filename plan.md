@@ -22,25 +22,48 @@ License.
 
 ## Goal
 
-Extend `type` declarations and types with a `check` clause, and enforce the constraints so that **it is impossible to create a value of a constrained type that breaches its constraints**.
+Extend `type` declarations and types with a `check` clause, and enforce the
+constraints so that **it is impossible to create a value of a constrained type
+that breaches its constraints**.
 
 ## Constrained types and erasure
 
-`check` is a type constructor in Morel's **one** type language, so a constrained type is an ordinary type that inference can carry, exactly as Standard ML carries a type abbreviation.
+`check` is a type constructor in Morel's **one** type language, so a
+constrained type is an ordinary type that inference can carry, exactly as
+Standard ML carries a type abbreviation.
 
-The erasure `⌊·⌋` deletes `check` nodes structurally, so `⌊nat⌋ = int`. It is not applied eagerly to the whole program. It is applied **on demand, at the head**, by unification: when the unifier compares two types whose heads differ, it expands an abbreviation or discards a `check` node and retries. Everywhere else the written form survives, and a metavariable is bound to whatever was written. Erasure also states the typing rule for `as` and `asOpt`, below.
+The erasure `⌊·⌋` deletes `check` nodes structurally, so `⌊nat⌋ = int`. It is
+not applied eagerly to the whole program. It is applied **on demand, at the
+head**, by unification: when the unifier compares two types whose heads
+differ, it expands an abbreviation or discards a `check` node and retries.
+Everywhere else the written form survives, and a metavariable is bound to
+whatever was written. Erasure also states the typing rule for `as` and
+`asOpt`, below.
 
-**Type inference is unchanged.** Algorithm W runs as it does now, principal types and the value restriction are unaffected, and there is no subtyping rule to admit. Head-reduction is how Standard ML has always treated abbreviations, not a new relation on types.
+**Type inference is unchanged.** Algorithm W runs as it does now, principal
+types and the value restriction are unaffected, and there is no subtyping rule
+to admit. Head-reduction is how Standard ML has always treated abbreviations,
+not a new relation on types.
 
-A second, syntax-directed pass then walks the elaborated tree and **inserts a check wherever a value flows into a position whose type is constrained**. Note what this pass is *not* responsible for: propagation. The unifier has already done that. The pass only decides where checks go.
+A second, syntax-directed pass then walks the elaborated tree and **inserts a
+check wherever a value flows into a position whose type is constrained**. Note
+what this pass is *not* responsible for: propagation. The unifier has already
+done that. The pass only decides where checks go.
 
-That division follows [Liquid Types][liquid] (Rondon, Kawaguchi and Jhala, PLDI 2008), where Hindley-Milner is invoked first as an oracle and each subexpression is then assigned a template with the same shape as its inferred ML type. The difference is that we propagate constraints from declared signatures rather than inferring them by predicate abstraction.
+That division follows [Liquid Types][liquid] (Rondon, Kawaguchi and Jhala,
+PLDI 2008), where Hindley-Milner is invoked first as an oracle and each
+subexpression is then assigned a template with the same shape as its inferred
+ML type. The difference is that we propagate constraints from declared
+signatures rather than inferring them by predicate abstraction.
 
 [liquid]: https://patrickrondon.com/research/papers/liquid-types-pldi08.pdf
 
 ### Widening is free, narrowing is checked
 
-Erasure is what makes a `nat` usable as an `int`. No coercion is needed in that direction and none is generated: the representation is identical and the constraint is simply dropped. The other direction is a narrowing, and can fail.
+Erasure is what makes a `nat` usable as an `int`. No coercion is needed in
+that direction and none is generated: the representation is identical and the
+constraint is simply dropped. The other direction is a narrowing, and can
+fail.
 
 ```sml
 type nat = int check i => i >= 0;
@@ -57,7 +80,9 @@ val m: nat = i;
 
 ### Propagation is Standard ML's, by head-reduction
 
-A constrained type should propagate as a Standard ML type abbreviation does. SML/NJ keeps the name through construction, selection and polymorphic instantiation, and this is the behavior to match:
+A constrained type should propagate as a Standard ML type abbreviation does.
+SML/NJ keeps the name through construction, selection and polymorphic
+instantiation, and this is the behavior to match:
 
 ```sml
 type nat = int;
@@ -72,17 +97,36 @@ twice (fn i => i) (hd ns);        > 1 : nat
 twice (fn i => i - 1) (hd ns);    > ~1 : int
 ```
 
-The mechanism is that the abbreviation is a **named type constructor in the one type language**, and unification is **up to head-reduction**: the name is expanded only when a rule needs to look inside it. A metavariable is bound to whatever form was written, so `'a` in `List.hd : 'a list -> 'a` is bound to `nat`, not to `int`, and the result prints `nat`. This is not subtyping and does not disturb principal types; Standard ML has both.
+The mechanism is that the abbreviation is a **named type constructor in the
+one type language**, and unification is **up to head-reduction**: the name is
+expanded only when a rule needs to look inside it. A metavariable is bound to
+whatever form was written, so `'a` in `List.hd : 'a list -> 'a` is bound to
+`nat`, not to `int`, and the result prints `nat`. This is not subtyping and
+does not disturb principal types; Standard ML has both.
 
-**Where a metavariable is involved this is sound for free, and the reason is parametricity.** The name survives exactly where unification never had to look inside it — that is, where the value passed only through parametric operations, so it is one of the inputs and its constraint still holds. The moment an operation needs the base type (`i - 1` needs `int` arithmetic) the name reduces to `int`, and that is precisely the moment the value may have changed and the constraint stops being guaranteed. Nothing has to enforce this; the unifier does it.
+**Where a metavariable is involved this is sound for free, and the reason is
+parametricity.** The name survives exactly where unification never had to look
+inside it — that is, where the value passed only through parametric
+operations, so it is one of the inputs and its constraint still holds. The
+moment an operation needs the base type (`i - 1` needs `int` arithmetic) the
+name reduces to `int`, and that is precisely the moment the value may have
+changed and the constraint stops being guaranteed. Nothing has to enforce
+this; the unifier does it.
 
-Parametricity does *not* cover the case where two concrete types meet, and there SML/NJ's rule is unsound for us; see below.
+Parametricity does *not* cover the case where two concrete types meet, and
+there SML/NJ's rule is unsound for us; see below.
 
-It is conservative in the safe direction. `List.filter (fn i => i > 0) ns` gives `int list` although filtering cannot invalidate the constraint, because the *predicate* mentioned `int`. Losing a constraint that still holds is a false negative; the reverse never happens.
+It is conservative in the safe direction. `List.filter (fn i => i > 0) ns`
+gives `int list` although filtering cannot invalidate the constraint, because
+the *predicate* mentioned `int`. Losing a constraint that still holds is a
+false negative; the reverse never happens.
 
 ### Arithmetic must drop the constraint
 
-Standard ML's `+` is `int * int -> int`, so `n + 1` where `n: nat` has type `int` and the constraint is dropped, exactly as the parametricity argument above requires. **Morel's arithmetic operators are overloaded, `'a * 'a -> 'a`**, so the alias is carried through instead:
+Standard ML's `+` is `int * int -> int`, so `n + 1` where `n: nat` has type
+`int` and the constraint is dropped, exactly as the parametricity argument
+above requires. **Morel's arithmetic operators are overloaded, `'a * 'a ->
+'a`**, so the alias is carried through instead:
 
 ```sml
 type nat = int check i => i >= 0;
@@ -91,9 +135,14 @@ n + 1;      (*) Morel gives 'nat'; Standard ML gives 'int'
 n - 100;    (*) Morel gives 'nat' -- and ~95 is not a nat
 ```
 
-For a plain alias that is harmless, since the alias and its expansion are the same type. For a constrained type it is **unsound**, and `n - 100` is the plan's own first example of a value that must lose its constraint.
+For a plain alias that is harmless, since the alias and its expansion are the
+same type. For a constrained type it is **unsound**, and `n - 100` is the
+plan's own first example of a value that must lose its constraint.
 
-**The meet rule was not enough.** Since `+` has type `'a * 'a -> 'a`, its two operand types meet, and an alias meeting `int` weakens to `int`, so `n + 1` and `n - 100` reported `int` as Standard ML does, without arithmetic being special-cased. But what made them meet was the *literal*, not the operator:
+**The meet rule was not enough.** Since `+` has type `'a * 'a -> 'a`, its two
+operand types meet, and an alias meeting `int` weakens to `int`, so `n + 1`
+and `n - 100` reported `int` as Standard ML does, without arithmetic being
+special-cased. But what made them meet was the *literal*, not the operator:
 
 ```sml
 type small = int check i => i < 100;
@@ -102,23 +151,49 @@ s + s;    (*) 120, reported as a 'small'
 ~n;       (*) ~5, reported as a 'nat'
 ```
 
-Nothing meets in either, so the constraint flowed straight through `'a * 'a -> 'a`, and `fun dbl (n: small) = n + n` had type `small -> small`. It is not unary against binary, and not really arithmetic: what breaks a condition is an operator whose result has the type of its operands and computes a new value from them. Where a meet did happen it was luck.
+Nothing meets in either, so the constraint flowed straight through `'a * 'a ->
+'a`, and `fun dbl (n: small) = n + n` had type `small -> small`. It is not
+unary against binary, and not really arithmetic: what breaks a condition is an
+operator whose result has the type of its operands and computes a new value
+from them. Where a meet did happen it was luck.
 
-Every *claimed* position still checked -- `val a: small = s + s` raised, as did a constructor argument, a list element and a `small` parameter -- so no value was smuggled past a claim. What was broken is that a **deduced** type carried a condition its value failed, and `fun dbl (n: small) = n + n` printed `small -> small` as fact.
+Every *claimed* position still checked -- `val a: small = s + s` raised, as
+did a constructor argument, a list element and a `small` parameter -- so no
+value was smuggled past a claim. What was broken is that a **deduced** type
+carried a condition its value failed, and `fun dbl (n: small) = n + n` printed
+`small -> small` as fact.
 
-**So the operator decides, not the operands.** `+`, `-`, `*`, `~`, `abs`, `div` and `mod` -- those overloaded at their operand's own type -- each compute a value that type has not been shown to contain, so each drops the condition whatever it was applied to. The type is weakened throughout the substitution, exactly as a meet weakens it, so `fun dbl (n: small) = n + n` has type `int -> int`, as `fun decr (n: nat) = n - 1` already did. The parameter is still checked: a check reads the annotation the user wrote, never the type inference deduced.
+**So the operator decides, not the operands.** `+`, `-`, `*`, `~`, `abs`,
+`div` and `mod` -- those overloaded at their operand's own type -- each compute
+a value that type has not been shown to contain, so each drops the condition
+whatever it was applied to. The type is weakened throughout the substitution,
+exactly as a meet weakens it, so `fun dbl (n: small) = n + n` has type `int ->
+int`, as `fun decr (n: nat) = n - 1` already did. The parameter is still
+checked: a check reads the annotation the user wrote, never the type inference
+deduced.
 
-`Int.abs` and `Int.max` needed nothing: they are declared at a concrete `int`, so an alias reaching them meets a different type and the meet does the work.
+`Int.abs` and `Int.max` needed nothing: they are declared at a concrete `int`,
+so an alias reaching them meets a different type and the meet does the work.
 
 ### The invariant
 
-**A constraint is claimed only where the type says so, and a check is inserted wherever a value flows into a claim.** Everywhere else the name has reduced to the base type, so nothing is claimed and nothing can be breached. That is the soundness argument for the goal.
+**A constraint is claimed only where the type says so, and a check is inserted
+wherever a value flows into a claim.** Everywhere else the name has reduced to
+the base type, so nothing is claimed and nothing can be breached. That is the
+soundness argument for the goal.
 
-Note that this supersedes the stronger rule in the issue's comment — "no elaboration decision may consult the substitution" — which would give `List.hd ns : int` and lose the propagation above. Consulting the substitution is exactly what makes `#1 p : nat` work. But the comment's rule was guarding something real: consulting the substitution is only sound when the binding came from a metavariable. Where two concrete types meet, an extra rule is needed; see below.
+Note that this supersedes the stronger rule in the issue's comment — "no
+elaboration decision may consult the substitution" — which would give `List.hd
+ns : int` and lose the propagation above. Consulting the substitution is
+exactly what makes `#1 p : nat` work. But the comment's rule was guarding
+something real: consulting the substitution is only sound when the binding
+came from a metavariable. Where two concrete types meet, an extra rule is
+needed; see below.
 
 ### A check is an effect
 
-The invariant is a statement about the code the compiler emits, and that is not enough on its own: the check has to still be there when the code runs.
+The invariant is a statement about the code the compiler emits, and that is not
+enough on its own: the check has to still be there when the code runs.
 
 Raising is a check's only effect. A parameter's check is emitted as
 
@@ -126,7 +201,9 @@ Raising is a check's only effect. A parameter's check is emitted as
 fn v => let val n = $check (c v, v, "nat") in body end
 ```
 
-which was written that way deliberately -- the body reads the name the check binds, so the check cannot be discarded. That reasoning holds only when the body does read it:
+which was written that way deliberately -- the body reads the name the check
+binds, so the check cannot be discarded. That reasoning holds only when the
+body does read it:
 
 ```sml
 fun ignores (n: nat) = 0;                          (*) never read
@@ -134,17 +211,36 @@ fun branches (n: nat) = if false then n else 0;    (*) read in a dead branch
 val delays = fn (n: nat) => fn () => n;            (*) read in a closure
 ```
 
-The first binding was dead and was dropped outright; the other two were used once, and were substituted into the place the name was read, so the check happened only if that branch was taken or that function was called. All three accepted `~1` in silence.
+The first binding was dead and was dropped outright; the other two were used
+once, and were substituted into the place the name was read, so the check
+happened only if that branch was taken or that function was called. All three
+accepted `~1` in silence.
 
-An optimizer that reasons about values alone is entitled to all three, so the rule belongs to the optimizer rather than to the shape of the code emitted: a declaration whose value checks a condition stays where it is, however often its name is read. One rule, in one place, covering discarding it and moving it alike.
+An optimizer that reasons about values alone is entitled to all three, so the
+rule belongs to the optimizer rather than to the shape of the code emitted: a
+declaration whose value checks a condition stays where it is, however often its
+name is read. One rule, in one place, covering discarding it and moving it
+alike.
 
 ### This is not in the Definition, and we cannot adopt it unchanged
 
 Two caveats, both of which matter.
 
-**It is not specified.** In the Definition of Standard ML a `type` binding introduces a *type function*, and applying a type function β-reduces immediately; after elaboration there is no `nat`, it simply *is* `int`. The Definition also says nothing about what a top level prints. So preserving the name is an implementation nicety, not a requirement, and Morel's eager expansion is faithful to the Definition. The Definition gives inference rules rather than an algorithm; implementations use Algorithm W with unification, and those that preserve abbreviations represent a `type` as a *defined type constructor* carrying its definition and unify **up to head-reduction** — SML/NJ's `DEFtyc` and `headReduceType`, OCaml's `expand_head`. Standard practice, not standardized.
+**It is not specified.** In the Definition of Standard ML a `type` binding
+introduces a *type function*, and applying a type function β-reduces
+immediately; after elaboration there is no `nat`, it simply *is* `int`. The
+Definition also says nothing about what a top level prints. So preserving the
+name is an implementation nicety, not a requirement, and Morel's eager
+expansion is faithful to the Definition. The Definition gives inference rules
+rather than an algorithm; implementations use Algorithm W with unification,
+and those that preserve abbreviations represent a `type` as a *defined type
+constructor* carrying its definition and unify **up to head-reduction** —
+SML/NJ's `DEFtyc` and `headReduceType`, OCaml's `expand_head`. Standard
+practice, not standardized.
 
-**SML/NJ's rule is order-dependent, and adopting it unchanged would be unsound.** Which name survives depends on the order the unifier meets the operands:
+**SML/NJ's rule is order-dependent, and adopting it unchanged would be
+unsound.** Which name survives depends on the order the unifier meets the
+operands:
 
 ```sml
 val n : nat = 5;   val i : int = 6;
@@ -152,7 +248,8 @@ val n : nat = 5;   val i : int = 6;
 [i, n];    > [6,5] : int list
 ```
 
-For a plain abbreviation that is harmless, because the two are the same type and nothing is claimed. For a *constrained* type it is not:
+For a plain abbreviation that is harmless, because the two are the same type
+and nothing is claimed. For a *constrained* type it is not:
 
 ```sml
 val bad : int = ~5;
@@ -160,9 +257,19 @@ val bad : int = ~5;
 List.nth ([n, bad], 1);      > ~5 : nat
 ```
 
-`~5` has been given the type `nat` without ever being checked. A later `as nat` on it would be elided, and the value would breach the constraint. So the heuristic is presentation for Standard ML but load-bearing for us, and it is wrong.
+`~5` has been given the type `nat` without ever being checked. A later `as
+nat` on it would be elided, and the value would breach the constraint. So the
+heuristic is presentation for Standard ML but load-bearing for us, and it is
+wrong.
 
-**The rule we need.** Binding a metavariable to the written form is sound, and that is the case parametricity covers: `#1 p`, `List.hd ns`, `List.map (fn i => i) ns`. But when two *concrete* types with the same erasure meet, the result is their **meet**, computed without entailment: equal constraints (textually) meet to themselves, and anything else meets to the base type. `nat` meets `nat` gives `nat`; `nat` meets `int` gives `int`; `nat` meets `teen` gives `int`, even though `teen` implies `nat`. Sound, deterministic, and cheap, which SML/NJ's rule is not.
+**The rule we need.** Binding a metavariable to the written form is sound, and
+that is the case parametricity covers: `#1 p`, `List.hd ns`, `List.map (fn i
+=> i) ns`. But when two *concrete* types with the same erasure meet, the
+result is their **meet**, computed without entailment: equal constraints
+(textually) meet to themselves, and anything else meets to the base type.
+`nat` meets `nat` gives `nat`; `nat` meets `int` gives `int`; `nat` meets
+`teen` gives `int`, even though `teen` implies `nat`. Sound, deterministic,
+and cheap, which SML/NJ's rule is not.
 
 Morel expands eagerly today, so all of this is new behavior:
 
@@ -174,9 +281,11 @@ Morel expands eagerly today, so all of this is new behavior:
 | `[n, i]` where `i: int` | `int list` | `nat list` | `int list` |
 | `[i, n]` | `int list` | `int list` | `int list` |
 
-A `check` node must also not obstruct unification: head-reduction discards it, as it expands an abbreviation.
+A `check` node must also not obstruct unification: head-reduction discards it,
+as it expands an abbreviation.
 
-A surface type is therefore **a record of what has been verified, not an obligation to verify**.
+A surface type is therefore **a record of what has been verified, not an
+obligation to verify**.
 
 ```sml
 val ps = List.map (fn i => i as nat) [3, ~2];
@@ -185,13 +294,21 @@ val ps = List.map (fn i => i as nat) [3, ~2];
  * succeeded, the surface type of 'ps' would be 'nat list'. *)
 ```
 
-Note that this also answers promptness: a cast written *inside* the mapper runs per element and fails at the offending one, where a narrowing at the binding would have run the whole traversal first.
+Note that this also answers promptness: a cast written *inside* the mapper
+runs per element and fails at the offending one, where a narrowing at the
+binding would have run the whole traversal first.
 
 ### The condition must be closed
 
-A `check` condition may not depend on the environment. Its only free variable is the value the match binds. That is what lets a constrained type be interned like any other: `TypeSystem` holds `Map<Key, Type>`, a `Key` must hash and compare cheaply, and it cannot hold a closure. With a closed condition the key is structural — the condition itself — and two constrained types are the same type when their conditions are textually equal.
+A `check` condition may not depend on the environment. Its only free variable
+is the value the match binds. That is what lets a constrained type be interned
+like any other: `TypeSystem` holds `Map<Key, Type>`, a `Key` must hash and
+compare cheaply, and it cannot hold a closure. With a closed condition the key
+is structural — the condition itself — and two constrained types are the same
+type when their conditions are textually equal.
 
-**The issue's `batchSize` example is not closed**, and neither is the section that follows it:
+**The issue's `batchSize` example is not closed**, and neither is the section
+that follows it:
 
 ```sml
 val limit = 12;
@@ -201,10 +318,19 @@ type batchSize = int check i => lessThanDozen i;
 
 Two ways to reconcile:
 
-* **Reject it.** The condition must be written inline. Simple, and the whole question of what a predicate captures disappears, along with the issue's three re-binding cases.
-* **Inline at declaration time.** Substitute `lessThanDozen` and `limit`, giving the closed term `check i => i >= 1 andalso i <= 12`. This *is* the issue's stated semantics — "the predicate does not change if the values are re-bound" — with the snapshot taken as a closed term rather than a closure, so the example survives and keying still works. A condition that cannot be inlined, such as one calling a recursive function, is rejected.
+* **Reject it.** The condition must be written inline. Simple, and the whole
+  question of what a predicate captures disappears, along with the issue's
+  three re-binding cases.
+* **Inline at declaration time.** Substitute `lessThanDozen` and `limit`,
+  giving the closed term `check i => i >= 1 andalso i <= 12`. This *is* the
+  issue's stated semantics — "the predicate does not change if the values are
+  re-bound" — with the snapshot taken as a closed term rather than a closure,
+  so the example survives and keying still works. A condition that cannot be
+  inlined, such as one calling a recursive function, is rejected.
 
-Either way the condition in the type is a closed term, and re-binding cannot affect it. Built-in operators are not rebindable — `val op >= = ...` is a parse error — so they need no special treatment.
+Either way the condition in the type is a closed term, and re-binding cannot
+affect it. Built-in operators are not rebindable — `val op >= = ...` is a
+parse error — so they need no special treatment.
 
 ### Out of scope
 
@@ -214,26 +340,39 @@ Either way the condition in the type is a closed term, and re-binding cannot aff
 
 ### Not an `abstype`
 
-`abstype` gives a similar guarantee — one checked way in, so the invariant holds of every value — but in the wrong shape. It is opaque in *both* directions:
+`abstype` gives a similar guarantee — one checked way in, so the invariant
+holds of every value — but in the wrong shape. It is opaque in *both*
+directions:
 
 | | in (`int` to `nat`) | out (`nat` to `int`) |
 |---|---|---|
 | `abstype` | explicit constructor | explicit accessor |
 | constrained type | checked narrowing | free, by erasure |
 
-Requiring `toInt n + 1` everywhere would make constrained types unusable for their purpose. (`abstype` is in any case largely superseded in Standard ML by opaque signature ascription, and Morel has no user-facing module system.)
+Requiring `toInt n + 1` everywhere would make constrained types unusable for
+their purpose. (`abstype` is in any case largely superseded in Standard ML by
+opaque signature ascription, and Morel has no user-facing module system.)
 
-The analogy fails on the implementation too. `abstype` has a constructor; a narrowing has none. On success it is the **identity**: no wrapper is allocated, no tag is attached, and equality, printing and serialization are unaffected.
+The analogy fails on the implementation too. `abstype` has a constructor; a
+narrowing has none. On success it is the **identity**: no wrapper is
+allocated, no tag is attached, and equality, printing and serialization are
+unaffected.
 
 ## Syntax
 
-> *typbind* ::= ⟨*var*⟩(`,`) *id* [`check` *match*] `=` *typ* ⟨`and` *typbind*⟩ > > *exp* ::= ... | *exp* `as` *typ* | *exp* `asOpt` *typ*
+> *typbind* ::= ⟨*var*⟩(`,`) *id* [`check` *match*] `=` *typ* ⟨`and` *typbind*⟩
+>
+> *exp* ::= ... | *exp* `as` *typ* | *exp* `asOpt` *typ*
 
-`as` subsumes the *exp* `check` *match* production originally proposed: `e check m` is `e as (t check m)` with `t` inferred. Only one of the two forms need be kept.
+`as` subsumes the *exp* `check` *match* production originally proposed: `e
+check m` is `e as (t check m)` with `t` inferred. Only one of the two forms
+need be kept.
 
 ### `check` matches need not be exhaustive
 
-The issue text requires the *match* to be exhaustive. Instead, a non-exhaustive match is allowed and the compiler appends `| _ => false`, so a value that matches no branch fails the check.
+The issue text requires the *match* to be exhaustive. Instead, a
+non-exhaustive match is allowed and the compiler appends `| _ => false`, so a
+value that matches no branch fails the check.
 
 ```sml
 (*) Valid. Equivalent to the three-branch form: (true, 1) fails the check.
@@ -244,7 +383,8 @@ type badPair = (bool * int) check
 
 ### When to append
 
-Appending unconditionally would break the issue's own example. A redundant branch is an **error** today, and it throws:
+Appending unconditionally would break the issue's own example. A redundant
+branch is an **error** today, and it throws:
 
 ```
 fun f 1 = "a" | f 1 = "b" | f _ = "c";
@@ -253,33 +393,59 @@ fun g 1 = "a";
 > stdIn:1.5-1.14 Warning: match nonexhaustive
 ```
 
-so appending `| _ => false` to a match that is *already* exhaustive — such as the three-branch `badPair` in the issue — would make the appended branch redundant and reject the declaration.
+so appending `| _ => false` to a match that is *already* exhaustive — such as
+the three-branch `badPair` in the issue — would make the appended branch
+redundant and reject the declaration.
 
 No new property is needed. Use the existing `matchCoverageEnabled`:
 
-* **`matchCoverageEnabled` false** — append blindly. Redundancy is never reported, so a redundant `_ => false` is unreachable and harmless. More to the point, `PatternCoverageChecker` is SAT-based (`Sat`, via `isExhaustive`), and someone who disables coverage checking should not be made to pay for a solver call merely to decide whether to append.
-* **`matchCoverageEnabled` true** — call `PatternCoverageChecker.isExhaustive` on the match and append only if it is not exhaustive. The appended branch then covers a gap, so it is not redundant, and the match is exhaustive afterwards, so no warning is emitted either.
+* **`matchCoverageEnabled` false** — append blindly. Redundancy is never
+  reported, so a redundant `_ => false` is unreachable and harmless. More to
+  the point, `PatternCoverageChecker` is SAT-based (`Sat`, via
+  `isExhaustive`), and someone who disables coverage checking should not be
+  made to pay for a solver call merely to decide whether to append.
+* **`matchCoverageEnabled` true** — call `PatternCoverageChecker.isExhaustive`
+  on the match and append only if it is not exhaustive. The appended branch
+  then covers a gap, so it is not redundant, and the match is exhaustive
+  afterwards, so no warning is emitted either.
 
-The semantics are the same either way: a value matching no branch fails the check.
+The semantics are the same either way: a value matching no branch fails the
+check.
 
 Other consequences:
 
-* **Ordering.** The decision and the rewrite must happen *before* the general `checkPatternCoverage` pass, so that pass sees an exhaustive match and emits neither the non-exhaustive warning nor a redundancy error.
+* **Ordering.** The decision and the rewrite must happen *before* the general
+  `checkPatternCoverage` pass, so that pass sees an exhaustive match and emits
+  neither the non-exhaustive warning nor a redundancy error.
 * `isExhaustive` takes `Core.Pat`, so the rewrite is a Core-level one.
-* The appended branch needs a source position; use the position of the whole match, and never blame it — user-written redundancy inside a `check` match is a real mistake and should stay an error.
-* A single irrefutable branch (`i => i >= 0`, the common case) is exhaustive, so nothing is appended.
+* The appended branch needs a source position; use the position of the whole
+  match, and never blame it — user-written redundancy inside a `check` match
+  is a real mistake and should stay an error.
+* A single irrefutable branch (`i => i >= 0`, the common case) is exhaustive,
+  so nothing is appended.
 
 ## Conversion operators
 
-Widening needs no operator. Narrowing has two, differing only in how they report failure.
+Widening needs no operator. Narrowing has two, differing only in how they
+report failure.
 
-Both take a value and a type, and their typing rule is stated on erasures: `e as t` and `e asOpt t` are well-typed if `⌊t⌋` unifies with the inferred type of `e`. Because erasure deletes `check` nodes, every type built over `int` — `int`, `nat`, `batchSize`, an anonymous `int check ...` — has the same erasure, so all of them may be converted to one another. A conversion between different erasures is an ordinary type error, reported by the unifier without any constraint reasoning.
+Both take a value and a type, and their typing rule is stated on erasures: `e
+as t` and `e asOpt t` are well-typed if `⌊t⌋` unifies with the inferred type
+of `e`. Because erasure deletes `check` nodes, every type built over `int` —
+`int`, `nat`, `batchSize`, an anonymous `int check ...` — has the same
+erasure, so all of them may be converted to one another. A conversion between
+different erasures is an ordinary type error, reported by the unifier without
+any constraint reasoning.
 
-Neither is a runtime type test: Morel values carry no type information, so `i asOpt string` is a compile-time error rather than an expression returning `NONE`. The question they ask is whether a value satisfies a constraint, never what type a value has.
+Neither is a runtime type test: Morel values carry no type information, so `i
+asOpt string` is a compile-time error rather than an expression returning
+`NONE`. The question they ask is whether a value satisfies a constraint, never
+what type a value has.
 
 ### `as`
 
-Returns the value unchanged if the constraints of `t` hold, and otherwise raises `Constraint`. Surface type `t`, inference type `⌊t⌋`.
+Returns the value unchanged if the constraints of `t` hold, and otherwise
+raises `Constraint`. Surface type `t`, inference type `⌊t⌋`.
 
 ```sml
 type nat = int check i => i >= 0;
@@ -304,7 +470,11 @@ n as int;
 
 ### `asOpt`
 
-Returns `SOME v` if the constraints hold and `NONE` otherwise, with surface type `t option`. It exists because failure is often ordinary — a value parsed from outside, or a row that should be filtered rather than abort a scan — and because the refined value arrives bound, so the successful branch needs no separate mechanism for tracking what has been established.
+Returns `SOME v` if the constraints hold and `NONE` otherwise, with surface
+type `t option`. It exists because failure is often ordinary — a value parsed
+from outside, or a row that should be filtered rather than abort a scan — and
+because the refined value arrives bound, so the successful branch needs no
+separate mechanism for tracking what has been established.
 
 ```sml
 val i = 20;
@@ -323,13 +493,16 @@ case i asOpt nat of
 
 ### Precedence and associativity
 
-`as` and `asOpt` take the **same precedence as `:`**, are left-associative, and chain. In Morel's grammar `:` sits in its own production above every infix level:
+`as` and `asOpt` take the **same precedence as `:`**, are left-associative,
+and chain. In Morel's grammar `:` sits in its own production above every
+infix level:
 
 ```
 expression: expression0 ( <COLON> type )*
 ```
 
-so adding `<AS>` and `<AS_OPT>` as alternatives in that loop is the whole change. Consequences, all of them shared with `:` today:
+so adding `<AS>` and `<AS_OPT>` as alternatives in that loop is the whole
+change. Consequences, all of them shared with `:` today:
 
 ```sml
 i - 1 as nat        (*) = (i - 1) as nat; looser than every operator
@@ -338,22 +511,49 @@ e : int as nat      (*) = (e : int) as nat; mixes with ':'
 (i as nat) + 1      (*) parentheses required, as for ':'
 ```
 
-Two reasons to follow `:` rather than Kotlin, Rust or TypeScript, where `as` binds *tighter* than arithmetic so that `x as Int + 1` means `(x as Int) + 1`:
+Two reasons to follow `:` rather than Kotlin, Rust or TypeScript, where `as`
+binds *tighter* than arithmetic so that `x as Int + 1` means `(x as Int) + 1`:
 
-1. **Refactoring safety.** `e : t` and `e as t` are the same shape — an expression paired with a type — and differ only in whether a check is emitted. If they had different precedence, changing one to the other would silently regroup the expression.
-2. **The type grammar shares `*` and `->` with the expression grammar.** Under tight binding, `x as int * int` is ambiguous: `int * int` is a legal type and `... * int` is a legal expression. ML resolves this by parsing the type greedily at the loosest level, which is why `: ty` is loosest in Standard ML and Haskell but `as` is tight in Kotlin, whose types contain no `*`. Morel's own parse error already lists `-> : *` as the continuations of a type.
+1. **Refactoring safety.** `e : t` and `e as t` are the same shape — an
+   expression paired with a type — and differ only in whether a check is
+   emitted. If they had different precedence, changing one to the other would
+   silently regroup the expression.
+2. **The type grammar shares `*` and `->` with the expression grammar.** Under
+   tight binding, `x as int * int` is ambiguous: `int * int` is a legal type
+   and `... * int` is a legal expression. ML resolves this by parsing the type
+   greedily at the loosest level, which is why `: ty` is loosest in Standard
+   ML and Haskell but `as` is tight in Kotlin, whose types contain no `*`.
+   Morel's own parse error already lists `-> : *` as the continuations of a
+   type.
 
-The cost is that `i as nat + 1` needs parentheses. That is not new: `1 : int + 2` is a parse error in Morel today.
+The cost is that `i as nat + 1` needs parentheses. That is not new: `1 : int +
+2` is a parse error in Morel today.
 
-`asOpt` mirrors Kotlin's `as?` exactly — cast that yields absence rather than throwing — which is a good sign for the pair, though the spelling must be a word because Morel's lexer has no `?`. It has to be a reserved word: in `e asOpt t` an identifier could otherwise appear in that position, and `e asOpt` would parse as an application. That breaks any existing code using `asOpt` as an identifier.
+`asOpt` mirrors Kotlin's `as?` exactly — cast that yields absence rather than
+throwing — which is a good sign for the pair, though the spelling must be a
+word because Morel's lexer has no `?`. It has to be a reserved word: in `e
+asOpt t` an identifier could otherwise appear in that position, and `e asOpt`
+would parse as an application. That breaks any existing code using `asOpt` as
+an identifier.
 
 ### Properties
 
 * Neither operator changes representation; on success `as` is the identity.
-* On a composite type the check is deep, applied to components before the whole, using the same order and blame path as construction.
-* Where the surface type already satisfies the target, the check is elided statically, so `n as nat` costs nothing. The implementation computes a **residual**: the part of the target's constraint not discharged by what is already known. An empty residual means no runtime check.
-* Elision does **not** attempt entailment. Two constraints match only if they are textually equal; anything else emits the check. So `n as nat` is free, but `k as nat` where `k` has type `int check z => z > 0` is *not*, even though `z > 0` implies `z >= 0`. Conservative and cheap, and it keeps #242's `prove` out of the critical path. An entailment test can be added later without changing any accepted program, only removing checks.
-* Converting to a constrained **function** type is rejected: it cannot be the identity, since the only way to enforce it is a proxy checking each argument and result.
+* On a composite type the check is deep, applied to components before the
+  whole, using the same order and blame path as construction.
+* Where the surface type already satisfies the target, the check is elided
+  statically, so `n as nat` costs nothing. The implementation computes a
+  **residual**: the part of the target's constraint not discharged by what is
+  already known. An empty residual means no runtime check.
+* Elision does **not** attempt entailment. Two constraints match only if they
+  are textually equal; anything else emits the check. So `n as nat` is free,
+  but `k as nat` where `k` has type `int check z => z > 0` is *not*, even
+  though `z > 0` implies `z >= 0`. Conservative and cheap, and it keeps #242's
+  `prove` out of the critical path. An entailment test can be added later
+  without changing any accepted program, only removing checks.
+* Converting to a constrained **function** type is rejected: it cannot be the
+  identity, since the only way to enforce it is a proxy checking each argument
+  and result.
 
 ```sml
 [1, ~2, 3] as nat list;
@@ -366,7 +566,8 @@ f as (nat -> nat);
 
 ## Where a check is inserted
 
-Errors use Morel's existing format, `uncaught exception Name [message]`, as in `uncaught exception Subscript [subscript out of bounds]`.
+Errors use Morel's existing format, `uncaught exception Name [message]`, as in
+`uncaught exception Subscript [subscript out of bounds]`.
 
 ### A. Bindings, parameters and results
 
@@ -385,7 +586,9 @@ g ();
 > uncaught exception Constraint [~1 is not a valid nat: result of g]
 ```
 
-A parameter's check is compiled inside the function, so it travels with the function value and fires however the function is called — including from polymorphic code that knows nothing of `nat`.
+A parameter's check is compiled inside the function, so it travels with the
+function value and fires however the function is called — including from
+polymorphic code that knows nothing of `nat`.
 
 ### B. Construction of composite values
 
@@ -410,7 +613,8 @@ e replace empno = ~1;
 > uncaught exception Constraint [~1 is not a valid nat: field empno]
 ```
 
-Compound constraints check components before the whole, so the message names the innermost failure:
+Compound constraints check components before the whole, so the message names
+the innermost failure:
 
 ```sml
 type evenPair = (nat * nat) check (i, j) => i * j mod 2 = 0;
@@ -422,7 +626,9 @@ type evenPair = (nat * nat) check (i, j) => i * j mod 2 = 0;
 
 ### C. Through polymorphic functions
 
-**No polymorphic function needs to change**, and none is instrumented. Either the constraint is erased at the boundary, in which case nothing is claimed of the result and nothing need be checked:
+**No polymorphic function needs to change**, and none is instrumented. Either
+the constraint is erased at the boundary, in which case nothing is claimed of
+the result and nothing need be checked:
 
 ```sml
 val ms = List.map (fn i => i - 1) ns;
@@ -443,18 +649,24 @@ List.map (fn i => (i - 1) as nat) ns;
 > uncaught exception Constraint [~1 is not a valid nat]
 ```
 
-The costs are promptness (a narrowing at a binding runs the whole traversal first) and forcing (a narrowing walks its operand, so a lazy or foreign collection is materialized; see E).
+The costs are promptness (a narrowing at a binding runs the whole traversal
+first) and forcing (a narrowing walks its operand, so a lazy or foreign
+collection is materialized; see E).
 
 ### D. Constrained function types — deferred
 
-A narrowing to a function type cannot be the identity, so it is rejected rather than implemented with a proxy.
+A narrowing to a function type cannot be the identity, so it is rejected
+rather than implemented with a proxy.
 
 ```sml
 val h: nat -> nat = fn i => i - 1;
 > Cannot convert to a constrained function type
 ```
 
-This also removes the workaround an earlier draft of this plan proposed — ascribing at a call site, `twice (dec : nat -> nat) 1`, to place a coercion the compiler could compile. That is now rejected too. The polymorphic cases therefore have no user-level remedy, and wait on the deferred work below.
+This also removes the workaround an earlier draft of this plan proposed —
+ascribing at a call site, `twice (dec : nat -> nat) 1`, to place a coercion
+the compiler could compile. That is now rejected too. The polymorphic cases
+therefore have no user-level remedy, and wait on the deferred work below.
 
 ### E. Values from outside
 
@@ -464,11 +676,14 @@ Foreign rows and parsed values never pass through a Morel constructor.
 val emps: employee bag = scott.emps;
 ```
 
-A narrowing here walks the whole bag, turning a streamed Calcite query into a materialized one. `asOpt` is the intended tool where failure should filter rather than abort.
+A narrowing here walks the whole bag, turning a streamed Calcite query into a
+materialized one. `asOpt` is the intended tool where failure should filter
+rather than abort.
 
 ### F. Generated values
 
-From the issue's comment: a constrained type used as a scan source must *generate* only conforming values, not generate-and-filter.
+From the issue's comment: a constrained type used as a scan source must
+*generate* only conforming values, not generate-and-filter.
 
 ```sml
 type parity_pair = {i: int, j: int} check {i, j} => i mod 2 = j mod 2;
@@ -477,11 +692,13 @@ from p: parity_pair where p.i elem [0..2] andalso p.j elem [5..8];
 >   : {i:int, j:int} bag
 ```
 
-There is no value to check, so no narrowing can help; the constraint has to reach the planner.
+There is no value to check, so no narrowing can help; the constraint has to
+reach the planner.
 
 **Most of this now exists.** Unbounded scans over a written type landed in
 #440 and #443, and `Extents` already grounds a variable from an `elem`
-constraint. Writing the constraint by hand gives the answer the issue asks for, exactly:
+constraint. Writing the constraint by hand gives the answer the issue asks
+for, exactly:
 
 ```sml
 type pair = {i: int, j: int};
@@ -492,12 +709,19 @@ from {i, j}: pair
 >   : {i:int, j:int} list
 ```
 
-So two things remain, both smaller than "teach the planner about constraints":
+So two things remain, both smaller than "teach the planner about
+constraints":
 
-1. **Conjoin the type's `check` predicate into the scan's filter.** Mechanical once `check` exists, and the example above is the result.
-2. **Ground a record variable from a constraint on a field selection.** A destructured pattern already works, but the issue writes `p.i elem [0..2]`, and that reports "pattern 'p' is not grounded". Either teach `Extents` to ground `p` from constraints on `p.i`, or accept the destructured form.
+1. **Conjoin the type's `check` predicate into the scan's filter.** Mechanical
+   once `check` exists, and the example above is the result.
+2. **Ground a record variable from a constraint on a field selection.** A
+   destructured pattern already works, but the issue writes `p.i elem
+   [0..2]`, and that reports "pattern 'p' is not grounded". Either teach
+   `Extents` to ground `p` from constraints on `p.i`, or accept the
+   destructured form.
 
-Note the issue's expected output says `bag`; a scan currently yields a `list`.
+Note the issue's expected output says `bag`; a scan currently yields a
+`list`.
 
 ### G. The predicate itself
 
@@ -508,17 +732,27 @@ val x: odd = 0;
 > uncaught exception Div [divide by zero]
 ```
 
-The issue specifies that a predicate captures the values it uses at declaration time, so redefining `limit` or `lessThanDozen` afterwards does not change the type. The closure must be snapshotted into the surface type, which affects surface-type equality and printing.
+The issue specifies that a predicate captures the values it uses at
+declaration time, so redefining `limit` or `lessThanDozen` afterwards does not
+change the type. The closure must be snapshotted into the surface type, which
+affects surface-type equality and printing.
 
 ## Testing
 
 ### There is no oracle
 
-For the `scan` functions of #371, SML/NJ settled every expected value, and it repeatedly contradicted what the specification implied. Here there is no oracle: no Standard ML has constrained types. Expected values come from this document alone, so **the tests are the specification**, and a wrong expectation will be enshrined rather than caught. Every open question below must be closed before the tests that depend on it are written.
+For the `scan` functions of #371, SML/NJ settled every expected value, and it
+repeatedly contradicted what the specification implied. Here there is no
+oracle: no Standard ML has constrained types. Expected values come from this
+document alone, so **the tests are the specification**, and a wrong expectation
+will be enshrined rather than caught. Every open question below must be closed
+before the tests that depend on it are written.
 
 ### The printed type is the observable
 
-What the second pass knows is directly visible in the printed type, which makes these the cheapest tests of the design — and the ones most likely to break if propagation is later "improved" into something unsound.
+What the second pass knows is directly visible in the printed type, which
+makes these the cheapest tests of the design — and the ones most likely to
+break if propagation is later "improved" into something unsound.
 
 A constrained type **is** printed on re-reference, unlike an alias today:
 
@@ -533,11 +767,16 @@ k;
 > val it = 5 : int check z => z > 0    (*) anonymous: printed in full
 ```
 
-So a binding records its surface type in the environment, and a use of the bound variable recovers it. That is not a violation of the invariant: the invariant forbids consulting the *substitution*, not the environment.
+So a binding records its surface type in the environment, and a use of the
+bound variable recovers it. That is not a violation of the invariant: the
+invariant forbids consulting the *substitution*, not the environment.
 
-Note this differs from an ordinary alias, which is erased on re-reference (`type nat = int` without a `check` prints `int`). The two must be tested side by side, because the difference is the whole point.
+Note this differs from an ordinary alias, which is erased on re-reference
+(`type nat = int` without a `check` prints `int`). The two must be tested
+side by side, because the difference is the whole point.
 
-A surface type propagates through construction and selection, as in Standard ML, so these follow the SML/NJ column of the table above:
+A surface type propagates through construction and selection, as in Standard
+ML, so these follow the SML/NJ column of the table above:
 
 ```sml
 [n];                     > [5] : nat list
@@ -547,16 +786,26 @@ List.hd ns;              > 1 : nat
 List.map (fn i => i - 1) ns;   > [0,1] : int list
 ```
 
-The last is the one to pin hardest: the name is lost exactly where an operation needed the base type, and that is what makes propagation sound. Since Morel does not behave this way today, each of these is a change to existing behavior and needs a test whether or not a `check` is involved.
+The last is the one to pin hardest: the name is lost exactly where an
+operation needed the base type, and that is what makes propagation sound.
+Since Morel does not behave this way today, each of these is a change to
+existing behavior and needs a test whether or not a `check` is involved.
 
 ### Axes
 
-1. **Type shape** — primitive, tuple, record, list, bag, option, datatype, nested (`{a: nat list}`, `(nat * nat) list`), constrained-over-constrained (`type teen = nat check ...`), function (rejected), type variable (erased).
+1. **Type shape** — primitive, tuple, record, list, bag, option, datatype,
+   nested (`{a: nat list}`, `(nat * nat) list`), constrained-over-constrained
+   (`type teen = nat check ...`), function (rejected), type variable (erased).
 2. **Site** — the A–G sections above.
-3. **Outcome** — passes and returns the value unchanged; fails with a message and blame path; rejected at compile time; elided statically.
-4. **Match shape** — single irrefutable branch, multi-branch exhaustive, multi-branch with a gap, redundant branch; crossed with `matchCoverageEnabled`.
+3. **Outcome** — passes and returns the value unchanged; fails with a message
+   and blame path; rejected at compile time; elided statically.
+4. **Match shape** — single irrefutable branch, multi-branch exhaustive,
+   multi-branch with a gap, redundant branch; crossed with
+   `matchCoverageEnabled`.
 
-Crossing every axis is wasteful. Cross axis 3 with axis 2 exhaustively, and sample axis 1 — one primitive, one record, one list, one nested — except where the shape is the point (composites, function types).
+Crossing every axis is wasteful. Cross axis 3 with axis 2 exhaustively, and
+sample axis 1 — one primitive, one record, one list, one nested — except where
+the shape is the point (composites, function types).
 
 ### Site × outcome
 
@@ -576,62 +825,129 @@ Crossing every axis is wasteful. Cross axis 3 with axis 2 exhaustively, and samp
 
 ### Cases a naive matrix misses
 
-1. **Elision must not over-elide.** `n as nat` where `n: nat` is free; `i as nat` where `i: int` must check. Same shape, opposite answers — the pair catches an elision keyed on the target type rather than the source. Subsumption needs its own row: `k as nat` where `k: int check z => z > 0` is free because `z > 0` entails `z >= 0`, whereas `n as teen` where `n: nat` is not, because `i >= 0` does not entail `i >= 13`. And a case the approximation cannot prove must emit the check rather than drop it.
-2. **All four coverage combinations.** {match has a gap, is exhaustive} × {`matchCoverageEnabled` true, false}. All four must accept the declaration and give identical runtime semantics; today two of them would error.
-3. **Component before whole.** A value failing both a component constraint and the enclosing one must report the component.
-4. **Nested blame.** `{xs = [1, ~2]}` at `{xs: nat list}` must name the field *and* the element.
-5. **Round trip.** `nat` to `int` to `nat` re-checks: nothing records that a value was checked before.
-6. **Vacuous cases.** `[]: nat list` and `NONE: nat option` pass. Does the predicate run zero times? Observable if it raises.
-7. **Refinement survives `asOpt`.** In `case i asOpt nat of SOME n => ...`, `n` has surface type `nat`, so a use of `n` where a `nat` is wanted emits no second check. This is the only place a constraint is *gained* rather than asserted, and it is easy to get wrong.
-8. **Repeated `check` clauses.** `int check i => i >= 1 check j => j <= 12`: both apply; which failure is reported first?
-9. **Capture.** All three of the issue's cases — redefine a captured value, redefine a captured function, and a type declared in a `let` whose captured bindings have gone out of scope.
-10. **Predicate misbehavior.** Raises, diverges, returns a non-`bool`, is constantly true, is constantly false.
-11. **Same erasure, different constraint.** `nat as teen`, `teen as nat`, `nat as int`, anonymous `int check ...` to and from named.
-12. **Different erasure is the unifier's error**, not the constraint machinery's: `"abc" as nat` must report before any constraint reasoning, and must not mention `Constraint`.
-13. **Function types rejected at both sites** — `f as (nat -> nat)` and `val h: nat -> nat = f`.
+1. **Elision must not over-elide.** `n as nat` where `n: nat` is free; `i as
+   nat` where `i: int` must check. Same shape, opposite answers — the pair
+   catches an elision keyed on the target type rather than the source.
+   Subsumption needs its own row: `k as nat` where `k: int check z => z > 0`
+   is free because `z > 0` entails `z >= 0`, whereas `n as teen` where `n:
+   nat` is not, because `i >= 0` does not entail `i >= 13`. And a case the
+   approximation cannot prove must emit the check rather than drop it.
+2. **All four coverage combinations.** {match has a gap, is exhaustive} ×
+   {`matchCoverageEnabled` true, false}. All four must accept the declaration
+   and give identical runtime semantics; today two of them would error.
+3. **Component before whole.** A value failing both a component constraint and
+   the enclosing one must report the component.
+4. **Nested blame.** `{xs = [1, ~2]}` at `{xs: nat list}` must name the field
+   *and* the element.
+5. **Round trip.** `nat` to `int` to `nat` re-checks: nothing records that a
+   value was checked before.
+6. **Vacuous cases.** `[]: nat list` and `NONE: nat option` pass. Does the
+   predicate run zero times? Observable if it raises.
+7. **Refinement survives `asOpt`.** In `case i asOpt nat of SOME n => ...`,
+   `n` has surface type `nat`, so a use of `n` where a `nat` is wanted emits
+   no second check. This is the only place a constraint is *gained* rather
+   than asserted, and it is easy to get wrong.
+8. **Repeated `check` clauses.** `int check i => i >= 1 check j => j <= 12`:
+   both apply; which failure is reported first?
+9. **Capture.** All three of the issue's cases — redefine a captured value,
+   redefine a captured function, and a type declared in a `let` whose captured
+   bindings have gone out of scope.
+10. **Predicate misbehavior.** Raises, diverges, returns a non-`bool`,
+    is constantly true, is constantly false.
+11. **Same erasure, different constraint.** `nat as teen`, `teen as nat`,
+    `nat as int`, anonymous `int check ...` to and from named.
+12. **Different erasure is the unifier's error**, not the constraint
+    machinery's: `"abc" as nat` must report before any constraint reasoning,
+    and must not mention `Constraint`.
+13. **Function types rejected at both sites** — `f as (nat -> nat)` and `val
+    h: nat -> nat = f`.
 14. **Shadowing.** A `check` match whose bound variable shadows an outer one.
-15. **Self-reference.** `type t = t check ...`, and mutually recursive constrained types.
-16. **Idempotency.** `script/idempotent.smli` round-trips source through the printer and parser; `check`, `as` and `asOpt` must survive.
-17. **`Sys.plan()`.** Is the check visible in the plan, and does the inliner or `Relationalize` remove it?
-18. **Calcite pushdown.** A constrained bag pushed to Calcite: does the check survive, and is a foreign scan still streamed?
+15. **Self-reference.** `type t = t check ...`, and mutually recursive
+    constrained types.
+16. **Idempotency.** `script/idempotent.smli` round-trips source through the
+    printer and parser; `check`, `as` and `asOpt` must survive.
+17. **`Sys.plan()`.** Is the check visible in the plan, and does the inliner
+    or `Relationalize` remove it?
+18. **Calcite pushdown.** A constrained bag pushed to Calcite: does the check
+    survive, and is a foreign scan still streamed?
 
 ### Where the tests live
 
 * `script/check.smli` (new) — the bulk: sites, outcomes, messages.
-* `script/match.smli` — the append rule and the four coverage combinations, since they are about matches.
-* `script/type.smli` — erasure, unification, and the printed-type observables above.
+* `script/match.smli` — the append rule and the four coverage combinations,
+  since they are about matches.
+* `script/type.smli` — erasure, unification, and the printed-type observables
+  above.
 * `script/idempotent.smli` — parser/printer round trip.
-* `TypeTest` — unit tests for the erasure function itself, which is easier to cover exhaustively in Java than through scripts.
+* `TypeTest` — unit tests for the erasure function itself, which is easier to
+  cover exhaustively in Java than through scripts.
 * `LintTest` — the new keywords appear in `docs/reference.md`.
 
 ### By phase
 
 Each phase should land with its own tests, rather than deferring them:
 
-1. Abbreviations — the SML/NJ column of the table above, with and without a `check`; `TypeTest` for head-reduction and erasure.
-2. Syntax — parse and print `check`, `as`, `asOpt`; the four coverage combinations; redundant branch still an error; `idempotent.smli`.
-3. Narrowing — site × outcome for `val`, parameter, result; `as`/`asOpt`; elision pair (case 1 above); message format.
-4. Composites — shapes and nested blame paths; ordering (case 3); vacuous cases.
+1. Abbreviations — the SML/NJ column of the table above, with and without
+   a `check`; `TypeTest` for head-reduction and erasure.
+2. Syntax — parse and print `check`, `as`, `asOpt`; the four coverage
+   combinations; redundant branch still an error; `idempotent.smli`.
+3. Narrowing — site × outcome for `val`, parameter, result; `as`/`asOpt`;
+   elision pair (case 1 above); message format.
+4. Composites — shapes and nested blame paths; ordering (case 3); vacuous
+   cases.
 5. Rejections — function types, different erasures.
 6. Planner — the `parity_pair` scan from the issue comment.
 
 ## Phases
 
-1. ~~**Abbreviations propagate.**~~ **Done.** An alias now survives inference, by unifying up to head-reduction. The design that landed differs from the one sketched here: an alias reaches only the type *displayed for a binding*, and every type the compiler examines has its aliases expanded, so nothing that inspects a type structurally has to know an alias exists. `check` nodes ride on the same mechanism.
+1. ~~**Abbreviations propagate.**~~ **Done.** An alias now survives inference,
+   by unifying up to head-reduction. The design that landed differs from the
+   one sketched here: an alias reaches only the type *displayed for a
+   binding*, and every type the compiler examines has its aliases expanded, so
+   nothing that inspects a type structurally has to know an alias exists.
+   `check` nodes ride on the same mechanism.
 
-   The **meet rule** is done too: where an alias meets a different type the result is the weaker of the two, so `[n, i]` and `[i, n]` are both `int list`, whichever is seen first. The unifier records each alias it had to expand in order to unify, and weakens it in the substitution on the way out.
-2. ~~**Syntax.**~~ **Done.** `check` in `typbind`; `as` and `asOpt` expressions; `| _ => false` appended to a condition that is not exhaustive. The condition is also type-checked, as `base -> bool`, and must be closed; a parameterized type may not be constrained.
+   The **meet rule** is done too: where an alias meets a different type the
+   result is the weaker of the two, so `[n, i]` and `[i, n]` are both `int
+   list`, whichever is seen first. The unifier records each alias it had to
+   expand in order to unify, and weakens it in the substitution on the way
+   out.
+2. ~~**Syntax.**~~ **Done.** `check` in `typbind`; `as` and `asOpt`
+   expressions; `| _ => false` appended to a condition that is not exhaustive.
+   The condition is also type-checked, as `base -> bool`, and must be closed;
+   a parameterized type may not be constrained.
 
-   Two things the sketch did not anticipate. A `check` clause holds a *list of functions*, one per clause, not a flat list of matches: the branches of a clause are alternatives, whereas separate clauses are conjoined, and flattening confused the two. And the `| _ => false` is appended in `Resolver`, not `TypeResolver`, because exhaustiveness is decided on Core patterns.
-3. ~~**Narrowing.**~~ **Done.** `Constraint` in `BuiltInExn`; checks at bindings, parameters, results, ascriptions, `as` and `asOpt`.
+   Two things the sketch did not anticipate. A `check` clause holds a *list of
+   functions*, one per clause, not a flat list of matches: the branches of a
+   clause are alternatives, whereas separate clauses are conjoined, and
+   flattening confused the two. And the `| _ => false` is appended in
+   `Resolver`, not `TypeResolver`, because exhaustiveness is decided on Core
+   patterns.
+3. ~~**Narrowing.**~~ **Done.** `Constraint` in `BuiltInExn`; checks at
+   bindings, parameters, results, ascriptions, `as` and `asOpt`.
 
-   Every one of these reads the type *the user wrote* rather than the type inference deduces. Inference gives the meet, which for a constrained type is the type it abbreviates, so a deduced type has no condition left to check: `fun decr (n: nat) = n - 1` has type `int -> int`. This is the single most important thing the sketch got wrong.
-4. ~~**Composites.**~~ **Done.** Records, tuples, lists and datatype constructors are followed, to any depth; components are checked before the whole; the message names the component that failed and quotes it.
+   Every one of these reads the type *the user wrote* rather than the type
+   inference deduces. Inference gives the meet, which for a constrained type
+   is the type it abbreviates, so a deduced type has no condition left to
+   check: `fun decr (n: nat) = n - 1` has type `int -> int`. This is the
+   single most important thing the sketch got wrong.
+4. ~~**Composites.**~~ **Done.** Records, tuples, lists and datatype
+   constructors are followed, to any depth; components are checked before the
+   whole; the message names the component that failed and quotes it.
 
-   `deepCondition` walks *two* types in step -- the claimed type, which keeps its aliases and so knows where the conditions are, and the erased type, which the expressions being built are typed with. A single walk builds a selector typed `nat`, which a predicate typed `int -> bool` rejects.
+   `deepCondition` walks *two* types in step -- the claimed type, which keeps
+   its aliases and so knows where the conditions are, and the erased type,
+   which the expressions being built are typed with. A single walk builds a
+   selector typed `nat`, which a predicate typed `int -> bool` rejects.
 
-   Record modifiers need no site of their own, contrary to this plan: a modifier's result is a plain record, which claims nothing, so it is checked where the result is bound.
-5. ~~**Rejections.**~~ **Done**, and finer-grained than this plan said. What is rejected is a condition on a function's *parameter or result*, which would have to check every argument the function is ever given. A condition on the function type itself is given the function value, and is checked like any other:
+   Record modifiers need no site of their own, contrary to this plan: a
+   modifier's result is a plain record, which claims nothing, so it is checked
+   where the result is bound.
+5. ~~**Rejections.**~~ **Done**, and finer-grained than this plan said. What
+   is rejected is a condition on a function's *parameter or result*, which
+   would have to check every argument the function is ever given. A condition
+   on the function type itself is given the function value, and is checked
+   like any other:
 
    ```sml
    type fnFalse = (int -> int) check c => false;
@@ -639,36 +955,72 @@ Each phase should land with its own tests, rather than deferring them:
    > uncaught exception Constraint [fn is not a valid fnFalse]
    ```
 
-   Where the condition lands is decided by parenthesization, so `int -> int check c => ...` is allowed and `(int check c => ...) -> int` is not. Until this was rejected it was a silent hole -- `constrains` looks for conditions in positions a value can be checked at, so it passed a function type over and the claim went unenforced.
+   Where the condition lands is decided by parenthesization, so `int -> int
+   check c => ...` is allowed and `(int check c => ...) -> int` is not. Until
+   this was rejected it was a silent hole -- `constrains` looks for conditions
+   in positions a value can be checked at, so it passed a function type over
+   and the claim went unenforced.
 
-   A conversion between different erasures needed no work: it is an ordinary type error, and the unifier's message names both types and says which is an alias.
-6. ~~**Planner.**~~ **Done.** A type's `check` condition is conjoined into a scan over it, and the issue's example gives the answer it asks for. A scan is the one site whose condition does not raise: which values the type has is the question being asked, not something claimed of a value in hand.
+   A conversion between different erasures needed no work: it is an ordinary
+   type error, and the unifier's message names both types and says which is an
+   alias.
+6. ~~**Planner.**~~ **Done.** A type's `check` condition is conjoined into a
+   scan over it, and the issue's example gives the answer it asks for. A scan
+   is the one site whose condition does not raise: which values the type has
+   is the question being asked, not something claimed of a value in hand.
 
-   Grounding a record variable from a constraint on a field selection is done too. It was **not a constrained-types problem**: `from p: {i: int, j: int} where p.i elem [0..2] andalso p.j elem [5..8]` reported that `p` was not grounded with no `check` anywhere.
+   Grounding a record variable from a constraint on a field selection is done
+   too. It was **not a constrained-types problem**: `from p: {i: int, j: int}
+   where p.i elem [0..2] andalso p.j elem [5..8]` reported that `p` was not
+   grounded with no `check` anywhere.
 
-   The diagnosis was right -- collect a generator per field rather than one per pattern -- and three more things were needed once that was done, each of them a place where the machinery had only ever been asked about one field:
+   The diagnosis was right -- collect a generator per field rather than one
+   per pattern -- and three more things were needed once that was done, each
+   of them a place where the machinery had only ever been asked about one
+   field:
 
-   * A `Range.contains` constraint could only match the pattern itself, never a field of it, and asked discreteness of the pattern rather than of the value being generated. A record is not discrete; its fields may be. So `p.i elem [0..2]` could not ground a field while `p.i elem [0,1,2]` could.
-   * The derived value was built at a type deduced from its fields, giving `int * int` where the pattern's type was `{i:int, j:int}`.
-   * Joining the field generators wrapped each scan's pattern in a tuple pattern, and a one-element tuple pattern throws. With one field there was no join to do, so nothing had wrapped anything before.
+   * A `Range.contains` constraint could only match the pattern itself, never
+     a field of it, and asked discreteness of the pattern rather than of the
+     value being generated. A record is not discrete; its fields may be. So
+     `p.i elem [0..2]` could not ground a field while `p.i elem [0,1,2]`
+     could.
+   * The derived value was built at a type deduced from its fields, giving
+     `int * int` where the pattern's type was `{i:int, j:int}`.
+   * Joining the field generators wrapped each scan's pattern in a tuple
+     pattern, and a one-element tuple pattern throws. With one field there was
+     no join to do, so nothing had wrapped anything before.
 
-Deferred: constrained function types and any recovery of a constraint that has reached a type variable. Both need a type-directed dispatch mechanism; #290 needs one too, for comparators, so they should share it. Under this design neither is a soundness hole -- the constraint is erased, so nothing is claimed -- which is why they can wait.
+Deferred: constrained function types and any recovery of a constraint that has
+reached a type variable. Both need a type-directed dispatch mechanism; #290
+needs one too, for comparators, so they should share it. Under this design
+neither is a soundness hole -- the constraint is erased, so nothing is claimed
+-- which is why they can wait.
 
-Also not done: values from outside (E). A foreign row never passes through a Morel constructor, so a claim over a Calcite-backed bag would have to walk it, turning a streamed query into a materialized one.
+Also not done: values from outside (E). A foreign row never passes through a
+Morel constructor, so a claim over a Calcite-backed bag would have to walk it,
+turning a streamed query into a materialized one.
 
 ## Messages when a constraint fails
 
-Requirements collected for a follow-up issue. The messages today are serviceable, not good, and the `hr` example in `check.smli` shows where they fall short. They are accepted as they are for now.
+Requirements collected for a follow-up issue. The messages today are
+serviceable, not good, and the `hr` example in `check.smli` shows where they
+fall short. They are accepted as they are for now.
 
-Today a message reads `<value> is not a valid <type>[: <blame>]`, where `<type>` is the type's moniker and `<blame>` is a path such as `field emps.element`. The value is rendered as the shell would render it.
+Today a message reads `<value> is not a valid <type>[: <blame>]`, where
+`<type>` is the type's moniker and `<blame>` is a path such as `field
+emps.element`. The value is rendered as the shell would render it.
 
 ### Name the type when it has one
 
-`~1 is not a valid nat` is right when the condition belongs to a type the user named. A condition on a type that is not named has no such name to give, and should say `is not a valid value` rather than invent one or print the whole condition.
+`~1 is not a valid nat` is right when the condition belongs to a type the user
+named. A condition on a type that is not named has no such name to give, and
+should say `is not a valid value` rather than invent one or print the whole
+condition.
 
 ### Name the constraint
 
-A type may carry several `check` clauses, and a message says only that one of them failed:
+A type may carry several `check` clauses, and a message says only that one of
+them failed:
 
 ```sml
 type emps = emp bag
@@ -676,21 +1028,35 @@ type emps = emp bag
   check es => ...;         (*) nobody out-earns their manager
 ```
 
-Both failures read `is not a valid emps`. A syntax that names a clause would let the message say which, and would give the reader a name to look up. It would also let a constraint be referred to elsewhere -- in a diagnostic, or a tool that lists what a schema requires.
+Both failures read `is not a valid emps`. A syntax that names a clause would
+let the message say which, and would give the reader a name to look up. It
+would also let a constraint be referred to elsewhere -- in a diagnostic, or a
+tool that lists what a schema requires.
 
 ### Control how the value is printed
 
-This is the largest gap. A constraint on a collection quotes the entire collection, and a constraint on a schema quotes every table in it. In the single-type version of the `hr` example, hiring one unpaid employee prints the whole schema.
+This is the largest gap. A constraint on a collection quotes the entire
+collection, and a constraint on a schema quotes every table in it. In the
+single-type version of the `hr` example, hiring one unpaid employee prints the
+whole schema.
 
 What a reader wants instead:
 
 * **The relation's name.** "in `emps`" rather than the rows of `emps`.
-* **The offending row, identified by key.** `empno 1` rather than the row, and certainly rather than the table. This needs a notion of a primary key on a record collection, which Morel does not have yet; declaring one would serve more than messages. A blame path already writes an element as `emps[_]`, a subscript with nothing known about which element it was, so a key has somewhere to go: `emps[empno 1].sal`.
-* **Only the part that failed.** Naming the levels already buys this -- see below -- but a condition that is genuinely about the whole collection, such as uniqueness, has no smaller part to point at, and needs the two above.
+* **The offending row, identified by key.** `empno 1` rather than the row, and
+  certainly rather than the table. This needs a notion of a primary key on a
+  record collection, which Morel does not have yet; declaring one would serve
+  more than messages. A blame path already writes an element as `emps[_]`, a
+  subscript with nothing known about which element it was, so a key has
+  somewhere to go: `emps[empno 1].sal`.
+* **Only the part that failed.** Naming the levels already buys this -- see
+  below -- but a condition that is genuinely about the whole collection, such
+  as uniqueness, has no smaller part to point at, and needs the two above.
 
 ### Naming the levels already helps
 
-The two versions of the `hr` example differ only in whether the row and table types are named, and the messages differ sharply:
+The two versions of the `hr` example differ only in whether the row and table
+types are named, and the messages differ sharply:
 
 ```
 (*) named
@@ -700,22 +1066,30 @@ The two versions of the `hr` example differ only in whether the row and table ty
 {depts=[...],emps=[...]} is not a valid hr1
 ```
 
-So naming a level is not only documentation: it is what buys a message that says which level failed and quotes only that much of the value. Any scheme here should keep that property, and give the anonymous case a way to reach it.
+So naming a level is not only documentation: it is what buys a message that
+says which level failed and quotes only that much of the value. Any scheme
+here should keep that property, and give the anonymous case a way to reach it.
 
 ### Types that are not named
 
-A type may carry a condition wherever it is written, so a constraint can sit on the thing it is about:
+A type may carry a condition wherever it is written, so a constraint can sit on
+the thing it is about:
 
 ```sml
 type emp = {deptno: int, empno: int, mgrno: int option,
     sal: real check s => s > 0.0};
 ```
 
-This is what moves a constraint towards the leaves, and it improves the message, which now quotes the value that failed rather than the row that contains it: `0 is not a valid value: field emps.element.sal`.
+This is what moves a constraint towards the leaves, and it improves the
+message, which now quotes the value that failed rather than the row that
+contains it: `0 is not a valid value: field emps.element.sal`.
 
-Such a type is keyed by its body and its conditions, so two written the same way are the same type, and it is called "value" in a message, having no name to give.
+Such a type is keyed by its body and its conditions, so two written the same
+way are the same type, and it is called "value" in a message, having no name
+to give.
 
-The `hr` example in `check.smli` is written three ways, and the messages are what tells them apart:
+The `hr` example in `check.smli` is written three ways, and the messages are
+what tells them apart:
 
 | form | message when a salary is not positive |
 | ---- | ---- |
@@ -723,30 +1097,65 @@ The `hr` example in `check.smli` is written three ways, and the messages are wha
 | one type, conditions at the top | `{depts=[...],emps=[...]} is not a valid hr1` |
 | one type, conditions pushed down | `0 is not a valid value: field emps.element.sal` |
 
-So precision comes from *where the condition is written*, not from naming the levels. Naming buys only the name: a type that is not named is called "value", and the blame path says which one. That is what the "name the constraint" requirement above is for.
+So precision comes from *where the condition is written*, not from naming the
+levels. Naming buys only the name: a type that is not named is called "value",
+and the blame path says which one. That is what the "name the constraint"
+requirement above is for.
 
 ### Such a type survives inference
 
-A term identifies an alias by name, and a constrained type that is not named has none, so its condition used to reach only the binding it was written on: a later reference saw the body. It is given a name derived from its conditions, and the conditions are remembered for the term to be converted back, the way a displaced datatype already is.
+A term identifies an alias by name, and a constrained type that is not named
+has none, so its condition used to reach only the binding it was written on: a
+later reference saw the body. It is given a name derived from its conditions,
+and the conditions are remembered for the term to be converted back, the way a
+displaced datatype already is.
 
-The name is derived from the conditions and from nothing else. That is what decides identity -- a condition is closed, so its text is the whole of it -- and the body is not in the name because the term carries the body as its first argument, so two terms with the same conditions unify only if their bodies do. Everything else follows the rules a named alias already obeys: the meet is the weaker of the two, so arithmetic drops the condition, and two types written differently meet at the body they share.
+The name is derived from the conditions and from nothing else. That is what
+decides identity -- a condition is closed, so its text is the whole of it --
+and the body is not in the name because the term carries the body as its first
+argument, so two terms with the same conditions unify only if their bodies do.
+Everything else follows the rules a named alias already obeys: the meet is the
+weaker of the two, so arithmetic drops the condition, and two types written
+differently meet at the body they share.
 
-One thing had to be fixed with it. A named alias is written by its name, which never needs parentheses, and a type that is not named is written in full, so `Pretty` had been rendering an alias without regard to precedence. A condition binds more loosely than anything else in a type, so `(int check i => i >= 0) -> (int check i => i >= 0)` needs the parentheses that `AliasKey.describe` already gave it and the pretty-printer did not.
+One thing had to be fixed with it. A named alias is written by its name, which
+never needs parentheses, and a type that is not named is written in full, so
+`Pretty` had been rendering an alias without regard to precedence. A condition
+binds more loosely than anything else in a type, so `(int check i => i >= 0)
+-> (int check i => i >= 0)` needs the parentheses that `AliasKey.describe`
+already gave it and the pretty-printer did not.
 
 Two limits remain:
 
-* A condition is compiled where its type is declared, so one written anywhere else -- in an annotation, say -- is rejected: "a `check` may only be written in a type declaration". Lifting this means compiling conditions wherever a claim reads a type.
-* ~~A type that is not named may not sit under a type constructor.~~ Fixed. `{contents: (int check ...) list}` declares, and a value bound to it is checked, blaming `field contents[_]`. The same goes for a nested list and for a datatype constructor's argument.
+* A condition is compiled where its type is declared, so one written anywhere
+  else -- in an annotation, say -- is rejected: "a `check` may only be written
+  in a type declaration". Lifting this means compiling conditions wherever a
+  claim reads a type.
+* ~~A type that is not named may not sit under a type constructor.~~ Fixed.
+  `{contents: (int check ...) list}` declares, and a value bound to it is
+  checked, blaming `field contents[_]`. The same goes for a nested list and for
+  a datatype constructor's argument.
 
-  A narrower hole survived underneath that claim, and is fixed too: a condition reached through a datatype's *type parameter* was claimed and never checked. `val w: nat option = SOME ~1` printed `nat option` -- a claim the user wrote, which the shell then repeated -- and held a value that is not one. `option` is a plain datatype, so `constrains` passed it over, exactly as it once passed a function type over.
+  A narrower hole survived underneath that claim, and is fixed too: a condition
+  reached through a datatype's *type parameter* was claimed and never checked.
+  `val w: nat option = SOME ~1` printed `nat option` -- a claim the user wrote,
+  which the shell then repeated -- and held a value that is not one. `option` is
+  a plain datatype, so `constrains` passed it over, exactly as it once passed a
+  function type over.
 
-  A datatype is now walked, as a record and a collection are: a `case` over the value, one arm per constructor, checking what each carries at the type the parameter was given. Because a datatype may contain itself, the walk is a function applied to the value rather than an expansion, and a datatype met again calls the function being built. So `nat tree` is checked to any depth.
+  A datatype is now walked, as a record and a collection are: a `case` over the
+  value, one arm per constructor, checking what each carries at the type the
+  parameter was given. Because a datatype may contain itself, the walk is a
+  function applied to the value rather than an expansion, and a datatype met
+  again calls the function being built. So `nat tree` is checked to any depth.
 
 ## Record modifiers and conditions
 
-**Done**, except for inheriting a condition into a record of a different shape, which is recorded below as what remains.
+**Done**, except for inheriting a condition into a record of a different
+shape, which is recorded below as what remains.
 
-A modifier used to keep the constraints on fields it does not touch, and drop the record type's own condition:
+A modifier used to keep the constraints on fields it does not touch, and drop
+the record type's own condition:
 
 ```sml
 type box = {a: int, b: nat} check r => r.a < 10;
@@ -756,24 +1165,54 @@ val v2 = {v0 remove a};        (*) {b:nat}
 val v3 = {v0 replace a = 9};   (*) {a:int, b:nat}
 ```
 
-That was sound -- the result claimed nothing it had not been shown -- but it threw away more than it needed to, and `v3` is the footgun: a derived schema was unchecked unless it was annotated.
+That was sound -- the result claimed nothing it had not been shown -- but it
+threw away more than it needed to, and `v3` is the footgun: a derived schema
+was unchecked unless it was annotated.
 
-**A rule that covers all four modifiers.** Inherit a condition if and only if every field it depends on is unchanged; otherwise drop it. Then:
+**A rule that covers all four modifiers.** Inherit a condition if and only if
+every field it depends on is unchanged; otherwise drop it. Then:
 
-* `extend` inherits every condition, and **needs no check**: the fields the conditions range over are untouched, so they are already known to hold. This is the case that most obviously wants fixing.
-* `remove` inherits a condition that does not mention a removed field, also for free. One that does mention it cannot be inherited -- it no longer typechecks -- so `{r remove y}` where the condition is `r.x > r.y` drops it, and is allowed. Projecting a column away drops the constraints that mention it, as it does in a database.
+* `extend` inherits every condition, and **needs no check**: the fields the
+  conditions range over are untouched, so they are already known to hold. This
+  is the case that most obviously wants fixing.
+* `remove` inherits a condition that does not mention a removed field, also
+  for free. One that does mention it cannot be inherited -- it no longer
+  typechecks -- so `{r remove y}` where the condition is `r.x > r.y` drops it,
+  and is allowed. Projecting a column away drops the constraints that mention
+  it, as it does in a database.
 * `rename` inherits a condition with the field renamed inside it.
-* `replace` is the only one that can falsify a condition, so it must inherit it *and check*. Dropping is what happens today, and is why a derived schema is unchecked unless it is annotated -- a footgun, because every realistic derivation of a schema goes through `replace`.
+* `replace` is the only one that can falsify a condition, so it must inherit
+  it *and check*. Dropping is what happens today, and is why a derived schema
+  is unchecked unless it is annotated -- a footgun, because every realistic
+  derivation of a schema goes through `replace`.
 
-**Done: a modifier claims the type it modifies**, with the obvious exceptions -- a modifier that adds or removes a field, or changes a field's type, produces a different type and cannot claim the old one.
+**Done: a modifier claims the type it modifies**, with the obvious exceptions
+-- a modifier that adds or removes a field, or changes a field's type,
+produces a different type and cannot claim the old one.
 
-The rule that landed is stated on the modifier's *shape*, and falls out of one test rather than a case per verb. Applying a modifier gives, for each field of the result, where its value comes from: a field kept from the record it was applied to, a value assigned, or a field of an `all` argument. The chain claims the base's type if every modifier leaves that list looking like the one it was given -- same labels, in the same places, each keeping the type it had. So `replace` and `replace all` claim, `extend`, `remove` and `rename` do not, `lenient` does not, and a verb that skips claims by having done nothing. No verb is named anywhere in the test.
+The rule that landed is stated on the modifier's *shape*, and falls out of one
+test rather than a case per verb. Applying a modifier gives, for each field of
+the result, where its value comes from: a field kept from the record it was
+applied to, a value assigned, or a field of an `all` argument. The chain claims
+the base's type if every modifier leaves that list looking like the one it was
+given -- same labels, in the same places, each keeping the type it had. So
+`replace` and `replace all` claim, `extend`, `remove` and `rename` do not,
+`lenient` does not, and a verb that skips claims by having done nothing. No
+verb is named anywhere in the test.
 
-The claim is checked **at the modifier**, because nobody else wrote the type down. The check runs when some modifier put a value into a field that has a declared type; a field being added has no type to keep, and one kept, removed or renamed carries a value that was checked when it was put there. So `extend` is free, as this plan asked.
+The claim is checked **at the modifier**, because nobody else wrote the type
+down. The check runs when some modifier put a value into a field that has a
+declared type; a field being added has no type to keep, and one kept, removed
+or renamed carries a value that was checked when it was put there. So `extend`
+is free, as this plan asked.
 
-Where the shape does change, the assigned field takes the type of the value, so `{e replace empno = ~1 extend hired = true}` is `{empno:int, ...}` and is neither claimed nor checked. That is sound -- the printed type says `int` -- and it is the price of the rule being about shape.
+Where the shape does change, the assigned field takes the type of the value,
+so `{e replace empno = ~1 extend hired = true}` is `{empno:int, ...}` and is
+neither claimed nor checked. That is sound -- the printed type says `int` --
+and it is the price of the rule being about shape.
 
-**Attempted three ways; the desugaring had to move.** A modifier was desugared into a destructure and a fresh record literal:
+**Attempted three ways; the desugaring had to move.** A modifier was desugared
+into a destructure and a fresh record literal:
 
 ```sml
 {r replace a = v}
@@ -781,23 +1220,47 @@ Where the shape does change, the assigned field takes the type of the value, so 
 let val {a, b} = r in {a = v, b = b} end
 ```
 
-so the result's type is built from the literal's components and has no connection to `r`'s. Reconnecting it afterwards does not work. Annotating the result with `typeof r` unifies the two, and the meet of a checked type and the type it refines is the latter, so the conditions are gone before they can be checked. Claiming without unifying -- deducing `typeof r` into a variable of its own -- leaves the claim correct but finds `r` already carrying its erased type by that point, because the declaration is re-deduced by the retry loop that resolves field names.
+so the result's type is built from the literal's components and has no
+connection to `r`'s. Reconnecting it afterwards does not work. Annotating the
+result with `typeof r` unifies the two, and the meet of a checked type and the
+type it refines is the latter, so the conditions are gone before they can be
+checked. Claiming without unifying -- deducing `typeof r` into a variable of
+its own -- leaves the claim correct but finds `r` already carrying its erased
+type by that point, because the declaration is re-deduced by the retry loop
+that resolves field names.
 
-Equating the result's variable with the base's, and typing the desugared form on a variable of its own, fails too -- and shows where the type is actually lost. It is the **destructure**, not the literal: `val {n, s} = r` meets `r`'s alias with a record pattern's term, which head-reduces, so `r` itself carries the erased type from that point on. Anything that desugars before typing loses the type, however the result is wired up afterwards.
+Equating the result's variable with the base's, and typing the desugared form
+on a variable of its own, fails too -- and shows where the type is actually
+lost. It is the **destructure**, not the literal: `val {n, s} = r` meets `r`'s
+alias with a record pattern's term, which head-reduces, so `r` itself carries
+the erased type from that point on. Anything that desugars before typing loses
+the type, however the result is wired up afterwards.
 
-So the modifier needs a typing rule of its own, applied to the record expression as written:
+So the modifier needs a typing rule of its own, applied to the record
+expression as written:
 
 * the result's type is `r`'s type;
-* an assigned value is deduced against the declared type of the field it assigns to, not the other way about, so a `nat` field narrows the value and a condition is checked;
+* an assigned value is deduced against the declared type of the field it
+  assigns to, not the other way about, so a `nat` field narrows the value and
+  a condition is checked;
 * `lenient` opts out, and the result is then a different type.
 
-and the desugaring moved to `Resolver`, which builds the `let` and the record in Core, where the types are already settled. That was a change to how modifiers are typed rather than something that could be added around the desugaring, and it is the substance of this issue.
+and the desugaring moved to `Resolver`, which builds the `let` and the record
+in Core, where the types are already settled. That was a change to how
+modifiers are typed rather than something that could be added around the
+desugaring, and it is the substance of this issue.
 
-Two things fell out of the record surviving into the tree. The unresolved-flex-record check could no longer be "a record still has modifiers", since now they all do, so unresolved records are collected as they are found; and a `yield` step reads the fields it binds from the modifiers' result rather than from the expression, which has none of its own.
+Two things fell out of the record surviving into the tree. The
+unresolved-flex-record check could no longer be "a record still has
+modifiers", since now they all do, so unresolved records are collected as they
+are found; and a `yield` step reads the fields it binds from the modifiers'
+result rather than from the expression, which has none of its own.
 
-A value that a verb skips used to vanish with the desugaring, and so was never typed. It is typed now, because the user wrote it.
+A value that a verb skips used to vanish with the desugaring, and so was never
+typed. It is typed now, because the user wrote it.
 
-`replace` already says it "preserves the field's type", and enforces it by unification, so a different base type is caught:
+`replace` already says it "preserves the field's type", and enforces it by
+unification, so a different base type is caught:
 
 ```sml
 type box = {n: nat, s: string};
@@ -806,38 +1269,86 @@ val b: box = {n = 1, s = "a"};
 > Error: Cannot deduce type: conflict: string vs nat (alias for int)
 ```
 
-But the meet rule lets a condition drop silently, because `int` and `nat` unify:
+But the meet rule lets a condition drop silently, because `int` and `nat`
+unify:
 
 ```sml
 {b replace n = b.n + 1};
 > val it = {n=2,s="a"} : {n:int, s:string}
 ```
 
-The field's type did not have to change -- `n + 1` may well be a `nat` -- so it should not have. What should happen is that the field keeps its declared type and the value is narrowed to it: the result is `box`, `{b replace n = b.n + 1}` checks that 2 is a `nat`, and `{b replace n = ~5}` raises. The record's own conditions must be checked too, since they may depend on the field that changed.
+The field's type did not have to change -- `n + 1` may well be a `nat` -- so
+it should not have. What should happen is that the field keeps its declared
+type and the value is narrowed to it: the result is `box`, `{b replace n =
+b.n + 1}` checks that 2 is a `nat`, and `{b replace n = ~5}` raises. The
+record's own conditions must be checked too, since they may depend on the
+field that changed.
 
-That gives `lenient` a meaning for checked types, and a useful one: it is the escape hatch that says "I know this widens". `{b replace lenient n = ~5}` yields `{n:int, s:string}` and checks nothing, which is what it already does. So the two forms stop being interchangeable, as they are today.
+That gives `lenient` a meaning for checked types, and a useful one: it is the
+escape hatch that says "I know this widens". `{b replace lenient n = ~5}`
+yields `{n:int, s:string}` and checks nothing, which is what it already does.
+So the two forms stop being interchangeable, as they are today.
 
-The asymmetry between `extend` and `replace` is principled, not arbitrary: one cannot invalidate a condition and the other can.
+The asymmetry between `extend` and `replace` is principled, not arbitrary: one
+cannot invalidate a condition and the other can.
 
-**Done: a condition is inherited into a different shape.** `extend`, `remove` and `rename` claim nothing, but the record's own conditions need not be lost with the name. A condition is carried over if every field it depends on was left alone, and rewritten to name those fields as the result names them; the result is a constrained type that has no name, which is what the previous section made possible.
+**Done: a condition is inherited into a different shape.** `extend`, `remove`
+and `rename` claim nothing, but the record's own conditions need not be lost
+with the name. A condition is carried over if every field it depends on was
+left alone, and rewritten to name those fields as the result names them; the
+result is a constrained type that has no name, which is what the previous
+section made possible.
 
-The rule reads off the same list of sources the claim does. A field the modifier kept is still there, under whatever label it kept it at; one it assigned to holds a value that was never shown to satisfy anything; one it removed is not there at all. So `extend` carries every condition over, `remove` drops one that mentions the field it removed, `rename` rewrites the field inside it, and an assignment in a chain that changes shape drops whatever depended on what it assigned. Nothing is checked -- every value carried over was checked when it was put there.
+The rule reads off the same list of sources the claim does. A field the
+modifier kept is still there, under whatever label it kept it at; one it
+assigned to holds a value that was never shown to satisfy anything; one it
+removed is not there at all. So `extend` carries every condition over,
+`remove` drops one that mentions the field it removed, `rename` rewrites the
+field inside it, and an assignment in a chain that changes shape drops
+whatever depended on what it assigned. Nothing is checked -- every value
+carried over was checked when it was put there.
 
-Two conditions cannot be carried over, and are dropped, which is sound because a type that claims less claims nothing false: one that uses the record as a whole rather than by selecting fields from it, since a record of another shape is not that record; and one whose match this cannot rewrite -- more than one branch, or a refutable sub-pattern, which decides by not matching where a `val` would raise `Bind`.
+Two conditions cannot be carried over, and are dropped, which is sound because
+a type that claims less claims nothing false: one that uses the record as a
+whole rather than by selecting fields from it, since a record of another shape
+is not that record; and one whose match this cannot rewrite -- more than one
+branch, or a refutable sub-pattern, which decides by not matching where a
+`val` would raise `Bind`.
 
-A condition is typed against the exact record type, and records are not width-subtyped, so an inherited condition must re-type against the new record. `r => r.a < 10` only selects fields, and re-types fine; `{a, b} => a < 10` destructures, and will not match a record with another field. That would make inheritance depend on how the condition was written.
+A condition is typed against the exact record type, and records are not
+width-subtyped, so an inherited condition must re-type against the new
+record. `r => r.a < 10` only selects
+fields, and re-types fine; `{a, b} => a < 10` destructures, and will not match
+a record with another field. That would make inheritance depend on how the
+condition was written.
 
-The way out is to desugar a destructuring condition into a selecting one -- `{a, b} => a < 10` becomes `$r => let val a = $r.a and b = $r.b in a < 10 end` -- which is mechanical, since the fields are known. Then every condition is inheritable and the rule has no exceptions.
+The way out is to desugar a destructuring condition into a selecting one --
+`{a, b} => a < 10` becomes `$r => let val a = $r.a and b = $r.b in a < 10 end`
+-- which is mechanical, since the fields are known. Then every condition is
+inheritable and the rule has no exceptions.
 
-**Done, but at the point of inheritance, not at the declaration** as this plan said. Two reasons. An inherited condition has to be re-typed against the new record wherever the rewriting happens, so doing it early saves nothing; and doing it early would make every type that was declared with a destructuring condition *print* in the desugared form, which is a poor trade for a form the user did not write. Rewriting at the point of inheritance leaves a declared type printing as it was written, and only the derived type shows the longer form.
+**Done, but at the point of inheritance, not at the declaration** as this plan
+said. Two reasons. An inherited condition has to be re-typed against the new
+record wherever the rewriting happens, so doing it early saves nothing; and
+doing it early would make every type that was declared with a destructuring
+condition *print* in the desugared form, which is a poor trade for a form the
+user did not write. Rewriting at the point of inheritance leaves a declared
+type printing as it was written, and only the derived type shows the longer
+form.
 
-The cost is that a derived type prints its condition at length, which is the same thing open question 8 records about `hr1`.
+The cost is that a derived type prints its condition at length, which is the
+same thing open question 8 records about `hr1`.
 
-**Not a laundering hole, either way.** `{{bad extend x = 1} remove x}` yields an unnamed record that claims nothing, so re-claiming it at the original type checks it. Both dropping and inheriting are sound; this is about how much is lost.
+**Not a laundering hole, either way.** `{{bad extend x = 1} remove x}` yields
+an unnamed record that claims nothing, so re-claiming it at the original type
+checks it. Both dropping and inheriting are sound; this is about how much is
+lost.
 
 ## Adding and removing conditions
 
-**Removing is rarely needed, but has no practical syntax when it is.** Widening is implicit at a use site, so a value never has to be widened in order to be used:
+**Removing is rarely needed, but has no practical syntax when it is.** Widening
+is implicit at a use site, so a value never has to be widened in order to be
+used:
 
 ```sml
 fun f (i: int) = i + 1;
@@ -845,47 +1356,103 @@ f n;
 > val it = 6 : int
 ```
 
-and widening is free, because a value that satisfies a condition satisfies the type the condition refines. What is missing is a way to give a *binding* the base type deliberately. Ascription does it -- `val m: int = n` -- but only if the base type can be named and written out, which fails exactly where it matters: a large record type, or a checked type that is not named and so has no base to write.
+and widening is free, because a value that satisfies a condition satisfies the
+type the condition refines. What is missing is a way to give a *binding* the
+base type deliberately. Ascription does it -- `val m: int = n` -- but only if
+the base type can be named and written out, which fails exactly where it
+matters: a large record type, or a checked type that is not named and so has
+no base to write.
 
-So a type-level operator is wanted, say `unchecked t`, usable wherever a type is: `val m: unchecked nat = n`, `fun f (x: unchecked emp)`, `unchecked (typeof e)`. It pairs with `check` -- one adds a condition to a type, the other strips them -- and being type-level it composes, where an expression-level form would not.
+So a type-level operator is wanted, say `unchecked t`, usable wherever a type
+is: `val m: unchecked nat = n`, `fun f (x: unchecked emp)`, `unchecked (typeof
+e)`. It pairs with `check` -- one adds a condition to a type, the other strips
+them -- and being type-level it composes, where an expression-level form would
+not.
 
-It should be deep, removing conditions anywhere within the type rather than only the outermost, wherever a condition can now be reached: through a record, a collection, or a datatype's type parameter.
+It should be deep, removing conditions anywhere within the type rather than
+only the outermost, wherever a condition can now be reached: through a record,
+a collection, or a datatype's type parameter.
 
-**Adding to an expression does need syntax, and has none.** There is no way to introduce a checked value without declaring a named type:
+**Adding to an expression does need syntax, and has none.** There is no way to
+introduce a checked value without declaring a named type:
 
 ```sml
 val x = y + z check i => i < 100;
 ```
 
-is a syntax error today. It should give `x` the type `int check i => i < 100`, so that `x` can later be used where that condition is required, without being checked again.
+is a syntax error today. It should give `x` the type `int check i => i < 100`,
+so that `x` can later be used where that condition is required, without being
+checked again.
 
-`e check match` is the anonymous counterpart of `as`: `e as nat` converts to a named checked type and checks, and this does the same with the type written inline. It must check, or the type would claim something that was never verified.
+`e check match` is the anonymous counterpart of `as`: `e as nat` converts to a
+named checked type and checks, and this does the same with the type written
+inline. It must check, or the type would claim something that was never
+verified.
 
-**A match must end where a `check` begins.** A condition is an expression, and a type may carry several conditions, so without that rule the two uses collide:
+**A match must end where a `check` begins.** A condition is an expression, and
+a type may carry several conditions, so without that rule the two uses
+collide:
 
 ```sml
 type batchSize = int check i => i >= 1 check j => j <= 12;
 ```
 
-The type-level loop parses the first condition's body with the expression parser. If that parser also accepts `check`, it takes `check j => j <= 12` as a condition on `i >= 1`, and the second clause never reaches the type. Every multi-clause declaration breaks, which was confirmed by building it: the whole `hr` example failed with "conflict: int vs bool".
+The type-level loop parses the first condition's body with the expression
+parser. If that parser also accepts `check`, it takes `check j => j <= 12` as
+a condition on `i >= 1`, and the second clause never reaches the type. Every
+multi-clause declaration breaks, which was confirmed by building it: the whole
+`hr` example failed with "conflict: int vs bool".
 
-The fix is a precedence rule, not a second keyword: a match's body is parsed one level below `check`, so a `check` ends the match rather than being taken into it. Both uses keep the keyword. The cost is that an expression-level condition inside a match body must be parenthesized -- `fn i => (i check j => j > 0)` -- which is the same parenthesis `case` and `fn` already need where they nest.
+The fix is a precedence rule, not a second keyword: a match's body is parsed
+one level below `check`, so a `check` ends the match rather than being taken
+into it. Both uses keep the keyword. The cost is that an expression-level
+condition inside a match body must be parenthesized -- `fn i => (i check j =>
+j > 0)` -- which is the same parenthesis `case` and `fn` already need where
+they nest.
 
-An implementation note: the base type need never be materialized. The condition is typed against the term the expression was deduced to, and the checked type is built afterwards, where the expression's type is known.
+An implementation note: the base type need never be materialized. The
+condition is typed against the term the expression was deduced to, and the
+checked type is built afterwards, where the expression's type is known.
 
-**A condition is added to what the expression already claims, never in place of it.** Typing the condition against the expression's own type takes the claim away: a condition compares the value with something -- `i < 100` with an `int` -- and where an alias meets a different type the meet takes the weaker of the two, so writing a condition on a `nat` removed the one that made it a `nat`. The condition is therefore typed against the type the expression's own conditions are typed against, the type its aliases abbreviate; then the expression's type survives, and the type built on it carries both. Only a condition that mentioned nothing of the value gave the right answer before, which is why this was easy to miss.
+**A condition is added to what the expression already claims, never in place
+of it.** Typing the condition against the expression's own type takes the
+claim away: a condition compares the value with something -- `i < 100` with an
+`int` -- and where an alias meets a different type the meet takes the weaker of
+the two, so writing a condition on a `nat` removed the one that made it a
+`nat`. The condition is therefore typed against the type the expression's own
+conditions are typed against, the type its aliases abbreviate; then the
+expression's type survives, and the type built on it carries both. Only a
+condition that mentioned nothing of the value gave the right answer before,
+which is why this was easy to miss.
 
-The same rule decides `(e check m1) check m2`: the conditions are conjoined into one node, as `e check m1 check m2` already was, rather than the outer one being written on a type the inner one had made. Nesting them would put each in the type of the last.
+The same rule decides `(e check m1) check m2`: the conditions are conjoined
+into one node, as `e check m1 check m2` already was, rather than the outer one
+being written on a type the inner one had made. Nesting them would put each in
+the type of the last.
 
-That first gave a type that did not participate in inference -- `val a = e check m` displayed as `int check ...`, but a later reference to `a` was only `int` -- because a term identifies an alias by name, and a constrained type that is not named has none. **That is fixed**, per the section below, and a condition now reaches a later use.
+That first gave a type that did not participate in inference -- `val a = e
+check m` displayed as `int check ...`, but a later reference to `a` was only
+`int` -- because a term identifies an alias by name, and a constrained type
+that is not named has none. **That is fixed**, per the section below, and a
+condition now reaches a later use.
 
-Several conditions on one expression therefore have to be one node, not nested: nesting would put each in the type of the last, and the last would be the only one seen. A type declaration already treats them that way.
+Several conditions on one expression therefore have to be one node, not
+nested: nesting would put each in the type of the last, and the last would be
+the only one seen. A type declaration already treats them that way.
 
-Two notes. It unlocks the annotation form as well: `val x: int check i => i < 100 = e` is rejected today only because nothing compiles a condition outside a `type` declaration, which is an implementation limit rather than a design one, and this needs the same lifting. And `asOpt` has no anonymous counterpart under this scheme; naming the type is always available, so that seems acceptable, but it is an asymmetry rather than an oversight.
+Two notes. It unlocks the annotation form as well: `val x: int check i => i <
+100 = e` is rejected today only because nothing compiles a condition outside a
+`type` declaration, which is an implementation limit rather than a design one,
+and this needs the same lifting. And `asOpt` has no anonymous counterpart
+under this scheme; naming the type is always available, so that seems
+acceptable, but it is an asymmetry rather than an oversight.
 
 ## Is there a complete algebra?
 
-`e as t` converts a value to a named checked type; `e check m` would do the same with the type written inline. That parallel suggests asking whether the operators that move between expressions, types and strings are complete and agree with each other. They are not, and here is what is missing.
+`e as t` converts a value to a named checked type; `e check m` would do the
+same with the type written inline. That parallel suggests asking whether the
+operators that move between expressions, types and strings are complete and
+agree with each other. They are not, and here is what is missing.
 
 | | produces a type | produces a value |
 | ---- | ---- | ---- |
@@ -896,9 +1463,13 @@ Two notes. It unlocks the annotation form as well: `val x: int check i => i < 10
 
 ### Driven by the operations, not the table
 
-The matrix above lists what exists. What it should list is what is wanted, and one operation is missing from it entirely: **extracting a type's predicate**, as a value. Write it `predicate t`, of type `unchecked t -> bool`.
+The matrix above lists what exists. What it should list is what is wanted, and
+one operation is missing from it entirely: **extracting a type's predicate**,
+as a value. Write it `predicate t`, of type `unchecked t -> bool`.
 
-It is worth having for its own sake. It expresses "filter rather than abort", which is the shape case E wants for foreign data, and which today cannot be written without restating the condition:
+It is worth having for its own sake. It expresses "filter rather than abort",
+which is the shape case E wants for foreign data, and which today cannot be
+written without restating the condition:
 
 ```sml
 List.filter (predicate nat) xs
@@ -912,7 +1483,10 @@ e as t     ==  if predicate t e then e else raise Constraint ...
 e check m  ==  e : (typeof e check m)          (given a faithful typeof)
 ```
 
-So `asOpt` having no anonymous counterpart is not a missing operator; it is a missing decomposition. The irreducible set is `t check m` to add a condition, `unchecked t` to remove one, `predicate t` to extract one, `typeof e` to take an expression's type into type space, and `e : t` to claim.
+So `asOpt` having no anonymous counterpart is not a missing operator; it is a
+missing decomposition. The irreducible set is `t check m` to add a condition,
+`unchecked t` to remove one, `predicate t` to extract one, `typeof e` to take
+an expression's type into type space, and `e : t` to claim.
 
 Some laws, which are the test of whether it is closed:
 
@@ -922,27 +1496,67 @@ predicate (unchecked t)  =  fn _ => true
 t check (predicate t)    =  t                    (round-trip)
 ```
 
-**Reifying is the tool.** Each of these takes something from type space into value space: `type_string` a type as a string, lossily and for display; `predicate` its checkable content, as a function. This plan already says that constrained function types and #290's comparators both need type-directed dispatch and should share it. A general "reify a type as a value" is that mechanism, and `predicate` is its smallest well-scoped instance -- a reason to build it early rather than as a convenience.
+**Reifying is the tool.** Each of these takes something from type space into
+value space: `type_string` a type as a string, lossily and for display;
+`predicate` its checkable content, as a function. This plan already says that
+constrained function types and #290's comparators both need type-directed
+dispatch and should share it. A general "reify a type as a value" is that
+mechanism, and `predicate` is its smallest well-scoped instance -- a reason to
+build it early rather than as a convenience.
 
-**One cost of the decomposition, honestly.** `as` desugared through `predicate` loses its message: the type's name and the blame path come from the primitive. Either the messages get worse, or what is reified has to carry enough to rebuild them. That is a reason the primitives may earn their keep even once the sugar is available.
+**One cost of the decomposition, honestly.** `as` desugared through
+`predicate` loses its message: the type's name and the blame path come from
+the primitive. Either the messages get worse, or what is reified has to carry
+enough to rebuild them. That is a reason the primitives may earn their keep
+even once the sugar is available.
 
 ### The gaps that remain
 
-Three gaps, in increasing order of how much they matter. Two are now closed; what remains of them is recorded with each.
+Three gaps, in increasing order of how much they matter. Two are now closed;
+what remains of them is recorded with each.
 
-1. **`asOpt` has no anonymous counterpart.** `e as t` pairs with `e check m`, but `e asOpt t` pairs with nothing. Naming the type is always available, so this may be acceptable.
-2. ~~**`typeof e` erases.**~~ **Fixed.** It named the type inference had reduced the expression to, not the type the expression was shown to have, so `1 : typeof n` claimed nothing and `~1 : typeof n` was accepted. It now names the displayed type -- alias, conditions and all -- so an annotation that uses it claims what that type claims, and a binding displays what a binding at the named type displays.
+1. **`asOpt` has no anonymous counterpart.** `e as t` pairs with `e check m`,
+   but `e asOpt t` pairs with nothing. Naming the type is always available, so
+   this may be acceptable.
+2. ~~**`typeof e` erases.**~~ **Fixed.** It named the type inference had
+   reduced the expression to, not the type the expression was shown to have,
+   so `1 : typeof n` claimed nothing and `~1 : typeof n` was accepted. It now
+   names the displayed type -- alias, conditions and all -- so an annotation
+   that uses it claims what that type claims, and a binding displays what a
+   binding at the named type displays.
 
-   The cause was that a type AST is converted syntactically, and a `typeof` has no syntax to convert: `KeyBuilder` had no case for it, and every caller that would reach one skipped it. The key builder now takes a way to resolve one, and the two callers that know the answer -- the claim in `Resolver`, the displayed type in `TypeResolver` -- supply it from the `TypeMap`.
+   The cause was that a type AST is converted syntactically, and a `typeof`
+   has no syntax to convert: `KeyBuilder` had no case for it, and every caller
+   that would reach one skipped it. The key builder now takes a way to resolve
+   one, and the two callers that know the answer -- the claim in `Resolver`,
+   the displayed type in `TypeResolver` -- supply it from the `TypeMap`.
 
-   **What it does not give is the derivation.** `e check m` is still primitive, not `e : (typeof e check m)`, because a condition is typed against its base *while the declaration is being deduced*, and that is exactly when the expression's type is not yet known. Both the term for a constrained type and the type its condition is checked against are built from the key, before unification has run. `typeof e check m` therefore reports rather than works. Closing it needs the deduce-again loop that a record modifier uses to learn its base's fields.
-3. ~~**`type t = typeof e` throws an AssertionError.**~~ **Fixed**, as far as it goes: it is a message rather than a crash. It cannot be made to work for the same reason as the derivation above -- a type declaration is elaborated before anything in it has been deduced.
+   **What it does not give is the derivation.** `e check m` is still primitive,
+   not `e : (typeof e check m)`, because a condition is typed against its base
+   *while the declaration is being deduced*, and that is exactly when the
+   expression's type is not yet known. Both the term for a constrained type and
+   the type its condition is checked against are built from the key, before
+   unification has run. `typeof e check m` therefore reports rather than works.
+   Closing it needs the deduce-again loop that a record modifier uses to learn
+   its base's fields.
+3. ~~**`type t = typeof e` throws an AssertionError.**~~ **Fixed**, as far as
+   it goes: it is a message rather than a crash. It cannot be made to work for
+   the same reason as the derivation above -- a type declaration is elaborated
+   before anything in it has been deduced.
 
-`type_string` was a fourth: it erased, so a value the shell printed as `foo` reported `"int"`. That is now fixed -- it renders the type as displayed -- but it is worth noting that the divergence appeared only when an alias began to survive inference. Every operator that renders or reifies a type has to be checked against that.
+`type_string` was a fourth: it erased, so a value the shell printed as `foo`
+reported `"int"`. That is now fixed -- it renders the type as displayed -- but
+it is worth noting that the divergence appeared only when an alias began to
+survive inference. Every operator that renders or reifies a type has to be
+checked against that.
 
 ## The internal operators
 
-`$check`, `$require` and `$attempt` are three names for one implementation. `Compiler.constraintCode` takes the same quadruple for each -- the condition, the value, the type's name, and what the value is of -- evaluates them the same way, wraps a raise from the condition the same way, and consults which operator it is only at the end:
+`$check`, `$require` and `$attempt` are three names for one implementation.
+`Compiler.constraintCode` takes the same quadruple for each -- the condition,
+the value, the type's name, and what the value is of -- evaluates them the same
+way, wraps a raise from the condition the same way, and consults which operator
+it is only at the end:
 
 | | condition holds | condition false | condition raised |
 | ---- | ---- | ---- | ---- |
@@ -950,91 +1564,205 @@ Three gaps, in increasing order of how much they matter. Two are now closed; wha
 | `$require` | `true` | raises `Constraint` | as above |
 | `$attempt` | `true` | `false` | as above |
 
-**Two things vary, and only one of them is semantic.** Whether falsity raises or is answered is the difference between claiming and asking, and that is real. The other -- the value or `true` -- is a property of the position the operator is written in: `$require` answers `true` so that it can be a conjunct of the condition of the value that contains it, and `$check` answers the value so that it can stand where the value stood. Nothing about the check differs.
+**Two things vary, and only one of them is semantic.** Whether falsity raises
+or is answered is the difference between claiming and asking, and that is
+real. The other -- the value or `true` -- is a property of the position the
+operator is written in: `$require` answers `true` so that it can be a conjunct
+of the condition of the value that contains it, and `$check` answers the value
+so that it can stand where the value stood. Nothing about the check differs.
 
-So they are not three operators. They are one operator and a mode, which is what the compiler already says: `constraintCode` takes the `BuiltIn` as an argument and switches on it twice.
+So they are not three operators. They are one operator and a mode, which is
+what the compiler already says: `constraintCode` takes the `BuiltIn` as an
+argument and switches on it twice.
 
-**`$check` is derivable from `$require`.** `$check (c, v, n, b)` is `let val _ = $require (c, v, n, b) in v end`, and nothing is evaluated twice -- the caller has already bound the value to a name, so `v` is an identifier. It had to be a primitive only while a dead binding could be discarded; that is now fixed, so keeping it is a convenience rather than a necessity.
+**`$check` is derivable from `$require`.** `$check (c, v, n, b)` is `let val _
+= $require (c, v, n, b) in v end`, and nothing is evaluated twice -- the caller
+has already bound the value to a name, so `v` is an identifier. It had to be a
+primitive only while a dead binding could be discarded; that is now fixed, so
+keeping it is a convenience rather than a necessity.
 
-**`$attempt` is the one that is mis-factored.** It exists because `asOpt` evaluates the condition inside an `if`, which is outside any check, so a raise from the condition escaped unwrapped. The operator was introduced to pull the condition back inside something that wraps -- but it answers `bool` and leaves the `if` where it was, so the shape that caused the problem is still there. An operator that answered `α option`, SOME or NONE, would fold the `if` in and leave nothing outside to get wrong.
+**`$attempt` is the one that is mis-factored.** It exists because `asOpt`
+evaluates the condition inside an `if`, which is outside any check, so a raise
+from the condition escaped unwrapped. The operator was introduced to pull the
+condition back inside something that wraps -- but it answers `bool` and leaves
+the `if` where it was, so the shape that caused the problem is still there. An
+operator that answered `α option`, SOME or NONE, would fold the `if` in and
+leave nothing outside to get wrong.
 
 ### What `assert`, `assume` and `prove` would need
 
-* **`assume p`** needs nothing. It is believed without being checked, so it has no run-time behavior at all; what it changes is the environment of predicates.
-* **`prove p`** needs nothing either. It is discharged statically, and a premise set that cannot discharge it is a compile error, not a raise.
-* **`assert p`** does need an operator, and it is not `$require`. Its argument is a bare predicate: there is no value to blame, no type to name, and "0 is not a valid nat" is not the message it wants. It raises when the predicate does not hold and returns `bool` when it does, which is `$require`'s shape with a different message and a different exception.
+* **`assume p`** needs nothing. It is believed without being checked, so it has
+  no run-time behavior at all; what it changes is the environment of
+  predicates.
+* **`prove p`** needs nothing either. It is discharged statically, and a
+  premise set that cannot discharge it is a compile error, not a raise.
+* **`assert p`** does need an operator, and it is not `$require`. Its argument
+  is a bare predicate: there is no value to blame, no type to name, and "0 is
+  not a valid nat" is not the message it wants. It raises when the predicate
+  does not hold and returns `bool` when it does, which is `$require`'s shape
+  with a different message and a different exception.
 
-So of the six, three of them -- `check`, `as`, `asOpt` -- are what these operators were built for, two need no operator, and `assert` needs the message and the exception to stop being baked in. Parameterize those and one operator with a mode covers all of it.
+So of the six, three of them -- `check`, `as`, `asOpt` -- are what these
+operators were built for, two need no operator, and `assert` needs the message
+and the exception to stop being baked in. Parameterize those and one operator
+with a mode covers all of it.
 
-**Two changes worth making, neither urgent.** Fold the three into one operator that takes its mode, since that is what the compiler does with them anyway; and give the asking mode the option type, so that `asOpt` has nothing outside the operator that can raise.
+**Two changes worth making, neither urgent.** Fold the three into one operator
+that takes its mode, since that is what the compiler does with them anyway; and
+give the asking mode the option type, so that `asOpt` has nothing outside the
+operator that can raise.
 
 ## Refining the environment (follow-up)
 
-`assert`, `assume`, `prove` and `where` all establish that something is true for the rest of a scope. Today nothing is learned from them.
+`assert`, `assume`, `prove` and `where` all establish that something is true
+for the rest of a scope. Today nothing is learned from them.
 
-The important point is that **what is learned is not a type**. `assert x > y` says nothing about `x` alone or `y` alone; neither variable's type changes. What it adds is a predicate relating them, to an environment of predicates that holds over the scope. So this is not occurrence typing, where a test narrows one variable's type; it is a path condition, as in Liquid Types.
+The important point is that **what is learned is not a type**. `assert x > y`
+says nothing about `x` alone or `y` alone; neither variable's type changes.
+What it adds is a predicate relating them, to an environment of predicates
+that holds over the scope. So this is not occurrence typing, where a test
+narrows one variable's type; it is a path condition, as in Liquid Types.
 
 The four differ in what they do with the predicate:
 
 * `assert p` -- check it at run time, and assume it afterwards.
-* `assume p` -- assume it without checking. Useful and unsound, so it should be visible.
+* `assume p` -- assume it without checking. Useful and unsound, so it should
+  be visible.
 * `prove p` -- discharge it statically, from what is already known.
-* `where p`, in a query -- assume it for the steps that follow, where it is true by construction.
+* `where p`, in a query -- assume it for the steps that follow, where it is
+  true by construction.
 
-This is the general form of something this plan already has in a degenerate form. Elision computes a **residual**: the part of a target's condition not discharged by what is already known, and an empty residual means no check. Today "what is already known" is only the value's own type, matched by textual equality. An environment of predicates is the same idea with a larger premise set, and would let `n as nat` be free after `assert n >= 0`, and let the planner use a `where` for more than filtering.
+This is the general form of something this plan already has in a degenerate
+form. Elision computes a **residual**: the part of a target's condition not
+discharged by what is already known, and an empty residual means no check.
+Today "what is already known" is only the value's own type, matched by textual
+equality. An environment of predicates is the same idea with a larger
+premise set, and would let `n as nat` be free after `assert n >= 0`, and let
+the planner use a `where` for more than filtering.
 
-It needs entailment, which this plan deliberately kept off the critical path. So it is opt-in and later, and no program that is accepted today would change -- only checks would be removed.
+It needs entailment, which this plan deliberately kept off the critical path.
+So it is opt-in and later, and no program that is accepted today would change
+-- only checks would be removed.
 
 ## Weakening a check to its residual
 
-A check that is partly known to hold should cost only the part that is not. Given `type pct = int check i => i >= 0 check i => i <= 100` and a value known to be greater than 50, the check that survives is `i <= 100`; and `i as nat` where `i` is known to be greater than 50 should compile to `i`.
+A check that is partly known to hold should cost only the part that is not.
+Given `type pct = int check i => i >= 0 check i => i <= 100` and a value known
+to be greater than 50, the check that survives is `i <= 100`; and `i as nat`
+where `i` is known to be greater than 50 should compile to `i`.
 
-Today elision is all or nothing, and "known" means only that the source type's condition is *textually* the target's. Three pieces turn that into a residual.
+Today elision is all or nothing, and "known" means only that the source type's
+condition is *textually* the target's. Three pieces turn that into a residual.
 
 ### 1. The residual is a list of conjuncts, not a boolean
 
-`Resolver.condition` conjoins one applied predicate per clause with `andalso`, and `TypeSystem.checkPredicates` returns them as a list -- one per `check` clause. So the conjunct structure is already there, and the residual is a sub-list of it. Nothing has to be invented; the filter has nowhere to get its premises yet.
+`Resolver.condition` conjoins one applied predicate per clause with `andalso`,
+and `TypeSystem.checkPredicates` returns them as a list -- one per `check`
+clause. So the conjunct structure is already there, and the residual is a
+sub-list of it. Nothing has to be invented; the filter has nowhere to get its
+premises yet.
 
-What is missing is that the conjuncts a *user* writes need not line up with the clauses. `check i => i >= 0 check i => i <= 100` decomposes and `check i => i >= 0 andalso i <= 100` does not, though they mean the same thing. So the predicate list should be built by splitting on `andalso` in the body, and then how the condition was written stops mattering.
+What is missing is that the conjuncts a *user* writes need not line up with the
+clauses. `check i => i >= 0 check i => i <= 100` decomposes and `check i => i
+>= 0 andalso i <= 100` does not, though they mean the same thing. So the
+predicate list should be built by splitting on `andalso` in the body, and then
+how the condition was written stops mattering.
 
-Two things have to agree with the residual once it exists. `constrains` decides whether a check is emitted at all, and would otherwise wrap a `$check` around an empty condition. And `deepCondition` walks the claimed type, so a component's conjuncts are discharged against what is known of that component, independently of the whole.
+Two things have to agree with the residual once it exists. `constrains` decides
+whether a check is emitted at all, and would otherwise wrap a `$check` around
+an empty condition. And `deepCondition` walks the claimed type, so a
+component's conjuncts are discharged against what is known of that component,
+independently of the whole.
 
 ### 2. A premise set, keyed to bindings rather than names
 
-What is known comes from three places: the value's own type, as today; a path condition -- `assert p`, a query's `where`, the taken branch of an `if`, a `case` guard; and `assert p` itself, which both checks `p` and adds it for the rest of the scope.
+What is known comes from three places: the value's own type, as today; a path
+condition -- `assert p`, a query's `where`, the taken branch of an `if`, a
+`case` guard; and `assert p` itself, which both checks `p` and adds it for the
+rest of the scope.
 
-Morel is pure and a binding is immutable, so a premise about `i` holds for the life of that `i`. But shadowing rebinds the name, so a premise must be keyed to the `Core.NamedPat` and not to the string. `Bounds.Term` already does exactly that.
+Morel is pure and a binding is immutable, so a premise about `i` holds for the
+life of that `i`. But shadowing rebinds the name, so a premise must be keyed to
+the `Core.NamedPat` and not to the string. `Bounds.Term` already does exactly
+that.
 
 ### 3. Entailment by interval, not by decision procedure
 
-`Fbbt` is feasibility-based bound tightening: it takes a conjunction, tightens each variable's feasible interval by propagating each conjunct, and iterates to a fixed point. Its dialect -- `(varA + kA) OP (varB + kB)`, `abs x OP c`, `a * b OP c` -- is the shape these conditions are written in, and it shares `Bounds.Term` with the range extractor and the pushdown.
+`Fbbt` is feasibility-based bound tightening: it takes a conjunction, tightens
+each variable's feasible interval by propagating each conjunct, and iterates to
+a fixed point. Its dialect -- `(varA + kA) OP (varB + kB)`, `abs x OP c`, `a *
+b OP c` -- is the shape these conditions are written in, and it shares
+`Bounds.Term` with the range extractor and the pushdown.
 
-Point it at the premise set instead of a `where` clause and the example above falls out: the premises tighten `i` to `[51, ∞)`; the conjunct `i >= 0` is implied by the interval and drops; `i <= 100` is not and stays. `i as nat` after `assert i > 50` has an empty residual and compiles to `i`.
+Point it at the premise set instead of a `where` clause and the example above
+falls out: the premises tighten `i` to `[51, ∞)`; the conjunct `i >= 0` is
+implied by the interval and drops; `i <= 100` is not and stays. `i as nat`
+after `assert i > 50` has an empty residual and compiles to `i`.
 
-That is deliberately weaker than a solver and much stronger than textual equality, and it reuses the machinery rather than adding a second way to reason about numbers. It also fixes the type-to-type case this plan already records as a miss: `k as nat` where `k` is `int check z => z > 0`.
+That is deliberately weaker than a solver and much stronger than textual
+equality, and it reuses the machinery rather than adding a second way to reason
+about numbers. It also fixes the type-to-type case this plan already records as
+a miss: `k as nat` where `k` is `int check z => z > 0`.
 
 ### What must not break
 
-* **Elision changes the code, never the type.** `i as nat` weakened to `i` still has type `nat`. The claim stands and only the check goes; otherwise the invariant stops being about claims.
-* **Conservative in one direction only.** Cannot prove, so keep the check. A bug in the entailment must cost time and never soundness -- which argues for a property that turns elision off, and a run of the suite with it off and on that differs only in how long it takes.
-* **A premise from `assume` is believed, not checked**, so a check discharged by one is only as good as the assumption. Either keep `assume` out of the premise set or mark what it discharged, so that the unsoundness stays visible.
-* **The message is unaffected**, because it names the type rather than the conjunct: a value that fails the surviving conjunct is still "not a valid pct". Worth stating, because it is the reason the residual can be a sub-list rather than something that has to rebuild a message.
+* **Elision changes the code, never the type.** `i as nat` weakened to `i`
+  still has type `nat`. The claim stands and only the check goes; otherwise the
+  invariant stops being about claims.
+* **Conservative in one direction only.** Cannot prove, so keep the check. A
+  bug in the entailment must cost time and never soundness -- which argues for
+  a property that turns elision off, and a run of the suite with it off and on
+  that differs only in how long it takes.
+* **A premise from `assume` is believed, not checked**, so a check discharged
+  by one is only as good as the assumption. Either keep `assume` out of the
+  premise set or mark what it discharged, so that the unsoundness stays
+  visible.
+* **The message is unaffected**, because it names the type rather than the
+  conjunct: a value that fails the surviving conjunct is still "not a valid
+  pct". Worth stating, because it is the reason the residual can be a sub-list
+  rather than something that has to rebuild a message.
 
-Open question 7, repeated narrowing, is what this is really for: a value bound at a constrained type and passed to something expecting it is walked twice today, and the second walk is exactly a residual that is empty.
+Open question 7, repeated narrowing, is what this is really for: a value bound
+at a constrained type and passed to something expecting it is walked twice
+today, and the second walk is exactly a residual that is empty.
 
 ## Issues to log
 
-* **Capture for a condition that is not closed**, so that the issue's `batchSize` example works: inline what the condition refers to at the declaration, so that it becomes closed. Note that `local` is not implemented and a `type` may not be declared in a `let`, so a free variable can only be a top-level binding today; implementing either would widen this.
+* **Capture for a condition that is not closed**, so that the issue's
+  `batchSize` example works: inline what the condition refers to at the
+  declaration, so that it becomes closed. Note that `local` is not
+  implemented and a `type` may not be declared in a `let`, so a free variable
+  can only be a top-level binding today; implementing either would widen this.
 * **Messages when a constraint fails**, per the requirements above.
-* **`e check match`, to add a condition to an expression**, per the section above. Includes lifting the restriction that a condition may only be written in a type declaration.
-* **`unchecked t`, to strip conditions from a type**, per the section above. It must be as deep as the walk that checks them.
-* **`predicate t`, to extract a type's condition as a value**, per "Driven by the operations" above. Expresses "filter rather than abort", and makes `as`, `asOpt` and `e check m` derivable.
-* **Make `typeof e check m` work**, so that `e check m` is derivable rather than primitive, per "The gaps that remain" above. It needs a condition to be typed after its base is known, which today it is not.
-* **Refine the environment after `assert`, `assume`, `prove` and `where`**, per the section above. Note that what is learned is a predicate, not a type: `assert x > y` changes neither variable's type.
-* **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve` has no case for a type declaration. Unrelated to conditions.
-* **A `case` branch that destructures is not checked.** The check is put on a name the pattern binds, and a pattern that destructures binds none that covers the whole value, so `case (~1, 2) of (n: nat, m) => n` and the record equivalent both admit the value. A function parameter of the same shape is checked, because there the check goes on the parameter. `Core.AsPat` would give the whole value a name -- `v as (n, m)` is a `Core.NamedPat`, which is what the rewrite wants -- but replacing the branch's pattern with a fresh id, as the rewrite does, makes an irrefutable branch of a refutable one. So it needs an irrefutability test first, and that is a commit of its own.
-* **`local ... in ... end` is not implemented.** It is how Standard ML declares a type locally.
-* **A redeclared constrained type checks the condition it used to have**, if a binding still holds the old one:
+* **`e check match`, to add a condition to an expression**, per the section
+  above. Includes lifting the restriction that a condition may only be written
+  in a type declaration.
+* **`unchecked t`, to strip conditions from a type**, per the section above.
+  It must be as deep as the walk that checks them.
+* **`predicate t`, to extract a type's condition as a value**, per "Driven by
+  the operations" above. Expresses "filter rather than abort", and makes `as`,
+  `asOpt` and `e check m` derivable.
+* **Make `typeof e check m` work**, so that `e check m` is derivable rather
+  than primitive, per "The gaps that remain" above. It needs a condition to be
+  typed after its base is known, which today it is not.
+* **Refine the environment after `assert`, `assume`, `prove` and `where`**,
+  per the section above. Note that what is learned is a predicate, not a type:
+  `assert x > y` changes neither variable's type.
+* **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve`
+  has no case for a type declaration. Unrelated to conditions.
+* **A `case` branch that destructures is not checked.** The check is put on a
+  name the pattern binds, and a pattern that destructures binds none that
+  covers the whole value, so `case (~1, 2) of (n: nat, m) => n` and the record
+  equivalent both admit the value. A function parameter of the same shape is
+  checked, because there the check goes on the parameter. `Core.AsPat` would
+  give the whole value a name -- `v as (n, m)` is a `Core.NamedPat`, which is
+  what the rewrite wants -- but replacing the branch's pattern with a fresh
+  id, as the rewrite does, makes an irrefutable branch of a refutable one. So
+  it needs an irrefutability test first, and that is a commit of its own.
+* **`local ... in ... end` is not implemented.** It is how Standard ML
+  declares a type locally.
+* **A redeclared constrained type checks the condition it used to have**, if a
+  binding still holds the old one:
 
   ```sml
   type nat = int check i => i >= 0;
@@ -1043,70 +1771,166 @@ Open question 7, repeated narrowing, is what this is really for: a value bound a
   val m: nat = 0;                    (*) accepted; 0 is not >= 1
   ```
 
-  Without the binding in the middle it is rejected, as it should be. A term names an alias by name, and `displacedTypes` recovers the type a name used to have; here it is consulted for a name that has not been displaced so much as redeclared. Found while testing the above; unrelated to conditions except that a condition is what makes it visible.
+  Without the binding in the middle it is rejected, as it should be. A term
+  names an alias by name, and `displacedTypes` recovers the type a name used to
+  have; here it is consulted for a name that has not been displaced so much as
+  redeclared. Found while testing the above; unrelated to conditions except that
+  a condition is what makes it visible.
 
 ## Open questions
 
-1. ~~**Closed conditions: reject or inline?**~~ **Resolved: reject.** A condition may refer only to the value it is given and to the standard basis; a reference to anything the user declared is an error. Inlining -- substituting what the condition refers to, so that it becomes closed and the issue's `batchSize` survives -- is recorded in the tests as a possible future feature.
+1. ~~**Closed conditions: reject or inline?**~~ **Resolved: reject.** A
+   condition may refer only to the value it is given and to the standard
+   basis; a reference to anything the user declared is an error. Inlining --
+   substituting what the condition refers to, so that it becomes closed and
+   the issue's `batchSize` survives -- is recorded in the tests as a possible
+   future feature.
 
-   One hole remains: a basis name the user has shadowed still counts as built-in, so a condition could capture the shadowing value. It bites only if the shadowing binding has a compatible type; closing it properly needs a built-in marker on `Binding`.
-2. ~~**Predicate that raises.**~~ **Resolved: wrap as `Constraint`, but say which.** Whether the value has the type is then not false but unknown, so `Constraint` is right either way -- the value has not been shown to have the type -- but "is not a valid nat" would be a lie. The message reads `cannot tell whether 0 is a valid odd; Div [divide by zero]`.
+   One hole remains: a basis name the user has shadowed still counts as
+   built-in, so a condition could capture the shadowing value. It bites only
+   if the shadowing binding has a compatible type; closing it properly needs a
+   built-in marker on `Binding`.
+2. ~~**Predicate that raises.**~~ **Resolved: wrap as `Constraint`, but say
+   which.** Whether the value has the type is then not false but unknown, so
+   `Constraint` is right either way -- the value has not been shown to have
+   the type -- but "is not a valid nat" would be a lie. The message reads
+   `cannot tell whether 0 is a valid odd; Div [divide by zero]`.
 
-   A `Constraint` from a check on a component passes through untouched rather than being wrapped again. `asOpt` needed a third operator, `$attempt`: its condition was evaluated by the `if` that chooses between SOME and NONE, outside any check, so a raise escaped unwrapped.
-3. **Naming an anonymous constrained type in a message.** Folded into "Messages when a constraint fails" above, which collects this and the rest of what those messages need.
-4. ~~**What `assert` returns.**~~ **Resolved: `bool`**, as #242 says. The disagreement dissolves rather than needing a winner. #239 asked for an operator that returns its operand with the constraint attached, and that is `e check m` -- see "Adding and removing conditions" -- so refinement is delivered by an operator designed for it, and `assert` stays a `bool`, which also lets it appear inside a `check` condition.
+   A `Constraint` from a check on a component passes through untouched rather
+   than being wrapped again. `asOpt` needed a third operator, `$attempt`: its
+   condition was evaluated by the `if` that chooses between SOME and NONE,
+   outside any check, so a raise escaped unwrapped.
+3. **Naming an anonymous constrained type in a message.** Folded into
+   "Messages when a constraint fails" above, which collects this and the rest
+   of what those messages need.
+4. ~~**What `assert` returns.**~~ **Resolved: `bool`**, as #242 says. The
+   disagreement dissolves rather than needing a winner. #239 asked for an
+   operator that returns its operand with the constraint attached, and that is
+   `e check m` -- see "Adding and removing conditions" -- so refinement is
+   delivered by an operator designed for it, and `assert` stays a `bool`,
+   which also lets it appear inside a `check` condition.
 
    Refining the *environment* is a separate and larger idea, recorded below.
-5. **Two edits the issue needs.** It still requires the `check` match to be exhaustive, and its capture-semantics section is superseded by the closed condition above.
-6. **Foreign data (E).** Still open. Check on entry, or declare the boundary untrusted?
-7. **Repeated narrowing.** Still open, and now real: a value bound at a constrained type and then passed to something else expecting it is walked twice, and an ascription inside a binding checks twice over.
-8. **Hiding constraints when printing.** Still open, and now pressing: the four-condition `hr1` declaration echoes as one very long line, desugared (`#length Bag (#emps h)`). Two things would help, and are separable: a variant of `type_string` that elides constraints, and an unparser that renders a record-selector application as `x.f`.
+5. **Two edits the issue needs.** It still requires the `check` match to be
+   exhaustive, and its capture-semantics section is superseded by the closed
+   condition above.
+6. **Foreign data (E).** Still open. Check on entry, or declare the boundary
+   untrusted?
+7. **Repeated narrowing.** Still open, and now real: a value bound at a
+   constrained type and then passed to something else expecting it is walked
+   twice, and an ascription inside a binding checks twice over.
+8. **Hiding constraints when printing.** Still open, and now pressing: the
+   four-condition `hr1` declaration echoes as one very long line, desugared
+   (`#length Bag (#emps h)`). Two things would help, and are separable: a
+   variant of `type_string` that elides constraints, and an unparser that
+   renders a record-selector application as `x.f`.
 
 ## Departures from this plan
 
 Recorded here so that the plan and the code agree.
 
-* **A tuple's components are numbered from 1**, not 0: "component 1" is what `#1` selects. Matching Morel's own selector seemed less surprising than matching this plan.
-* **A list element has no index.** `List.all`, which walks the list, does not offer one, so "element 1" is just "element".
-* **A record modifier raises after all.** This plan first recorded that it did not -- its result claimed nothing, and the binding that received it did the checking. Now a modifier that assigns claims the type it modifies, and that claim is checked where it is made.
-* **"Cannot claim", not "cannot convert"**, a constrained function type: the same message serves a binding and a parameter as well as a conversion.
+* **A tuple's components are numbered from 1**, not 0: "component 1" is what
+  `#1` selects. Matching Morel's own selector seemed less surprising than
+  matching this plan.
+* **A list element has no index.** `List.all`, which walks the list, does not
+  offer one, so "element 1" is just "element".
+* **A record modifier raises after all.** This plan first recorded that it did
+  not -- its result claimed nothing, and the binding that received it did the
+  checking. Now a modifier that assigns claims the type it modifies, and that
+  claim is checked where it is made.
+* **"Cannot claim", not "cannot convert"**, a constrained function type: the
+  same message serves a binding and a parameter as well as a conversion.
 
 ## Preparing the branch for main
 
-The branch is a working record: 79 commits, of which 22 touch only this file, plus a revert and the two commits it undid. That is the right way to explore and the wrong way to merge. Before merging, reorder, squash and amend so the history reads as a design rather than a diary.
+The branch is a working record: 79 commits, of which 22 touch only this file,
+plus a revert and the two commits it undid. That is the right way to explore
+and the wrong way to merge. Before merging, reorder, squash and amend so the
+history reads as a design rather than a diary.
 
 ### What can move out in front
 
-**"Type a modified record as written, and build it in Resolver" is independent of constrained types**, and belongs before them. It is a fix to the record modifiers of #432: a modifier was desugared into a destructure and a record literal before it was typed, and the destructure erased the type of the record being modified. Nothing about that reasoning mentions a condition; conditions are only what made it matter.
+**"Type a modified record as written, and build it in Resolver" is
+independent of constrained types**, and belongs before them. It is a fix to
+the record modifiers of #432: a modifier was desugared into a destructure and
+a record literal before it was typed, and the destructure erased the type of
+the record being modified. Nothing about that reasoning mentions a condition;
+conditions are only what made it matter.
 
-Verified rather than assumed. Cherry-picked onto `d4eeff5a`, the last commit before this work began, it applies with no conflicts, and the whole suite passes (516 tests). It needs one thing carried with it: `Resolver.letValue`, a ten-line helper that binds an expression to a name, which the check work introduced but does not own.
+Verified rather than assumed. Cherry-picked onto `d4eeff5a`, the last commit
+before this work began, it applies with no conflicts, and the whole suite
+passes (516 tests). It needs one thing carried with it: `Resolver.letValue`,
+a ten-line helper that binds an expression to a name, which the check work
+introduced but does not own.
 
 So the merge order should be:
 
-1. **Type a modified record as written**, as a fix in its own right. It stands without the rest, and it fixes a footgun that is there today.
+1. **Type a modified record as written**, as a fix in its own right. It stands
+   without the rest, and it fixes a footgun that is there today.
 2. Everything else, in the order it was built.
-3. **A record modifier claims the type it modifies** stays where it is: it needs both the typing rule and the check machinery.
+3. **A record modifier claims the type it modifies** stays where it is: it
+   needs both the typing rule and the check machinery.
 
-"A check must ask for the stack slots its condition needs" is a real bug with a test of its own, and should stay a commit of its own, but it cannot move before the check work -- the code it fixes arrives with "Enforce a check condition at a binding" (`6b55a382`). Squashing it into that commit is the alternative, and loses a fix worth reading on its own.
+"A check must ask for the stack slots its condition needs" is a real bug with
+a test of its own, and should stay a commit of its own, but it cannot move
+before the check work -- the code it fixes arrives with "Enforce a check
+condition at a binding" (`6b55a382`). Squashing it into that commit is the
+alternative, and loses a fix worth reading on its own.
 
 ### What should collapse
 
-* **The alias revert cluster.** `A type alias should survive inference` (`c6d599d4`), `A parameterized alias survives inference in a function signature` (`9773d2f6`), the revert of both (`e6fbff1b`), and the second attempt (`2c646400`) with `Where a type alias meets a different type, take the weaker of the two` (`04012445`) should become one commit: the design that stayed. The first attempt is not history anyone needs.
-* **The plan-only commits.** Each records a finding; most are followed by the commit that acts on it. Squash each into the commit that acts on it, so the reasoning arrives with the code rather than a step ahead of it. The ones that record a decision with no code -- the phases, the open questions -- belong in whatever this file becomes.
+* **The alias revert cluster.** `A type alias should survive inference`
+  (`c6d599d4`), `A parameterized alias survives inference in a function
+  signature` (`9773d2f6`), the revert of both (`e6fbff1b`), and the second
+  attempt (`2c646400`) with `Where a type alias meets a different type, take
+  the weaker of the two` (`04012445`) should become one commit: the design
+  that stayed. The first attempt is not history anyone needs.
+* **The plan-only commits.** Each records a finding; most are followed by the
+  commit that acts on it. Squash each into the commit that acts on it, so the
+  reasoning arrives with the code rather than a step ahead of it. The ones
+  that record a decision with no code -- the phases, the open questions --
+  belong in whatever this file becomes.
 
 ### What to tidy while squashing
 
-Small things, each of which belongs in the commit that introduced it rather than in a cleanup commit of its own. Each review should therefore produce `fixup!` commits, so that `git rebase --autosquash` puts each edit back where it came from.
+Small things, each of which belongs in the commit that introduced it rather
+than in a cleanup commit of its own. Each review should therefore produce
+`fixup!` commits, so that `git rebase --autosquash` puts each edit back where
+it came from.
 
-* ~~**Uses of `PairList` added since `origin/main`.**~~ **Done**, as two fixups. `claims` and `preserves` were loops over `Map.Entry` that return on the first decision -- `anyMatch` and `allMatch` -- and both named a key they read only in one branch (`fixup! A record modifier claims the type it modifies`); and `Conditions.select` built a list from a `PairList` an element at a time, which is `transform` (`fixup! Inherit a record's condition into a modifier that changes its shape`).
+* ~~**Uses of `PairList` added since `origin/main`.**~~ **Done**, as two
+  fixups. `claims` and `preserves` were loops over `Map.Entry` that return on
+  the first decision -- `anyMatch` and `allMatch` -- and both named a key they
+  read only in one branch (`fixup! A record modifier claims the type it
+  modifies`); and `Conditions.select` built a list from a `PairList` an element
+  at a time, which is `transform` (`fixup! Inherit a record's condition into a
+  modifier that changes its shape`).
 
-  Three other sites were considered and left: `Resolver.build` needs a `SortedMap` under `RecordType.ORDERING`, which neither `toImmutableSortedMap` nor `withSortedKeys` gives; and `inheritChecks` and the `assign` case filter as well as map, which `transform` cannot.
-* **Rename "constrained type" to "checked type"**, in the specification, the implementation and the comments. The type is written with `check`, the operator that adds one is `check`, and the exception is `Constraint`; calling the type "constrained" is a third word for the same idea.
+  Three other sites were considered and left: `Resolver.build` needs a
+  `SortedMap` under `RecordType.ORDERING`, which neither `toImmutableSortedMap`
+  nor `withSortedKeys` gives; and `inheritChecks` and the `assign` case filter
+  as well as map, which `transform` cannot.
+* **Rename "constrained type" to "checked type"**, in the specification, the
+  implementation and the comments. The type is written with `check`, the
+  operator that adds one is `check`, and the exception is `Constraint`; calling
+  the type "constrained" is a third word for the same idea.
 
-  92 lines carry the phrase, and `git blame` attributes them to **33 commits**, so this is 33 fixups. The split is 26 lines in this file, 15 in `check.smli` and 51 in the code, mostly `Resolver` and `TypeResolver`. Do the code and the tests first: whether the 26 in this file are worth a fixup depends on what is decided below about the file itself.
+  92 lines carry the phrase, and `git blame` attributes them to **33 commits**,
+  so this is 33 fixups. The split is 26 lines in this file, 15 in `check.smli`
+  and 51 in the code, mostly `Resolver` and `TypeResolver`. Do the code and the
+  tests first: whether the 26 in this file are worth a fixup depends on what is
+  decided below about the file itself.
 
-  The identifiers are a separate, smaller job that no fixup can do line by line: `Ast.ConstrainedType`, `Op.CONSTRAINED_TYPE`, the builder, the parser production, and the `Visitor`/`Shuttle` cases -- 17 references over 7 files. Rename them in whichever commit first introduces each.
+  The identifiers are a separate, smaller job that no fixup can do line by
+  line: `Ast.ConstrainedType`, `Op.CONSTRAINED_TYPE`, the builder, the parser
+  production, and the `Visitor`/`Shuttle` cases -- 17 references over 7 files.
+  Rename them in whichever commit first introduces each.
 
 ### What to decide
 
-**Whether `plan.md` merges at all.** It is a scratch design document, and much of it is now either implemented or superseded. The parts worth keeping are the requirements for constraint-failure messages, the open questions, and the issues to log; the parts recording how the design was arrived at are not documentation. Either cut it down to the parts that survive and put them where documentation goes, or file the issues it lists and drop the file.
+**Whether `plan.md` merges at all.** It is a scratch design document, and much
+of it is now either implemented or superseded. The parts worth keeping are the
+requirements for constraint-failure messages, the open questions, and the
+issues to log; the parts recording how the design was arrived at are not
+documentation. Either cut it down to the parts that survive and put them where
+documentation goes, or file the issues it lists and drop the file.
