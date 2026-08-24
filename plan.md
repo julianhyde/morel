@@ -57,7 +57,7 @@ val m: nat = i;
 
 ### Propagation is Standard ML's, by head-reduction
 
-A constrained type should propagate as a Standard ML type abbreviation does. SML/NJ keeps the name through construction, selection and polymorphic instantiation, and this is the behaviour to match:
+A constrained type should propagate as a Standard ML type abbreviation does. SML/NJ keeps the name through construction, selection and polymorphic instantiation, and this is the behavior to match:
 
 ```sml
 type nat = int;
@@ -164,7 +164,7 @@ List.nth ([n, bad], 1);      > ~5 : nat
 
 **The rule we need.** Binding a metavariable to the written form is sound, and that is the case parametricity covers: `#1 p`, `List.hd ns`, `List.map (fn i => i) ns`. But when two *concrete* types with the same erasure meet, the result is their **meet**, computed without entailment: equal constraints (textually) meet to themselves, and anything else meets to the base type. `nat` meets `nat` gives `nat`; `nat` meets `int` gives `int`; `nat` meets `teen` gives `int`, even though `teen` implies `nat`. Sound, deterministic, and cheap, which SML/NJ's rule is not.
 
-Morel expands eagerly today, so all of this is new behaviour:
+Morel expands eagerly today, so all of this is new behavior:
 
 | | Morel today | SML/NJ | this plan |
 |---|---|---|---|
@@ -547,7 +547,7 @@ List.hd ns;              > 1 : nat
 List.map (fn i => i - 1) ns;   > [0,1] : int list
 ```
 
-The last is the one to pin hardest: the name is lost exactly where an operation needed the base type, and that is what makes propagation sound. Since Morel does not behave this way today, each of these is a change to existing behaviour and needs a test whether or not a `check` is involved.
+The last is the one to pin hardest: the name is lost exactly where an operation needed the base type, and that is what makes propagation sound. Since Morel does not behave this way today, each of these is a change to existing behavior and needs a test whether or not a `check` is involved.
 
 ### Axes
 
@@ -585,7 +585,7 @@ Crossing every axis is wasteful. Cross axis 3 with axis 2 exhaustively, and samp
 7. **Refinement survives `asOpt`.** In `case i asOpt nat of SOME n => ...`, `n` has surface type `nat`, so a use of `n` where a `nat` is wanted emits no second check. This is the only place a constraint is *gained* rather than asserted, and it is easy to get wrong.
 8. **Repeated `check` clauses.** `int check i => i >= 1 check j => j <= 12`: both apply; which failure is reported first?
 9. **Capture.** All three of the issue's cases — redefine a captured value, redefine a captured function, and a type declared in a `let` whose captured bindings have gone out of scope.
-10. **Predicate misbehaviour.** Raises, diverges, returns a non-`bool`, is constantly true, is constantly false.
+10. **Predicate misbehavior.** Raises, diverges, returns a non-`bool`, is constantly true, is constantly false.
 11. **Same erasure, different constraint.** `nat as teen`, `teen as nat`, `nat as int`, anonymous `int check ...` to and from named.
 12. **Different erasure is the unifier's error**, not the constraint machinery's: `"abc" as nat` must report before any constraint reasoning, and must not mention `Constraint`.
 13. **Function types rejected at both sites** — `f as (nat -> nat)` and `val h: nat -> nat = f`.
@@ -1032,6 +1032,7 @@ Open question 7, repeated narrowing, is what this is really for: a value bound a
 * **Make `typeof e check m` work**, so that `e check m` is derivable rather than primitive, per "The gaps that remain" above. It needs a condition to be typed after its base is known, which today it is not.
 * **Refine the environment after `assert`, `assume`, `prove` and `where`**, per the section above. Note that what is learned is a predicate, not a type: `assert x > y` changes neither variable's type.
 * **`let type t = int in 1 end` throws an AssertionError** -- `Resolver.resolve` has no case for a type declaration. Unrelated to conditions.
+* **A `case` branch that destructures is not checked.** The check is put on a name the pattern binds, and a pattern that destructures binds none that covers the whole value, so `case (~1, 2) of (n: nat, m) => n` and the record equivalent both admit the value. A function parameter of the same shape is checked, because there the check goes on the parameter. `Core.AsPat` would give the whole value a name -- `v as (n, m)` is a `Core.NamedPat`, which is what the rewrite wants -- but replacing the branch's pattern with a fresh id, as the rewrite does, makes an irrefutable branch of a refutable one. So it needs an irrefutability test first, and that is a commit of its own.
 * **`local ... in ... end` is not implemented.** It is how Standard ML declares a type locally.
 * **A redeclared constrained type checks the condition it used to have**, if a binding still holds the old one:
 
