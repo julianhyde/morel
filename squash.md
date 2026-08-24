@@ -44,6 +44,34 @@ series; what survives goes to `follow-up-issue.md` (below) and to javadoc.
 Whether M3 and M4 can be separated at all is **E4**, and it is the experiment
 that decides between three commits and four.
 
+### Which commit goes where
+
+By `Cnn` (see Phase 1 for the numbering; it is the current order, oldest
+first). Plan-only commits are not listed: each folds into the commit that acts
+on it, or is dropped into `follow-up-issue.md`.
+
+* **M1** — C68 `Type a modified record as written, and build it in Resolver`.
+  One commit, carrying `Resolver.letValue` with it. C70, which makes a
+  modifier *claim* the type, needs the check machinery and stays in M4.
+* **M2** — C74 `Ground a record variable from constraints on its fields`. One
+  commit, one production file, `Generators.java`.
+* **M3** — the alias group: C10, C11, C12 (the revert), C16, C17 (the second
+  attempt and the meet rule), C13, C14 (what an alias does to a type error),
+  C28 and C40 (looking through an alias term to find a record's fields, and a
+  field's type), C56 (`type_string` agrees with the displayed type), and the
+  alias half of C76 (`typeof`).
+* **M4** — everything else that mentions `check`: C18-C27, C29-C33, C35-C39,
+  C41, C42, C44-C52, C61, C63-C65, C69, C70, C72, C73, C75, C77-C79, and the
+  five fixups C81, C82, C86, C87, C88.
+* **Neither** — C89, the lint commit, lands on its own; C90, this plan, is
+  deleted with `plan.md` at the end.
+
+Two of those assignments are guesses that E4 has to confirm. **C28 and C40
+arrived during the check work** because the check work is what needed them,
+and they may not compile without it. **C76 splits**: `typeof` naming the
+displayed type is alias work, but the same commit makes a `typeof` annotation
+enforce the conditions it names, which is not.
+
 ## Ground rules
 
 * **Tags.** `239-check.N` at each phase boundary, before anything
@@ -157,9 +185,14 @@ conflicts and 516 tests passed. Re-run because the fixups have since changed
 `Resolver`.
 *If it fails*: M1 merges inside M4 and the series is three commits.
 
-**E3 — does M2 stand alone?** Cherry-pick the grounding commit onto E2's
-result; `fullMake`. The plan records the diagnosis as independent of checked
-types, but the commit may still touch code M4 introduces.
+**E3 — does M2 stand alone?** Cherry-pick C74 onto E2's result; `fullMake`.
+The production change is one file and has no `check` in it, but **its tests
+do not travel as they are**: three of the four cases it adds to `check.smli`
+scan a `parityPair`, a checked type. The condition is not what they test --
+the same block covers a plain record and a bare `int * int` -- so the work is
+to move them to a script that exists without checked types, `relational.smli`
+being the obvious home, or to restate them on unchecked types. Decide which
+before running the experiment, because it changes what "stands alone" means.
 *If it fails*: M2 folds into M4.
 
 **E4 — can the alias work be separated from the check work?** The one that
