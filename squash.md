@@ -1,3 +1,24 @@
+<!--
+{% comment %}
+Licensed to Julian Hyde under one or more contributor license
+agreements.  See the NOTICE file distributed with this work
+for additional information regarding copyright ownership.
+Julian Hyde licenses this file to you under the Apache
+License, Version 2.0 (the "License"); you may not use this
+file except in compliance with the License.  You may obtain a
+copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied.  See the License for the specific
+language governing permissions and limitations under the
+License.
+{% endcomment %}
+-->
+
 # Reorganizing `239-check` for main
 
 A working plan for turning 89 commits into three or four, and for deciding
@@ -165,7 +186,7 @@ autosquashed, so that each lands in the commit that introduced the code.
 ### Phase 5 — reword
 
 1. Write the four final messages (see the rules below).
-2. Strip the prefixes: `git filter-branch --msg-filter 'sed "s/^C[0-9][0-9]: //"'`.
+2. Strip the prefixes, with a `--msg-filter` of `sed 's,^C[0-9][0-9]: ,,'`.
 3. `fullMake`; tag `239-check.7`.
 
 ### Phase 6 — the design record
@@ -332,8 +353,8 @@ short enough to become an issue on its own:
    AssertionError; `local ... in ... end` is unimplemented; a redeclared
    checked type checks the condition it used to have when a binding still
    holds the old one.
-10. **Two edits #239 itself needs** — it still requires the `check` match to be
-    exhaustive, and its capture-semantics section is superseded.
+10. **Two edits #239 itself needs** — it still requires the `check` match
+    to be exhaustive, and its capture-semantics section is superseded.
 
 What does **not** go in: the phases, the axes of the test matrix, the
 departures list, and everything recording how the design was arrived at.
