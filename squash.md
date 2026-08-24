@@ -125,6 +125,13 @@ Each experiment is a scratch branch off `origin/main`, cherry-picking or
 rebasing a candidate subset, ending in `fullMake`. None of them touches
 `239-check`. Results feed a re-plan of Phase 3.
 
+Run them in a `git worktree`, which needs two things that are not obvious.
+The worktree must be created with a branch, not detached, and the build needs
+`-Dmaven.gitcommitid.skip=true`: `git-commit-id-plugin` cannot read a linked
+worktree's `.git`, which is a file rather than a directory, and fails the
+build before anything compiles. And `./morel` needs `test-compile`, not
+`compile`, because `BuiltInDataSet` lives in the test tree.
+
 Ends at `239-check.4` (unchanged).
 
 ### Phase 3 — reorder and squash
@@ -186,13 +193,25 @@ conflicts and 516 tests passed. Re-run because the fixups have since changed
 *If it fails*: M1 merges inside M4 and the series is three commits.
 
 **E3 — does M2 stand alone?** Cherry-pick C74 onto E2's result; `fullMake`.
-The production change is one file and has no `check` in it, but **its tests
-do not travel as they are**: three of the four cases it adds to `check.smli`
-scan a `parityPair`, a checked type. The condition is not what they test --
-the same block covers a plain record and a bare `int * int` -- so the work is
-to move them to a script that exists without checked types, `relational.smli`
-being the obvious home, or to restate them on unchecked types. Decide which
-before running the experiment, because it changes what "stands alone" means.
+The production change is one file, `Generators.java`, and has no `check` in
+it. **Two of the four cases it adds need no `check` either**, and both fail on
+`origin/main` today with the bug C74 fixes -- checked, in a worktree:
+
+```sml
+type triple = {i: int, j: int, k: int};
+from p: triple where p.i elem [0,1] andalso p.j elem [2] andalso p.k elem [3..4];
+> stdIn:1.6-1.15 Error: pattern 'p' is not grounded
+from p: int * int where #1 p elem [0,1] andalso #2 p elem [2,3];
+> stdIn:1.6-1.18 Error: pattern 'p' is not grounded
+```
+
+with the destructured form beside them working on `origin/main` already, so
+the contrast the test is making survives the move. The two `parityPair` cases
+stay behind in `check.smli` as M4's, which is where they belong: what they add
+is that the type's condition is conjoined into the scan.
+
+So M2 is one production file and three test cases, and E3 is a cherry-pick
+plus moving those cases to `relational.smli`.
 *If it fails*: M2 folds into M4.
 
 **E4 — can the alias work be separated from the check work?** The one that
