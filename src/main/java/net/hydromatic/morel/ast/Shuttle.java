@@ -288,11 +288,21 @@ public class Shuttle {
   }
 
   protected Ast.Type visit(Ast.ConstrainedType constrainedType) {
-    return constrainedType;
+    return constrainedType.copy(
+        constrainedType.type.accept(this), visitChecks(constrainedType.checks));
   }
 
   protected Ast.Exp visit(Ast.CheckExp checkExp) {
-    return checkExp.copy(checkExp.exp.accept(this));
+    return checkExp.copy(
+        checkExp.exp.accept(this), visitChecks(checkExp.checks));
+  }
+
+  /**
+   * Visits the conditions of a `check` clause. A condition is a function, so it
+   * has expressions in it that a shuttle rewriting expressions must see.
+   */
+  private List<Ast.Fn> visitChecks(List<Ast.Fn> checks) {
+    return transformEager(checks, check -> (Ast.Fn) check.accept(this));
   }
 
   protected Ast.TyVar visit(Ast.TyVar tyVar) {

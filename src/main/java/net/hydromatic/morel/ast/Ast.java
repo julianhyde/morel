@@ -913,9 +913,30 @@ public class Ast {
           : new CheckExp(pos, exp, ImmutableList.copyOf(checks));
     }
 
+    @Override
+    public int hashCode() {
+      return hash(exp, checks);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o == this
+          || o instanceof CheckExp
+              && exp.equals(((CheckExp) o).exp)
+              && checks.equals(((CheckExp) o).checks);
+    }
+
     /** Creates a copy of this {@code CheckExp} with a given expression. */
     public CheckExp copy(Exp exp) {
-      return exp.equals(this.exp)
+      return copy(exp, checks);
+    }
+
+    /**
+     * Creates a copy of this {@code CheckExp} with a given expression and
+     * conditions.
+     */
+    public CheckExp copy(Exp exp, List<Fn> checks) {
+      return exp.equals(this.exp) && checks.equals(this.checks)
           ? this
           : new CheckExp(pos, exp, ImmutableList.copyOf(checks));
     }
@@ -960,6 +981,16 @@ public class Ast {
           || o instanceof ConstrainedType
               && type.equals(((ConstrainedType) o).type)
               && checks.equals(((ConstrainedType) o).checks);
+    }
+
+    /**
+     * Creates a copy of this {@code ConstrainedType} with a given base type and
+     * conditions.
+     */
+    public ConstrainedType copy(Type type, List<Fn> checks) {
+      return type.equals(this.type) && checks.equals(this.checks)
+          ? this
+          : new ConstrainedType(pos, type, ImmutableList.copyOf(checks));
     }
 
     @Override
