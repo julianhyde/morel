@@ -378,6 +378,7 @@ public class Visitor {
   protected void visit(Ast.TypeBind typeBind) {
     typeBind.tyVars.forEach(this::accept);
     typeBind.type.accept(this);
+    typeBind.checks.forEach(f -> f.accept(this));
   }
 
   protected void visit(Ast.DatatypeDecl datatypeDecl) {
