@@ -487,7 +487,8 @@ public class Shuttle {
         typeBind.pos,
         typeBind.name.accept(this),
         visitList(typeBind.tyVars),
-        typeBind.type.accept(this));
+        typeBind.type.accept(this),
+        visitList(typeBind.checks));
   }
 
   protected Ast.DatatypeDecl visit(Ast.DatatypeDecl datatypeDecl) {
