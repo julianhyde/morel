@@ -18,8 +18,10 @@
  */
 package net.hydromatic.morel;
 
+import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasToString;
 
 import com.google.common.collect.ImmutableMap;
 import java.io.StringReader;
@@ -60,6 +62,12 @@ public class RelLowererTest {
    * the translator declined.
    */
   private static @Nullable String lower(String ml) {
+    final Core.Exp exp = lowerExp(ml);
+    return exp == null ? null : exp.toString();
+  }
+
+  /** As {@link #lower(String)}, but returns the lowered expression itself. */
+  private static Core.@Nullable Exp lowerExp(String ml) {
     final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
     final AstNode statement = parser.statementEofSafe();
     final TypeSystem typeSystem = new TypeSystem();
@@ -97,7 +105,7 @@ public class RelLowererTest {
         "lowered step list has the element type of the from",
         lowered.type,
         is(froms[0].type));
-    return lowered.toString();
+    return lowered;
   }
 
   /** Tests that a filter over a leaf lowers to the two steps it began as. */
@@ -135,6 +143,23 @@ public class RelLowererTest {
     assertThat(
         lower("from i in [1, 2, 3] yield {j = i + 1} where j > 2"),
         is("from v$0 in [1, 2, 3] where v$0 + 1 > 2 yield {j = v$0 + 1}"));
+  }
+
+  /**
+   * Tests that an expression substituted for {@code $0} is blamed where the
+   * occurrence was, not where the replacement was built.
+   *
+   * <p>{@code order i} becomes an order over the row, and it is the {@code i}
+   * the user wrote that "comparison not defined" should point at. Both the
+   * translation and the lowering substitute, and either dropping the position
+   * loses it.
+   */
+  @Test
+  void testSubstitutionKeepsPosition() {
+    final Core.From from =
+        (Core.From) requireNonNull(lowerExp("from i in [1, 2, 3] order i"));
+    final Core.Order order = (Core.Order) from.steps.get(1);
+    assertThat(order.exp.pos, hasToString("1.27"));
   }
 
   /** Tests the same reduction for a field of a join's element. */
