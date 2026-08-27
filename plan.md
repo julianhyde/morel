@@ -322,17 +322,24 @@ something settled — §8's principle, applied to the sequence itself.
         pushdowns, and most of the plan-text difference goes with it:
         relational.smli's `#2 (#0 (v$1998))` is `#2 v$1998` again.
 
-        One query is still not pushed down, and it is the same
-        question from the other side. `from x in (from e in
-        scott.emps yield e.deptno) union ... group x` scans a nested
-        query in the step list, so `join` binds `x`, and `group x`
-        finds it. The lowering inlines the nested query and leaves a
-        scalar `yield` where it was, and `yield_` extends the
-        environment and the map only for a record yield; a scalar one
-        projects and returns the context it was handed. The binding
-        is there to be taken — the `yield` step carries it — and
-        Calcite already represents a scalar variable as a
-        one-field row, which is what the record branch would build.
+        The other pushdown was the same question from the other
+        side. `from x in (from e in scott.emps yield e.deptno) union
+        ... group x` scans a nested query in the step list, so `join`
+        binds `x` and `group x` finds it; the lowering inlines the
+        nested query and leaves an atomizing `yield` where it was,
+        and `yield_` extended the environment and the map only for a
+        record yield. So it binds an atomizing one too: the yield
+        step carries the binding, and the projection is the one-field
+        row that Calcite already uses for a scalar variable. The
+        column keeps the name Calcite gave it, since only Morel looks
+        the variable up and by then it is the sole field. That is a
+        gap in the step-list path as well, not only the tree's --
+        write the branch inline and the query stops being pushed
+        down today -- so dual.smli has it written both ways now.
+
+        hybrid.smli and dual.smli are therefore clean through the
+        tree. What remains is plan text, which step 3 rebaselines,
+        and one lost source position.
 
         Three ways out remain for the channel itself. Materialize
         more in the lowering, which cannot work, because whether a
