@@ -252,10 +252,6 @@ public class UtilTest {
     assertThat(Static.find(emptyList, i -> i > 0), is(-1));
   }
 
-  /**
-   * Tests {@link Static#last(List)}, {@link Static#skip(List)}, {@link
-   * Static#skipLast(List)}.
-   */
   /** Tests {@link ColorScheme#rgbToLuma(String)}. */
   @Test
   void testRgbToLuma() {
@@ -272,6 +268,10 @@ public class UtilTest {
     assertThat(rgbToLuma("no rgb here"), nullValue());
   }
 
+  /**
+   * Tests {@link Static#last(List)}, {@link Static#skip(List)}, {@link
+   * Static#skipLast(List)}.
+   */
   @Test
   void testLast() {
     final List<Integer> list = Arrays.asList(1, 7, 3);

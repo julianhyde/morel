@@ -246,14 +246,15 @@ n < 6;
 > val it = true : bool
 
 (* A record modifier must see the fields of the record it is modifying, so it
- * looks through the alias to find them. The result is a plain record: a
- * derived value loses the abbreviation, as it does in arithmetic. *)
+ * looks through the alias to find them. A modifier that leaves the record's
+ * shape alone keeps the abbreviation; one that adds, removes or renames a
+ * field gives a record of a different shape, which the name does not fit. *)
 type point = {x: int, y: int};
 > type point = {x:int, y:int}
 val pt: point = {x = 1, y = 2};
 > val pt = {x=1,y=2} : point
 {pt replace x = 3};
-> val it = {x=3,y=2} : {x:int, y:int}
+> val it = {x=3,y=2} : point
 {pt extend z = 4};
 > val it = {x=1,y=2,z=4} : {x:int, y:int, z:int}
 
@@ -271,6 +272,19 @@ Bag.length (from r in recs yield r.i);
 > val it = 2 : int
 case {i = 3, j = "c"} : rec1 of {i, j} => i;
 > val it = 3 : int
+
+(* 'type_string' renders the type as it would be displayed, so it agrees with
+ * what the shell prints, alias and all. *)
+type foo = int;
+> type foo = int
+val fv: foo = 1;
+> val fv = 1 : foo
+type_string fv;
+> val it = "foo" : string
+type_string [fv];
+> val it = "foo list" : string
+type_string 1;
+> val it = "int" : string
 
 (*) A parameterized alias is expanded.
 type 'a my_list2 = 'a list;

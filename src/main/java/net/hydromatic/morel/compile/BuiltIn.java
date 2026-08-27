@@ -689,12 +689,6 @@ public enum BuiltIn {
       "Bool", "orelse", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
   /**
-   * Function "Bool.toString", of type "bool &rarr; string".
-   *
-   * <p>"toString b" returns the string representation of <em>b</em>, either
-   * "true" or "false".
-   */
-  /**
    * Function "Bool.scan", of type "(char, &alpha;) reader &rarr; (bool,
    * &alpha;) reader".
    *
@@ -711,6 +705,12 @@ public enum BuiltIn {
                   ts.fnType(
                       ts.reader(CHAR, h.get(0)), ts.reader(BOOL, h.get(0))))),
 
+  /**
+   * Function "Bool.toString", of type "bool &rarr; string".
+   *
+   * <p>"toString b" returns the string representation of <em>b</em>, either
+   * "true" or "false".
+   */
   BOOL_TO_STRING("Bool", "toString", true, ts -> ts.fnType(BOOL, STRING)),
 
   /**
@@ -4027,14 +4027,6 @@ public enum BuiltIn {
       ts -> ts.fnType(STRING, ts.listType(STRING), STRING)),
 
   /**
-   * Function "StringCvt.padLeft", of type "char &rarr; int &rarr; string &rarr;
-   * string".
-   *
-   * <p>{@code padLeft c i s} returns {@code s} padded on the left with {@code
-   * c} characters so that the result has length at least {@code i}. If {@code
-   * s} is already at least {@code i} characters long, it is returned unchanged.
-   */
-  /**
    * Function "StringCvt.dropl", of type "(char &rarr; bool) &rarr; (char,
    * &alpha;) reader &rarr; &alpha; &rarr; &alpha;".
    *
@@ -4054,6 +4046,14 @@ public enum BuiltIn {
                       h.get(0),
                       h.get(0)))),
 
+  /**
+   * Function "StringCvt.padLeft", of type "char &rarr; int &rarr; string &rarr;
+   * string".
+   *
+   * <p>{@code padLeft c i s} returns {@code s} padded on the left with {@code
+   * c} characters so that the result has length at least {@code i}. If {@code
+   * s} is already at least {@code i} characters long, it is returned unchanged.
+   */
   STRING_CVT_PAD_LEFT(
       "StringCvt", "padLeft", ts -> ts.fnType(CHAR, INT, STRING, STRING)),
 
@@ -5220,6 +5220,29 @@ public enum BuiltIn {
   Z_ANDALSO("$", "andalso", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
 
   /**
+   * Internal operator that tests a constrained type, of type "bool * &alpha; *
+   * string * string &rarr; bool".
+   *
+   * <p>It takes the same arguments as {@link #Z_CHECK} but returns the result
+   * of the condition rather than raising when it does not hold, so that {@code
+   * asOpt} can answer NONE. It still raises {@code Constraint} if evaluating
+   * the condition raised, because then the question has no answer.
+   */
+  Z_ATTEMPT("$", "$attempt", ts -> UNIT),
+
+  /**
+   * Internal operator that enforces a constrained type, of type "bool * &alpha;
+   * * string * string &rarr; &alpha;". Given the result of the type's
+   * condition, the value, the type's name, and what the value is of (empty at
+   * the outermost level), it returns the value, or raises {@code Constraint} if
+   * the condition did not hold.
+   *
+   * <p>Its type cannot be derived, because the value is polymorphic and the
+   * operator is never written in code.
+   */
+  Z_CHECK("$", "$check", ts -> UNIT),
+
+  /**
    * Internal value "$current", of type "unit". It is used to implement the
    * {@code current} keyword and its type is not necessarily {@code unit}. This
    * enum member is mainly to provide a single definition for the name.
@@ -5265,6 +5288,17 @@ public enum BuiltIn {
 
   /** Internal operator "orelse", of type "bool * bool &rarr; bool". */
   Z_ORELSE("$", "orelse", ts -> ts.fnType(ts.tupleType(BOOL, BOOL), BOOL)),
+
+  /**
+   * Internal operator that enforces a constrained type on a component of a
+   * value, of type "bool * &alpha; * string * string &rarr; bool".
+   *
+   * <p>It takes the same arguments as {@link #Z_CHECK} but returns {@code true}
+   * rather than the value, so that it can be a conjunct of the condition of the
+   * value that contains it. That is what lets a message name the component that
+   * failed, and quote the component rather than the whole.
+   */
+  Z_REQUIRE("$", "$require", ts -> UNIT),
 
   /** Internal relational sum operator "sum", of type "int * int &rarr; int". */
   Z_SUM_INT("$", "sum:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
@@ -5791,6 +5825,7 @@ public enum BuiltIn {
         h ->
             h.tyCon(Constructor.EXN_BIND)
                 .tyCon(Constructor.EXN_CHR)
+                .tyCon(Constructor.EXN_CONSTRAINT)
                 .tyCon(Constructor.EXN_DIV)
                 .tyCon(Constructor.EXN_DOMAIN)
                 .tyCon(Constructor.EXN_EMPTY)
@@ -6060,6 +6095,7 @@ public enum BuiltIn {
     // Codes.BuiltInExn can refer to them by name.
     EXN_BIND(Datatype.EXN, "Bind"),
     EXN_CHR(Datatype.EXN, "Chr"),
+    EXN_CONSTRAINT(Datatype.EXN, "Constraint"),
     EXN_DATE(Datatype.EXN, "Date"),
     EXN_DIV(Datatype.EXN, "Div"),
     EXN_DOMAIN(Datatype.EXN, "Domain"),

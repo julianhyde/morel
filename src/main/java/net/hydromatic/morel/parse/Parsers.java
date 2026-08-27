@@ -72,7 +72,9 @@ public final class Parsers {
           "and",
           "andalso",
           "as",
+          "asOpt",
           "case",
+          "check",
           "compute",
           "current",
           "datatype",
@@ -133,7 +135,8 @@ public final class Parsers {
           "val",
           "where",
           "with",
-          "yield");
+          "yield",
+          "yieldAll");
 
   /**
    * Given quoted identifier {@code `abc`} returns {@code abc}. Converts any
