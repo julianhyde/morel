@@ -372,7 +372,35 @@ public class RelLowerer {
             }
             return id;
           }
+
+          @Override
+          protected Core.Exp visit(Core.Apply apply) {
+            return readField(super.visit(apply));
+          }
         });
+  }
+
+  /**
+   * Reads a field out of a record that is being constructed here: {@code #b {a
+   * = x, b = y}} becomes {@code y}.
+   *
+   * <p>The lowering carries a node's element as an expression rather than
+   * materializing it, so a projection followed by anything that reads a field
+   * -- a filter, a group key, a later projection -- meets a selector applied to
+   * a record the projection built. The step list reads the field off the row
+   * that its {@code yield} left behind; reading it off the expression that
+   * describes the row is the same field, one step earlier.
+   */
+  private static Core.Exp readField(Core.Exp exp) {
+    if (exp instanceof Core.Apply) {
+      final Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn instanceof Core.RecordSelector
+          && apply.arg instanceof Core.Tuple) {
+        final int slot = ((Core.RecordSelector) apply.fn).slot;
+        return ((Core.Tuple) apply.arg).args.get(slot);
+      }
+    }
+    return exp;
   }
 
   /**
@@ -385,6 +413,11 @@ public class RelLowerer {
           @Override
           protected Core.Exp visit(Core.Id id) {
             return id.idPat.equals(param) ? element : id;
+          }
+
+          @Override
+          protected Core.Exp visit(Core.Apply apply) {
+            return readField(super.visit(apply));
           }
         });
   }
