@@ -464,6 +464,21 @@ INR ((1, true), 7);
 INR (1, (true, 7));
 > val it = INR (1,(true,7)) : ('a,int * (bool * int)) either
 
+(* A 'check' condition is an expression, and ends at a delimiter, so one may
+ * be written inside an argument list or beside a '*' without parentheses of
+ * its own: ',' and ')' both end it. Where it lands is decided the same way as
+ * for any other type. *)
+type checkedArg = (int check c => c >= 0, char) either;
+> type checkedArg = (int check c => c >= 0,char) either
+type checkedLast = (int, char check c => true) either;
+> type checkedLast = (int,char check c => true) either
+type checkedComponent = (int check c => c >= 0) * char;
+> type checkedComponent = (int check c => c >= 0) * char
+
+(*) With no parentheses the condition applies to the whole type.
+type checkedWhole = int * int * int check c => true;
+> type checkedWhole = int * int * int check c => true
+
 (* Tuple types and function types interact correctly: '*' binds tighter
  * than '->' in both source syntax and printed form. A tuple as a
  * function arg or result needs no parens; a function as a tuple element
@@ -661,6 +676,24 @@ val y = 6 : typeof m;
 > val y = 6 : int
 val z = [1] : typeof [m];
 > val z = [1] : int list
+
+(* 'typeof e' names the type 'e' was shown to have, so an alias survives it:
+ * it does not reduce the type to what inference made of it. *)
+type myInt = int;
+> type myInt = int
+val mi: myInt = 5;
+> val mi = 5 : myInt
+val mi2: typeof mi = 6;
+> val mi2 = 6 : myInt
+val mi3 = 6 : typeof mi;
+> val mi3 = 6 : myInt
+
+(* A type declaration is elaborated before anything in it has been deduced, so
+ * there is no type for 'typeof' to name. It is an error rather than a
+ * crash. *)
+type t = typeof mi;
+> stdIn:1.10-1.19 Error: 'typeof' may not be used in a type declaration
+>   raised at: stdIn:1.10-1.19
 
 (* 'typeof e' names the type 'e' was shown to have, so an alias survives it:
  * it does not reduce the type to what inference made of it. *)

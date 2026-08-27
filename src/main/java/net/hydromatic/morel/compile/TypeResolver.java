@@ -137,6 +137,16 @@ public class TypeResolver {
       PairList.of();
   private final List<Inst> overloads = new ArrayList<>();
   private final List<Constraint> constraints = new ArrayList<>();
+
+  /**
+   * Variables that hold the result of an operator that computes a new value
+   * from operands of its own type, and must therefore drop any condition they
+   * carry.
+   *
+   * @see #eraseConstraints
+   */
+  private final List<Variable> erasedVariables = new ArrayList<>();
+
   private final Deque<AggFrame> aggregateTripleStack = new ArrayDeque<>();
 
   /**
@@ -159,6 +169,20 @@ public class TypeResolver {
    * @see TypeMap#displacedTypes
    */
   private final Map<String, Type> displacedTypes = new HashMap<>();
+
+  /**
+   * Conditions of constrained types that have no name, by the name their term
+   * is given.
+   *
+   * <p>A term identifies an alias by name, and a constrained type that is not
+   * named has none, so without these its conditions could not be recovered from
+   * the term and would reach only the binding they were written on. The name is
+   * derived from the conditions, so that two types written the same way get the
+   * same name and are the same type.
+   *
+   * @see TypeMap#unnamedChecks
+   */
+  private final Map<String, List<Ast.Fn>> unnamedChecks = new HashMap<>();
 
   /**
    * Names of user-defined functions whose first parameter is named {@code self}
@@ -185,6 +209,25 @@ public class TypeResolver {
    * @see #deduceModifiedRecordType
    */
   private final Map<Ast.Exp, List<String>> fieldNames = new IdentityHashMap<>();
+
+  /**
+   * Conditions carried by the type of an expression that a record modifier is
+   * applied to, cached beside {@link #fieldNames} and learned at the same time,
+   * from the same resolved term.
+   */
+  private final Map<Ast.Exp, List<Ast.Fn>> fieldChecks =
+      new IdentityHashMap<>();
+
+  /**
+   * Fields of each record with modifiers that was typed on this attempt.
+   *
+   * <p>A record with modifiers has no fields of its own to read them from, and
+   * one that claims the type of the record it modifies has a variable for its
+   * term rather than a record term, so they cannot be read back from that
+   * either. A {@code yield} step needs them, in order to bind them.
+   */
+  private final Map<Ast.Record, NavigableMap<String, Variable>> modifiedFields =
+      new IdentityHashMap<>();
 
   /**
    * Records with modifiers that could not be applied on this attempt, because
@@ -304,6 +347,7 @@ public class TypeResolver {
   private Resolved deduceType_(Environment env, Ast.Decl decl) {
     // Clean up from previous attempt.
     validations.clear();
+    modifiedFields.clear();
     unresolvedRecords.clear();
     final int fieldsLearned0 = fieldsLearned;
 
@@ -325,7 +369,8 @@ public class TypeResolver {
       final List<TermTerm> termPairs = new ArrayList<>();
       terms.forEach(tv -> termPairs.add(new TermTerm(tv.term, tv.variable)));
       final Result result =
-          unifier.unify(termPairs, actionMap, constraints, tracer);
+          eraseConstraints(
+              unifier.unify(termPairs, actionMap, constraints, tracer));
       if (result instanceof Failure) {
         final String extra =
             ";\n"
@@ -342,7 +387,8 @@ public class TypeResolver {
               map,
               (Substitution) result,
               ImmutableMap.of(),
-              displacedTypes);
+              displacedTypes,
+              unnamedChecks);
 
       // If any value bindings have aliased types (e.g. 'myInt' rather than
       // the expanded type 'int'), populate a map with those types.
@@ -356,7 +402,8 @@ public class TypeResolver {
                   map,
                   (Substitution) result,
                   realTypes,
-                  displacedTypes);
+                  displacedTypes,
+                  unnamedChecks);
 
       while (!preferredTypes.isEmpty()) {
         Map.Entry<Variable, PrimitiveType> x = preferredTypes.remove(0);
@@ -424,6 +471,52 @@ public class TypeResolver {
       }
       return Resolved.of(env, decl, node2, typeMap);
     }
+  }
+
+  /**
+   * Drops the condition on each type that reached an operator that computes a
+   * new value, in the substitution unification produced.
+   *
+   * <p>{@code n - 1} already gave {@code int}, but only because the {@code 1}
+   * is an {@code int} that the {@code nat} had to meet, and a meet takes the
+   * weaker of the two. Nothing meets in {@code ~n} or in {@code n + n}, so the
+   * condition flowed through {@code 'a * 'a -> 'a} and {@code s + s} claimed a
+   * type it had just broken. What decides is the operator, not the operands:
+   * such an operator computes a value that has not been shown to satisfy the
+   * condition, so the condition is dropped whatever it was applied to.
+   *
+   * <p>The type is weakened throughout the substitution, as a meet is: a
+   * constrained type is only as strong as what it abbreviates once it has
+   * reached such an operator, so {@code fun dbl (n: small) = n + n} has type
+   * {@code int -> int}, exactly as {@code fun sub (n: nat) = n - 1} does. The
+   * parameter is still checked -- a check reads the annotation the user wrote,
+   * not the type inference deduced.
+   */
+  private Result eraseConstraints(Result result) {
+    if (erasedVariables.isEmpty() || !(result instanceof SubstitutionResult)) {
+      return result;
+    }
+    final SubstitutionResult substitutionResult = (SubstitutionResult) result;
+    final Substitution resolved = substitutionResult.resolve();
+    final Map<Term, Term> weakened = new LinkedHashMap<>();
+    for (Variable variable : erasedVariables) {
+      final Term term = resolved.resultMap.get(variable);
+      if (term != null) {
+        final Term term2 = unaliasTerm(term);
+        if (term2 != term) {
+          weakened.put(term, term2);
+        }
+      }
+    }
+    if (weakened.isEmpty()) {
+      return result;
+    }
+    final Map<Variable, Term> resultMap = new LinkedHashMap<>();
+    resolved.resultMap.forEach(
+        (variable, term) ->
+            resultMap.put(variable, Unifier.weaken(term, weakened)));
+    return SubstitutionResult.create(
+        resultMap, substitutionResult.residualConstraints);
   }
 
   /**
@@ -672,12 +765,39 @@ public class TypeResolver {
     if (decl instanceof Ast.ValDecl) {
       final BiConsumer<Ast.Pat, Type> consumer =
           (pat, realType) -> {
-            Type deducedType = typeMap.getType(pat);
-            if (!realType.equals(deducedType)) {
+            // A pattern whose annotation carried a condition was rebuilt when
+            // the condition was resolved, so the pattern written here is not
+            // the one that has a type. There is nothing to display for it that
+            // the rebuilt one does not already have.
+            final Type deducedType = typeMap.getTypeOpt(pat);
+            if (deducedType != null && !realType.equals(deducedType)) {
               realTypes.put(pat, realType);
             }
           };
       for (Ast.ValBind valBind : ((Ast.ValDecl) decl).valBinds) {
+        if (valBind.exp instanceof Ast.CheckExp) {
+          // 'val x = e check m' gives x the type of e with the conditions
+          // added. That type is not written anywhere, and its base is not
+          // known until now, so it is built here rather than by the key
+          // builder. The expression and the pattern were deduced into the same
+          // variable, so the pattern's type is the base.
+          //
+          // The base is the type displayed for the expression, not the type it
+          // reduces to: 'm' adds a condition to whatever 'e' was shown to
+          // satisfy, and does not take away what it already claimed.
+          final Type.Key baseKey = typeMap.displayedKey(valBind.pat);
+          if (baseKey != null) {
+            realTypes.put(
+                valBind.pat,
+                Keys.alias(
+                        "",
+                        baseKey,
+                        ImmutableList.of(),
+                        ((Ast.CheckExp) valBind.exp).checks)
+                    .toType(typeSystem));
+          }
+          continue;
+        }
         deduceRealType(
             valBind.pat, null, valBind.exp, consumer, typeMap::displayedKey);
       }
@@ -1165,6 +1285,54 @@ public class TypeResolver {
     }
   }
 
+  /**
+   * Deduces the type of a conversion, {@code e as t} or {@code e asOpt t}.
+   *
+   * <p>{@code as} has the type it converts to, and constrains {@code e} to the
+   * same type; {@code asOpt} has that type wrapped in {@code option}. Once
+   * constraints are enforced this is where the check goes; for now both behave
+   * as a type annotation.
+   */
+  private Ast.Exp deduceAnnotatedExpType(
+      TypeEnv env, Ast.AnnotatedExp annotatedExp, Variable v) {
+    final Ast.Type type = deduceTypeType(env, annotatedExp.type, v);
+    final Ast.Exp exp = deduceExpType(env, annotatedExp.exp, v);
+    return reg(annotatedExp.copy(exp, type), v);
+  }
+
+  /**
+   * Deduces the type of an expression with a condition, {@code e check m}.
+   *
+   * <p>The condition is typed against the type the expression's own conditions
+   * are written against -- the type its aliases abbreviate -- so the base type
+   * need never be materialized.
+   *
+   * <p>Typing it against the expression's own type would weaken that type. A
+   * condition compares the value with something, {@code i < 100} with an {@code
+   * int}, and where an alias meets a different type the meet takes the weaker
+   * of the two; so writing a condition on a {@code nat} would take away the
+   * condition that made it one. A condition is added to what the expression
+   * already claims, never in place of it.
+   */
+  private Ast.Exp deduceCheckExpType(
+      TypeEnv env, Ast.CheckExp checkExp, Variable v) {
+    final Ast.Exp exp = deduceExpType(env, checkExp.exp, v);
+    final Term term = requireNonNull(map.get(exp));
+    final List<Ast.Fn> checks =
+        deduceChecks(env, unaliasTerm(term), checkExp.checks);
+    return reg(ast.checkExp(checkExp.pos, exp, checks), v);
+  }
+
+  private Ast.Exp deduceCastType(TypeEnv env, Ast.Cast cast, Variable v) {
+    final Variable vExp = cast.op == Op.AS ? v : unifier.variable();
+    final Ast.Type type = deduceTypeType(env, cast.type, vExp);
+    final Ast.Exp exp = deduceExpType(env, cast.exp, vExp);
+    final Ast.Cast cast2 = cast.copy(exp, type);
+    return cast.op == Op.AS
+        ? reg(cast2, v)
+        : reg(cast2, v, unifier.apply(OPTION_TY_CON, vExp));
+  }
+
   private Ast.Exp deduceExpType(TypeEnv env, Ast.Exp node, Variable v) {
     final List<Ast.Exp> args2;
     final Variable v2;
@@ -1192,12 +1360,15 @@ public class TypeResolver {
         checkLiteralRange(node, PrimitiveType.WORD);
         return reg(node, v, toTerm(PrimitiveType.WORD));
 
+      case AS:
+      case AS_OPT:
+        return deduceCastType(env, (Ast.Cast) node, v);
+
+      case CHECK_EXP:
+        return deduceCheckExpType(env, (Ast.CheckExp) node, v);
+
       case ANNOTATED_EXP:
-        final Ast.AnnotatedExp annotatedExp = (Ast.AnnotatedExp) node;
-        final Ast.Type type2 = deduceTypeType(env, annotatedExp.type, v);
-        final Ast.Exp exp2 = deduceExpType(env, annotatedExp.exp, v);
-        final Ast.AnnotatedExp annotatedExp2 = annotatedExp.copy(exp2, type2);
-        return reg(annotatedExp2, v);
+        return deduceAnnotatedExpType(env, (Ast.AnnotatedExp) node, v);
 
       case ANDALSO:
       case ORELSE:
@@ -1452,7 +1623,10 @@ public class TypeResolver {
   private Ast.Type deduceTypeType(TypeEnv env, Ast.Type type, Variable v) {
     final Map<String, Variable> scope =
         tyVarScopes.isEmpty() ? ImmutableMap.of() : tyVarScopes.peek();
-    return new TypeToTermConverter(env, scope).typeTerm(type, v);
+    // A type written here may carry a condition, and the condition has to be
+    // resolved for Resolver to compile it, exactly as in a declaration.
+    final Ast.Type type2 = checkTypes(env, type);
+    return new TypeToTermConverter(env, scope).typeTerm(type2, v);
   }
 
   private Ast.Query deduceQueryType(TypeEnv env, Ast.Query query, Variable v) {
@@ -2036,23 +2210,32 @@ public class TypeResolver {
 
     final Ast.Exp yieldExp3 = letBody(yieldExp2);
     if (yield.binder == null && yieldExp3.op == Op.RECORD) {
-      // The fields are read from the record's type, not from the expression,
-      // because a record with modifiers has no fields of its own. One whose
-      // modifiers could not be applied has no record type either; it will be
-      // deduced again, or the attempt will end in an error.
-      final Term term = map.get(yieldExp3);
-      final List<String> labels =
-          term instanceof Sequence ? fieldList((Sequence) term) : null;
-      if (labels != null) {
+      final Ast.Record record2 = (Ast.Record) yieldExp3;
+      final NavigableMap<String, Variable> fields = modifiedFields.get(record2);
+      if (fields != null) {
+        // A record with modifiers; its fields are the ones they produced.
         fieldVars.clear();
-        forEach(
-            labels,
-            ((Sequence) term).terms,
+        fields.forEach(
             (label, t) -> {
-              fieldVars.add(ast.id(Pos.ZERO, label), toVariable(t));
+              fieldVars.add(ast.id(Pos.ZERO, label), t);
               envs.bind(label, t);
             });
+      } else if (record2.base == null) {
+        final Term term = map.get(yieldExp3);
+        if (term instanceof Sequence) {
+          final Sequence sequence = (Sequence) term;
+          fieldVars.clear();
+          forEach(
+              record2.args.leftList(),
+              sequence.terms,
+              (id, t) -> {
+                fieldVars.add(id, toVariable(t));
+                envs.bind(id.name, t);
+              });
+        }
       }
+      // A record whose modifiers could not be applied has no fields to bind;
+      // it will be deduced again, or the attempt will end in an error.
     } else {
       final Ast.Id label = getLabel(yield.binder, yield.exp);
       envs.bind(label.name, v6);
@@ -2406,6 +2589,8 @@ public class TypeResolver {
       final List<String> names = fieldNames.get(exp);
       if (names != null) {
         operands.names.put(exp, names);
+        operands.checks.put(
+            exp, fieldChecks.getOrDefault(exp, ImmutableList.of()));
       } else {
         unknown.add(exp, v);
       }
@@ -2417,13 +2602,16 @@ public class TypeResolver {
       final @Nullable Substitution substitution = solve();
       unknown.forEach(
           (exp, variable) -> {
+            final Term resolved =
+                substitution == null ? null : substitution.resolve(variable);
             final List<String> names =
-                substitution == null
-                    ? null
-                    : termFieldNames(substitution.resolve(variable));
+                resolved == null ? null : termFieldNames(resolved);
             if (names != null) {
+              final List<Ast.Fn> checks = termChecks(resolved);
               fieldNames.put(exp, names);
+              fieldChecks.put(exp, checks);
               operands.names.put(exp, names);
+              operands.checks.put(exp, checks);
             } else {
               actionMap.put(
                   variable,
@@ -2443,6 +2631,7 @@ public class TypeResolver {
   private void rememberFields(Ast.Exp exp, Term t) {
     final List<String> names = termFieldNames(t);
     if (names != null && fieldNames.putIfAbsent(exp, names) == null) {
+      fieldChecks.put(exp, termChecks(t));
       ++fieldsLearned;
     }
   }
@@ -2495,12 +2684,26 @@ public class TypeResolver {
    * simultaneous, because each reads the fields as they were before that
    * modifier. An operand -- the base, or the argument of an {@code all}
    * modifier -- is outside every modifier, and sees no fields at all.
+   *
+   * <p>If every modifier leaves the record's shape alone, the result claims the
+   * base's type, rather than a record assembled from the fields, so that a
+   * derived schema keeps the conditions the schema it derives from carries. The
+   * assembled record is what an assignment weakens a field to, and is the type
+   * this claim will be checked against.
+   *
+   * <p>A modifier that does change the shape gives a record the base's name no
+   * longer fits, but the base's conditions need not all be lost with it: one
+   * that depends only on fields the modifier left alone is carried over, and
+   * the result is a constrained type that has no name. Nothing is checked --
+   * every value carried over was checked when it was put there.
    */
   private Ast.Exp deduceModifiedRecordType(
       TypeEnv env, Ast.Record record, Operands operands, Variable v) {
     final Ast.Exp base = requireNonNull(record.base);
     NavigableMap<String, Variable> fields0 = fieldVariables(operands, base);
     final List<Ast.Modifier> modifiers = new ArrayList<>();
+    List<Ast.Fn> checks = operands.checks(base);
+    boolean claims = true;
     for (Ast.Modifier modifier : record.modifiers) {
       final NavigableMap<String, Variable> fields = fields0;
       final NavigableMap<String, Variable> allFields =
@@ -2515,6 +2718,9 @@ public class TypeResolver {
                   ? null
                   : ImmutableList.copyOf(allFields.keySet()));
 
+      claims &= RecordModifiers.preserves(sources, fields.keySet());
+      checks = inheritChecks(checks, sources);
+
       final TypeEnv env2 = bindFields(env, fields);
       final NavigableMap<String, Variable> fields2 =
           new TreeMap<>(RecordType.ORDERING);
@@ -2528,10 +2734,96 @@ public class TypeResolver {
       modifiers.add(copyModifier(env2, modifier, operands, assigned));
       fields0 = fields2;
     }
+    final Ast.Record record2 =
+        record.copy(operands.exp(base), ImmutableList.of(), modifiers);
+    modifiedFields.put(record2, fields0);
     return reg(
-        record.copy(operands.exp(base), ImmutableList.of(), modifiers),
-        v,
-        recordTerm(fields0));
+        record2, v, modifiedTerm(env, operands, base, fields0, checks, claims));
+  }
+
+  /**
+   * Returns the type of a modified record: the base's, if the modifiers left
+   * its shape alone; otherwise a record assembled from the fields, carrying
+   * whichever of the base's conditions were carried over.
+   */
+  private Term modifiedTerm(
+      TypeEnv env,
+      Operands operands,
+      Ast.Exp base,
+      NavigableMap<String, Variable> fields,
+      List<Ast.Fn> checks,
+      boolean claims) {
+    if (claims) {
+      return operands.variable(base);
+    }
+    final Term recordTerm = recordTerm(fields);
+    if (checks.isEmpty()) {
+      return recordTerm;
+    }
+    // The conditions were written for the record the modifiers were applied
+    // to, so they are typed again here, against the record they produced.
+    final List<Ast.Fn> checks2 = deduceChecks(env, recordTerm, checks);
+    final String name = unnamedCheckName(checks2);
+    unnamedChecks.put(name, checks2);
+    return aliasTerm(name, recordTerm, ImmutableList.of());
+  }
+
+  /**
+   * Returns the conditions that survive a modifier, rewritten for the record it
+   * produced.
+   *
+   * <p>A field the modifier kept is still there, under whatever label it kept
+   * it at; one it assigned to holds a value that was never shown to satisfy
+   * anything, and one it removed is not there at all. So a condition is carried
+   * over if it depends only on fields that were kept, and is rewritten to name
+   * them as the result names them.
+   */
+  private List<Ast.Fn> inheritChecks(
+      List<Ast.Fn> checks, PairList<String, RecordModifiers.Source> sources) {
+    if (checks.isEmpty()) {
+      return checks;
+    }
+    final Map<String, String> fields = new LinkedHashMap<>();
+    sources.forEach(
+        (label, source) -> {
+          if (source instanceof RecordModifiers.Kept) {
+            fields.put(((RecordModifiers.Kept) source).field, label);
+          }
+        });
+    final List<Ast.Fn> checks2 = new ArrayList<>();
+    for (Ast.Fn check : checks) {
+      final Ast.Fn check2 = Conditions.inherit(typeSystem, check, fields);
+      if (check2 != null) {
+        checks2.add(check2);
+      }
+    }
+    return checks2;
+  }
+
+  /**
+   * Returns the conditions a term carries, from every alias it is wrapped in.
+   *
+   * <p>A type may be an alias for an alias, and each layer may constrain, so
+   * they are collected from the outside in, down to the type the aliases
+   * abbreviate.
+   */
+  private List<Ast.Fn> termChecks(Term t) {
+    final List<Ast.Fn> checks = new ArrayList<>();
+    while (t instanceof Sequence && isAliasTerm((Sequence) t)) {
+      final Sequence sequence = (Sequence) t;
+      final String name = aliasTermName(sequence);
+      final List<Ast.Fn> named = unnamedChecks.get(name);
+      if (named != null) {
+        checks.addAll(named);
+      } else {
+        final Type type = typeSystem.lookupOpt(name);
+        if (type instanceof AliasType) {
+          checks.addAll(((AliasType) type).checks);
+        }
+      }
+      t = sequence.terms.get(0);
+    }
+    return checks;
   }
 
   /**
@@ -2666,6 +2958,9 @@ public class TypeResolver {
     /** The field names of each operand whose type is a known record. */
     final Map<Ast.Exp, List<String>> names = new IdentityHashMap<>();
 
+    /** The conditions each operand's type carries. */
+    final Map<Ast.Exp, List<Ast.Fn>> checks = new IdentityHashMap<>();
+
     /** Whether every operand's field names are known. */
     boolean complete;
 
@@ -2679,6 +2974,10 @@ public class TypeResolver {
 
     List<String> fieldNames(Ast.Exp exp) {
       return requireNonNull(names.get(exp), "operand");
+    }
+
+    List<Ast.Fn> checks(Ast.Exp exp) {
+      return checks.getOrDefault(exp, ImmutableList.of());
     }
   }
 
@@ -2865,6 +3164,11 @@ public class TypeResolver {
       final BuiltIn builtIn = BuiltIn.BY_ML_NAME.get(((Ast.Id) fn2).name);
       if (builtIn != null && builtIn.preferredType != null) {
         preferredTypes.add(v, builtIn.preferredType);
+        // '+', '-', '*', '~', 'abs', 'div' and 'mod' are the operators whose
+        // result has the type of their operands, and each of them computes a
+        // value the operands' type has not been shown to contain. So the
+        // result drops whatever condition the operands carry.
+        erasedVariables.add(v);
       }
     }
     return reg(apply.copy(fn2, arg2), v);
@@ -4121,7 +4425,13 @@ public class TypeResolver {
       return null;
     }
     final TypeMap tempTypeMap =
-        new TypeMap(typeSystem, map, subst, ImmutableMap.of(), displacedTypes);
+        new TypeMap(
+            typeSystem,
+            map,
+            subst,
+            ImmutableMap.of(),
+            displacedTypes,
+            unnamedChecks);
     final List<QualifiedType.Predicate> predicates = new ArrayList<>();
     for (Constraint c : ((SubstitutionResult) result).residualConstraints) {
       if (c.name == null || c.result == null) {
@@ -4318,6 +4628,7 @@ public class TypeResolver {
         });
 
     final List<Type.Key> keys = new ArrayList<>();
+    final List<Ast.TypeBind> binds = new ArrayList<>();
     for (Ast.TypeBind bind : typeDecl.binds) {
       // Check that every type-constructor reference in the body has the right
       // number of arguments before we materialize the key.
@@ -4326,17 +4637,137 @@ public class TypeResolver {
       checkBoundTyVars(bind.tyVars, ImmutableList.of(bind.type));
       final KeyBuilder keyBuilder = new KeyBuilder(displacedKeys);
       bind.tyVars.forEach(keyBuilder::toTypeKey);
+      final Ast.TypeBind bind0 = bind.copy(checkTypes(env, bind.type));
+      final Type.Key bodyKey = keyBuilder.toTypeKey(bind0.type);
 
+      // Resolve the conditions before the key is built, so that the type holds
+      // the resolved nodes; Resolver converts them to Core by looking them up
+      // in this TypeMap, and would not find the originals.
+      final Ast.TypeBind bind2 = check(env, bind0, bodyKey.toType(typeSystem));
+      binds.add(bind2);
       keys.add(
           Keys.alias(
-              bind.name.name,
-              keyBuilder.toTypeKey(bind.type),
-              Keys.ordinals(bind.tyVars.size())));
+              bind2.name.name,
+              bodyKey,
+              Keys.ordinals(bind2.tyVars.size()),
+              bind2.checks));
     }
     final List<Type> types = typeSystem.typesFor(keys);
 
-    map.put(typeDecl, toTerm(PrimitiveType.UNIT));
-    return typeDecl;
+    final Ast.TypeDecl typeDecl2 = typeDecl.copy(binds);
+    map.put(typeDecl2, toTerm(PrimitiveType.UNIT));
+    return typeDecl2;
+  }
+
+  /**
+   * Resolves the conditions of every constrained type written inside a type,
+   * returning the type with the resolved conditions in place.
+   *
+   * <p>A condition must be resolved before the key is built, so that the type
+   * holds nodes this {@link TypeMap} knows; {@link Resolver} converts them to
+   * Core by looking them up here.
+   */
+  private Ast.Type checkTypes(TypeEnv env, Ast.Type type) {
+    switch (type.op) {
+      case CONSTRAINED_TYPE:
+        final Ast.ConstrainedType constrainedType = (Ast.ConstrainedType) type;
+        final Ast.Type body = checkTypes(env, constrainedType.type);
+        return ast.constrainedType(
+            constrainedType.pos,
+            body,
+            deduceChecks(
+                env, toType(body, typeSystem), constrainedType.checks));
+
+      case RECORD_TYPE:
+        final Ast.RecordType recordType = (Ast.RecordType) type;
+        final Map<String, Ast.Type> fieldTypes = new LinkedHashMap<>();
+        recordType.fieldTypes.forEach(
+            (name, t) -> fieldTypes.put(name, checkTypes(env, t)));
+        return fieldTypes.equals(recordType.fieldTypes)
+            ? type
+            : ast.recordType(type.pos, fieldTypes);
+
+      case TUPLE_TYPE:
+        if (!(type instanceof Ast.TupleType)) {
+          // A composite type shares this op, and is reported elsewhere.
+          return type;
+        }
+        final Ast.TupleType tupleType = (Ast.TupleType) type;
+        final List<Ast.Type> types =
+            transformEager(tupleType.types, t -> checkTypes(env, t));
+        return types.equals(tupleType.types)
+            ? type
+            : ast.tupleType(type.pos, types);
+
+      case FUNCTION_TYPE:
+        final Ast.FunctionType functionType = (Ast.FunctionType) type;
+        final Ast.Type paramType = checkTypes(env, functionType.paramType);
+        final Ast.Type resultType = checkTypes(env, functionType.resultType);
+        return paramType.equals(functionType.paramType)
+                && resultType.equals(functionType.resultType)
+            ? type
+            : ast.functionType(type.pos, paramType, resultType);
+
+      case NAMED_TYPE:
+        final Ast.NamedType namedType = (Ast.NamedType) type;
+        final List<Ast.Type> args =
+            transformEager(namedType.types, t -> checkTypes(env, t));
+        return args.equals(namedType.types)
+            ? type
+            : ast.namedType(type.pos, args, namedType.name);
+
+      default:
+        return type;
+    }
+  }
+
+  /**
+   * Deduces the type of a {@code check} clause, which must be a function from
+   * the type it constrains to {@code bool}.
+   *
+   * <p>The condition sees the type as the type it abbreviates. The value being
+   * checked has not yet been admitted to the constrained type, so the
+   * constraint may not be assumed of it; without this, {@code type nat = int
+   * check i => i >= 0} would be checking a value that it already claims is a
+   * {@code nat}.
+   */
+  private Ast.TypeBind check(TypeEnv env, Ast.TypeBind bind, Type baseType) {
+    if (bind.checks.isEmpty()) {
+      return bind;
+    }
+    if (!bind.tyVars.isEmpty()) {
+      throw new CompileException(
+          format("cannot constrain parameterized type '%s'", bind.name.name),
+          false,
+          bind.pos);
+    }
+    return bind.copy(deduceChecks(env, baseType, bind.checks));
+  }
+
+  /** Deduces the type of each condition of a constrained type. */
+  private List<Ast.Fn> deduceChecks(
+      TypeEnv env, Type baseType, List<Ast.Fn> checks) {
+    return deduceChecks(env, toTerm(baseType, Subst.EMPTY), checks);
+  }
+
+  /**
+   * As {@link #deduceChecks(TypeEnv, Type, List)}, against a term rather than a
+   * type.
+   *
+   * <p>An expression's condition is typed against the variable the expression
+   * was deduced into, which is what lets the base type be unknown: it need
+   * never be materialized, and it is not written anywhere.
+   */
+  private List<Ast.Fn> deduceChecks(
+      TypeEnv env, Term baseTerm, List<Ast.Fn> checks) {
+    final Term checkTerm =
+        unifier.apply(FN_TY_CON, baseTerm, toTerm(PrimitiveType.BOOL));
+    final List<Ast.Fn> checks2 = new ArrayList<>();
+    for (Ast.Fn check : checks) {
+      final Variable v = equiv(unifier.variable(), checkTerm);
+      checks2.add((Ast.Fn) deduceExpType(env, check, v));
+    }
+    return checks2;
   }
 
   /**
@@ -4606,6 +5037,17 @@ public class TypeResolver {
           } else {
             return Keys.apply(nameKey(namedType.name), typeList);
           }
+
+        case CONSTRAINED_TYPE:
+          // A constrained type that is not named is keyed by its body and its
+          // conditions, so two written the same way are the same type.
+          final Ast.ConstrainedType constrainedType =
+              (Ast.ConstrainedType) type;
+          return Keys.alias(
+              "",
+              toTypeKey(constrainedType.type),
+              ImmutableList.of(),
+              constrainedType.checks);
 
         case TY_VAR:
           final Ast.TyVar tyVar = (Ast.TyVar) type;
@@ -5284,6 +5726,21 @@ public class TypeResolver {
     return unifier.apply(ALIAS_TY_CON + ":" + name, terms);
   }
 
+  /**
+   * Returns the name a constrained type that has none is known by in a term.
+   *
+   * <p>It is derived from the conditions, and from nothing else, so that it is
+   * the same wherever the same conditions are written -- which is what decides
+   * whether two constrained types are the same type. The body is not in it; the
+   * term carries the body as its first argument, so two terms with these
+   * conditions unify only if their bodies do.
+   */
+  static String unnamedCheckName(List<Ast.Fn> checks) {
+    final StringBuilder b = new StringBuilder("$check");
+    checks.forEach(c -> b.append(':').append(c.matchListString()));
+    return b.toString();
+  }
+
   /** Returns whether a term is a type alias, as built by {@link #aliasTerm}. */
   static boolean isAliasTerm(Term term) {
     return term instanceof Sequence
@@ -5349,8 +5806,16 @@ public class TypeResolver {
         // first argument, and the unifier expands it -- head-reduction --
         // only when it meets a term with a different operator.
         final AliasType aliasType = (AliasType) type;
+        String aliasName = aliasType.name;
+        if (aliasName.isEmpty() && !aliasType.checks.isEmpty()) {
+          // A constrained type that is not named has no name to look up by, so
+          // give it one derived from its conditions, and remember them for
+          // TypeMap to convert back.
+          aliasName = unnamedCheckName(aliasType.checks);
+          unnamedChecks.put(aliasName, aliasType.checks);
+        }
         return aliasTerm(
-            aliasType.name,
+            aliasName,
             toTerm(aliasType.type, subst),
             toTerms(aliasType.arguments, subst));
       case DATA_TYPE:
