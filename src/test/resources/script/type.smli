@@ -701,7 +701,7 @@ type_string ("x" ^ "y") ^ "z";
  * "(type_string f) x", which applies x to the resulting string,
  * rather than the type of "f x". *)
 type_string String.size "abc";
-> stdIn:1.1-1.30 Error: Cannot deduce type: conflict: fn(T2, T0) vs string
+> stdIn:1.1-1.30 Error: Cannot deduce type: conflict: T2 -> T0 vs string
 >   raised at: stdIn:1.1-1.30
 
 fun foo list = (size list, type_string (true, list));
@@ -813,10 +813,10 @@ id_list [1,2];
 id_list ["a","b"];
 > val it = ["a","b"] : string list
 id_list (true, 1);
-> stdIn:1.1-1.18 Error: Cannot deduce type: conflict: tuple(bool, int) vs list(T6)
+> stdIn:1.1-1.18 Error: Cannot deduce type: conflict: bool * int vs T6 list
 >   raised at: stdIn:1.1-1.18
 id_list (bag [false,true]);
-> stdIn:1.1-1.27 Error: Cannot deduce type: conflict: list(T9) vs bag(T7)
+> stdIn:1.1-1.27 Error: Cannot deduce type: conflict: T9 list vs T7 bag
 >   raised at: stdIn:1.1-1.27
 
 (*) Same, without parentheses around the argument.
@@ -856,7 +856,7 @@ first_pair [("a",true),("c",false)];
 > stdIn:1.1-1.36 Error: Cannot deduce type: conflict: string vs bool
 >   raised at: stdIn:1.1-1.36
 first_pair (bag [("a","b"),("c","d")]);
-> stdIn:1.1-1.39 Error: Cannot deduce type: conflict: bag(T11) vs list(tuple(T13, T13))
+> stdIn:1.1-1.39 Error: Cannot deduce type: conflict: T11 bag vs (T13 * T13) list
 >   raised at: stdIn:1.1-1.39
 
 (* Function that uses its argument in a query and therefore requires
@@ -1564,5 +1564,31 @@ val p = (1, 2) : int pair;
 val w = [1] : my_list;
 > stdIn:1.15-1.22 Error: type constructor my_list given 0 arguments, wants 1
 >   raised at: stdIn:1.15-1.22
+
+(* A type in an error message is written in the syntax types are written in,
+ * not the unifier's internal form. *)
+val a: int * int = 1;
+> stdIn:1.1-1.21 Error: Cannot deduce type: conflict: int * int vs int
+>   raised at: stdIn:1.1-1.21
+val b: {x: int} = 1;
+> stdIn:1.1-1.20 Error: Cannot deduce type: conflict: {x:int} vs int
+>   raised at: stdIn:1.1-1.20
+val c: int list = "a";
+> stdIn:1.1-1.22 Error: Cannot deduce type: conflict: int list vs string
+>   raised at: stdIn:1.1-1.22
+val d: int -> int = 1;
+> stdIn:1.1-1.22 Error: Cannot deduce type: conflict: int -> int vs int
+>   raised at: stdIn:1.1-1.22
+val e: int option = "a";
+> stdIn:1.1-1.24 Error: Cannot deduce type: conflict: int option vs string
+>   raised at: stdIn:1.1-1.24
+val f: int bag = [1];
+> stdIn:1.1-1.21 Error: Cannot deduce type: conflict: int bag vs T2 list
+>   raised at: stdIn:1.1-1.21
+
+(*) A compound element of a postfix type constructor is parenthesized.
+val g: (int * int) list = [1];
+> stdIn:1.1-1.30 Error: Cannot deduce type: conflict: int vs int * int
+>   raised at: stdIn:1.1-1.30
 
 (*) End type.smli

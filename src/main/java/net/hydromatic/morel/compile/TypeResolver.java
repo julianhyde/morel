@@ -210,6 +210,7 @@ public class TypeResolver {
   static final String UNORDERED = "unordered";
 
   static final String OPTION_TY_CON = BuiltIn.Datatype.OPTION.mlName();
+  static final String ALIAS_TY_CON = "$alias";
   static final String RECORD_TY_CON = "record";
   static final String FN_TY_CON = "fn";
 
@@ -2390,6 +2391,7 @@ public class TypeResolver {
    * an unresolved flex record.
    */
   private static @Nullable List<String> termFieldNames(Term t) {
+    t = unaliasTerm(t);
     if (!(t instanceof Sequence)) {
       return null;
     }
@@ -3631,6 +3633,7 @@ public class TypeResolver {
    */
   private static @Nullable Term lookupField(
       Term t, String fieldName, Unifier.Substitution substitution) {
+    t = unaliasTerm(t);
     if (t instanceof Sequence) {
       final Sequence sequence = (Sequence) t;
       final List<String> fieldList = fieldList(sequence);
@@ -3727,7 +3730,7 @@ public class TypeResolver {
     final Variable v2 = unifier.variable();
     final Ast.Exp e2b = deduceExpType(env, case_.exp, v2);
     final NavigableSet<String> labelNames = new TreeSet<>();
-    final Term argType = map.get(e2b);
+    final Term argType = unaliasTerm(map.get(e2b));
     if (argType instanceof Sequence) {
       final List<String> fieldList = fieldList((Sequence) argType);
       if (fieldList != null) {
@@ -4534,7 +4537,12 @@ public class TypeResolver {
                   subst.plus(
                       (TypeVar) alias.parameterTypes.get(i), argTerms.right(i));
             }
-            final Term aliasTerm = toTerm(alias.type, subst);
+            final Term body = toTerm(alias.type, subst);
+            final Term aliasTerm =
+                aliasTerm(
+                    alias.name,
+                    body,
+                    ImmutableList.copyOf(argTerms.rightList()));
             return reg(namedType.copy(argTerms.leftList()), v, aliasTerm);
           }
 
@@ -4886,8 +4894,9 @@ public class TypeResolver {
               // We now know the type of the source record, say
               // "{a: int, b: real}". So, now we can fill out the ellipsis.
               assert v == v3;
-              if (t instanceof Sequence) {
-                final Sequence sequence = (Sequence) t;
+              final Term t2 = unaliasTerm(t);
+              if (t2 instanceof Sequence) {
+                final Sequence sequence = (Sequence) t2;
                 final List<String> fieldList = fieldList(sequence);
                 if (fieldList != null) {
                   final NavigableMap<String, Term> labelTerms2 = mutableMap();
@@ -5066,6 +5075,47 @@ public class TypeResolver {
     return unifier.apply(FN_TY_CON, arg, result);
   }
 
+  /**
+   * Creates a term for a type alias.
+   *
+   * <p>The first argument is the expanded body, so that the unifier can
+   * head-reduce by replacing the term with {@code terms.get(0)}; the rest are
+   * the alias's arguments, which {@link TypeMap} needs to rebuild the {@link
+   * AliasType}.
+   */
+  private Sequence aliasTerm(
+      String name, Term body, List<? extends Term> args) {
+    final List<Term> terms = new ArrayList<>();
+    terms.add(body);
+    terms.addAll(args);
+    return unifier.apply(ALIAS_TY_CON + ":" + name, terms);
+  }
+
+  /** Returns whether a term is a type alias, as built by {@link #aliasTerm}. */
+  static boolean isAliasTerm(Term term) {
+    return term instanceof Sequence
+        && ((Sequence) term).operator.startsWith(ALIAS_TY_CON + ":");
+  }
+
+  /** Returns the name of an alias term. */
+  static String aliasTermName(Sequence sequence) {
+    return sequence.operator.substring(ALIAS_TY_CON.length() + 1);
+  }
+
+  /**
+   * Expands a term until it is not an alias term.
+   *
+   * <p>An alias is transparent, so anything that reads a term's structure --
+   * asking what fields a record has, say -- must look through it. An alias
+   * term's first argument is its body.
+   */
+  static Term unaliasTerm(Term term) {
+    while (isAliasTerm(term)) {
+      term = ((Sequence) term).terms.get(0);
+    }
+    return term;
+  }
+
   private Term recordTerm(NavigableMap<String, ? extends Term> labelTypes) {
     final NavigableSet<String> labels = labelTypes.navigableKeySet();
     if (TypeSystem.areContiguousIntegers(labels) && labelTypes.size() != 1) {
@@ -5101,14 +5151,15 @@ public class TypeResolver {
         final Variable variable = subst.get((TypeVar) type);
         return variable != null ? variable : unifier.variable();
       case ALIAS_TYPE:
-        // During type inference, we pretend that an alias type is its
-        // underlying type. For example, if we have 'type t = int', and
-        // 'val i = 1: t', we treat 'i' has having type 'int'.
-        //
-        // After type inference is complete, can can deduce the true type
-        // bottom-up. Thus, '[1: t]' has type 't list'.
+        // An alias survives inference, as in Standard ML, so that '[n]' where
+        // 'n: t' has type 't list'. The term carries the expanded body as its
+        // first argument, and the unifier expands it -- head-reduction --
+        // only when it meets a term with a different operator.
         final AliasType aliasType = (AliasType) type;
-        return toTerm(aliasType.type, subst);
+        return aliasTerm(
+            aliasType.name,
+            toTerm(aliasType.type, subst),
+            toTerms(aliasType.arguments, subst));
       case DATA_TYPE:
         final DataType dataType = (DataType) type;
         if (dataType.name.equals(BAG_TY_CON)) {
