@@ -761,7 +761,7 @@ public class RelTranslator {
           @Override
           protected Core.Exp visit(Core.Id id) {
             final Core.Exp exp = map.get(id.idPat);
-            return exp != null ? exp : id;
+            return exp != null ? core.at(exp, id.pos) : id;
           }
         });
   }

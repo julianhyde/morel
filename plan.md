@@ -338,8 +338,16 @@ something settled — §8's principle, applied to the sequence itself.
         down today -- so dual.smli has it written both ways now.
 
         hybrid.smli and dual.smli are therefore clean through the
-        tree. What remains is plan text, which step 3 rebaselines,
-        and one lost source position.
+        tree.
+
+        The lost source position was the last of it. Both the
+        translation and the lowering substitute one expression for
+        another — a binder for `$0`, `$0` for the element — and both
+        dropped the position of the occurrence they replaced, so
+        `from i in [{a = fn x => x}] order i` blamed nothing at all
+        (`0.0-0.0`) where it used to blame the `i` the user wrote.
+        `core.at` carries it, for the two shapes an access expression
+        takes.
 
         Three ways out remain for the channel itself. Materialize
         more in the lowering, which cannot work, because whether a
@@ -355,6 +363,20 @@ something settled — §8's principle, applied to the sequence itself.
         mentions) that a tree needs as much as a step list. The issue
         itself gives the reason: a tree is closer to `RelNode` than a
         step list is.
+      Where the round trip stands, with the suite routed through it:
+      every script agrees except for plan text, which step 3
+      rebaselines, and such-that.smli. Those two are the round trip's
+      own doing rather than the tree's, and they are the reason it
+      cannot be the flip. `fun cheap beer = exists bar1, ... where
+      sells (...)` has its body lowered when it is declared, and `from
+      b where cheap b` then asks `Expander` to ground `b` by reading
+      that body — which is now a step list the lowering shaped, not
+      the one the resolver built. One loses the grounding; the other
+      reaches a generator that scans a collection twice under the same
+      pattern, which the step list reads by shadowing and a tree
+      cannot represent at all. Both go when grounding moves to
+      `RelExpander`, which returns a tree and has no shadowing to
+      represent.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
