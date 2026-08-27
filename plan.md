@@ -304,13 +304,44 @@ something settled — §8's principle, applied to the sequence itself.
         text with no way to know what record `v$108` is — "unresolved
         flex record".
 
-        Three ways out. Materialize more in the lowering, which
-        cannot work, because whether a fragment crosses the Calcite
-        boundary is decided inside `CalciteCompiler`, long after
-        lowering. Emit types with the text, which is local — a
-        printing mode that annotates binders — and keeps plans
-        readable, but leaves a lossy channel in place. Or translate
-        the tree to `RelNode`s directly, which is where this was
+        But that error was not the channel's fault. The fragment that
+        crossed was `#x`: a selector with no argument, because the
+        lowering had built `#x {x = x_3}`, reading a field out of a
+        record it was constructing on the spot. `translate` pushes
+        down `#f v`, a field of a row; a selector applied to a record
+        it did not build is neither that nor anything else it knows,
+        so it sends the *function* across as a scalar fragment, and a
+        bare `#x` has no record to resolve against.
+
+        So the lowering reads the field instead of building the
+        record: `#b {a = x, b = y}` is `y`. It is the dual of
+        `simplifyTuple`, which the translation already uses in the
+        other direction, and it is what the step list does anyway —
+        it reads the field off the row its `yield` left behind. That
+        closes hybrid.smli's error and one of dual.smli's two
+        pushdowns, and most of the plan-text difference goes with it:
+        relational.smli's `#2 (#0 (v$1998))` is `#2 v$1998` again.
+
+        One query is still not pushed down, and it is the same
+        question from the other side. `from x in (from e in
+        scott.emps yield e.deptno) union ... group x` scans a nested
+        query in the step list, so `join` binds `x`, and `group x`
+        finds it. The lowering inlines the nested query and leaves a
+        scalar `yield` where it was, and `yield_` extends the
+        environment and the map only for a record yield; a scalar one
+        projects and returns the context it was handed. The binding
+        is there to be taken — the `yield` step carries it — and
+        Calcite already represents a scalar variable as a
+        one-field row, which is what the record branch would build.
+
+        Three ways out remain for the channel itself. Materialize
+        more in the lowering, which cannot work, because whether a
+        fragment crosses the Calcite boundary is decided inside
+        `CalciteCompiler`, long after lowering. Emit types with the
+        text, which is local — a printing mode that annotates
+        binders — and keeps plans readable, but leaves a lossy
+        channel in place. Or translate the tree to `RelNode`s
+        directly, which is where this was
         always going: 1,223 lines of which the step-shaped part is
         small (`Core.FromStep` twice, `Core.Scan` three times), the
         bulk being expression conversion and `RelContext` (52
