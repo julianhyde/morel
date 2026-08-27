@@ -257,6 +257,31 @@ public enum CoreBuilder {
     return new Core.Id(Pos.ZERO, idPat);
   }
 
+  /**
+   * Returns an expression at a given position, if it is of a kind whose
+   * position can be moved; otherwise returns it unchanged.
+   *
+   * <p>Use this where one expression is substituted for another, so that an
+   * error is blamed on the occurrence that was replaced rather than on wherever
+   * the replacement happened to be built. {@code from i in xs order i} becomes
+   * an order over the row, and it is the {@code i} the user wrote that
+   * "comparison not defined" should point at.
+   */
+  public Core.Exp at(Core.Exp exp, Pos pos) {
+    if (pos.equals(Pos.ZERO) || pos.equals(exp.pos)) {
+      return exp;
+    }
+    switch (exp.op) {
+      case ID:
+        return id(pos, ((Core.Id) exp).idPat);
+      case APPLY:
+        final Core.Apply apply = (Core.Apply) exp;
+        return apply(pos, apply.type, apply.fn, apply.arg);
+      default:
+        return exp;
+    }
+  }
+
   /** Creates a reference to a constructor. */
   public Core.Id constructor(
       TypeSystem typeSystem, BuiltIn.Constructor constructor) {

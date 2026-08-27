@@ -365,10 +365,10 @@ public class RelLowerer {
           @Override
           protected Core.Exp visit(Core.Id id) {
             if (e0 != null && id.idPat.name.equals("$0")) {
-              return e0;
+              return core.at(e0, id.pos);
             }
             if (e1 != null && id.idPat.name.equals("$1")) {
-              return e1;
+              return core.at(e1, id.pos);
             }
             return id;
           }
@@ -412,7 +412,7 @@ public class RelLowerer {
         new Shuttle(typeSystem) {
           @Override
           protected Core.Exp visit(Core.Id id) {
-            return id.idPat.equals(param) ? element : id;
+            return id.idPat.equals(param) ? core.at(element, id.pos) : id;
           }
 
           @Override
