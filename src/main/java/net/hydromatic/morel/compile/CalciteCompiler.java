@@ -628,6 +628,26 @@ public class CalciteCompiler extends Compiler {
     }
     RexNode rex = translate(cx, exp);
     cx.relBuilder.project(rex);
+    if (env.atom && !(env.bindings.get(0).id.type instanceof RecordType)) {
+      // An atomizing yield binds one name to the row itself, and Calcite
+      // represents a scalar variable as a one-field row -- which is what this
+      // projection is. So bind it, as the record branch does; otherwise a
+      // later step that reads the name, such as the 'group x' after a union
+      // of scalars, looks it up and finds nothing.
+      //
+      // The column keeps whatever name Calcite gave it. Only Morel looks the
+      // variable up, and by then it is the sole field; renaming the column
+      // after the binder would put a generated name such as 'v$3' into every
+      // plan that ends in a yield of an anonymous value.
+      final Binding binding = env.bindings.get(0);
+      final ImmutableSortedMap<String, VarData> map =
+          ImmutableSortedMap.of(
+              binding.id.name,
+              new VarData(
+                  binding.id.type, 0, cx.relBuilder.peek().getRowType()));
+      return new RelContext(
+          cx.env.bindAll(env.bindings), cx, cx.relBuilder, map, 1);
+    }
     return cx;
   }
 

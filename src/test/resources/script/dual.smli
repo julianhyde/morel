@@ -473,6 +473,24 @@ from x in (from e in scott.emps yield e.deptno)
 >
 > val it : {c:int, x:int} list
 
+(* The same, with the first branch written inline. The yield is
+ * atomizing -- it binds one name to the row itself, rather than a
+ * record of columns -- and the group has to find that name after the
+ * union. *)
+from e in scott.emps
+  yield e.deptno
+  union (from d in scott.depts yield d.deptno)
+  group {x = current} compute {c = count over ()}
+  order x;
+> c x
+> - --
+> 4 10
+> 6 20
+> 7 30
+> 1 40
+>
+> val it : {c:int, x:int} list
+
 from i in [1, 2, 3] union [2, 5, 4];
 > val it = [1,2,3,2,5,4] : int list
 from i in [1, 2, 3] union [2, 5, 4], [2, 1, 7];
