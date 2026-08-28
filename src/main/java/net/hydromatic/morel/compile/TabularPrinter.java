@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.compile;
 
+import static java.util.Objects.requireNonNull;
+
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
@@ -291,7 +293,7 @@ class TabularPrinter {
       }
       final RowIter row = new RowIter(root.children, iters);
       do {
-        appendLine(buf, row.next());
+        appendLine(buf, requireNonNull(row.next()));
       } while (row.hasNext());
     }
     if (rootCell.truncated) {

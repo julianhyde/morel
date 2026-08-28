@@ -2148,7 +2148,7 @@ public class Compiler {
           d -> {
             if (false) {
               // Don't recurse into refCode... or we'll never get out alive.
-              d.arg("refCode", refCode);
+              d.arg("refCode", requireNonNull(refCode));
             }
           });
     }

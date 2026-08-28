@@ -123,6 +123,19 @@ public class Static {
     return requireNonNull(Iterables.getOnlyElement(iterable));
   }
 
+  /**
+   * Returns the last element of an iterable.
+   *
+   * <p>As {@link Iterables#getLast(Iterable)}, but the result is known to be
+   * not null. (See {@link #only(Iterable)} for why Guava's method appears to
+   * return a value that may be null.)
+   *
+   * @throws java.util.NoSuchElementException if the iterable is empty
+   */
+  public static <E> E last(Iterable<E> iterable) {
+    return requireNonNull(Iterables.getLast(iterable));
+  }
+
   /** Returns all but the first element of a list. */
   public static <E> List<E> skip(List<E> list) {
     return skip(list, 1);
