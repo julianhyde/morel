@@ -77,6 +77,7 @@ License.
 
     <!-- Component and plugin versions, in alphabetical order. -->
     <!-- // lint: sort until '^$' where '##<[a-z]' -->
+    <avatica.version>1.28.0</avatica.version>
     <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
     <calcite.version>1.42.0</calcite.version>
     <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
@@ -86,10 +87,14 @@ License.
          In JDK 11 through 20, you must add '-Dcheckstyle.version=10.26.1'
          because Checkstyle 13 requires JDK 21 or higher. -->
     <checkstyle.version>13.10.0</checkstyle.version>
+    <commons-dbcp2.version>2.11.0</commons-dbcp2.version>
+    <commons-io.version>2.15.0</commons-io.version>
     <!-- Error Prone 2.42.0 is the last version that works on JDK 17.
          We disable Error Prone and NullAway on earlier JDK versions. -->
     <errorprone.version>2.42.0</errorprone.version>
-    <findbugs.version>3.0.2</findbugs.version>
+    <!-- The version of the annotations that Guava uses. Unrelated to
+         'errorprone.version', above, which is the version of the analyzer. -->
+    <errorprone-annotations.version>2.47.0</errorprone-annotations.version>
     <foodmart-data-hsqldb.version>0.5</foodmart-data-hsqldb.version>
     <git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
     <googleformatter-maven-plugin.version>1.7.5</googleformatter-maven-plugin.version>
@@ -151,14 +156,20 @@ License.
   <dependencies>
     <!-- // lint: sort until '#</dependencies>' where '##  <groupId>' -->
     <dependency>
-      <groupId>com.google.code.findbugs</groupId>
-      <artifactId>jsr305</artifactId>
-      <version>${findbugs.version}</version>
+      <groupId>com.google.errorprone</groupId>
+      <artifactId>error_prone_annotations</artifactId>
+      <version>${errorprone-annotations.version}</version>
     </dependency>
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <version>${guava.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>${commons-io.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>net.hydromatic</groupId>
@@ -171,9 +182,31 @@ License.
       <version>${scott-data-hsqldb.version}</version>
     </dependency>
     <dependency>
+      <groupId>org.apache.calcite.avatica</groupId>
+      <artifactId>avatica-core</artifactId>
+      <version>${avatica.version}</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.calcite</groupId>
       <artifactId>calcite-core</artifactId>
       <version>${calcite.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.calcite</groupId>
+      <artifactId>calcite-linq4j</artifactId>
+      <version>${calcite.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-dbcp2</artifactId>
+      <version>${commons-dbcp2.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.hamcrest</groupId>
+      <artifactId>hamcrest</artifactId>
+      <version>${hamcrest.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.hamcrest</groupId>
