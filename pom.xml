@@ -127,8 +127,8 @@ License.
     <git-commit-id.skip>false</git-commit-id.skip>
     <maven-javadoc-plugin.additionalOptions>-html5</maven-javadoc-plugin.additionalOptions>
     <maven-javadoc-plugin.excludePackageNames>net.hydromatic.morel.parse</maven-javadoc-plugin.excludePackageNames>
-    <!-- Set to 'ERROR' to make NullAway violations fail the build. -->
-    <nullaway.severity>WARN</nullaway.severity>
+    <!-- Set to 'WARN' to allow NullAway violations while you fix them. -->
+    <nullaway.severity>ERROR</nullaway.severity>
   </properties>
 
   <!-- Environment settings. -->
@@ -573,7 +573,7 @@ License.
                 <arg>10000</arg>
                 <arg>-Xmaxwarns</arg>
                 <arg>10000</arg>
-                <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:${nullaway.severity} -XepOpt:NullAway:AnnotatedPackages=net.hydromatic.morel -XepOpt:NullAway:ExcludedPaths=.*/generated-sources/.* -XepOpt:NullAway:AcknowledgeRestrictiveAnnotations=true -XepOpt:NullAway:AssertsEnabled=true</arg>
+                <arg>-Xplugin:ErrorProne -XepExcludedPaths:.*/generated-sources/.* -XepDisableAllChecks -Xep:NullAway:${nullaway.severity} -XepOpt:NullAway:AnnotatedPackages=net.hydromatic.morel -XepOpt:NullAway:AcknowledgeRestrictiveAnnotations=true -XepOpt:NullAway:AssertsEnabled=true</arg>
                 <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
                 <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
                 <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
