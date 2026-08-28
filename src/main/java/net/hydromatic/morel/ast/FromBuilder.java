@@ -608,7 +608,8 @@ public class FromBuilder {
         && exp.type.op() == Op.RECORD_TYPE) {
       final String name = typeSystem.nameGenerator.get();
       yield_(name, exp);
-      final Core.Id id = core.id(getOnlyElement(stepEnv().bindings).id);
+      final Core.Id id =
+          core.id(requireNonNull(getOnlyElement(stepEnv().bindings)).id);
       final RecordLikeType recordType = (RecordLikeType) exp.type;
       final List<Core.Exp> fields = new ArrayList<>();
       for (int i = 0; i < recordType.argNameTypes().size(); i++) {

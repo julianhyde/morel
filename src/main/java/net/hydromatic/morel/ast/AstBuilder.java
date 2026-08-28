@@ -715,7 +715,8 @@ public enum AstBuilder {
         pos, ImmutableList.copyOf(tyVars), name, ImmutableList.copyOf(tyCons));
   }
 
-  public Ast.TyCon typeConstructor(Pos pos, Ast.Id id, Ast.Type type) {
+  public Ast.TyCon typeConstructor(
+      Pos pos, Ast.Id id, Ast.@Nullable Type type) {
     return new Ast.TyCon(pos, id, type);
   }
 
@@ -788,12 +789,16 @@ public enum AstBuilder {
     return new Ast.Compute(pos, aggregate);
   }
 
-  public Ast.Group group(Pos pos, Ast.Exp groupExp, Ast.Exp aggregate) {
+  public Ast.Group group(
+      Pos pos, Ast.Exp groupExp, Ast.@Nullable Exp aggregate) {
     return new Ast.Group(pos, Op.GROUP, null, groupExp, aggregate);
   }
 
   public Ast.Group group(
-      Pos pos, Ast.@Nullable Id binder, Ast.Exp groupExp, Ast.Exp aggregate) {
+      Pos pos,
+      Ast.@Nullable Id binder,
+      Ast.Exp groupExp,
+      Ast.@Nullable Exp aggregate) {
     return new Ast.Group(pos, Op.GROUP, binder, groupExp, aggregate);
   }
 

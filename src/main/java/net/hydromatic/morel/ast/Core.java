@@ -2162,10 +2162,14 @@ public class Core {
       if (env.atom) {
         if (aggregates.isEmpty()) {
           w.append(" group ")
-              .append(getOnlyElement(groupExps.values()), 0, right);
+              .append(
+                  requireNonNull(getOnlyElement(groupExps.values())), 0, right);
         } else {
           w.append(" group {} compute ")
-              .append(getOnlyElement(aggregates.values()), 0, right);
+              .append(
+                  requireNonNull(getOnlyElement(aggregates.values())),
+                  0,
+                  right);
         }
       } else {
         w.append(" group");
