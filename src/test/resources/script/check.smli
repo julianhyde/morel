@@ -654,8 +654,9 @@ val h6: int -> int = fn i => i;
 val h7: plain -> plain = fn i => i;
 > val h7 = fn : plain -> plain
 
-(* A conversion between types with different erasures is an ordinary type
- * error; the unifier names both, and says which is an alias. *)
+(* A binding whose annotation has a different erasure is an ordinary type
+ * error, as the conversion above was; the unifier names both, and says which
+ * is an alias. *)
 val bad2: nat = "abc";
 > stdIn:1.1-1.22 Error: Cannot deduce type: conflict: nat (alias for int) vs string
 >   raised at: stdIn:1.1-1.22
@@ -772,6 +773,22 @@ compFn (~1, 2);
 > uncaught exception Constraint [~1 is not a valid nat: component 1]
 >   raised at: stdIn:1.5-1.32
 
+(* A record pattern claims per field, as a tuple pattern claims per
+ * component. A field the pattern does not mention claims nothing. *)
+val {x = fieldX: nat, y = fieldY} = {x = ~1, y = 2};
+> uncaught exception Constraint [~1 is not a valid nat: field x]
+>   raised at: stdIn:1.5-1.52
+fun fieldFn {x: nat, y: int} = x;
+> val fieldFn = fn : {x:nat, y:int} -> nat
+fieldFn {x = ~1, y = 2};
+> uncaught exception Constraint [~1 is not a valid nat: field x]
+>   raised at: stdIn:1.5-1.33
+fieldFn {x = 1, y = 2};
+> val it = 1 : int
+val {x = ellipsisX: nat, ...} = {x = ~1, y = 2};
+> uncaught exception Constraint [~1 is not a valid nat: field x]
+>   raised at: stdIn:1.5-1.48
+
 (* Entering a branch whose pattern claims a type is where a value flows into
  * the claim, so that is where the check goes. A pattern stays irrefutable: it
  * still matches every value, and may then raise. *)
@@ -794,22 +811,6 @@ firstOrNat 5;
 firstOrNat ~1;
 > uncaught exception Constraint [~1 is not a valid nat]
 >   raised at: stdIn:1.24-1.47
-
-(* A record pattern claims per field, as a tuple pattern claims per
- * component. A field the pattern does not mention claims nothing. *)
-val {x = fieldX: nat, y = fieldY} = {x = ~1, y = 2};
-> uncaught exception Constraint [~1 is not a valid nat: field x]
->   raised at: stdIn:1.5-1.52
-fun fieldFn {x: nat, y: int} = x;
-> val fieldFn = fn : {x:nat, y:int} -> nat
-fieldFn {x = ~1, y = 2};
-> uncaught exception Constraint [~1 is not a valid nat: field x]
->   raised at: stdIn:1.5-1.33
-fieldFn {x = 1, y = 2};
-> val it = 1 : int
-val {x = ellipsisX: nat, ...} = {x = ~1, y = 2};
-> uncaught exception Constraint [~1 is not a valid nat: field x]
->   raised at: stdIn:1.5-1.48
 
 (* A pattern that destructures inside a 'case' branch is not checked: the
  * check is put on a name the pattern binds, and this one binds none that
@@ -1200,7 +1201,7 @@ val stackedHigh: typeof stacked = 200;
 > uncaught exception Constraint [200 is not a valid value]
 >   raised at: stdIn:1.5-1.38
 
-(* --- Constraints on types that are not named -------------------- *)
+(* --- Conditions on types that are not named --------------------- *)
 
 (* A type may carry a condition wherever it is written, not only where it is
  * declared, so a constraint can sit on the thing it is about. *)
@@ -1341,6 +1342,8 @@ Sys.parseTree "val x = fn i => (i check j => j > 0)";
 > val it =
 >   "(val (valBind (idPat x) (fn (match (idPat i) (check_exp i check j => j > 0)))))"
 >   : string
+
+(* --- Shadowing, which has to come last -------------------------- *)
 
 (* Whether a reference is to the basis is decided by the binding, not by the
  * name. A user who shadows a basis name has declared a value of their own,
