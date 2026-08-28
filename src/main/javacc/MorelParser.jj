@@ -1349,11 +1349,11 @@ Exp expressionNoCheck() :
     }
   |
     <AS> t = type() {
-      e = ast.cast(e.pos.plus(t.pos), Op.AS, e, t);
+      e = ast.as(e.pos.plus(t.pos), e, t);
     }
   |
     <AS_OPT> t = type() {
-      e = ast.cast(e.pos.plus(t.pos), Op.AS_OPT, e, t);
+      e = ast.asOpt(e.pos.plus(t.pos), e, t);
     }
   )*
   { return e; }

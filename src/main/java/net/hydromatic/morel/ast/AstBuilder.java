@@ -645,8 +645,20 @@ public enum AstBuilder {
     return new Ast.InfixPat(pos, op, p0, p1);
   }
 
-  public Ast.Cast cast(Pos pos, Op op, Ast.Exp exp, Ast.Type type) {
-    return new Ast.Cast(pos, op, exp, type);
+  /**
+   * Creates an "{@code exp as type}" conversion, which raises {@code
+   * Constraint} if the type's condition does not hold of the value.
+   */
+  public Ast.Cast as(Pos pos, Ast.Exp exp, Ast.Type type) {
+    return new Ast.Cast(pos, Op.AS, exp, type);
+  }
+
+  /**
+   * Creates an "{@code exp asOpt type}" conversion, which answers {@code NONE}
+   * if the type's condition does not hold of the value.
+   */
+  public Ast.Cast asOpt(Pos pos, Ast.Exp exp, Ast.Type type) {
+    return new Ast.Cast(pos, Op.AS_OPT, exp, type);
   }
 
   public Ast.AnnotatedExp annotatedExp(
