@@ -23,12 +23,12 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
+import static net.hydromatic.morel.util.Static.only;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import java.util.AbstractList;
 import java.util.ArrayList;
@@ -417,7 +417,7 @@ public class TypeSystem {
       Collection<Map.Entry<String, Type>> argNameTypes) {
     switch (argNameTypes.size()) {
       case 1:
-        return Iterables.getOnlyElement(argNameTypes).getValue();
+        return only(argNameTypes).getValue();
       default:
         return recordType(argNameTypes);
     }
