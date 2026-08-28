@@ -613,7 +613,7 @@ public enum Prop {
    * Removes the value of this property from a map, returning the previous value
    * or null.
    */
-  public Object remove(Map<Prop, Object> map) {
+  public @Nullable Object remove(Map<Prop, Object> map) {
     return map.remove(this);
   }
 
