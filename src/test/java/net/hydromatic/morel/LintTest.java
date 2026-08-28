@@ -1545,7 +1545,6 @@ public class LintTest {
           && image.charAt(0) == '"'
           && image.charAt(image.length() - 1) == '"') {
         final String word = image.substring(1, image.length() - 1);
-        // Keywords are alphabetic, and may be camel-case, e.g. 'asOpt'.
         if (word.matches("[a-z][a-zA-Z_]*")) {
           fromGrammar.add(word);
         }
