@@ -841,6 +841,18 @@ Exp fn() :
   }
 }
 
+/** Parses a "{@code check match}" clause. */
+void check(List<Ast.Fn> checks) :
+{
+  final List<Match> matchList;
+  final Span span;
+}
+{
+  <CHECK> { span = Span.of(pos()); } matchList = matchList() {
+    checks.add(ast.fn(span.end(this), matchList));
+  }
+}
+
 List<Match> matchList() :
 {
   Match match;
@@ -1298,24 +1310,20 @@ Exp expression0() :
 Exp expression() :
 {
   Exp e;
-  List<Match> matchList;
   final List<Ast.Fn> checks = new ArrayList<>();
-  Span span;
-  Pos pos = null;
 }
 {
   e = expressionNoCheck()
   (
-    <CHECK> { span = Span.of(pos()); } matchList = matchList() {
-      pos = span.end(this);
-      checks.add(ast.fn(pos, matchList));
-    }
+    check(checks)
   )*
   {
     // Several conditions belong to one expression, as they do to one type
     // declaration; nesting them would put each in the type of the last, and
     // only the last would be seen.
-    return checks.isEmpty() ? e : ast.checkExp(e.pos.plus(pos), e, checks);
+    return checks.isEmpty() ? e
+        : ast.checkExp(
+            e.pos.plus(checks.get(checks.size() - 1).pos), e, checks);
   }
 }
 
@@ -2414,8 +2422,6 @@ Ast.Type type() :
 {
   final List<Type> types = new ArrayList<>();
   final List<Ast.Fn> checks = new ArrayList<>();
-  List<Match> matchList;
-  Span span;
   Type t;
 }
 {
@@ -2427,9 +2433,7 @@ Ast.Type type() :
     t = types.size() == 1 ? t : ast.foldFunctionType(types);
   }
   (
-    <CHECK> { span = Span.of(pos()); } matchList = matchList() {
-      checks.add(ast.fn(span.end(this), matchList));
-    }
+    check(checks)
   )*
   {
     return checks.isEmpty() ? t
