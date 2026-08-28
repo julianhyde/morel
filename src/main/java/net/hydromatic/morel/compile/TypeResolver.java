@@ -120,7 +120,7 @@ import net.hydromatic.morel.util.Unifier.Term;
 import net.hydromatic.morel.util.Unifier.TermTerm;
 import net.hydromatic.morel.util.Unifier.Variable;
 import org.apache.calcite.util.Holder;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Resolves all the types within an expression. */
 // @SuppressWarnings("StaticPseudoFunctionalStyleMethod")

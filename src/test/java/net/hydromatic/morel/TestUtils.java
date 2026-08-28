@@ -44,9 +44,9 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.calcite.util.Sources;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.incava.diff.Diff;
 import org.incava.diff.Difference;
+import org.jspecify.annotations.Nullable;
 
 /** Utility methods for testing. */
 public class TestUtils {

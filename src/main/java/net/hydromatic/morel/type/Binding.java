@@ -27,7 +27,7 @@ import java.util.Objects;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.eval.Unit;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Binding of a name to a type and a value.

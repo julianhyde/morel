@@ -36,7 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import net.hydromatic.morel.util.JavaVersion;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Property.

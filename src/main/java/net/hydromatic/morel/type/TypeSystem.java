@@ -50,7 +50,7 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.eval.Variants;
 import net.hydromatic.morel.type.Type.Key;
 import net.hydromatic.morel.util.ComparableSingletonList;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A table that contains all types in use, indexed by their description (e.g.

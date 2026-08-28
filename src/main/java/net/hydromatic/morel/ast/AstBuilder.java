@@ -35,7 +35,7 @@ import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.PairList;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Builds parse tree nodes. */
 public enum AstBuilder {

@@ -65,7 +65,6 @@ import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.MorelException;
 import net.hydromatic.morel.util.MorelHighlighter;
 import net.hydromatic.morel.util.Pair;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -81,6 +80,7 @@ import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 import org.jline.utils.NonBlockingReader;
+import org.jspecify.annotations.Nullable;
 
 /** Command shell for ML, powered by JLine3. */
 public class Shell {

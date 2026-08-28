@@ -47,7 +47,7 @@ import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Various subclasses of AST nodes. */
 public class Ast {

@@ -33,7 +33,7 @@ import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.eval.Unit;
 import org.apache.calcite.runtime.FlatLists;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** A type and a range set. */
 @SuppressWarnings("rawtypes")

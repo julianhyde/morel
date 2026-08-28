@@ -25,11 +25,11 @@ import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.ColorScheme.Category;
 import net.hydromatic.morel.util.MorelHighlighter;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jline.reader.Highlighter;
 import org.jline.reader.LineReader;
 import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStringBuilder;
+import org.jspecify.annotations.Nullable;
 
 /**
  * JLine {@link Highlighter} that colors Morel input in the shell.

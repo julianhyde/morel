@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 import net.hydromatic.morel.SignatureChecker;
 import net.hydromatic.morel.TestUtils;
 import net.hydromatic.morel.eval.Prop;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /** Generates code from metadata. */
 public class Generation {

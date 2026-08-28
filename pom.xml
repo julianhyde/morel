@@ -80,9 +80,6 @@ License.
     <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
     <calcite.version>1.42.0</calcite.version>
     <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
-    <!-- Checker Framework 4.x requires JDK 11 or higher, so we stay on
-         the 3.x line, whose annotations are compiled for JDK 8. -->
-    <checkerframework.version>3.55.1</checkerframework.version>
     <!-- We support (and test) Checkstyle as low as 9.3.
          In JDK 8 through 10, you must add '-Dcheckstyle.version=9.3'
          because Checkstyle 10 requires JDK 11 or higher.
@@ -127,7 +124,6 @@ License.
     <git-commit-id.skip>false</git-commit-id.skip>
     <maven-javadoc-plugin.additionalOptions>-html5</maven-javadoc-plugin.additionalOptions>
     <maven-javadoc-plugin.excludePackageNames>net.hydromatic.morel.parse</maven-javadoc-plugin.excludePackageNames>
-    <!-- Set to 'WARN' to allow NullAway violations while you fix them. -->
     <nullaway.severity>ERROR</nullaway.severity>
   </properties>
 
@@ -178,11 +174,6 @@ License.
       <groupId>org.apache.calcite</groupId>
       <artifactId>calcite-core</artifactId>
       <version>${calcite.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.checkerframework</groupId>
-      <artifactId>checker-qual</artifactId>
-      <version>${checkerframework.version}</version>
     </dependency>
     <dependency>
       <groupId>org.hamcrest</groupId>

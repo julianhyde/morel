@@ -41,7 +41,7 @@ import net.hydromatic.morel.datalog.DatalogAst.Rule;
 import net.hydromatic.morel.datalog.DatalogAst.Statement;
 import net.hydromatic.morel.datalog.DatalogAst.Term;
 import net.hydromatic.morel.datalog.DatalogAst.Variable;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Translates Datalog programs to Morel source code.

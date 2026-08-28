@@ -28,7 +28,7 @@ import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.util.PairList;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One endpoint of a range: either unbounded (representing −&infin; or +&infin;)

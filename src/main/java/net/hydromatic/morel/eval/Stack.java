@@ -23,7 +23,7 @@ import static java.util.Objects.requireNonNull;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Evaluation stack for the Morel interpreter.
