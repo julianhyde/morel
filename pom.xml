@@ -90,8 +90,9 @@ License.
          because Checkstyle 13 requires JDK 21 or higher. -->
     <checkstyle.version>13.10.0</checkstyle.version>
     <!-- Error Prone (which hosts NullAway) requires JDK 17 or higher;
-         see the 'nullaway' profile. -->
-    <errorprone.version>2.50.0</errorprone.version>
+         see the 'nullaway' profile. We stay on 2.41.0 because 2.45.0 and
+         later are compiled for JDK 21, and we still build on JDK 17. -->
+    <errorprone.version>2.41.0</errorprone.version>
     <findbugs.version>3.0.2</findbugs.version>
     <foodmart-data-hsqldb.version>0.5</foodmart-data-hsqldb.version>
     <git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
