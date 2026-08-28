@@ -566,6 +566,9 @@ License.
               <fork>true</fork>
               <compilerArgs>
                 <arg>-XDcompilePolicy=simple</arg>
+                <!-- Error Prone requires this option on JDK 21 and lower;
+                     later JDKs ignore it. -->
+                <arg>-XDaddTypeAnnotationsToSymbol=true</arg>
                 <arg>--should-stop=ifError=FLOW</arg>
                 <!-- Raise javac's limit of 100; there are more
                      violations than that, and we want to see them all. -->
