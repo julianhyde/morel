@@ -102,7 +102,11 @@ public class AliasType extends ParameterizedType {
       return computeMoniker(name, arguments);
     }
     final StringBuilder b = new StringBuilder(type.moniker());
-    checks.forEach(c -> b.append(" check ").append(c.matchListString()));
+    checks.forEach(
+        c -> {
+          b.append(" check ");
+          c.appendMatchList(b);
+        });
     return b.toString();
   }
 

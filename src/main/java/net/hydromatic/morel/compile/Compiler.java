@@ -1844,7 +1844,10 @@ public class Compiler {
                 .append(" = ")
                 .append(type.type.key());
         type.checks.forEach(
-            check -> b.append(" check ").append(check.matchListString()));
+            check -> {
+              b.append(" check ");
+              check.appendMatchList(b);
+            });
         final String line = b.toString();
         actions.add((outLines, outBindings, evalEnv) -> outLines.accept(line));
       }
