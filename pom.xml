@@ -80,12 +80,18 @@ License.
     <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
     <calcite.version>1.42.0</calcite.version>
     <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
+    <!-- Checker Framework 4.x requires JDK 11 or higher, so we stay on
+         the 3.x line, whose annotations are compiled for JDK 8. -->
+    <checkerframework.version>3.55.1</checkerframework.version>
     <!-- We support (and test) Checkstyle as low as 9.3.
          In JDK 8 through 10, you must add '-Dcheckstyle.version=9.3'
          because Checkstyle 10 requires JDK 11 or higher.
          In JDK 11 through 20, you must add '-Dcheckstyle.version=10.26.1'
          because Checkstyle 13 requires JDK 21 or higher. -->
     <checkstyle.version>13.10.0</checkstyle.version>
+    <!-- Error Prone (which hosts NullAway) requires JDK 17 or higher;
+         see the 'nullaway' profile. -->
+    <errorprone.version>2.50.0</errorprone.version>
     <findbugs.version>3.0.2</findbugs.version>
     <foodmart-data-hsqldb.version>0.5</foodmart-data-hsqldb.version>
     <git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
@@ -113,6 +119,7 @@ License.
     <maven-site-plugin.version>3.21.0</maven-site-plugin.version>
     <maven-source-plugin.version>3.2.1</maven-source-plugin.version>
     <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
+    <nullaway.version>0.14.0</nullaway.version>
     <scott-data-hsqldb.version>0.3</scott-data-hsqldb.version>
     <slf4j.version>2.1.0-alpha1</slf4j.version>
     <versions-maven-plugin.version>2.21.0</versions-maven-plugin.version>
@@ -120,6 +127,8 @@ License.
     <git-commit-id.skip>false</git-commit-id.skip>
     <maven-javadoc-plugin.additionalOptions>-html5</maven-javadoc-plugin.additionalOptions>
     <maven-javadoc-plugin.excludePackageNames>net.hydromatic.morel.parse</maven-javadoc-plugin.excludePackageNames>
+    <!-- Set to 'ERROR' to make NullAway violations fail the build. -->
+    <nullaway.severity>WARN</nullaway.severity>
   </properties>
 
   <!-- Environment settings. -->
@@ -169,6 +178,11 @@ License.
       <groupId>org.apache.calcite</groupId>
       <artifactId>calcite-core</artifactId>
       <version>${calcite.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.checkerframework</groupId>
+      <artifactId>checker-qual</artifactId>
+      <version>${checkerframework.version}</version>
     </dependency>
     <dependency>
       <groupId>org.hamcrest</groupId>
@@ -527,6 +541,66 @@ License.
         <!-- Java 1.8 does not support -html5, so we pass another harmless option -->
         <maven-javadoc-html5>-notimestamp</maven-javadoc-html5>
       </properties>
+    </profile>
+    <profile>
+      <!-- Runs NullAway, which finds potential NullPointerExceptions.
+           NullAway is a plugin for Error Prone, and Error Prone requires
+           JDK 17 or higher, so on earlier JDKs we compile as before, and
+           the analysis is simply not performed.
+
+           Error Prone needs access to internal javac packages. We fork the
+           compiler and pass the necessary 'add-exports' options to it,
+           rather than putting them in '.mvn/jvm.config', because Maven
+           running on JDK 8 would not recognize them. -->
+      <id>nullaway</id>
+      <activation>
+        <jdk>[17,)</jdk>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>${maven-compiler-plugin.version}</version>
+            <configuration>
+              <fork>true</fork>
+              <compilerArgs>
+                <arg>-XDcompilePolicy=simple</arg>
+                <arg>--should-stop=ifError=FLOW</arg>
+                <!-- Raise javac's limit of 100; there are more
+                     violations than that, and we want to see them all. -->
+                <arg>-Xmaxerrs</arg>
+                <arg>10000</arg>
+                <arg>-Xmaxwarns</arg>
+                <arg>10000</arg>
+                <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:${nullaway.severity} -XepOpt:NullAway:AnnotatedPackages=net.hydromatic.morel -XepOpt:NullAway:ExcludedPaths=.*/generated-sources/.* -XepOpt:NullAway:AcknowledgeRestrictiveAnnotations=true -XepOpt:NullAway:AssertsEnabled=true</arg>
+                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
+                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
+                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
+                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
+                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+                <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+                <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
+              </compilerArgs>
+              <annotationProcessorPaths>
+                <path>
+                  <groupId>com.google.errorprone</groupId>
+                  <artifactId>error_prone_core</artifactId>
+                  <version>${errorprone.version}</version>
+                </path>
+                <path>
+                  <groupId>com.uber.nullaway</groupId>
+                  <artifactId>nullaway</artifactId>
+                  <version>${nullaway.version}</version>
+                </path>
+              </annotationProcessorPaths>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
   </profiles>
 </project>
