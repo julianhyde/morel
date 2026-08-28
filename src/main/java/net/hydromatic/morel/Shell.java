@@ -230,7 +230,7 @@ public class Shell {
     final Session session = new Session(map, typeSystem);
     Environment env = Environments.env(typeSystem, session, config.valueMap);
 
-    String code = config.eval;
+    String code = requireNonNull(config.eval);
     // Ensure the code ends with a semicolon
     if (!code.trim().endsWith(";")) {
       code = code + ";";

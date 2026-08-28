@@ -65,7 +65,7 @@ public class DatalogAst {
       this.outputs = outputsBuilder.build();
     }
 
-    public Declaration getDeclaration(String name) {
+    public @Nullable Declaration getDeclaration(String name) {
       return declarations.get(name);
     }
 

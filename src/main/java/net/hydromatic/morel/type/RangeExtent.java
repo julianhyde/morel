@@ -97,10 +97,10 @@ public class RangeExtent {
   }
 
   /**
-   * Derives the collection of values in the range, or returns empty if the
-   * range is infinite.
+   * Derives the collection of values in the range, or returns null if the range
+   * is infinite.
    */
-  private <E extends Comparable<E>> Iterable<E> toList(
+  private <E extends Comparable<E>> @Nullable Iterable<E> toList(
       Type type, TypeSystem typeSystem) {
     final List<E> list = new ArrayList<>();
     if (populate(typeSystem, type, "/", rangeSetMap, (Consumer<E>) list::add)) {

@@ -79,7 +79,9 @@ public class TypeSystem {
 
   /** Creates a binding of a type constructor value. */
   public Binding bindTyCon(DataType dataType, String tyConName) {
-    final Type type = dataType.typeConstructors(this).get(tyConName);
+    final Type type =
+        requireNonNull(
+            dataType.typeConstructors(this).get(tyConName), tyConName);
     if (type == DummyType.INSTANCE) {
       Object o = ComparableSingletonList.of(tyConName);
       if (dataType.name.equals(BuiltIn.Datatype.VARIANT.mlName())) {
@@ -134,7 +136,7 @@ public class TypeSystem {
   }
 
   /** Looks up a type by name, returning null if not found. */
-  public Type lookupOpt(String name) {
+  public @Nullable Type lookupOpt(String name) {
     // TODO: only use this for names, e.g. 'option',
     // not monikers e.g. 'int option';
     // assert !name.contains(" ") : name;

@@ -597,7 +597,8 @@ public class Main {
                   subShell.command(
                       statement, lineConsumer, typeOnly, expectedOutput));
         } catch (MorelParseException | CompileException e) {
-          if (e.getMessage().startsWith("Encountered \"<EOF>\" ")) {
+          final String message = e.getMessage();
+          if (message != null && message.startsWith("Encountered \"<EOF>\" ")) {
             break;
           }
           String code = in2.flush();
