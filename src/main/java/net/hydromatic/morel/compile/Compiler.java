@@ -1843,11 +1843,7 @@ public class Compiler {
                 .append(type.moniker())
                 .append(" = ")
                 .append(type.type.key());
-        type.checks.forEach(
-            check -> {
-              b.append(" check ");
-              check.appendMatchList(b);
-            });
+        type.checks.forEach(check -> check.appendMatchList(b, " check "));
         final String line = b.toString();
         actions.add((outLines, outBindings, evalEnv) -> outLines.accept(line));
       }

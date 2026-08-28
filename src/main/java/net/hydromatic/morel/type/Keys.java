@@ -354,11 +354,7 @@ public class Keys {
         buf.append('(');
       }
       key.describe(buf, 0, 0);
-      checks.forEach(
-          c -> {
-            buf.append(" check ");
-            c.appendMatchList(buf);
-          });
+      checks.forEach(c -> c.appendMatchList(buf, " check "));
       if (parens) {
         buf.append(')');
       }

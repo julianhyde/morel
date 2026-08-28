@@ -5787,11 +5787,7 @@ public class TypeResolver {
    */
   static String unnamedCheckName(List<Ast.Fn> checks) {
     final StringBuilder b = new StringBuilder("$check");
-    checks.forEach(
-        c -> {
-          b.append(':');
-          c.appendMatchList(b);
-        });
+    checks.forEach(c -> c.appendMatchList(b, ":"));
     return b.toString();
   }
 

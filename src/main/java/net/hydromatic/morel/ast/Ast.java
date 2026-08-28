@@ -3580,17 +3580,9 @@ public class Ast {
       return w.append("fn ").appendAll(matchList, 0, Op.BAR, right);
     }
 
-    /**
-     * Appends the match list as it would be written without the leading {@code
-     * fn}. Used where a match list appears in another form, such as the {@code
-     * check} clause of a type declaration.
-     *
-     * <p>Writes into the caller's buffer, because every caller is building a
-     * string of its own; returning one would allocate a second buffer and copy
-     * it out.
-     */
-    public void appendMatchList(StringBuilder b) {
-      new AstWriter(b, false).appendAll(matchList, 0, Op.BAR, 0);
+    /** Appends the match list with a custom prefix instead of {@code fn}. */
+    public void appendMatchList(StringBuilder b, String prefix) {
+      new AstWriter(b, false).append(prefix).appendAll(matchList, 0, Op.BAR, 0);
     }
 
     /**
