@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel;
 
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.TestUtils.first;
 import static net.hydromatic.morel.TestUtils.n2u;
 import static net.hydromatic.morel.TestUtils.toCamelCase;
@@ -126,6 +127,7 @@ public class ScriptTest {
     assertThat(inUrl, notNullValue());
     final File firstFile = urlToFile(inUrl);
     assertThat(firstFile, notNullValue());
+    requireNonNull(firstFile);
     final int commonPrefixLength =
         firstFile.getAbsolutePath().length() - first.length();
     final Path dir = firstFile.getParentFile().toPath();

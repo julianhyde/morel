@@ -2034,7 +2034,7 @@ public class LintTest {
   /** Internal state of the lint rules, per file. */
   private static class FileState {
     final GlobalState global;
-    Language language;
+    Language language = Language.UNKNOWN;
     @Nullable String partialSort;
     @Nullable Consumer<Puffin.Line<GlobalState, FileState>> sortConsumer;
     int versionCount;

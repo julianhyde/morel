@@ -398,9 +398,9 @@ class Ml {
    * has changed after inlining.
    */
   public Ml assertCoreString(
-      @Nullable Matcher<Core.Decl> beforeMatcher,
+      Matcher<Core.Decl> beforeMatcher,
       Matcher<Core.Decl> matcher,
-      @Nullable Matcher<Core.Decl> inlinedMatcher) {
+      Matcher<Core.Decl> inlinedMatcher) {
     return with(Prop.INLINE_PASS_COUNT, 10)
         .with(Prop.RELATIONALIZE, true)
         .assertCore(0, beforeMatcher)
@@ -458,7 +458,7 @@ class Ml {
                     list,
                     e ->
                         e instanceof CompileException
-                            && e.getMessage().equals("match nonexhaustive"));
+                            && "match nonexhaustive".equals(e.getMessage()));
               }
             };
         break;

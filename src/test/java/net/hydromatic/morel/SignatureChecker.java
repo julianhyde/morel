@@ -254,7 +254,7 @@ public class SignatureChecker {
       // Single-structure files are the norm; pick the first structure as the
       // owner of any commented entries.
       final String structure = result.keySet().iterator().next();
-      result.get(structure).addAll(commentedSpecs(content));
+      requireNonNull(result.get(structure)).addAll(commentedSpecs(content));
     }
     return new ParseResult(result, structureMeta);
   }

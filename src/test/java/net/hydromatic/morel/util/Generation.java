@@ -486,7 +486,7 @@ public class Generation {
         String type,
         String prototype,
         String description,
-        String extra,
+        @Nullable String extra,
         boolean implemented,
         String specified,
         boolean method) {
@@ -938,7 +938,7 @@ public class Generation {
       this.format = b.toString();
     }
 
-    void row(Object... values) {
+    void row(@Nullable Object... values) {
       pw.printf(format, values);
     }
 
