@@ -44,6 +44,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.math.BigDecimal;
@@ -577,12 +578,10 @@ public class TypeResolver {
     if (weakened.isEmpty()) {
       return result;
     }
-    final Map<Variable, Term> resultMap = new LinkedHashMap<>();
-    resolved.resultMap.forEach(
-        (variable, term) ->
-            resultMap.put(variable, Unifier.weaken(term, weakened)));
     return SubstitutionResult.create(
-        resultMap, substitutionResult.residualConstraints);
+        Maps.transformValues(
+            resolved.resultMap, term -> Unifier.weaken(term, weakened)),
+        substitutionResult.residualConstraints);
   }
 
   /**
