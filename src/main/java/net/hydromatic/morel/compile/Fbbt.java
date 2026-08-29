@@ -39,6 +39,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Pair;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -284,12 +285,19 @@ class Fbbt {
      * same place but the snapshot is preserved.
      */
     void captureInputs(List<Core.Exp> conjuncts) {
+      // First, the bounds that the range extractor can already use, such as
+      // 'x > 0'. Re-emitting those would be noise, so they are the baseline.
       for (Core.Exp conjunct : conjuncts) {
         LinearPropagator.applyConstantBound(conjunct, this, true);
       }
-      // After capturing, intervals == inputs. The fixed-point loop will
-      // diverge them.
       inputs.putAll(intervals);
+      // Then the bounds that take arithmetic to see, such as the 'x = 2'
+      // implied by 'x + 1 = 3'. They constrain propagation, but the extractor
+      // cannot use them as they stand, so if they survive to the end they are
+      // worth emitting in a form that it can.
+      for (Core.Exp conjunct : conjuncts) {
+        LinearPropagator.applyConstantBound(conjunct, this, false);
+      }
     }
 
     /**
@@ -403,17 +411,23 @@ class Fbbt {
   }
 
   /**
-   * Propagator for a linear constraint over any number of variables, with any
-   * coefficients: {@code c1 * v1 + ... + cn * vn OP k}.
+   * Propagator for a linear constraint over any number of atoms, with any
+   * coefficients: {@code c1 * a1 + ... + cn * an OP k}.
    *
    * <p>This is FBBT proper. Moving everything to the left gives {@code sum OP
-   * 0}. To bound one variable, substitute the extreme values that the others'
+   * 0}. To bound one atom, substitute the extreme values that the others'
    * current intervals allow, and solve. For example, {@code 25q + 10d + 5n + p
    * = 100} with {@code q, d, n, p >= 0} gives {@code 25q <= 100}, that is
    * {@code q <= 4}; and likewise {@code d <= 10}, {@code n <= 20}, {@code p <=
    * 100}.
    *
-   * <p>A variable whose siblings are unbounded on the side that matters yields
+   * <p>An {@code abs} term is an atom whose interval is {@code [0, inf)}, and
+   * so it takes part on the same terms as a variable. In {@code abs (x - 2) +
+   * abs (y - 3) < 5} -- the Manhattan distance from a point -- each {@code abs}
+   * is bounded by what the other leaves over, and bounding an {@code abs}
+   * bounds the variable inside it: {@code ~3 < x < 7} and {@code ~2 < y < 8}.
+   *
+   * <p>An atom whose siblings are unbounded on the side that matters yields
    * nothing this round; a later round may bound it, once a sibling has a bound.
    * That is why {@link #iterateToFixedPoint} iterates.
    *
@@ -444,19 +458,20 @@ class Fbbt {
       }
       // Rewrite "lhs OP rhs" as "sum OP 0".
       final Bounds.LinearForm sum = lhs.minus(rhs);
-      if (sum.coefficients.size() < 2) {
-        // One variable or none: LinearPropagator has it covered, unless the
-        // variable has a coefficient, as 'b' does in '2 * b <= 6'.
-        if (sum.coefficients.isEmpty()) {
+      if (sum.coefficients.size() == 1) {
+        // A lone variable with a coefficient of 1 is LinearPropagator's
+        // business, not ours; but '2 * b <= 6' and 'abs (x - 2) < 5' are ours.
+        final Map.Entry<Core.Exp, BigDecimal> only =
+            sum.coefficients.entrySet().iterator().next();
+        if (only.getKey().op == Op.ID
+            && only.getValue().abs().compareTo(BigDecimal.ONE) == 0) {
           return false;
         }
-        final BigDecimal c = sum.coefficients.values().iterator().next();
-        if (c.abs().compareTo(BigDecimal.ONE) == 0) {
-          return false;
-        }
+      } else if (sum.coefficients.isEmpty()) {
+        return false;
       }
       boolean changed = false;
-      for (Map.Entry<Core.NamedPat, BigDecimal> entry :
+      for (Map.Entry<Core.Exp, BigDecimal> entry :
           sum.coefficients.entrySet()) {
         changed |= tightenOne(state, sum, entry.getKey(), entry.getValue(), op);
       }
@@ -464,31 +479,30 @@ class Fbbt {
     }
 
     /**
-     * Bounds one variable of {@code sum OP 0}, given the intervals of the
-     * others.
+     * Bounds one atom of {@code sum OP 0}, given the intervals of the others.
      */
     private static boolean tightenOne(
         State state,
         Bounds.LinearForm sum,
-        Core.NamedPat pat,
+        Core.Exp atom,
         BigDecimal coefficient,
         BuiltIn op) {
-      if (!state.knows(pat)) {
+      if (!canTighten(state, atom)) {
         return false;
       }
-      // The rest of the sum, "sum - coefficient * pat", lies in
-      // [restMin, restMax]; either may be absent, if some variable is
-      // unbounded on that side.
+      // The rest of the sum, "sum - coefficient * atom", lies in
+      // [restMin, restMax]; either may be absent, if some atom is unbounded
+      // on that side.
       BigDecimal restMin = sum.constant;
       BigDecimal restMax = sum.constant;
-      for (Map.Entry<Core.NamedPat, BigDecimal> entry :
+      for (Map.Entry<Core.Exp, BigDecimal> entry :
           sum.coefficients.entrySet()) {
-        if (entry.getKey().equals(pat)) {
+        if (entry.getKey().equals(atom)) {
           continue;
         }
-        final Range<BigDecimal> span = state.get(entry.getKey()).span();
+        final Range<BigDecimal> span = interval(state, entry.getKey()).span();
         final BigDecimal c = entry.getValue();
-        // A positive coefficient takes its minimum at the variable's lower
+        // A positive coefficient takes its minimum at the atom's lower
         // endpoint, a negative one at its upper endpoint.
         final boolean minAtLower = c.signum() > 0;
         if (restMin != null) {
@@ -505,23 +519,23 @@ class Fbbt {
         }
       }
 
-      // "coefficient * pat OP -rest". An upper bound on pat needs the
+      // "coefficient * atom OP -rest". An upper bound on the atom needs the
       // largest that "-rest" can be, i.e. the smallest rest; and vice versa.
       boolean changed = false;
       switch (op) {
         case OP_LT:
         case OP_LE:
-          changed |= bound(state, pat, coefficient, restMin, false, op);
+          changed |= bound(state, atom, coefficient, restMin, false, op);
           break;
         case OP_GT:
         case OP_GE:
-          changed |= bound(state, pat, coefficient, restMax, true, op);
+          changed |= bound(state, atom, coefficient, restMax, true, op);
           break;
         case OP_EQ:
           changed |=
-              bound(state, pat, coefficient, restMin, false, BuiltIn.OP_LE);
+              bound(state, atom, coefficient, restMin, false, BuiltIn.OP_LE);
           changed |=
-              bound(state, pat, coefficient, restMax, true, BuiltIn.OP_GE);
+              bound(state, atom, coefficient, restMax, true, BuiltIn.OP_GE);
           break;
         default:
           break;
@@ -530,12 +544,12 @@ class Fbbt {
     }
 
     /**
-     * Applies one side of a bound: {@code coefficient * pat OP -rest}, where
+     * Applies one side of a bound: {@code coefficient * atom OP -rest}, where
      * {@code rest} is null if that side is unbounded.
      */
     private static boolean bound(
         State state,
-        Core.NamedPat pat,
+        Core.Exp atom,
         BigDecimal coefficient,
         @Nullable BigDecimal rest,
         boolean lower,
@@ -563,7 +577,7 @@ class Fbbt {
       } else {
         range = strict ? Range.lessThan(value) : Range.atMost(value);
       }
-      return state.tighten(pat, ImmutableRangeSet.of(range));
+      return tighten(state, atom, ImmutableRangeSet.of(range));
     }
 
     /** Returns one endpoint of {@code span}, or null if it is unbounded. */
@@ -573,6 +587,90 @@ class Fbbt {
         return span.hasLowerBound() ? span.lowerEndpoint() : null;
       }
       return span.hasUpperBound() ? span.upperEndpoint() : null;
+    }
+
+    /** Returns whether we can put an atom's deduced bounds to use. */
+    private static boolean canTighten(State state, Core.Exp atom) {
+      if (atom.op == Op.ID) {
+        return state.knows(((Core.Id) atom).idPat);
+      }
+      return Bounds.isAbs(atom) && innerVariable(atom, state) != null;
+    }
+
+    /** Returns the interval that an atom is known to lie in. */
+    private static ImmutableRangeSet<BigDecimal> interval(
+        State state, Core.Exp atom) {
+      if (atom.op == Op.ID) {
+        return state.get(((Core.Id) atom).idPat);
+      }
+      // An absolute value is never negative. (We do not track how much more
+      // than zero it is; the variable inside it is what we are after.)
+      return ImmutableRangeSet.of(Range.atLeast(BigDecimal.ZERO));
+    }
+
+    /**
+     * Tightens an atom to {@code rangeSet}. For a variable that is direct; for
+     * {@code abs (e)}, whose upper bound {@code b} says that {@code e} lies in
+     * {@code [~b, b]}, it is the variable inside {@code e} that tightens.
+     */
+    private static boolean tighten(
+        State state, Core.Exp atom, ImmutableRangeSet<BigDecimal> rangeSet) {
+      if (atom.op == Op.ID) {
+        return state.tighten(((Core.Id) atom).idPat, rangeSet);
+      }
+      final @Nullable Pair<Core.NamedPat, BigDecimal> inner =
+          innerVariable(atom, state);
+      if (inner == null) {
+        return false;
+      }
+      final Range<BigDecimal> span = rangeSet.span();
+      if (!span.hasUpperBound()) {
+        return false;
+      }
+      final BigDecimal b = span.upperEndpoint();
+      final boolean strict = span.upperBoundType() == BoundType.OPEN;
+      if (b.signum() < 0 || b.signum() == 0 && strict) {
+        // 'abs e < 0' cannot be satisfied.
+        return state.tighten(inner.left, ImmutableRangeSet.of());
+      }
+      // 'abs (c * x + k) OP b' is '(~b - k) / c OP x OP (b - k) / c', with
+      // the ends swapped if c is negative.
+      final Bounds.LinearForm form =
+          requireNonNull(Bounds.linearForm(Bounds.absArg(atom)));
+      final BigDecimal c = inner.right;
+      final BigDecimal k = form.constant;
+      final BigDecimal end1 =
+          b.negate().subtract(k).divide(c, SCALE, RoundingMode.FLOOR);
+      final BigDecimal end2 =
+          b.subtract(k).divide(c, SCALE, RoundingMode.CEILING);
+      return state.tighten(
+          inner.left,
+          ImmutableRangeSet.of(
+              strict
+                  ? Range.open(end1.min(end2), end1.max(end2))
+                  : Range.closed(end1.min(end2), end1.max(end2))));
+    }
+
+    /**
+     * If {@code atom} is {@code abs (e)} and {@code e} is linear in one
+     * variable that {@code state} is deducing bounds for, returns that variable
+     * and its coefficient; otherwise null.
+     */
+    private static @Nullable Pair<Core.NamedPat, BigDecimal> innerVariable(
+        Core.Exp atom, State state) {
+      final Bounds.@Nullable LinearForm form =
+          Bounds.linearForm(Bounds.absArg(atom));
+      if (form == null || form.coefficients.size() != 1) {
+        return null;
+      }
+      final Map.Entry<Core.Exp, BigDecimal> entry =
+          form.coefficients.entrySet().iterator().next();
+      if (entry.getKey().op != Op.ID) {
+        // 'abs (abs (x - 2) - 1)', say. One layer is enough.
+        return null;
+      }
+      final Core.NamedPat pat = ((Core.Id) entry.getKey()).idPat;
+      return state.knows(pat) ? Pair.of(pat, entry.getValue()) : null;
     }
   }
 
@@ -627,9 +725,15 @@ class Fbbt {
       return changed;
     }
 
-    /** Applies a "var op constant" tightening to {@code state}. */
+    /**
+     * Applies a "var op constant" tightening to {@code state}.
+     *
+     * <p>If {@code directOnly}, considers only a constraint that the range
+     * extractor could itself use, namely one whose variable side has no offset:
+     * {@code x <= 3}, but not {@code x + 1 = 3}.
+     */
     static boolean applyConstantBound(
-        Core.Exp constraint, State state, boolean recordOnly) {
+        Core.Exp constraint, State state, boolean directOnly) {
       if (constraint.op != Op.APPLY) {
         return false;
       }
@@ -647,10 +751,16 @@ class Fbbt {
       final BuiltIn finalOp;
       final BigDecimal constant;
       if (lhs.var != null && rhs.var == null) {
+        if (directOnly && lhs.offset.signum() != 0) {
+          return false;
+        }
         pat = lhs.var;
         finalOp = op;
         constant = rhs.offset.subtract(lhs.offset);
       } else if (lhs.var == null && rhs.var != null) {
+        if (directOnly && rhs.offset.signum() != 0) {
+          return false;
+        }
         pat = rhs.var;
         finalOp = op.reverse();
         constant = lhs.offset.subtract(rhs.offset);

@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel.compile;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.google.common.collect.ImmutableMap;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
@@ -115,21 +117,26 @@ final class Bounds {
   }
 
   /**
-   * A linear combination of variables, {@code c1 * v1 + ... + cn * vn + k}.
+   * A linear combination of atoms, {@code c1 * a1 + ... + cn * an + k}.
    *
    * <p>Where {@link Term} models one variable with a coefficient of 1, a {@code
-   * LinearForm} models any number of variables with any integer or real
+   * LinearForm} models any number of atoms with any integer or real
    * coefficients. It is what FBBT needs to reason about a constraint such as
    * {@code 25 * q + 10 * d + 5 * n + p = 100}.
+   *
+   * <p>An atom is a variable, or an {@code abs} term. An {@code abs} term is an
+   * atom because, like a variable, it is a quantity that the arithmetic cannot
+   * see into but whose value lies in a known interval -- in its case {@code [0,
+   * inf)}. That is what lets FBBT bound the terms around it, and then the term
+   * itself.
    */
   static final class LinearForm {
-    /** Coefficients, keyed by variable. No coefficient is zero. */
-    final Map<Core.NamedPat, BigDecimal> coefficients;
+    /** Coefficients, keyed by atom. No coefficient is zero. */
+    final Map<Core.Exp, BigDecimal> coefficients;
 
     final BigDecimal constant;
 
-    LinearForm(
-        Map<Core.NamedPat, BigDecimal> coefficients, BigDecimal constant) {
+    LinearForm(Map<Core.Exp, BigDecimal> coefficients, BigDecimal constant) {
       this.coefficients = ImmutableMap.copyOf(coefficients);
       this.constant = constant;
     }
@@ -155,8 +162,7 @@ final class Bounds {
     }
 
     private LinearForm combine(LinearForm that, BigDecimal scale) {
-      final Map<Core.NamedPat, BigDecimal> map =
-          new LinkedHashMap<>(coefficients);
+      final Map<Core.Exp, BigDecimal> map = new LinkedHashMap<>(coefficients);
       that.coefficients.forEach(
           (v, c) ->
               map.merge(
@@ -176,7 +182,7 @@ final class Bounds {
       if (scale.signum() == 0) {
         return constant(BigDecimal.ZERO);
       }
-      final Map<Core.NamedPat, BigDecimal> map = new LinkedHashMap<>();
+      final Map<Core.Exp, BigDecimal> map = new LinkedHashMap<>();
       coefficients.forEach((v, c) -> map.put(v, c.multiply(scale)));
       return new LinearForm(map, constant.multiply(scale));
     }
@@ -191,13 +197,13 @@ final class Bounds {
    * linear, and gives null.
    *
    * <p>Examples: {@code 2 * x + 3} -> {@code 2x + 3}; {@code x - y} -> {@code x
-   * - y}; {@code x * y} -> null.
+   * - y}; {@code abs (x - 2) + abs (y - 3)} -> a sum of two atoms; {@code x *
+   * y} -> null.
    */
   static @Nullable LinearForm linearForm(Core.Exp exp) {
-    if (exp instanceof Core.Id) {
+    if (exp instanceof Core.Id || isAbs(exp)) {
       return new LinearForm(
-          ImmutableMap.of(((Core.Id) exp).idPat, BigDecimal.ONE),
-          BigDecimal.ZERO);
+          ImmutableMap.of(exp, BigDecimal.ONE), BigDecimal.ZERO);
     }
     if (exp instanceof Core.Literal) {
       final Core.Literal lit = numericLiteral(exp);
@@ -261,6 +267,21 @@ final class Bounds {
         }
         return null;
     }
+  }
+
+  /** Returns whether {@code exp} is a call to {@code abs}. */
+  static boolean isAbs(Core.Exp exp) {
+    if (!(exp instanceof Core.Apply)) {
+      return false;
+    }
+    final BuiltIn b = ((Core.Apply) exp).builtIn();
+    return b == BuiltIn.INT_ABS || b == BuiltIn.REAL_ABS;
+  }
+
+  /** Returns the argument of an {@code abs} term. */
+  static Core.Exp absArg(Core.Exp exp) {
+    checkArgument(isAbs(exp), "not abs: %s", exp);
+    return ((Core.Apply) exp).arg;
   }
 
   /**
