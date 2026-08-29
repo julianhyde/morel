@@ -325,6 +325,165 @@ from x where abs x < 5;
 List.length (from x, y where x > 0 andalso x < y andalso y < 10);
 > val it = 36 : int
 
+(* -- FBBT over linear constraints -------------------------------- *)
+
+(* The cases below come from the catalog in issue #229, "Improve
+ * deduction of ranges". Each was written with explicit bounds (say
+ * 'q <= 4') that the planner should not need; FBBT deduces them by
+ * substituting the other variables' known bounds into one constraint
+ * at a time, and iterating.
+ *
+ * Postage stamps. How many (threes, fives) pairs make 30 cents?
+ * Substituting 'f >= 0' into the equation gives 't <= 10', and
+ * substituting 't >= 0' gives 'f <= 6'. *)
+from t, f
+  where t >= 0 andalso f >= 0 andalso 3 * t + 5 * f = 30;
+> f t
+> - --
+> 6  0
+> 3  5
+> 0 10
+>
+> val it : {f:int, t:int} list
+Sys.planEx "3";
+> val it =
+>   "val it = from t in #flatten Range ([CLOSED (0, 10)]) join f in #flatten Range ([CLOSED (0, 6)]) where #* Int (3, t) + #* Int (5, f) = 30"
+>   : string
+
+(* A linear Diophantine equation with no solutions. FBBT bounds
+ * 'x <= 7' and 'y <= 5'; enumerating that box finds nothing, which is
+ * the right answer -- 13x + 17y = 100 has no non-negative solutions. *)
+from x, y
+  where x >= 0 andalso y >= 0 andalso 13 * x + 17 * y = 100;
+> x y
+> - -
+>
+> val it : {x:int, y:int} list
+
+(* Coin change: how many ways to make a dollar? One equation bounds
+ * all four variables: 'q <= 4', 'd <= 10', 'n <= 20', 'p <= 100'. *)
+List.length (
+  from q, d, n, p
+    where q >= 0 andalso d >= 0 andalso n >= 0 andalso p >= 0
+      andalso 25 * q + 10 * d + 5 * n + p = 100);
+> val it = 242 : int
+
+(* Integer triangles of perimeter 24, with sides in order. Here the
+ * bounds come out of the ordering chain and the perimeter equation
+ * together, which takes more than one round of propagation: 'a >= 1'
+ * bounds 'b' below, which bounds 'c' below, and the equation then
+ * bounds all three above. *)
+from a, b, c
+  where 1 <= a andalso a <= b andalso b <= c
+    andalso a + b + c = 24
+    andalso a + b > c;
+> a b  c
+> - -- --
+> 2 11 11
+> 3 10 11
+> 4  9 11
+> 4 10 10
+> 5  8 11
+> 5  9 10
+> 6  7 11
+> 6  8 10
+> 6  9  9
+> 7  7 10
+> 7  8  9
+> 8  8  8
+>
+> val it : {a:int, b:int, c:int} list
+
+(* A bounded knapsack. The single inequality bounds each variable:
+ * 'a <= 16', 'b <= 10', 'c <= 7'. *)
+from a, b, c
+  where a >= 0 andalso b >= 0 andalso c >= 0
+    andalso 3 * a + 5 * b + 7 * c <= 50
+  yield {a, b, c, value = 4 * a + 6 * b + 9 * c}
+  order DESC value
+  take 3;
+> a  b c value
+> -- - - -----
+> 12 0 2    66
+> 15 1 0    66
+>  5 0 5    65
+>
+> val it : {a:int, b:int, c:int, value:int} list
+
+(* A production plan. No constraint mentions an upper bound, but
+ * '2 * b <= 6' gives 'b <= 3' and '75 * c <= 500' gives 'c <= 6'; a
+ * coefficient no longer stops FBBT. *)
+from b, c
+  where b >= 0 andalso c >= 0
+    andalso 50 * b + 200 * c <= 4000
+    andalso 2 * b <= 6
+    andalso 75 * b + 150 * c <= 2000
+    andalso 100 * b + 150 * c <= 500
+    andalso 75 * c <= 500
+  yield {b, c, profit = 400 * b + 450 * c}
+  order DESC profit;
+> b c profit
+> - - ------
+> 2 2   1700
+> 3 1   1650
+> 0 3   1350
+> 1 2   1300
+> 2 1   1250
+> 3 0   1200
+> 0 2    900
+> 1 1    850
+> 2 0    800
+> 0 1    450
+> 1 0    400
+> 0 0      0
+>
+> val it : {b:int, c:int, profit:int} list
+
+(* Pythagorean triples. The constraint 'a * a + b * b = c * c' is not
+ * linear, and FBBT ignores it; the ordering chain
+ * '1 <= a <= b < c <= 50' is what grounds the query, and the
+ * non-linear constraint remains a filter. *)
+from a, b, c
+  where 1 <= a andalso a <= b andalso b < c andalso c <= 50
+    andalso a * a + b * b = c * c;
+> a  b  c
+> -- -- --
+>  3  4  5
+>  5 12 13
+>  6  8 10
+>  7 24 25
+>  8 15 17
+>  9 12 15
+>  9 40 41
+> 10 24 26
+> 12 16 20
+> 12 35 37
+> 14 48 50
+> 15 20 25
+> ...
+>
+> val it : {a:int, b:int, c:int} list
+
+(* Two cases that FBBT does not solve.
+ *
+ * Lattice points in a tilted region. No single constraint bounds
+ * either variable: 'x + y <= 10' says nothing about 'x' while 'y' is
+ * unbounded below. Deducing '~1 <= x <= 6' means adding two
+ * constraints together, which is Fourier-Motzkin elimination. *)
+from x, y
+  where x + y >= 0 andalso x + y <= 10
+    andalso x - y >= ~3 andalso x - y <= 3;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+
+(* And the example that opens issue #229. FBBT could bound 'x' and 'y'
+ * if it knew that 'z' lies in [1, 8], but the bounds of a variable
+ * that a scan supplies are not visible to it. *)
+from z in [1, 2, 3, 4, 5, 6, 7, 8], x, y
+  where x + y = z andalso x > 0 andalso y > 0;
+> stdIn:1.37 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.37
+
 (* -- elem patterns ----------------------------------------------- *)
 
 (*) Pattern

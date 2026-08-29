@@ -81,8 +81,15 @@ class Fbbt {
   private static final ImmutableList<Propagator> PROPAGATORS =
       ImmutableList.of(
           new LinearPropagator(),
+          new SumPropagator(),
           new AbsPropagator(),
           new MultiplyPropagator());
+
+  /**
+   * Scale for the division in {@link SumPropagator}, whose result may not
+   * terminate (as 100 / 3 does not).
+   */
+  private static final int SCALE = 12;
 
   private Fbbt() {}
 
@@ -396,6 +403,180 @@ class Fbbt {
   }
 
   /**
+   * Propagator for a linear constraint over any number of variables, with any
+   * coefficients: {@code c1 * v1 + ... + cn * vn OP k}.
+   *
+   * <p>This is FBBT proper. Moving everything to the left gives {@code sum OP
+   * 0}. To bound one variable, substitute the extreme values that the others'
+   * current intervals allow, and solve. For example, {@code 25q + 10d + 5n + p
+   * = 100} with {@code q, d, n, p >= 0} gives {@code 25q <= 100}, that is
+   * {@code q <= 4}; and likewise {@code d <= 10}, {@code n <= 20}, {@code p <=
+   * 100}.
+   *
+   * <p>A variable whose siblings are unbounded on the side that matters yields
+   * nothing this round; a later round may bound it, once a sibling has a bound.
+   * That is why {@link #iterateToFixedPoint} iterates.
+   *
+   * <p>What this propagator cannot do is combine two constraints, which is what
+   * Fourier-Motzkin elimination does. Constraints such as {@code x + y >= 0
+   * andalso x - y >= ~3}, where no single constraint bounds a variable, remain
+   * ungrounded.
+   */
+  static class SumPropagator implements Propagator {
+    @Override
+    public boolean propagate(Core.Exp constraint, State state) {
+      if (constraint.op != Op.APPLY) {
+        return false;
+      }
+      final BuiltIn op = constraint.builtIn();
+      if (op == null || !LinearPropagator.isComparisonOp(op)) {
+        return false;
+      }
+      final Bounds.@Nullable LinearForm lhs =
+          Bounds.linearForm(constraint.arg(0));
+      if (lhs == null) {
+        return false;
+      }
+      final Bounds.@Nullable LinearForm rhs =
+          Bounds.linearForm(constraint.arg(1));
+      if (rhs == null) {
+        return false;
+      }
+      // Rewrite "lhs OP rhs" as "sum OP 0".
+      final Bounds.LinearForm sum = lhs.minus(rhs);
+      if (sum.coefficients.size() < 2) {
+        // One variable or none: LinearPropagator has it covered, unless the
+        // variable has a coefficient, as 'b' does in '2 * b <= 6'.
+        if (sum.coefficients.isEmpty()) {
+          return false;
+        }
+        final BigDecimal c = sum.coefficients.values().iterator().next();
+        if (c.abs().compareTo(BigDecimal.ONE) == 0) {
+          return false;
+        }
+      }
+      boolean changed = false;
+      for (Map.Entry<Core.NamedPat, BigDecimal> entry :
+          sum.coefficients.entrySet()) {
+        changed |= tightenOne(state, sum, entry.getKey(), entry.getValue(), op);
+      }
+      return changed;
+    }
+
+    /**
+     * Bounds one variable of {@code sum OP 0}, given the intervals of the
+     * others.
+     */
+    private static boolean tightenOne(
+        State state,
+        Bounds.LinearForm sum,
+        Core.NamedPat pat,
+        BigDecimal coefficient,
+        BuiltIn op) {
+      if (!state.knows(pat)) {
+        return false;
+      }
+      // The rest of the sum, "sum - coefficient * pat", lies in
+      // [restMin, restMax]; either may be absent, if some variable is
+      // unbounded on that side.
+      BigDecimal restMin = sum.constant;
+      BigDecimal restMax = sum.constant;
+      for (Map.Entry<Core.NamedPat, BigDecimal> entry :
+          sum.coefficients.entrySet()) {
+        if (entry.getKey().equals(pat)) {
+          continue;
+        }
+        final Range<BigDecimal> span = state.get(entry.getKey()).span();
+        final BigDecimal c = entry.getValue();
+        // A positive coefficient takes its minimum at the variable's lower
+        // endpoint, a negative one at its upper endpoint.
+        final boolean minAtLower = c.signum() > 0;
+        if (restMin != null) {
+          restMin =
+              endpoint(span, minAtLower) == null
+                  ? null
+                  : restMin.add(c.multiply(endpoint(span, minAtLower)));
+        }
+        if (restMax != null) {
+          restMax =
+              endpoint(span, !minAtLower) == null
+                  ? null
+                  : restMax.add(c.multiply(endpoint(span, !minAtLower)));
+        }
+      }
+
+      // "coefficient * pat OP -rest". An upper bound on pat needs the
+      // largest that "-rest" can be, i.e. the smallest rest; and vice versa.
+      boolean changed = false;
+      switch (op) {
+        case OP_LT:
+        case OP_LE:
+          changed |= bound(state, pat, coefficient, restMin, false, op);
+          break;
+        case OP_GT:
+        case OP_GE:
+          changed |= bound(state, pat, coefficient, restMax, true, op);
+          break;
+        case OP_EQ:
+          changed |=
+              bound(state, pat, coefficient, restMin, false, BuiltIn.OP_LE);
+          changed |=
+              bound(state, pat, coefficient, restMax, true, BuiltIn.OP_GE);
+          break;
+        default:
+          break;
+      }
+      return changed;
+    }
+
+    /**
+     * Applies one side of a bound: {@code coefficient * pat OP -rest}, where
+     * {@code rest} is null if that side is unbounded.
+     */
+    private static boolean bound(
+        State state,
+        Core.NamedPat pat,
+        BigDecimal coefficient,
+        @Nullable BigDecimal rest,
+        boolean lower,
+        BuiltIn op) {
+      if (rest == null) {
+        return false;
+      }
+      // Dividing by a negative coefficient turns an upper bound into a lower
+      // bound, and the other way about.
+      final boolean flip = coefficient.signum() < 0;
+      final boolean resultLower = flip != lower;
+      // Round outwards, so that a bound we cannot represent exactly is
+      // weaker than the true one, never stronger. (For an integer variable
+      // 'boundConjunct' snaps it back to the tightest integer.)
+      final BigDecimal value =
+          rest.negate()
+              .divide(
+                  coefficient,
+                  SCALE,
+                  resultLower ? RoundingMode.FLOOR : RoundingMode.CEILING);
+      final boolean strict = op == BuiltIn.OP_LT || op == BuiltIn.OP_GT;
+      final Range<BigDecimal> range;
+      if (resultLower) {
+        range = strict ? Range.greaterThan(value) : Range.atLeast(value);
+      } else {
+        range = strict ? Range.lessThan(value) : Range.atMost(value);
+      }
+      return state.tighten(pat, ImmutableRangeSet.of(range));
+    }
+
+    /** Returns one endpoint of {@code span}, or null if it is unbounded. */
+    private static @Nullable BigDecimal endpoint(
+        Range<BigDecimal> span, boolean lower) {
+      if (lower) {
+        return span.hasLowerBound() ? span.lowerEndpoint() : null;
+      }
+      return span.hasUpperBound() ? span.upperEndpoint() : null;
+    }
+  }
+
+  /**
    * Propagator for linear constraints of the form {@code (varA + kA) OP (varB +
    * kB)} where {@code kA}, {@code kB} are integer-literal offsets (possibly
    * zero, possibly missing on one side) and {@code OP} is one of {@code <, <=,
@@ -479,7 +660,7 @@ class Fbbt {
       return tightenFromConstant(state, pat, finalOp, constant);
     }
 
-    private static boolean isComparisonOp(BuiltIn op) {
+    static boolean isComparisonOp(BuiltIn op) {
       switch (op) {
         case OP_LT:
         case OP_LE:
