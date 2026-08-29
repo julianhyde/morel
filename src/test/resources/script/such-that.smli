@@ -333,7 +333,15 @@ List.length (from x, y where x > 0 andalso x < y andalso y < 10);
  * substituting the other variables' known bounds into one constraint
  * at a time, and iterating.
  *
- * Postage stamps. How many (threes, fives) pairs make 30 cents?
+ * To start with the smallest case: FBBT deduces 'x = 2' from
+ * 'x + 1 = 3'. The extractor cannot use that equation as it stands --
+ * it grounds a variable from a comparison against a constant -- so
+ * FBBT emits the bounds that it can use.
+ *)
+from x where x + 1 = 3;
+> val it = [2] : int list
+
+(* Postage stamps. How many (threes, fives) pairs make 30 cents?
  * Substituting 'f >= 0' into the equation gives 't <= 10', and
  * substituting 't >= 0' gives 'f <= 6'. *)
 from t, f
@@ -483,6 +491,73 @@ from z in [1, 2, 3, 4, 5, 6, 7, 8], x, y
   where x + y = z andalso x > 0 andalso y > 0;
 > stdIn:1.37 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.37
+
+(* -- FBBT over sums of absolute values --------------------------- *)
+
+(* An absolute value is never negative, which is enough to bound what
+ * it wraps. FBBT reads 'abs (x - 2) < 5' as '~5 < x - 2 < 5'. *)
+from x where abs (x - 2) < 5;
+> val it = [~2,~1,0,1,2,3,4,5,6] : int list
+
+(*) The same, with a coefficient: 'abs (2 * x - 1) <= 5'.
+from x where abs (2 * x - 1) <= 5;
+> val it = [~2,~1,0,1,2,3] : int list
+
+(* Manhattan distance: all the points within 5 steps of (2, 3). Each
+ * absolute value is bounded by what the other leaves over -- and the
+ * other is at least zero -- so 'abs (x - 2) < 5' and
+ * 'abs (y - 3) < 5', which bound both variables. *)
+List.length (from x, y where abs (x - 2) + abs (y - 3) < 5);
+> val it = 41 : int
+from x, y
+  where abs (x - 2) + abs (y - 3) < 3
+  yield {x, y};
+> x y
+> - -
+> 0 3
+> 1 2
+> 1 3
+> 1 4
+> 2 1
+> 2 2
+> 2 3
+> 2 4
+> 2 5
+> 3 2
+> 3 3
+> 3 4
+> ...
+>
+> val it : {x:int, y:int} list
+
+(* A sum of an absolute value and an ordinary term. The term's own
+ * bounds say how much of the constant it uses up: 'y <= 2' leaves
+ * 'abs (x - 2) < 5', and so '~3 < x < 7'. *)
+from x, y
+  where y >= 0 andalso y <= 2 andalso abs (x - 2) + y < 5
+  yield {x, y};
+> x  y
+> -- -
+> -2 0
+> -1 0
+> -1 1
+>  0 0
+>  0 1
+>  0 2
+>  1 0
+>  1 1
+>  1 2
+>  2 0
+>  2 1
+>  2 2
+> ...
+>
+> val it : {x:int, y:int} list
+(* 'abs (x) > c' describes two disjoint intervals rather than one, so
+ * it grounds nothing. *)
+from x where abs (x - 2) > 5;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
 
 (* -- elem patterns ----------------------------------------------- *)
 

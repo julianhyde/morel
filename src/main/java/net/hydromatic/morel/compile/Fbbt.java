@@ -83,6 +83,7 @@ class Fbbt {
           new LinearPropagator(),
           new SumPropagator(),
           new AbsPropagator(),
+          new AbsSumPropagator(),
           new MultiplyPropagator());
 
   /**
@@ -284,12 +285,19 @@ class Fbbt {
      * same place but the snapshot is preserved.
      */
     void captureInputs(List<Core.Exp> conjuncts) {
+      // First, the bounds that the range extractor can already use, such as
+      // 'x > 0'. Re-emitting those would be noise, so they are the baseline.
       for (Core.Exp conjunct : conjuncts) {
         LinearPropagator.applyConstantBound(conjunct, this, true);
       }
-      // After capturing, intervals == inputs. The fixed-point loop will
-      // diverge them.
       inputs.putAll(intervals);
+      // Then the bounds that take arithmetic to see, such as the 'x = 2'
+      // implied by 'x + 1 = 3'. They constrain propagation, but the extractor
+      // cannot use them as they stand, so if they survive to the end they are
+      // worth emitting in a form that it can.
+      for (Core.Exp conjunct : conjuncts) {
+        LinearPropagator.applyConstantBound(conjunct, this, false);
+      }
     }
 
     /**
@@ -577,6 +585,184 @@ class Fbbt {
   }
 
   /**
+   * Propagator for a sum of absolute values, {@code abs (e1) + ... + abs (en) +
+   * rest OP c}.
+   *
+   * <p>Every {@code abs} is at least zero, which bounds each one of them by
+   * what the constraint leaves over: in {@code abs (x - 2) + abs (y - 3) < 5},
+   * {@code abs (x - 2) < 5}, and so {@code ~3 < x < 7}. That is the Manhattan
+   * distance from a point, and the query that motivates this propagator.
+   *
+   * <p>Only {@code <} and {@code <=} are useful. {@code abs (x) > c} describes
+   * two disjoint intervals rather than one, and this class of propagator
+   * deduces a single interval per variable.
+   */
+  static class AbsSumPropagator implements Propagator {
+    @Override
+    public boolean propagate(Core.Exp constraint, State state) {
+      if (constraint.op != Op.APPLY) {
+        return false;
+      }
+      final BuiltIn op = constraint.builtIn();
+      if (op == null) {
+        return false;
+      }
+      switch (op) {
+        case OP_LT:
+        case OP_LE:
+        case OP_GT:
+        case OP_GE:
+          break;
+        default:
+          // Not a binary comparison; it may not even have two arguments.
+          return false;
+      }
+      // Put the sum on the left and the constant on the right.
+      final Core.Exp sumExp;
+      final BigDecimal constant;
+      final BuiltIn normalized;
+      final Core.@Nullable Literal rhsLiteral =
+          Bounds.numericLiteral(constraint.arg(1));
+      if (rhsLiteral != null) {
+        sumExp = constraint.arg(0);
+        constant = rhsLiteral.unwrap(BigDecimal.class);
+        normalized = op;
+      } else {
+        final Core.@Nullable Literal lhsLiteral =
+            Bounds.numericLiteral(constraint.arg(0));
+        if (lhsLiteral == null) {
+          return false;
+        }
+        sumExp = constraint.arg(1);
+        constant = lhsLiteral.unwrap(BigDecimal.class);
+        normalized = op.reverse();
+      }
+      if (normalized != BuiltIn.OP_LT && normalized != BuiltIn.OP_LE) {
+        return false;
+      }
+
+      final List<Core.Exp> addends = new ArrayList<>();
+      addUp(sumExp, addends);
+      // Classify the addends: the 'abs' terms, and everything else, which
+      // must be linear if we are to know its minimum.
+      final List<Core.Exp> absArgs = new ArrayList<>();
+      BigDecimal othersMin = BigDecimal.ZERO;
+      for (Core.Exp addend : addends) {
+        final Core.@Nullable Exp absArg = absArg(addend);
+        if (absArg != null) {
+          absArgs.add(absArg);
+          // Contributes at least zero to the sum.
+          continue;
+        }
+        final Bounds.@Nullable LinearForm form = Bounds.linearForm(addend);
+        if (form == null || othersMin == null) {
+          return false;
+        }
+        othersMin = plusMin(othersMin, form, state);
+      }
+      if (absArgs.isEmpty() || othersMin == null) {
+        return false;
+      }
+
+      boolean changed = false;
+      for (Core.Exp absArg : absArgs) {
+        // The other addends are at least 'othersMin', so this one is at
+        // most the rest.
+        changed |=
+            tightenAbs(state, absArg, constant.subtract(othersMin), normalized);
+      }
+      return changed;
+    }
+
+    /** Collects the addends of a sum, flattening nested additions. */
+    private static void addUp(Core.Exp exp, List<Core.Exp> addends) {
+      if (exp.op == Op.APPLY) {
+        final BuiltIn op = exp.builtIn();
+        if (op == BuiltIn.OP_PLUS
+            || op == BuiltIn.INT_OP_PLUS
+            || op == BuiltIn.REAL_OP_PLUS) {
+          addUp(exp.arg(0), addends);
+          addUp(exp.arg(1), addends);
+          return;
+        }
+      }
+      addends.add(exp);
+    }
+
+    /** Returns the argument of {@code abs e}, or null if not an abs. */
+    private static Core.@Nullable Exp absArg(Core.Exp exp) {
+      if (!(exp instanceof Core.Apply)) {
+        return null;
+      }
+      final Core.Apply apply = (Core.Apply) exp;
+      final BuiltIn b = apply.builtIn();
+      return b == BuiltIn.INT_ABS || b == BuiltIn.REAL_ABS ? apply.arg : null;
+    }
+
+    /**
+     * Returns {@code min} plus the least value that {@code form} can take, or
+     * null if it is unbounded below.
+     */
+    private static @Nullable BigDecimal plusMin(
+        BigDecimal min, Bounds.LinearForm form, State state) {
+      BigDecimal result = min.add(form.constant);
+      for (Map.Entry<Core.NamedPat, BigDecimal> entry :
+          form.coefficients.entrySet()) {
+        final Range<BigDecimal> span = state.get(entry.getKey()).span();
+        final BigDecimal c = entry.getValue();
+        // A positive coefficient is least at the variable's lower endpoint.
+        final boolean lower = c.signum() > 0;
+        if (lower ? !span.hasLowerBound() : !span.hasUpperBound()) {
+          return null;
+        }
+        result =
+            result.add(
+                c.multiply(
+                    lower ? span.lowerEndpoint() : span.upperEndpoint()));
+      }
+      return result;
+    }
+
+    /**
+     * Applies {@code abs (exp) OP bound}, where {@code exp} is linear in one
+     * variable: {@code abs (2 * x - 1) <= 5} gives {@code ~2 <= x <= 3}.
+     */
+    private static boolean tightenAbs(
+        State state, Core.Exp exp, BigDecimal bound, BuiltIn op) {
+      final Bounds.@Nullable LinearForm form = Bounds.linearForm(exp);
+      if (form == null || form.coefficients.size() != 1) {
+        return false;
+      }
+      final Map.Entry<Core.NamedPat, BigDecimal> entry =
+          form.coefficients.entrySet().iterator().next();
+      final Core.NamedPat pat = entry.getKey();
+      if (!state.knows(pat)) {
+        return false;
+      }
+      final boolean strict = op == BuiltIn.OP_LT;
+      if (bound.signum() < 0 || bound.signum() == 0 && strict) {
+        // 'abs e < 0' and 'abs e <= ~1' cannot be satisfied.
+        return state.tighten(pat, ImmutableRangeSet.of());
+      }
+      // 'abs (c * x + k) OP b' is '~b OP c * x + k OP b', that is
+      // '(~b - k) / c OP x OP (b - k) / c', with the ends swapped if c is
+      // negative.
+      final BigDecimal c = entry.getValue();
+      final BigDecimal k = form.constant;
+      final BigDecimal end1 =
+          bound.negate().subtract(k).divide(c, SCALE, RoundingMode.FLOOR);
+      final BigDecimal end2 =
+          bound.subtract(k).divide(c, SCALE, RoundingMode.CEILING);
+      final BigDecimal lo = end1.min(end2);
+      final BigDecimal hi = end1.max(end2);
+      return state.tighten(
+          pat,
+          ImmutableRangeSet.of(
+              strict ? Range.open(lo, hi) : Range.closed(lo, hi)));
+    }
+  }
+
+  /**
    * Propagator for linear constraints of the form {@code (varA + kA) OP (varB +
    * kB)} where {@code kA}, {@code kB} are integer-literal offsets (possibly
    * zero, possibly missing on one side) and {@code OP} is one of {@code <, <=,
@@ -627,9 +813,15 @@ class Fbbt {
       return changed;
     }
 
-    /** Applies a "var op constant" tightening to {@code state}. */
+    /**
+     * Applies a "var op constant" tightening to {@code state}.
+     *
+     * <p>If {@code directOnly}, considers only a constraint that the range
+     * extractor could itself use, namely one whose variable side has no offset:
+     * {@code x <= 3}, but not {@code x + 1 = 3}.
+     */
     static boolean applyConstantBound(
-        Core.Exp constraint, State state, boolean recordOnly) {
+        Core.Exp constraint, State state, boolean directOnly) {
       if (constraint.op != Op.APPLY) {
         return false;
       }
@@ -647,10 +839,16 @@ class Fbbt {
       final BuiltIn finalOp;
       final BigDecimal constant;
       if (lhs.var != null && rhs.var == null) {
+        if (directOnly && lhs.offset.signum() != 0) {
+          return false;
+        }
         pat = lhs.var;
         finalOp = op;
         constant = rhs.offset.subtract(lhs.offset);
       } else if (lhs.var == null && rhs.var != null) {
+        if (directOnly && rhs.offset.signum() != 0) {
+          return false;
+        }
         pat = rhs.var;
         finalOp = op.reverse();
         constant = lhs.offset.subtract(rhs.offset);
