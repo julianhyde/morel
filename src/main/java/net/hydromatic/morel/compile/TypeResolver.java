@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 import static java.lang.String.join;
 import static java.util.Collections.newSetFromMap;
+import static java.util.Collections.unmodifiableMap;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
@@ -2562,8 +2563,8 @@ public class TypeResolver {
 
     // A record with modifiers is typed as it is written, but only once we know
     // which fields its base has. Resolver turns it into the 'let's it means.
-    final Operands operands = deduceOperands(e, record);
-    if (!operands.complete) {
+    final OperandMap operands = deduceOperands(e, record);
+    if (!operands.isComplete()) {
       return deduceUnresolvedRecordType(e, record, operands, v);
     }
     return deduceModifiedRecordType(e, record, operands, v);
@@ -2582,7 +2583,7 @@ public class TypeResolver {
    * flex record.
    */
   private Ast.Exp deduceUnresolvedRecordType(
-      TypeEnv e, Ast.Record record, Operands operands, Variable v) {
+      TypeEnv e, Ast.Record record, OperandMap operands, Variable v) {
     final List<Ast.Modifier> modifiers =
         transformEager(
             record.modifiers,
@@ -2602,7 +2603,7 @@ public class TypeResolver {
    * as an operand; the expressions an assignment gives have not.
    */
   private Ast.Modifier deduceModifierTypes(
-      TypeEnv e, Ast.Modifier modifier, Operands operands) {
+      TypeEnv e, Ast.Modifier modifier, OperandMap operands) {
     switch (modifier.op) {
       case ASSIGN_MODIFIER:
         final Ast.AssignModifier assign = (Ast.AssignModifier) modifier;
@@ -2636,29 +2637,29 @@ public class TypeResolver {
    * then records the names and bumps {@link #fieldsLearned}, and the
    * declaration is deduced again.
    */
-  private Operands deduceOperands(TypeEnv e, Ast.Record record) {
-    final List<Ast.Exp> exps = new ArrayList<>();
-    exps.add(requireNonNull(record.base));
+  private OperandMap deduceOperands(TypeEnv e, Ast.Record record) {
+    final List<Ast.Exp> operandExps = new ArrayList<>();
+    operandExps.add(requireNonNull(record.base));
     record.modifiers.forEach(
         modifier -> {
           if (modifier instanceof Ast.AllModifier) {
-            exps.add(((Ast.AllModifier) modifier).exp);
+            operandExps.add(((Ast.AllModifier) modifier).exp);
           }
         });
 
-    final Operands operands = new Operands();
+    final Map<Ast.Exp, Operand> operands = new IdentityHashMap<>();
     final PairList<Ast.Exp, Variable> unknown = PairList.of();
-    for (Ast.Exp exp : exps) {
+    for (Ast.Exp exp : operandExps) {
       final Variable v = unifier.variable();
-      operands.exps.put(exp, deduceExpType(e, exp, v));
-      operands.variables.put(exp, v);
+      final Ast.Exp exp2 = deduceExpType(e, exp, v);
       final List<String> names = fieldNames.get(exp);
-      if (names != null) {
-        operands.names.put(exp, names);
-        operands.checks.put(
-            exp, fieldChecks.getOrDefault(exp, ImmutableList.of()));
-      } else {
+      if (names == null) {
+        operands.put(exp, new Operand(exp2, v, null, ImmutableList.of()));
         unknown.add(exp, v);
+      } else {
+        final List<Ast.Fn> checks =
+            fieldChecks.getOrDefault(exp, ImmutableList.of());
+        operands.put(exp, new Operand(exp2, v, names, checks));
       }
     }
     if (!unknown.isEmpty()) {
@@ -2678,8 +2679,9 @@ public class TypeResolver {
               final List<Ast.Fn> checks = termChecks(resolved);
               fieldNames.put(exp, names);
               fieldChecks.put(exp, checks);
-              operands.names.put(exp, names);
-              operands.checks.put(exp, checks);
+              operands.put(
+                  exp,
+                  requireNonNull(operands.get(exp)).withFields(names, checks));
             } else {
               actionMap.put(
                   variable,
@@ -2687,8 +2689,7 @@ public class TypeResolver {
             }
           });
     }
-    operands.complete = operands.names.size() == exps.size();
-    return operands;
+    return new OperandMap(operands);
   }
 
   /**
@@ -2737,6 +2738,32 @@ public class TypeResolver {
   }
 
   /**
+   * Returns the conditions a term carries, from every alias it is wrapped in.
+   *
+   * <p>A type may be an alias for an alias, and each layer may constrain, so
+   * they are collected from the outside in, down to the type the aliases
+   * abbreviate.
+   */
+  private List<Ast.Fn> termChecks(Term t) {
+    final List<Ast.Fn> checks = new ArrayList<>();
+    while (t instanceof Sequence && isAliasTerm((Sequence) t)) {
+      final Sequence sequence = (Sequence) t;
+      final String name = aliasTermName(sequence);
+      final List<Ast.Fn> named = unnamedChecks.get(name);
+      if (named != null) {
+        checks.addAll(named);
+      } else {
+        final Type type = typeSystem.lookupOpt(name);
+        if (type instanceof AliasType) {
+          checks.addAll(((AliasType) type).checks);
+        }
+      }
+      t = sequence.terms.get(0);
+    }
+    return checks;
+  }
+
+  /**
    * Deduces the type of a record with modifiers, applying each modifier to the
    * record the one before it produced.
    *
@@ -2766,7 +2793,7 @@ public class TypeResolver {
    * value carried over was checked when it was put there.
    */
   private Ast.Exp deduceModifiedRecordType(
-      TypeEnv e, Ast.Record record, Operands operands, Variable v) {
+      TypeEnv e, Ast.Record record, OperandMap operands, Variable v) {
     final Ast.Exp base = requireNonNull(record.base);
     NavigableMap<String, Variable> fields0 = fieldVariables(operands, base);
     final List<Ast.Modifier> modifiers = new ArrayList<>();
@@ -2816,7 +2843,7 @@ public class TypeResolver {
    */
   private Term modifiedTerm(
       TypeEnv e,
-      Operands operands,
+      OperandMap operands,
       Ast.Exp base,
       NavigableMap<String, Variable> fields,
       List<Ast.Fn> checks,
@@ -2869,32 +2896,6 @@ public class TypeResolver {
   }
 
   /**
-   * Returns the conditions a term carries, from every alias it is wrapped in.
-   *
-   * <p>A type may be an alias for an alias, and each layer may constrain, so
-   * they are collected from the outside in, down to the type the aliases
-   * abbreviate.
-   */
-  private List<Ast.Fn> termChecks(Term t) {
-    final List<Ast.Fn> checks = new ArrayList<>();
-    while (t instanceof Sequence && isAliasTerm((Sequence) t)) {
-      final Sequence sequence = (Sequence) t;
-      final String name = aliasTermName(sequence);
-      final List<Ast.Fn> named = unnamedChecks.get(name);
-      if (named != null) {
-        checks.addAll(named);
-      } else {
-        final Type type = typeSystem.lookupOpt(name);
-        if (type instanceof AliasType) {
-          checks.addAll(((AliasType) type).checks);
-        }
-      }
-      t = sequence.terms.get(0);
-    }
-    return checks;
-  }
-
-  /**
    * Returns a copy of a modifier whose expressions have been deduced.
    *
    * <p>A verb that skips a label leaves the expression it was given with
@@ -2905,7 +2906,7 @@ public class TypeResolver {
   private Ast.Modifier copyModifier(
       TypeEnv e,
       Ast.Modifier modifier,
-      Operands operands,
+      OperandMap operands,
       Map<Ast.Exp, Ast.Exp> assigned) {
     switch (modifier.op) {
       case ASSIGN_MODIFIER:
@@ -2980,7 +2981,7 @@ public class TypeResolver {
    * being modified used to be lost.
    */
   private NavigableMap<String, Variable> fieldVariables(
-      Operands operands, Ast.Exp exp) {
+      OperandMap operands, Ast.Exp exp) {
     final NavigableMap<String, Variable> fields =
         new TreeMap<>(RecordType.ORDERING);
     operands
@@ -3007,46 +3008,6 @@ public class TypeResolver {
       e2 = e2.bind(field.getKey(), field.getValue());
     }
     return e2;
-  }
-
-  /**
-   * The operands of a record with modifiers -- its base, and the argument of
-   * each of its {@code all} modifiers -- as deduced by {@link #deduceOperands}.
-   *
-   * <p>Keyed by identity, because two operands may be equal expressions and
-   * still be distinct nodes.
-   */
-  private static class Operands {
-    /** The deduced form of each operand. */
-    final Map<Ast.Exp, Ast.Exp> exps = new IdentityHashMap<>();
-
-    /** The variable each operand's type was deduced into. */
-    final Map<Ast.Exp, Variable> variables = new IdentityHashMap<>();
-
-    /** The field names of each operand whose type is a known record. */
-    final Map<Ast.Exp, List<String>> names = new IdentityHashMap<>();
-
-    /** The conditions each operand's type carries. */
-    final Map<Ast.Exp, List<Ast.Fn>> checks = new IdentityHashMap<>();
-
-    /** Whether every operand's field names are known. */
-    boolean complete;
-
-    Ast.Exp exp(Ast.Exp exp) {
-      return requireNonNull(exps.get(exp), "operand");
-    }
-
-    Variable variable(Ast.Exp exp) {
-      return requireNonNull(variables.get(exp), "operand");
-    }
-
-    List<String> fieldNames(Ast.Exp exp) {
-      return requireNonNull(names.get(exp), "operand");
-    }
-
-    List<Ast.Fn> checks(Ast.Exp exp) {
-      return checks.getOrDefault(exp, ImmutableList.of());
-    }
   }
 
   private void deduceFieldTypes(
@@ -6657,6 +6618,84 @@ public class TypeResolver {
     @Override
     public String toString() {
       return format("id %s term %s", id, term);
+    }
+  }
+
+  /** One operand of a record with modifiers, as deduced. */
+  private static class Operand {
+    /** The deduced form of the operand. */
+    final Ast.Exp exp;
+
+    /** The variable the operand's type was deduced into. */
+    final Variable variable;
+
+    /** The operand's field names, or null if its type is not a known record. */
+    final @Nullable List<String> names;
+
+    /** The conditions the operand's type carries; empty if unknown. */
+    final List<Ast.Fn> checks;
+
+    Operand(
+        Ast.Exp exp,
+        Variable variable,
+        @Nullable List<String> names,
+        List<Ast.Fn> checks) {
+      this.exp = exp;
+      this.variable = variable;
+      this.names = names;
+      this.checks = checks;
+    }
+
+    /**
+     * Returns a copy whose field names, and the conditions that come with them,
+     * are now known.
+     */
+    Operand withFields(List<String> names, List<Ast.Fn> checks) {
+      return new Operand(exp, variable, names, checks);
+    }
+  }
+
+  /**
+   * The operands of a record with modifiers -- its base, and the argument of
+   * each of its {@code all} modifiers -- as deduced by {@link #deduceOperands}.
+   *
+   * <p>Keyed by identity, because two operands may be equal expressions and
+   * still be distinct nodes. That is also why the map is not an {@code
+   * ImmutableMap}, which would hash such operands together.
+   *
+   * <p>Immutable. {@link #deduceOperands} fills the map and hands it over;
+   * every caller only reads.
+   */
+  private static class OperandMap {
+    private final Map<Ast.Exp, Operand> operands;
+
+    OperandMap(Map<Ast.Exp, Operand> operands) {
+      this.operands = unmodifiableMap(operands);
+    }
+
+    /** Returns whether every operand's field names are known. */
+    boolean isComplete() {
+      return operands.values().stream().allMatch(o -> o.names != null);
+    }
+
+    private Operand operand(Ast.Exp exp) {
+      return requireNonNull(operands.get(exp), "operand");
+    }
+
+    Ast.Exp exp(Ast.Exp exp) {
+      return operand(exp).exp;
+    }
+
+    Variable variable(Ast.Exp exp) {
+      return operand(exp).variable;
+    }
+
+    List<String> fieldNames(Ast.Exp exp) {
+      return requireNonNull(operand(exp).names, "field names");
+    }
+
+    List<Ast.Fn> checks(Ast.Exp exp) {
+      return operand(exp).checks;
     }
   }
 }
