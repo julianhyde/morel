@@ -214,7 +214,7 @@ class Enforcer {
     // Reject before the test below: a checked function type constrains
     // nothing that can be checked, so the test would pass it over in silence.
     rejectCheckedFunction(t, t, type.pos);
-    return constrains(t) ? t : null;
+    return hasCheck(t) ? t : null;
   }
 
   /**
@@ -241,6 +241,30 @@ class Enforcer {
   }
 
   /**
+   * Compiles the conditions a type declaration writes, and records them against
+   * {@code type}.
+   *
+   * <p>A condition can only be converted here, in the {@link TypeMap} that
+   * resolved it; a binding that later claims the type is a separate statement,
+   * with a type map that has never seen these nodes.
+   *
+   * <p>Records before checking, not after. The type is interned by the time we
+   * get here, so a declaration that throws would otherwise leave a type that
+   * has conditions but nothing to evaluate, and using it later threw a {@link
+   * NullPointerException}.
+   */
+  void compileDeclaredChecks(
+      Ast.TypeBind bind, Type type, List<Ast.Fn> checks) {
+    if (checks.isEmpty()) {
+      return;
+    }
+    final List<Core.Exp> predicates =
+        transformEager(checks, f -> makeTotal(toCore.apply(f)));
+    typeMap.typeSystem.setCheckPredicates(type, predicates);
+    predicates.forEach(p -> checkClosed(bind, p));
+  }
+
+  /**
    * Compiles the conditions of a checked type, unless they are compiled
    * already.
    *
@@ -253,7 +277,7 @@ class Enforcer {
     if (!checks.isEmpty()
         && typeMap.typeSystem.checkPredicates(type).isEmpty()) {
       final List<Core.Exp> predicates =
-          transformEager(checks, f -> total(toCore.apply(f)));
+          transformEager(checks, f -> makeTotal(toCore.apply(f)));
       typeMap.typeSystem.setCheckPredicates(type, predicates);
       predicates.forEach(p -> checkClosed(null, pos, p));
     }
@@ -294,7 +318,7 @@ class Enforcer {
   void rejectCheckedFunction(Type type, Type claimed, Pos pos) {
     if (type instanceof FnType) {
       final FnType fnType = (FnType) type;
-      if (constrains(fnType.paramType) || constrains(fnType.resultType)) {
+      if (hasCheck(fnType.paramType) || hasCheck(fnType.resultType)) {
         throw new CompileException(
             format(
                 "cannot claim a checked function type '%s'", claimed.moniker()),
@@ -334,7 +358,7 @@ class Enforcer {
   }
 
   /** Returns whether a type, or any type within it, carries a condition. */
-  boolean constrains(Type type) {
+  boolean hasCheck(Type type) {
     return deepCondition(type, null, null, "", true, Pos.ZERO) != null;
   }
 
@@ -358,10 +382,10 @@ class Enforcer {
    * component; the outermost condition raises without one, and quotes the
    * whole.
    *
-   * <p>{@code raising} says whether a component that fails should raise for
-   * itself. A claim wants that, so that the message names the component; a scan
-   * over the type does not, because there the condition decides which values
-   * the type has rather than judging a value that must have it.
+   * <p>{@code walk.raising} says whether a component that fails should raise
+   * for itself. A claim wants that, so that the message names the component; a
+   * scan over the type does not, because there the condition decides which
+   * values the type has rather than judging a value that must have it.
    *
    * <p>Called with a null {@code value} to ask only whether a type constrains
    * anything, in which case the expression it returns is a placeholder.
@@ -374,7 +398,11 @@ class Enforcer {
       boolean raising,
       Pos pos) {
     return deepCondition(
-        claimedType, erasedType, value, blame, raising, pos, ImmutableMap.of());
+        claimedType,
+        erasedType,
+        value,
+        blame,
+        new Walk(raising, pos, ImmutableMap.of()));
   }
 
   /**
@@ -390,24 +418,21 @@ class Enforcer {
       @Nullable Type erasedType,
       Core.@Nullable Exp value,
       String blame,
-      boolean raising,
-      Pos pos,
-      Map<Type.Key, Core.@Nullable IdPat> walking) {
+      Walk walk) {
     final TypeSystem typeSystem = typeMap.typeSystem;
     if (claimedType instanceof AliasType) {
       final AliasType aliasType = (AliasType) claimedType;
       Core.Exp condition =
-          deepCondition(
-              aliasType.type, erasedType, value, blame, raising, pos, walking);
+          deepCondition(aliasType.type, erasedType, value, blame, walk);
       if (!aliasType.checks.isEmpty()) {
-        Core.Exp own = condition(aliasType, value, pos);
-        if (raising && !blame.isEmpty() && value != null) {
+        Core.Exp own = ownCondition(aliasType, value, walk.pos);
+        if (walk.raising && !blame.isEmpty() && value != null) {
           // A component raises for itself, so that the message names it and
           // quotes it. The outermost condition is left bare, for the $check
           // that wraps the whole value to report.
           own =
               core.apply(
-                  pos,
+                  walk.pos,
                   PrimitiveType.BOOL,
                   core.functionLiteral(typeSystem, BuiltIn.Z_REQUIRE),
                   core.tuple(
@@ -437,7 +462,7 @@ class Enforcer {
             value == null
                 ? null
                 : core.apply(
-                    pos,
+                    walk.pos,
                     requireNonNull(erasedFieldType),
                     core.recordSelector(
                         typeSystem,
@@ -450,9 +475,7 @@ class Enforcer {
                 erasedFieldType,
                 fieldValue,
                 append(blame, fieldBlame(recordType, field.getKey())),
-                raising,
-                pos,
-                walking);
+                walk);
         if (fieldCondition != null) {
           condition =
               condition == null
@@ -464,8 +487,7 @@ class Enforcer {
     }
     if (claimedType.isCollection()) {
       final Type elementType = claimedType.elementType();
-      if (deepCondition(elementType, null, null, "", raising, pos, walking)
-          == null) {
+      if (deepCondition(elementType, null, null, "", walk) == null) {
         return null;
       }
       if (value == null) {
@@ -482,9 +504,7 @@ class Enforcer {
                   erasedElementType,
                   core.id(idPat),
                   appendElement(blame),
-                  raising,
-                  pos,
-                  walking));
+                  walk));
       final Core.Fn predicate =
           core.fn(
               typeSystem.fnType(erasedElementType, PrimitiveType.BOOL),
@@ -494,20 +514,14 @@ class Enforcer {
       final BuiltIn all =
           claimedType instanceof ListType ? BuiltIn.LIST_ALL : BuiltIn.BAG_ALL;
       return core.apply(
-          pos,
+          walk.pos,
           PrimitiveType.BOOL,
-          core.call(typeSystem, all, erasedElementType, pos, predicate),
+          core.call(typeSystem, all, erasedElementType, walk.pos, predicate),
           value);
     }
     if (claimedType instanceof DataType) {
       return datatypeCondition(
-          (DataType) claimedType,
-          erasedType,
-          value,
-          blame,
-          raising,
-          pos,
-          walking);
+          (DataType) claimedType, erasedType, value, blame, walk);
     }
     return null;
   }
@@ -531,38 +545,36 @@ class Enforcer {
       @Nullable Type erasedType,
       Core.@Nullable Exp value,
       String blame,
-      boolean raising,
-      Pos pos,
-      Map<Type.Key, Core.@Nullable IdPat> walking) {
+      Walk walk) {
     final TypeSystem typeSystem = typeMap.typeSystem;
-    if (walking.containsKey(dataType.key())) {
+    if (walk.walking.containsKey(dataType.key())) {
       // Met again, so this datatype contains itself. Call the predicate being
       // built for it rather than expanding it a second time. Asked only
       // whether anything is checked, answer no: the recursion constrains
       // nothing that the walk does not find elsewhere. (There is no predicate
       // to call while that is being asked, which is why the value may be null.)
-      final Core.IdPat walkingPat = walking.get(dataType.key());
+      final Core.IdPat walkingPat = walk.walking.get(dataType.key());
       return value == null || walkingPat == null
           ? null
-          : core.apply(pos, PrimitiveType.BOOL, core.id(walkingPat), value);
+          : core.apply(
+              walk.pos, PrimitiveType.BOOL, core.id(walkingPat), value);
     }
     final Map<String, Type> constructors =
         dataType.typeConstructors(typeSystem);
 
     // Ask first whether anything is checked, so that a datatype that
     // carries no condition costs no names and no code.
-    final Map<Type.Key, Core.@Nullable IdPat> walking2 = new HashMap<>(walking);
-    walking2.put(dataType.key(), null); // no predicate yet; only re-entry
-    boolean constrains = false;
+    // no predicate yet; only re-entry
+    final Walk probe = walk.walking(dataType.key(), null);
+    boolean checks = false;
     for (Type argType : constructors.values()) {
       if (argType != DummyType.INSTANCE
-          && deepCondition(argType, null, null, "", raising, pos, walking2)
-              != null) {
-        constrains = true;
+          && deepCondition(argType, null, null, "", probe) != null) {
+        checks = true;
         break;
       }
     }
-    if (!constrains) {
+    if (!checks) {
       return null;
     }
     if (value == null) {
@@ -578,7 +590,7 @@ class Enforcer {
     final FnType fnType = typeSystem.fnType(erasedDataType, PrimitiveType.BOOL);
     final Core.IdPat predicatePat =
         core.idPat(fnType, () -> nameGenerator.getPrefixed("con"));
-    walking2.put(dataType.key(), predicatePat);
+    final Walk walk2 = walk.walking(dataType.key(), predicatePat);
 
     final List<Core.Match> matches = new ArrayList<>();
     constructors.forEach(
@@ -587,7 +599,7 @@ class Enforcer {
             // A constructor with no argument carries nothing to check.
             matches.add(
                 core.match(
-                    pos,
+                    walk.pos,
                     core.con0Pat(erasedDataType, name),
                     core.boolLiteral(true)));
             return;
@@ -602,12 +614,10 @@ class Enforcer {
                   erasedArgType,
                   core.id(argPat),
                   append(blame, name),
-                  raising,
-                  pos,
-                  walking2);
+                  walk2);
           matches.add(
               core.match(
-                  pos,
+                  walk.pos,
                   core.conPat(erasedDataType, name, argPat),
                   argCondition == null
                       ? core.boolLiteral(true)
@@ -620,12 +630,13 @@ class Enforcer {
         core.fn(
             fnType,
             valuePat,
-            core.caseOf(pos, PrimitiveType.BOOL, core.id(valuePat), matches));
+            core.caseOf(
+                walk.pos, PrimitiveType.BOOL, core.id(valuePat), matches));
     return core.let(
         core.recValDecl(
             ImmutableList.of(
-                core.nonRecValDecl(pos, predicatePat, null, predicate))),
-        core.apply(pos, PrimitiveType.BOOL, core.id(predicatePat), value));
+                core.nonRecValDecl(walk.pos, predicatePat, null, predicate))),
+        core.apply(walk.pos, PrimitiveType.BOOL, core.id(predicatePat), value));
   }
 
   /**
@@ -681,7 +692,7 @@ class Enforcer {
    */
   Core.Exp checked(Core.Exp coreExp, Type type, String blame, Pos pos) {
     rejectCheckedFunction(type, type, pos);
-    if (!constrains(type)) {
+    if (!hasCheck(type)) {
       return coreExp;
     }
     final TypeSystem typeSystem = typeMap.typeSystem;
@@ -763,7 +774,7 @@ class Enforcer {
    * Returns the conjunction of a checked type's own conditions, of {@code
    * value}.
    */
-  private Core.Exp condition(
+  private Core.Exp ownCondition(
       AliasType aliasType, Core.@Nullable Exp value, Pos pos) {
     final TypeSystem typeSystem = typeMap.typeSystem;
     final List<Core.Exp> predicates = typeSystem.checkPredicates(aliasType);
@@ -878,7 +889,7 @@ class Enforcer {
    * <p>This runs before the general coverage pass, so the condition never looks
    * non-exhaustive to it.
    */
-  Core.Exp total(Core.Exp predicate) {
+  Core.Exp makeTotal(Core.Exp predicate) {
     if (!(predicate instanceof Core.Fn)) {
       return predicate;
     }
@@ -951,6 +962,39 @@ class Enforcer {
       return null;
     }
     return claimedPatType(pat, erasedType);
+  }
+
+  /**
+   * What stays the same while a claim is walked: whether a failure raises, the
+   * position to blame it at, and the datatypes whose walk is in progress.
+   *
+   * <p>A datatype may contain itself, so walking one cannot be an expansion:
+   * {@link #walking} maps each datatype being walked to the predicate being
+   * built for it, and a datatype met again is called rather than expanded.
+   */
+  private static class Walk {
+    /** Whether a value that fails the condition raises, or answers false. */
+    final boolean raising;
+
+    /** Where to blame a failure. */
+    final Pos pos;
+
+    /** The datatypes being walked, and the predicate being built for each. */
+    final Map<Type.Key, Core.@Nullable IdPat> walking;
+
+    Walk(
+        boolean raising, Pos pos, Map<Type.Key, Core.@Nullable IdPat> walking) {
+      this.raising = raising;
+      this.pos = pos;
+      this.walking = walking;
+    }
+
+    /** Returns a copy that is also walking {@code dataType}. */
+    Walk walking(Type.Key dataType, Core.@Nullable IdPat predicate) {
+      final Map<Type.Key, Core.@Nullable IdPat> map = new HashMap<>(walking);
+      map.put(dataType, predicate);
+      return new Walk(raising, pos, map);
+    }
   }
 }
 

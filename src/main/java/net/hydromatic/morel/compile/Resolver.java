@@ -713,19 +713,7 @@ public class Resolver {
   private AliasType toCore(Ast.TypeBind bind) {
     final AliasType aliasType =
         (AliasType) typeMap.typeSystem.lookup(bind.name.name);
-    if (!bind.checks.isEmpty()) {
-      // A condition can only be converted here, in the TypeMap that resolved
-      // it; a binding that later claims the type is a separate statement, with
-      // a TypeMap that has never seen these nodes.
-      final List<Core.Exp> predicates =
-          transformEager(bind.checks, f -> enforcer.total(toCore(f)));
-      // Record before checking, not after. The type is interned by the time we
-      // get here, so a declaration that throws would otherwise leave a type
-      // that has conditions but nothing to evaluate, and using it later threw
-      // a NullPointerException.
-      typeMap.typeSystem.setCheckPredicates(aliasType, predicates);
-      predicates.forEach(p -> enforcer.checkClosed(bind, p));
-    }
+    enforcer.compileDeclaredChecks(bind, aliasType, bind.checks);
     // A checked type written inside the body has no name of its own, so
     // its conditions are compiled here too, against the type its key builds.
     bind.type.accept(
@@ -733,13 +721,10 @@ public class Resolver {
           @Override
           protected void visit(Ast.CheckedType checkedType) {
             super.visit(checkedType);
-            final Type type =
-                TypeResolver.toType(checkedType, typeMap.typeSystem);
-            final List<Core.Exp> predicates =
-                transformEager(
-                    checkedType.checks, f -> enforcer.total(toCore(f)));
-            typeMap.typeSystem.setCheckPredicates(type, predicates);
-            predicates.forEach(p -> enforcer.checkClosed(bind, p));
+            enforcer.compileDeclaredChecks(
+                bind,
+                TypeResolver.toType(checkedType, typeMap.typeSystem),
+                checkedType.checks);
           }
         });
     return aliasType;
