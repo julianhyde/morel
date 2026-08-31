@@ -436,9 +436,17 @@ something settled — §8's principle, applied to the sequence itself.
         mentions) that a tree needs as much as a step list. The issue
         itself gives the reason: a tree is closer to `RelNode` than a
         step list is.
-      Where the round trip stands, with the suite routed through it:
-      every script agrees except for plan text, which step 3
-      rebaselines, and such-that.smli. Those two are the round trip's
+      Where the round trip stands, re-measured after the dependent
+      join, the failable-pattern translation and the group-record
+      change: three scripts differ, all of them in plan text only
+      (optimize, hybrid, relational), and such-that.smli has the two
+      artifacts below. dual.smli, blog.smli and built-in/relational
+      .smli used to differ and now do not — the dependent join and
+      the filter-and-projection translation closed them. Re-measure
+      after a run of changes rather than only when something is
+      expected to move: the run that produced these numbers also
+      turned up a name-collision bug that no single change looked
+      capable of causing. Those two are the round trip's
       own doing rather than the tree's, and they are the reason it
       cannot be the flip. `fun cheap beer = exists bar1, ... where
       sells (...)` has its body lowered when it is declared, and `from
