@@ -421,6 +421,39 @@ public class RelBuilderTest {
                 + "    [i]\n"));
   }
 
+  /**
+   * Tests that merging two projections binds the inner expression to a variable
+   * when the outer reads it more than once, so that the merge never turns one
+   * evaluation per row into two.
+   */
+  @Test
+  void testProjectMergeBindsWhatItWouldDuplicate() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    b.push(f.emps).project(b.field("deptno"));
+    // The outer projection reads its input twice.
+    final Core.Exp rel =
+        b.project(core.greaterThan(f.typeSystem, b.input(0), b.input(0)))
+            .build();
+    assertThat(
+        f.plan(rel),
+        is(
+            "project [$0 > $0]\n" //
+                + "  project [#deptno $0]\n"
+                + "    [{deptno = 10}, {deptno = 20}]\n"));
+
+    final RelBuilder b2 = f.builder(RelBuilder.Simp.ALL);
+    b2.push(f.emps).project(b2.field("deptno"));
+    final Core.Exp rel2 =
+        b2.project(core.greaterThan(f.typeSystem, b2.input(0), b2.input(0)))
+            .build();
+    assertThat(
+        f.plan(rel2),
+        is(
+            "project [let val v$0 = #deptno $0 in v$0 > v$0 end]\n" //
+                + "  [{deptno = 10}, {deptno = 20}]\n"));
+  }
+
   /** Tests {@code group}, whose element is a record of keys and aggregates. */
   @Test
   void testGroup() {

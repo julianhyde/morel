@@ -94,6 +94,12 @@ public class RelBuilder {
   private final Set<Simp> simps;
   private final Deque<Frame> stack = new ArrayDeque<>();
 
+  /**
+   * Counter for generated binders. Per builder, not per type system, so that
+   * plan text does not depend on what was compiled before it (spec.md §6).
+   */
+  private int nextName = 0;
+
   private RelBuilder(TypeSystem typeSystem, Set<Simp> simps) {
     this.typeSystem = requireNonNull(typeSystem);
     this.simps = EnumSet.copyOf(simps.isEmpty() ? Simp.NONE : simps);
@@ -384,7 +390,7 @@ public class RelBuilder {
     }
     if (on(Simp.PROJECT_MERGE) && frame.rel instanceof Core.Project) {
       final Core.Project project = (Core.Project) frame.rel;
-      return project(project.input, substitute(exp, project.exp));
+      return project(project.input, merge(exp, project.exp));
     }
     return project(frame.rel, exp);
   }
@@ -528,6 +534,41 @@ public class RelBuilder {
                 .unwrap(BigDecimal.class)
                 .compareTo(BigDecimal.valueOf(value))
             == 0;
+  }
+
+  /**
+   * Substitutes the inner projection's expression into the outer's, binding it
+   * to a variable first if the outer reads it more than once.
+   *
+   * <p>Merging two projections is substitution, and substitution duplicates:
+   * {@code project [$0 + $0]} over {@code project [f $0]} would call {@code f}
+   * twice per row where the two nodes called it once. A {@code let} keeps the
+   * one evaluation that the two nodes had, so the merge is a simplification of
+   * the plan and never a pessimization of it.
+   */
+  private Core.Exp merge(Core.Exp outer, Core.Exp inner) {
+    if (count(outer) <= 1) {
+      return substitute(outer, inner);
+    }
+    final Core.IdPat pat = core.idPat(inner.type, "v$" + nextName++, 0);
+    return core.let(
+        core.nonRecValDecl(inner.pos, pat, null, inner),
+        substitute(outer, core.id(pat)));
+  }
+
+  /** Returns how many times an expression reads {@code $0}. */
+  private static int count(Core.Exp exp) {
+    final int[] n = {0};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (isInput0(id)) {
+              ++n[0];
+            }
+          }
+        });
+    return n[0];
   }
 
   /** Replaces {@code $0} in an expression with another expression. */
