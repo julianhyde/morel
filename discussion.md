@@ -636,3 +636,67 @@ The `map` is still the right answer where a tree is *given* rather
 than built from a query -- a rule that rewrites a root, or an
 implementation reading frozen plan text -- and the point stands that
 it is elementwise, not an aggregate.
+
+## 15. Does a join need a yield?
+
+A join carries a yield expression over `$0` and `$1`, so it pairs its
+inputs *and* projects them in one node. §7 chose that over fixed
+pairs — a join emitting `leftElem * rightElem` with a record built
+above — because n-ary joins nest the pairs, reassociation re-nests
+them, and every access above has to re-path.
+
+There is a third option §7 did not consider: the join emits the
+*concatenation* of its inputs' fields, `m + n` of them, and a
+projection follows where the query wants something else. Flattening
+rather than nesting, so the objection to fixed pairs does not apply.
+
+**The yield is a pairing 495 times out of 497.** Measured over the
+script suite: of the joins the translation builds, all but two have a
+yield that is a record whose every field is `$0`, `$1`, or a field of
+one of them. It renames; it does not compute. So the general
+mechanism is paying for two queries.
+
+And concatenation would make two rewrites free rather than merely
+local. Morel's record types are sorted by label, so the
+concatenation of two field sets is the same record whichever side
+contributed which: **commute needs no substitution at all**, where
+today it swaps `$0` and `$1` through the yield and the condition. For
+the same reason `(A ⋈ B) ⋈ C` and `A ⋈ (B ⋈ C)` have the *identical*
+element type, so **reassociation needs no compensating projection**,
+where today it composes the two yields involved. Those are the two
+rewrites a join planner does most.
+
+It is also the argument that removed `projectMany` (§8), applied
+again: a node that both pairs and projects is a node doing two
+things, and the one that does one thing composes better.
+
+Three costs, and one of them is not what it appears.
+
+* **Inputs must be records whose fields are the binders.** `from e in
+  emps, d in depts` wants `{d, e}`, and `emps` is a collection of emp
+  records, not of `{e: ...}`. So each input needs a projection that
+  names it, where today the yield names both at once. Roughly one
+  more node per join.
+* **Field collisions need a convention now.** Two inputs with the
+  same field name have no concatenation. §5 already owes a
+  deterministic rename convention for scope-merging rewrites; this
+  makes it due earlier.
+* **An outer join must option-wrap the absent side's fields**, where
+  today the yield does it and §3.4 says approvingly that "the node
+  stays simple; the arithmetic of which value becomes `NONE` is in
+  the expression, where a rule can see it".
+
+
+That third cost is smaller than it looks, and it is the one that
+decides the question. The node *already* decides which side can be
+absent — that is what its kind means — so the yield is not expressing
+that decision, it is transcribing it. Moving the wrapping into the
+node does not add semantics to the node; it removes a copy of them
+from the expression, and with it the possibility that the two
+disagree.
+
+**Resolution: the join concatenates, and a projection follows where
+the query wants something else.** Not yet done. It should land before
+step 3 freezes the plan text, and it wants §14 settled first, because
+"the inputs are records" is the same question about leaves that §14
+answered for constructed elements.
