@@ -194,8 +194,8 @@ public class RelTranslator {
 
   /**
    * Translates a scan. The first scan is a leaf; a later scan whose collection
-   * does not depend on the bindings so far is a join; one that does depend on
-   * them is a {@code projectMany}.
+   * does not depend on the bindings so far is an ordinary join; one that does
+   * depend on them is a join carrying a binder that its right input reads.
    */
   private boolean scan(Core.Scan scan, Core.Rel.JoinType joinType) {
     final Type rightElementType = scan.exp.type.elementType();
@@ -232,58 +232,23 @@ public class RelTranslator {
     final Core.Exp left = requireExp();
     final Type wanted = elementType(scan.env);
 
-    if (dependsOnBindings(scan.exp)) {
-      if (joinType == Core.Rel.JoinType.RIGHT
-          || joinType == Core.Rel.JoinType.FULL) {
-        // Every element of a correlated collection comes from some left
-        // element, so there is nothing for the other side to be outer to.
-        return false;
-      }
-      // A correlated scan. The lambda's parameter names the left element,
-      // because the body is a tree, and a tree would shadow $0.
-      final Core.IdPat param = param(left.type.elementType());
-      final Map<Core.NamedPat, Core.Exp> outerAccess = over(access, param);
-      final Map<Core.NamedPat, Core.Exp> rightAccess = new LinkedHashMap<>();
-      if (!destructure(scan.pat, core.input0(rightElementType), rightAccess)) {
-        return false;
-      }
-      final Map<Core.NamedPat, Core.Exp> yieldAccess =
-          new LinkedHashMap<>(outerAccess);
-      final Map<Core.NamedPat, Core.Exp> emptyAccess =
-          new LinkedHashMap<>(outerAccess);
-      // A correlated outer join yields SOME of each right binder where the
-      // collection has elements, and NONE for all of them where it does not.
-      for (Map.Entry<Core.NamedPat, Core.Exp> entry : rightAccess.entrySet()) {
-        if (joinType == Core.Rel.JoinType.INNER) {
-          yieldAccess.put(entry.getKey(), entry.getValue());
-          continue;
-        }
-        final Core.@Nullable NamedPat binding =
-            binding(scan.env, entry.getKey().name);
-        if (binding == null) {
-          return false;
-        }
-        yieldAccess.put(entry.getKey(), some(binding.type, entry.getValue()));
-        emptyAccess.put(entry.getKey(), none(binding.type));
-      }
-      final Map<Core.NamedPat, Core.Exp> combined =
-          both(outerAccess, rightAccess);
-      Core.Exp body = substitute(scan.exp, outerAccess);
-      if (!scan.condition.isBoolLiteral(true)) {
-        body = core.filter(body, substitute(scan.condition, combined));
-      }
-      body = core.project(typeSystem, body, element(yieldAccess, wanted));
-      if (joinType != Core.Rel.JoinType.INNER) {
-        // An outer apply: where the collection has nothing that matches, the
-        // left element still yields a row. The node sits inside the lambda,
-        // where the parameter its expression reads is in scope.
-        body = core.ifEmpty(body, element(emptyAccess, wanted));
-      }
-      exp = core.projectMany(typeSystem, left, param, body);
-      return true;
+    final boolean dependent = dependsOnBindings(scan.exp);
+    if (dependent
+        && (joinType == Core.Rel.JoinType.RIGHT
+            || joinType == Core.Rel.JoinType.FULL)) {
+      // Every element of a correlated collection comes from some left
+      // element, so there is nothing for the other side to be outer to.
+      return false;
     }
 
-    // An independent scan is a join: the left element is $0, the right $1.
+    // A scan is a join: the left element is $0, the right $1. Where the
+    // collection reads the left element it reads it through a binder, because
+    // the right input is a tree of its own and its $0 is its own.
+    final Core.@Nullable IdPat binder =
+        dependent ? param(left.type.elementType()) : null;
+    final Core.Exp right =
+        binder == null ? scan.exp : substitute(scan.exp, over(access, binder));
+
     final Map<Core.NamedPat, Core.Exp> rightAccess = new LinkedHashMap<>();
     if (!destructure(scan.pat, core.input1(rightElementType), rightAccess)) {
       return false;
@@ -318,8 +283,9 @@ public class RelTranslator {
         core.join(
             typeSystem,
             joinType,
+            binder,
             left,
-            scan.exp,
+            right,
             substitute(scan.condition, condAccess),
             element(yieldAccess, wanted));
     return true;
@@ -327,11 +293,13 @@ public class RelTranslator {
 
   /**
    * Returns a collection of the elements that match a pattern, for a scan whose
-   * pattern can fail: a {@code projectMany} whose body yields one element where
-   * the pattern matches and none where it does not.
+   * pattern can fail: a dependent join whose right input yields one element
+   * where the pattern matches and none where it does not.
    *
-   * <p>The pattern binds its own names, as a lambda's parameter does, so the
-   * element is built from those names rather than from {@code $0}.
+   * <p>The pattern binds its own names, as the binder does, so the element is
+   * built from those names rather than from {@code $0}. The join's yield is
+   * {@code $1}, the matched element; the left element is not wanted, and the
+   * binder exists only so that the {@code case} can read it.
    */
   private Core.@Nullable Exp matchMany(
       Core.Exp collection, Core.Pat pat, Type wanted) {
@@ -357,7 +325,14 @@ public class RelTranslator {
                     Pos.ZERO,
                     core.wildcardPat(elementType),
                     core.list(typeSystem, element.type, ImmutableList.of()))));
-    return core.projectMany(typeSystem, collection, param, body);
+    return core.join(
+        typeSystem,
+        Core.Rel.JoinType.INNER,
+        param,
+        collection,
+        body,
+        core.boolLiteral(true),
+        core.input1(element.type));
   }
 
   /**
