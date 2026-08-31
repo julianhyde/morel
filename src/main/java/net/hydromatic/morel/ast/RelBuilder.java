@@ -38,6 +38,7 @@ import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Builds a relational tree ({@link Core.Rel}).
@@ -471,12 +472,44 @@ public class RelBuilder {
    */
   public RelBuilder join(
       Core.Rel.JoinType joinType, Core.Exp condition, Core.Exp yieldExp) {
+    return join(joinType, null, condition, yieldExp);
+  }
+
+  /**
+   * Joins the top two of the stack, with a binder that names the left element
+   * inside the right input.
+   *
+   * <p>This is what a scan whose collection reads an earlier binder becomes.
+   * The right input is a tree of its own, so it cannot say {@code $0} and mean
+   * the left element; the binder crosses that boundary by ordinary lexical
+   * scoping. Pass null where the right input reads nothing of the left.
+   */
+  public RelBuilder join(
+      Core.Rel.JoinType joinType,
+      Core.@Nullable IdPat binder,
+      Core.Exp condition,
+      Core.Exp yieldExp) {
     final Frame right = pop();
     final Frame left = pop();
     arity = 1;
     return push(
         core.join(
-            typeSystem, joinType, left.rel, right.rel, condition, yieldExp));
+            typeSystem,
+            joinType,
+            binder,
+            left.rel,
+            right.rel,
+            condition,
+            yieldExp));
+  }
+
+  /**
+   * Returns a binder that names the top input's element, for the right input of
+   * a dependent join. The right input is built after this, and reads the binder
+   * where it needs the left element.
+   */
+  public Core.IdPat binder(String name) {
+    return core.idPat(frame(0).rel.type.elementType(), name, 0);
   }
 
   /** Combines the top {@code n} of the stack with a set operator. */

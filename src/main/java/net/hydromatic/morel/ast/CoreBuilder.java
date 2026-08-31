@@ -889,7 +889,13 @@ public enum CoreBuilder {
       Core.Exp condition,
       Core.Exp yieldExp) {
     return join(
-        typeSystem, Core.Rel.JoinType.INNER, left, right, condition, yieldExp);
+        typeSystem,
+        Core.Rel.JoinType.INNER,
+        null,
+        left,
+        right,
+        condition,
+        yieldExp);
   }
 
   /**
@@ -904,12 +910,29 @@ public enum CoreBuilder {
       Core.Exp right,
       Core.Exp condition,
       Core.Exp yieldExp) {
+    return join(typeSystem, joinType, null, left, right, condition, yieldExp);
+  }
+
+  /**
+   * Creates a join that may be dependent: if {@code binder} is not null, it
+   * names the left element inside {@code right}, which is how a scan whose
+   * collection reads an earlier binder is expressed (spec.md §3.3).
+   */
+  public Core.Join join(
+      TypeSystem typeSystem,
+      Core.Rel.JoinType joinType,
+      Core.@Nullable IdPat binder,
+      Core.Exp left,
+      Core.Exp right,
+      Core.Exp condition,
+      Core.Exp yieldExp) {
     checkCollection(left);
     checkCollection(right);
     checkBoolType(condition, "join condition");
     final boolean ordered = isOrdered(left) && isOrdered(right);
     final Type type = collectionType(typeSystem, ordered, yieldExp.type);
-    return new Core.Join(type, joinType, left, right, condition, yieldExp);
+    return new Core.Join(
+        type, joinType, binder, left, right, condition, yieldExp);
   }
 
   /**

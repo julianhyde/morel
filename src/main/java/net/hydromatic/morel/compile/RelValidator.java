@@ -126,6 +126,14 @@ public class RelValidator {
       requireType(join.condition, PrimitiveType.BOOL, "join condition");
       scope(join.condition, ZERO_ONE, "join condition");
       scope(join.yieldExp, ZERO_ONE, "join yield");
+      if (join.binder != null) {
+        // The binder names the left element inside the right input, and only
+        // there. The condition and the yield say $0 and $1 like any join's
+        // (spec.md §3.3), so an occurrence here is a scope error, not a
+        // second way of spelling $0.
+        binderNotIn(join.condition, join.binder, "join condition");
+        binderNotIn(join.yieldExp, join.binder, "join yield");
+      }
       requireDerivedType(
           rel,
           core.join(
@@ -234,6 +242,27 @@ public class RelValidator {
     if (!exp.type.equals(type)) {
       violation("%s must be %s: %s", what, type.moniker(), exp.type.moniker());
     }
+  }
+
+  /**
+   * Checks that an expression does not mention a join's binder.
+   *
+   * <p>Unlike {@link #scope}, this walk does not stop at a nested node: the
+   * binder is an ordinary name, so a nested tree does not shield an occurrence
+   * of it the way it rebinds {@code $0}.
+   */
+  private void binderNotIn(Core.Exp exp, Core.IdPat binder, String what) {
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (id.idPat.equals(binder)) {
+              violation(
+                  "%s cannot reference the join's binder %s",
+                  what, binder.name);
+            }
+          }
+        });
   }
 
   /**

@@ -723,6 +723,7 @@ public class Shuttle {
     return join.copy(
         typeSystem,
         join.joinType,
+        join.binder,
         join.left.accept(this),
         join.right.accept(this),
         join.condition.accept(this),

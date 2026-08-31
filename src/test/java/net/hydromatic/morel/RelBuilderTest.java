@@ -21,7 +21,9 @@ package net.hydromatic.morel;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 
 import com.google.common.collect.ImmutableList;
@@ -175,6 +177,64 @@ public class RelBuilderTest {
             "join [{i = $0, j = $1}]\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"));
+  }
+
+  /**
+   * Tests a dependent join: the binder names the left element inside the right
+   * input, which is a tree of its own and so cannot say {@code $0} and mean the
+   * left.
+   */
+  @Test
+  void testDependentJoin() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    b.push("e", f.emps);
+    final Core.IdPat binder = b.binder("e");
+    // The right input reads the left element through the binder.
+    b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
+    b.pair();
+    final PairList<String, Core.Exp> nameExps = PairList.of();
+    nameExps.add("d", b.input(1));
+    nameExps.add("e", b.input(0));
+    final Core.Exp rel =
+        b.join(
+                Core.Rel.JoinType.INNER,
+                binder,
+                core.boolLiteral(true),
+                core.record(f.typeSystem, nameExps))
+            .build();
+    assertThat(
+        f.plan(rel),
+        is(
+            "join [e] [{d = $1, e = $0}]\n" //
+                + "  [{deptno = 10}, {deptno = 20}]\n"
+                + "  [#deptno e]\n"));
+  }
+
+  /**
+   * Tests that the validator rejects a binder read from the condition or the
+   * yield, where {@code $0} and {@code $1} are what a join says.
+   */
+  @Test
+  void testBinderOutOfScope() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    b.push("e", f.emps);
+    final Core.IdPat binder = b.binder("e");
+    b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
+    b.pair();
+    // Illegal: the yield reads the binder rather than $0.
+    final Core.Exp rel =
+        b.join(
+                Core.Rel.JoinType.INNER,
+                binder,
+                core.boolLiteral(true),
+                core.id(binder))
+            .build();
+    assertThat(
+        RelValidator.violations(f.typeSystem, (Core.Rel) rel),
+        hasItem(
+            containsString("join yield cannot reference the join's binder")));
   }
 
   /** Tests that a set operator takes as many inputs as it is given. */
