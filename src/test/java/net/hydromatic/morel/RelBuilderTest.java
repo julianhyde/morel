@@ -28,14 +28,16 @@ import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.Matchers.not;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
-import java.util.Set;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.RelBuilder;
+import net.hydromatic.morel.ast.Simplification;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.RelValidator;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -46,7 +48,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests {@link RelBuilder}, which does three things: keeps a stack of
  * relational expressions, maps names onto paths into an input, and simplifies
- * under a switchable {@link RelBuilder.Simp} set.
+ * under a switchable {@link Simplification} set.
  *
  * <p>Every simplification is tested twice -- once with the set empty, which is
  * what the builder was told to build, and once with it enabled. That pairing is
@@ -84,8 +86,16 @@ public class RelBuilderTest {
       return core.literal(PrimitiveType.INT, i);
     }
 
-    RelBuilder builder(Set<RelBuilder.Simp> simps) {
-      return RelBuilder.create(typeSystem, simps);
+    /**
+     * Creates a builder with the given simplifications enabled; with none
+     * named, a builder that constructs exactly what it is told.
+     */
+    RelBuilder builder(Simplification... simps) {
+      return RelBuilder.create(
+          typeSystem,
+          simps.length == 0
+              ? Simplification.none()
+              : ImmutableSet.copyOf(EnumSet.copyOf(Arrays.asList(simps))));
     }
 
     /** Builds, checks the validator is happy, and returns the plan text. */
@@ -103,7 +113,7 @@ public class RelBuilderTest {
   @Test
   void testFilter() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     final Core.Exp rel =
         b.push(f.list12)
             .filter(core.greaterThan(f.typeSystem, b.input(0), f.intLiteral(1)))
@@ -123,7 +133,7 @@ public class RelBuilderTest {
   @Test
   void testNameAndField() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     final Core.Exp rel =
         b.push("e", f.emps)
             .filter(
@@ -145,7 +155,7 @@ public class RelBuilderTest {
   @Test
   void testFieldWithoutName() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     final Core.Exp rel = b.push(f.emps).project(b.name("deptno")).build();
     assertThat(
         f.plan(rel),
@@ -161,7 +171,7 @@ public class RelBuilderTest {
   @Test
   void testJoin() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     final PairList<String, Core.Exp> nameExps = PairList.of();
     b.push("i", f.list12).push("j", f.list12).pair();
     nameExps.add("i", b.name(0, "i"));
@@ -188,7 +198,7 @@ public class RelBuilderTest {
   @Test
   void testDependentJoin() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     b.push("e", f.emps);
     final Core.IdPat binder = b.binder("e");
     // The right input reads the left element through the binder.
@@ -213,7 +223,7 @@ public class RelBuilderTest {
   }
 
   /**
-   * Tests {@link RelBuilder.Simp#JOIN_INDEPENDENT}: a binder the right input
+   * Tests {@link Simplification#JOIN_INDEPENDENT}: a binder the right input
    * does not read makes no join dependent, so it goes, and what is left is an
    * independent join with a condition.
    */
@@ -222,20 +232,20 @@ public class RelBuilderTest {
     final Fixture f = new Fixture();
     // The right input reads nothing of the left, though a binder is offered.
     assertThat(
-        f.plan(offeredBinder(f, RelBuilder.Simp.NONE)),
+        f.plan(offeredBinder(f)),
         is(
             "join [i] [$0 = $1] [$0]\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"));
     assertThat(
-        f.plan(offeredBinder(f, RelBuilder.Simp.ALL)),
+        f.plan(offeredBinder(f, Simplification.values())),
         is(
             "join [$0 = $1] [$0]\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"));
   }
 
-  private static Core.Exp offeredBinder(Fixture f, Set<RelBuilder.Simp> simps) {
+  private static Core.Exp offeredBinder(Fixture f, Simplification... simps) {
     final RelBuilder b = f.builder(simps);
     b.push("i", f.list12);
     final Core.IdPat binder = b.binder("i");
@@ -255,7 +265,7 @@ public class RelBuilderTest {
   @Test
   void testJoinStaysDependentWhenRead() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.ALL);
+    final RelBuilder b = f.builder(Simplification.values());
     b.push("e", f.emps);
     final Core.IdPat binder = b.binder("e");
     b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
@@ -282,7 +292,7 @@ public class RelBuilderTest {
   @Test
   void testBinderOutOfScope() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     b.push("e", f.emps);
     final Core.IdPat binder = b.binder("e");
     b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
@@ -305,7 +315,7 @@ public class RelBuilderTest {
   @Test
   void testUnionOfThree() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     final Core.Exp rel =
         b.push(f.list12).push(f.list12).push(f.list12).union(3, false).build();
     assertThat(
@@ -317,46 +327,43 @@ public class RelBuilderTest {
                 + "  [1, 2]\n"));
   }
 
-  /** Tests {@link RelBuilder.Simp#FILTER_TRUE}, off and on. */
+  /** Tests {@link Simplification#FILTER_TRUE}, off and on. */
   @Test
   void testFilterTrue() {
     final Fixture f = new Fixture();
     assertThat(
         f.plan(
-            f.builder(RelBuilder.Simp.NONE)
-                .push(f.list12)
-                .filter(core.boolLiteral(true))
-                .build()),
+            f.builder().push(f.list12).filter(core.boolLiteral(true)).build()),
         is(
             "filter [true]\n" //
                 + "  [1, 2]\n"));
     assertThat(
         f.plan(
-            f.builder(RelBuilder.Simp.ALL)
+            f.builder(Simplification.values())
                 .push(f.list12)
                 .filter(core.boolLiteral(true))
                 .build()),
         is("[1, 2]\n"));
   }
 
-  /** Tests {@link RelBuilder.Simp#FILTER_MERGE}, off and on. */
+  /** Tests {@link Simplification#FILTER_MERGE}, off and on. */
   @Test
   void testFilterMerge() {
     final Fixture f = new Fixture();
     assertThat(
-        f.plan(twoFilters(f, RelBuilder.Simp.NONE)),
+        f.plan(twoFilters(f)),
         is(
             "filter [$0 < 2]\n" //
                 + "  filter [$0 > 0]\n"
                 + "    [1, 2]\n"));
     assertThat(
-        f.plan(twoFilters(f, RelBuilder.Simp.ALL)),
+        f.plan(twoFilters(f, Simplification.values())),
         is(
             "filter [$0 > 0 andalso $0 < 2]\n" //
                 + "  [1, 2]\n"));
   }
 
-  private static Core.Exp twoFilters(Fixture f, Set<RelBuilder.Simp> simps) {
+  private static Core.Exp twoFilters(Fixture f, Simplification... simps) {
     final RelBuilder b = f.builder(simps);
     return b.push(f.list12)
         .filter(core.greaterThan(f.typeSystem, b.input(0), f.intLiteral(0)))
@@ -364,23 +371,23 @@ public class RelBuilderTest {
         .build();
   }
 
-  /** Tests {@link RelBuilder.Simp#PROJECT_IDENTITY}, off and on. */
+  /** Tests {@link Simplification#PROJECT_IDENTITY}, off and on. */
   @Test
   void testProjectIdentity() {
     final Fixture f = new Fixture();
-    final RelBuilder b0 = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b0 = f.builder();
     assertThat(
         f.plan(b0.push(f.list12).project(b0.input(0)).build()),
         is(
             "project [$0]\n" //
                 + "  [1, 2]\n"));
-    final RelBuilder b1 = f.builder(RelBuilder.Simp.ALL);
+    final RelBuilder b1 = f.builder(Simplification.values());
     assertThat(
         f.plan(b1.push(f.list12).project(b1.input(0)).build()), is("[1, 2]\n"));
   }
 
   /**
-   * Tests {@link RelBuilder.Simp#PROJECT_MERGE}, off and on. Merging is
+   * Tests {@link Simplification#PROJECT_MERGE}, off and on. Merging is
    * substitution: the outer projection's {@code $0} is the inner projection's
    * expression, so {@code $0 > 1} over {@code #deptno $0} becomes {@code
    * #deptno $0 > 1}.
@@ -389,19 +396,19 @@ public class RelBuilderTest {
   void testProjectMerge() {
     final Fixture f = new Fixture();
     assertThat(
-        f.plan(twoProjects(f, RelBuilder.Simp.NONE)),
+        f.plan(twoProjects(f)),
         is(
             "project [$0 > 1]\n" //
                 + "  project [#deptno $0]\n"
                 + "    [{deptno = 10}, {deptno = 20}]\n"));
     assertThat(
-        f.plan(twoProjects(f, RelBuilder.Simp.ALL)),
+        f.plan(twoProjects(f, Simplification.values())),
         is(
             "project [#deptno $0 > 1]\n" //
                 + "  [{deptno = 10}, {deptno = 20}]\n"));
   }
 
-  private static Core.Exp twoProjects(Fixture f, Set<RelBuilder.Simp> simps) {
+  private static Core.Exp twoProjects(Fixture f, Simplification... simps) {
     final RelBuilder b = f.builder(simps);
     b.push(f.emps).project(b.field("deptno"));
     return b.project(
@@ -409,22 +416,18 @@ public class RelBuilderTest {
         .build();
   }
 
-  /** Tests {@link RelBuilder.Simp#SKIP_ZERO}, off and on. */
+  /** Tests {@link Simplification#SKIP_ZERO}, off and on. */
   @Test
   void testSkipZero() {
     final Fixture f = new Fixture();
     assertThat(
-        f.plan(
-            f.builder(RelBuilder.Simp.NONE)
-                .push(f.list12)
-                .skip(f.intLiteral(0))
-                .build()),
+        f.plan(f.builder().push(f.list12).skip(f.intLiteral(0)).build()),
         is(
             "skip [0]\n" //
                 + "  [1, 2]\n"));
     assertThat(
         f.plan(
-            f.builder(RelBuilder.Simp.ALL)
+            f.builder(Simplification.values())
                 .push(f.list12)
                 .skip(f.intLiteral(0))
                 .build()),
@@ -432,7 +435,7 @@ public class RelBuilderTest {
     // A non-zero skip survives either way.
     assertThat(
         f.plan(
-            f.builder(RelBuilder.Simp.ALL)
+            f.builder(Simplification.values())
                 .push(f.list12)
                 .skip(f.intLiteral(1))
                 .build()),
@@ -448,9 +451,7 @@ public class RelBuilderTest {
   @Test
   void testOneSimplificationAtATime() {
     final Fixture f = new Fixture();
-    final Set<RelBuilder.Simp> onlyFilter =
-        EnumSet.of(RelBuilder.Simp.FILTER_TRUE);
-    final RelBuilder b = f.builder(onlyFilter);
+    final RelBuilder b = f.builder(Simplification.FILTER_TRUE);
     final Core.Exp rel =
         b.push(f.list12)
             .filter(core.boolLiteral(true))
@@ -471,14 +472,13 @@ public class RelBuilderTest {
   @Test
   void testSimplifiedDiffersFromLiteral() {
     final Fixture f = new Fixture();
-    final String literal = f.plan(twoFilters(f, RelBuilder.Simp.NONE));
-    final String simplified = f.plan(twoFilters(f, RelBuilder.Simp.ALL));
+    final String literal = f.plan(twoFilters(f));
+    final String simplified = f.plan(twoFilters(f, Simplification.values()));
     assertThat(literal, not(is(simplified)));
     // Both are valid trees of the same type: simplification does not change
     // what the query returns, only how many nodes say it.
     assertThat(
-        twoFilters(f, RelBuilder.Simp.NONE).type,
-        is(twoFilters(f, RelBuilder.Simp.ALL).type));
+        twoFilters(f).type, is(twoFilters(f, Simplification.values()).type));
   }
 
   /**
@@ -488,7 +488,7 @@ public class RelBuilderTest {
   @Test
   void testPushPattern() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     final Core.Pat pat =
         core.tuplePat(
             f.typeSystem,
@@ -534,14 +534,14 @@ public class RelBuilderTest {
   @Test
   void testNamesAfterGroup() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     b.push(f.list12);
     b.group(ImmutableSortedMap.of("j", b.input(0)), ImmutableSortedMap.of());
     // A record, though there is one key, so 'j' is a field of it.
     assertThat(b.peek().type.moniker(), is("{j:int} list"));
     assertThat(b.name("j"), hasToString("#j $0"));
 
-    final RelBuilder b2 = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b2 = f.builder();
     b2.push(f.list12);
     b2.group(
         ImmutableSortedMap.of("j", b2.input(0), "k", b2.input(0)),
@@ -558,7 +558,7 @@ public class RelBuilderTest {
   @Test
   void testNamesAfterAtomizingProject() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     b.push("e", f.emps);
     b.project("d", b.field("deptno"));
     assertThat(b.peek().type.moniker(), is("int list"));
@@ -569,7 +569,7 @@ public class RelBuilderTest {
   @Test
   void testGroup() {
     final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final RelBuilder b = f.builder();
     b.push(f.list12);
     final Core.Exp rel =
         b.group(ImmutableSortedMap.of("k", b.input(0)), ImmutableSortedMap.of())

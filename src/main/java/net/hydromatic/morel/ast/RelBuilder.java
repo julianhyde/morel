@@ -23,11 +23,11 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,47 +57,15 @@ import org.jspecify.annotations.Nullable;
  * the map is derived rather than threaded, which is what makes it unlike a
  * {@link Core.StepEnv}.
  *
- * <p>It <b>simplifies</b>, under an {@link EnumSet} of {@link Simp}. Each
- * simplification is named and can be switched off. With {@link Simp#NONE} the
- * builder is a pure constructor, which is a test oracle: build a query twice,
- * once simplified and once not, and compare what the two produce.
+ * <p>It <b>simplifies</b>, under a set of {@link Simplification}. Each
+ * simplification is named and can be switched off. With {@link
+ * Simplification#none()} the builder is a pure constructor, which is a test
+ * oracle: build a query twice, once simplified and once not, and compare what
+ * the two produce.
  */
 public class RelBuilder {
-  /**
-   * A simplification that {@link RelBuilder} may apply. Every one of them is
-   * optional, and {@link #NONE} turns them all off.
-   *
-   * <p>What belongs here rather than in the rule framework of step 4 is what is
-   * cheaper not to build than to build and then remove.
-   */
-  public enum Simp {
-    /** Drops {@code filter true}. */
-    FILTER_TRUE,
-    /**
-     * Drops a join's binder when its right input does not read it, making a
-     * dependent join independent.
-     */
-    JOIN_INDEPENDENT,
-    /** Combines a filter over a filter into one conjunction. */
-    FILTER_MERGE,
-    /** Drops a projection whose expression is its input's element. */
-    PROJECT_IDENTITY,
-    /** Combines a projection over a projection by substitution. */
-    PROJECT_MERGE,
-    /** Drops {@code skip 0}. */
-    SKIP_ZERO,
-    /** Drops an {@code unorder} whose input is already unordered. */
-    UNORDER_UNORDERED;
-
-    /** No simplification; the builder constructs exactly what it is told. */
-    public static final Set<Simp> NONE = EnumSet.noneOf(Simp.class);
-
-    /** Every simplification. */
-    public static final Set<Simp> ALL = EnumSet.allOf(Simp.class);
-  }
-
   private final TypeSystem typeSystem;
-  private final Set<Simp> simps;
+  private final ImmutableSet<Simplification> simps;
   private final Deque<Frame> stack = new ArrayDeque<>();
 
   /**
@@ -106,31 +74,32 @@ public class RelBuilder {
    */
   private int nextName = 0;
 
-  private RelBuilder(TypeSystem typeSystem, Set<Simp> simps) {
+  private RelBuilder(TypeSystem typeSystem, Set<Simplification> simps) {
     this.typeSystem = requireNonNull(typeSystem);
-    this.simps = EnumSet.copyOf(simps.isEmpty() ? Simp.NONE : simps);
+    this.simps = ImmutableSet.copyOf(simps);
   }
 
   /** Creates a builder that applies every simplification. */
   public static RelBuilder create(TypeSystem typeSystem) {
-    return new RelBuilder(typeSystem, Simp.ALL);
+    return new RelBuilder(typeSystem, Simplification.all());
   }
 
   /** Creates a builder that applies only the given simplifications. */
-  public static RelBuilder create(TypeSystem typeSystem, Set<Simp> simps) {
+  public static RelBuilder create(
+      TypeSystem typeSystem, Set<Simplification> simps) {
     return new RelBuilder(typeSystem, simps);
   }
 
   /**
    * Rebuilds a tree through a builder, node by node.
    *
-   * <p>With {@link Simp#NONE} the result must equal the input: that is the
-   * assertion that the builder can express every tree there is, which is what a
-   * caller has to be able to assume before it depends on the builder. With
-   * other sets it is what those simplifications make of the tree.
+   * <p>With {@link Simplification#none()} the result must equal the input: that
+   * is the assertion that the builder can express every tree there is, which is
+   * what a caller has to be able to assume before it depends on the builder.
+   * With other sets it is what those simplifications make of the tree.
    */
   public static Core.Exp rebuild(
-      TypeSystem typeSystem, Core.Exp exp, Set<Simp> simps) {
+      TypeSystem typeSystem, Core.Exp exp, Set<Simplification> simps) {
     final RelBuilder b = create(typeSystem, simps);
     b.rebuild(exp);
     return b.build();
@@ -197,7 +166,7 @@ public class RelBuilder {
   }
 
   /** Returns whether a simplification is enabled. */
-  private boolean on(Simp simp) {
+  private boolean on(Simplification simp) {
     return simps.contains(simp);
   }
 
@@ -449,10 +418,10 @@ public class RelBuilder {
   /** Filters the top of the stack. */
   public RelBuilder filter(Core.Exp condition) {
     final Frame frame = pop();
-    if (on(Simp.FILTER_TRUE) && condition.isBoolLiteral(true)) {
+    if (on(Simplification.FILTER_TRUE) && condition.isBoolLiteral(true)) {
       return push(frame);
     }
-    if (on(Simp.FILTER_MERGE) && frame.rel instanceof Core.Filter) {
+    if (on(Simplification.FILTER_MERGE) && frame.rel instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) frame.rel;
       return push(
           frame.withRel(
@@ -466,10 +435,10 @@ public class RelBuilder {
   /** Projects the top of the stack; {@code exp} is over {@code $0}. */
   public RelBuilder project(Core.Exp exp) {
     final Frame frame = pop();
-    if (on(Simp.PROJECT_IDENTITY) && isInput0(exp)) {
+    if (on(Simplification.PROJECT_IDENTITY) && isInput0(exp)) {
       return push(frame);
     }
-    if (on(Simp.PROJECT_MERGE) && frame.rel instanceof Core.Project) {
+    if (on(Simplification.PROJECT_MERGE) && frame.rel instanceof Core.Project) {
       final Core.Project project = (Core.Project) frame.rel;
       return project(project.input, merge(exp, project.exp));
     }
@@ -498,7 +467,7 @@ public class RelBuilder {
   /** Discards the ordering of the top of the stack; the result is a bag. */
   public RelBuilder unorder() {
     final Frame frame = pop();
-    if (on(Simp.UNORDER_UNORDERED) && !isOrdered(frame.rel)) {
+    if (on(Simplification.UNORDER_UNORDERED) && !isOrdered(frame.rel)) {
       return push(frame);
     }
     return push(frame.withRel(core.unorder(typeSystem, frame.rel)));
@@ -507,7 +476,7 @@ public class RelBuilder {
   /** Skips rows of the top of the stack. */
   public RelBuilder skip(Core.Exp count) {
     final Frame frame = pop();
-    if (on(Simp.SKIP_ZERO) && isIntLiteral(count, 0)) {
+    if (on(Simplification.SKIP_ZERO) && isIntLiteral(count, 0)) {
       return push(frame);
     }
     return push(frame.withRel(core.skip(frame.rel, count)));
@@ -575,7 +544,7 @@ public class RelBuilder {
     final Frame right = pop();
     final Frame left = pop();
     arity = 1;
-    if (on(Simp.JOIN_INDEPENDENT)
+    if (on(Simplification.JOIN_INDEPENDENT)
         && binder != null
         && !references(right.rel, binder)) {
       // An independent join is far preferable to a dependent one -- it can be
