@@ -549,3 +549,71 @@ Where a simplification belongs is still a real question, and the
 framework will express as a rule should end up there; what stays in
 the builder is what is cheaper to not build than to build and then
 remove.
+
+## 14. Trees have no atoms
+
+`from i in [1, 2, 3] group j = i` has type `int list`, not `{j: int}
+list`. Somewhere the single-field record becomes a bare value, and
+today that somewhere is the tree: a node's element type is a record of
+its bindings, *except* where there is exactly one, when it is that
+binding's bare type.
+
+That exception is a discontinuity at arity one, and it is expensive in
+a way that is easy to miss because each instance looks small. The
+element type's *shape* — record or not — depends on how many bindings
+there are, so:
+
+* Every pass that reads an element has to ask. `atom` appears
+  nineteen times across the translator, the lowerer and the builder,
+  and `Core.StepEnv` carries a flag whose invariant (`!atom ||
+  bindings.size() == 1`) exists only to police it.
+* Rewrites stop being local. A rule that projects away one of two
+  fields does not merely narrow the element; it changes its shape from
+  record to atom, and everything above must be re-expressed. A rule
+  that adds a field to a one-field element does the reverse. Neither
+  is a rewrite anyone would want to write, and both are rewrites the
+  step-4 framework will want.
+* Two trees that mean the same thing can differ in shape, so plan text
+  and MEMO keys have to agree about atomization before they agree
+  about anything else.
+
+**Resolution: every node's element is a record, and the conversion to
+a bare value happens outside the tree.**
+
+It cannot be a node. The invariant that buys the uniformity is "every
+element is a record"; a node whose output is not a record reintroduces
+the case analysis inside the tree, which is exactly where rules live
+and exactly where it hurts.
+
+It does not need to be new. The design already does this once, for
+`compute`: §3.2 says `compute` is `group` with no keys "plus the
+extraction of the single element that the enclosing expression
+performs" — the tree yields a one-row collection and `Relational.only`
+outside it yields the value. Atomization is the same move one
+dimension over: the tree yields `{j: int} bag`, and the enclosing
+expression maps it to `int bag`.
+
+And the expression is a `map`, not an aggregate. An aggregate reduces
+a collection to a value; this is elementwise and shape-preserving, so
+it is `List.map #j` or `Bag.map #j` — a record selector lifted over
+the collection. No new operator, and one that `CalciteCompiler`
+already pushes down, since `Bag.map` appears in hybrid.smli's plans
+today.
+
+Consequences to plan for:
+
+* The tree's root type stops being the query's type; it is the
+  query's type wrapped in a one-field record wherever the query
+  atomizes. `RelShadow` asserts the two are equal, and that assertion
+  becomes one about the *wrapped* expression instead.
+* Plan text changes for every atomizing query, gaining a record in
+  the tree and an apply around it. That is a step-3 rebaseline, and
+  the reason to decide this before step 3 freezes the text rather
+  than after.
+* The zero-binding case is the same question with a different answer:
+  a record with no fields, which is unit, and needs no unwrapping
+  because that is already the query's type.
+
+Not yet done. `atom` is threaded through the translator, the lowerer,
+`Core.StepEnv` and `TypeSystem.recordOrScalarType`, and unpicking it
+is a change of the size of the `projectMany` one.
