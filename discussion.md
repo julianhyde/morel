@@ -412,3 +412,102 @@ over a projection over the leaf, because the query's element is the
 record the bindings describe while the leaf's is a tuple; pushing
 through that projection is what lets the conditions reach the leaf at
 all.
+
+## 13. What the tree builder owns, and what the resolver owns
+
+`FromBuilder` is 855 lines, and the plan's instruction was to build
+trees through a builder but not to ape it. So: an inventory of what it
+does, and of which parts a tree still needs.
+
+Its responsibilities sort into two piles. The larger one exists
+because a step list cannot say what is in scope, and cannot say what a
+node's type is without knowing where the node sits.
+
+* **Scope.** The builder holds `bindings` and an `atom` flag beside
+  the steps, synthesizes a `StepEnv` for every step, re-syncs the
+  fields from `step.env` afterwards, and rewrites every binding in
+  scope when an outer join wraps them in `option`. A tree node's type
+  carries its element type and expressions name their input `$0`, so
+  there is no scope to thread.
+* **Position.** Three separate fields —
+  `removeIfNotLastIndex`, `removeIfLastIndex`, `scalarIfLastIndex`
+  with its `scalarIfLastExp` — defer a decision about a step until the
+  builder knows whether anything follows it. They exist because a
+  query's result type is the environment of its *last* step, so a
+  step's meaning depends on its position. In a tree a node's type is
+  its own, a root is not a special kind of node, and "useless if last"
+  is not a question that can be asked.
+* **Nesting.** Around 130 lines splice a subquery's steps into the
+  enclosing list, drop its trailing `yield`, and rebuild a projection
+  to rename its bindings — with `safeToInline`, `isSimplePat`,
+  `yieldsRecord` and `endsWithBindings` deciding when that is legal. A
+  step list cannot contain a step list. A tree nests by construction.
+* **Atomization.** The `atom` flag is passed *in*, not derived, and
+  asserted consistent in three places. It is the difference between an
+  element type of `int` and of `{i:int}` — a property of the type.
+  `CoreBuilder.group` already writes it as `recordOrScalarType`.
+* **Kind.** `ordered` is carried in `StepEnv`, asserted against
+  `step.isOrdered(...)`, and recomputed by each set operator.
+  `CoreBuilder.isOrdered` is `exp.type instanceof ListType`.
+* **Name stability.** The `env2` parameter exists so that a `yield`
+  does not regenerate `IdPat('a', 1)` where an expression already
+  refers to `IdPat('a', 0)`. A tree has no names at step boundaries.
+
+None of that is bad code; it is the step list's bill, itemized. And
+`CoreBuilder`'s `Rel` methods already pay none of it: they take no
+`StepEnv`, derive element type and kind from their inputs, and
+validate by type. What they deliberately do *not* do is simplify —
+`filter` builds a `Filter` even for `true`.
+
+The smaller pile is semantic and survives any representation:
+`distinct`'s unit case (`group {}` returns one row where `take 1`
+returns zero), and ordinal materialization, which still needs a node
+that evaluates once per row.
+
+So what is left for a tree builder to own? One thing, and the
+evidence for it is that two passes have now written it twice.
+`RelTranslator` keeps a map from binder to an access expression over
+`$0`; `RelLowerer` carries one element expression over the step
+list's bindings. They are inverses — one eliminates variables, the
+other reintroduces them — but underneath they share a shape:
+"the element is the sole binding's value if it atomizes, otherwise a
+record with one field per binding". That sentence is written four
+times: `RelTranslator.elementType`, `RelLowerer.naturalElement`,
+`FromBuilder.dropOrdinal`, and `CoreBuilder.fromElementType`. Beside
+it, `element` and `naturalElement` both fold a name→expression list
+into a record; the two id-substituting `Shuttle`s differ only in
+whether the key is a user binder or `$0`; `over` and `rename` are
+exact inverses; and `containsOrdinal` is duplicated verbatim.
+
+The resolver has written it a fifth time. `FromResolver` calls
+`fromBuilder.stepEnv()` twelve times — more often than any append
+method — always as `withStepEnv(fromBuilder.stepEnv())`, and that
+method reassembles the element expression from the bindings, atom or
+record, and stores it as `Resolver.current`. That is what the user's
+`current` keyword resolves to, and what the `elements` aggregate
+reads. So the resolver asks the builder for a binding list in order to
+rebuild a row that the builder could have handed it.
+
+**Resolution: the builder owns the element expression, and nothing
+else that `CoreBuilder` does not already own.** Node construction,
+type and kind derivation and validation stay where they are. The
+builder adds the bookkeeping that three passes have each reinvented,
+so that "what is this node's element, as an expression" is answered in
+one place. Scoping and name resolution stay with the resolver, which
+gets *smaller* rather than larger: `current` stops being derived from
+bindings on every step and becomes the element expression the builder
+is already carrying — `$0` at the top of a step's expressions.
+
+That also fixes the interface to aim for. Today the resolver asks
+"what is in scope?" and reconstructs a row; afterwards it asks "what
+is the element?" and gets it. The `stepPriorEnv` field and the
+`materializeOrdinal`/`dropOrdinal` pair around it are the same wart
+seen from the other side — a field spliced into the bindings and then
+hidden again, so that the row the user sees is not the row the step
+list carries — and they go when the row is a value rather than a
+reassembly.
+
+Deliberately not decided here: whether the builder should simplify at
+all. `CoreBuilder`'s `Rel` methods do not, and the rule framework of
+step 4 is where a `filter true` ought to go. Building that in now
+would be `FromBuilder`'s history repeating.

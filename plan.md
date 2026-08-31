@@ -383,16 +383,30 @@ something settled — §8's principle, applied to the sequence itself.
       this step changes); query results must not.
 - [ ] Delete the AST→From path; the resolver builds trees natively.
       Build them through a *builder*, not by constructing nodes
-      directly and not by aping `FromBuilder`. Which needs research
-      first: what the resolver should own and what the builder
-      should. `FromBuilder` is the cautionary example — it carries
-      bindings, inlines nested queries, drops useless steps and
-      decides atomization, because the step list made all of that its
-      business. A tree builder should own less: derive types and
-      kinds (`CoreBuilder` already does), keep the element-expression
-      bookkeeping that `RelTranslator` and `RelLowerer` each
-      reinvented, and leave scoping and name resolution to the
-      resolver.
+      directly and not by aping `FromBuilder`. The research is done
+      (discussion.md §13): of `FromBuilder`'s 855 lines, the parts
+      that carry scope, defer a step's fate until it knows whether
+      anything follows, splice a subquery into the enclosing list,
+      pass `atom` in rather than deriving it, and keep binder names
+      stable across a `yield` are all the step list's bill, and a
+      tree owes none of it. `CoreBuilder`'s `Rel` methods already
+      derive element type and kind and validate by type.
+
+      So the builder owns one thing beyond that: the element
+      expression. The evidence is that the sentence "the element is
+      the sole binding's value if it atomizes, otherwise a record
+      with one field per binding" is written four times already
+      (`RelTranslator.elementType`, `RelLowerer.naturalElement`,
+      `FromBuilder.dropOrdinal`, `CoreBuilder.fromElementType`), and
+      a fifth time in the resolver, where `withStepEnv(fromBuilder
+      .stepEnv())` reassembles it on every step to set `current`.
+
+      Scoping and name resolution stay with the resolver, which gets
+      smaller: `current` stops being derived from bindings and
+      becomes the element expression, `$0`. Whether the builder
+      simplifies at all is left open on purpose — `filter true`
+      belongs to step 4's rules, and deciding otherwise now is how
+      `FromBuilder` grew.
 
 ## Step 3 — Flip observability
 
