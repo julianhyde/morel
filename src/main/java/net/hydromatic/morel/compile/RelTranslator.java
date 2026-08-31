@@ -689,8 +689,23 @@ public class RelTranslator {
         // A literal binds nothing; it filters, and `test` says how.
         return true;
 
+      case CONS_PAT:
+        // `h :: t` binds the head and the tail, which `hd` and `tl` reach.
+        final Core.TuplePat headTail = (Core.TuplePat) ((Core.ConPat) pat).pat;
+        return destructure(headTail.args.get(0), hd(element), map)
+            && destructure(headTail.args.get(1), tl(element), map);
+
+      case LIST_PAT:
+        final List<Core.Pat> items = ((Core.ListPat) pat).args;
+        for (int i = 0; i < items.size(); i++) {
+          if (!destructure(items.get(i), nth(element, i), map)) {
+            return false;
+          }
+        }
+        return true;
+
       default:
-        // A constructor or list pattern also filters, but extracting what it
+        // A user datatype's constructor also filters, but extracting what it
         // binds has no total expression -- see `test`.
         return false;
     }
@@ -746,9 +761,83 @@ public class RelTranslator {
         }
         return tests.isEmpty() ? null : core.andAlso(typeSystem, tests);
 
+      case CONS_PAT:
+        // A non-empty list, whose head and tail must match in turn.
+        final Core.TuplePat consPat = (Core.TuplePat) ((Core.ConPat) pat).pat;
+        final List<Core.Exp> consTests = new ArrayList<>();
+        consTests.add(core.not(typeSystem, isNull(element)));
+        addTest(consTests, consPat.args.get(0), hd(element));
+        addTest(consTests, consPat.args.get(1), tl(element));
+        return core.andAlso(typeSystem, consTests);
+
+      case LIST_PAT:
+        // A list of exactly this length, whose items must match in turn.
+        final List<Core.Pat> listItems = ((Core.ListPat) pat).args;
+        if (listItems.isEmpty()) {
+          return isNull(element);
+        }
+        final List<Core.Exp> listTests = new ArrayList<>();
+        listTests.add(
+            core.equal(
+                typeSystem,
+                length(element),
+                core.literal(PrimitiveType.INT, listItems.size())));
+        for (int i = 0; i < listItems.size(); i++) {
+          addTest(listTests, listItems.get(i), nth(element, i));
+        }
+        return core.andAlso(typeSystem, listTests);
+
       default:
         throw new AssertionError("not testable: " + pat);
     }
+  }
+
+  /** Adds a pattern's test to a list, if it has one. */
+  private void addTest(List<Core.Exp> tests, Core.Pat pat, Core.Exp element) {
+    final Core.@Nullable Exp test = test(pat, element);
+    if (test != null) {
+      tests.add(test);
+    }
+  }
+
+  /** Applies a one-argument list built-in to a list. */
+  private Core.Exp listCall(BuiltIn builtIn, Core.Exp list, Type resultType) {
+    return core.apply(
+        Pos.ZERO,
+        resultType,
+        core.functionLiteral(typeSystem.fnType(list.type, resultType), builtIn),
+        list);
+  }
+
+  private Core.Exp isNull(Core.Exp list) {
+    return listCall(BuiltIn.LIST_NULL, list, PrimitiveType.BOOL);
+  }
+
+  private Core.Exp length(Core.Exp list) {
+    return listCall(BuiltIn.LIST_LENGTH, list, PrimitiveType.INT);
+  }
+
+  private Core.Exp hd(Core.Exp list) {
+    return listCall(BuiltIn.LIST_HD, list, list.type.elementType());
+  }
+
+  private Core.Exp tl(Core.Exp list) {
+    return listCall(BuiltIn.LIST_TL, list, list.type);
+  }
+
+  private Core.Exp nth(Core.Exp list, int i) {
+    final Type elementType = list.type.elementType();
+    final Type fnType =
+        typeSystem.fnType(
+            typeSystem.tupleType(list.type, PrimitiveType.INT), elementType);
+    return core.apply(
+        Pos.ZERO,
+        elementType,
+        core.functionLiteral(fnType, BuiltIn.LIST_NTH),
+        core.tuple(
+            typeSystem,
+            null,
+            ImmutableList.of(list, core.literal(PrimitiveType.INT, i))));
   }
 
   /**
@@ -771,6 +860,14 @@ public class RelTranslator {
             .args.stream().allMatch(RelTranslator::testable);
       case RECORD_PAT:
         return ((Core.RecordPat) pat)
+            .args.stream().allMatch(RelTranslator::testable);
+      case CONS_PAT:
+        // `::` is a constructor, but the list datatype has total accessors --
+        // `null`, `hd`, `tl` -- where a user datatype has none.
+        return ((Core.ConPat) pat).pat.op == Op.TUPLE_PAT
+            && testable(((Core.ConPat) pat).pat);
+      case LIST_PAT:
+        return ((Core.ListPat) pat)
             .args.stream().allMatch(RelTranslator::testable);
       default:
         return false;

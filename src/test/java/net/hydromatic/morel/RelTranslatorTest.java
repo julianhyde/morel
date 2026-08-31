@@ -232,16 +232,26 @@ public class RelTranslatorTest {
             "project [#1 $0]\n" //
                 + "  filter [#2 $0 = 2]\n"
                 + "    [(1, 2), (3, 4)]\n"));
-    // A cons pattern is not expressible this way yet: `hd` and `tl` would
-    // give the paths and `null` the test, but a constructor pattern needs a
-    // `case` for both, so the general mechanism stays for now.
+    // `::` is a constructor, but the list datatype has the total accessors a
+    // user datatype lacks, so a cons pattern takes the same path: `null` is
+    // the test, `hd` and `tl` are the paths.
     assertThat(
         plan("from (x :: xs) in [[1, 2], []] yield x"),
         is(
             "project [#x $0]\n" //
-                + "  join [v$0] [$1]\n"
-                + "    [[1, 2], []]\n"
-                + "    case v$0 of op ::((x, xs)) => [{x = x, xs = xs}] | _ => []\n"));
+                + "  project [{x = #hd List $0, xs = #tl List $0}]\n"
+                + "    filter [not (#null List $0)]\n"
+                + "      [[1, 2], []]\n"));
+
+    // An empty-list pattern is the test alone; it binds nothing, so the
+    // element the bindings describe is unit.
+    assertThat(
+        plan("from [] in [[1], []] yield 1"),
+        is(
+            "project [1]\n" //
+                + "  project [()]\n"
+                + "    filter [#null List $0]\n"
+                + "      [[1], []]\n"));
   }
 
   /**
