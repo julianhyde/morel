@@ -107,16 +107,36 @@ something settled — §8's principle, applied to the sequence itself.
       permutes fields, an atomizing yield, a failable pattern whose
       scan condition kept a dangling reference, and a projection
       containing `ordinal` deferred past the step that counts rows.
-- [ ] Replace `projectMany` with a dependent join: a `join` that
+- [x] A builder (`RelBuilder`), per discussion.md §13: a stack of
+      relational expressions, a name map, and simplifications under a
+      switchable `EnumSet`. `RelShadow` asserts on every query that
+      the builder can express the tree exactly -- 1852 of them, none
+      rebuilt differently -- which is the precondition for the
+      resolver depending on it. The name map is the untested half,
+      because only a caller that starts from names exercises it.
+- [x] Replace `projectMany` with a dependent join: a `join` that
       carries a binder its right input may read, plus an ordinary
-      `project` where only the inner elements are wanted. One node
-      instead of two operations fused, `$0` meaning the same thing at
-      every node, decorrelation reduced to dropping the binder, and
-      the outer apply falling out of `join [left]` rather than
-      needing `ifEmpty` inside a lambda. spec.md §3.3 and
-      discussion.md §8 are rewritten; the narrative above this line
-      predates the change and says `projectMany` where it now means a
-      dependent join.
+      `project` where only the inner elements are wanted. Done, and
+      it paid more than it cost. The translator's forty-line
+      correlated branch collapsed into the independent one plus two
+      lines; the outer apply needed no code at all, because a
+      dependent `join [left]` emits the unmatched row by definition;
+      and the expander's two correlated constructions became a join
+      and a commuted join. The binder is dropped where the right
+      input does not read it, so decorrelation is paid at
+      construction and a caller may offer one speculatively. spec.md
+      §3.3 and discussion.md §8 are rewritten; the narrative above
+      this line predates the change and says `projectMany` where it
+      now means a dependent join.
+- [x] A scan whose pattern can fail is a filter and a projection, not
+      a node holding a `case` that yields a collection. The condition
+      is a filter that a rule can reorder and the expander can push
+      through; the bindings are paths, and the projection that turns
+      them into the row is the one the translation already added.
+      Every pattern takes this path except a user datatype's
+      constructor, whose argument has no total accessor: `::` and
+      `[]` escape through `null`, `hd`, `tl`, `nth` and `length`,
+      which are exactly the accessors a datatype lacks.
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once. A round trip cannot be the flip, because it
       perturbs Core shapes that other machinery reads, and no care in
