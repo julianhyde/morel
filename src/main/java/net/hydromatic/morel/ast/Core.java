@@ -2587,6 +2587,22 @@ public class Core {
    */
   public static class Join extends Rel {
     public final Rel.JoinType joinType;
+
+    /**
+     * Names the left element inside {@link #right}, or null if the right input
+     * does not read it.
+     *
+     * <p>This is what makes a join <em>dependent</em>: the right input is a
+     * tree of its own and rebinds {@code $0}, so it cannot say {@code $0} and
+     * mean the left element. The binder is in scope in {@link #right} only,
+     * never in {@link #condition} or {@link #yieldExp}, which say {@code $0}
+     * and {@code $1} as any join's do (spec.md §3.3).
+     *
+     * <p>It is a scoping device, not a mode: it may be present and unread, and
+     * dependence is a free occurrence of it. Decorrelation is dropping it.
+     */
+    public final @Nullable IdPat binder;
+
     public final Exp left;
     public final Exp right;
     public final Exp condition;
@@ -2595,12 +2611,14 @@ public class Core {
     Join(
         Type type,
         Rel.JoinType joinType,
+        @Nullable IdPat binder,
         Exp left,
         Exp right,
         Exp condition,
         Exp yieldExp) {
       super(Op.JOIN, type);
       this.joinType = requireNonNull(joinType, "joinType");
+      this.binder = binder;
       this.left = requireNonNull(left, "left");
       this.right = requireNonNull(right, "right");
       this.condition = requireNonNull(condition, "condition");
@@ -2622,6 +2640,9 @@ public class Core {
       if (joinType != Rel.JoinType.INNER) {
         arg(b, joinType.opName());
       }
+      if (binder != null) {
+        arg(b, binder.name);
+      }
       if (!condition.isBoolLiteral(true)) {
         arg(b, condition);
       }
@@ -2641,17 +2662,20 @@ public class Core {
     public Join copy(
         TypeSystem typeSystem,
         Rel.JoinType joinType,
+        @Nullable IdPat binder,
         Exp left,
         Exp right,
         Exp condition,
         Exp yieldExp) {
       return joinType == this.joinType
+              && binder == this.binder
               && left == this.left
               && right == this.right
               && condition == this.condition
               && yieldExp == this.yieldExp
           ? this
-          : core.join(typeSystem, joinType, left, right, condition, yieldExp);
+          : core.join(
+              typeSystem, joinType, binder, left, right, condition, yieldExp);
     }
   }
 
