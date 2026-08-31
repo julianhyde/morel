@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.ast.Simplification;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.TypeSystem;
 
@@ -67,7 +68,7 @@ public class RelShadow {
   private static void checkBuildable(TypeSystem typeSystem, Core.Exp tree) {
     final Core.Exp rebuilt;
     try {
-      rebuilt = RelBuilder.rebuild(typeSystem, tree, RelBuilder.Simp.NONE);
+      rebuilt = RelBuilder.rebuild(typeSystem, tree, Simplification.none());
     } catch (RuntimeException e) {
       throw new AssertionError("builder cannot express: " + tree, e);
     }
