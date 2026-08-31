@@ -53,6 +53,8 @@ public class GroundingShadowTest {
     final int before = RelShadow.translatedCount();
     Ml.ml("from i in [1, 2, 3] where i > 1").assertEval();
     assertThat(RelShadow.translatedCount(), greaterThan(before));
+    // Every tree the translator made, the builder expressed exactly.
+    assertThat(RelShadow.rebuiltCount(), greaterThan(before));
     // Step 1 landed with no declines and it must stay that way: a query the
     // translator turns down is a query the flip could not carry.
     assertThat(RelShadow.declinedCount(), is(declinedBefore));

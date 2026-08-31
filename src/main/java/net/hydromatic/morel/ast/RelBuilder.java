@@ -121,6 +121,81 @@ public class RelBuilder {
     return new RelBuilder(typeSystem, simps);
   }
 
+  /**
+   * Rebuilds a tree through a builder, node by node.
+   *
+   * <p>With {@link Simp#NONE} the result must equal the input: that is the
+   * assertion that the builder can express every tree there is, which is what a
+   * caller has to be able to assume before it depends on the builder. With
+   * other sets it is what those simplifications make of the tree.
+   */
+  public static Core.Exp rebuild(
+      TypeSystem typeSystem, Core.Exp exp, Set<Simp> simps) {
+    final RelBuilder b = create(typeSystem, simps);
+    b.rebuild(exp);
+    return b.build();
+  }
+
+  /** Pushes the rebuilt form of one node, having rebuilt its inputs. */
+  private void rebuild(Core.Exp exp) {
+    if (!(exp instanceof Core.Rel)) {
+      push(exp);
+    } else if (exp instanceof Core.Filter) {
+      final Core.Filter filter = (Core.Filter) exp;
+      rebuild(filter.input);
+      filter(filter.condition);
+    } else if (exp instanceof Core.Project) {
+      final Core.Project project = (Core.Project) exp;
+      rebuild(project.input);
+      project(project.exp);
+    } else if (exp instanceof Core.IfEmpty) {
+      final Core.IfEmpty ifEmpty = (Core.IfEmpty) exp;
+      rebuild(ifEmpty.input);
+      ifEmpty(ifEmpty.exp);
+    } else if (exp instanceof Core.Join) {
+      final Core.Join join = (Core.Join) exp;
+      rebuild(join.left);
+      rebuild(join.right);
+      join(join.joinType, join.binder, join.condition, join.yieldExp);
+    } else if (exp instanceof Core.Group) {
+      final Core.Group group = (Core.Group) exp;
+      rebuild(group.input);
+      group(group.keys, group.aggregates);
+    } else if (exp instanceof Core.Sort) {
+      final Core.Sort sort = (Core.Sort) exp;
+      rebuild(sort.input);
+      sort(sort.exp);
+    } else if (exp instanceof Core.Unorder) {
+      rebuild(((Core.Unorder) exp).input);
+      unorder();
+    } else if (exp instanceof Core.Skip) {
+      final Core.Skip skip = (Core.Skip) exp;
+      rebuild(skip.input);
+      skip(skip.count);
+    } else if (exp instanceof Core.Take) {
+      final Core.Take take = (Core.Take) exp;
+      rebuild(take.input);
+      take(take.count);
+    } else if (exp instanceof Core.SetRel) {
+      final Core.SetRel setRel = (Core.SetRel) exp;
+      setRel.inputs.forEach(this::rebuild);
+      final int n = setRel.inputs.size();
+      switch (setRel.op) {
+        case UNION:
+          union(n, setRel.distinct);
+          break;
+        case INTERSECT:
+          intersect(n, setRel.distinct);
+          break;
+        default:
+          except(n, setRel.distinct);
+          break;
+      }
+    } else {
+      throw new AssertionError("cannot rebuild " + exp.op);
+    }
+  }
+
   /** Returns whether a simplification is enabled. */
   private boolean on(Simp simp) {
     return simps.contains(simp);
