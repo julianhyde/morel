@@ -380,6 +380,18 @@ other implementation could reproduce the text. A `$` cannot occur in
 an identifier, so a generated name cannot capture one the query
 wrote.
 
+*Review.* "Per tree" is not yet enough, because trees nest: a nested
+query is a tree of its own inside an expression of the tree that
+contains it. Two trees that each number from zero put a `v$0` in one
+expression, and one captures the other — which is not a printing
+problem but a wrong answer, and it has already been observed, in the
+lowering, where composing two independently numbered forms produced
+a tree whose leaf referenced `$0`. The rule wanted is that a nested
+tree *continues* the enclosing tree's numbering rather than
+restarting it, so that numbering is per outermost tree; that keeps
+determinism and adds uniqueness. Written when the flip makes nested
+trees routine.
+
 *Review.* A tree nested inside another tree's expressions numbers its
 own binders from zero, which is unambiguous only because the two
 scopes do not overlap today: a nested query is still a step list, and
