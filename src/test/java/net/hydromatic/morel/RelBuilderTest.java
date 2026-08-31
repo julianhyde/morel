@@ -24,6 +24,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.Matchers.not;
 
 import com.google.common.collect.ImmutableList;
@@ -520,6 +521,48 @@ public class RelBuilderTest {
         core.literalPat(Op.INT_LITERAL_PAT, PrimitiveType.INT, BigDecimal.ONE);
     assertThat(RelBuilder.destructurable(idPat), is(true));
     assertThat(RelBuilder.destructurable(literalPat), is(false));
+  }
+
+  /**
+   * Tests that a group's labels are names, including when there is exactly one
+   * of them and the element atomizes to its bare type.
+   *
+   * <p>This is what the resolver will ask of the name map: after {@code group j
+   * = i}, the query says {@code j}, and the map has to answer whether or not
+   * the element happens to be a record.
+   */
+  @Test
+  void testNamesAfterGroup() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    b.push(f.list12);
+    b.group(ImmutableSortedMap.of("j", b.input(0)), ImmutableSortedMap.of());
+    // One key, so the element is a bare int -- but 'j' still names it.
+    assertThat(b.peek().type.moniker(), is("int list"));
+    assertThat(b.name("j"), hasToString("$0"));
+
+    final RelBuilder b2 = f.builder(RelBuilder.Simp.NONE);
+    b2.push(f.list12);
+    b2.group(
+        ImmutableSortedMap.of("j", b2.input(0), "k", b2.input(0)),
+        ImmutableSortedMap.of());
+    // Two keys, so the element is a record and each label is a field.
+    assertThat(b2.name("j"), hasToString("#j $0"));
+    assertThat(b2.name("k"), hasToString("#k $0"));
+  }
+
+  /**
+   * Tests that a projection to a bare value keeps the name it was pushed under,
+   * as an atomizing yield does.
+   */
+  @Test
+  void testNamesAfterAtomizingProject() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    b.push("e", f.emps);
+    b.project("d", b.field("deptno"));
+    assertThat(b.peek().type.moniker(), is("int list"));
+    assertThat(b.name("d"), hasToString("$0"));
   }
 
   /** Tests {@code group}, whose element is a record of keys and aggregates. */
