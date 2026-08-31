@@ -148,6 +148,16 @@ something settled — §8's principle, applied to the sequence itself.
       projection that turns the record into the query's bare value is
       one `normalize` was already inserting, so no boundary operator
       was needed.
+- [ ] A join concatenates its inputs' fields, and carries no yield
+      (discussion.md §15). Measured: 495 of the 497 join yields the
+      suite builds are pairings that rename without computing, so the
+      yield is general machinery paying for two queries. Records are
+      label-sorted, so concatenation makes commute need no
+      substitution and reassociation no compensating projection --
+      the two rewrites a join planner does most. Costs a projection
+      per input, brings §5's rename convention forward, and moves an
+      outer join's option-wrapping into the node, which is where the
+      decision already lives. Before step 3, and after §14.
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once.
 
