@@ -210,7 +210,18 @@ public class RelTranslator {
       // element.
       exp = scan.exp;
       patternAccess = true;
-      if (!destructure(scan.pat, core.input0(rightElementType), access)) {
+      if (testable(scan.pat)) {
+        // The pattern filters and binds, and the two halves are separate
+        // nodes: a filter for the condition, and -- where the bindings do not
+        // describe the element -- the projection that `normalize` adds.
+        final Core.Exp element = core.input0(rightElementType);
+        destructure(scan.pat, element, access);
+        final Core.@Nullable Exp test = test(scan.pat, element);
+        if (test != null) {
+          exp = core.filter(exp, test);
+        }
+      } else if (!destructure(
+          scan.pat, core.input0(rightElementType), access)) {
         // The pattern can fail to match, so the scan filters as well as
         // binds. `matchMany` builds the element, so the binders read it as
         // any later step would -- including this scan's own condition, which
@@ -669,9 +680,99 @@ public class RelTranslator {
       case RECORD_PAT:
         return destructureAll(((Core.RecordPat) pat).args, element, map);
 
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+      case WORD_LITERAL_PAT:
+        // A literal binds nothing; it filters, and `test` says how.
+        return true;
+
       default:
-        // A pattern that can fail to match -- a literal, a constructor, a list
-        // -- also filters, which this translator does not yet express.
+        // A constructor or list pattern also filters, but extracting what it
+        // binds has no total expression -- see `test`.
+        return false;
+    }
+  }
+
+  /**
+   * Returns the condition under which a pattern matches an element, or null if
+   * it always matches.
+   *
+   * <p>A pattern that can fail to match filters as well as binds, and the two
+   * halves separate: this is the filter, and {@link #destructure} is the
+   * binding. A scan is then a leaf with a filter above it and, where the
+   * bindings do not describe the element, a projection above that -- three
+   * ordinary nodes, each of which a rule can see through, rather than one node
+   * holding a {@code case} that yields a collection.
+   *
+   * <p>Callers must first ask {@link #testable}. A constructor pattern is not
+   * testable here, because extracting what it binds needs a {@code case} of its
+   * own: a datatype has no total accessor for a constructor's argument, and no
+   * value to give the branch that does not match.
+   */
+  private Core.@Nullable Exp test(Core.Pat pat, Core.Exp element) {
+    switch (pat.op) {
+      case ID_PAT:
+      case WILDCARD_PAT:
+        return null;
+
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+      case WORD_LITERAL_PAT:
+        final Core.LiteralPat literalPat = (Core.LiteralPat) pat;
+        return core.equal(
+            typeSystem,
+            element,
+            core.literal((PrimitiveType) pat.type, literalPat.value));
+
+      case TUPLE_PAT:
+      case RECORD_PAT:
+        final List<Core.Pat> args =
+            pat.op == Op.TUPLE_PAT
+                ? ((Core.TuplePat) pat).args
+                : ((Core.RecordPat) pat).args;
+        final List<Core.Exp> tests = new ArrayList<>();
+        for (int i = 0; i < args.size(); i++) {
+          final Core.@Nullable Exp test =
+              test(args.get(i), core.field(typeSystem, element, i));
+          if (test != null) {
+            tests.add(test);
+          }
+        }
+        return tests.isEmpty() ? null : core.andAlso(typeSystem, tests);
+
+      default:
+        throw new AssertionError("not testable: " + pat);
+    }
+  }
+
+  /**
+   * Returns whether {@link #test} can express a pattern's condition, and {@link
+   * #destructure} its bindings, as expressions over the element.
+   */
+  private static boolean testable(Core.Pat pat) {
+    switch (pat.op) {
+      case ID_PAT:
+      case WILDCARD_PAT:
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+      case WORD_LITERAL_PAT:
+        return true;
+      case TUPLE_PAT:
+        return ((Core.TuplePat) pat)
+            .args.stream().allMatch(RelTranslator::testable);
+      case RECORD_PAT:
+        return ((Core.RecordPat) pat)
+            .args.stream().allMatch(RelTranslator::testable);
+      default:
         return false;
     }
   }
