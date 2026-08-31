@@ -102,23 +102,6 @@ public class RelValidator {
       scope(project.exp, ZERO, "project expression");
       requireDerivedType(
           rel, core.project(typeSystem, project.input, project.exp));
-    } else if (rel instanceof Core.ProjectMany) {
-      final Core.ProjectMany projectMany = (Core.ProjectMany) rel;
-      input(projectMany.input);
-      // The body names the input element by the lambda's parameter, so its own
-      // $0 belongs to whatever node the body is; validate it as an input.
-      input(projectMany.body);
-      if (!projectMany.body.type.isCollection()) {
-        violation(
-            "projectMany body must be list or bag: %s", projectMany.body.type);
-      }
-      requireDerivedType(
-          rel,
-          core.projectMany(
-              typeSystem,
-              projectMany.input,
-              projectMany.param,
-              projectMany.body));
     } else if (rel instanceof Core.Join) {
       final Core.Join join = (Core.Join) rel;
       input(join.left);
@@ -306,11 +289,6 @@ public class RelValidator {
     @Override
     protected void visit(Core.Project project) {
       rel(project);
-    }
-
-    @Override
-    protected void visit(Core.ProjectMany projectMany) {
-      rel(projectMany);
     }
 
     @Override

@@ -852,21 +852,6 @@ public enum CoreBuilder {
   }
 
   /**
-   * Creates a {@code projectMany}; the element type is that of the body, and
-   * the output is ordered only if both the input and the body are ordered,
-   * because it is a nested loop.
-   */
-  public Core.ProjectMany projectMany(
-      TypeSystem typeSystem, Core.Exp input, Core.IdPat param, Core.Exp body) {
-    checkCollection(input);
-    checkCollection(body);
-    final boolean ordered = isOrdered(input) && isOrdered(body);
-    final Type type =
-        collectionType(typeSystem, ordered, body.type.elementType());
-    return new Core.ProjectMany(type, input, param, body);
-  }
-
-  /**
    * Creates an {@code ifEmpty}, which yields one element where its input has
    * none. It is what makes an apply outer.
    */

@@ -204,7 +204,6 @@ public enum Op {
   // INTERSECT and EXCEPT are shared with the from-steps of the same name
   FILTER,
   PROJECT,
-  PROJECT_MANY,
   JOIN,
   SORT,
   IF_EMPTY,

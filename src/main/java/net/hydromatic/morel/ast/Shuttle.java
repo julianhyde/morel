@@ -711,14 +711,6 @@ public class Shuttle {
         typeSystem, project.input.accept(this), project.exp.accept(this));
   }
 
-  protected Core.ProjectMany visit(Core.ProjectMany projectMany) {
-    return projectMany.copy(
-        typeSystem,
-        projectMany.input.accept(this),
-        projectMany.param.accept(this),
-        projectMany.body.accept(this));
-  }
-
   protected Core.Join visit(Core.Join join) {
     return join.copy(
         typeSystem,

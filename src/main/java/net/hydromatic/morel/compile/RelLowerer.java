@@ -109,13 +109,6 @@ public class RelLowerer {
       }
       return element2;
     }
-    if (exp instanceof Core.ProjectMany) {
-      final Core.ProjectMany projectMany = (Core.ProjectMany) exp;
-      final Core.Exp element = lowerInto(fromBuilder, projectMany.input);
-      final Core.Exp body =
-          rename(lowerRel(projectMany.body), projectMany.param, element);
-      return scan(fromBuilder, body);
-    }
     if (exp instanceof Core.IfEmpty) {
       // Needs the collection as a value, so it becomes an expression, which
       // is then scanned.
@@ -219,7 +212,15 @@ public class RelLowerer {
     }
     final Core.IdPat w = freshPat(join.right.type.elementType());
     final Core.Exp condition = subst(join.condition, left, core.id(w));
-    fromBuilder.scan(op(join.joinType), w, lowerRel(join.right), condition);
+    // A dependent join's right input reads the left element through the
+    // binder. The step list has the left bindings in scope at the scan, so
+    // the binder becomes the expression that denotes the left element -- the
+    // step-list way of saying the same thing.
+    Core.Exp right = lowerRel(join.right);
+    if (join.binder != null) {
+      right = rename(right, join.binder, left);
+    }
+    fromBuilder.scan(op(join.joinType), w, right, condition);
     if (join.joinType == Core.Rel.JoinType.INNER) {
       return subst(join.yieldExp, left, core.id(w));
     }
@@ -404,8 +405,8 @@ public class RelLowerer {
   }
 
   /**
-   * Replaces a {@code projectMany} lambda's parameter with the expression that
-   * denotes the input element.
+   * Replaces a dependent join's binder with the expression that denotes the
+   * left element.
    */
   private Core.Exp rename(Core.Exp exp, Core.IdPat param, Core.Exp element) {
     return exp.accept(

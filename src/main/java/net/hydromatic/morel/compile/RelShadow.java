@@ -173,8 +173,7 @@ public class RelShadow {
         return true;
       }
     }
-    return exp instanceof Core.ProjectMany
-        && containsExtent(((Core.ProjectMany) exp).body);
+    return false;
   }
 
   /**

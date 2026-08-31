@@ -202,14 +202,6 @@ public class RelExpander {
           group.keys,
           group.aggregates);
     }
-    if (exp instanceof Core.ProjectMany) {
-      final Core.ProjectMany projectMany = (Core.ProjectMany) exp;
-      return projectMany.copy(
-          typeSystem,
-          expand(projectMany.input, ImmutableList.of()),
-          projectMany.param,
-          expand(projectMany.body, ImmutableList.of()));
-    }
     if (exp instanceof Core.IfEmpty) {
       final Core.IfEmpty ifEmpty = (Core.IfEmpty) exp;
       return ifEmpty.copy(
@@ -303,7 +295,7 @@ public class RelExpander {
   /**
    * Rebuilds a join tree with each extent leaf replaced by the collection that
    * bounds it. A leaf whose generator reads another leaf's element makes the
-   * join a {@code projectMany}, whose lambda binds what it reads.
+   * join dependent, its binder naming what the right side reads.
    */
   private Core.Exp rebuild(
       Core.Exp node,
@@ -374,9 +366,9 @@ public class RelExpander {
             : null;
     if (rightGenerator != null && !free(rightGenerator, bound).isEmpty()) {
       // Correlated: the right side reads names that the left side binds. The
-      // join becomes a `projectMany` whose lambda binds the left element, and
-      // each name the generator reads becomes the path that reads it out of
-      // that element. The left side need not be a leaf: `from x, y where edge
+      // join becomes dependent, its binder naming the left element, and each
+      // name the generator reads becomes the path that reads it out of that
+      // element. The left side need not be a leaf: `from x, y where edge
       // (x, y) join y2 where y2 = y` reads `y` out of a pair.
       final Core.Exp leftElement = frame.elements.get(join.left);
       final Core.IdPat param =
@@ -396,21 +388,25 @@ public class RelExpander {
         paths.put(name, path);
       }
       if (!join.condition.isBoolLiteral(true)) {
-        // The `projectMany` has nowhere to put the join's own condition.
+        // A dependent join has a condition, so the node could carry this one;
+        // the step list cannot ground such a query, and `groundingAgrees`
+        // holds the two engines to the same verdict in both directions.
+        // Lifting this is a change to what compiles, like discussion.md §12,
+        // and belongs with that one rather than smuggled in here.
         throw new CompileException("pattern is not grounded", false, right.pos);
       }
       paths.putAll(bound);
       final Core.Exp collection = replace(rightGenerator.exp, paths);
-      final Core.Exp body =
-          core.project(
-              typeSystem,
-              collection,
-              subst(
-                  join.yieldExp,
-                  core.id(param),
-                  core.input0(collection.type.elementType())));
-      return core.projectMany(
-          typeSystem, rebuild(join.left, frame, cache, bound), param, body);
+      // The yield needs no substitution: a dependent join's yield is over
+      // `$0` and `$1` exactly as this join's already was.
+      return core.join(
+          typeSystem,
+          join.joinType,
+          param,
+          rebuild(join.left, frame, cache, bound),
+          collection,
+          join.condition,
+          join.yieldExp);
     }
     if (rightGenerator != null
         && join.condition.isBoolLiteral(true)
@@ -432,16 +428,20 @@ public class RelExpander {
                       name,
                       requireNonNull(path(rightPat, core.id(param), name))));
       final Core.Exp left = rebuild(join.left, frame, cache, bound2);
-      final Core.Exp body =
-          core.project(
-              typeSystem,
-              left,
-              subst(
-                  join.yieldExp,
-                  core.input0(left.type.elementType()),
-                  core.id(param)));
-      return core.projectMany(
-          typeSystem, bounded(right, rightPat, cache, bound), param, body);
+      final Core.Exp boundedRight = bounded(right, rightPat, cache, bound);
+      // The sides swap, so the yield commutes with them: what was `$0` is now
+      // `$1` and what was `$1` is now `$0` (spec.md §3.4).
+      return core.join(
+          typeSystem,
+          join.joinType,
+          param,
+          boundedRight,
+          left,
+          join.condition,
+          subst(
+              join.yieldExp,
+              core.input1(left.type.elementType()),
+              core.input0(boundedRight.type.elementType())));
     }
     return join.copy(
         typeSystem,
