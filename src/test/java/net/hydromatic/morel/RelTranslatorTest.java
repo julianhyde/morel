@@ -142,19 +142,17 @@ public class RelTranslatorTest {
   }
 
   /**
-   * Tests that a scan that depends on an earlier binder becomes a {@code
-   * projectMany} whose lambda parameter is that binder.
+   * Tests that a scan that depends on an earlier binder becomes a join carrying
+   * a binder, which its right input reads.
    */
   @Test
   void testCorrelatedScan() {
     assertThat(
         plan("from i in [1, 2], j in [i, i + 1] yield {i, j}"),
         is(
-            "projectMany\n" //
+            "join [i] [{i = $0, j = $1}]\n" //
                 + "  [1, 2]\n"
-                + "  fn i =>\n"
-                + "    project [{i = i, j = $0}]\n"
-                + "      [i, i + 1]\n"));
+                + "  [i, i + 1]\n"));
   }
 
   /**
@@ -223,38 +221,44 @@ public class RelTranslatorTest {
 
   /**
    * Tests a scan whose pattern can fail to match, which filters as well as
-   * binds: it becomes a {@code projectMany} whose body yields one element where
-   * the pattern matches and none where it does not.
+   * binds: it becomes a join whose right input yields one element where the
+   * pattern matches and none where it does not.
    */
   @Test
   void testFailablePattern() {
     assertThat(
         plan("from (i, 2) in [(1, 2), (3, 4)]"),
         is(
-            "projectMany\n" //
+            "join [v$0] [$1]\n" //
                 + "  [(1, 2), (3, 4)]\n"
-                + "  fn v$0 =>\n"
-                + "    case v$0 of (i, 2) => [i] | _ => []\n"));
+                + "  case v$0 of (i, 2) => [i] | _ => []\n"));
     assertThat(
         plan("from (x :: xs) in [[1, 2], []] yield x"),
         is(
             "project [#x $0]\n" //
-                + "  projectMany\n"
+                + "  join [v$0] [$1]\n"
                 + "    [[1, 2], []]\n"
-                + "    fn v$0 =>\n"
-                + "      case v$0 of op ::((x, xs)) => [{x = x, xs = xs}] | _ => []\n"));
+                + "    case v$0 of op ::((x, xs)) => [{x = x, xs = xs}] | _ => []\n"));
   }
 
   /**
    * Tests an outer apply: a correlated outer join, whose left element yields a
    * row even where its collection has nothing that matches.
+   *
+   * <p>It needs no special construction. A dependent join whose kind is {@code
+   * left} emits that row already, because that is what {@code left} means, so
+   * the {@code ifEmpty} that an earlier design put inside the lambda is gone.
    */
   @Test
   void testOuterApply() {
-    System.out.println(
+    assertThat(
         plan(
             "from r in [{id = 1, items = [2]}] "
-                + "left join i in r.items on i > 2"));
+                + "left join i in r.items on i > 2"),
+        is(
+            "join [left] [r] [$1 > 2] [{i = $1, r = $0}]\n" //
+                + "  [{id = 1, items = [2]}]\n"
+                + "  #items r\n"));
   }
 
   /**
