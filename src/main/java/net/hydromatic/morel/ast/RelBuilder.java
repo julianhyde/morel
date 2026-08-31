@@ -28,10 +28,13 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.function.Function;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -130,6 +133,80 @@ public class RelBuilder {
     return this;
   }
 
+  /**
+   * Pushes a relational expression and names its element by a pattern, as
+   * {@code from (a, b) in pairs} names the two components.
+   *
+   * <p>The pattern is erased: what survives is one name per binder, each mapped
+   * to the path that reads it out of the element. That is what a tree has
+   * instead of a pattern, and it is why a pattern that can *fail* -- a literal,
+   * a constructor -- is rejected here rather than erased, because such a
+   * pattern also filters. Use {@link #destructurable} to ask first.
+   */
+  public RelBuilder push(Core.Pat pat, Core.Exp rel) {
+    final Map<String, Core.Exp> names = new LinkedHashMap<>();
+    final Core.Exp element = core.input0(rel.type.elementType());
+    if (!destructure(pat, element, names)) {
+      throw new IllegalArgumentException(
+          "pattern cannot be destructured, because it can fail to match: "
+              + pat);
+    }
+    stack.push(new Frame(rel, elementNames(rel, names)));
+    return this;
+  }
+
+  /**
+   * Returns whether {@link #push(Core.Pat, Core.Exp)} accepts a pattern, that
+   * is, whether it binds names without also filtering.
+   */
+  public static boolean destructurable(Core.Pat pat) {
+    switch (pat.op) {
+      case ID_PAT:
+      case WILDCARD_PAT:
+        return true;
+      case TUPLE_PAT:
+      case RECORD_PAT:
+        for (Core.Pat arg : args(pat)) {
+          if (!destructurable(arg)) {
+            return false;
+          }
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** Returns the components of a tuple or record pattern. */
+  private static List<Core.Pat> args(Core.Pat pat) {
+    return pat.op == Op.TUPLE_PAT
+        ? ((Core.TuplePat) pat).args
+        : ((Core.RecordPat) pat).args;
+  }
+
+  private boolean destructure(
+      Core.Pat pat, Core.Exp element, Map<String, Core.Exp> names) {
+    switch (pat.op) {
+      case ID_PAT:
+        names.put(((Core.IdPat) pat).name, element);
+        return true;
+      case WILDCARD_PAT:
+        return true;
+      case TUPLE_PAT:
+      case RECORD_PAT:
+        final List<Core.Pat> args = args(pat);
+        for (int i = 0; i < args.size(); i++) {
+          if (!destructure(
+              args.get(i), core.field(typeSystem, element, i), names)) {
+            return false;
+          }
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
   /** Returns how many expressions are on the stack. */
   public int size() {
     return stack.size();
@@ -190,7 +267,8 @@ public class RelBuilder {
     return rebase(core.input0(frame(i).rel.type.elementType()), i);
   }
 
-  private Core.Exp field(Core.Exp exp, String fieldName) {
+  /** Returns a field of an expression, by name. */
+  public Core.Exp field(Core.Exp exp, String fieldName) {
     final RecordLikeType recordType = (RecordLikeType) exp.type;
     final int slot =
         new ArrayList<>(recordType.argNameTypes().keySet()).indexOf(fieldName);
@@ -315,6 +393,34 @@ public class RelBuilder {
     return push(core.project(typeSystem, input, exp));
   }
 
+  /**
+   * Returns a parameter naming the top input's element, for the lambda of a
+   * {@link #projectMany}. A {@code projectMany}'s body is a tree of its own, so
+   * it cannot say {@code $0} -- that is its own input's element -- and names
+   * the enclosing element through this parameter instead.
+   */
+  public Core.IdPat param(String name) {
+    return core.idPat(frame(0).rel.type.elementType(), name, 0);
+  }
+
+  /**
+   * Applies a collection-valued lambda to each element of the top of the stack,
+   * which is what a scan that reads an earlier binder becomes.
+   */
+  public RelBuilder projectMany(Core.IdPat param, Core.Exp body) {
+    final Frame frame = pop();
+    return push(core.projectMany(typeSystem, frame.rel, param, body));
+  }
+
+  /**
+   * Yields one element where the top of the stack is empty, which is what the
+   * absent side of an outer join needs.
+   */
+  public RelBuilder ifEmpty(Core.Exp exp) {
+    final Frame frame = pop();
+    return push(frame.withRel(core.ifEmpty(frame.rel, exp)));
+  }
+
   /** Sorts the top of the stack; the result is a list. */
   public RelBuilder sort(Core.Exp exp) {
     final Frame frame = pop();
@@ -382,8 +488,7 @@ public class RelBuilder {
     return setRel(n, inputs -> core.except(typeSystem, distinct, inputs));
   }
 
-  private RelBuilder setRel(
-      int n, java.util.function.Function<List<Core.Exp>, Core.Exp> f) {
+  private RelBuilder setRel(int n, Function<List<Core.Exp>, Core.Exp> f) {
     checkArgument(n >= 2, "a set operator needs at least two inputs");
     final List<Core.Exp> inputs = new ArrayList<>();
     Frame first = null;
@@ -409,7 +514,7 @@ public class RelBuilder {
   }
 
   private boolean isOrdered(Core.Exp rel) {
-    return rel.type instanceof net.hydromatic.morel.type.ListType;
+    return rel.type instanceof ListType;
   }
 
   private static boolean isInput0(Core.Exp exp) {
