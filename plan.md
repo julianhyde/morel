@@ -137,6 +137,14 @@ something settled — §8's principle, applied to the sequence itself.
       constructor, whose argument has no total accessor: `::` and
       `[]` escape through `null`, `hd`, `tl`, `nth` and `length`,
       which are exactly the accessors a datatype lacks.
+- [ ] Trees have no atoms (discussion.md §14). Every node's element is
+      a record; the conversion to a bare value is a `map` of a record
+      selector outside the tree, as `compute`'s extraction is an
+      `only` outside it. Decide before step 3 freezes the plan text,
+      because every atomizing query's text changes. Unpicking `atom`
+      from the translator, the lowerer, `Core.StepEnv` and
+      `TypeSystem.recordOrScalarType` is a change the size of the
+      `projectMany` one.
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once. A round trip cannot be the flip, because it
       perturbs Core shapes that other machinery reads, and no care in
