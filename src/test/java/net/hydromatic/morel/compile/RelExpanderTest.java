@@ -172,19 +172,17 @@ public class RelExpanderTest {
   }
 
   /**
-   * Tests a generator that reads another variable: the join becomes a {@code
-   * projectMany}, whose lambda binds the left element that the generator needs.
+   * Tests a generator that reads another variable: the join becomes dependent,
+   * its binder naming the left element that the generator needs.
    */
   @Test
   void testCorrelated() {
     assertThat(
         expanded("from x in [1, 2], y where y elem [x, x + 1]"),
         is(
-            "projectMany\n" //
+            "join [g$2] [{x = $0, y = $1}]\n" //
                 + "  [1, 2]\n"
-                + "  fn g$2 =>\n"
-                + "    project [{x = g$2, y = $0}]\n"
-                + "      [g$2, g$2 + 1]\n"));
+                + "  [g$2, g$2 + 1]\n"));
   }
 
   /**
@@ -266,8 +264,8 @@ public class RelExpanderTest {
    * Tests a generator that reads a name bound deeper in the left subtree.
    *
    * <p>{@code z} is correlated with {@code y}, which is not the join's left
-   * input but a leaf inside it, so the {@code projectMany} binds the left
-   * element and reads {@code y} out of it by path.
+   * input but a leaf inside it, so the binder names the left element and {@code
+   * y} is read out of it by path.
    */
   @Test
   void testCorrelatedWithSubtree() {
@@ -276,15 +274,11 @@ public class RelExpanderTest {
             "from x in [1, 2] join y where y elem [x] "
                 + "join z where z elem [y, y + 1]"),
         is(
-            "projectMany\n" //
-                + "  projectMany\n"
+            "join [g$3] [{x = #x $0, y = #y $0, z = $1}]\n" //
+                + "  join [g$4] [{x = $0, y = $1}]\n"
                 + "    [1, 2]\n"
-                + "    fn g$4 =>\n"
-                + "      project [{x = g$4, y = $0}]\n"
-                + "        [g$4]\n"
-                + "  fn g$3 =>\n"
-                + "    project [{x = #x g$3, y = #y g$3, z = $0}]\n"
-                + "      [#y g$3, #y g$3 + 1]\n"));
+                + "    [g$4]\n"
+                + "  [#y g$3, #y g$3 + 1]\n"));
   }
 
   /**
@@ -303,11 +297,9 @@ public class RelExpanderTest {
             "from dno : int join v : int list "
                 + "where v elem [[1], [2]] andalso dno elem v"),
         is(
-            "projectMany\n" //
+            "join [g$2] [{dno = $1, v = $0}]\n" //
                 + "  [[1], [2]]\n"
-                + "  fn g$2 =>\n"
-                + "    project [{dno = $0, v = g$2}]\n"
-                + "      g$2\n"));
+                + "  g$2\n"));
   }
 
   /** Tests that a query that cannot be bounded is an error. */

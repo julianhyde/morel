@@ -406,25 +406,6 @@ public class RelBuilder {
   }
 
   /**
-   * Returns a parameter naming the top input's element, for the lambda of a
-   * {@link #projectMany}. A {@code projectMany}'s body is a tree of its own, so
-   * it cannot say {@code $0} -- that is its own input's element -- and names
-   * the enclosing element through this parameter instead.
-   */
-  public Core.IdPat param(String name) {
-    return core.idPat(frame(0).rel.type.elementType(), name, 0);
-  }
-
-  /**
-   * Applies a collection-valued lambda to each element of the top of the stack,
-   * which is what a scan that reads an earlier binder becomes.
-   */
-  public RelBuilder projectMany(Core.IdPat param, Core.Exp body) {
-    final Frame frame = pop();
-    return push(core.projectMany(typeSystem, frame.rel, param, body));
-  }
-
-  /**
    * Yields one element where the top of the stack is empty, which is what the
    * absent side of an outer join needs.
    */

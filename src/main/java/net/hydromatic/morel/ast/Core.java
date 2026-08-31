@@ -2286,9 +2286,8 @@ public class Core {
    * is derived from its inputs and its expressions, and is exactly the type of
    * the value that flows out of it. Expressions inside a node name the input
    * element {@code $0} (and, in a {@link Join}, the right input element {@code
-   * $1}); the exception is {@link ProjectMany}, whose lambda parameter names
-   * the input element, because its body may contain a tree that would shadow
-   * {@code $0}.
+   * $1}); a dependent {@link Join} also has a binder that names the input
+   * element, because its body may contain a tree that would shadow {@code $0}.
    */
   public abstract static class Rel extends Exp {
     Rel(Op op, Type type) {
@@ -2527,57 +2526,6 @@ public class Core {
   }
 
   /**
-   * Maps each element to many elements: monadic bind, and what a dependent scan
-   * becomes.
-   *
-   * <p>The parameter {@link #param} names the input element throughout the
-   * body, in place of {@code $0}, because the body may be a tree and would
-   * otherwise shadow it. The node is correlated if, and only if, a leaf of the
-   * body mentions the parameter.
-   */
-  public static class ProjectMany extends SingleRel {
-    public final IdPat param;
-    public final Exp body;
-
-    ProjectMany(Type type, Exp input, IdPat param, Exp body) {
-      super(Op.PROJECT_MANY, type, input);
-      this.param = requireNonNull(param, "param");
-      this.body = requireNonNull(body, "body");
-    }
-
-    @Override
-    public String opName() {
-      return "projectMany";
-    }
-
-    @Override
-    protected void describe(StringBuilder b, int indent, boolean withTypes) {
-      describeLine(b, indent, withTypes);
-      describeInput(input, b, indent + 2, withTypes);
-      indent(b, indent + 2);
-      b.append("fn ").append(param.name).append(" =>").append('\n');
-      describeInput(body, b, indent + 4, withTypes);
-    }
-
-    @Override
-    public ProjectMany accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
-
-    @Override
-    public void accept(Visitor visitor) {
-      visitor.visit(this);
-    }
-
-    public ProjectMany copy(
-        TypeSystem typeSystem, Exp input, IdPat param, Exp body) {
-      return input == this.input && param == this.param && body == this.body
-          ? this
-          : core.projectMany(typeSystem, input, param, body);
-    }
-  }
-
-  /**
    * Pairs elements of two inputs, and maps each pair to an element via a yield
    * expression over {@code $0} and {@code $1}.
    *
@@ -2747,7 +2695,7 @@ public class Core {
    * <p>The expression is evaluated only when there is no element, so, like the
    * count of a {@link Skip}, it cannot mention {@code $0}. It can mention
    * whatever the tree's enclosing environment binds, which inside the body of a
-   * {@link ProjectMany} includes that node's parameter.
+   * the right input of a dependent {@link Join} includes its binder.
    */
   public static class IfEmpty extends SingleRel {
     public final Exp exp;

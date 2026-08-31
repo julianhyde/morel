@@ -548,12 +548,6 @@ public class Visitor {
     project.exp.accept(this);
   }
 
-  protected void visit(Core.ProjectMany projectMany) {
-    projectMany.input.accept(this);
-    projectMany.param.accept(this);
-    projectMany.body.accept(this);
-  }
-
   protected void visit(Core.IfEmpty ifEmpty) {
     ifEmpty.input.accept(this);
     ifEmpty.exp.accept(this);
