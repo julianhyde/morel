@@ -113,7 +113,7 @@ public class RelLowererTest {
   void testFilter() {
     assertThat(
         lower("from i in [1, 2, 3] where i > 1"),
-        is("from v$0 in [1, 2, 3] where v$0 > 1"));
+        is("from w$0 in [1, 2, 3] where w$0 > 1"));
   }
 
   /**
@@ -124,7 +124,7 @@ public class RelLowererTest {
   void testProjectionCostsNoStep() {
     assertThat(
         lower("from i in [1, 2, 3] yield {j = i + 1}"),
-        is("from v$0 in [1, 2, 3] yield {j = v$0 + 1}"));
+        is("from w$0 in [1, 2, 3] yield {j = w$0 + 1}"));
   }
 
   /**
@@ -132,7 +132,7 @@ public class RelLowererTest {
    * the field itself, rather than selecting from a record constructed on the
    * spot.
    *
-   * <p>Without the reduction the {@code where} would read {@code #j {j = v$0 +
+   * <p>Without the reduction the {@code where} would read {@code #j {j = w$0 +
    * 1}}: correct, but it builds a record per row to throw all but one field of
    * it away, and it hides the column from anything that reads the step list --
    * the Calcite translation, which pushes {@code #j v} down and cannot push
@@ -142,7 +142,7 @@ public class RelLowererTest {
   void testFieldOfProjectionIsRead() {
     assertThat(
         lower("from i in [1, 2, 3] yield {j = i + 1} where j > 2"),
-        is("from v$0 in [1, 2, 3] where v$0 + 1 > 2 yield {j = v$0 + 1}"));
+        is("from w$0 in [1, 2, 3] where w$0 + 1 > 2 yield {j = w$0 + 1}"));
   }
 
   /**
@@ -162,14 +162,20 @@ public class RelLowererTest {
     assertThat(order.exp.pos, hasToString("1.27"));
   }
 
-  /** Tests the same reduction for a field of a join's element. */
+  /**
+   * Tests the same reduction for a field of a join's element.
+   *
+   * <p>The binders are {@code w$0} and {@code w$1} whatever was compiled before
+   * this query, because the lowering numbers them per lowering rather than from
+   * the session-wide generator (spec.md §6).
+   */
   @Test
   void testFieldOfJoinIsRead() {
     assertThat(
         lower("from i in [1, 2], j in [3, 4] where i < j yield i + j"),
         is(
-            "from v$1 in [1, 2] join v$2 in [3, 4] "
-                + "where v$1 < v$2 yield v$1 + v$2"));
+            "from w$0 in [1, 2] join w$1 in [3, 4] "
+                + "where w$0 < w$1 yield w$0 + w$1"));
   }
 }
 
