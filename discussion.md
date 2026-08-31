@@ -66,9 +66,9 @@ the convention then exists in two places (the printer's and the
 translator's).
 
 **Resolution: expressions over numbered inputs.** A one-input node
-(`filter`, `project`, `group`, `order`, `projectMany`) binds `$0` to
-its input element; a two-input node (`join`) binds `$0` and `$1` to
-its left and right input elements. Those names are in scope in
+(`filter`, `project`, `group`, `order`) binds `$0` to its input
+element; a two-input node (`join`) binds `$0` and `$1` to its left
+and right input elements. Those names are in scope in
 addition to the environment enclosing the tree, and in place of
 nothing else: an expression sees its node's inputs and the outside
 world, never the bindings of nodes further down.
@@ -101,9 +101,9 @@ Well-formedness, checked by the validator:
   silently become correlated.
 * An expression that contains a nested tree rebinds `$0` inside it,
   so an outer element that must reach into a nested tree is bound to
-  a name first; see §8. `projectMany` is the one node whose input
-  element is named by a lambda parameter rather than by `$0`, for
-  that reason.
+  a name first; see §8. That is what a dependent join's binder is
+  for: its right input is a tree of its own, so it cannot say `$0`
+  and reach the left element.
 
 Reification (#359) loses nothing: a node's expression wraps
 mechanically as `fn $0 => e`, which is the lambda form, recovered on
@@ -252,7 +252,8 @@ Join must then say what value it emits:
   the two yields involved; nothing above the node rewrites, because
   the output element type is pinned. Names live in the yield's
   record construction, checker-enforced. Conditions are expressions
-  over `$0` and `$1`. Correlation is `projectMany` (§8). planEx
+  over `$0` and `$1`. Correlation is a binder on the join (§8).
+  planEx
   prints a real type at every node; MEMO groups key on (semantics,
   element type) with no side-channel metadata.
 
@@ -261,68 +262,66 @@ destination.** The bindings form is not a way-station (that would pay
 plan-text churn and rewrite ports twice); it survives permanently as
 the internal lowering IR for RowSink, unprinted.
 
-## 8. Correlation: `projectMany`
+## 8. Correlation: the dependent join
 
-`project` maps an element to one element; `projectMany` maps it to
-many. Its expression is evaluated with `$0` bound to the input
-element and must have a collection type; the node's element type is
-that collection's element type, and its kind follows the usual
-signatures. `from e in emps, d in e.depts` is a `projectMany` whose
-expression mentions `$0`; `from e in emps, d in depts` is one whose
-expression does not.
+A scan whose collection depends on an earlier binder — `from d in
+depts, e in d.emps` — needs the outer element to reach the inner
+expression. `$0` cannot carry it, because the inner expression is a
+tree of its own and rebinds `$0`. So something must bind a name that
+crosses the boundary by ordinary lexical scoping.
 
-This is why there is no separate `dependentJoin` constructor.
-Dependence is not a mode of a node, it is a property visible in the
-node's expression — an occurrence of `$0` under a collection-typed
-expression — and the validator can see it, a rule can guard on it,
-and no metadata records it. Decorrelation becomes a rule with a
-syntactic guard: when the collection expression stops mentioning
-`$0` (because a preceding rule pulled the correlated part out), the
-node is a cross join and `join` replaces it.
+**Resolution: a `join` may carry a binder, read by its right input.**
+Correlation is a join, and the yield is the join's yield, over `$0`
+and `$1` like any other. Where the query wants only the inner
+elements — `yieldAll r.items` — an ordinary `project` drops the left,
+which is exactly what the step list does today: a scan over the
+collection-valued expression, then a `yield` of the freshly bound
+element.
 
-**How the outer element reaches the pairing.** `projectMany` emits
-the inner elements, but `from d in depts, e in d.emps` must emit
-pairs, so something has to combine the outer element with each inner
-one, and the natural place is a nested query:
+The alternative, taken by an earlier draft of this document and of
+spec.md §3.3, was `projectMany`: monadic bind, `α coll * (α -> β
+coll) -> β coll`, with a lambda whose parameter named the outer
+element. It reads well in isolation, and it is wrong in three ways
+that only show up in the rest of the system.
 
-```
-projectMany depts (fn d => from e in d.emps yield {d, e})
-```
+* **It fuses two operations.** `projectMany` correlates *and* drops
+  the left element. A query that wants both — `from d in depts, e in
+  d.emps yield {d, e}`, which is the common case — has to rebuild the
+  pair inside the lambda, so the node's own output is not what the
+  query asked for and a projection inside the body compensates.
+  Separating them makes the pairing the join's yield, where every
+  other two-input node puts it.
+* **It is the one node that does not bind `$0`.** The old §2 had to
+  carry a rule for that, and every pass that walks nodes uniformly
+  had to special-case it. With a binder on `join`, `$0` and `$1` mean
+  what they mean everywhere, and the binder is an extra name, not a
+  replacement for them.
+* **Decorrelation becomes a rewrite rather than a simplification.**
+  Under `projectMany`, decorrelating meant replacing the constructor
+  and substituting `v ↦ $0` and the inner `$0 ↦ $1`. Under a
+  dependent join it is *dropping the binder*: when nothing in the
+  right input mentions it, the name goes and the node is already an
+  ordinary join. Nothing above or below it changes.
 
-which in Core is a `projectMany` whose argument is a lambda whose
-body is a `project` over the leaf `d.emps`, with the projection
-expression `{d = d, e = $0}` — `$0` being the inner element and `d`
-the lambda's parameter.
+What survives from the old argument is its best part. Dependence is
+still not a mode of the node: the binder is a scoping device that may
+be present and unread, and dependence is a free occurrence of it,
+which the validator sees and a rule can guard on. No metadata records
+it, and no correlation counter exists.
 
-So the outer element is named by an ordinary lambda binder. This is
-not a retreat from §2: it is the one place where a scope crosses a
-tree boundary, and `$0` cannot cross it, because the nested tree
-rebinds `$0` to its own input. A named binder crosses it by ordinary
-lexical scoping — no sigil, no correlation counter, no yield on the
-node, and no descent into scalar expressions where rules cannot look.
-`projectMany` is exactly monadic bind, `α bag * (α -> β bag) -> β
-bag`, and the lambda is a plain Core lambda, so reification is
-nothing.
+**The outer apply comes for free.** The old design needed `ifEmpty`
+inside the lambda, because flat-map has no element to map when the
+body is empty and so cannot emit a row for an order with no matching
+items. A dependent join whose kind is `left` emits that row already —
+that is what `left` means — so outer apply is a kind, not a
+construction. `ifEmpty` remains a node for its own sake; it is no
+longer load-bearing for correlation.
 
-Two consequences worth stating:
-
-* **`projectMany` is the one node that does not bind `$0`.** Its
-  input element is named by its lambda's parameter, precisely because
-  its argument is the one expression that routinely contains a tree.
-  Every other node binds `$0` (and `join` also `$1`) as §2 says.
-* **The device generalizes.** Any expression that contains a nested
-  tree shadows `$0` inside it, so a correlated subquery elsewhere —
-  `where exists (from d in depts where d.deptno = e.deptno)` — binds
-  the outer element the same way, with `let v = $0 in ...` around the
-  subquery. It is the same mechanism, written with `let` instead of
-  `fn` because the node's own argument is not a function.
-
-Decorrelation stays a rule with a syntactic guard, now stated over
-the lambda: when no leaf inside the body has a free occurrence of the
-parameter, the collection does not depend on the outer element, and
-`projectMany input (fn v => body)` becomes a `join` whose right input
-is that leaf and whose yield is the body's projection with `v ↦ $0`
-and the inner `$0 ↦ $1`.
+The device still generalizes to correlated subqueries elsewhere:
+`where exists (from d in depts where d.deptno = e.deptno)` binds the
+outer element with `let v = $0 in ...` around the subquery. That is
+the same lexical scoping, written with `let` because the enclosing
+construct is an expression rather than a node.
 
 ## 9. Sequencing principle
 
