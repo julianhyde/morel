@@ -221,17 +221,20 @@ public class RelTranslatorTest {
 
   /**
    * Tests a scan whose pattern can fail to match, which filters as well as
-   * binds: it becomes a join whose right input yields one element where the
-   * pattern matches and none where it does not.
+   * binds. The two halves separate into ordinary nodes: a filter for the
+   * condition, and the projection that the bindings need anyway.
    */
   @Test
   void testFailablePattern() {
     assertThat(
         plan("from (i, 2) in [(1, 2), (3, 4)]"),
         is(
-            "join [v$0] [$1]\n" //
-                + "  [(1, 2), (3, 4)]\n"
-                + "  case v$0 of (i, 2) => [i] | _ => []\n"));
+            "project [#1 $0]\n" //
+                + "  filter [#2 $0 = 2]\n"
+                + "    [(1, 2), (3, 4)]\n"));
+    // A cons pattern is not expressible this way yet: `hd` and `tl` would
+    // give the paths and `null` the test, but a constructor pattern needs a
+    // `case` for both, so the general mechanism stays for now.
     assertThat(
         plan("from (x :: xs) in [[1, 2], []] yield x"),
         is(
