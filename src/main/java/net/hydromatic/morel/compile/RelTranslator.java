@@ -212,9 +212,9 @@ public class RelTranslator {
       patternAccess = true;
       if (!destructure(scan.pat, core.input0(rightElementType), access)) {
         // The pattern can fail to match, so the scan filters as well as
-        // binds. The projectMany builds the element, so the binders read it
-        // as any later step would -- including this scan's own condition,
-        // which is why the map is set before the condition is rewritten.
+        // binds. `matchMany` builds the element, so the binders read it as
+        // any later step would -- including this scan's own condition, which
+        // is why the map is set before the condition is rewritten.
         final Core.@Nullable Exp exp2 =
             matchMany(scan.exp, scan.pat, elementType(scan.env));
         if (exp2 == null) {
@@ -702,7 +702,7 @@ public class RelTranslator {
 
   /**
    * Re-expresses access expressions over a lambda parameter rather than over
-   * {@code $0}, for the body of a {@code projectMany}.
+   * {@code $0}, for the right input of a dependent join.
    */
   private Map<Core.NamedPat, Core.Exp> over(
       Map<Core.NamedPat, Core.Exp> access, Core.IdPat param) {
@@ -757,9 +757,9 @@ public class RelTranslator {
   }
 
   /**
-   * Creates the parameter of a {@code projectMany} lambda. If the element is a
-   * single binder's value, the parameter is that binder, which is why {@code
-   * from d in depts, e in d.emps} prints as {@code fn d => ...}.
+   * Creates a dependent join's binder. If the element is a single binder's
+   * value, the parameter is that binder, which is why {@code from d in depts, e
+   * in d.emps} prints as {@code fn d => ...}.
    */
   private Core.IdPat param(Type elementType) {
     if (access.size() == 1) {

@@ -193,47 +193,53 @@ public class RelTest {
   }
 
   /**
-   * Tests {@code projectMany}: its element type is that of its body, its lambda
-   * parameter names the input element, and its body prints as a tree below the
-   * input.
+   * Tests a dependent join: its binder names the left element inside the right
+   * input, its element type is that of its yield, and it is ordered only if
+   * both inputs are.
    */
   @Test
-  void testProjectMany() {
+  void testDependentJoin() {
     final Fixture f = new Fixture();
     final Core.IdPat dPat = core.idPat(f.intType, "d", 0);
     final Core.Id dId = core.id(dPat);
 
-    // The body's leaf mentions d, so the node is correlated.
-    final Core.Rel body =
-        core.project(
+    // The right input mentions d, so the join is dependent.
+    final Core.Rel join =
+        core.join(
             f.typeSystem,
+            Core.Rel.JoinType.INNER,
+            dPat,
+            f.list12,
             core.list(f.typeSystem, dId, f.intLiteral(4)),
-            f.record(dId, f.input0));
-    final Core.Rel projectMany =
-        core.projectMany(f.typeSystem, f.list12, dPat, body);
+            core.boolLiteral(true),
+            f.record(f.input0, f.input1));
 
-    assertThat(projectMany.type.moniker(), is("{a:int, b:int} list"));
+    assertThat(join.type.moniker(), is("{a:int, b:int} list"));
     assertThat(
-        projectMany.describe(),
+        join.describe(),
         is(
-            "projectMany\n" //
+            "join [d] [{a = $0, b = $1}]\n" //
                 + "  [1, 2]\n"
-                + "  fn d =>\n"
-                + "    project [{a = d, b = $0}]\n"
-                + "      [d, 4]\n"));
+                + "  [d, 4]\n"));
 
-    // A bag body makes the output a bag, as a dependent scan over a bag
-    // does today. This body is a leaf, so it prints as one.
-    final Core.Rel projectMany2 =
-        core.projectMany(f.typeSystem, f.list12, dPat, f.bag56);
-    assertThat(projectMany2.type.moniker(), is("int bag"));
+    // A bag on either side makes the output a bag, as a dependent scan over a
+    // bag does today.
+    final Core.Rel join2 =
+        core.join(
+            f.typeSystem,
+            Core.Rel.JoinType.INNER,
+            dPat,
+            f.list12,
+            f.bag56,
+            core.boolLiteral(true),
+            f.input1);
+    assertThat(join2.type.moniker(), is("int bag"));
     assertThat(
-        projectMany2.describe(),
+        join2.describe(),
         is(
-            "projectMany\n" //
+            "join [d] [$1]\n" //
                 + "  [1, 2]\n"
-                + "  fn d =>\n"
-                + "    #fromList Bag ([5, 6])\n"));
+                + "  #fromList Bag ([5, 6])\n"));
   }
 
   /**
@@ -365,19 +371,36 @@ public class RelTest {
             f.greaterThan(f.input0, f.intLiteral(0)));
     assertThat(f.violations(nested), empty());
 
-    // A projectMany body binds $0 in its own right, and may mention the
-    // lambda's parameter.
+    // A dependent join's right input binds $0 in its own right, and may
+    // mention the binder.
     final Core.IdPat dPat = core.idPat(f.intType, "d", 0);
-    final Core.Rel projectMany =
-        core.projectMany(
+    final Core.Rel dependent =
+        core.join(
             f.typeSystem,
-            f.list12,
+            Core.Rel.JoinType.INNER,
             dPat,
+            f.list12,
             core.project(
                 f.typeSystem,
                 core.list(f.typeSystem, core.id(dPat)),
-                f.record(core.id(dPat), f.input0)));
-    assertThat(f.violations(projectMany), empty());
+                f.record(core.id(dPat), f.input0)),
+            core.boolLiteral(true),
+            f.input1);
+    assertThat(f.violations(dependent), empty());
+
+    // But the yield may not mention it: there, $0 and $1 are what a join says.
+    final Core.Rel badBinder =
+        core.join(
+            f.typeSystem,
+            Core.Rel.JoinType.INNER,
+            dPat,
+            f.list12,
+            core.list(f.typeSystem, core.id(dPat)),
+            core.boolLiteral(true),
+            core.id(dPat));
+    assertThat(
+        f.violations(badBinder),
+        is(Arrays.asList("join yield cannot reference the join's binder d")));
   }
 }
 
