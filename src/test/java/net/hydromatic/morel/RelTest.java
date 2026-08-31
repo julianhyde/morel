@@ -256,7 +256,9 @@ public class RelTest {
             f.list12,
             ImmutableSortedMap.of("j", (Core.Exp) f.input0),
             ImmutableSortedMap.of());
-    assertThat(group1.type.moniker(), is("int list"));
+    // A record, though there is only one key: collapsing it would make the
+    // element's shape depend on how many labels there are (discussion.md §14).
+    assertThat(group1.type.moniker(), is("{j:int} list"));
     assertThat(
         group1.describe(),
         is(

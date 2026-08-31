@@ -524,8 +524,8 @@ public class RelBuilderTest {
   }
 
   /**
-   * Tests that a group's labels are names, including when there is exactly one
-   * of them and the element atomizes to its bare type.
+   * Tests that a group's labels are names, whether there is one of them or
+   * several, because a group's element is a record either way.
    *
    * <p>This is what the resolver will ask of the name map: after {@code group j
    * = i}, the query says {@code j}, and the map has to answer whether or not
@@ -537,9 +537,9 @@ public class RelBuilderTest {
     final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
     b.push(f.list12);
     b.group(ImmutableSortedMap.of("j", b.input(0)), ImmutableSortedMap.of());
-    // One key, so the element is a bare int -- but 'j' still names it.
-    assertThat(b.peek().type.moniker(), is("int list"));
-    assertThat(b.name("j"), hasToString("$0"));
+    // A record, though there is one key, so 'j' is a field of it.
+    assertThat(b.peek().type.moniker(), is("{j:int} list"));
+    assertThat(b.name("j"), hasToString("#j $0"));
 
     final RelBuilder b2 = f.builder(RelBuilder.Simp.NONE);
     b2.push(f.list12);
