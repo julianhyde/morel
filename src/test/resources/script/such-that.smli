@@ -1640,6 +1640,16 @@ from p: int * int where #1 p elem [0,1] andalso #2 p elem [2,3];
 >
 > val it : (int * int) list
 
+(* A record with one field is grounded by constraining that field.
+ * There is no join to do, and the row is the field. *)
+from p: {i: int} where p.i elem [0,1];
+> i
+> -
+> 0
+> 1
+>
+> val it : {i:int} list
+
 (* Joe's bar ---------------------------------------------------------
  *
  * See http://infolab.stanford.edu/~ullman/fcdb/aut07/slides/dlog.pdf.
