@@ -269,6 +269,7 @@ public class RelExpander {
       return join.copy(
           typeSystem,
           join.joinType,
+          join.binder,
           expand(join.left, ImmutableList.of()),
           expand(join.right, ImmutableList.of()),
           join.condition,
@@ -445,6 +446,7 @@ public class RelExpander {
     return join.copy(
         typeSystem,
         join.joinType,
+        join.binder,
         rebuild(join.left, frame, cache, bound),
         rebuild(right, frame, cache, bound),
         join.condition,
