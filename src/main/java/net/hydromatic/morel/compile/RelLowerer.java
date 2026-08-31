@@ -356,23 +356,25 @@ public class RelLowerer {
   /**
    * Creates a binder for the step list, numbered per lowering.
    *
-   * <p>Not from {@code typeSystem.nameGenerator}, which is shared by everything
-   * compiled in a session: a name taken from it makes a query's plan text
-   * depend on what was compiled before it, which spec.md §6 forbids precisely
-   * so that three implementations can print the same text for the same query.
-   * The lowering did take names from it, which was latent while nothing ran the
-   * lowered form and would not have been once the flip made it the executable
-   * path.
+   * <p>Numbered by {@code typeSystem.nameGenerator}, under a {@code w} prefix
+   * of its own, and not by a counter of this lowering's.
    *
-   * <p>The prefix is {@code w$}, not the tree's {@code v$}. Two counters that
-   * both start at zero and both say {@code v$} collide as soon as their outputs
-   * meet in one expression, and they do: these binders sit in a step list whose
-   * expressions are the tree's, which already has a {@code v$0}. The collision
-   * is not hypothetical -- it mistyped {@code from (x, y) in ... group x + y}
-   * before the prefixes were separated.
+   * <p>A per-lowering counter is what spec.md §6 asks for -- numbering from
+   * zero, so that a query's text does not depend on what was compiled before it
+   * -- and it is wrong here, for a reason §6 does not yet account for:
+   * lowerings compose. A nested query is lowered into the expression of the
+   * query that contains it, so an inner lowering's {@code w$0} and an outer
+   * one's {@code w$0} meet, and one captures the other. Deterministic and not
+   * unique is worse than unique and not deterministic, because the first
+   * silently computes the wrong answer.
+   *
+   * <p>The lowered form is not the frozen plan text -- step 3 prints the tree
+   * -- so the determinism §6 wants is not owed here. The tree's own numbering
+   * has the same hole, and closing it is a spec question: a nested tree must
+   * continue the enclosing tree's numbering rather than restart.
    */
   private Core.IdPat freshPat(Type type) {
-    return core.idPat(type, "w$" + nextName++, 0);
+    return core.idPat(type, typeSystem.nameGenerator.getPrefixed("w"), 0);
   }
 
   /**
