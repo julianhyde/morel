@@ -79,11 +79,13 @@ Three rules complete the picture:
    evaluated once, before any element exists. They see the enclosing
    environment only; an occurrence of `$0` or `$1` in them is
    ill-formed.
-2. **`projectMany` names its input.** Its argument is a lambda
-   `fn v => c`, and `v`, not `$0`, denotes the input element. This is
-   the one node whose argument routinely contains a nested tree,
-   which would shadow `$0`; a lambda-bound name crosses that boundary
-   by ordinary lexical scoping. See discussion.md §8.
+2. **A dependent join names its left element.** A `join` may carry a
+   binder `v`. Inside its *right input* — and only there — `v`
+   denotes the current element of the left input. The right input is
+   the one argument that routinely contains a nested tree, which
+   would shadow `$0`; a bound name crosses that boundary by ordinary
+   lexical scoping. The condition and the yield see `$0` and `$1` as
+   any join's do. See discussion.md §8.
 3. **Nested trees shadow.** Inside a tree that appears within an
    expression, `$0` is that tree's own input element. To use the
    outer element inside a nested tree, bind it first —
@@ -155,71 +157,77 @@ whole element and whose aggregate list is empty.
 has none, and its input's elements where it has some. The expression
 is evaluated only in the first case, when there is no element, so
 like the count of a `skip` it cannot mention `$0`; it can mention
-whatever encloses the tree, which inside the body of a `projectMany`
-includes that node's parameter. It is what makes an apply outer
-(§3.3).
+whatever encloses the tree, which inside the right input of a
+dependent join includes that join's binder.
 
 `compute` is `group` with no keys, plus the extraction of the single
 element that the enclosing expression performs — see §6, *Review*.
 
-### 3.3 `projectMany`
+### 3.3 Correlation
 
-| Constructor | Arguments | Element type | Scope |
-| --- | --- | --- | --- |
-| `projectMany` | `fn v => c`, `c` of collection type | element type of `c` | `v` names the input element |
+A scan whose collection depends on an earlier binder — `from d in
+depts, e in d.emps` — is a **dependent join**: a `join` carrying a
+binder that its right input may read.
 
-`project` maps an element to one element; `projectMany` maps it to
-many, and is exactly monadic bind: `α coll * (α -> β coll) -> β
-coll`. It is what a dependent scan becomes:
-
-```
-from d in depts, e in d.emps yield {d, e}
+```sml
+from d in scott.depts, e in d.emps where e.sal > 1000 yield {d, e}
 ```
 
-is
-
 ```
-projectMany depts (fn d => project d.emps [{d = d, e = $0}])
-```
-
-Dependence is not a mode of the node; it is the presence of a free
-occurrence of `v` in a leaf of the body, which the validator sees and
-a rule can guard on. There is no separate dependent-join
-constructor.
-
-**An outer apply is `ifEmpty` inside the lambda.** A correlated outer
-join — `from r in orders left join i in r.items on p` — yields a row
-for an order none of whose items satisfy `p`, which flat-map cannot
-do, because it has no element to map. The `ifEmpty` node (§3.2)
-supplies that row, and it sits in the body, where `v` is in scope:
-
-```
-projectMany
-  orders
-  fn r =>
-    ifEmpty [{i = NONE, r = r}]
-      project [{i = SOME $0, r = r}]
-        filter [#units $0 > 2]
-          #items r
+join [d] [{d = $0, e = $1}]
+  scott.depts
+  filter [#sal $0 > 1000]
+    #emps d
 ```
 
-`projectMany` itself stays a pure bind with one argument. An earlier
-draft made `ifEmpty` a second, optional argument of `projectMany`,
-and it was wrong for a reason worth recording: its expression reads
-`r`, which only the lambda binds, so an argument of the node would
-have been printed outside the binder it depends on. As a node in the
-body it is inside that scope, and it composes — it is an ordinary
-collection→collection operator that a rule can move.
+The binder `d` names the left element inside the right input, where
+`$0` cannot reach because the right input is a tree of its own and
+rebinds `$0`. The condition and the yield are over `$0` and `$1`, as
+in any join.
 
-The `SOME` and the `NONE` are written by the expressions rather than
-implied by any node, because Morel has no null to fill a row with:
-only the query knows what the absent row's value is.
+**Dependence is still not a mode of the node.** The binder is a
+scoping device, not a flag: it may be present and unread. Dependence
+is a free occurrence of the binder in the right input, which the
+validator sees and a rule can guard on. Decorrelation is therefore
+*dropping the binder* — when nothing in the right input mentions it,
+the join is an ordinary join and the name goes — rather than
+rewriting one constructor into another.
+
+**A scan translates the same way whether or not anything reads both
+sides.** `yieldAll` is a dependent join followed by a projection that
+drops the left element:
+
+```sml
+from r in orders yieldAll r.items
+```
+
+```
+project [#i $0]
+  join [r] [{i = $1, r = $0}]
+    orders
+    #items r
+```
+
+which is what the step list has always done — a scan over the
+collection-valued expression, then a `yield` of the freshly bound
+element — said with nodes. Fusing the two, so that one constructor
+both correlated and dropped, is what an earlier draft of this
+document did under the name `projectMany`; the cost was a node that
+did two things, that alone among the nodes did not bind `$0`, and
+that a decorrelation rule had to rewrite rather than simplify.
+
+**An outer apply is a dependent join whose kind is `left`.** A
+correlated outer join — `from r in orders left join i in r.items on
+p` — yields a row for an order none of whose items satisfy `p`. That
+is exactly what §3.4 says a `left` join does, so it needs no special
+device: the right input is evaluated per left element, and where it
+yields nothing the join still emits a row with `$1` absent.
 
 ### 3.4 Two inputs
 
 | Constructor | Arguments | Element type | Scope |
 | --- | --- | --- | --- |
-| `join` | kind ∈ {inner, left, right, full}, `cond : bool`, yield `e` | type of `e` | `$0` (left element), `$1` (right element) |
+| `join` | kind ∈ {inner, left, right, full}, binder `v` (optional), `cond : bool`, yield `e` | type of `e` | `$0` (left element), `$1` (right element); `v` names the left element in the right input (§3.3) |
 | `union`, `intersect`, `except` | `r₀ … rₙ`, `distinct : bool` | `τ₀` | — |
 
 For an outer join the absent side is an `option`, which transcribes
@@ -274,8 +282,7 @@ are transcribed from current step behavior, not redesigned; the
 | --- | --- | --- |
 | leaf `e` | kind of `e` | — |
 | `filter`, `project`, `skip`, `take`, `ifEmpty` | kind of input | `from i in [1,2] where i > 1` is a `list` |
-| `projectMany` | `list` if the input is a `list` and the lambda's body is a `list`, else `bag` | `from i in [1,2,3], j in bag [i]` is a `bag` |
-| `join` | `list` if both inputs are `list`, else `bag` | as above (a join is a nested loop) |
+| `join` | `list` if both inputs are `list`, else `bag` | `from i in [1,2,3], j in bag [i]` is a `bag` (a join is a nested loop) |
 | `group` | kind of input | `from i in [1,2,3] group j = i` is a `list` |
 | `sort` | `list` | — |
 | `unorder` | `bag` | — |
@@ -294,12 +301,14 @@ place to look when a rule is wrong.
 1. **Types.** Every expression type-checks in the scope §2 gives it.
    Every node's element type is the type §3 derives. Set-operator
    inputs agree. `filter` and `join` conditions are `bool`; `skip`
-   and `take` arguments are `int`; a `projectMany` body has a
-   collection type.
+   and `take` arguments are `int`.
 2. **Kinds.** Every node's kind is the kind §4 derives.
 3. **Scope.** No `$0` outside a node that binds it, no `$1` outside a
    `join`, neither in a `skip` or `take` argument, and no free
-   variable other than those and the enclosing environment's.
+   variable other than those and the enclosing environment's. A
+   join's binder is in scope in its right input only: an occurrence
+   in its condition or its yield is ill-formed, and so is one in a
+   join that has no binder.
 4. **Labels.** Within one node, output labels are distinct: the
    fields of a `project` or `join` yield record, and the keys and
    aggregates of a `group`.
@@ -331,7 +340,7 @@ that is `$0`) are omitted.
 plan     ::= node
 node     ::= indent op arg* '\n' node*
            | indent exp '\n'                    -- a leaf
-op       ::= 'filter' | 'project' | 'projectMany' | 'ifEmpty'
+op       ::= 'filter' | 'project' | 'ifEmpty'
            | 'join' | 'group' | 'sort' | 'unorder'
            | 'skip' | 'take' | 'union' | 'intersect' | 'except'
 arg      ::= '[' exp ']' | '[' label '=' exp (',' label '=' exp)* ']'
@@ -400,19 +409,16 @@ from d in scott.depts, e in d.emps where e.sal > 1000 yield {d, e}
 ```
 
 ```
-projectMany
+join [d] [{d = $0, e = $1}]
   scott.depts
-  fn d =>
-    project [{d = d, e = $0}]
-      filter [#sal $0 > 1000]
-        d.emps
+  filter [#sal $0 > 1000]
+    #emps d
 ```
 
-*Review.* A lambda whose body is a tree cannot print inside brackets
-on the operator's line and stay readable, so `projectMany` prints its
-input as its first child, then a `fn v =>` header, then the body as a
-further-indented child — a node if the body is a node, a leaf line if
-it is a plain expression such as `d.emps`.
+The binder prints as an argument, before the condition and the yield,
+and is omitted when the join has none. Its two inputs are its two
+children, as any join's are; there is no lambda header, because the
+right input is an ordinary input rather than the body of a function.
 
 Group:
 
