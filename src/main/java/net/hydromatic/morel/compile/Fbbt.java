@@ -266,7 +266,11 @@ class Fbbt {
      * whether the interval actually tightened.
      */
     boolean tighten(Core.NamedPat pat, ImmutableRangeSet<BigDecimal> rangeSet) {
-      if (!knows(pat)) {
+      // Track any numeric variable, not only the ones whose bounds we are
+      // deducing: a variable that a scan bound, such as 'z' in
+      // 'from z in [1, 2, 3], x where x < z', tells us about its neighbours
+      // even though it needs no bounds itself.
+      if (!isNumeric(pat.type)) {
         return false;
       }
       final ImmutableRangeSet<BigDecimal> current = get(pat);
@@ -311,6 +315,10 @@ class Fbbt {
           new ArrayList<>(intervals.keySet());
       sortedPats.sort(Comparator.comparing(p -> p.name));
       for (Core.NamedPat pat : sortedPats) {
+        if (!pats.contains(pat)) {
+          // A variable that a scan bound. It needs no bounds of its own.
+          continue;
+        }
         final ImmutableRangeSet<BigDecimal> finalRs =
             requireNonNull(intervals.get(pat));
         if (finalRs.isEmpty()) {
@@ -786,9 +794,6 @@ class Fbbt {
     /** Tightens {@code pat}'s interval by {@code pat OP constant}. */
     private static boolean tightenFromConstant(
         State state, Core.NamedPat pat, BuiltIn op, BigDecimal constant) {
-      if (!state.knows(pat)) {
-        return false;
-      }
       return state.tighten(pat, rangeFromOp(op, constant));
     }
 

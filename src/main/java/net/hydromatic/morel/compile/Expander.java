@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.compile.Generators.maybeGenerator;
 import static net.hydromatic.morel.util.Static.append;
@@ -31,12 +32,14 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
+import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,8 +50,10 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
+import org.jspecify.annotations.Nullable;
 
 /** Expands generators. */
 public class Expander {
@@ -76,7 +81,8 @@ public class Expander {
     // extractor (below) then picks them up as finite generators.
     from = applyFbbt(typeSystem, from);
 
-    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
+    final Generators.Cache cache =
+        new Generators.Cache(typeSystem, env, extentPats(from));
     final Expander expander = new Expander(cache, ImmutableList.of());
 
     // First, deduce generators.
@@ -129,6 +135,70 @@ public class Expander {
   }
 
   /**
+   * If {@code scan} iterates over a list of numeric literals, adds conjuncts
+   * for the least and the greatest of them to {@code bounds}.
+   */
+  private static void listBounds(
+      TypeSystem typeSystem, Core.Scan scan, List<Core.Exp> bounds) {
+    if (!(scan.pat instanceof Core.NamedPat)
+        || !scan.exp.isCallTo(BuiltIn.Z_LIST)) {
+      return;
+    }
+    final Core.NamedPat pat = (Core.NamedPat) scan.pat;
+    if (pat.type != PrimitiveType.INT && pat.type != PrimitiveType.REAL) {
+      return;
+    }
+    final Core.Exp arg = ((Core.Apply) scan.exp).arg;
+    if (arg.op != Op.TUPLE) {
+      return;
+    }
+    final List<Core.Exp> elements = ((Core.Tuple) arg).args;
+    if (elements.isEmpty()) {
+      return;
+    }
+    BigDecimal min = null;
+    BigDecimal max = null;
+    for (Core.Exp element : elements) {
+      final Core.@Nullable Literal literal = Bounds.numericLiteral(element);
+      if (literal == null) {
+        // Not a constant, so we know nothing about the range.
+        return;
+      }
+      final BigDecimal value = literal.unwrap(BigDecimal.class);
+      min = min == null || value.compareTo(min) < 0 ? value : min;
+      max = max == null || value.compareTo(max) > 0 ? value : max;
+    }
+    final Core.Exp id = core.id(pat);
+    bounds.add(
+        core.greaterThanOrEqualTo(
+            typeSystem,
+            id,
+            core.literal((PrimitiveType) pat.type, requireNonNull(min))));
+    bounds.add(
+        core.call(
+            typeSystem,
+            BuiltIn.OP_LE,
+            PrimitiveType.BOOL,
+            Pos.ZERO,
+            id,
+            core.literal((PrimitiveType) pat.type, requireNonNull(max))));
+  }
+
+  /** Returns the patterns of {@code from}'s extent scans. */
+  private static Set<Core.NamedPat> extentPats(Core.From from) {
+    final Set<Core.NamedPat> pats = new LinkedHashSet<>();
+    for (Core.FromStep step : from.steps) {
+      if (step.op == Op.SCAN) {
+        final Core.Scan scan = (Core.Scan) step;
+        if (scan.exp.isExtent()) {
+          pats.addAll(scan.pat.expand());
+        }
+      }
+    }
+    return pats;
+  }
+
+  /**
    * Runs FBBT over each {@code where} step in {@code from}, strengthening its
    * expression with newly-deduced bounds on the in-scope unbounded patterns.
    * Returns the original {@code from} if FBBT made no progress.
@@ -156,6 +226,12 @@ public class Expander {
           if (info != null) {
             unboundedPats.add(info.pat);
             rangeImpliedBounds.add(info.boundExp(typeSystem));
+          } else {
+            // A scan over a list of numbers, such as 'z in [1, 2, 3]', bounds
+            // 'z'. FBBT needs to see those bounds, because they may bound
+            // another variable: 'z' bounds 'x' in
+            // 'from z in [1, 2, 3], x, y where x + y = z'.
+            listBounds(typeSystem, scan, rangeImpliedBounds);
           }
         }
       }
