@@ -304,10 +304,19 @@ that only show up in the rest of the system.
   ordinary join. Nothing above or below it changes.
 
 What survives from the old argument is its best part. Dependence is
-still not a mode of the node: the binder is a scoping device that may
-be present and unread, and dependence is a free occurrence of it,
-which the validator sees and a rule can guard on. No metadata records
-it, and no correlation counter exists.
+still not a mode of the node: the binder is a scoping device, and
+dependence is a free occurrence of it, which the validator sees and a
+rule can guard on. No metadata records it, and no correlation counter
+exists.
+
+And because an independent join is the better node — commutable,
+reassociable, executable by something other than a nested loop — the
+builder drops a binder the right input does not read. Decorrelation
+is thereby paid at construction rather than deferred to a pass, and a
+caller may offer a binder speculatively, before it knows whether the
+right input will use it. That is only possible because dropping the
+binder is the whole of decorrelation; under `projectMany` there was
+no equivalent, because the constructor itself had to change.
 
 **The outer apply comes for free.** The old design needed `ifEmpty`
 inside the lambda, because flat-map has no element to map when the
