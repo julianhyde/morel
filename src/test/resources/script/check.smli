@@ -209,6 +209,13 @@ i as nat as int;
 (i : int) as nat;
 > val it = 5 : nat
 
+(* Every conversion in a chain is checked, so widening at the end does not
+ * excuse a narrowing before it that fails. The position blames the
+ * conversion that raised, not the whole expression. *)
+~1 as nat as int;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.1-1.10
+
 (* A conversion between types with different erasures is an ordinary type
  * error, reported by the unifier without any constraint reasoning. *)
 "abc" as nat;
