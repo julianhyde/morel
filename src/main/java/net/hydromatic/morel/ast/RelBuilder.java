@@ -73,6 +73,11 @@ public class RelBuilder {
   public enum Simp {
     /** Drops {@code filter true}. */
     FILTER_TRUE,
+    /**
+     * Drops a join's binder when its right input does not read it, making a
+     * dependent join independent.
+     */
+    JOIN_INDEPENDENT,
     /** Combines a filter over a filter into one conjunction. */
     FILTER_MERGE,
     /** Drops a projection whose expression is its input's element. */
@@ -492,6 +497,18 @@ public class RelBuilder {
     final Frame right = pop();
     final Frame left = pop();
     arity = 1;
+    if (on(Simp.JOIN_INDEPENDENT)
+        && binder != null
+        && !references(right.rel, binder)) {
+      // An independent join is far preferable to a dependent one -- it can be
+      // commuted, reassociated, and executed by something other than a nested
+      // loop -- and a binder nothing reads is what makes the difference
+      // between them, so it goes. This is the decorrelation rule, applied
+      // where the tree is built rather than waiting for a pass to notice: a
+      // caller can offer a binder without first knowing whether the right
+      // input will use it.
+      binder = null;
+    }
     return push(
         core.join(
             typeSystem,
@@ -501,6 +518,26 @@ public class RelBuilder {
             right.rel,
             condition,
             yieldExp));
+  }
+
+  /**
+   * Returns whether an expression has a free occurrence of a binder.
+   *
+   * <p>The walk does not stop at a nested node: the binder is an ordinary name,
+   * and a nested tree rebinds {@code $0} but does not shield a name.
+   */
+  private static boolean references(Core.Exp exp, Core.IdPat binder) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (id.idPat.equals(binder)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
   }
 
   /**

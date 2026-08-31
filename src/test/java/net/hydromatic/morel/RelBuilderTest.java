@@ -212,6 +212,69 @@ public class RelBuilderTest {
   }
 
   /**
+   * Tests {@link RelBuilder.Simp#JOIN_INDEPENDENT}: a binder the right input
+   * does not read makes no join dependent, so it goes, and what is left is an
+   * independent join with a condition.
+   */
+  @Test
+  void testJoinIndependent() {
+    final Fixture f = new Fixture();
+    // The right input reads nothing of the left, though a binder is offered.
+    assertThat(
+        f.plan(offeredBinder(f, RelBuilder.Simp.NONE)),
+        is(
+            "join [i] [$0 = $1] [$0]\n" //
+                + "  [1, 2]\n"
+                + "  [1, 2]\n"));
+    assertThat(
+        f.plan(offeredBinder(f, RelBuilder.Simp.ALL)),
+        is(
+            "join [$0 = $1] [$0]\n" //
+                + "  [1, 2]\n"
+                + "  [1, 2]\n"));
+  }
+
+  private static Core.Exp offeredBinder(Fixture f, Set<RelBuilder.Simp> simps) {
+    final RelBuilder b = f.builder(simps);
+    b.push("i", f.list12);
+    final Core.IdPat binder = b.binder("i");
+    b.push(f.list12).pair();
+    return b.join(
+            Core.Rel.JoinType.INNER,
+            binder,
+            core.equal(f.typeSystem, b.input(0), b.input(1)),
+            b.input(0))
+        .build();
+  }
+
+  /**
+   * Tests that a binder the right input <em>does</em> read is kept, so the join
+   * stays dependent.
+   */
+  @Test
+  void testJoinStaysDependentWhenRead() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(RelBuilder.Simp.ALL);
+    b.push("e", f.emps);
+    final Core.IdPat binder = b.binder("e");
+    b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
+    b.pair();
+    final Core.Exp rel =
+        b.join(
+                Core.Rel.JoinType.INNER,
+                binder,
+                core.boolLiteral(true),
+                b.input(1))
+            .build();
+    assertThat(
+        f.plan(rel),
+        is(
+            "join [e] [$1]\n" //
+                + "  [{deptno = 10}, {deptno = 20}]\n"
+                + "  [#deptno e]\n"));
+  }
+
+  /**
    * Tests that the validator rejects a binder read from the condition or the
    * yield, where {@code $0} and {@code $1} are what a join says.
    */
