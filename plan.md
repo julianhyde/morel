@@ -401,12 +401,24 @@ something settled — §8's principle, applied to the sequence itself.
       a fifth time in the resolver, where `withStepEnv(fromBuilder
       .stepEnv())` reassembles it on every step to set `current`.
 
-      Scoping and name resolution stay with the resolver, which gets
-      smaller: `current` stops being derived from bindings and
-      becomes the element expression, `$0`. Whether the builder
-      simplifies at all is left open on purpose — `filter true`
-      belongs to step 4's rules, and deciding otherwise now is how
-      `FromBuilder` grew.
+      So the builder does three things: keeps a **stack** of
+      relational expressions, which a node takes its inputs from and
+      leaves its result on; keeps a **name map**, so that `e` names
+      input #1 and `deptno` its second field; and **simplifies**,
+      through an `EnumSet` in which each simplification is named and
+      can be switched off. Node construction, type and kind
+      derivation and validation stay in `CoreBuilder`; scoping and
+      name resolution stay with the resolver, which gets smaller,
+      because `current` stops being derived from bindings and falls
+      out of the name map.
+
+      The `EnumSet` is what keeps this from being `FromBuilder`
+      again: its simplifications were unconditional, entangled with
+      the scope bookkeeping, and set in one method to be applied in
+      another. Named and switchable, they are none of those, and an
+      empty set makes the builder a pure constructor — so the same
+      query can be built twice and the two compared, which is a
+      sharper test than a golden file.
 
 ## Step 3 — Flip observability
 

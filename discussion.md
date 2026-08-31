@@ -488,15 +488,27 @@ record, and stores it as `Resolver.current`. That is what the user's
 reads. So the resolver asks the builder for a binding list in order to
 rebuild a row that the builder could have handed it.
 
-**Resolution: the builder owns the element expression, and nothing
-else that `CoreBuilder` does not already own.** Node construction,
-type and kind derivation and validation stay where they are. The
-builder adds the bookkeeping that three passes have each reinvented,
-so that "what is this node's element, as an expression" is answered in
-one place. Scoping and name resolution stay with the resolver, which
-gets *smaller* rather than larger: `current` stops being derived from
-bindings on every step and becomes the element expression the builder
-is already carrying — `$0` at the top of a step's expressions.
+**Resolution: the builder does three things.**
+
+1. **A stack of relational expressions.** A node takes its inputs
+   from the stack and leaves its result there. `FromBuilder` had a
+   linear `steps` list because a step list is linear; a tree needs
+   the stack, and it is what makes an n-ary set operator or a join
+   ordinary rather than special.
+2. **A name map.** Names resolve to a path into an input: `e` is
+   input #1, `deptno` is its second field. This is the
+   element-expression bookkeeping, in the form that actually spans
+   two inputs — `RelTranslator.access` is the same map for one.
+   `current` falls out of it, which is why the resolver stops
+   reassembling a row from bindings.
+3. **Simplification, gated by an `EnumSet`.** Each simplification is
+   named and can be switched off, individually or all at once.
+
+Node construction, type and kind derivation and validation stay in
+`CoreBuilder`. Scoping and name resolution stay with the resolver,
+which gets *smaller* rather than larger: `current` stops being
+derived from bindings on every step and becomes what the name map
+already knows.
 
 That also fixes the interface to aim for. Today the resolver asks
 "what is in scope?" and reconstructs a row; afterwards it asks "what
@@ -507,7 +519,18 @@ hidden again, so that the row the user sees is not the row the step
 list carries — and they go when the row is a value rather than a
 reassembly.
 
-Deliberately not decided here: whether the builder should simplify at
-all. `CoreBuilder`'s `Rel` methods do not, and the rule framework of
-step 4 is where a `filter true` ought to go. Building that in now
-would be `FromBuilder`'s history repeating.
+On the third: the fear was `FromBuilder`'s history repeating, and the
+`EnumSet` is what prevents it. `FromBuilder`'s trouble was never that
+it simplified; it was that the simplifications were unconditional,
+entangled with the scope bookkeeping, and undiscoverable — three
+position-dependent index fields, set in one method and applied in
+another. A named, individually switchable set is none of those. It
+also buys an oracle: with the set empty the builder is a pure
+constructor, so the same query can be built twice and the two
+compared, which is a sharper test than a golden file.
+
+Where a simplification belongs is still a real question, and the
+`EnumSet` defers rather than settles it. A rewrite that step 4's
+framework will express as a rule should end up there; what stays in
+the builder is what is cheaper to not build than to build and then
+remove.
