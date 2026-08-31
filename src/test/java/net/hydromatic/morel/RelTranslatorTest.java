@@ -156,6 +156,27 @@ public class RelTranslatorTest {
   }
 
   /**
+   * Tests the one pattern that still needs a {@code case}: a user datatype's
+   * constructor.
+   *
+   * <p>Its test is expressible as an expression, but extracting what it binds
+   * is not -- there is no total accessor for a constructor's argument, and no
+   * value to give the branch that does not match. So it stays a dependent join
+   * whose right input yields one element where the pattern matches and none
+   * where it does not. The list datatype escapes this because {@code null},
+   * {@code hd} and {@code tl} are exactly the accessors it lacks.
+   */
+  @Test
+  void testConstructorPattern() {
+    assertThat(
+        plan("from (SOME i) in [SOME 1, NONE] yield i"),
+        is(
+            "join [v$0] [$1]\n" //
+                + "  [SOME 1, NONE]\n"
+                + "  case v$0 of SOME(i) => [i] | _ => []\n"));
+  }
+
+  /**
    * Tests {@code group}, {@code order}, {@code skip} and {@code take}.
    *
    * <p>The identity projection over the group is the {@code yield i} that the
