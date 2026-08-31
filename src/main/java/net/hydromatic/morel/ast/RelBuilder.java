@@ -524,7 +524,43 @@ public class RelBuilder {
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
     final Frame frame = pop();
-    return push(core.group(typeSystem, frame.rel, keys, aggregates));
+    final Core.Exp rel = core.group(typeSystem, frame.rel, keys, aggregates);
+    final List<String> labels = new ArrayList<>(keys.keySet());
+    labels.addAll(aggregates.keySet());
+    return push(new Frame(rel, labelNames(rel, labels)));
+  }
+
+  /**
+   * Projects the top of the stack, naming the element.
+   *
+   * <p>An atomizing yield -- {@code yield e.deptno} -- makes the element a bare
+   * value, which has no fields to take names from, but the query still refers
+   * to it by the name the yield gave it.
+   */
+  public RelBuilder project(String name, Core.Exp exp) {
+    project(exp);
+    final Frame frame = pop();
+    return push(
+        new Frame(
+            frame.rel,
+            elementNames(
+                frame.rel,
+                ImmutableMap.of(
+                    name, core.input0(frame.rel.type.elementType())))));
+  }
+
+  /**
+   * Returns the names for a node whose element is described by labels: one name
+   * per label, or, where there is exactly one, that label naming the whole
+   * element, because the element type atomizes to its bare type.
+   */
+  private ImmutableMap<String, Core.Exp> labelNames(
+      Core.Exp rel, List<String> labels) {
+    if (labels.size() == 1) {
+      return ImmutableMap.of(
+          labels.get(0), core.input0(rel.type.elementType()));
+    }
+    return elementNames(rel, ImmutableMap.of());
   }
 
   /**
