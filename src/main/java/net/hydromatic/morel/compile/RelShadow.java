@@ -22,6 +22,7 @@ import static java.lang.String.format;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.TypeSystem;
@@ -48,8 +49,45 @@ public class RelShadow {
   private static final AtomicInteger DECLINED = new AtomicInteger();
   private static final AtomicInteger GROUNDING_AGREED = new AtomicInteger();
   private static final AtomicInteger GROUNDING_UNEXAMINED = new AtomicInteger();
+  private static final AtomicInteger REBUILT = new AtomicInteger();
 
   private RelShadow() {}
+
+  /**
+   * Checks that {@link RelBuilder} can express a tree exactly.
+   *
+   * <p>Rebuilt with no simplification, the tree must come back as it went in.
+   * That is the precondition for anything depending on the builder -- the
+   * resolver, when it builds trees natively -- and it is worth asserting on
+   * every query rather than on the handful a unit test can write by hand,
+   * because the shapes that break a builder are the ones nobody thinks to
+   * write: an atomizing yield, an outer join whose absent side has several
+   * binders, a set operator over three inputs.
+   */
+  private static void checkBuildable(TypeSystem typeSystem, Core.Exp tree) {
+    final Core.Exp rebuilt;
+    try {
+      rebuilt = RelBuilder.rebuild(typeSystem, tree, RelBuilder.Simp.NONE);
+    } catch (RuntimeException e) {
+      throw new AssertionError("builder cannot express: " + tree, e);
+    }
+    if (!describe(rebuilt).equals(describe(tree))) {
+      throw new AssertionError(
+          format(
+              "builder rebuilt a different tree%nfrom: %s%n  to: %s",
+              describe(tree), describe(rebuilt)));
+    }
+    REBUILT.incrementAndGet();
+  }
+
+  private static String describe(Core.Exp exp) {
+    return exp instanceof Core.Rel ? ((Core.Rel) exp).describe() : exp + "\n";
+  }
+
+  /** Returns how many trees the builder was asked to express. */
+  public static int rebuiltCount() {
+    return REBUILT.get();
+  }
 
   /**
    * Returns the number of queries translated so far, for tests that want to
@@ -270,6 +308,7 @@ public class RelShadow {
     }
     if (exp instanceof Core.Rel) {
       RelValidator.checkValid(typeSystem, (Core.Rel) exp);
+      checkBuildable(typeSystem, exp);
     }
     final Core.Exp lowered;
     try {
