@@ -24,11 +24,14 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.RelValidator;
@@ -143,7 +146,9 @@ public class RelBuilderTest {
     final Core.Exp rel = b.push(f.emps).project(b.name("deptno")).build();
     assertThat(
         f.plan(rel),
-        is("project [#deptno $0]\n" + "  [{deptno = 10}, {deptno = 20}]\n"));
+        is(
+            "project [#deptno $0]\n" //
+                + "  [{deptno = 10}, {deptno = 20}]\n"));
   }
 
   /**
@@ -350,6 +355,70 @@ public class RelBuilderTest {
     assertThat(
         twoFilters(f, RelBuilder.Simp.NONE).type,
         is(twoFilters(f, RelBuilder.Simp.ALL).type));
+  }
+
+  /**
+   * Tests that a scan's pattern is erased into one name per binder, each mapped
+   * to the path that reads it out of the element.
+   */
+  @Test
+  void testPushPattern() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    final Core.Pat pat =
+        core.tuplePat(
+            f.typeSystem,
+            ImmutableList.of(
+                core.idPat(PrimitiveType.INT, "a", 0),
+                core.idPat(PrimitiveType.INT, "b", 0)));
+    final Core.Exp pairs =
+        core.list(
+            f.typeSystem,
+            core.tuple(f.typeSystem, f.intLiteral(1), f.intLiteral(2)));
+    final Core.Exp rel =
+        b.push(pat, pairs)
+            .filter(core.greaterThan(f.typeSystem, b.name("b"), b.name("a")))
+            .build();
+    assertThat(
+        f.plan(rel),
+        is(
+            "filter [#2 $0 > #1 $0]\n" //
+                + "  [(1, 2)]\n"));
+  }
+
+  /**
+   * Tests that a pattern which can fail to match is refused, because such a
+   * pattern also filters and so cannot simply be erased.
+   */
+  @Test
+  void testFailablePatternRefused() {
+    final Core.Pat idPat = core.idPat(PrimitiveType.INT, "a", 0);
+    final Core.Pat literalPat =
+        core.literalPat(Op.INT_LITERAL_PAT, PrimitiveType.INT, BigDecimal.ONE);
+    assertThat(RelBuilder.destructurable(idPat), is(true));
+    assertThat(RelBuilder.destructurable(literalPat), is(false));
+  }
+
+  /**
+   * Tests {@code projectMany}, which is what a scan that reads an earlier
+   * binder becomes: the lambda's parameter names the enclosing element, because
+   * the body is a tree of its own and its {@code $0} is its own.
+   */
+  @Test
+  void testProjectMany() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(RelBuilder.Simp.NONE);
+    b.push("i", f.list12);
+    final Core.IdPat param = b.param("i");
+    final Core.Exp body = core.list(f.typeSystem, core.id(param));
+    final Core.Exp rel = b.projectMany(param, body).build();
+    assertThat(
+        f.plan(rel),
+        is(
+            "projectMany\n" //
+                + "  [1, 2]\n"
+                + "  fn i =>\n"
+                + "    [i]\n"));
   }
 
   /** Tests {@code group}, whose element is a record of keys and aggregates. */
