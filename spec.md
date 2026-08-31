@@ -186,12 +186,24 @@ rebinds `$0`. The condition and the yield are over `$0` and `$1`, as
 in any join.
 
 **Dependence is still not a mode of the node.** The binder is a
-scoping device, not a flag: it may be present and unread. Dependence
-is a free occurrence of the binder in the right input, which the
-validator sees and a rule can guard on. Decorrelation is therefore
-*dropping the binder* — when nothing in the right input mentions it,
-the join is an ordinary join and the name goes — rather than
-rewriting one constructor into another.
+scoping device, not a flag. Dependence is a free occurrence of the
+binder in the right input, which the validator sees and a rule can
+guard on. Decorrelation is therefore *dropping the binder* — when
+nothing in the right input mentions it, the join is an ordinary join
+and the name goes — rather than rewriting one constructor into
+another.
+
+**An independent join is preferable, so the binder does not survive
+being unread.** A dependent join must be executed as a nested loop,
+and cannot be commuted or reassociated freely; an independent one can
+be, and has an ordinary condition (`true` where the query wants a
+cross join). So a builder that is offered a binder the right input
+does not read drops it, and a caller may offer one without first
+knowing whether it will be used. The datatype still permits an unread
+binder, because a rewrite may transiently strip the last reference,
+but nothing that a builder produces has one — which makes `binder !=
+null` a reliable test for dependence, and keeps two trees that mean
+the same thing from printing differently.
 
 **A scan translates the same way whether or not anything reads both
 sides.** `yieldAll` is a dependent join followed by a projection that
