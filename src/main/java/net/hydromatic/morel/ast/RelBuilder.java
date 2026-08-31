@@ -525,9 +525,9 @@ public class RelBuilder {
       SortedMap<String, Core.Aggregate> aggregates) {
     final Frame frame = pop();
     final Core.Exp rel = core.group(typeSystem, frame.rel, keys, aggregates);
-    final List<String> labels = new ArrayList<>(keys.keySet());
-    labels.addAll(aggregates.keySet());
-    return push(new Frame(rel, labelNames(rel, labels)));
+    // A group's element is a record of its labels, whether there is one label
+    // or many, so the names come off its fields like any other node's.
+    return push(rel);
   }
 
   /**
@@ -547,20 +547,6 @@ public class RelBuilder {
                 frame.rel,
                 ImmutableMap.of(
                     name, core.input0(frame.rel.type.elementType())))));
-  }
-
-  /**
-   * Returns the names for a node whose element is described by labels: one name
-   * per label, or, where there is exactly one, that label naming the whole
-   * element, because the element type atomizes to its bare type.
-   */
-  private ImmutableMap<String, Core.Exp> labelNames(
-      Core.Exp rel, List<String> labels) {
-    if (labels.size() == 1) {
-      return ImmutableMap.of(
-          labels.get(0), core.input0(rel.type.elementType()));
-    }
-    return elementNames(rel, ImmutableMap.of());
   }
 
   /**

@@ -171,8 +171,10 @@ public class RelLowerer {
                     aggregate.argument == null
                         ? null
                         : subst(aggregate.argument, element, null))));
-    final boolean atom = groupExps.size() + aggregates.size() == 1;
-    fromBuilder.group(atom, groupExps, aggregates);
+    // Never an atom: the tree's group builds a record whether it has one
+    // label or many (discussion.md §14), so the step list must carry the same
+    // record, or the lowered form has a different type from the tree.
+    fromBuilder.group(false, groupExps, aggregates);
     return naturalElement(fromBuilder);
   }
 
