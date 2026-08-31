@@ -537,6 +537,13 @@ also buys an oracle: with the set empty the builder is a pure
 constructor, so the same query can be built twice and the two
 compared, which is a sharper test than a golden file.
 
+Measured, on the 1,852 trees the script suite translates: 154 of them
+change under the full set, and 162 nodes go — so about one in twelve
+queries is simplified, and almost every one that is loses exactly one
+node. Small, which is the right size. A set that rewrote most trees
+would be doing the rule framework's work in the constructor, and one
+that rewrote none would not be worth the switch.
+
 Where a simplification belongs is still a real question, and the
 `EnumSet` defers rather than settles it. A rewrite that step 4's
 framework will express as a rule should end up there; what stays in
