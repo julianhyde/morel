@@ -137,16 +137,17 @@ something settled — §8's principle, applied to the sequence itself.
       constructor, whose argument has no total accessor: `::` and
       `[]` escape through `null`, `hd`, `tl`, `nth` and `length`,
       which are exactly the accessors a datatype lacks.
-- [ ] Trees have no atoms (discussion.md §14). `group` builds a record
+- [x] Trees have no atoms (discussion.md §14). `group` builds a record
       whether it has one label or many, and the conversion to a bare
       value is a `map` of a record selector outside the tree, as
       `compute`'s extraction is an `only` outside it. Narrower than
       it first looked: a single *binding* naming the element is not
       atomization, so nothing changes for `from i in [1,2,3] where i
       > 1`, and `Core.StepEnv.atom` goes with the step list at the
-      flip rather than here. Decide before step 3 freezes the plan
-      text, because the queries that do atomize gain a record and an
-      apply.
+      flip rather than here. Done, for two lines and a deletion: the
+      projection that turns the record into the query's bare value is
+      one `normalize` was already inserting, so no boundary operator
+      was needed.
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once. A round trip cannot be the flip, because it
       perturbs Core shapes that other machinery reads, and no care in

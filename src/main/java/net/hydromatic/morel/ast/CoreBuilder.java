@@ -939,9 +939,15 @@ public enum CoreBuilder {
               "duplicate label in group keys %s and aggregates %s",
               keys.keySet(), aggregates.keySet()));
     }
+    // A record whether there is one label or many. Collapsing a one-label
+    // element to its bare type would make the element's *shape* depend on how
+    // many labels there are, so a rule that drops one of two labels would
+    // change the shape and nothing above it would rewrite locally
+    // (discussion.md §14). Where the query wants the bare value, an ordinary
+    // projection of the field says so, and a projection is a node a rule can
+    // see.
     final Type elementType =
-        typeSystem.recordOrScalarType(
-            ImmutableSortedMap.copyOf(nameTypes, ORDERING).entrySet());
+        typeSystem.recordType(ImmutableSortedMap.copyOf(nameTypes, ORDERING));
     final Type type = collectionType(typeSystem, isOrdered(input), elementType);
     return new Core.Group(
         type,
