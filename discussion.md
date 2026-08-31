@@ -620,3 +620,19 @@ Consequences to plan for:
 * `atom` goes when the name map replaces `StepEnv`, which is the
   flip, not this. Until then the two coexist: the flag stays
   step-side, and the tree simply stops having the case.
+
+Done, and it cost two lines and a deletion. `CoreBuilder.group` builds
+a record; `RelLowerer` tells `FromBuilder` the group is not an atom,
+so the lowered step list carries the same record; and the projection
+that turns the record into the query's bare value is one the
+translation was already inserting, because `normalize` adds a
+projection wherever a node's element differs from what the bindings
+describe. No boundary operator was needed after all -- the `map`
+outside the tree that this section argued for is, in the translator's
+hands, an ordinary `project [#j $0]` inside it, which is better,
+because a projection is a node a rule can see and move.
+
+The `map` is still the right answer where a tree is *given* rather
+than built from a query -- a rule that rewrites a root, or an
+implementation reading frozen plan text -- and the point stands that
+it is elementwise, not an aggregate.
