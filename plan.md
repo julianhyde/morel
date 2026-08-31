@@ -107,6 +107,16 @@ something settled — §8's principle, applied to the sequence itself.
       permutes fields, an atomizing yield, a failable pattern whose
       scan condition kept a dangling reference, and a projection
       containing `ordinal` deferred past the step that counts rows.
+- [ ] Replace `projectMany` with a dependent join: a `join` that
+      carries a binder its right input may read, plus an ordinary
+      `project` where only the inner elements are wanted. One node
+      instead of two operations fused, `$0` meaning the same thing at
+      every node, decorrelation reduced to dropping the binder, and
+      the outer apply falling out of `join [left]` rather than
+      needing `ifEmpty` inside a lambda. spec.md §3.3 and
+      discussion.md §8 are rewritten; the narrative above this line
+      predates the change and says `projectMany` where it now means a
+      dependent join.
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once. A round trip cannot be the flip, because it
       perturbs Core shapes that other machinery reads, and no care in
