@@ -149,7 +149,39 @@ something settled — §8's principle, applied to the sequence itself.
       one `normalize` was already inserting, so no boundary operator
       was needed.
 - [ ] The flip proper: the resolver builds trees natively, and the
-      lowering runs once. A round trip cannot be the flip, because it
+      lowering runs once.
+
+      **The shadow cannot be a differential one.** Tried, and backed
+      out. Building the tree natively beside the step list and
+      comparing the two requires converting each step's expressions a
+      second time, and `Resolver.toCore` is not a pure function: run
+      under `assert` beside the real conversion it shifted the global
+      name generator, and then broke real queries outright
+      (a `ClassCastException` in blog.smli, casting a `Core.Apply` to
+      a `Core.Tuple`). A pass that shadows the resolver by re-running
+      it corrupts the pass it shadows.
+
+      That rules out the method the rest of this branch has leaned on,
+      and it is worth knowing before the flip rather than during it.
+      What is left: convert step kinds one at a time, with the *step
+      list* as the fallback for kinds not yet converted, and check by
+      results rather than by comparing trees. Which means the flip is
+      a sequence of small behaviour changes, each verified by the
+      script suite, not a shadow that runs to zero and then a switch.
+
+      Three differences the attempt did surface before it was backed
+      out, all real:
+      * The native path emits an identity projection where the
+        translation drops it -- `PROJECT_IDENTITY`, which the
+        translation gets from `normalize` and the builder would get
+        from its `EnumSet`.
+      * A translated tree carries `FromBuilder`'s normalizations. An
+        inlined subquery is the clearest: the step list flattens
+        `from p in (from q in ...)` and the tree has no reason to, so
+        the two differ and the *tree* is right.
+      * Substituting a name into an expression that contains a nested
+        query puts `$0` where the nested tree rebinds it. spec.md §2
+        rule 3 says a `let` is needed; nothing enforces it yet. A round trip cannot be the flip, because it
       perturbs Core shapes that other machinery reads, and no care in
       the lowering avoids that. Two such readers, and both must move
       to the tree with it:
