@@ -755,7 +755,37 @@ C` nests, so reassociation re-paths every access above. Concatenation
 is flat, which was the reason to look past §7's two options at all.
 
 **Resolution: the join concatenates, and a projection follows where
-the query wants something else.** Not yet done. It should land before
-step 3 freezes the plan text, and it wants §14 settled first, because
-"what a leaf's element is" is the same question §14 answered for
-constructed elements.
+the query wants something else.** Not yet done; §14 is settled, so
+the way is clear. What follows is what a first attempt found, so that
+the second does not have to find it again.
+
+**The path arithmetic.** After the join, a binder's access has to be
+rebased onto the concatenated element. Left components occupy
+positions 1..k where k is `components(left).size()`, and right
+components k+1..k+m, so:
+
+* if an input has one component, its bare reference (`$0` or `$1`)
+  becomes `#i $0` for that component's position;
+* if an input is itself a join, and so has several, `#j $0` becomes
+  `#j $0` — unchanged, because left's components are the prefix — and
+  `#j $1` becomes `#(k+j) $0`.
+
+A binder is never the whole element of a multi-component input, so
+the case that has no expression does not arise.
+
+**The outer join reuses `side` and `optionize`.** The node
+option-wraps each component of the absent side, so a binder that *is*
+a component reads the option-typed component directly, and one that
+is a path within a component still needs `Option.map`. That is the
+same distinction `optionize` already draws; only its base reference
+changes.
+
+**`RelExpander`'s reordering is the hard part, and it is where the
+cost of commute lands.** Its rebuild swaps a join's inputs when the
+right side grounds on its own, and today it absorbs the swap by
+commuting the yield. With no yield there is nothing to absorb it: the
+components change position, so the rewrite must insert a projection
+that permutes them back, or re-path every access above. That is not
+an obstacle to the design — it is the cost this section already
+records — but it is real code in the one place where the tree is
+rewritten today, and it is why this is not a small change.
