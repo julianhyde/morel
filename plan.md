@@ -150,16 +150,22 @@ something settled — §8's principle, applied to the sequence itself.
       was needed.
 - [ ] A join concatenates its inputs' fields, and carries no yield
       (discussion.md §15). Measured: 495 of the 497 join yields the
-      suite builds are pairings that rename without computing, so the
-      yield is general machinery paying for two queries. Records are
-      label-sorted, so concatenation makes commute need no
-      substitution and reassociation no compensating projection --
-      the two rewrites a join planner does most. Costs a projection
-      brings §5's rename convention forward if fields are addressed
-      by label, and is the only one of the three shapes whose outer
-      join needs no `Option.map` in an expression: it gives each
-      field of the absent side its own option, which is Morel's rule
-      (§3.4). Before step 3, and after §14.
+- [ ] A join concatenates its inputs' components, and carries no
+      yield (discussion.md §15). Measured: 495 of the 497 join yields
+      the suite builds are pairings that rename without computing, so
+      the yield is general machinery paying for two queries.
+      Components flatten joins, not records -- a join contributes its
+      own, anything else contributes one -- so `(A ⋈ B) ⋈ C` and `A ⋈
+      (B ⋈ C)` are identical and reassociation is free. Commute is
+      not free: the components are positional, because the labels a
+      yield supplies are the query's binders and the tree has erased
+      them, so commute renumbers and the projection above re-paths.
+      The decisive argument is the outer join: concatenation gives
+      each component of the absent side its own option, which is
+      Morel's rule (§3.4), where a yield needs `Option.map` to
+      express it and a pair needs a projection to distribute it.
+      Before step 3, and after §14.
+
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once.
 
