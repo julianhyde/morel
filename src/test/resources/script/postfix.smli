@@ -293,4 +293,15 @@ let val w : {b:int list} option = NONE in w?.b?.c end;
 > stdIn:1.43-1.47 Error: reference to field c of non-record type int
 >   raised at: stdIn:1.43-1.47
 
+(* A receiver whose type comes only from the function's own type
+ * dispatches like any other. Nothing in the body says what "ds"
+ * is; the annotation on the function does, and the rule's type is
+ * settled before its body is deduced, so the body sees it. *)
+val f = (fn ds => ds.length ()) : {d:int} bag -> int;
+> val f = fn : {d:int} bag -> int
+f (bag [{d=1},{d=2}]);
+> val it = 2 : int
+val g: {d:int} bag -> int = fn ds => ds.length ();
+> val g = fn : {d:int} bag -> int
+
 (*) End postfix.smli
