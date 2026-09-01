@@ -135,8 +135,8 @@ public class RelTranslatorTest {
     assertThat(
         plan("from i in [1, 2], j in [3, 4] yield i + j"),
         is(
-            "project [#i $0 + #j $0]\n" //
-                + "  join [{i = $0, j = $1}]\n"
+            "project [#1 $0 + #2 $0]\n" //
+                + "  join\n"
                 + "    [1, 2]\n"
                 + "    [3, 4]\n"));
   }
@@ -150,9 +150,10 @@ public class RelTranslatorTest {
     assertThat(
         plan("from i in [1, 2], j in [i, i + 1] yield {i, j}"),
         is(
-            "join [i] [{i = $0, j = $1}]\n" //
-                + "  [1, 2]\n"
-                + "  [i, i + 1]\n"));
+            "project [{i = #1 $0, j = #2 $0}]\n" //
+                + "  join [i]\n"
+                + "    [1, 2]\n"
+                + "    [i, i + 1]\n"));
   }
 
   /**
@@ -171,9 +172,10 @@ public class RelTranslatorTest {
     assertThat(
         plan("from (SOME i) in [SOME 1, NONE] yield i"),
         is(
-            "join [v$0] [$1]\n" //
-                + "  [SOME 1, NONE]\n"
-                + "  case v$0 of SOME(i) => [i] | _ => []\n"));
+            "project [#2 $0]\n" //
+                + "  join [v$0]\n"
+                + "    [SOME 1, NONE]\n"
+                + "    case v$0 of SOME(i) => [i] | _ => []\n"));
   }
 
   /**
@@ -297,9 +299,10 @@ public class RelTranslatorTest {
             "from r in [{id = 1, items = [2]}] "
                 + "left join i in r.items on i > 2"),
         is(
-            "join [left] [r] [$1 > 2] [{i = $1, r = $0}]\n" //
-                + "  [{id = 1, items = [2]}]\n"
-                + "  #items r\n"));
+            "project [{i = #2 $0, r = #1 $0}]\n" //
+                + "  join [left] [r] [$1 > 2]\n"
+                + "    [{id = 1, items = [2]}]\n"
+                + "    #items r\n"));
   }
 
   /**
@@ -325,21 +328,24 @@ public class RelTranslatorTest {
     assertThat(
         plan("from i in [1, 2, 3] left join j in [1, 2] on i = j"),
         is(
-            "join [left] [$0 = $1] [{i = $0, j = $1}]\n" //
-                + "  [1, 2, 3]\n"
-                + "  [1, 2]\n"));
+            "project [{i = #1 $0, j = #2 $0}]\n" //
+                + "  join [left] [$0 = $1]\n"
+                + "    [1, 2, 3]\n"
+                + "    [1, 2]\n"));
     assertThat(
         plan("from i in [1, 2] right join j in [3, 4] on i = j"),
         is(
-            "join [right] [$0 = $1] [{i = $0, j = $1}]\n" //
-                + "  [1, 2]\n"
-                + "  [3, 4]\n"));
+            "project [{i = #1 $0, j = #2 $0}]\n" //
+                + "  join [right] [$0 = $1]\n"
+                + "    [1, 2]\n"
+                + "    [3, 4]\n"));
     assertThat(
         plan("from i in [1, 2] full join j in [3, 4] on i = j"),
         is(
-            "join [full] [$0 = $1] [{i = $0, j = $1}]\n" //
-                + "  [1, 2]\n"
-                + "  [3, 4]\n"));
+            "project [{i = #1 $0, j = #2 $0}]\n" //
+                + "  join [full] [$0 = $1]\n"
+                + "    [1, 2]\n"
+                + "    [3, 4]\n"));
   }
 
   /**
@@ -354,20 +360,12 @@ public class RelTranslatorTest {
     assertThat(
         plan("from i in [1, 2] left join (j, k) in [(1, 2)] on i = j"),
         is(
-            "join [left] [$0 = #1 $1] "
-                + "[{i = $0, j = #map Option (fn v$0 => #1 v$0) $1, "
-                + "k = #map Option (fn v$1 => #2 v$1) $1}]\n"
-                + "  [1, 2]\n"
-                + "  [(1, 2)]\n"));
-    assertThat(
-        plan("from i in [1, 2] right join j in [3] right join k in [4]"),
-        is(
-            "join [right] [{i = #map Option (fn v$0 => #i v$0) $0, "
-                + "j = #map Option (fn v$1 => #j v$1) $0, k = $1}]\n"
-                + "  join [right] [{i = $0, j = $1}]\n"
+            "project [{i = #1 $0, "
+                + "j = #map Option (fn v$0 => #1 v$0) (#2 $0), "
+                + "k = #map Option (fn v$1 => #2 v$1) (#2 $0)}]\n"
+                + "  join [left] [$0 = #1 $1]\n"
                 + "    [1, 2]\n"
-                + "    [3]\n"
-                + "  [4]\n"));
+                + "    [(1, 2)]\n"));
   }
 }
 

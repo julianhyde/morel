@@ -112,14 +112,37 @@ public class RelTranslator {
       // Bare 'from' iterates over a single element, which is unit.
       return unitCollection();
     }
+    Core.StepEnv lastEnv = Core.StepEnv.EMPTY;
     for (Core.FromStep step : from.steps) {
       if (!step(step)) {
         return null;
       }
-      normalize(step.env);
+      lastEnv = step.env;
+      if (!deferred) {
+        normalize(step.env);
+      }
+    }
+    if (deferred) {
+      // The root's element is the query's, so the row is needed here even
+      // though no step needed it.
+      normalize(lastEnv);
     }
     return exp;
   }
+
+  /**
+   * Whether the element is a join's components rather than the record the
+   * bindings describe.
+   *
+   * <p>A join's element is its inputs' components (discussion.md §15), which is
+   * not what the query's bindings describe, so normalizing after one would
+   * project -- and a projection between two joins is what stops them nesting,
+   * which is the whole point of concatenating. So the projection waits until
+   * something needs the row: a step that computes its own element, or the root.
+   * Until then the access map carries paths into the components, which is all
+   * any expression needs.
+   */
+  private boolean deferred;
 
   /** Translates one step, returning false if it cannot. */
   private boolean step(Core.FromStep step) {
@@ -147,12 +170,16 @@ public class RelTranslator {
         return true;
 
       case YIELD:
+        // A step that computes its own element ends the deferral: the element
+        // is what it built, not a join's components.
         exp =
             core.project(
                 typeSystem, requireExp(), rewrite(((Core.Yield) step).exp));
+        deferred = false;
         return true;
 
       case GROUP:
+        deferred = false;
         return group((Core.GroupStep) step);
 
       case ORDER:
@@ -176,6 +203,10 @@ public class RelTranslator {
       case UNION:
       case INTERSECT:
       case EXCEPT:
+        // A set operator compares rows, so it needs the row.
+        if (deferred) {
+          normalize(step.env);
+        }
         return setOp((Core.SetStep) step);
 
       default:
@@ -265,41 +296,143 @@ public class RelTranslator {
       return false;
     }
     // The condition sees both elements as they are, because it is evaluated
-    // on candidate pairs; the yield sees an option on a side that an outer
-    // join can leave absent.
+    // on candidate pairs.
     final Map<Core.NamedPat, Core.Exp> condAccess = both(access, rightAccess);
-    final Map<Core.NamedPat, Core.Exp> yieldAccess;
-    if (joinType == Core.Rel.JoinType.INNER) {
-      yieldAccess = condAccess;
-    } else {
-      yieldAccess = new LinkedHashMap<>();
-      if (!side(
-              yieldAccess,
-              access,
-              0,
-              joinType.leftIsOption(),
-              scan.env,
-              left.type.elementType())
-          || !side(
-              yieldAccess,
-              rightAccess,
-              1,
-              joinType.rightIsOption(),
-              scan.env,
-              rightElementType)) {
-        return false;
-      }
-    }
-    exp =
+    final Core.Join join =
         core.join(
             typeSystem,
             joinType,
             binder,
             left,
             right,
-            substitute(scan.condition, condAccess),
-            element(yieldAccess, wanted));
+            substitute(scan.condition, condAccess));
+
+    // The element is the inputs' components in order, so each binder's access
+    // is rebased onto that: left components keep their positions and right
+    // components follow them.
+    final int k = core.componentCount(left);
+    final Map<Core.NamedPat, Core.Exp> access2 = new LinkedHashMap<>();
+    if (!rebase(access2, access, left, 0, 0, joinType.leftIsOption(), join)
+        || !rebase(
+            access2,
+            rightAccess,
+            right,
+            1,
+            k,
+            joinType.rightIsOption(),
+            join)) {
+      return false;
+    }
+    access.clear();
+    access.putAll(access2);
+    patternAccess = true;
+    deferred = true;
+    exp = join;
     return true;
+  }
+
+  /**
+   * Rebases one input's access map onto the join's element.
+   *
+   * <p>An input with one component is the whole of a position, so its bare
+   * reference becomes that field; an input that is itself a join has several,
+   * and its {@code #j} becomes {@code #(offset + j)}. A binder is never the
+   * whole element of a multi-component input, which is why the second case
+   * never has to name a range of fields.
+   *
+   * <p>On a side the join can leave absent the component is option-typed, so a
+   * binder that <em>is</em> a component reads it directly and one that is a
+   * path within a component maps through the option -- the distinction {@link
+   * #optionize} already draws.
+   */
+  private boolean rebase(
+      Map<Core.NamedPat, Core.Exp> target,
+      Map<Core.NamedPat, Core.Exp> source,
+      Core.Exp input,
+      int inputOrdinal,
+      int offset,
+      boolean option,
+      Core.Join join) {
+    final Core.Id element = core.input0(join.type.elementType());
+    final int n = core.componentCount(input);
+    final Core.Id rawRef = core.input(input.type.elementType(), inputOrdinal);
+    for (Map.Entry<Core.NamedPat, Core.Exp> entry : source.entrySet()) {
+      final Core.Exp a = entry.getValue();
+      final Core.Exp rebased;
+      if (n == 1) {
+        final Core.Exp component = core.field(typeSystem, element, offset);
+        System.err.println(
+            "PROBE binder="
+                + entry.getKey().name
+                + " access="
+                + a
+                + " op="
+                + a.op
+                + " option="
+                + option);
+        rebased =
+            option
+                ? optionize(a, rawRef, component, typeSystem.option(a.type))
+                : subst1(a, inputOrdinal, component);
+      } else if (option && !isComponentRef(a, inputOrdinal)) {
+        // Each component of an absent side is option-typed in its own right,
+        // so a binder that *is* a component reads it directly. One that is a
+        // path within a component would have to map through the option, and
+        // is not expressed yet.
+        return false;
+      } else {
+        rebased = shift(a, inputOrdinal, offset, element);
+      }
+      target.put(entry.getKey(), rebased);
+    }
+    return true;
+  }
+
+  /** Returns whether an access is exactly one component of an input. */
+  private static boolean isComponentRef(Core.Exp exp, int inputOrdinal) {
+    if (!(exp instanceof Core.Apply)) {
+      return false;
+    }
+    final Core.Apply apply = (Core.Apply) exp;
+    return apply.fn instanceof Core.RecordSelector
+        && apply.arg.op == Op.ID
+        && ((Core.Id) apply.arg).idPat.name.equals("$" + inputOrdinal);
+  }
+
+  /** Replaces {@code $i} in an expression with another expression. */
+  private Core.Exp subst1(Core.Exp exp, int i, Core.Exp e) {
+    final String name = "$" + i;
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            return id.idPat.name.equals(name) ? core.at(e, id.pos) : id;
+          }
+        });
+  }
+
+  /**
+   * Rewrites {@code #j $i} to {@code #(offset + j) $0}, for an input that is
+   * itself a join and so occupies several of the element's positions. An outer
+   * path survives: a binder inside a component's record reads that component
+   * and then its own field.
+   */
+  private Core.Exp shift(
+      Core.Exp exp, int inputOrdinal, int offset, Core.Id element) {
+    final String name = "$" + inputOrdinal;
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Apply apply) {
+            if (apply.fn instanceof Core.RecordSelector
+                && apply.arg.op == Op.ID
+                && ((Core.Id) apply.arg).idPat.name.equals(name)) {
+              final int j = ((Core.RecordSelector) apply.fn).slot;
+              return core.field(typeSystem, element, offset + j);
+            }
+            return super.visit(apply);
+          }
+        });
   }
 
   /**
@@ -336,14 +469,20 @@ public class RelTranslator {
                     Pos.ZERO,
                     core.wildcardPat(elementType),
                     core.list(typeSystem, element.type, ImmutableList.of()))));
-    return core.join(
+    final Core.Join join =
+        core.join(
+            typeSystem,
+            Core.Rel.JoinType.INNER,
+            param,
+            collection,
+            body,
+            core.boolLiteral(true));
+    // The element is (the collection's element, the matched element); only
+    // the second is wanted, so a projection takes it.
+    return core.project(
         typeSystem,
-        Core.Rel.JoinType.INNER,
-        param,
-        collection,
-        body,
-        core.boolLiteral(true),
-        core.input1(element.type));
+        join,
+        core.field(typeSystem, core.input0(join.type.elementType()), 1));
   }
 
   /**
@@ -391,7 +530,7 @@ public class RelTranslator {
    * {@code k : int option}, not {@code (int * int) option}.
    */
   private Core.Exp optionize(
-      Core.Exp access, Core.Id rawRef, Core.Id optionRef, Type optionType) {
+      Core.Exp access, Core.Id rawRef, Core.Exp optionRef, Type optionType) {
     if (access.op == Op.ID) {
       return optionRef;
     }
@@ -536,6 +675,7 @@ public class RelTranslator {
    * projection; for every other step the node already produces the element.
    */
   private void normalize(Core.StepEnv env) {
+    deferred = false;
     final Type wanted = elementType(env);
     // The element must not only have the right type: the binders must read
     // the right fields of it. A pattern can permute them -- `from {b = a, a =

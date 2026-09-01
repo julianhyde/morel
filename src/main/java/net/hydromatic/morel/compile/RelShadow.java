@@ -298,8 +298,11 @@ public class RelShadow {
       throw new AssertionError("cannot translate to a tree: " + from, e);
     }
     if (exp == null) {
-      DECLINED.incrementAndGet();
-      return;
+      // Step 1 landed with no declines and the invariant has held since: a
+      // query the translator turns down is a query the flip cannot carry.
+      // Asserted here rather than counted, because a count shared by tests
+      // that run in parallel cannot be compared before and after.
+      throw new AssertionError("translator declined: " + from);
     }
     if (!exp.type.equals(from.type)) {
       throw new AssertionError(

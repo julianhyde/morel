@@ -718,8 +718,7 @@ public class Shuttle {
         join.binder,
         join.left.accept(this),
         join.right.accept(this),
-        join.condition.accept(this),
-        join.yieldExp.accept(this));
+        join.condition.accept(this));
   }
 
   protected Core.Group visit(Core.Group group) {
