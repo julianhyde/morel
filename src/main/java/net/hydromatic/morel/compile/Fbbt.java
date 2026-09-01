@@ -80,11 +80,7 @@ class Fbbt {
       ImmutableRangeSet.of(Range.all());
 
   private static final ImmutableList<Propagator> PROPAGATORS =
-      ImmutableList.of(
-          new LinearPropagator(),
-          new SumPropagator(),
-          new AbsPropagator(),
-          new MultiplyPropagator());
+      ImmutableList.of(new SumPropagator(), new MultiplyPropagator());
 
   /**
    * Scale for the division in {@link SumPropagator}, whose result may not
@@ -292,7 +288,7 @@ class Fbbt {
       // First, the bounds that the range extractor can already use, such as
       // 'x > 0'. Re-emitting those would be noise, so they are the baseline.
       for (Core.Exp conjunct : conjuncts) {
-        LinearPropagator.applyConstantBound(conjunct, this, true);
+        ConstantBounds.applyConstantBound(conjunct, this, true);
       }
       inputs.putAll(intervals);
       // Then the bounds that take arithmetic to see, such as the 'x = 2'
@@ -300,7 +296,7 @@ class Fbbt {
       // cannot use them as they stand, so if they survive to the end they are
       // worth emitting in a form that it can.
       for (Core.Exp conjunct : conjuncts) {
-        LinearPropagator.applyConstantBound(conjunct, this, false);
+        ConstantBounds.applyConstantBound(conjunct, this, false);
       }
     }
 
@@ -451,7 +447,7 @@ class Fbbt {
         return false;
       }
       final BuiltIn op = constraint.builtIn();
-      if (op == null || !LinearPropagator.isComparisonOp(op)) {
+      if (op == null || !ConstantBounds.isComparisonOp(op)) {
         return false;
       }
       final Bounds.@Nullable LinearForm lhs =
@@ -466,16 +462,8 @@ class Fbbt {
       }
       // Rewrite "lhs OP rhs" as "sum OP 0".
       final Bounds.LinearForm sum = lhs.minus(rhs);
-      if (sum.coefficients.size() == 1) {
-        // A lone variable with a coefficient of 1 is LinearPropagator's
-        // business, not ours; but '2 * b <= 6' and 'abs (x - 2) < 5' are ours.
-        final Map.Entry<Core.Exp, BigDecimal> only =
-            sum.coefficients.entrySet().iterator().next();
-        if (only.getKey().op == Op.ID
-            && only.getValue().abs().compareTo(BigDecimal.ONE) == 0) {
-          return false;
-        }
-      } else if (sum.coefficients.isEmpty()) {
+      if (sum.coefficients.isEmpty()) {
+        // Both sides constant; nothing to deduce.
         return false;
       }
       boolean changed = false;
@@ -683,55 +671,14 @@ class Fbbt {
   }
 
   /**
-   * Propagator for linear constraints of the form {@code (varA + kA) OP (varB +
-   * kB)} where {@code kA}, {@code kB} are integer-literal offsets (possibly
-   * zero, possibly missing on one side) and {@code OP} is one of {@code <, <=,
-   * >, >=, =}.
+   * Reads the bounds that a constraint states outright, such as {@code x <= 3}
+   * or {@code x + 1 = 3}.
+   *
+   * <p>{@link State#captureInputs} uses this to record what the query already
+   * says, before propagation begins. It is not a {@link Propagator}: {@link
+   * SumPropagator} deduces everything that propagating such a constraint would.
    */
-  static class LinearPropagator implements Propagator {
-    @Override
-    public boolean propagate(Core.Exp constraint, State state) {
-      if (constraint.op != Op.APPLY) {
-        return false;
-      }
-      final BuiltIn op = constraint.builtIn();
-      if (op == null || !isComparisonOp(op)) {
-        return false;
-      }
-      final Bounds.Term lhs = Bounds.linearTerm(constraint.arg(0));
-      final Bounds.Term rhs = Bounds.linearTerm(constraint.arg(1));
-      if (lhs == null || rhs == null) {
-        return false;
-      }
-      // Both sides constant: nothing to deduce.
-      if (lhs.var == null && rhs.var == null) {
-        return false;
-      }
-      // Constant on one side: a "x + k OP c" constraint. Reduce to
-      //   x OP (c - k)
-      if (lhs.var == null) {
-        return tightenFromConstant(
-            state,
-            requireNonNull(rhs.var),
-            op.reverse(),
-            lhs.offset.subtract(rhs.offset));
-      }
-      if (rhs.var == null) {
-        return tightenFromConstant(
-            state, lhs.var, op, rhs.offset.subtract(lhs.offset));
-      }
-      // Both sides have a variable: "varA + kA OP varB + kB"
-      // Reduce to "varA OP varB + (kB - kA)".
-      final BigDecimal delta = rhs.offset.subtract(lhs.offset);
-      boolean changed = false;
-      changed |= tightenFromOther(state, lhs.var, op, rhs.var, delta);
-      // And solving for varB: "varB OP' varA - (kB - kA)" where OP' is the
-      // reverse. (E.g. "x < y + 1" becomes "y > x - 1".)
-      changed |=
-          tightenFromOther(
-              state, rhs.var, op.reverse(), lhs.var, delta.negate());
-      return changed;
-    }
+  static class ConstantBounds {
 
     /**
      * Applies a "var op constant" tightening to {@code state}.
@@ -798,32 +745,6 @@ class Fbbt {
     }
 
     /**
-     * Tightens {@code targetPat}'s interval by {@code targetPat OP (otherPat +
-     * delta)}, using {@code otherPat}'s current interval.
-     */
-    private static boolean tightenFromOther(
-        State state,
-        Core.NamedPat targetPat,
-        BuiltIn op,
-        Core.NamedPat otherPat,
-        BigDecimal delta) {
-      if (!state.knows(targetPat)) {
-        return false;
-      }
-      final ImmutableRangeSet<BigDecimal> otherRs = state.get(otherPat);
-      if (otherRs.isEmpty()) {
-        return false;
-      }
-      final Range<BigDecimal> otherSpan = otherRs.span();
-      final ImmutableRangeSet<BigDecimal> bound =
-          rangeFromOther(op, otherSpan, delta);
-      if (bound == null) {
-        return false;
-      }
-      return state.tighten(targetPat, bound);
-    }
-
-    /**
      * Returns the range that {@code v} must lie in to satisfy {@code v OP c}.
      */
     private static ImmutableRangeSet<BigDecimal> rangeFromOp(
@@ -842,205 +763,6 @@ class Fbbt {
         default:
           throw new AssertionError(op);
       }
-    }
-
-    /**
-     * Given {@code v OP (otherPat + delta)} and {@code otherPat}'s span,
-     * returns the range that {@code v} must lie in, or {@code null} if no
-     * useful bound can be derived (e.g. the relevant side of {@code otherSpan}
-     * is unbounded).
-     */
-    private static @Nullable ImmutableRangeSet<BigDecimal> rangeFromOther(
-        BuiltIn op, Range<BigDecimal> otherSpan, BigDecimal delta) {
-      switch (op) {
-        case OP_LT:
-          // v < other + delta; need other's upper.
-          if (!otherSpan.hasUpperBound()) {
-            return null;
-          }
-          // Always open: v can approach but never equal other_hi + delta.
-          return ImmutableRangeSet.of(
-              Range.lessThan(otherSpan.upperEndpoint().add(delta)));
-        case OP_LE:
-          // v <= other + delta; need other's upper.
-          if (!otherSpan.hasUpperBound()) {
-            return null;
-          }
-          return ImmutableRangeSet.of(
-              otherSpan.upperBoundType() == BoundType.CLOSED
-                  ? Range.atMost(otherSpan.upperEndpoint().add(delta))
-                  : Range.lessThan(otherSpan.upperEndpoint().add(delta)));
-        case OP_GT:
-          if (!otherSpan.hasLowerBound()) {
-            return null;
-          }
-          return ImmutableRangeSet.of(
-              Range.greaterThan(otherSpan.lowerEndpoint().add(delta)));
-        case OP_GE:
-          if (!otherSpan.hasLowerBound()) {
-            return null;
-          }
-          return ImmutableRangeSet.of(
-              otherSpan.lowerBoundType() == BoundType.CLOSED
-                  ? Range.atLeast(otherSpan.lowerEndpoint().add(delta))
-                  : Range.greaterThan(otherSpan.lowerEndpoint().add(delta)));
-        case OP_EQ:
-          // v = other + delta. Shift other's range by delta.
-          if (!otherSpan.hasLowerBound() && !otherSpan.hasUpperBound()) {
-            return null;
-          }
-          final Range<BigDecimal> shifted = shift(otherSpan, delta);
-          return ImmutableRangeSet.of(shifted);
-        default:
-          throw new AssertionError(op);
-      }
-    }
-
-    /** Translates {@code r} by {@code delta} along the number line. */
-    private static Range<BigDecimal> shift(
-        Range<BigDecimal> r, BigDecimal delta) {
-      if (r.hasLowerBound() && r.hasUpperBound()) {
-        return Range.range(
-            r.lowerEndpoint().add(delta), r.lowerBoundType(),
-            r.upperEndpoint().add(delta), r.upperBoundType());
-      }
-      if (r.hasLowerBound()) {
-        return r.lowerBoundType() == BoundType.CLOSED
-            ? Range.atLeast(r.lowerEndpoint().add(delta))
-            : Range.greaterThan(r.lowerEndpoint().add(delta));
-      }
-      if (r.hasUpperBound()) {
-        return r.upperBoundType() == BoundType.CLOSED
-            ? Range.atMost(r.upperEndpoint().add(delta))
-            : Range.lessThan(r.upperEndpoint().add(delta));
-      }
-      return Range.all();
-    }
-  }
-
-  /**
-   * Propagator for {@code abs(x) OP c} (or {@code c OP abs(x)}) where {@code c}
-   * is an integer literal.
-   *
-   * <p>Handles the connected-interval cases:
-   *
-   * <ul>
-   *   <li>{@code abs(x) < c} -> {@code x} in {@code (-c, c)}
-   *   <li>{@code abs(x) <= c} -> {@code x} in {@code [-c, c]}
-   *   <li>{@code abs(x) = 0} -> {@code x = 0}
-   * </ul>
-   *
-   * <p>The {@code >}, {@code >=}, and non-zero {@code =} cases produce a
-   * disjoint range set ({@code x < -c} OR {@code x > c}, etc.). FBBT can track
-   * these via {@code ImmutableRangeSet.union}, but the materializer currently
-   * emits per-side conjuncts that assume a contiguous span; until the
-   * materializer is taught to emit unions, these cases are skipped (no
-   * tightening). The constraint remains in the where as a filter.
-   */
-  static class AbsPropagator implements Propagator {
-    @Override
-    public boolean propagate(Core.Exp constraint, State state) {
-      if (constraint.op != Op.APPLY) {
-        return false;
-      }
-      final BuiltIn op = constraint.builtIn();
-      if (op == null) {
-        return false;
-      }
-      switch (op) {
-        case OP_LT:
-        case OP_LE:
-        case OP_GT:
-        case OP_GE:
-        case OP_EQ:
-          break;
-        default:
-          return false;
-      }
-      final Core.Exp lhs = constraint.arg(0);
-      final Core.Exp rhs = constraint.arg(1);
-      // Normalize so that abs(x) is on the left.
-      final Core.NamedPat absArg;
-      final BigDecimal constant;
-      final BuiltIn normalized;
-      final Core.@Nullable NamedPat lhsAbsArg = extractAbsArg(lhs);
-      final Core.@Nullable NamedPat rhsAbsArg = extractAbsArg(rhs);
-      if (lhsAbsArg != null) {
-        final Core.@Nullable Literal lit = Bounds.numericLiteral(rhs);
-        if (lit == null) {
-          return false;
-        }
-        absArg = lhsAbsArg;
-        constant = lit.unwrap(BigDecimal.class);
-        normalized = op;
-      } else if (rhsAbsArg != null) {
-        final Core.@Nullable Literal lit = Bounds.numericLiteral(lhs);
-        if (lit == null) {
-          return false;
-        }
-        absArg = rhsAbsArg;
-        constant = lit.unwrap(BigDecimal.class);
-        normalized = op.reverse();
-      } else {
-        return false;
-      }
-      if (!state.knows(absArg)) {
-        return false;
-      }
-      // Only handle cases that yield a single connected interval. Note
-      // that abs(x) < c for c <= 0 is infeasible; we treat as empty range.
-      switch (normalized) {
-        case OP_LT:
-          // abs(x) < c: x in (-c, c). If c <= 0, infeasible.
-          if (constant.signum() <= 0) {
-            return state.tighten(absArg, ImmutableRangeSet.of());
-          }
-          return state.tighten(
-              absArg,
-              ImmutableRangeSet.of(Range.open(constant.negate(), constant)));
-        case OP_LE:
-          // abs(x) <= c: x in [-c, c]. If c < 0, infeasible.
-          if (constant.signum() < 0) {
-            return state.tighten(absArg, ImmutableRangeSet.of());
-          }
-          return state.tighten(
-              absArg,
-              ImmutableRangeSet.of(Range.closed(constant.negate(), constant)));
-        case OP_EQ:
-          // abs(x) = 0: x = 0. Otherwise the solution is two disjoint
-          // points (x = c or x = -c), which we don't materialize per-side.
-          if (constant.signum() == 0) {
-            return state.tighten(
-                absArg, ImmutableRangeSet.of(Range.singleton(BigDecimal.ZERO)));
-          }
-          return false;
-        case OP_GT:
-        case OP_GE:
-        default:
-          // Disjoint cases — see class comment.
-          return false;
-      }
-    }
-
-    /**
-     * If {@code exp} is a call to {@code Int.abs} or {@code Real.abs} with a
-     * bare-variable argument, returns that variable; otherwise {@code null}.
-     */
-    private static Core.@Nullable NamedPat extractAbsArg(Core.Exp exp) {
-      if (!(exp instanceof Core.Apply)) {
-        return null;
-      }
-      final Core.Apply apply = (Core.Apply) exp;
-      final BuiltIn b = apply.builtIn();
-      if (b != BuiltIn.INT_ABS && b != BuiltIn.REAL_ABS) {
-        return null;
-      }
-      // abs is unary; its single argument is at .arg.
-      final Core.Exp arg = apply.arg;
-      if (!(arg instanceof Core.Id)) {
-        return null;
-      }
-      return ((Core.Id) arg).idPat;
     }
   }
 
