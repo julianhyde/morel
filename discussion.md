@@ -646,9 +646,24 @@ above — because n-ary joins nest the pairs, reassociation re-nests
 them, and every access above has to re-path.
 
 There is a third option §7 did not consider: the join emits the
-*concatenation* of its inputs' fields, `m + n` of them, and a
-projection follows where the query wants something else. Flattening
-rather than nesting, so the objection to fixed pairs does not apply.
+*concatenation* of its inputs' components, and a projection follows
+where the query wants something else. Flattening rather than nesting,
+so the objection to fixed pairs does not apply.
+
+**What counts as a component decides whether this works at all.** Not
+the fields of the input's element: `emps` is a collection of eight-
+field rows, and `from e in emps, d in depts` must yield two things,
+`d` and `e`, not sixteen. The rule is that a *join* contributes its
+own components and anything else contributes one:
+
+    components(join(l, r)) = components(l) ++ components(r)
+    components(anything else) = [it]
+
+So `(A ⋈ B) ⋈ C` and `A ⋈ (B ⋈ C)` both have components `A, B, C` --
+flat, three of them, and the same in both associations, which is the
+property the whole idea rests on. And `from e in emps, d in depts`
+has two, each a whole row, which is what the query means. Flattening
+joins, not records.
 
 **The yield is a pairing 495 times out of 497.** Measured over the
 script suite: of the joins the translation builds, all but two have a
@@ -702,9 +717,10 @@ Read against the three designs, that sentence decides between them.
   which is the shape §3.4 says Morel does *not* have. A projection
   above must distribute the option before the element is the query's,
   so the `Option.map` does not go away; it moves.
-* **A concatenation** gives each field of the absent side its own
-  option, which is Morel's rule exactly, derived by the node from its
-  kind. Nothing distributes anything.
+* **A concatenation** gives each *component* of the absent side its
+  own option, and a component is a binder's value, which is Morel's
+  rule exactly, derived by the node from its kind. Nothing
+  distributes anything.
 
 So concatenation is the only one of the three that needs no
 `Option.map` in an expression, and "the node stays simple" cuts for

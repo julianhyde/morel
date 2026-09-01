@@ -284,6 +284,17 @@ Commuting a join swaps its inputs and substitutes `$0` ↔ `$1` in the
 condition and the yield. The element type is unchanged, so nothing
 above the node rewrites, and no compensating projection appears.
 
+*Review.* The yield is to go (discussion.md §15). A join will emit
+the concatenation of its inputs' components — a join contributing its
+own, anything else contributing one, so that `(A ⋈ B) ⋈ C` and `A ⋈
+(B ⋈ C)` both have components `A, B, C` — and a projection will
+follow where the query wants something else. Measured over the suite,
+495 of 497 yields only pair their inputs; commute and reassociation
+become free rather than local rewrites; and an outer join gives each
+component of the absent side its own option, which is the rule above,
+without the `Option.map` a yield needs to express it. Written here
+when it lands, which is before this text is frozen.
+
 ## 4. Kinds
 
 The kind of a node's output, given the kinds of its inputs. All rows
