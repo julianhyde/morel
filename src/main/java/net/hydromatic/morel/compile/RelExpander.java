@@ -264,8 +264,7 @@ public class RelExpander {
           join.binder,
           expand(join.left, ImmutableList.of()),
           expand(join.right, ImmutableList.of()),
-          join.condition,
-          join.yieldExp);
+          join.condition);
     }
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     Expander.ground(cache, extents, strengthen(constraints, extents));
@@ -405,8 +404,7 @@ public class RelExpander {
           param,
           rebuild(join.left, frame, cache, bound),
           collection,
-          join.condition,
-          join.yieldExp);
+          join.condition);
     }
     if (rightGenerator != null
         && join.condition.isBoolLiteral(true)
@@ -431,17 +429,21 @@ public class RelExpander {
       final Core.Exp boundedRight = bounded(right, rightPat, cache, bound);
       // The sides swap, so the yield commutes with them: what was `$0` is now
       // `$1` and what was `$1` is now `$0` (spec.md §3.4).
-      return core.join(
-          typeSystem,
-          join.joinType,
-          param,
-          boundedRight,
-          left,
-          join.condition,
-          subst(
-              join.yieldExp,
-              core.input1(left.type.elementType()),
-              core.input0(boundedRight.type.elementType())));
+      final Core.Join swapped =
+          core.join(
+              typeSystem,
+              join.joinType,
+              param,
+              boundedRight,
+              left,
+              join.condition);
+      // Swapping the inputs moves the components, and with no yield to absorb
+      // the swap a projection puts them back where the tree above expects
+      // them -- the re-path that discussion.md §15 records as commute's cost.
+      return permute(
+          swapped,
+          core.componentCount(boundedRight),
+          core.componentCount(left));
     }
     return join.copy(
         typeSystem,
@@ -449,8 +451,23 @@ public class RelExpander {
         join.binder,
         rebuild(join.left, frame, cache, bound),
         rebuild(right, frame, cache, bound),
-        join.condition,
-        join.yieldExp);
+        join.condition);
+  }
+
+  /**
+   * Projects a join whose inputs were swapped back into the component order the
+   * tree above expects: the last {@code k} first, then the first {@code m}.
+   */
+  private Core.Exp permute(Core.Exp join, int m, int k) {
+    final Core.Id element = core.input0(join.type.elementType());
+    final List<Core.Exp> exps = new ArrayList<>();
+    for (int i = 0; i < k; i++) {
+      exps.add(core.field(typeSystem, element, m + i));
+    }
+    for (int i = 0; i < m; i++) {
+      exps.add(core.field(typeSystem, element, i));
+    }
+    return core.project(typeSystem, join, core.tuple(typeSystem, null, exps));
   }
 
   /**
@@ -702,18 +719,12 @@ public class RelExpander {
         access.add(core.input0(component.type.elementType()));
         continue;
       }
-      final List<Core.Exp> args = new ArrayList<>(access);
-      args.add(core.input1(component.type.elementType()));
       product =
-          core.join(
-              typeSystem,
-              product,
-              component,
-              core.boolLiteral(true),
-              core.tuple(typeSystem, args.toArray(new Core.Exp[0])));
+          core.join(typeSystem, product, component, core.boolLiteral(true));
       final Core.Exp element = core.input0(product.type.elementType());
+      final int n = core.componentCount(product);
       access = new ArrayList<>();
-      for (int i = 0; i < args.size(); i++) {
+      for (int i = 0; i < n; i++) {
         access.add(core.field(typeSystem, element, i));
       }
     }
@@ -1016,11 +1027,13 @@ public class RelExpander {
     if (!join.condition.isBoolLiteral(true)) {
       constraints.add(subst(join.condition, left.element, right.element));
     }
+    final List<Core.Exp> componentExps =
+        new ArrayList<>(core.components(typeSystem, join.left, left.element));
+    componentExps.addAll(
+        core.components(typeSystem, join.right, right.element));
     final Frame frame =
         new Frame(
-            subst(join.yieldExp, left.element, right.element),
-            leaves,
-            constraints);
+            core.tuple(typeSystem, null, componentExps), leaves, constraints);
     frame.elements.putAll(left.elements);
     frame.elements.putAll(right.elements);
     frame.elements.put(node, frame.element);

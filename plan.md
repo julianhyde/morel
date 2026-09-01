@@ -148,34 +148,16 @@ something settled — §8's principle, applied to the sequence itself.
       projection that turns the record into the query's bare value is
       one `normalize` was already inserting, so no boundary operator
       was needed.
-- [ ] A join concatenates its inputs' fields, and carries no yield
-      (discussion.md §15). Measured: 495 of the 497 join yields the
-- [ ] A join concatenates its inputs' components, and carries no
-      yield (discussion.md §15). Measured: 495 of the 497 join yields
-      the suite builds are pairings that rename without computing, so
-      the yield is general machinery paying for two queries.
-      Components flatten joins, not records -- a join contributes its
-      own, anything else contributes one -- so `(A ⋈ B) ⋈ C` and `A ⋈
-      (B ⋈ C)` are identical and reassociation is free. Commute is
-      not free: the components are positional, because the labels a
-      yield supplies are the query's binders and the tree has erased
-      them, so commute renumbers and the projection above re-paths.
-      The decisive argument is the outer join: concatenation gives
-      each component of the absent side its own option, which is
-      Morel's rule (§3.4), where a yield needs `Option.map` to
-      express it and a pair needs a projection to distribute it.
-      Before step 3, and after §14.
-
-      Blocked on one thing, found by attempting it: the translator
-      normalizes after every step, so a projection always lands
-      between two joins and they are never directly nested. Flatness
-      never materialises, and an outer join then wraps a projected
-      left input's whole record in an option instead of wrapping each
-      binder -- a wrong type rather than a missed optimization.
-      `RelTranslator` has to defer normalizing first, carrying the
-      access map as component paths and projecting only where a step
-      needs the row, which is the move `RelLowerer` already makes for
-      the step list.
+- [x] A join concatenates its inputs' components, and carries no
+      yield (discussion.md §15). Three things the design did not
+      anticipate, each found by building it: the translator had to
+      stop normalizing after a join, or the projection it inserts
+      keeps joins from nesting; `optionize` wanted the binder's type
+      where it was given the component's, which silently gave every
+      binder of a multi-binder absent side the whole option; and an
+      outer join contributes one component rather than its inputs',
+      because flattening it would need each component of an absent
+      side wrapped again, which the step list cannot express.
 
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once.

@@ -557,7 +557,6 @@ public class Visitor {
     join.left.accept(this);
     join.right.accept(this);
     join.condition.accept(this);
-    join.yieldExp.accept(this);
   }
 
   protected void visit(Core.Group group) {
