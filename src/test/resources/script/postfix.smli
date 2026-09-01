@@ -304,4 +304,19 @@ f (bag [{d=1},{d=2}]);
 val g: {d:int} bag -> int = fn ds => ds.length ();
 > val g = fn : {d:int} bag -> int
 
+(* A query is a receiver like any other. Its orderedness is not
+ * settled when the method is chosen -- that is what typing the
+ * query decides -- so the method is chosen at the collection, and
+ * a list or a bag it turns out to be. *)
+val b = bag [1,2,3];
+> val b = [1,2,3] : int bag
+(from x in b).length ();
+> val it = 3 : int
+(from x in b yield x distinct).length ();
+> val it = 3 : int
+(from x in [1,2,3]).length ();
+> val it = 3 : int
+(from x in [1,2,3] order x).length ();
+> val it = 3 : int
+
 (*) End postfix.smli
