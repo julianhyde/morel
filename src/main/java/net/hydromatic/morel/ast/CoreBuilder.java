@@ -910,8 +910,18 @@ public enum CoreBuilder {
     if (!(node instanceof Core.Join) || !isFlat((Core.Join) node)) {
       return ImmutableList.of(exp);
     }
+    final int n = componentCount(node);
+    if (exp instanceof Core.Tuple && ((Core.Tuple) exp).args.size() == n) {
+      // The element is already a tuple of the components -- the lowering
+      // builds one for every join -- so read them off it rather than
+      // projecting each out of it. `#1 (a, b)` is `a`, and leaving it
+      // unreduced hands whatever reads it a projection of a construction:
+      // the shape that crossed to Calcite as a bare `#1` and could not be
+      // resolved there.
+      return ((Core.Tuple) exp).args;
+    }
     final List<Core.Exp> exps = new ArrayList<>();
-    for (int i = 0; i < componentCount(node); i++) {
+    for (int i = 0; i < n; i++) {
       exps.add(field(typeSystem, exp, i));
     }
     return exps;
