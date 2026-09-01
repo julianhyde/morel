@@ -670,33 +670,52 @@ It is also the argument that removed `projectMany` (§8), applied
 again: a node that both pairs and projects is a node doing two
 things, and the one that does one thing composes better.
 
-Three costs, and one of them is not what it appears.
+One cost, and one apparent cost that is really an argument the other
+way.
 
-* **Inputs must be records whose fields are the binders.** `from e in
-  emps, d in depts` wants `{d, e}`, and `emps` is a collection of emp
-  records, not of `{e: ...}`. So each input needs a projection that
-  names it, where today the yield names both at once. Roughly one
-  more node per join.
-* **Field collisions need a convention now.** Two inputs with the
-  same field name have no concatenation. §5 already owes a
-  deterministic rename convention for scope-merging rewrites; this
-  makes it due earlier.
-* **An outer join must option-wrap the absent side's fields**, where
-  today the yield does it and §3.4 says approvingly that "the node
-  stays simple; the arithmetic of which value becomes `NONE` is in
-  the expression, where a rule can see it".
+* **Field collisions need a convention.** Two inputs with the same
+  field name have no concatenation by label. Addressing by ordinal —
+  input ordinal and field ordinal — avoids the question entirely, at
+  the price that commute renumbers and accesses above re-path. §5
+  already owes a deterministic rename convention for scope-merging
+  rewrites, and by label this makes it due earlier.
 
+An earlier draft of this section listed a second cost, that each
+input needs a projection naming it, because `from e in emps, d in
+depts` wants `{d, e}` where `emps` is a collection of emp records.
+That is true only of addressing by label. The cost is not there.
 
-That third cost is smaller than it looks, and it is the one that
-decides the question. The node *already* decides which side can be
-absent — that is what its kind means — so the yield is not expressing
-that decision, it is transcribing it. Moving the wrapping into the
-node does not add semantics to the node; it removes a copy of them
-from the expression, and with it the possibility that the two
-disagree.
+**The outer join is the case one expects to be the problem, and it is
+the strongest argument for concatenating.** §3.4 records what Morel
+does: it "makes each *binder* of the absent side an option, not the
+side as a whole — `left join (j, k) in pairs` binds `j : int option`
+and `k : int option`, not `(int * int) option`".
+
+Read against the three designs, that sentence decides between them.
+
+* **A yield** must express the distribution itself: §3.4's next
+  clause is "a yield that reads more than one binder maps each access
+  through the option, with `Option.map`". That machinery is what the
+  suite's two non-pairing yields are made of.
+* **A pair** — a join emitting exactly two fields, the left element
+  and the right — gives `(int * int) option` on the absent side,
+  which is the shape §3.4 says Morel does *not* have. A projection
+  above must distribute the option before the element is the query's,
+  so the `Option.map` does not go away; it moves.
+* **A concatenation** gives each field of the absent side its own
+  option, which is Morel's rule exactly, derived by the node from its
+  kind. Nothing distributes anything.
+
+So concatenation is the only one of the three that needs no
+`Option.map` in an expression, and "the node stays simple" cuts for
+it rather than against.
+
+The pair also loses on the ground §7 rejected fixed pairs: `(A ⋈ B) ⋈
+C` nests, so reassociation re-paths every access above. Concatenation
+is flat, which was the reason to look past §7's two options at all.
 
 **Resolution: the join concatenates, and a projection follows where
 the query wants something else.** Not yet done. It should land before
 step 3 freezes the plan text, and it wants §14 settled first, because
-"the inputs are records" is the same question about leaves that §14
-answered for constructed elements.
+"what a leaf's element is" is the same question §14 answered for
+constructed elements.
