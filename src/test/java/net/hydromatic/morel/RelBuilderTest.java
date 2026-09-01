@@ -299,6 +299,55 @@ public class RelBuilderTest {
                 "join condition cannot reference the join's binder")));
   }
 
+  /**
+   * Tests that names survive two joins, which is what a three-way query needs.
+   *
+   * <p>{@code from e in emps, d in depts, g in salgrades} builds {@code
+   * join(join(emps, depts), salgrades)}, whose element is three components
+   * because an inner join flattens. Each name is one of them, and the builder
+   * says which -- where reading the names off the element's fields would say
+   * {@code 1}, {@code 2} and {@code 3}, which is true and useless to a caller
+   * that started from a query.
+   */
+  @Test
+  void testNamesAcrossTwoJoins() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder();
+    b.push("e", f.emps).push("d", f.emps).pair();
+    b.join(Core.Rel.JoinType.INNER, core.boolLiteral(true));
+    b.push("g", f.emps).pair();
+    b.join(Core.Rel.JoinType.INNER, core.boolLiteral(true));
+
+    assertThat(
+        b.peek().type.moniker(),
+        is("({deptno:int} * {deptno:int} * {deptno:int}) list"));
+    assertThat(b.name("e"), hasToString("#1 $0"));
+    assertThat(b.name("d"), hasToString("#2 $0"));
+    assertThat(b.name("g"), hasToString("#3 $0"));
+
+    // And a field of a name is the field of that component, which is the
+    // two-step path a three-way join's condition is made of.
+    assertThat(b.field(b.name("e"), "deptno"), hasToString("#deptno (#1 $0)"));
+  }
+
+  /**
+   * Tests that an outer join is one component, so a name from inside it reads
+   * that component rather than a position of its own.
+   */
+  @Test
+  void testNamesAcrossAnOuterJoin() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder();
+    b.push("e", f.emps).push("d", f.emps).pair();
+    b.join(Core.Rel.JoinType.LEFT, core.boolLiteral(true));
+    b.push("g", f.emps).pair();
+    b.join(Core.Rel.JoinType.INNER, core.boolLiteral(true));
+
+    // The left join did not flatten, so it is one component and 'g' is the
+    // second -- not the third.
+    assertThat(b.name("g"), hasToString("#2 $0"));
+  }
+
   /** Tests that a set operator takes as many inputs as it is given. */
   @Test
   void testUnionOfThree() {
