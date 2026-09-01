@@ -448,18 +448,26 @@ something settled — §8's principle, applied to the sequence itself.
         itself gives the reason: a tree is closer to `RelNode` than a
         step list is.
       One consequence of concatenating the join, found by
-      re-measuring: a component access is positional and sometimes
-      nested -- `#1 (#1 $0)` where a component is itself a join's
-      element -- and `CalciteCompiler.translate` pushes down only
-      `#f v`, a field of a plain id. A nested access falls through to
-      the scalar-fragment path, and a bare `#1` crosses the text
-      channel with nothing to resolve it against: "unresolved flex
-      record (can't tell what fields there are besides #1)", which is
-      the same failure `08b8e22d` fixed for `#x`. Only the round trip
-      sees it today, because only the round trip runs the lowered
-      form; the flip makes it real. The fix is the same shape as
-      before -- teach `translate` to push a path down, or reduce the
-      path in the lowering.
+      re-measuring and then diagnosed: dual.smli's two three-way
+      joins fail under the round trip with "unresolved flex record
+      (can't tell what fields there are besides #1)".
+
+      It is not a Calcite problem, though it looks like one. The
+      fragment that crosses is a bare `#1`, and the expression it
+      came from is `#1 (w$0, w$1)` -- a selector applied to a *tuple
+      construction*, not to a variable. The lowering builds a join's
+      element as a literal tuple of its components and a later access
+      reads a field of it, so what Calcite is handed is a projection
+      of something it has no reason to understand.
+
+      `RelLowerer.readField` reduces exactly that shape -- `#b {a =
+      x, b = y}` is `y` -- but only inside `subst` and `rename`, so
+      an access built anywhere else keeps the tuple. Teaching
+      `CalciteCompiler.translate` to push a selector path down was
+      tried and is neither necessary nor sufficient: the base is a
+      tuple construction, not a variable, so there is no path to
+      push. The fix is to reduce where the lowering builds, not to
+      translate what it failed to reduce.
 
       Where the round trip stands, re-measured after the dependent
       join, the failable-pattern translation and the group-record

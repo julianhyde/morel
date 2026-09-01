@@ -361,15 +361,6 @@ public class RelTranslator {
       final Core.Exp rebased;
       if (n == 1) {
         final Core.Exp component = core.field(typeSystem, element, offset);
-        System.err.println(
-            "PROBE binder="
-                + entry.getKey().name
-                + " access="
-                + a
-                + " op="
-                + a.op
-                + " option="
-                + option);
         rebased =
             option
                 ? optionize(a, rawRef, component, typeSystem.option(a.type))
