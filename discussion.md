@@ -780,8 +780,40 @@ is a path within a component still needs `Option.map`. That is the
 same distinction `optionize` already draws; only its base reference
 changes.
 
-**`RelExpander`'s reordering is the hard part, and it is where the
-cost of commute lands.** Its rebuild swaps a join's inputs when the
+**A projection between two joins destroys flatness, and the
+translator puts one there after every step.** This is the finding
+that matters, and it was not visible from the design.
+`RelTranslator.normalize` runs after each step and projects whenever
+a node's element differs from the record its bindings describe --
+which, after a join, it always does, because the join's element is a
+tuple of components and the bindings describe a record of names. So
+the translator builds `project(join(A, B))` and then `join(that, C)`,
+and `(A ⋈ B) ⋈ C` -- the shape this section reasons about -- never
+occurs.
+
+Two consequences, and the second is not a lost optimization but a
+wrong answer:
+
+* Reassociation is free only for directly nested joins, and there are
+  none, so the benefit is unrealised until the translator stops
+  projecting between them.
+* A projected left input is *one* component holding a record, so an
+  outer join wraps that record in an option rather than wrapping each
+  binder. `from i in [1, 2] right join j in [3] right join k in [4]`
+  comes out `{i: {i: int option, j: int} option, ...}` where Morel
+  says `{i: int option option, j: int option, k: int}`. §3.4's rule --
+  each binder an option, not the side as a whole -- is exactly what
+  the intervening projection breaks.
+
+So concatenation needs the translator to defer normalizing, keeping
+the access map as component paths and projecting only where a step
+needs the row: a group, a set operator, the end. That is the same
+"carry the element as an expression" move `RelLowerer` already makes
+for the step list, applied to the translation. It is a change of
+similar size to this one, and it has to come first.
+
+**`RelExpander`'s reordering is the other hard part, and it is where
+the cost of commute lands.** Its rebuild swaps a join's inputs when the
 right side grounds on its own, and today it absorbs the swap by
 commuting the yield. With no yield there is nothing to absorb it: the
 components change position, so the rewrite must insert a projection
