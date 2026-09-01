@@ -155,9 +155,11 @@ something settled — §8's principle, applied to the sequence itself.
       label-sorted, so concatenation makes commute need no
       substitution and reassociation no compensating projection --
       the two rewrites a join planner does most. Costs a projection
-      per input, brings §5's rename convention forward, and moves an
-      outer join's option-wrapping into the node, which is where the
-      decision already lives. Before step 3, and after §14.
+      brings §5's rename convention forward if fields are addressed
+      by label, and is the only one of the three shapes whose outer
+      join needs no `Option.map` in an expression: it gives each
+      field of the absent side its own option, which is Morel's rule
+      (§3.4). Before step 3, and after §14.
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once.
 
