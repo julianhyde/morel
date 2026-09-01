@@ -554,9 +554,63 @@ public class RelBuilder {
       // input will use it.
       binder = null;
     }
-    return push(
-        core.join(
-            typeSystem, joinType, binder, left.rel, right.rel, condition));
+    final Core.Exp rel =
+        core.join(typeSystem, joinType, binder, left.rel, right.rel, condition);
+    return push(new Frame(rel, joinNames(rel, left, right)));
+  }
+
+  /**
+   * Returns the names of a join, by rebasing its inputs' onto the element it
+   * concatenates them into.
+   *
+   * <p>This is what lets a caller keep saying {@code e} after two joins: the
+   * element of {@code join(join(emps, depts), salgrades)} is three components,
+   * and the map says which of them each name is. Without it the names would be
+   * the element's field names, which for a tuple are {@code 1}, {@code 2} and
+   * {@code 3} -- true, and useless to anything that started from a query.
+   */
+  private ImmutableMap<String, Core.Exp> joinNames(
+      Core.Exp rel, Frame left, Frame right) {
+    final Core.Exp element = core.input0(rel.type.elementType());
+    final Map<String, Core.Exp> names = new LinkedHashMap<>();
+    rebaseInto(names, left, 0, element);
+    rebaseInto(names, right, core.componentCount(left.rel), element);
+    return ImmutableMap.copyOf(names);
+  }
+
+  /**
+   * Rebases one input's names onto the join's element: an input with one
+   * component is the whole of a position, and one that is itself a flattened
+   * join has several, whose indexes shift by the offset.
+   */
+  private void rebaseInto(
+      Map<String, Core.Exp> names, Frame frame, int offset, Core.Exp element) {
+    final int n = core.componentCount(frame.rel);
+    frame.names.forEach(
+        (name, a) ->
+            names.put(
+                name,
+                n == 1
+                    ? substitute(a, core.field(typeSystem, element, offset))
+                    : shift(a, offset, element)));
+  }
+
+  /** Rewrites {@code #j $0} to {@code #(offset + j) $0}. */
+  private Core.Exp shift(Core.Exp exp, int offset, Core.Exp element) {
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Apply apply) {
+            if (apply.fn instanceof Core.RecordSelector
+                && isInput0(apply.arg)) {
+              return core.field(
+                  typeSystem,
+                  element,
+                  offset + ((Core.RecordSelector) apply.fn).slot);
+            }
+            return super.visit(apply);
+          }
+        });
   }
 
   /**
