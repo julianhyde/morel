@@ -319,4 +319,21 @@ val b = bag [1,2,3];
 (from x in [1,2,3] order x).length ();
 > val it = 3 : int
 
+(* The receiver may be any expression. Its head type constructor is
+ * what the method is chosen by, and an expression that is not an
+ * application, a literal or a name has one just the same -- an
+ * 'if', a 'let', a 'case', or an operator applied. *)
+val l = [1,2,3];
+> val l = [1,2,3] : int list
+(if true then l else l).length ();
+> val it = 3 : int
+(let val z = l in z end).length ();
+> val it = 3 : int
+(case 1 of _ => l).length ();
+> val it = 3 : int
+(l @ l).length ();
+> val it = 6 : int
+(if true then 1 else 2).abs ();
+> val it = 1 : int
+
 (*) End postfix.smli
