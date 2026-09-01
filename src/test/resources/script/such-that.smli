@@ -507,6 +507,19 @@ from z in [1, 2, 3, 4, 5, 6, 7, 8], x, y
 >
 > val it : {x:int, y:int, z:int} list
 
+(* A bound that does not divide exactly must round outwards, or it
+ * would exclude a solution: '3 * x <= 10' gives 'x <= 3', and 3 is a
+ * solution. *)
+from x where x >= 0 andalso 3 * x <= 10;
+> val it = [0,1,2,3] : int list
+
+(* The argument of an absolute value must be linear in one variable.
+ * 'abs (x * y)' is not, so nothing is deduced, and neither variable is
+ * grounded. *)
+from x, y where abs (x * y) < 5;
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
+
 (* Constraints that contradict each other leave a variable with an
  * empty range. There is nothing to deduce, and nothing to enumerate. *)
 from x, y where x > 5 andalso x < 3 andalso y < x andalso y > 0;
