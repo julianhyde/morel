@@ -3459,7 +3459,10 @@ class Generators {
         Preference preference);
   }
 
-  /** How much we like the shape of a bound; see {@link #bound}. */
+  /**
+   * How much we like the shape of a bound. The constants are in order of
+   * preference; see {@link #bound}.
+   */
   private enum Preference {
     /** Mentions only variables that are bound already. */
     GROUNDED,

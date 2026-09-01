@@ -387,6 +387,18 @@ class Fbbt {
     }
   }
 
+  /**
+   * Returns the span of an interval, or null if the interval is empty.
+   *
+   * <p>An interval goes empty when the constraints contradict each other, as
+   * they do in {@code from x where x > 5 andalso x < 3}. There is nothing more
+   * to deduce, and {@link ImmutableRangeSet#span()} would throw.
+   */
+  private static @Nullable Range<BigDecimal> span(
+      ImmutableRangeSet<BigDecimal> rangeSet) {
+    return rangeSet.isEmpty() ? null : rangeSet.span();
+  }
+
   /** Receives one newly-deduced bound side. */
   @FunctionalInterface
   interface DeducedBoundConsumer {
@@ -496,7 +508,11 @@ class Fbbt {
         if (entry.getKey().equals(atom)) {
           continue;
         }
-        final Range<BigDecimal> span = interval(state, entry.getKey()).span();
+        final @Nullable Range<BigDecimal> span =
+            span(interval(state, entry.getKey()));
+        if (span == null) {
+          return false;
+        }
         final BigDecimal c = entry.getValue();
         // A positive coefficient takes its minimum at the atom's lower
         // endpoint, a negative one at its upper endpoint.
@@ -861,8 +877,12 @@ class Fbbt {
         BuiltIn op,
         BigDecimal c) {
       final Core.NamedPat selfVar = requireNonNull(self.var);
-      final Range<BigDecimal> otherSpan =
-          shiftSpan(state.get(requireNonNull(other.var)).span(), other.offset);
+      final @Nullable Range<BigDecimal> otherRange =
+          span(state.get(requireNonNull(other.var)));
+      if (otherRange == null) {
+        return false;
+      }
+      final Range<BigDecimal> otherSpan = shiftSpan(otherRange, other.offset);
       // For OP_LT / OP_LE: need other.lo > 0 to divide.
       // For OP_GT / OP_GE: need other.hi > 0.
       switch (op) {

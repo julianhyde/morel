@@ -214,14 +214,12 @@ public class Expander {
     // infinite-range scans, FBBT also needs to *see* the scan's implied
     // bound (e.g. `x >= 1` from `from x in [1..]`), so we synthesize that
     // bound into the where.
-    final Set<Core.NamedPat> unboundedPats = new HashSet<>();
+    final Set<Core.NamedPat> unboundedPats = new HashSet<>(extentPats(from));
     final List<Core.Exp> rangeImpliedBounds = new ArrayList<>();
     for (Core.FromStep step : from.steps) {
       if (step.op == Op.SCAN) {
         final Core.Scan scan = (Core.Scan) step;
-        if (scan.exp.isExtent()) {
-          unboundedPats.addAll(scan.pat.expand());
-        } else {
+        if (!scan.exp.isExtent()) {
           final RangePushdown.ScanInfo info = RangePushdown.match(scan);
           if (info != null) {
             unboundedPats.add(info.pat);
