@@ -462,20 +462,20 @@ something settled — §8's principle, applied to the sequence itself.
 
       `RelLowerer.readField` reduces exactly that shape -- `#b {a =
       x, b = y}` is `y` -- but only inside `subst` and `rename`, so
-      an access built anywhere else keeps the tuple. Teaching
-      `CalciteCompiler.translate` to push a selector path down was
-      tried and is neither necessary nor sufficient: the base is a
-      tuple construction, not a variable, so there is no path to
-      push. The fix is to reduce where the lowering builds, not to
-      translate what it failed to reduce.
+      an access built anywhere else kept the tuple. The site was
+      `core.components`, which reads a node's components out of an
+      expression for its element and projected each one out even when
+      the element was already a tuple of exactly those components,
+      which for a lowered join it always is. Fixed there: read them
+      off the tuple. dual.smli is clean again.
 
       Where the round trip stands, re-measured after the dependent
       join, the failable-pattern translation and the group-record
-      change, and again after concatenating the join: four scripts
-      differ -- optimize, hybrid and relational in plan text only,
-      dual.smli on the Calcite gap above -- and such-that.smli has
-      the two artifacts below. blog.smli and built-in/relational.smli
-      used to differ and now do not — the dependent join and
+      change, and again after concatenating the join: three scripts
+      differ, all in plan text only (optimize, hybrid, relational),
+      and such-that.smli has the two artifacts below. blog.smli,
+      dual.smli and built-in/relational.smli used to differ and now
+      do not — the dependent join and
       the filter-and-projection translation closed them. Re-measure
       after a run of changes rather than only when something is
       expected to move: the run that produced these numbers also
