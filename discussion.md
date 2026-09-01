@@ -671,15 +671,39 @@ yield that is a record whose every field is `$0`, `$1`, or a field of
 one of them. It renames; it does not compute. So the general
 mechanism is paying for two queries.
 
-And concatenation would make two rewrites free rather than merely
-local. Morel's record types are sorted by label, so the
-concatenation of two field sets is the same record whichever side
-contributed which: **commute needs no substitution at all**, where
-today it swaps `$0` and `$1` through the yield and the condition. For
-the same reason `(A ⋈ B) ⋈ C` and `A ⋈ (B ⋈ C)` have the *identical*
-element type, so **reassociation needs no compensating projection**,
-where today it composes the two yields involved. Those are the two
-rewrites a join planner does most.
+And concatenation makes **reassociation free**: `(A ⋈ B) ⋈ C` and `A
+⋈ (B ⋈ C)` have components `A, B, C` either way, so the element type
+is identical and nothing above the node rewrites, where today the
+rule has to compose the two yields involved.
+
+*It does not make commute free, and an earlier draft of this section
+said it did.* That claim rested on Morel's record types being sorted
+by label, so that a concatenation is the same record whichever side
+contributed which. True — but only if the components have labels, and
+they cannot. The labels of `from e in emps, d in depts` are `d` and
+`e`, which are the query's *binders*; the tree has erased those, and
+the only reason its element type has them today is that the yield
+constructs a record with them. Take the yield away and there is
+nowhere for a label to come from, so the components are positional
+and commute renumbers: `A ⋈ B` has element `a * b` and `B ⋈ A` has
+`b * a`.
+
+So commute changes the element type, and the projection above must
+re-path. That is the cost §7 named when it rejected fixed pairs —
+"downstream accesses re-path" — and concatenation does not escape it
+for commute, only for reassociation.
+
+The trade is therefore narrower than it first appeared:
+
+|  | commute | reassociate | node |
+| --- | --- | --- | --- |
+| yield | substitute in the node | compose two yields | carries an expression |
+| pair | re-path above; nests | re-path above; re-nests | plain |
+| concatenation | re-path above | free | plain |
+
+Concatenation beats the pair outright. Against the yield it trades a
+rewrite *inside* the node for one *above* it on commute, and wins on
+reassociation and on carrying no expression.
 
 It is also the argument that removed `projectMany` (§8), applied
 again: a node that both pairs and projects is a node doing two
