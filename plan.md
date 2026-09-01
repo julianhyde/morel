@@ -166,6 +166,17 @@ something settled — §8's principle, applied to the sequence itself.
       express it and a pair needs a projection to distribute it.
       Before step 3, and after §14.
 
+      Blocked on one thing, found by attempting it: the translator
+      normalizes after every step, so a projection always lands
+      between two joins and they are never directly nested. Flatness
+      never materialises, and an outer join then wraps a projected
+      left input's whole record in an option instead of wrapping each
+      binder -- a wrong type rather than a missed optimization.
+      `RelTranslator` has to defer normalizing first, carrying the
+      access map as component paths and projecting only where a step
+      needs the row, which is the move `RelLowerer` already makes for
+      the step list.
+
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once.
 
