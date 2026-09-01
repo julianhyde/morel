@@ -108,24 +108,22 @@ public class RelValidator {
       input(join.right);
       requireType(join.condition, PrimitiveType.BOOL, "join condition");
       scope(join.condition, ZERO_ONE, "join condition");
-      scope(join.yieldExp, ZERO_ONE, "join yield");
       if (join.binder != null) {
         // The binder names the left element inside the right input, and only
         // there. The condition and the yield say $0 and $1 like any join's
         // (spec.md §3.3), so an occurrence here is a scope error, not a
         // second way of spelling $0.
         binderNotIn(join.condition, join.binder, "join condition");
-        binderNotIn(join.yieldExp, join.binder, "join yield");
       }
       requireDerivedType(
           rel,
           core.join(
               typeSystem,
               join.joinType,
+              join.binder,
               join.left,
               join.right,
-              join.condition,
-              join.yieldExp));
+              join.condition));
     } else if (rel instanceof Core.Group) {
       final Core.Group group = (Core.Group) rel;
       input(group.input);

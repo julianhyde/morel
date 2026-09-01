@@ -125,7 +125,7 @@ public class RelBuilder {
       final Core.Join join = (Core.Join) exp;
       rebuild(join.left);
       rebuild(join.right);
-      join(join.joinType, join.binder, join.condition, join.yieldExp);
+      join(join.joinType, join.binder, join.condition);
     } else if (exp instanceof Core.Group) {
       final Core.Group group = (Core.Group) exp;
       rebuild(group.input);
@@ -522,9 +522,8 @@ public class RelBuilder {
    * Joins the top two of the stack, the deeper being the left. The condition
    * and the yield are over {@code $0} and {@code $1}.
    */
-  public RelBuilder join(
-      Core.Rel.JoinType joinType, Core.Exp condition, Core.Exp yieldExp) {
-    return join(joinType, null, condition, yieldExp);
+  public RelBuilder join(Core.Rel.JoinType joinType, Core.Exp condition) {
+    return join(joinType, null, condition);
   }
 
   /**
@@ -539,8 +538,7 @@ public class RelBuilder {
   public RelBuilder join(
       Core.Rel.JoinType joinType,
       Core.@Nullable IdPat binder,
-      Core.Exp condition,
-      Core.Exp yieldExp) {
+      Core.Exp condition) {
     final Frame right = pop();
     final Frame left = pop();
     arity = 1;
@@ -558,13 +556,7 @@ public class RelBuilder {
     }
     return push(
         core.join(
-            typeSystem,
-            joinType,
-            binder,
-            left.rel,
-            right.rel,
-            condition,
-            yieldExp));
+            typeSystem, joinType, binder, left.rel, right.rel, condition));
   }
 
   /**

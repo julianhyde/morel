@@ -226,15 +226,17 @@ public class RelLowerer {
       right = rename(right, join.binder, left);
     }
     fromBuilder.scan(op(join.joinType), w, right, condition);
-    if (join.joinType == Core.Rel.JoinType.INNER) {
-      return subst(join.yieldExp, left, core.id(w));
-    }
-    // The scan has re-typed the bindings that the join can leave absent; the
-    // yield reads those, not the pattern variables.
-    return subst(
-        join.yieldExp,
-        rebind(fromBuilder, left),
-        rebind(fromBuilder, core.id(w)));
+    // The element is the inputs' components in order (discussion.md §15). For
+    // an outer join the scan has re-typed the bindings it can leave absent, so
+    // the components are read off those, not the pattern variables.
+    final boolean inner = join.joinType == Core.Rel.JoinType.INNER;
+    final Core.Exp leftElement = inner ? left : rebind(fromBuilder, left);
+    final Core.Exp rightElement =
+        inner ? core.id(w) : rebind(fromBuilder, core.id(w));
+    final List<Core.Exp> exps =
+        new ArrayList<>(core.components(typeSystem, join.left, leftElement));
+    exps.addAll(core.components(typeSystem, join.right, rightElement));
+    return core.tuple(typeSystem, null, exps);
   }
 
   /**

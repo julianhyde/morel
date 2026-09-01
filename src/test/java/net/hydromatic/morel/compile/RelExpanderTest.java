@@ -180,9 +180,10 @@ public class RelExpanderTest {
     assertThat(
         expanded("from x in [1, 2], y where y elem [x, x + 1]"),
         is(
-            "join [g$2] [{x = $0, y = $1}]\n" //
-                + "  [1, 2]\n"
-                + "  [g$2, g$2 + 1]\n"));
+            "project [{x = #1 $0, y = #2 $0}]\n" //
+                + "  join [g$2]\n"
+                + "    [1, 2]\n"
+                + "    [g$2, g$2 + 1]\n"));
   }
 
   /**
@@ -215,7 +216,8 @@ public class RelExpanderTest {
                 + "where (i, j) elem [(1, \"a\"), (2, \"b\")]"),
         is(
             "project [{i = #1 $0, j = #2 $0}]\n" //
-                + "  [(1, \"a\"), (2, \"b\")]\n"));
+                + "  project [(#1 $0, #2 $0)]\n"
+                + "    [(1, \"a\"), (2, \"b\")]\n"));
   }
 
   /**
@@ -235,7 +237,9 @@ public class RelExpanderTest {
         expanded instanceof Core.Rel
             ? ((Core.Rel) expanded).describe()
             : expanded + "\n",
-        is("[3]\n"));
+        is(
+            "project [{w = #1 $0, x = #2 $0}]\n" //
+                + "  [3]\n"));
   }
 
   /**
@@ -253,11 +257,12 @@ public class RelExpanderTest {
             "from i : int join j : int where i elem [1, 2] "
                 + "join k : int where j elem [3, 4] andalso k elem [5, 6]"),
         is(
-            "join [{i = #i $0, j = #j $0, k = $1}]\n" //
-                + "  join [{i = $0, j = $1}]\n"
-                + "    [1, 2]\n"
-                + "    [3, 4]\n"
-                + "  [5, 6]\n"));
+            "project [{i = #1 (#1 $0), j = #2 (#1 $0), k = #2 $0}]\n" //
+                + "  join\n"
+                + "    join\n"
+                + "      [1, 2]\n"
+                + "      [3, 4]\n"
+                + "    [5, 6]\n"));
   }
 
   /**
@@ -274,11 +279,12 @@ public class RelExpanderTest {
             "from x in [1, 2] join y where y elem [x] "
                 + "join z where z elem [y, y + 1]"),
         is(
-            "join [g$3] [{x = #x $0, y = #y $0, z = $1}]\n" //
-                + "  join [g$4] [{x = $0, y = $1}]\n"
-                + "    [1, 2]\n"
-                + "    [g$4]\n"
-                + "  [#y g$3, #y g$3 + 1]\n"));
+            "project [{x = #1 (#1 $0), y = #2 (#1 $0), z = #2 $0}]\n" //
+                + "  join [g$3]\n"
+                + "    join [g$4]\n"
+                + "      [1, 2]\n"
+                + "      [g$4]\n"
+                + "    [#2 g$3, #2 g$3 + 1]\n"));
   }
 
   /**
@@ -297,9 +303,11 @@ public class RelExpanderTest {
             "from dno : int join v : int list "
                 + "where v elem [[1], [2]] andalso dno elem v"),
         is(
-            "join [g$2] [{dno = $1, v = $0}]\n" //
-                + "  [[1], [2]]\n"
-                + "  g$2\n"));
+            "project [{dno = #1 $0, v = #2 $0}]\n" //
+                + "  project [(#2 $0, #1 $0)]\n"
+                + "    join [g$2]\n"
+                + "      [[1], [2]]\n"
+                + "      g$2\n"));
   }
 
   /** Tests that a query that cannot be bounded is an error. */

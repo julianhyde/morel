@@ -755,9 +755,8 @@ C` nests, so reassociation re-paths every access above. Concatenation
 is flat, which was the reason to look past §7's two options at all.
 
 **Resolution: the join concatenates, and a projection follows where
-the query wants something else.** Not yet done; §14 is settled, so
-the way is clear. What follows is what a first attempt found, so that
-the second does not have to find it again.
+the query wants something else.** Done. What follows is what building
+it took, including the two things the design did not anticipate.
 
 **The path arithmetic.** After the join, a binder's access has to be
 rebased onto the concatenated element. Left components occupy
@@ -811,6 +810,16 @@ needs the row: a group, a set operator, the end. That is the same
 "carry the element as an expression" move `RelLowerer` already makes
 for the step list, applied to the translation. It is a change of
 similar size to this one, and it has to come first.
+
+**An outer join is one component, not its inputs'.** Found by
+building it. Flattening an outer join would mean a join above it
+wrapping each component of an absent side in its own option, one per
+component -- and nothing below can express that: the step list the
+tree lowers to re-types whole bindings, not fields of them. So an
+inner join flattens and an outer join contributes one component,
+which a projection above can take apart where a query wants the
+parts. Reassociation is free for the joins that reassociate, which
+are the inner ones; the restriction costs nothing that was on offer.
 
 **`RelExpander`'s reordering is the other hard part, and it is where
 the cost of commute lands.** Its rebuild swaps a join's inputs when the

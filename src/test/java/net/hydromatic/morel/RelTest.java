@@ -146,32 +146,28 @@ public class RelTest {
             f.typeSystem,
             f.list12,
             f.list34,
-            core.equal(f.typeSystem, f.input0, f.input1),
-            f.record(f.input0, f.input1));
-    assertThat(join.type.moniker(), is("{a:int, b:int} list"));
+            core.equal(f.typeSystem, f.input0, f.input1));
+    // The element is the inputs' components, a tuple, not a record
+    // of names -- there are no names to give it (discussion.md §15).
+    assertThat(join.type.moniker(), is("(int * int) list"));
     assertThat(
         join.describe(),
         is(
-            "join [$0 = $1] [{a = $0, b = $1}]\n" //
+            "join [$0 = $1]\n" //
                 + "  [1, 2]\n"
                 + "  [3, 4]\n"));
 
     // A join with a bag input is a bag; a nested loop over a bag has no
     // order to preserve.
     final Core.Rel join2 =
-        core.join(
-            f.typeSystem,
-            f.list12,
-            f.bag56,
-            core.boolLiteral(true),
-            f.record(f.input0, f.input1));
-    assertThat(join2.type.moniker(), is("{a:int, b:int} bag"));
+        core.join(f.typeSystem, f.list12, f.bag56, core.boolLiteral(true));
+    assertThat(join2.type.moniker(), is("(int * int) bag"));
 
     // A condition that is 'true' and an inner join kind print nothing.
     assertThat(
         join2.describe(),
         is(
-            "join [{a = $0, b = $1}]\n" //
+            "join\n" //
                 + "  [1, 2]\n"
                 + "  #fromList Bag ([5, 6])\n"));
 
@@ -180,14 +176,14 @@ public class RelTest {
         core.join(
             f.typeSystem,
             Core.Rel.JoinType.LEFT,
+            null,
             f.list12,
             f.list34,
-            core.boolLiteral(true),
-            f.record(f.input0, f.input1));
+            core.boolLiteral(true));
     assertThat(
         join3.describe(),
         is(
-            "join [left] [{a = $0, b = $1}]\n" //
+            "join [left]\n" //
                 + "  [1, 2]\n"
                 + "  [3, 4]\n"));
   }
@@ -211,14 +207,15 @@ public class RelTest {
             dPat,
             f.list12,
             core.list(f.typeSystem, dId, f.intLiteral(4)),
-            core.boolLiteral(true),
-            f.record(f.input0, f.input1));
+            core.boolLiteral(true));
 
-    assertThat(join.type.moniker(), is("{a:int, b:int} list"));
+    // The element is the inputs' components, a tuple, not a record
+    // of names -- there are no names to give it (discussion.md §15).
+    assertThat(join.type.moniker(), is("(int * int) list"));
     assertThat(
         join.describe(),
         is(
-            "join [d] [{a = $0, b = $1}]\n" //
+            "join [d]\n" //
                 + "  [1, 2]\n"
                 + "  [d, 4]\n"));
 
@@ -231,13 +228,12 @@ public class RelTest {
             dPat,
             f.list12,
             f.bag56,
-            core.boolLiteral(true),
-            f.input1);
-    assertThat(join2.type.moniker(), is("int bag"));
+            core.boolLiteral(true));
+    assertThat(join2.type.moniker(), is("(int * int) bag"));
     assertThat(
         join2.describe(),
         is(
-            "join [d] [$1]\n" //
+            "join [d]\n" //
                 + "  [1, 2]\n"
                 + "  #fromList Bag ([5, 6])\n"));
   }
@@ -339,8 +335,7 @@ public class RelTest {
             f.typeSystem,
             f.list12,
             f.list34,
-            core.equal(f.typeSystem, f.input0, f.input1),
-            f.record(f.input0, f.input1));
+            core.equal(f.typeSystem, f.input0, f.input1));
     assertThat(f.violations(join), empty());
 
     // $1 belongs to a join; a filter does not bind it.
@@ -386,23 +381,11 @@ public class RelTest {
                 f.typeSystem,
                 core.list(f.typeSystem, core.id(dPat)),
                 f.record(core.id(dPat), f.input0)),
-            core.boolLiteral(true),
-            f.input1);
+            core.boolLiteral(true));
     assertThat(f.violations(dependent), empty());
 
-    // But the yield may not mention it: there, $0 and $1 are what a join says.
-    final Core.Rel badBinder =
-        core.join(
-            f.typeSystem,
-            Core.Rel.JoinType.INNER,
-            dPat,
-            f.list12,
-            core.list(f.typeSystem, core.id(dPat)),
-            core.boolLiteral(true),
-            core.id(dPat));
-    assertThat(
-        f.violations(badBinder),
-        is(Arrays.asList("join yield cannot reference the join's binder d")));
+    // There is no yield to misuse the binder in; the condition is the only
+    // expression a join carries, and `binderNotIn` guards that.
   }
 }
 
