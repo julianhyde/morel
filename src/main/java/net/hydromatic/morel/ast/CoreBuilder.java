@@ -871,31 +871,9 @@ public enum CoreBuilder {
       TypeSystem typeSystem,
       Core.Exp left,
       Core.Exp right,
-      Core.Exp condition,
-      Core.Exp yieldExp) {
+      Core.Exp condition) {
     return join(
-        typeSystem,
-        Core.Rel.JoinType.INNER,
-        null,
-        left,
-        right,
-        condition,
-        yieldExp);
-  }
-
-  /**
-   * Creates a join; the element type is the type of the yield expression, over
-   * {@code $0} and {@code $1}, and the output is ordered only if both inputs
-   * are ordered.
-   */
-  public Core.Join join(
-      TypeSystem typeSystem,
-      Core.Rel.JoinType joinType,
-      Core.Exp left,
-      Core.Exp right,
-      Core.Exp condition,
-      Core.Exp yieldExp) {
-    return join(typeSystem, joinType, null, left, right, condition, yieldExp);
+        typeSystem, Core.Rel.JoinType.INNER, null, left, right, condition);
   }
 
   /**
@@ -909,15 +887,88 @@ public enum CoreBuilder {
       Core.@Nullable IdPat binder,
       Core.Exp left,
       Core.Exp right,
-      Core.Exp condition,
-      Core.Exp yieldExp) {
+      Core.Exp condition) {
     checkCollection(left);
     checkCollection(right);
     checkBoolType(condition, "join condition");
     final boolean ordered = isOrdered(left) && isOrdered(right);
-    final Type type = collectionType(typeSystem, ordered, yieldExp.type);
-    return new Core.Join(
-        type, joinType, binder, left, right, condition, yieldExp);
+    final Type type =
+        collectionType(
+            typeSystem,
+            ordered,
+            joinElementType(typeSystem, joinType, left, right));
+    return new Core.Join(type, joinType, binder, left, right, condition);
+  }
+
+  /**
+   * Returns expressions for a node's components, read out of an expression for
+   * its element: a join contributes its own, anything else contributes one
+   * (discussion.md §15).
+   */
+  public List<Core.Exp> components(
+      TypeSystem typeSystem, Core.Exp node, Core.Exp exp) {
+    if (!(node instanceof Core.Join) || !isFlat((Core.Join) node)) {
+      return ImmutableList.of(exp);
+    }
+    final List<Core.Exp> exps = new ArrayList<>();
+    for (int i = 0; i < componentCount(node); i++) {
+      exps.add(field(typeSystem, exp, i));
+    }
+    return exps;
+  }
+
+  /** Returns how many components a node's element has. */
+  public int componentCount(Core.Exp node) {
+    if (node instanceof Core.Join && isFlat((Core.Join) node)) {
+      final Core.Join join = (Core.Join) node;
+      return componentCount(join.left) + componentCount(join.right);
+    }
+    return 1;
+  }
+
+  /**
+   * Returns whether a join's components are its inputs' components rather than
+   * one apiece.
+   *
+   * <p>An inner join flattens. An outer join does not: its element has each
+   * component of the absent side option-wrapped, and a join above it would have
+   * to wrap them again, one option per component, which nothing below can
+   * express -- the step list the tree lowers to re-types whole bindings, not
+   * fields of them. So an outer join is one component, and a projection above
+   * it can take it apart where a query wants the parts.
+   */
+  private static boolean isFlat(Core.Join join) {
+    return join.joinType == Core.Rel.JoinType.INNER;
+  }
+
+  /** Returns the element type of a join: its inputs' components, in order. */
+  public Type joinElementType(
+      TypeSystem typeSystem,
+      Core.Rel.JoinType joinType,
+      Core.Exp left,
+      Core.Exp right) {
+    final List<Type> types = new ArrayList<>();
+    componentTypes(left)
+        .forEach(
+            t -> types.add(joinType.leftIsOption() ? typeSystem.option(t) : t));
+    componentTypes(right)
+        .forEach(
+            t ->
+                types.add(joinType.rightIsOption() ? typeSystem.option(t) : t));
+    return typeSystem.tupleType(types);
+  }
+
+  /**
+   * Returns the component types of a node's element, read off a join's own
+   * element rather than recomputed from its inputs, so that an outer join's
+   * option-wrapping is not applied twice.
+   */
+  public List<Type> componentTypes(Core.Exp node) {
+    if (node instanceof Core.Join && isFlat((Core.Join) node)) {
+      return ImmutableList.copyOf(
+          ((RecordLikeType) node.type.elementType()).argTypes());
+    }
+    return ImmutableList.of(node.type.elementType());
   }
 
   /**

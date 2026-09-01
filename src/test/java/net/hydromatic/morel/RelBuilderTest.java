@@ -177,15 +177,11 @@ public class RelBuilderTest {
     nameExps.add("i", b.name(0, "i"));
     nameExps.add("j", b.name(1, "j"));
     final Core.Exp rel =
-        b.join(
-                Core.Rel.JoinType.INNER,
-                core.boolLiteral(true),
-                core.record(f.typeSystem, nameExps))
-            .build();
+        b.join(Core.Rel.JoinType.INNER, core.boolLiteral(true)).build();
     assertThat(
         f.plan(rel),
         is(
-            "join [{i = $0, j = $1}]\n" //
+            "join\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"));
   }
@@ -208,16 +204,11 @@ public class RelBuilderTest {
     nameExps.add("d", b.input(1));
     nameExps.add("e", b.input(0));
     final Core.Exp rel =
-        b.join(
-                Core.Rel.JoinType.INNER,
-                binder,
-                core.boolLiteral(true),
-                core.record(f.typeSystem, nameExps))
-            .build();
+        b.join(Core.Rel.JoinType.INNER, binder, core.boolLiteral(true)).build();
     assertThat(
         f.plan(rel),
         is(
-            "join [e] [{d = $1, e = $0}]\n" //
+            "join [e]\n" //
                 + "  [{deptno = 10}, {deptno = 20}]\n"
                 + "  [#deptno e]\n"));
   }
@@ -234,13 +225,13 @@ public class RelBuilderTest {
     assertThat(
         f.plan(offeredBinder(f)),
         is(
-            "join [i] [$0 = $1] [$0]\n" //
+            "join [i] [$0 = $1]\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"));
     assertThat(
         f.plan(offeredBinder(f, Simplification.values())),
         is(
-            "join [$0 = $1] [$0]\n" //
+            "join [$0 = $1]\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"));
   }
@@ -253,8 +244,7 @@ public class RelBuilderTest {
     return b.join(
             Core.Rel.JoinType.INNER,
             binder,
-            core.equal(f.typeSystem, b.input(0), b.input(1)),
-            b.input(0))
+            core.equal(f.typeSystem, b.input(0), b.input(1)))
         .build();
   }
 
@@ -271,23 +261,18 @@ public class RelBuilderTest {
     b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
     b.pair();
     final Core.Exp rel =
-        b.join(
-                Core.Rel.JoinType.INNER,
-                binder,
-                core.boolLiteral(true),
-                b.input(1))
-            .build();
+        b.join(Core.Rel.JoinType.INNER, binder, core.boolLiteral(true)).build();
     assertThat(
         f.plan(rel),
         is(
-            "join [e] [$1]\n" //
+            "join [e]\n" //
                 + "  [{deptno = 10}, {deptno = 20}]\n"
                 + "  [#deptno e]\n"));
   }
 
   /**
-   * Tests that the validator rejects a binder read from the condition or the
-   * yield, where {@code $0} and {@code $1} are what a join says.
+   * Tests that the validator rejects a binder read from the condition, where
+   * {@code $0} and {@code $1} are what a join says.
    */
   @Test
   void testBinderOutOfScope() {
@@ -297,18 +282,21 @@ public class RelBuilderTest {
     final Core.IdPat binder = b.binder("e");
     b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
     b.pair();
-    // Illegal: the yield reads the binder rather than $0.
+    // Illegal: the condition reads the binder rather than $0.
     final Core.Exp rel =
         b.join(
                 Core.Rel.JoinType.INNER,
                 binder,
-                core.boolLiteral(true),
-                core.id(binder))
+                core.equal(
+                    f.typeSystem,
+                    core.field(f.typeSystem, core.id(binder), 0),
+                    f.intLiteral(10)))
             .build();
     assertThat(
         RelValidator.violations(f.typeSystem, (Core.Rel) rel),
         hasItem(
-            containsString("join yield cannot reference the join's binder")));
+            containsString(
+                "join condition cannot reference the join's binder")));
   }
 
   /** Tests that a set operator takes as many inputs as it is given. */
