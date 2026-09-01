@@ -447,12 +447,27 @@ something settled — §8's principle, applied to the sequence itself.
         mentions) that a tree needs as much as a step list. The issue
         itself gives the reason: a tree is closer to `RelNode` than a
         step list is.
+      One consequence of concatenating the join, found by
+      re-measuring: a component access is positional and sometimes
+      nested -- `#1 (#1 $0)` where a component is itself a join's
+      element -- and `CalciteCompiler.translate` pushes down only
+      `#f v`, a field of a plain id. A nested access falls through to
+      the scalar-fragment path, and a bare `#1` crosses the text
+      channel with nothing to resolve it against: "unresolved flex
+      record (can't tell what fields there are besides #1)", which is
+      the same failure `08b8e22d` fixed for `#x`. Only the round trip
+      sees it today, because only the round trip runs the lowered
+      form; the flip makes it real. The fix is the same shape as
+      before -- teach `translate` to push a path down, or reduce the
+      path in the lowering.
+
       Where the round trip stands, re-measured after the dependent
       join, the failable-pattern translation and the group-record
-      change: three scripts differ, all of them in plan text only
-      (optimize, hybrid, relational), and such-that.smli has the two
-      artifacts below. dual.smli, blog.smli and built-in/relational
-      .smli used to differ and now do not — the dependent join and
+      change, and again after concatenating the join: four scripts
+      differ -- optimize, hybrid and relational in plan text only,
+      dual.smli on the Calcite gap above -- and such-that.smli has
+      the two artifacts below. blog.smli and built-in/relational.smli
+      used to differ and now do not — the dependent join and
       the filter-and-projection translation closed them. Re-measure
       after a run of changes rather than only when something is
       expected to move: the run that produced these numbers also
