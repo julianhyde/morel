@@ -2168,6 +2168,13 @@ public class Resolver {
    * the name is the whole element.
    */
   private class RelFromResolver {
+    /** The step-list resolver that chose this path; asked about `ordinal`. */
+    private final FromResolver outer;
+
+    RelFromResolver(FromResolver outer) {
+      this.outer = outer;
+    }
+
     final RelBuilder b =
         RelBuilder.create(typeMap.typeSystem, Simplification.all());
 
@@ -2217,10 +2224,29 @@ public class Resolver {
      */
     int scopeOrdinal = 0;
 
+    /**
+     * The pattern that {@code ordinal} resolves to while a step that reads it
+     * is converted, and the path that reads the field holding it; null
+     * otherwise.
+     *
+     * <p>The tree has no notion of a row's position. The builder does: it
+     * projects the ordinal into a field beside the row, the step reads the
+     * field like any other, and the field is projected away again. What the
+     * step list does with two extra yields, and for the same reason.
+     */
+    Core.@Nullable IdPat ordinalPat;
+
+    /**
+     * Name of the field the ordinal was projected into; null if there is none.
+     *
+     * <p>A name and not a path, because where the path is rooted depends on who
+     * reads it: a join's right input reads it through the join's binder, as it
+     * reads every other name.
+     */
+    @Nullable String ordinalName;
+
     Core.Exp run(List<Ast.FromStep> steps) {
-      for (Ast.FromStep step : steps) {
-        step(step);
-      }
+      forEachIndexed(steps, this::acceptStep);
       if (!(last(steps) instanceof Ast.Yield)) {
         finish();
       }
@@ -2242,7 +2268,15 @@ public class Resolver {
       }
       final Map<String, Core.Exp> paths = new LinkedHashMap<>();
       binders.forEach(name -> paths.put(name, b.name(name)));
-      b.project(natural(paths, b.input(0)));
+      final Core.Exp exp = natural(paths, b.input(0));
+      if (atom && binders.size() == 1) {
+        // A projection takes its names from the element's fields, and an atom
+        // row has none, so the binder is named explicitly or the steps after
+        // this one cannot find it.
+        b.project(requireNonNull(getOnlyElement(binders)), exp);
+      } else {
+        b.project(exp);
+      }
       rowIsElement = true;
     }
 
@@ -2268,6 +2302,57 @@ public class Resolver {
       final PairList<String, Core.Exp> nameExps = PairList.of();
       paths.forEach(nameExps::add);
       return core.record(typeMap.typeSystem, nameExps);
+    }
+
+    /**
+     * Converts a step, giving it a field to read if it reads {@code ordinal}.
+     *
+     * <p>The first step is never a reader, and a {@code yield} holds the call
+     * itself -- it is evaluated once per row already -- which is the same rule
+     * the step list follows.
+     */
+    private void acceptStep(Ast.FromStep step, int i) {
+      if (i == 0 || step instanceof Ast.Yield || !outer.usesOrdinal(step)) {
+        step(step);
+        return;
+      }
+      materializeOrdinal();
+      step(step);
+      // Projects the field away, unless the step replaced the row anyway, in
+      // which case `finish` has nothing to do. The field is an implementation
+      // detail and must not reach the query's result.
+      finish();
+      ordinalPat = null;
+      ordinalName = null;
+    }
+
+    /** Projects the row with a field beside it holding the row's position. */
+    private void materializeOrdinal() {
+      if (binders.isEmpty() && rowIsElement) {
+        // The row has no name -- `yield i + 1` binds none -- so give it one,
+        // or the record below would be the field and nothing else.
+        final String rowName = typeMap.typeSystem.nameGenerator.get();
+        b.project(rowName, b.input(0));
+        binders.add(rowName);
+        atom = true;
+      }
+      final Core.IdPat pat =
+          core.idPat(PrimitiveType.INT, typeMap.typeSystem.nameGenerator::get);
+      final PairList<String, Core.Exp> nameExps = PairList.of();
+      binders.forEach(name -> nameExps.add(name, b.name(name)));
+      nameExps.add(
+          pat.name,
+          core.apply(
+              Pos.ZERO,
+              PrimitiveType.INT,
+              core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_ORDINAL),
+              core.tuple(typeMap.typeSystem)));
+      b.project(core.record(typeMap.typeSystem, nameExps));
+      ordinalPat = pat;
+      ordinalName = pat.name;
+      // The element is now the row and the field; the row is what the binders
+      // name, which is what makes `finish` project the field away.
+      rowIsElement = false;
     }
 
     private void step(Ast.FromStep step) {
@@ -2507,7 +2592,8 @@ public class Resolver {
       for (String binder : binders) {
         paths.put(binder, b.name(binder));
       }
-      final Scope scope = new Scope(paths, natural(paths, b.input(0)));
+      final Scope scope =
+          new Scope(paths, natural(paths, b.input(0)), ordinalPath(b.input(0)));
       // `withAggregateResolver` reads only the bindings and the ordering; the
       // atom flag would have to lie anyway, since these bindings include the
       // tree's inputs and an atom env holds exactly one.
@@ -2596,7 +2682,7 @@ public class Resolver {
       final Map<String, Core.Exp> labels = new LinkedHashMap<>();
       keys.keySet().forEach(name -> labels.put(name, b.name(name)));
       aggs.keySet().forEach(name -> labels.put(name, b.name(name)));
-      final Scope after = new Scope(labels, b.input(0));
+      final Scope after = new Scope(labels, b.input(0), null);
       binders.clear();
       if (groupIsAtom) {
         final String name = postExps.left(0);
@@ -2751,7 +2837,15 @@ public class Resolver {
       for (String binder : binders) {
         paths.put(binder, rootAt(b.name(binder), element));
       }
-      return toCore(exp, paths, natural(paths, element));
+      return toCore(exp, paths, natural(paths, element), ordinalPath(element));
+    }
+
+    /**
+     * Returns the path that reads the ordinal field, rooted where its reader
+     * reads it, or null if no field was projected.
+     */
+    private Core.@Nullable Exp ordinalPath(Core.Exp element) {
+      return ordinalName == null ? null : rootAt(b.name(ordinalName), element);
     }
 
     /**
@@ -2769,13 +2863,20 @@ public class Resolver {
       }
       final Map<String, Core.Exp> paths = new LinkedHashMap<>(left);
       rightBinders.forEach(name -> paths.put(name, b.name(1, name)));
-      return toCore(exp, paths, natural(left, b.input(0)));
+      return toCore(
+          exp,
+          paths,
+          natural(left, b.input(0)),
+          ordinalName == null ? null : b.name(0, ordinalName));
     }
 
     /** Converts an expression, given where each name it may use is found. */
     private Core.Exp toCore(
-        Ast.Exp exp, Map<String, Core.Exp> paths, Core.Exp current) {
-      return new Scope(paths, current).toCore(exp);
+        Ast.Exp exp,
+        Map<String, Core.Exp> paths,
+        Core.Exp current,
+        Core.@Nullable Exp ordinalPath) {
+      return new Scope(paths, current, ordinalPath).toCore(exp);
     }
 
     /**
@@ -2803,7 +2904,10 @@ public class Resolver {
        */
       private final Map<Core.NamedPat, Core.Exp> byPat = new LinkedHashMap<>();
 
-      Scope(Map<String, Core.Exp> paths, Core.Exp current) {
+      Scope(
+          Map<String, Core.Exp> paths,
+          Core.Exp current,
+          Core.@Nullable Exp ordinalPath) {
         this.current = current;
         paths.forEach(
             (name, path) -> {
@@ -2827,11 +2931,16 @@ public class Resolver {
         paths.values().forEach(path -> path.accept(inputBinder));
         current.accept(inputBinder);
         inputs.values().forEach(pat -> bindings.add(Binding.of(pat)));
+        if (ordinalPath != null) {
+          byPat.put(requireNonNull(ordinalPat), ordinalPath);
+          bindings.add(Binding.of(ordinalPat));
+        }
       }
 
       /** Returns a resolver that reads this scope's names. */
       Resolver resolver() {
-        return Resolver.this.withEnv(bindings).withCurrent(current);
+        final Resolver r = Resolver.this.withEnv(bindings).withCurrent(current);
+        return ordinalName == null ? r : r.withOrdinalPat(ordinalPat);
       }
 
       /** Replaces each reference to a name with the path that reads it. */
@@ -2958,7 +3067,7 @@ public class Resolver {
 
     private Core.Exp run(List<Ast.FromStep> steps) {
       if (nativelyBuildable(steps)) {
-        return new RelFromResolver().run(steps);
+        return new RelFromResolver(this).run(steps);
       }
       forEachIndexed(steps, this::acceptStep);
       return fromBuilder.buildSimplify();
@@ -3041,11 +3150,6 @@ public class Resolver {
           }
           bound = -1;
         } else {
-          return false;
-        }
-        if (i > 0 && usesOrdinal(step)) {
-          // `ordinal` counts rows, so the step list materializes it as a
-          // field and drops it again. The tree has no equivalent yet.
           return false;
         }
       }

@@ -766,6 +766,33 @@ something settled — §8's principle, applied to the sequence itself.
       do not, 74 read `ordinal` and all but a handful of the rest are
       unbounded scans -- which is now the whole of what is left, and
       is the grounding move rather than another slice.
+- [x] Slice 11: `ordinal`, and the tree keeps no notion of a row's
+      position. The builder has one instead: it projects the ordinal
+      into a field beside the row, the step reads the field like any
+      other name, and `finish` projects the field away again -- what
+      the step list does with two extra yields, for the same reason,
+      but held where the names are held rather than in the datatype.
+
+      Three things it found:
+      * A path to the field has to be rooted where its *reader* reads
+        it, exactly as a binder's is: a join's right input reads it
+        through the join's binder, and rooting it at `$0` put a leaf
+        that references `$0` into the tree. So the builder keeps the
+        field's *name*, not its path.
+      * `finish` projected an atom row without naming it, and a
+        projection takes its names from the element's fields, which an
+        atom has none of. Invisible until now, because `finish` had
+        only ever run at the end of a query or before a set operator;
+        dropping the ordinal field made it run in the middle.
+      * A row with no name (`yield i + 1` binds none) has to be given
+        one before the field can sit beside it, or the record would be
+        the field and nothing else.
+
+      1492 of the suite's 1852 queries build natively. Of the 360 that
+      do not, 341 are unbounded scans, 14 are queries whose first step
+      is not a scan, and 5 read `ordinal` in a join's condition --
+      which counts candidate pairs rather than rows, and is a counter
+      the tree has no way to ask for.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
