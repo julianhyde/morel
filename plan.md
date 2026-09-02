@@ -832,6 +832,33 @@ something settled — §8's principle, applied to the sequence itself.
 
       1528 of the suite's 1852 queries build natively. The 324 that do
       not are unbounded scans, save a handful of chained outer joins.
+- [ ] Unbounded scans, the last 324, and the reason is sharper than
+      "grounding reads step lists". Tried, and backed out; the branch
+      is green without it.
+
+      **Grounding must run after inlining, and the resolver runs
+      before it.** The engine matches on *function literals*, and
+      until `Inliner` has run a built-in such as `elem` is still an
+      `Id` -- which `RelExpanderTest`'s own fixture says in a comment,
+      and which is why `Compiles` runs `SuchThatShuttle` in the inline
+      loop rather than at conversion. Two attempts, each answered by
+      the suite:
+      * Let the tree carry the extent and leave the lowered step list
+        to `SuchThatShuttle`, as today. The pattern is gone by then --
+        a tree erases it -- so the engine cannot tell a pattern that
+        named each component from one that named the whole, and the
+        inliner recursed until it overflowed the stack on
+        `from n where n elem [1,2,3]`.
+      * Call `RelExpander.expand` on the tree inside the resolver. The
+        tree is exactly right (`filter [$0 elem [1, 2, 3]]` over
+        `extent "int"`) and the engine finds no generator, because
+        `elem` is still an `Id`.
+
+      So the move is about *when*, not about which class: the tree has
+      to survive as a tree until after inlining, which is step 3's
+      business (`Core.Rel` reaching the compiler) rather than a slice
+      of the flip. Until then unbounded queries keep the step list,
+      and that is the whole of what does.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
