@@ -728,6 +728,28 @@ something settled — §8's principle, applied to the sequence itself.
       1142. Of the 492 that do not: 270 are unbounded scans, 74 read
       `ordinal`, 24 are `through` or `into`, 23 are `yieldAll`, and
       the rest are outer joins.
+- [x] Slice 8: outer joins, where the absent side binds one name. The
+      mapping is three lines; the constraint is the finding. A tree's
+      outer join contributes one component and wraps *it* in `option`
+      (discussion.md §15), and the step list wraps each binding of the
+      absent side separately. For one binding those are the same type;
+      for several they are not -- `(a * b) option` against `a option *
+      b option` -- and it is the step list's answer the user has seen.
+      Chained outer joins are what find it, because the second one's
+      left side is the first join, which binds two:
+      `from i in [1,2] right join j in [3] on true right join k in [4]
+      on true` is `{i:int option option, ...}`, and the tree said
+      `int option`.
+
+      Also: a scan's *condition* may read `ordinal` (`left join j in
+      [...] on ordinal mod 2 = 0` counts candidate pairs), and
+      `usesOrdinal` answers only for the extent, so the condition is
+      asked separately.
+
+      1377 of the suite's 1852 queries now build natively. Of the 475
+      that do not, about 350 are unbounded scans, 74 read `ordinal`,
+      24 are `through` or `into`, 23 are `yieldAll`, and a handful are
+      chained outer joins.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
