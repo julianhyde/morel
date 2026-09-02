@@ -38,6 +38,7 @@ import static org.apache.calcite.util.Util.intersects;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
@@ -2218,6 +2219,17 @@ public class Resolver {
     /** Name of each scan's binder, in the order the scans were pushed. */
     final List<String> scanNames = new ArrayList<>();
 
+    /**
+     * Ordinal for the next binder that a {@link Scope} makes, counting down.
+     *
+     * <p>Negative, so that it cannot be an ordinal {@link NameGenerator#inc}
+     * hands out, and taking one from the generator instead would suffix every
+     * binder in every plan -- {@code from p_1 in ...} where the user wrote
+     * {@code p}. These patterns are substituted away before anything sees them;
+     * uniqueness is all their ordinals owe.
+     */
+    int scopeOrdinal = 0;
+
     Core.Exp run(List<Ast.FromStep> steps) {
       for (Ast.FromStep step : steps) {
         step(step);
@@ -2244,6 +2256,7 @@ public class Resolver {
       final Map<String, Core.Exp> paths = new LinkedHashMap<>();
       binders.forEach(name -> paths.put(name, b.name(name)));
       b.project(natural(paths, b.input(0)));
+      rowIsElement = true;
     }
 
     /**
@@ -2307,8 +2320,71 @@ public class Resolver {
         b.take(toCore(((Ast.Take) step).exp, null));
       } else if (step instanceof Ast.Group) {
         group_((Ast.Group) step);
+      } else if (step instanceof Ast.SetStep) {
+        setStep((Ast.SetStep) step);
+      } else if (step instanceof Ast.Require) {
+        // As the step list has it: `require e` is `where not e`.
+        b.filter(
+            core.not(typeMap.typeSystem, toCore(((Ast.Require) step).exp)));
+      } else if (step instanceof Ast.Distinct) {
+        distinct();
       } else {
         yield_((Ast.Yield) step);
+      }
+    }
+
+    /**
+     * Keeps one row of each distinct value, by grouping on every binder.
+     *
+     * <p>A row of {@code unit} is the exception the step list makes too: {@code
+     * group {}} always returns one row, so an empty input would gain one, and
+     * {@code take 1} is what is meant.
+     */
+    private void distinct() {
+      finish();
+      final SortedMap<String, Core.Exp> keys = new TreeMap<>();
+      if (binders.isEmpty() || atom) {
+        if (b.input(0).type == PrimitiveType.UNIT) {
+          b.take(core.intLiteral(BigDecimal.ONE));
+          return;
+        }
+        // The row is one value, so group by it and read it back out of the
+        // record the group makes.
+        final String name =
+            binders.isEmpty()
+                ? typeMap.typeSystem.nameGenerator.get()
+                : requireNonNull(getOnlyElement(binders));
+        keys.put(name, b.input(0));
+        b.group(keys, ImmutableSortedMap.of());
+        b.project(name, b.name(name));
+      } else {
+        binders.forEach(name -> keys.put(name, b.name(name)));
+        b.group(keys, ImmutableSortedMap.of());
+      }
+    }
+
+    /**
+     * Combines the query so far with one or more collections.
+     *
+     * <p>A set operator compares rows, so the row has to be built first: after
+     * a join the element is the inputs' components, which is not what the
+     * query's binders name. The arguments are whole collections, evaluated
+     * once, so they are read in the enclosing scope as a count is.
+     */
+    private void setStep(Ast.SetStep set) {
+      finish();
+      set.args.forEach(arg -> b.push(toCore(arg, null)));
+      final int n = set.args.size() + 1;
+      switch (set.op) {
+        case UNION:
+          b.union(n, set.distinct);
+          break;
+        case INTERSECT:
+          b.intersect(n, set.distinct);
+          break;
+        default:
+          b.except(n, set.distinct);
+          break;
       }
     }
 
@@ -2608,16 +2684,31 @@ public class Resolver {
      * That is the whole of what {@code withStepEnv} did, minus the step list.
      */
     private class Scope {
-      final Map<String, Core.Exp> paths;
       final Core.Exp current;
       final List<Binding> bindings = new ArrayList<>();
 
+      /**
+       * Path to each binder, by the pattern that binds it rather than by its
+       * name.
+       *
+       * <p>By the pattern, because a name is not unique: {@code forall p in
+       * s.pictures require ... exists p in s.products where p.sku = sku}
+       * rebinds {@code p}, and the inner query is lowered to a step list that
+       * says {@code p} again. Substituting by name would give the inner query
+       * the outer row. A fresh ordinal for each binder is what keeps them
+       * apart, and the resolver hands back the very pattern it was given.
+       */
+      private final Map<Core.NamedPat, Core.Exp> byPat = new LinkedHashMap<>();
+
       Scope(Map<String, Core.Exp> paths, Core.Exp current) {
-        this.paths = paths;
         this.current = current;
         paths.forEach(
-            (name, path) ->
-                bindings.add(Binding.of(core.idPat(path.type, name, 0))));
+            (name, path) -> {
+              final Core.IdPat pat =
+                  core.idPat(path.type, name, --scopeOrdinal);
+              byPat.put(pat, path);
+              bindings.add(Binding.of(pat));
+            });
         // A path, and `current`, read an input of the tree, `$0` or `$1`. A
         // nested query is still built as a step list, and its FromBuilder
         // validates each step against this environment, so the inputs must be
@@ -2646,7 +2737,7 @@ public class Resolver {
             new Shuttle(typeMap.typeSystem) {
               @Override
               protected Core.Exp visit(Core.Id id) {
-                final Core.@Nullable Exp path = paths.get(id.idPat.name);
+                final Core.@Nullable Exp path = byPat.get(id.idPat);
                 return path == null ? id : core.at(path, id.pos);
               }
             });
@@ -2818,6 +2909,10 @@ public class Resolver {
           if (((Ast.Group) step).binder != null) {
             return false;
           }
+        } else if (step instanceof Ast.SetStep
+            || step instanceof Ast.Require
+            || step instanceof Ast.Distinct) {
+          // Nothing more to check.
         } else if (step instanceof Ast.Yield) {
           if (((Ast.Yield) step).binder != null) {
             return false;

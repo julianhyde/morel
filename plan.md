@@ -669,6 +669,34 @@ something settled — §8's principle, applied to the sequence itself.
       excluded for something else), `union` 75, `order` 67, `except`
       49, `intersect` 47, `require` 36, `through` 31, `into` 6,
       `distinct` 3.
+- [x] Slice 6: the set operators, `require` (which is `where not e`,
+      as the step list has it) and `distinct` (a group on every
+      binder, or `take 1` where the row is `unit`, which is the
+      exception the step list makes too: `group {}` always returns one
+      row, so an empty input would gain one).
+
+      And a correctness hole that had been open since the first slice,
+      which only a query that shadows a binder could reach.
+      Substitution was by *name*, and a name is not unique: `forall p
+      in s.pictures require ... exists p in s.products where p.sku =
+      sku` rebinds `p`, and the inner query -- itself built as a tree
+      -- is lowered to a step list that says `p` again. The outer
+      substitution then handed the inner query the outer row. It is by
+      pattern now, each binder given an ordinal of its own, and the
+      resolver hands back the very pattern it was given.
+
+      Those ordinals come from a private negative range rather than
+      the name generator. Taking them from the generator works and
+      costs one line, and it suffixed every binder in every plan --
+      `from p_1 in ...` where the user wrote `p`. These patterns are
+      substituted away before anything sees them; uniqueness is all
+      their ordinals owe.
+
+      1142 of the suite's 1852 queries now build natively, up from
+      936. Of the 710 that do not: about 330 are unbounded scans,
+      whose grounding reads step lists and waits on `RelExpander`;
+      192 are scans with a pattern; the rest are `through`, `into`,
+      `yieldAll`, `ordinal`, and outer joins.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
