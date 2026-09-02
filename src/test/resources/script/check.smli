@@ -351,6 +351,28 @@ val ns2: nats = [1, ~2];
 > uncaught exception Constraint [~2 is not a valid nat: [_]]
 >   raised at: stdIn:1.5-1.24
 
+(* A vector is walked element by element, as a list is. It is not a
+ * collection -- a query cannot scan one -- and it is an eqtype, so it has no
+ * constructors to walk either; before this it fell between the two, and a
+ * condition inside one was claimed and never checked. *)
+type natVector = nat vector;
+> type natVector = nat vector
+val vs: natVector = Vector.fromList [1, 2];
+> val vs = #[1,2] : natVector
+val vs2: natVector = Vector.fromList [1, ~2];
+> uncaught exception Constraint [~2 is not a valid nat: [_]]
+>   raised at: stdIn:1.5-1.45
+
+(* The claim is reached through whatever encloses the vector: a walk that
+ * answers "nothing here is checked" is believed by every walk above it. *)
+val vs3: nat vector list = [Vector.fromList [~1]];
+> uncaught exception Constraint [~1 is not a valid nat: [_][_]]
+>   raised at: stdIn:1.5-1.50
+
+(*) A vector whose element type constrains nothing is not checked.
+val vs4: int vector = Vector.fromList [~1];
+> val vs4 = #[~1] : int vector
+
 (* Components are checked before the whole, so a type's own condition may
  * assume that its components satisfy theirs. *)
 type nonEmptyNats = nat list check l => not (List.null l);
