@@ -550,6 +550,19 @@ something settled — §8's principle, applied to the sequence itself.
         the scan names the caller knows, with the same ordinal
         allocation the step list uses -- which `InlineTest.testFromView`
         insisted on, two `e` binders in one plan.
+- [x] Slice 2: a `yield` anywhere in the query, not only last. The
+      names a yield introduces are the untested half of the builder's
+      map, and deriving them is the whole of the slice: a record yield
+      binds its fields, at paths `#f $0`; any other yield binds the
+      row at `$0` under one name, if it has one to offer -- a
+      reference keeps its name, `e.deptno` gives `deptno`, and
+      anything else is anonymous, which is exactly when the user
+      cannot name it either. The rule has to be the step list's
+      because the *type resolver* has already decided by it which
+      names the later steps may use. Whether the yield is a record is
+      what the user wrote rather than what the expression turned out
+      to be: a record with modifiers is a `let` by the time it
+      arrives, so only the `Ast` can say. No expectation moved.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
