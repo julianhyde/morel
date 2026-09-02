@@ -563,6 +563,30 @@ something settled — §8's principle, applied to the sequence itself.
       what the user wrote rather than what the expression turned out
       to be: a record with modifiers is a `let` by the time it
       arrives, so only the `Ast` can say. No expectation moved.
+- [x] Slice 3: a second scan, as a join. The right input is a tree of
+      its own and cannot say `$0`, so the left's names are read off a
+      dependent-join binder that the builder drops again where the
+      collection turns out not to use it -- decorrelation paid at
+      construction, and `from e in emps, d in depts` comes out as an
+      independent join without a pass to notice.
+
+      What a join forced into the open, having been invisible while
+      every query had one binder:
+      * A query with no trailing yield returns what its *binders*
+        name, and a join's element is its inputs' components
+        concatenated, which is not that record. So the resolver
+        projects it -- and that projection is `current` as well, which
+        is the same thing said in an expression.
+      * `Core.StepEnv.atom` had to come back, under its own name. The
+        distinction is not how many binders there are: `yield {j = i +
+        1}` binds one name and the row is still a record, so `current`
+        is a record too, and reading the binder instead gives an
+        `int`. One binder is the row only when the step that bound it
+        made it the row.
+      * A yield's name has to be read off the `Ast`. The step list
+        reads it off the Core -- `getIdPat` sees `Core.Id d` and says
+        `d` -- but by the time the tree's converter is done, `d` is a
+        path into the element and no longer looks like a reference.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
