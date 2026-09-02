@@ -815,6 +815,23 @@ something settled — §8's principle, applied to the sequence itself.
       1495 of the suite's 1852 queries build natively. Of the 357 that
       do not, 341 are unbounded scans and 14 are queries whose first
       step is not a scan.
+- [x] A query with no scan -- `from`, `from where p`, `from yield e`
+      -- which iterates over one row, and that row is `unit`. The tree
+      says so with a leaf holding that one row, exactly as
+      `RelTranslator.unitCollection` does.
+
+      The lowering owed the inverse and did not have it, which two
+      tests found at once: `InlineTest.testFromEmptyFrom` read
+      `from u in [()]` where it had read `from u in (from)`, and
+      `AlgebraTest.testCalciteFrom` got a project over a values of one
+      `true` where Calcite had been given a values of one empty row. A
+      step list says "one unit row" by having no scan, and downstream
+      reads it that way; `[()]` is the same rows and a worse plan. So
+      the lowering now turns that leaf back into a scan-free step
+      list, which is the translator's rule read backwards.
+
+      1528 of the suite's 1852 queries build natively. The 324 that do
+      not are unbounded scans, save a handful of chained outer joins.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
