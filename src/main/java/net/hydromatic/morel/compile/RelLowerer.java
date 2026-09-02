@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
@@ -63,34 +62,13 @@ import org.jspecify.annotations.Nullable;
 public class RelLowerer {
   private final TypeSystem typeSystem;
 
-  /** Counter for generated binders, shared by nested lowerings. */
-  private final AtomicInteger nextName;
-
-  private RelLowerer(TypeSystem typeSystem, AtomicInteger nextName) {
+  private RelLowerer(TypeSystem typeSystem) {
     this.typeSystem = typeSystem;
-    this.nextName = nextName;
   }
 
   /** Lowers a tree into an executable expression. */
   public static Core.Exp lower(TypeSystem typeSystem, Core.Exp exp) {
-    return lower(typeSystem, exp, new AtomicInteger());
-  }
-
-  /**
-   * Lowers a tree, numbering its binders from a counter the caller owns.
-   *
-   * <p>Lowerings compose: a nested query is lowered into an expression of the
-   * query that contains it. A counter of this lowering's own would restart at
-   * zero for each, so an inner {@code w$0} and an outer {@code w$0} would meet
-   * in one expression and one would capture the other -- which happened, and
-   * cost two commits to find. A counter shared by everything lowered for one
-   * declaration is unique *and* deterministic: it depends on the declaration
-   * and on nothing compiled before it, which is what spec.md §6 asks of the
-   * tree's own binders and what plan text needs if it is ever to be frozen.
-   */
-  public static Core.Exp lower(
-      TypeSystem typeSystem, Core.Exp exp, AtomicInteger nameCount) {
-    return new RelLowerer(typeSystem, nameCount).lowerRel(exp);
+    return new RelLowerer(typeSystem).lowerRel(exp);
   }
 
   private Core.Exp lowerRel(Core.Exp exp) {
@@ -383,7 +361,7 @@ public class RelLowerer {
    * step list whose expressions are the tree's.
    */
   private Core.IdPat freshPat(Type type) {
-    return core.idPat(type, "w$" + nextName.getAndIncrement(), 0);
+    return core.idPat(type, typeSystem.nameGenerator.getPrefixed("w"), 0);
   }
 
   /**

@@ -40,11 +40,14 @@ import com.google.common.collect.Ordering;
 import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.ObjIntConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
@@ -2290,6 +2293,10 @@ public class Core {
    * element, because its body may contain a tree that would shadow {@code $0}.
    */
   public abstract static class Rel extends Exp {
+    /** A binder that the compiler generated, such as {@code v$0}. */
+    private static final Pattern GENERATED_BINDER =
+        Pattern.compile("[a-z]+\\$[0-9]+");
+
     Rel(Op op, Type type) {
       super(Pos.ZERO, op, type);
       if (!type.isCollection()) {
@@ -2336,6 +2343,51 @@ public class Core {
     public String describe(boolean withTypes) {
       final StringBuilder b = new StringBuilder();
       describe(b, 0, withTypes);
+      return renumber(b.toString());
+    }
+
+    /**
+     * Renumbers generated binders by first occurrence, so that a query's plan
+     * text does not depend on what was compiled before it.
+     *
+     * <p>Allocation stays free -- a fresh binder takes the next number from
+     * whatever counter its maker uses, and uniqueness is all that is asked of
+     * it. Determinism is a property of the *text*, and so belongs to the
+     * printer: `v$123`, `v$110`, `v$200`, `v$110` print as `v$0`, `v$1`, `v$2`,
+     * `v$1`. It is what {@link
+     * net.hydromatic.morel.type.TypeSystem#unqualified} does for type
+     * variables, where `('b * 'a * 'b)` prints as `('a * 'b * 'a)`.
+     *
+     * <p>This is what spec.md §6 asks for, and it gets it without the counter
+     * threading the rule seemed to need: two nested trees may both allocate
+     * `v$0` and still print apart, because the printer sees the whole text and
+     * numbers what it finds.
+     */
+    private static String renumber(String plan) {
+      final Matcher matcher = GENERATED_BINDER.matcher(plan);
+      final Map<String, String> map = new LinkedHashMap<>();
+      final StringBuilder b = new StringBuilder();
+      while (matcher.find()) {
+        final String name = matcher.group();
+        String replacement = map.get(name);
+        if (replacement == null) {
+          // The prefix distinguishes a tree's binders from the lowering's;
+          // each is numbered in its own sequence.
+          final String prefix = name.substring(0, name.indexOf('$') + 1);
+          int n = 0;
+          for (String s : map.values()) {
+            if (s.startsWith(prefix)) {
+              ++n;
+            }
+          }
+          replacement = prefix + n;
+          map.put(name, replacement);
+        }
+        // Quoted, because a replacement is not a literal: the `$` in `v$0`
+        // would otherwise read as a group reference.
+        matcher.appendReplacement(b, Matcher.quoteReplacement(replacement));
+      }
+      matcher.appendTail(b);
       return b.toString();
     }
 
