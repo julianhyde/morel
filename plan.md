@@ -159,8 +159,30 @@ something settled — §8's principle, applied to the sequence itself.
       because flattening it would need each component of an absent
       side wrapped again, which the step list cannot express.
 
+- [x] Deterministic names for the lowered form, which turned out to
+      be a *prerequisite* of the flip rather than something the flip
+      would reach. Measuring what a flip would change to the script
+      expectations showed two kinds of churn: one genuine improvement
+      (optimize.smli's `nonEmpty (from i in [3,1,2] yield i)` becomes
+      `nonEmpty [3,1,2]`) and one intolerable -- binder names like
+      `w$1509`, taken from the session-wide generator, which would
+      make every expectation depend on everything compiled before it.
+      The lowering now numbers from a counter its caller owns, and
+      `viaTree` gives one counter per declaration: unique, because
+      nested lowerings share it, and deterministic, because it starts
+      at zero for each declaration. Names are `w$0` again.
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once.
+
+      **Not a differential shadow, and the reason narrowed.**
+      `Resolver.toCore` is not pure, so a pass that shadows the
+      resolver by re-running it corrupts the pass it shadows. But
+      that rules out shadowing, not the flip: a native path that is
+      the *only* conversion runs `toCore` once, which is what the
+      resolver does today. So the shape is to replace, not to
+      shadow -- build the tree natively for the queries a slice
+      handles, lower it, execute it, fall back to the step list for
+      the rest -- and the oracle is the script suite's results.
 
       **The shadow cannot be a differential one.** Tried, and backed
       out. Building the tree natively beside the step list and
