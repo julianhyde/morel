@@ -167,10 +167,14 @@ something settled — §8's principle, applied to the sequence itself.
       `nonEmpty [3,1,2]`) and one intolerable -- binder names like
       `w$1509`, taken from the session-wide generator, which would
       make every expectation depend on everything compiled before it.
-      The lowering now numbers from a counter its caller owns, and
-      `viaTree` gives one counter per declaration: unique, because
-      nested lowerings share it, and deterministic, because it starts
-      at zero for each declaration. Names are `w$0` again.
+      Solved by renumbering when printing rather than by controlling
+      allocation, which is what Morel already does for type variables
+      (`TypeSystem.unqualified` prints `('b * 'a * 'b)` as `('a * 'b
+      * 'a)`). A binder is allocated freely -- uniqueness is all
+      allocation owes -- and `Core.Rel.describe` numbers the
+      generated binders it finds, from zero, in order of first
+      occurrence. It survives nesting, which a rule about allocation
+      does not, so it closes spec.md §6's hole as well.
 - [ ] The flip proper: the resolver builds trees natively, and the
       lowering runs once.
 

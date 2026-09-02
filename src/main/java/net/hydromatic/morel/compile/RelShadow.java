@@ -107,10 +107,6 @@ public class RelShadow {
    * its results that the two are the same query.
    */
   public static Core.Decl viaTree(TypeSystem typeSystem, Core.Decl decl) {
-    // One counter for the whole declaration, because the queries it contains
-    // are lowered into one another's expressions and a counter per lowering
-    // would let an inner binder capture an outer one.
-    final AtomicInteger nameCount = new AtomicInteger();
     return decl.accept(
         new Shuttle(typeSystem) {
           @Override
@@ -135,7 +131,7 @@ public class RelShadow {
             if (tree == null) {
               return from2;
             }
-            return RelLowerer.lower(typeSystem, tree, nameCount);
+            return RelLowerer.lower(typeSystem, tree);
           }
         });
   }
