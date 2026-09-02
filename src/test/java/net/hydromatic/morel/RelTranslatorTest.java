@@ -211,14 +211,18 @@ public class RelTranslatorTest {
   /**
    * Tests that a scan whose pattern destructures becomes a projection that
    * builds the element the bindings describe.
+   *
+   * <p>The filter reads the components rather than the record, and so comes
+   * first: a pattern binds paths into the element, and the projection that
+   * makes the record is owed only to whatever wants the row.
    */
   @Test
   void testDestructuringScan() {
     assertThat(
         plan("from (i, j) in [(1, 2)] where i > j"),
         is(
-            "filter [#i $0 > #j $0]\n" //
-                + "  project [{i = #1 $0, j = #2 $0}]\n"
+            "project [{i = #1 $0, j = #2 $0}]\n" //
+                + "  filter [#1 $0 > #2 $0]\n"
                 + "    [(1, 2)]\n"));
   }
 

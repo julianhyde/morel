@@ -697,6 +697,37 @@ something settled — §8's principle, applied to the sequence itself.
       whose grounding reads step lists and waits on `RelExpander`;
       192 are scans with a pattern; the rest are `through`, `into`,
       `yieldAll`, `ordinal`, and outer joins.
+- [x] Slice 7: a scan whose pattern destructures -- `(i, j) in pairs`,
+      `{a, c, ...} in recs`, `_ in xs`. The builder already had
+      `push(pat, rel)`, which erases the pattern and keeps one path
+      per name it binds; the resolver's work was to decide from the
+      `Ast` whether a pattern binds without also filtering. The one
+      thing the `Ast` does not say is whether a bare name is a nullary
+      constructor -- `from NIL in xs` tests rather than binds -- so
+      the type system is asked.
+
+      Two things the slice restored, both about the row rather than
+      the pattern:
+      * `atom` counts *bindings*, not what the step added. `from a in
+        [1], _ in [true]` binds one name, so its rows are ints and not
+        records of one field, and `from {a} in recs` is an `int list`
+        for the same reason. It is the step list's own rule
+        (`FromBuilder.scan` says `atom = bindings.size() == 1`), and
+        having dropped it in favour of "the element is the row" I had
+        to put it back beside that, not instead of it.
+      * A pattern that binds nothing makes rows of `unit`, which is
+        not the element and not a record either.
+
+      `RelTranslatorTest.testDestructuringScan` moved, and the new
+      plan is the better one: the filter now precedes the projection,
+      because a pattern binds paths into the element and the
+      projection that makes the record is owed only to whatever wants
+      the row.
+
+      1360 of the suite's 1852 queries now build natively, up from
+      1142. Of the 492 that do not: 270 are unbounded scans, 74 read
+      `ordinal`, 24 are `through` or `into`, 23 are `yieldAll`, and
+      the rest are outer joins.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what

@@ -422,9 +422,15 @@ public class RelLowerer {
    * owed, and otherwise a generated one.
    */
   private Core.IdPat scanPat(Type type) {
-    return scanNames.isEmpty()
+    if (scanNames.isEmpty()) {
+      return freshPat(type);
+    }
+    final String name = scanNames.remove();
+    // Empty where the caller had a pattern rather than a name: a pattern
+    // names no one thing, and the tree keeps paths instead.
+    return name.isEmpty()
         ? freshPat(type)
-        : core.idPat(type, scanNames.remove(), typeSystem.nameGenerator::inc);
+        : core.idPat(type, name, typeSystem.nameGenerator::inc);
   }
 
   /**
