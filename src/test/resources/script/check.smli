@@ -640,6 +640,25 @@ val t0: sel = {i = 1, j = 2};
 > val it = {j=2,y=1}
 >   : {j:int, y:int} check r => #y r > 0 andalso (let val r = {i = ~1} in #i r < 0 end)
 
+(* A selection inside a query is renamed like any other. *)
+type inQuery = {i: int, j: int} check r => exists x in [1] where x <= #i r;
+> type inQuery = {i:int, j:int} check r => exists x in [1] where x <= #i r
+val u0: inQuery = {i = 1, j = 2};
+> val u0 = {i=1,j=2} : inQuery
+{u0 rename y = i};
+> val it = {j=2,y=1}
+>   : {j:int, y:int} check r => exists x in [1] where x <= #y r
+
+(* A query's steps bind, so a query that rebinds the record's name selects on
+ * whatever it bound, and those selections are left as they are. *)
+type rebound = {i: int, j: int} check r => #i r > 0 andalso (exists r in [{i = ~1}] where #i r < 0);
+> type rebound = {i:int, j:int} check r => #i r > 0 andalso (exists r in [{i = ~1}] where #i r < 0)
+val u1: rebound = {i = 1, j = 2};
+> val u1 = {i=1,j=2} : rebound
+{u1 rename y = i};
+> val it = {j=2,y=1}
+>   : {j:int, y:int} check r => #y r > 0 andalso (exists r in [{i = ~1}] where #i r < 0)
+
 (* 'typeof e' names the type 'e' was shown to have, conditions and all, so an
  * annotation that uses it claims what that type claims. It used to reduce the
  * type to what inference made of it, which left the claim unchecked. *)

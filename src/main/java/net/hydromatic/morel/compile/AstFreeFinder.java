@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.Op;
@@ -46,9 +47,11 @@ import net.hydromatic.morel.ast.Visitor;
  * takes a wrong one. A name is never missed, because every construct's children
  * are walked, whether or not it binds.
  *
- * <p>A {@code from} is the case that gives most away: its steps bind, and
- * nothing here tracks them, so a query that rebinds the name being asked about
- * reports it free.
+ * <p>A query's steps bind, and are tracked as far as a scan: its pattern is in
+ * scope for the steps that follow. A step that replaces the scope -- {@code
+ * yield}, {@code group}, {@code compute}, {@code into}, {@code through} --
+ * binds names this cannot know, and from there to the end of the query every
+ * name is reported free.
  */
 class AstFreeFinder extends Visitor {
   /** The names bound at this point in the walk, innermost last. */
@@ -56,11 +59,17 @@ class AstFreeFinder extends Visitor {
 
   private final ImmutableSet.Builder<String> free = ImmutableSet.builder();
 
+  /**
+   * Whether the walk is inside a query, past a step that bound names it does
+   * not know. Every name is free from there to the end of the query.
+   */
+  boolean unknownScope = false;
+
   AstFreeFinder() {}
 
   /** Whether a name is bound at this point in the walk. */
   boolean isBound(String name) {
-    return bound.contains(name);
+    return !unknownScope && bound.contains(name);
   }
 
   /** Called as each name comes into scope. */
@@ -115,8 +124,10 @@ class AstFreeFinder extends Visitor {
    * of one of {@code fields} is not a use of the record, because a record of
    * another shape still has that field. Anything else is, and a record of
    * another shape is not the record.
+   *
+   * <p>{@code fields} maps each field to the name it is to be given.
    */
-  static Use useOf(Ast.Exp exp, String name, Set<String> fields) {
+  static Use useOf(Ast.Exp exp, String name, Map<String, String> fields) {
     final SelectionFinder finder = new SelectionFinder(name, fields);
     exp.accept(finder);
     return new Use(finder.usesWhole, finder.selections);
@@ -125,12 +136,12 @@ class AstFreeFinder extends Visitor {
   /** Finds the uses of a record that are not selections of its fields. */
   private static class SelectionFinder extends AstFreeFinder {
     private final String name;
-    private final Set<String> fields;
+    private final Map<String, String> fields;
     boolean usesWhole = false;
     final Set<Ast.Apply> selections =
         Collections.newSetFromMap(new IdentityHashMap<>());
 
-    SelectionFinder(String name, Set<String> fields) {
+    SelectionFinder(String name, Map<String, String> fields) {
       this.name = name;
       this.fields = fields;
     }
@@ -144,10 +155,18 @@ class AstFreeFinder extends Visitor {
         // A selection of the record. The field must be one that
         // survives; the name itself is not a use, so the argument is
         // not walked.
-        if (fields.contains(((Ast.RecordSelector) apply.fn).name)) {
-          selections.add(apply);
-        } else {
+        //
+        // Under an unknown scope the name may be this record or may be
+        // whatever the step bound. Nothing tells them apart, so the
+        // condition is dropped -- but only if the field is renamed,
+        // because otherwise there is nothing to rewrite and either
+        // reading leaves the condition as it is.
+        final String field = ((Ast.RecordSelector) apply.fn).name;
+        final String field2 = fields.get(field);
+        if (field2 == null || unknownScope && !field2.equals(field)) {
           usesWhole = true;
+        } else if (!unknownScope) {
+          selections.add(apply);
         }
         return;
       }
@@ -165,7 +184,7 @@ class AstFreeFinder extends Visitor {
 
   @Override
   protected void visit(Ast.Id id) {
-    if (!bound.contains(id.name)) {
+    if (!isBound(id.name)) {
       free.add(id.name);
     }
   }
@@ -178,6 +197,71 @@ class AstFreeFinder extends Visitor {
     names.forEach(this::bind);
     match.exp.accept(this);
     names.forEach(name -> unbind());
+  }
+
+  @Override
+  protected void visit(Ast.From from) {
+    visitSteps(from.steps);
+  }
+
+  @Override
+  protected void visit(Ast.Exists exists) {
+    visitSteps(exists.steps);
+  }
+
+  @Override
+  protected void visit(Ast.Forall forall) {
+    visitSteps(forall.steps);
+  }
+
+  /**
+   * Walks the steps of a query, in order, with each scan's pattern in scope for
+   * the steps that follow.
+   */
+  private void visitSteps(List<Ast.FromStep> steps) {
+    int depth = 0;
+    final boolean unknownScope0 = unknownScope;
+    for (Ast.FromStep step : steps) {
+      if (step instanceof Ast.Scan) {
+        final Ast.Scan scan = (Ast.Scan) step;
+        // The collection is outside the scope the pattern creates; the
+        // 'on' condition is inside it.
+        if (scan.exp != null) {
+          scan.exp.accept(this);
+        }
+        final List<String> names = patNames(scan.pat);
+        names.forEach(this::bind);
+        depth += names.size();
+        if (scan.condition != null) {
+          scan.condition.accept(this);
+        }
+      } else {
+        step.accept(this);
+        if (replacesScope(step)) {
+          unknownScope = true;
+        }
+      }
+    }
+    for (int i = 0; i < depth; i++) {
+      unbind();
+    }
+    unknownScope = unknownScope0;
+  }
+
+  /**
+   * Whether a step gives the steps that follow it a scope of its own making.
+   */
+  private static boolean replacesScope(Ast.FromStep step) {
+    switch (step.op) {
+      case YIELD:
+      case COMPUTE:
+      case GROUP:
+      case INTO:
+      case THROUGH:
+        return true;
+      default:
+        return false;
+    }
   }
 
   @Override

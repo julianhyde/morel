@@ -86,7 +86,7 @@ class Conditions {
     for (Ast.Match match : check.matchList) {
       final String name = ((Ast.IdPat) match.pat).name;
       final AstFreeFinder.Use use =
-          AstFreeFinder.useOf(match.exp, name, fields.keySet());
+          AstFreeFinder.useOf(match.exp, name, fields);
       if (use.usesWhole) {
         return null;
       }

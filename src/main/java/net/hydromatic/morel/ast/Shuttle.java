@@ -390,15 +390,20 @@ public class Shuttle {
   }
 
   protected Ast.Exp visit(Ast.From from) {
-    return ast.from(from.pos, from.steps);
+    return ast.from(from.pos, visitSteps(from.steps));
   }
 
   protected Ast.Exp visit(Ast.Exists exists) {
-    return ast.exists(exists.pos, exists.steps);
+    return ast.exists(exists.pos, visitSteps(exists.steps));
   }
 
   protected Ast.Exp visit(Ast.Forall forall) {
-    return ast.forall(forall.pos, forall.steps);
+    return ast.forall(forall.pos, visitSteps(forall.steps));
+  }
+
+  /** Visits the steps of a query. */
+  private List<Ast.FromStep> visitSteps(List<Ast.FromStep> steps) {
+    return transformEager(steps, step -> (Ast.FromStep) step.accept(this));
   }
 
   protected AstNode visit(Ast.Order order) {
