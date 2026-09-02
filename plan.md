@@ -756,6 +756,16 @@ something settled — §8's principle, applied to the sequence itself.
       and a projection that drops the left again, since `yieldAll`
       yields only the elements. Written from the design rather than
       from the step list, and right the first time.
+- [x] Slice 10: `through`. `from ... through p in f` is `from p in f
+      (from ...)`, so the tree built so far is lowered *there* rather
+      than at the end, and the builder starts again from the
+      collection the function returns. `into` needed nothing: the
+      query-level conversion strips it before the steps are seen.
+
+      1425 of the suite's 1852 queries build natively. Of the 427 that
+      do not, 74 read `ordinal` and all but a handful of the rest are
+      unbounded scans -- which is now the whole of what is left, and
+      is the grounding move rather than another slice.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
