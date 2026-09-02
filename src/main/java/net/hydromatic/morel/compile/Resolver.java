@@ -2309,6 +2309,8 @@ public class Resolver {
             core.not(typeMap.typeSystem, toCore(((Ast.Require) step).exp)));
       } else if (step instanceof Ast.Distinct) {
         distinct();
+      } else if (step instanceof Ast.YieldAll) {
+        yieldAll((Ast.YieldAll) step);
       } else {
         yield_((Ast.Yield) step);
       }
@@ -2393,6 +2395,34 @@ public class Resolver {
       // A pattern names no one thing, so the lowering invents a binder.
       scanNames.add("");
       return names;
+    }
+
+    /**
+     * Multiplies each row by the elements of a collection, and keeps only
+     * those.
+     *
+     * <p>A dependent join and a projection, which is what the design says
+     * {@code yieldAll} is (discussion.md §8): the join's binder is how the
+     * right input names the current row of the left, and the projection drops
+     * the left again, since {@code yieldAll} yields only the elements.
+     */
+    private void yieldAll(Ast.YieldAll yieldAll) {
+      final Core.IdPat joinBinder =
+          b.binder(typeMap.typeSystem.nameGenerator.get());
+      final Core.Exp collection = toCore(yieldAll.exp, core.id(joinBinder));
+      final String name =
+          yieldAll.binder == null
+              ? typeMap.typeSystem.nameGenerator.get()
+              : yieldAll.binder.name;
+      b.push(name, collection).pair();
+      b.join(Core.Rel.JoinType.INNER, joinBinder, core.boolLiteral(true));
+      b.project(name, b.name(name));
+      binders.clear();
+      if (yieldAll.binder != null) {
+        binders.add(name);
+      }
+      atom = true;
+      rowIsElement = true;
     }
 
     /**
@@ -2985,6 +3015,10 @@ public class Resolver {
             || step instanceof Ast.Require
             || step instanceof Ast.Distinct) {
           // Nothing more to check.
+        } else if (step instanceof Ast.YieldAll) {
+          // A yieldAll rebinds the row, so how many names an outer join after
+          // it would see is not known here.
+          bound = -1;
         } else if (step instanceof Ast.Yield) {
           if (((Ast.Yield) step).binder != null) {
             return false;

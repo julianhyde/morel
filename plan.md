@@ -750,6 +750,12 @@ something settled — §8's principle, applied to the sequence itself.
       that do not, about 350 are unbounded scans, 74 read `ordinal`,
       24 are `through` or `into`, 23 are `yieldAll`, and a handful are
       chained outer joins.
+- [x] Slice 9: `yieldAll`, which is what the design said it was
+      (discussion.md §8) and nothing more: a dependent join whose
+      binder is how the right input names the current row of the left,
+      and a projection that drops the left again, since `yieldAll`
+      yields only the elements. Written from the design rather than
+      from the step list, and right the first time.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
