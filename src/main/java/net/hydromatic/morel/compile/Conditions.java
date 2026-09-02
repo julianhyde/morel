@@ -22,16 +22,12 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import net.hydromatic.morel.ast.Ast;
-import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
-import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
@@ -86,10 +82,21 @@ class Conditions {
    */
   private static Ast.@Nullable Fn rename(
       TypeSystem typeSystem, Ast.Fn check, Map<String, String> fields) {
+    // A field that keeps its name needs no rewriting. Then a condition that
+    // binds the record's name again is no obstacle: the uses under that
+    // binding are not the record, and nothing is rewritten that could change
+    // what they mean. Where a field is renamed it is an obstacle, because the
+    // rewrite cannot tell a selection on the record from one on whatever the
+    // inner binding holds, and would rewrite both.
+    final boolean renames =
+        fields.entrySet().stream()
+            .anyMatch(e -> !e.getKey().equals(e.getValue()));
     final List<Ast.Match> matches = new ArrayList<>();
     for (Ast.Match match : check.matchList) {
       final String name = ((Ast.IdPat) match.pat).name;
-      if (!selectsOnly(match.exp, name, fields.keySet())) {
+      final AstFreeFinder.Use use =
+          AstFreeFinder.useOf(match.exp, name, fields.keySet());
+      if (use.usesWhole || renames && use.shadowed) {
         return null;
       }
       matches.add(
@@ -158,48 +165,6 @@ class Conditions {
   /** Returns whether a pattern matches every value, and so cannot decide. */
   private static boolean irrefutable(Ast.Pat pat) {
     return pat.op == Op.ID_PAT || pat.op == Op.WILDCARD_PAT;
-  }
-
-  /**
-   * Returns whether every use of {@code name} in {@code exp} selects one of
-   * {@code fields} from it, and {@code name} is not bound again within.
-   */
-  private static boolean selectsOnly(
-      Ast.Exp exp, String name, Set<String> fields) {
-    final Set<AstNode> selected = new HashSet<>();
-    final boolean[] ok = {true};
-    exp.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Ast.Apply apply) {
-            if (apply.fn.op == Op.RECORD_SELECTOR
-                && apply.arg.op == Op.ID
-                && ((Ast.Id) apply.arg).name.equals(name)) {
-              if (!fields.contains(((Ast.RecordSelector) apply.fn).name)) {
-                ok[0] = false;
-              }
-              selected.add(apply.arg);
-            }
-            super.visit(apply);
-          }
-
-          @Override
-          protected void visit(Ast.Id id) {
-            if (id.name.equals(name) && !selected.contains(id)) {
-              ok[0] = false;
-            }
-            super.visit(id);
-          }
-
-          @Override
-          protected void visit(Ast.IdPat idPat) {
-            if (idPat.name.equals(name)) {
-              ok[0] = false; // rebound, so the uses below are not the record
-            }
-            super.visit(idPat);
-          }
-        });
-    return ok[0];
   }
 
   /** Renames the fields that {@code name} is selected on. */

@@ -609,6 +609,26 @@ val w0: whole = {i = 1, j = 2};
 {w0 extend k = 9};
 > val it = {i=1,j=2,k=9} : {i:int, j:int, k:int}
 
+(* A condition that binds the record's name again is still carried over. The
+ * uses under that binding are not the record -- they are whatever the inner
+ * binding holds -- so a record of another shape does not disturb them. *)
+type shadow = {i: int, j: int} check r => #i r > 0 andalso (let val r = 1 in r > 0 end);
+> type shadow = {i:int, j:int} check r => #i r > 0 andalso (let val r = 1 in r > 0 end)
+val s0: shadow = {i = 1, j = 2};
+> val s0 = {i=1,j=2} : shadow
+{s0 extend k = 9};
+> val it = {i=1,j=2,k=9}
+>   : {i:int, j:int, k:int} check r => #i r > 0 andalso (let val r = 1 in r > 0 end)
+{s0 remove j};
+> val it = {i=1}
+>   : {i:int} check r => #i r > 0 andalso (let val r = 1 in r > 0 end)
+
+(* A modifier that renames is the exception. Rewriting the selections cannot
+ * tell a selection on the record from one on what the inner binding holds,
+ * and would rewrite both, so a shadowed condition is dropped. *)
+{s0 rename y = j};
+> val it = {i=1,y=2} : {i:int, y:int}
+
 (* 'typeof e' names the type 'e' was shown to have, conditions and all, so an
  * annotation that uses it claims what that type claims. It used to reduce the
  * type to what inference made of it, which left the claim unchecked. *)
