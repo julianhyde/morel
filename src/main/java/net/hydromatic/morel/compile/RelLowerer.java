@@ -143,8 +143,13 @@ public class RelLowerer {
       return lowerGroup(fromBuilder, (Core.Group) exp);
     }
     if (exp instanceof Core.Sort) {
+      // A sort reads the element, so a projection above it must be paid for
+      // here rather than deferred: deferring it would sort a wider row, and
+      // evaluate the projection twice for every expression the sort key
+      // shares with it.
       final Core.Sort sort = (Core.Sort) exp;
-      final Core.Exp element = lowerInto(fromBuilder, sort.input);
+      final Core.Exp element =
+          materialize(fromBuilder, lowerInto(fromBuilder, sort.input));
       fromBuilder.order(subst(sort.exp, element, null));
       return element;
     }
