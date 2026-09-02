@@ -94,6 +94,12 @@ public class RelLowerer {
   }
 
   private Core.Exp lowerRel(Core.Exp exp) {
+    if (isUnitCollection(exp)) {
+      // A query that is nothing but the one unit row is a `from` with no
+      // steps, which is what the step list means by it and what Calcite reads
+      // as a values of one empty row.
+      return core.fromBuilder(typeSystem).build();
+    }
     if (!(exp instanceof Core.Rel)) {
       // A leaf is already an expression.
       return exp;
@@ -291,6 +297,14 @@ public class RelLowerer {
    * the expression that denotes the element.
    */
   private Core.Exp scan(FromBuilder fromBuilder, Core.Exp collection) {
+    if (isUnitCollection(collection)) {
+      // The inverse of the translator's `unitCollection`: a query with no scan
+      // iterates over one row, which is unit, and the tree says so with a leaf
+      // holding that one row. A step list says it by having no scan, and
+      // downstream reads that -- Calcite turns an empty `from` into a values
+      // of one empty row, and a scan of `[()]` into a project over one.
+      return core.unitLiteral();
+    }
     final Core.IdPat v = scanPat(collection.type.elementType());
     fromBuilder.scan(v, collection);
     return rebind(fromBuilder, core.id(v));
@@ -415,6 +429,19 @@ public class RelLowerer {
       default:
         return Op.SCAN;
     }
+  }
+
+  /**
+   * Returns whether an expression is the one-row collection of {@code unit}.
+   */
+  private static boolean isUnitCollection(Core.Exp exp) {
+    if (!(exp instanceof Core.Apply)) {
+      return false;
+    }
+    final Core.Apply apply = (Core.Apply) exp;
+    return apply.isCallTo(BuiltIn.Z_LIST)
+        && exp.type.elementType() == PrimitiveType.UNIT
+        && ((Core.Tuple) apply.arg).args.size() == 1;
   }
 
   /**
