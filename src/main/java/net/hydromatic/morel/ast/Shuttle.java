@@ -78,7 +78,7 @@ public class Shuttle {
     return literal; // leaf
   }
 
-  protected Ast.Id visit(Ast.Id id) {
+  protected Ast.Exp visit(Ast.Id id) {
     return id; // leaf
   }
 
@@ -215,11 +215,13 @@ public class Shuttle {
   }
 
   protected Ast.ConPat visit(Ast.ConPat conPat) {
-    return conPat.copy(conPat.tyCon.accept(this), conPat.pat.accept(this));
+    // The constructor names a type's constructor, not a variable, so it is
+    // passed through.
+    return conPat.copy(conPat.tyCon, conPat.pat.accept(this));
   }
 
   protected Ast.Con0Pat visit(Ast.Con0Pat con0Pat) {
-    return con0Pat.copy(con0Pat.tyCon.accept(this));
+    return con0Pat.copy(con0Pat.tyCon);
   }
 
   // value constructors
@@ -266,7 +268,7 @@ public class Shuttle {
     return ast.fn(fn.pos, visitList(fn.matchList));
   }
 
-  protected Ast.Apply visit(Ast.Apply apply) {
+  protected Ast.Exp visit(Ast.Apply apply) {
     return ast.apply(apply.fn.accept(this), apply.arg.accept(this));
   }
 
@@ -499,9 +501,10 @@ public class Shuttle {
   }
 
   protected Ast.TypeBind visit(Ast.TypeBind typeBind) {
+    // The name is a binding occurrence, not a use, so it is passed through.
     return ast.typeBind(
         typeBind.pos,
-        typeBind.name.accept(this),
+        typeBind.name,
         visitList(typeBind.tyVars),
         typeBind.type.accept(this),
         visitList(typeBind.checks));
@@ -512,17 +515,19 @@ public class Shuttle {
   }
 
   protected Ast.DatatypeBind visit(Ast.DatatypeBind datatypeBind) {
+    // The name is a binding occurrence, not a use, so it is passed through.
     return ast.datatypeBind(
         datatypeBind.pos,
-        datatypeBind.name.accept(this),
+        datatypeBind.name,
         visitList(datatypeBind.tyVars),
         visitList(datatypeBind.tyCons));
   }
 
   protected AstNode visit(Ast.TyCon tyCon) {
+    // The name is a binding occurrence, not a use, so it is passed through.
     return ast.typeConstructor(
         tyCon.pos,
-        tyCon.id.accept(this),
+        tyCon.id,
         tyCon.type == null ? null : tyCon.type.accept(this));
   }
 

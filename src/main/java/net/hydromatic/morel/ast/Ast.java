@@ -1369,7 +1369,7 @@ public class Ast {
     }
 
     @Override
-    public Id accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 

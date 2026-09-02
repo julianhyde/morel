@@ -2836,7 +2836,7 @@ public class TypeResolver {
                   : ImmutableList.copyOf(allFields.keySet()));
 
       claims &= RecordModifiers.preserves(sources, fields.keySet());
-      checks = inheritChecks(checks, sources);
+      checks = inheritChecks(checks, fields.keySet(), sources);
 
       final TypeEnv e2 = bindFields(e, fields);
       final NavigableMap<String, Variable> fields2 =
@@ -2896,20 +2896,25 @@ public class TypeResolver {
    * them as the result names them.
    */
   private List<Ast.Fn> inheritChecks(
-      List<Ast.Fn> checks, PairList<String, RecordModifiers.Source> sources) {
+      List<Ast.Fn> checks,
+      Collection<String> oldFields,
+      PairList<String, RecordModifiers.Source> sources) {
     if (checks.isEmpty()) {
       return checks;
     }
-    final Map<String, String> fields = new LinkedHashMap<>();
+    final Map<String, String> kept = new LinkedHashMap<>();
     sources.forEach(
         (label, source) -> {
           if (source instanceof RecordModifiers.Kept) {
-            fields.put(((RecordModifiers.Kept) source).field, label);
+            kept.put(((RecordModifiers.Kept) source).field, label);
           }
         });
+    final List<String> newFields = new ArrayList<>();
+    sources.forEach((label, source) -> newFields.add(label));
     final List<Ast.Fn> checks2 = new ArrayList<>();
     for (Ast.Fn check : checks) {
-      final Ast.Fn check2 = Conditions.inherit(typeSystem, check, fields);
+      final Ast.Fn check2 =
+          Conditions.inherit(typeSystem, check, oldFields, newFields, kept);
       if (check2 != null) {
         checks2.add(check2);
       }
