@@ -375,24 +375,12 @@ public class RelLowerer {
   }
 
   /**
-   * Creates a binder for the step list, numbered per lowering.
+   * Creates a binder for the step list, numbered from the counter the caller
+   * supplied and prefixed {@code w$} to keep it clear of the tree's {@code v$}.
    *
-   * <p>Numbered by {@code typeSystem.nameGenerator}, under a {@code w} prefix
-   * of its own, and not by a counter of this lowering's.
-   *
-   * <p>A per-lowering counter is what spec.md §6 asks for -- numbering from
-   * zero, so that a query's text does not depend on what was compiled before it
-   * -- and it is wrong here, for a reason §6 does not yet account for:
-   * lowerings compose. A nested query is lowered into the expression of the
-   * query that contains it, so an inner lowering's {@code w$0} and an outer
-   * one's {@code w$0} meet, and one captures the other. Deterministic and not
-   * unique is worse than unique and not deterministic, because the first
-   * silently computes the wrong answer.
-   *
-   * <p>The lowered form is not the frozen plan text -- step 3 prints the tree
-   * -- so the determinism §6 wants is not owed here. The tree's own numbering
-   * has the same hole, and closing it is a spec question: a nested tree must
-   * continue the enclosing tree's numbering rather than restart.
+   * <p>Two counters that both start at zero and both say {@code v$} collide the
+   * moment their outputs meet in one expression, and these binders sit in a
+   * step list whose expressions are the tree's.
    */
   private Core.IdPat freshPat(Type type) {
     return core.idPat(type, "w$" + nextName.getAndIncrement(), 0);
