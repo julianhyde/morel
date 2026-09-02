@@ -2260,7 +2260,11 @@ public class Resolver {
               b.binder(typeMap.typeSystem.nameGenerator.get());
           final Core.Exp collection = toCore(scanExp, core.id(binder));
           b.push(name, collection).pair();
-          b.join(Core.Rel.JoinType.INNER, binder, core.boolLiteral(true));
+          final Core.Exp condition =
+              scan.condition == null
+                  ? core.boolLiteral(true)
+                  : on(scan.condition, name);
+          b.join(Core.Rel.JoinType.INNER, binder, condition);
           atom = false;
         }
         binders.add(name);
@@ -2379,18 +2383,42 @@ public class Resolver {
         // step environment is empty.
         return Resolver.this.toCore(exp);
       }
-      final List<Binding> bindings = new ArrayList<>();
       final Map<String, Core.Exp> paths = new LinkedHashMap<>();
       for (String binder : binders) {
-        final Core.Exp path = rootAt(b.name(binder), element);
-        paths.put(binder, path);
-        bindings.add(Binding.of(core.idPat(path.type, binder, 0)));
+        paths.put(binder, rootAt(b.name(binder), element));
       }
+      return toCore(exp, paths, natural(paths, element));
+    }
+
+    /**
+     * Converts a join's condition, which reads the left input as {@code $0} and
+     * the right as {@code $1}.
+     *
+     * <p>{@code current} is the row so far, which is the left's: the right's
+     * binder is in scope by name, but the condition is asked of a row the join
+     * has not made yet.
+     */
+    private Core.Exp on(Ast.Exp exp, String rightBinder) {
+      final Map<String, Core.Exp> left = new LinkedHashMap<>();
+      for (String binder : binders) {
+        left.put(binder, b.name(0, binder));
+      }
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>(left);
+      paths.put(rightBinder, b.name(1, rightBinder));
+      return toCore(exp, paths, natural(left, b.input(0)));
+    }
+
+    /** Converts an expression, given where each name it may use is found. */
+    private Core.Exp toCore(
+        Ast.Exp exp, Map<String, Core.Exp> paths, Core.Exp current) {
+      final List<Binding> bindings = new ArrayList<>();
+      paths.forEach(
+          (name, path) ->
+              bindings.add(Binding.of(core.idPat(path.type, name, 0))));
       // A path, and `current`, read an input of the tree, `$0` or `$1`. A
       // nested query is still built as a step list, and its FromBuilder
       // validates each step against this environment, so the inputs must be
       // visible in it. The lowering substitutes them away afterwards.
-      final Core.Exp current = natural(paths, element);
       final Map<String, Core.NamedPat> inputs = new LinkedHashMap<>();
       final Visitor inputBinder =
           new Visitor() {
@@ -2552,9 +2580,16 @@ public class Resolver {
         final Ast.FromStep step = steps.get(i);
         if (step instanceof Ast.Scan) {
           final Ast.Scan scan = (Ast.Scan) step;
-          if (scan.exp == null
-              || scan.condition != null
-              || !(scan.pat instanceof Ast.IdPat)) {
+          if (scan.exp == null || !(scan.pat instanceof Ast.IdPat)) {
+            return false;
+          }
+          if (scan.op != Op.SCAN) {
+            // An outer join contributes one component rather than its
+            // inputs', and option-wraps the side it can leave absent.
+            return false;
+          }
+          if (scan.condition != null && i == 0) {
+            // Nothing to join to.
             return false;
           }
         } else if (step instanceof Ast.Where) {
