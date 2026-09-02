@@ -27,6 +27,7 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.Static.allMatch;
 import static net.hydromatic.morel.util.Static.anyMatch;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skip;
@@ -2268,8 +2269,15 @@ public class Resolver {
      * without a yield.
      */
     private Core.Exp natural(Map<String, Core.Exp> paths, Core.Exp element) {
-      if (rowIsElement || paths.isEmpty()) {
+      if (rowIsElement) {
         return element;
+      }
+      if (paths.isEmpty()) {
+        // Nothing is bound, as after `from _ in xs`, and the row is unit.
+        return core.unitLiteral();
+      }
+      if (atom) {
+        return requireNonNull(getOnlyElement(paths.values()));
       }
       final PairList<String, Core.Exp> nameExps = PairList.of();
       paths.forEach(nameExps::add);
@@ -2278,34 +2286,7 @@ public class Resolver {
 
     private void step(Ast.FromStep step) {
       if (step instanceof Ast.Scan) {
-        final Ast.Scan scan = (Ast.Scan) step;
-        final String name = ((Ast.IdPat) scan.pat).name;
-        // `nativelyBuildable` refused a scan with no expression.
-        final Ast.Exp scanExp = requireNonNull(scan.exp);
-        if (b.size() == 0) {
-          b.push(name, toCore(scanExp));
-          atom = true;
-          rowIsElement = true;
-        } else {
-          // The right input is a tree of its own, so it cannot say `$0` and
-          // mean the row so far. A binder crosses that boundary by ordinary
-          // lexical scoping, and the builder drops it again if the collection
-          // turns out to read nothing of the left -- which is the common case,
-          // and an independent join is far the better one.
-          final Core.IdPat binder =
-              b.binder(typeMap.typeSystem.nameGenerator.get());
-          final Core.Exp collection = toCore(scanExp, core.id(binder));
-          b.push(name, collection).pair();
-          final Core.Exp condition =
-              scan.condition == null
-                  ? core.boolLiteral(true)
-                  : on(scan.condition, name);
-          b.join(Core.Rel.JoinType.INNER, binder, condition);
-          atom = false;
-          rowIsElement = false;
-        }
-        binders.add(name);
-        scanNames.add(name);
+        scan((Ast.Scan) step);
       } else if (step instanceof Ast.Where) {
         b.filter(toCore(((Ast.Where) step).exp));
       } else if (step instanceof Ast.Order) {
@@ -2331,6 +2312,73 @@ public class Resolver {
       } else {
         yield_((Ast.Yield) step);
       }
+    }
+
+    /**
+     * Scans a collection: the query's first, or a join onto what it has.
+     *
+     * <p>A pattern is erased -- the tree has paths where the step list has a
+     * pattern -- so what survives is one binder per name it binds, and none at
+     * all for {@code from _ in xs}, whose rows are {@code unit}.
+     */
+    private void scan(Ast.Scan scan) {
+      // `nativelyBuildable` refused a scan with no expression.
+      final Ast.Exp scanExp = requireNonNull(scan.exp);
+      if (b.size() == 0) {
+        binders.addAll(push(scan.pat, toCore(scanExp)));
+        // Only a bare name leaves the element as the row; a pattern is erased,
+        // and what it bound is read back out by paths.
+        rowIsElement = scan.pat instanceof Ast.IdPat;
+      } else {
+        // The right input is a tree of its own, so it cannot say `$0` and
+        // mean the row so far. A binder crosses that boundary by ordinary
+        // lexical scoping, and the builder drops it again if the collection
+        // turns out to read nothing of the left -- which is the common case,
+        // and an independent join is far the better one.
+        final Core.IdPat binder =
+            b.binder(typeMap.typeSystem.nameGenerator.get());
+        final Core.Exp collection = toCore(scanExp, core.id(binder));
+        final List<String> names = push(scan.pat, collection);
+        b.pair();
+        final Core.Exp condition =
+            scan.condition == null
+                ? core.boolLiteral(true)
+                : on(scan.condition, names);
+        b.join(Core.Rel.JoinType.INNER, binder, condition);
+        binders.addAll(names);
+        rowIsElement = false;
+      }
+      // The step list's rule, and it is about how many names are bound rather
+      // than how many the scan added: `from a in [1], _ in [true]` binds one,
+      // so its rows are ints and not records of one field.
+      atom = binders.size() == 1;
+    }
+
+    /**
+     * Pushes a collection under a pattern, and returns the names the pattern
+     * binds.
+     */
+    private List<String> push(Ast.Pat pat, Core.Exp collection) {
+      if (pat instanceof Ast.IdPat) {
+        final String name = ((Ast.IdPat) pat).name;
+        b.push(name, collection);
+        scanNames.add(name);
+        return ImmutableList.of(name);
+      }
+      final Core.Pat corePat =
+          Resolver.this.toCore(pat, collection.type.elementType());
+      b.push(corePat, collection);
+      final List<String> names = new ArrayList<>();
+      corePat.accept(
+          new Visitor() {
+            @Override
+            protected void visit(Core.IdPat idPat) {
+              names.add(idPat.name);
+            }
+          });
+      // A pattern names no one thing, so the lowering invents a binder.
+      scanNames.add("");
+      return names;
     }
 
     /**
@@ -2659,13 +2707,13 @@ public class Resolver {
      * binder is in scope by name, but the condition is asked of a row the join
      * has not made yet.
      */
-    private Core.Exp on(Ast.Exp exp, String rightBinder) {
+    private Core.Exp on(Ast.Exp exp, List<String> rightBinders) {
       final Map<String, Core.Exp> left = new LinkedHashMap<>();
       for (String binder : binders) {
         left.put(binder, b.name(0, binder));
       }
       final Map<String, Core.Exp> paths = new LinkedHashMap<>(left);
-      paths.put(rightBinder, b.name(1, rightBinder));
+      rightBinders.forEach(name -> paths.put(name, b.name(1, name)));
       return toCore(exp, paths, natural(left, b.input(0)));
     }
 
@@ -2886,7 +2934,7 @@ public class Resolver {
         final Ast.FromStep step = steps.get(i);
         if (step instanceof Ast.Scan) {
           final Ast.Scan scan = (Ast.Scan) step;
-          if (scan.exp == null || !(scan.pat instanceof Ast.IdPat)) {
+          if (scan.exp == null || !destructurable(scan.pat)) {
             return false;
           }
           if (scan.op != Op.SCAN) {
@@ -2927,6 +2975,38 @@ public class Resolver {
         }
       }
       return true;
+    }
+
+    /**
+     * Returns whether a pattern binds names without also filtering, so that the
+     * tree can erase it and keep paths.
+     *
+     * <p>{@link RelBuilder#destructurable} asks the same of a converted
+     * pattern; this asks it of the {@link Ast}, because the choice of path is
+     * made before anything is converted. The one thing the {@code Ast} does not
+     * say is whether a bare name is a nullary constructor -- {@code from NIL in
+     * xs} tests rather than binds -- so the type system is asked.
+     */
+    private boolean destructurable(Ast.Pat pat) {
+      switch (pat.op) {
+        case ID_PAT:
+          return typeMap.typeSystem.lookupTyCon(((Ast.IdPat) pat).name) == null;
+
+        case WILDCARD_PAT:
+          return true;
+
+        case TUPLE_PAT:
+          return allMatch(((Ast.TuplePat) pat).args, this::destructurable);
+
+        case RECORD_PAT:
+          // An ellipsis is no obstacle: by the time the pattern is converted
+          // the omitted fields are wildcards, which bind nothing.
+          return allMatch(
+              ((Ast.RecordPat) pat).args.values(), this::destructurable);
+
+        default:
+          return false;
+      }
     }
 
     /**
