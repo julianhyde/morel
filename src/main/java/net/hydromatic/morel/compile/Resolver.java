@@ -2311,6 +2311,8 @@ public class Resolver {
         distinct();
       } else if (step instanceof Ast.YieldAll) {
         yieldAll((Ast.YieldAll) step);
+      } else if (step instanceof Ast.Through) {
+        through((Ast.Through) step);
       } else {
         yield_((Ast.Yield) step);
       }
@@ -2395,6 +2397,29 @@ public class Resolver {
       // A pattern names no one thing, so the lowering invents a binder.
       scanNames.add("");
       return names;
+    }
+
+    /**
+     * Passes the query so far through a function, and scans what comes back.
+     *
+     * <p>{@code from ... through p in f} is {@code from p in f (from ...)}, so
+     * the tree built so far is lowered here rather than at the end, and the
+     * builder starts again from the collection the function returns.
+     */
+    private void through(Ast.Through through) {
+      finish();
+      final Core.Exp inner =
+          RelLowerer.lower(typeMap.typeSystem, b.build(), scanNames);
+      scanNames.clear();
+      // The function is evaluated once, on the whole collection, so it reads
+      // the enclosing scope and not this query's row.
+      final Core.Exp fn = toCore(through.exp, null);
+      final Core.Exp collection =
+          core.apply(through.pos, typeMap.getType(through), fn, inner);
+      binders.clear();
+      binders.addAll(push(through.pat, collection));
+      atom = binders.size() == 1;
+      rowIsElement = through.pat instanceof Ast.IdPat;
     }
 
     /**
@@ -3019,6 +3044,11 @@ public class Resolver {
           // A yieldAll rebinds the row, so how many names an outer join after
           // it would see is not known here.
           bound = -1;
+        } else if (step instanceof Ast.Through) {
+          if (!destructurable(((Ast.Through) step).pat)) {
+            return false;
+          }
+          bound = binderCount(((Ast.Through) step).pat);
         } else if (step instanceof Ast.Yield) {
           if (((Ast.Yield) step).binder != null) {
             return false;
