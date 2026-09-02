@@ -633,6 +633,42 @@ something settled — §8's principle, applied to the sequence itself.
       `order` 130 (in queries excluded for something else), `union`
       75, `except` 49, `intersect` 47, `require` 36, `through` 31,
       `into` 6, `distinct` 3.
+- [x] Slice 5: `group` and `compute`, which were 513 of the 1111
+      queries the flip had not reached. A tree's group builds a record
+      whether it has one label or many (discussion.md §14), so an
+      atomizing group -- `group e.deptno`, whose rows are bare ints --
+      is that record and a projection that reads its one field. The
+      aggregate machinery is reused as it stands: `withAggregateResolver`
+      wants a `StepEnv`, and one made of the tree's bindings serves,
+      since it reads only the bindings and the ordering.
+
+      Three findings, and the third is a defect that predates the
+      branch:
+      * The post projection -- the step list's trailing yield, which
+        names what the group produced -- is usually the identity, and
+        emitting it anyway put a projection under the query's own
+        yield. Merging two projections binds the row to a variable,
+        which is right, and a `let` is something Calcite will not push
+        down: dual.smli caught it. Skip it where the group's labels
+        are already what the query calls them -- and *being* a label
+        matters, not merely sharing a name, because `compute sum` with
+        nothing to sum reads the built-in `sum` under that name.
+      * `Core.StepEnv` asserts that an atom env holds exactly one
+        binding, and the tree's bindings include its inputs, so the
+        flag has to say false. It is not read here.
+      * `RelLowerer.rebind`'s fallback rebuilt a record where the row
+        was a single binding. `FromBuilder` inlines a subquery and
+        skips its trailing `yield e`, so the binder's name is gone --
+        but that yield is exactly what made the subquery's rows
+        scalar, and putting a record back undoes it. Only a group
+        reached it, because only a group leaves one binding in a row
+        that is not that binding.
+
+      936 of the suite's 1852 queries now build natively, up from 741.
+      What the other 916 want: `compute` 91 and `group` 82 (in queries
+      excluded for something else), `union` 75, `order` 67, `except`
+      49, `intersect` 47, `require` 36, `through` 31, `into` 6,
+      `distinct` 3.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
