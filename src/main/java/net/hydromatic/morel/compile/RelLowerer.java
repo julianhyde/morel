@@ -377,8 +377,14 @@ public class RelLowerer {
         return core.id(binding.id);
       }
     }
-    // The builder inlined the scan and the name is gone, so the row is the
-    // element.
+    // The builder inlined the scan and the name is gone. Where it left one
+    // binding, that binding is the row: the trailing `yield e` it skipped is
+    // exactly what made the subquery's rows scalar, and rebuilding a record
+    // of the binding would put back what the yield took away.
+    final List<Binding> bindings = fromBuilder.stepEnv().bindings;
+    if (bindings.size() == 1) {
+      return core.id(bindings.get(0).id);
+    }
     return naturalElement(fromBuilder);
   }
 

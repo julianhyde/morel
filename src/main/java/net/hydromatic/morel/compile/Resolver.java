@@ -2291,9 +2291,158 @@ public class Resolver {
         b.skip(toCore(((Ast.Skip) step).exp, null));
       } else if (step instanceof Ast.Take) {
         b.take(toCore(((Ast.Take) step).exp, null));
+      } else if (step instanceof Ast.Group) {
+        group_((Ast.Group) step);
       } else {
         yield_((Ast.Yield) step);
       }
+    }
+
+    /**
+     * Groups, and then names what the group produced.
+     *
+     * <p>A tree's group builds a record whether it has one label or many
+     * (discussion.md §14), so an atomizing group -- {@code group e.deptno},
+     * whose rows are bare ints -- is that record and a projection that reads
+     * its one field. A group with expressions over its labels ({@code compute
+     * {n = count() * 2}}) is the same record and a projection that computes
+     * them, which is the step list's trailing yield by another name.
+     */
+    private void group_(Ast.Group group) {
+      final boolean groupIsAtom = group.isAtom();
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+      for (String binder : binders) {
+        paths.put(binder, b.name(binder));
+      }
+      final Scope scope = new Scope(paths, natural(paths, b.input(0)));
+      // `withAggregateResolver` reads only the bindings and the ordering; the
+      // atom flag would have to lie anyway, since these bindings include the
+      // tree's inputs and an atom env holds exactly one.
+      final Core.StepEnv stepEnv =
+          Core.StepEnv.of(
+              scope.bindings, false, b.peek().type instanceof ListType);
+
+      // Following the step list: group keys and aggregate arguments read the
+      // row before the group, and the expressions that name the result read
+      // the labels the group made.
+      final PairList<Core.IdPat, Core.Exp> groupExps = PairList.of();
+      final PairList<Core.IdPat, Core.Aggregate> aggregates = PairList.of();
+      final PairList<String, Core.Exp> postExps = PairList.of();
+      if (groupIsAtom) {
+        final Resolver aggregateResolver =
+            scope
+                .resolver()
+                .withAggregateResolver(
+                    env, stepEnv, ImmutableList.of(), aggregates);
+        final boolean emptyKey =
+            group.group instanceof Ast.Record
+                && ((Ast.Record) group.group).args.isEmpty();
+        final Core.Exp exp;
+        final @Nullable String label;
+        if (emptyKey) {
+          // No group keys, so compute is a singleton.
+          requireNonNull(group.aggregate);
+          exp = aggregateResolver.toCore(group.aggregate, null);
+          label = ast.implicitLabelOpt(group.aggregate);
+        } else {
+          // One group key, so compute is empty.
+          requireNonNull(group.group);
+          exp = scope.toCore(group.group);
+          label = ast.implicitLabelOpt(group.group);
+        }
+        // Not the step list's `exp instanceof Core.Id` case: a reference to a
+        // binder has become a path by now, so the label is all there is.
+        final Core.IdPat idPat =
+            label != null
+                ? core.idPat(exp.type, label, 0)
+                : core.idPat(exp.type, typeMap.typeSystem.nameGenerator::get);
+        if (emptyKey) {
+          postExps.add(idPat.name, exp);
+        } else {
+          groupExps.add(idPat, exp);
+          postExps.add(idPat.name, core.id(idPat));
+        }
+      } else {
+        group
+            .key()
+            .args
+            .forEach(
+                (id, exp) -> groupExps.add(toCorePat(id), scope.toCore(exp)));
+        final Resolver aggregateResolver =
+            scope
+                .resolver()
+                .withAggregateResolver(
+                    env, stepEnv, groupExps.leftList(), aggregates);
+        groupExps.forEach((id, exp) -> postExps.add(id.name, core.id(id)));
+        group
+            .compute()
+            .args
+            .forEach(
+                (id, exp) ->
+                    postExps.add(id.name, aggregateResolver.toCore(exp, id)));
+      }
+
+      final SortedMap<String, Core.Exp> keys = new TreeMap<>();
+      groupExps.forEach((pat, exp) -> keys.put(pat.name, exp));
+      final SortedMap<String, Core.Aggregate> aggs = new TreeMap<>();
+      aggregates.forEach(
+          (pat, aggregate) ->
+              aggs.put(
+                  pat.name,
+                  aggregate.copy(
+                      aggregate.type,
+                      aggregate.aggregate,
+                      aggregate.argument == null
+                          ? null
+                          // An argument reads the row before the group.
+                          : scope.substitute(aggregate.argument))));
+      b.group(keys, aggs);
+
+      // The group's element is a record of its labels, so the expressions
+      // that name the result read them off its fields.
+      final Map<String, Core.Exp> labels = new LinkedHashMap<>();
+      keys.keySet().forEach(name -> labels.put(name, b.name(name)));
+      aggs.keySet().forEach(name -> labels.put(name, b.name(name)));
+      final Scope after = new Scope(labels, b.input(0));
+      binders.clear();
+      if (groupIsAtom) {
+        final String name = postExps.left(0);
+        b.project(name, after.substitute(postExps.right(0)));
+        binders.add(name);
+        atom = true;
+      } else {
+        postExps.forEach((name, exp) -> binders.add(name));
+        if (!isIdentity(postExps, labels.keySet())) {
+          // Only where the group's labels are not already what the query
+          // calls them. An identity projection here would be a second
+          // projection under the query's own yield, and merging the two
+          // binds the row to a variable -- which is right, but a `let` is
+          // something Calcite cannot push down.
+          final PairList<String, Core.Exp> nameExps = PairList.of();
+          postExps.forEach(
+              (name, exp) -> nameExps.add(name, after.substitute(exp)));
+          b.project(core.record(typeMap.typeSystem, nameExps));
+        }
+        atom = false;
+      }
+      rowIsElement = true;
+    }
+
+    /**
+     * Returns whether each expression is a reference to the group's label of
+     * its own name, so that a projection of them would leave the row as it is.
+     *
+     * <p>Being a label matters and not merely sharing a name: {@code compute
+     * sum}, with nothing to sum, reads the built-in {@code sum} under that
+     * name, and a row that dropped it would be a row short of a field.
+     */
+    private boolean isIdentity(
+        PairList<String, Core.Exp> nameExps, Set<String> labels) {
+      return nameExps.allMatch(
+          (name, exp) ->
+              labels.contains(name)
+                  && exp instanceof Core.Id
+                  && ((Core.Id) exp).idPat.name.equals(name));
     }
 
     /**
@@ -2433,35 +2582,65 @@ public class Resolver {
     /** Converts an expression, given where each name it may use is found. */
     private Core.Exp toCore(
         Ast.Exp exp, Map<String, Core.Exp> paths, Core.Exp current) {
+      return new Scope(paths, current).toCore(exp);
+    }
+
+    /**
+     * What names mean at one point in the build: where each is found in the
+     * element, and what {@code current} denotes.
+     *
+     * <p>The resolver gives a name as a reference to its binder; the builder
+     * says where that binder lives; and the two are joined by substitution.
+     * That is the whole of what {@code withStepEnv} did, minus the step list.
+     */
+    private class Scope {
+      final Map<String, Core.Exp> paths;
+      final Core.Exp current;
       final List<Binding> bindings = new ArrayList<>();
-      paths.forEach(
-          (name, path) ->
-              bindings.add(Binding.of(core.idPat(path.type, name, 0))));
-      // A path, and `current`, read an input of the tree, `$0` or `$1`. A
-      // nested query is still built as a step list, and its FromBuilder
-      // validates each step against this environment, so the inputs must be
-      // visible in it. The lowering substitutes them away afterwards.
-      final Map<String, Core.NamedPat> inputs = new LinkedHashMap<>();
-      final Visitor inputBinder =
-          new Visitor() {
-            @Override
-            protected void visit(Core.Id id) {
-              inputs.put(id.idPat.name, id.idPat);
-            }
-          };
-      paths.values().forEach(path -> path.accept(inputBinder));
-      current.accept(inputBinder);
-      inputs.values().forEach(pat -> bindings.add(Binding.of(pat)));
-      final Core.Exp core0 =
-          Resolver.this.withEnv(bindings).withCurrent(current).toCore(exp);
-      return core0.accept(
-          new Shuttle(typeMap.typeSystem) {
-            @Override
-            protected Core.Exp visit(Core.Id id) {
-              final Core.@Nullable Exp path = paths.get(id.idPat.name);
-              return path == null ? id : core.at(path, id.pos);
-            }
-          });
+
+      Scope(Map<String, Core.Exp> paths, Core.Exp current) {
+        this.paths = paths;
+        this.current = current;
+        paths.forEach(
+            (name, path) ->
+                bindings.add(Binding.of(core.idPat(path.type, name, 0))));
+        // A path, and `current`, read an input of the tree, `$0` or `$1`. A
+        // nested query is still built as a step list, and its FromBuilder
+        // validates each step against this environment, so the inputs must be
+        // visible in it. The lowering substitutes them away afterwards.
+        final Map<String, Core.NamedPat> inputs = new LinkedHashMap<>();
+        final Visitor inputBinder =
+            new Visitor() {
+              @Override
+              protected void visit(Core.Id id) {
+                inputs.put(id.idPat.name, id.idPat);
+              }
+            };
+        paths.values().forEach(path -> path.accept(inputBinder));
+        current.accept(inputBinder);
+        inputs.values().forEach(pat -> bindings.add(Binding.of(pat)));
+      }
+
+      /** Returns a resolver that reads this scope's names. */
+      Resolver resolver() {
+        return Resolver.this.withEnv(bindings).withCurrent(current);
+      }
+
+      /** Replaces each reference to a name with the path that reads it. */
+      Core.Exp substitute(Core.Exp exp) {
+        return exp.accept(
+            new Shuttle(typeMap.typeSystem) {
+              @Override
+              protected Core.Exp visit(Core.Id id) {
+                final Core.@Nullable Exp path = paths.get(id.idPat.name);
+                return path == null ? id : core.at(path, id.pos);
+              }
+            });
+      }
+
+      Core.Exp toCore(Ast.Exp exp) {
+        return substitute(resolver().toCore(exp));
+      }
     }
   }
 
@@ -2621,6 +2800,10 @@ public class Resolver {
             || step instanceof Ast.Take) {
           // Nothing more to check; the ordinal test below applies. None of
           // these changes the row, so the binders survive them unchanged.
+        } else if (step instanceof Ast.Group) {
+          if (((Ast.Group) step).binder != null) {
+            return false;
+          }
         } else if (step instanceof Ast.Yield) {
           if (((Ast.Yield) step).binder != null) {
             return false;
