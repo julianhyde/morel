@@ -2330,7 +2330,7 @@ public class Resolver {
             scan.condition == null
                 ? core.boolLiteral(true)
                 : on(scan.condition, names);
-        b.join(Core.Rel.JoinType.INNER, binder, condition);
+        b.join(joinType(scan.op), binder, condition);
         binders.addAll(names);
         rowIsElement = false;
       }
@@ -2338,6 +2338,20 @@ public class Resolver {
       // than how many the scan added: `from a in [1], _ in [true]` binds one,
       // so its rows are ints and not records of one field.
       atom = binders.size() == 1;
+    }
+
+    /** Returns the kind of join a scan's keyword asks for. */
+    private Core.Rel.JoinType joinType(Op op) {
+      switch (op) {
+        case LEFT_JOIN:
+          return Core.Rel.JoinType.LEFT;
+        case RIGHT_JOIN:
+          return Core.Rel.JoinType.RIGHT;
+        case FULL_JOIN:
+          return Core.Rel.JoinType.FULL;
+        default:
+          return Core.Rel.JoinType.INNER;
+      }
     }
 
     /**
@@ -2916,6 +2930,9 @@ public class Resolver {
       if (steps.isEmpty() || !(steps.get(0) instanceof Ast.Scan)) {
         return false;
       }
+      // How many names are bound so far, or -1 where a step has made it
+      // something only the conversion would know. Only an outer join asks.
+      int bound = 0;
       for (int i = 0; i < steps.size(); i++) {
         final Ast.FromStep step = steps.get(i);
         if (step instanceof Ast.Scan) {
@@ -2923,15 +2940,21 @@ public class Resolver {
           if (scan.exp == null || !destructurable(scan.pat)) {
             return false;
           }
-          if (scan.op != Op.SCAN) {
-            // An outer join contributes one component rather than its
-            // inputs', and option-wraps the side it can leave absent.
+          if (scan.condition != null && containsOrdinal(scan.condition)) {
+            // A scan's condition counts its own candidate pairs, which the
+            // tree has no way to say. `usesOrdinal` answers only for the
+            // extent, so this is asked separately.
             return false;
           }
           if (scan.condition != null && i == 0) {
             // Nothing to join to.
             return false;
           }
+          final int n = binderCount(scan.pat);
+          if (scan.op != Op.SCAN && !outerJoinAgrees(scan.op, bound, n)) {
+            return false;
+          }
+          bound = bound < 0 ? -1 : bound + n;
         } else if (step instanceof Ast.Where
             || step instanceof Ast.Order
             || step instanceof Ast.Unorder
@@ -2943,6 +2966,7 @@ public class Resolver {
           if (((Ast.Group) step).binder != null) {
             return false;
           }
+          bound = -1;
         } else if (step instanceof Ast.SetStep
             || step instanceof Ast.Require
             || step instanceof Ast.Distinct) {
@@ -2951,6 +2975,7 @@ public class Resolver {
           if (((Ast.Yield) step).binder != null) {
             return false;
           }
+          bound = -1;
         } else {
           return false;
         }
@@ -2961,6 +2986,60 @@ public class Resolver {
         }
       }
       return true;
+    }
+
+    /**
+     * Returns whether an outer join's absent side binds one name, which is when
+     * the tree and the step list agree about its type.
+     *
+     * <p>A tree's outer join contributes one component, and wraps it in {@code
+     * option} (discussion.md §15); the step list wraps each binding of the
+     * absent side separately. For one binding those are the same type, and for
+     * several they are not -- {@code (a * b) option} against {@code a option *
+     * b option} -- and it is the step list's answer that the user has seen.
+     * Chained outer joins are the case that finds it: the second one's left
+     * side is the first join, which binds two.
+     */
+    private boolean outerJoinAgrees(Op op, int leftCount, int rightCount) {
+      switch (op) {
+        case LEFT_JOIN:
+          return rightCount == 1;
+        case RIGHT_JOIN:
+          return leftCount == 1;
+        default:
+          return leftCount == 1 && rightCount == 1;
+      }
+    }
+
+    /** Returns how many names a pattern binds. */
+    private int binderCount(Ast.Pat pat) {
+      switch (pat.op) {
+        case ID_PAT:
+          return 1;
+        case WILDCARD_PAT:
+          return 0;
+        case TUPLE_PAT:
+          return ((Ast.TuplePat) pat)
+              .args.stream().mapToInt(this::binderCount).sum();
+        case RECORD_PAT:
+          return ((Ast.RecordPat) pat)
+              .args.values().stream().mapToInt(this::binderCount).sum();
+        default:
+          return 0;
+      }
+    }
+
+    /** Returns whether an expression reads {@code ordinal}. */
+    private boolean containsOrdinal(Ast.Exp exp) {
+      final AtomicBoolean b = new AtomicBoolean();
+      exp.accept(
+          new Visitor() {
+            @Override
+            protected void visit(Ast.Ordinal ordinal) {
+              b.set(true);
+            }
+          });
+      return b.get();
     }
 
     /**
