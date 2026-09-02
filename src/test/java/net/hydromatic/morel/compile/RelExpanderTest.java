@@ -249,6 +249,12 @@ public class RelExpanderTest {
    * the walk has to see through the filter to reach the leaves, and gather its
    * conjuncts as it passes: {@code j} is bounded by a condition above the
    * filter and {@code i} by one below it.
+   *
+   * <p>The projection reads three components and not two, because a filter
+   * passes its input's components through: it emits its input's rows unchanged,
+   * so the element of the join above it is flat whether the filter is there or
+   * not -- which is what lets expansion drop the filter, as it does here,
+   * without re-associating what reads the element.
    */
   @Test
   void testFilterBetweenJoins() {
@@ -257,7 +263,7 @@ public class RelExpanderTest {
             "from i : int join j : int where i elem [1, 2] "
                 + "join k : int where j elem [3, 4] andalso k elem [5, 6]"),
         is(
-            "project [{i = #1 (#1 $0), j = #2 (#1 $0), k = #2 $0}]\n" //
+            "project [{i = #1 $0, j = #2 $0, k = #3 $0}]\n" //
                 + "  join\n"
                 + "    join\n"
                 + "      [1, 2]\n"
@@ -279,7 +285,7 @@ public class RelExpanderTest {
             "from x in [1, 2] join y where y elem [x] "
                 + "join z where z elem [y, y + 1]"),
         is(
-            "project [{x = #1 (#1 $0), y = #2 (#1 $0), z = #2 $0}]\n" //
+            "project [{x = #1 $0, y = #2 $0, z = #3 $0}]\n" //
                 + "  join [g$0]\n"
                 + "    join [g$1]\n"
                 + "      [1, 2]\n"

@@ -830,3 +830,28 @@ that permutes them back, or re-path every access above. That is not
 an obstacle to the design — it is the cost this section already
 records — but it is real code in the one place where the tree is
 rewritten today, and it is why this is not a small change.
+
+## 16. A filter passes its components through
+
+A node's element is the concatenation of its inputs' components (§15),
+and the rule for what a node's components *are* was: a flat join's are
+its inputs', and every other node's is one -- itself.
+
+That is wrong for a node that emits its input's rows unchanged. A
+filter's element *is* its input's element, so its components are its
+input's components. The error is invisible until something removes the
+filter, and then it is not subtle: `join(filter(join(a, b)), c)` has
+element `((a, b), c)` under the old rule and `join(join(a, b), c)` has
+`(a, b, c)`, so grounding -- which drops a filter whose constraints its
+generators have subsumed -- re-associated the element under a projection
+written for the other shape. `from i, j where ... join k, m where ...`
+then read a scalar as a pair.
+
+Filter, sort, unorder, skip and take all change which rows there are, or
+in what order, but not what a row is; all pass their components through.
+Project, group and the set operators do not.
+
+It has to be the node's own answer rather than a caller's care, because
+the rules of step 4 will remove and reorder filters constantly, and a
+rule that has to remember to re-associate its parent's projection is a
+rule that will forget.
