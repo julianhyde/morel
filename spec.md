@@ -391,17 +391,23 @@ other implementation could reproduce the text. A `$` cannot occur in
 an identifier, so a generated name cannot capture one the query
 wrote.
 
-*Review.* "Per tree" is not yet enough, because trees nest: a nested
-query is a tree of its own inside an expression of the tree that
-contains it. Two trees that each number from zero put a `v$0` in one
-expression, and one captures the other — which is not a printing
-problem but a wrong answer, and it has already been observed, in the
-lowering, where composing two independently numbered forms produced
-a tree whose leaf referenced `$0`. The rule wanted is that a nested
-tree *continues* the enclosing tree's numbering rather than
-restarting it, so that numbering is per outermost tree; that keeps
-determinism and adds uniqueness. Written when the flip makes nested
-trees routine.
+More precisely: **allocated freely, and renumbered when printed.** A
+binder takes whatever number its maker's counter gives it, because
+uniqueness is all that allocation is asked for; the *printer* then
+numbers the generated binders it finds, from zero, in order of first
+occurrence. `v$123`, `v$110`, `v$200`, `v$110` print as `v$0`, `v$1`,
+`v$2`, `v$1`.
+
+That is what makes the text depend on the query and nothing else,
+and it survives nesting, which a rule about allocation does not: two
+nested trees may each allocate `v$0`, and a scheme that numbered per
+tree would have them collide, whereas a printer sees the whole text
+and numbers what it finds. Morel does the same for type variables —
+`TypeSystem.unqualified` prints `('b * 'a * 'b)` as `('a * 'b *
+'a)` — so an implementation has the pattern already.
+
+Each prefix is numbered in its own sequence, so a tree's `v$` and a
+lowering's `w$` do not interleave.
 
 *Review.* A tree nested inside another tree's expressions numbers its
 own binders from zero, which is unambiguous only because the two
