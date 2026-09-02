@@ -622,12 +622,23 @@ val s0: shadow = {i = 1, j = 2};
 {s0 remove j};
 > val it = {i=1}
 >   : {i:int} check r => #i r > 0 andalso (let val r = 1 in r > 0 end)
-
-(* A modifier that renames is the exception. Rewriting the selections cannot
- * tell a selection on the record from one on what the inner binding holds,
- * and would rewrite both, so a shadowed condition is dropped. *)
 {s0 rename y = j};
-> val it = {i=1,y=2} : {i:int, y:int}
+> val it = {i=1,y=2}
+>   : {i:int, y:int} check r => #i r > 0 andalso (let val r = 1 in r > 0 end)
+{s0 rename y = i};
+> val it = {j=2,y=1}
+>   : {j:int, y:int} check r => #y r > 0 andalso (let val r = 1 in r > 0 end)
+
+(* Renaming rewrites the selections on the record, and only those. A
+ * selection that stands under a binding of the record's name is a selection
+ * on whatever that binding holds, and is left as it was. *)
+type sel = {i: int, j: int} check r => #i r > 0 andalso (let val r = {i = ~1} in #i r < 0 end);
+> type sel = {i:int, j:int} check r => #i r > 0 andalso (let val r = {i = ~1} in #i r < 0 end)
+val t0: sel = {i = 1, j = 2};
+> val t0 = {i=1,j=2} : sel
+{t0 rename y = i};
+> val it = {j=2,y=1}
+>   : {j:int, y:int} check r => #y r > 0 andalso (let val r = {i = ~1} in #i r < 0 end)
 
 (* 'typeof e' names the type 'e' was shown to have, conditions and all, so an
  * annotation that uses it claims what that type claims. It used to reduce the

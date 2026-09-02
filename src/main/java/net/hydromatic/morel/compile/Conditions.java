@@ -82,27 +82,17 @@ class Conditions {
    */
   private static Ast.@Nullable Fn rename(
       TypeSystem typeSystem, Ast.Fn check, Map<String, String> fields) {
-    // A field that keeps its name needs no rewriting. Then a condition that
-    // binds the record's name again is no obstacle: the uses under that
-    // binding are not the record, and nothing is rewritten that could change
-    // what they mean. Where a field is renamed it is an obstacle, because the
-    // rewrite cannot tell a selection on the record from one on whatever the
-    // inner binding holds, and would rewrite both.
-    final boolean renames =
-        fields.entrySet().stream()
-            .anyMatch(e -> !e.getKey().equals(e.getValue()));
     final List<Ast.Match> matches = new ArrayList<>();
     for (Ast.Match match : check.matchList) {
       final String name = ((Ast.IdPat) match.pat).name;
       final AstFreeFinder.Use use =
           AstFreeFinder.useOf(match.exp, name, fields.keySet());
-      if (use.usesWhole || renames && use.shadowed) {
+      if (use.usesWhole) {
         return null;
       }
       matches.add(
           match.copy(
-              match.pat,
-              rewriteSelectors(typeSystem, match.exp, name, fields)));
+              match.pat, rewriteSelectors(typeSystem, match.exp, use, fields)));
     }
     return ast.fn(check.pos, matches);
   }
@@ -167,20 +157,26 @@ class Conditions {
     return pat.op == Op.ID_PAT || pat.op == Op.WILDCARD_PAT;
   }
 
-  /** Renames the fields that {@code name} is selected on. */
+  /**
+   * Renames the fields that the record is selected on.
+   *
+   * <p>Only the nodes that {@code use} found are rewritten. A shuttle has no
+   * scopes, so it cannot itself tell a selection on the record from one that
+   * looks the same but stands under a binding of the record's name; the scoped
+   * walk that produced {@code use} has already told them apart.
+   */
   private static Ast.Exp rewriteSelectors(
       TypeSystem typeSystem,
       Ast.Exp exp,
-      String name,
+      AstFreeFinder.Use use,
       Map<String, String> fields) {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
           protected Ast.Apply visit(Ast.Apply apply) {
+            final boolean selection = use.selections.contains(apply);
             final Ast.Apply apply2 = super.visit(apply);
-            if (apply2.fn.op == Op.RECORD_SELECTOR
-                && apply2.arg.op == Op.ID
-                && ((Ast.Id) apply2.arg).name.equals(name)) {
+            if (selection) {
               final Ast.RecordSelector selector =
                   (Ast.RecordSelector) apply2.fn;
               final String field = fields.get(selector.name);

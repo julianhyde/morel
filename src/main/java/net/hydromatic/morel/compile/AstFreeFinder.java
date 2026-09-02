@@ -21,7 +21,9 @@ package net.hydromatic.morel.compile;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import net.hydromatic.morel.ast.Ast;
@@ -91,12 +93,17 @@ class AstFreeFinder extends Visitor {
      */
     final boolean usesWhole;
 
-    /** Whether the name is bound again within. */
-    final boolean shadowed;
+    /**
+     * The nodes that are free selections of one of the given fields, held by
+     * identity. They are the nodes, and the only nodes, that a rewrite of the
+     * selections may touch; a selection that looked the same but stood under a
+     * binding of the name is not among them.
+     */
+    final Set<Ast.Apply> selections;
 
-    Use(boolean usesWhole, boolean shadowed) {
+    Use(boolean usesWhole, Set<Ast.Apply> selections) {
       this.usesWhole = usesWhole;
-      this.shadowed = shadowed;
+      this.selections = selections;
     }
   }
 
@@ -112,7 +119,7 @@ class AstFreeFinder extends Visitor {
   static Use useOf(Ast.Exp exp, String name, Set<String> fields) {
     final SelectionFinder finder = new SelectionFinder(name, fields);
     exp.accept(finder);
-    return new Use(finder.usesWhole, finder.shadowed);
+    return new Use(finder.usesWhole, finder.selections);
   }
 
   /** Finds the uses of a record that are not selections of its fields. */
@@ -120,7 +127,8 @@ class AstFreeFinder extends Visitor {
     private final String name;
     private final Set<String> fields;
     boolean usesWhole = false;
-    boolean shadowed = false;
+    final Set<Ast.Apply> selections =
+        Collections.newSetFromMap(new IdentityHashMap<>());
 
     SelectionFinder(String name, Set<String> fields) {
       this.name = name;
@@ -136,7 +144,9 @@ class AstFreeFinder extends Visitor {
         // A selection of the record. The field must be one that
         // survives; the name itself is not a use, so the argument is
         // not walked.
-        if (!fields.contains(((Ast.RecordSelector) apply.fn).name)) {
+        if (fields.contains(((Ast.RecordSelector) apply.fn).name)) {
+          selections.add(apply);
+        } else {
           usesWhole = true;
         }
         return;
@@ -150,14 +160,6 @@ class AstFreeFinder extends Visitor {
         usesWhole = true;
       }
       super.visit(id);
-    }
-
-    @Override
-    void bind(String boundName) {
-      if (boundName.equals(name)) {
-        shadowed = true;
-      }
-      super.bind(boundName);
     }
   }
 
