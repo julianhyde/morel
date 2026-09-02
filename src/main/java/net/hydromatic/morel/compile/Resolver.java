@@ -2190,6 +2190,17 @@ public class Resolver {
      */
     boolean atom = true;
 
+    /**
+     * Whether the element is the row the user sees.
+     *
+     * <p>True everywhere except after a join, which leaves the element as its
+     * inputs' components concatenated. Where it is true, {@code current} is the
+     * element itself rather than a record rebuilt out of paths into it -- and
+     * rebuilding one would not merely be longer, it would be a projection that
+     * survives into the plan.
+     */
+    boolean rowIsElement = true;
+
     /** Name of each scan's binder, in the order the scans were pushed. */
     final List<String> scanNames = new ArrayList<>();
 
@@ -2213,7 +2224,7 @@ public class Resolver {
      * projection's job.
      */
     private void finish() {
-      if (atom || binders.isEmpty()) {
+      if (rowIsElement) {
         return;
       }
       final Map<String, Core.Exp> paths = new LinkedHashMap<>();
@@ -2230,11 +2241,8 @@ public class Resolver {
      * without a yield.
      */
     private Core.Exp natural(Map<String, Core.Exp> paths, Core.Exp element) {
-      if (paths.isEmpty()) {
+      if (rowIsElement || paths.isEmpty()) {
         return element;
-      }
-      if (atom) {
-        return requireNonNull(getOnlyElement(paths.values()));
       }
       final PairList<String, Core.Exp> nameExps = PairList.of();
       paths.forEach(nameExps::add);
@@ -2250,6 +2258,7 @@ public class Resolver {
         if (b.size() == 0) {
           b.push(name, toCore(scanExp));
           atom = true;
+          rowIsElement = true;
         } else {
           // The right input is a tree of its own, so it cannot say `$0` and
           // mean the row so far. A binder crosses that boundary by ordinary
@@ -2266,11 +2275,22 @@ public class Resolver {
                   : on(scan.condition, name);
           b.join(Core.Rel.JoinType.INNER, binder, condition);
           atom = false;
+          rowIsElement = false;
         }
         binders.add(name);
         scanNames.add(name);
       } else if (step instanceof Ast.Where) {
         b.filter(toCore(((Ast.Where) step).exp));
+      } else if (step instanceof Ast.Order) {
+        b.sort(toCore(((Ast.Order) step).exp));
+      } else if (step instanceof Ast.Unorder) {
+        b.unorder();
+      } else if (step instanceof Ast.Skip) {
+        // A count is evaluated before the query has a row, so it reads the
+        // enclosing scope; `toCore(exp, null)` is that scope.
+        b.skip(toCore(((Ast.Skip) step).exp, null));
+      } else if (step instanceof Ast.Take) {
+        b.take(toCore(((Ast.Take) step).exp, null));
       } else {
         yield_((Ast.Yield) step);
       }
@@ -2298,9 +2318,11 @@ public class Resolver {
         b.project(exp);
         binders.addAll(((RecordLikeType) exp.type).argNameTypes().keySet());
         atom = false;
+        rowIsElement = true;
         return;
       }
       atom = true;
+      rowIsElement = true;
       if (name == null) {
         b.project(exp);
       } else {
@@ -2592,8 +2614,13 @@ public class Resolver {
             // Nothing to join to.
             return false;
           }
-        } else if (step instanceof Ast.Where) {
-          // Nothing more to check; the ordinal test below applies.
+        } else if (step instanceof Ast.Where
+            || step instanceof Ast.Order
+            || step instanceof Ast.Unorder
+            || step instanceof Ast.Skip
+            || step instanceof Ast.Take) {
+          // Nothing more to check; the ordinal test below applies. None of
+          // these changes the row, so the binders survive them unchanged.
         } else if (step instanceof Ast.Yield) {
           if (((Ast.Yield) step).binder != null) {
             return false;

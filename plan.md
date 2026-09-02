@@ -587,6 +587,52 @@ something settled — §8's principle, applied to the sequence itself.
         reads it off the Core -- `getIdPat` sees `Core.Id d` and says
         `d` -- but by the time the tree's converter is done, `d` is a
         path into the element and no longer looks like a reference.
+- [x] Slice 4: `on` conditions, and the steps that leave the row
+      alone -- `order`, `unorder`, `skip`, `take`. A condition is
+      converted where the builder addresses both inputs, the left's
+      names over `$0` and the right's binder over `$1`; `current` in
+      one is the row so far, which is the left's, because the
+      condition is asked of a row the join has not made yet. A count
+      is read in the enclosing scope, as the step list reads it, since
+      it is evaluated before this query has a row. Inner joins only.
+      No expectation moved by any of it.
+
+      741 of the suite's 1852 queries now build natively. What the
+      other 1111 still want, by step kind: `compute` 291, `group` 222,
+      `order` 130 (in queries excluded for something else), `union`
+      75, `except` 49, `intersect` 47, `require` 36, `through` 31,
+      `into` 6, `distinct` 3.
+- [x] Slice 4: `on` conditions, and the steps that leave the row
+      alone -- `order`, `unorder`, `skip`, `take`. A condition is
+      converted where the builder addresses both inputs, the left's
+      names over `$0` and the right's binder over `$1`; `current` in
+      one is the row so far, which is the left's, because the
+      condition is asked of a row the join has not made yet. A count
+      is read in the enclosing scope, as the step list reads it, since
+      it is evaluated before this query has a row. Inner joins only.
+
+      Two things `order` found, both about *where* the row gets built
+      rather than what it is, and both invisible until a step read the
+      element after a projection:
+      * The lowering deferred a projection past a sort, which is what
+        deferring one is for -- except that a sort reads the element.
+        `AlgebraTest.testScottOrder` caught it: Calcite sorted the
+        eight-column row and projected two columns after, where it had
+        been sorting two. Deferring also evaluates the projection
+        twice for anything the sort key shares with it. So a sort
+        materializes, as a set operator and an outer join do.
+      * `finish` projected the record of binders even where the row
+        was already that record, which is a node in the plan that
+        nothing needs. The resolver now tracks whether the element is
+        the row -- true everywhere except after a join -- and
+        `current` is then the element itself rather than a record
+        rebuilt out of paths into it.
+
+      741 of the suite's 1852 queries build natively. What the other
+      1111 still want, by step kind: `compute` 291, `group` 222,
+      `order` 130 (in queries excluded for something else), `union`
+      75, `except` 49, `intersect` 47, `require` 36, `through` 31,
+      `into` 6, `distinct` 3.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
