@@ -640,6 +640,15 @@ val t0: sel = {i = 1, j = 2};
 > val it = {j=2,y=1}
 >   : {j:int, y:int} check r => #y r > 0 andalso (let val r = {i = ~1} in #i r < 0 end)
 
+(* A 'let' is walked into like anything else: a selection in its body is
+ * renamed, and one under a binding of the record's name is not. *)
+type inLet = {i: int, j: int} check r => let val z = 0 in #i r > z end;
+> type inLet = {i:int, j:int} check r => let val z = 0 in #i r > z end
+val w1: inLet = {i = 1, j = 2};
+> val w1 = {i=1,j=2} : inLet
+{w1 rename y = i};
+> val it = {j=2,y=1} : {j:int, y:int} check r => let val z = 0 in #y r > z end
+
 (* A selection inside a query is renamed like any other. *)
 type inQuery = {i: int, j: int} check r => exists x in [1] where x <= #i r;
 > type inQuery = {i:int, j:int} check r => exists x in [1] where x <= #i r

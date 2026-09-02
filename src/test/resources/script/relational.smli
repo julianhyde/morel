@@ -476,6 +476,14 @@ from e in emps
   yield e.name;
 > val it = ["Fred","Velma","Scooby","Shaggy"] : string list
 
+(*) Or inside a 'let' the key contains.
+from e in emps
+  order (let val z = 0 in {e.name, e.deptno} end)
+  yield e.name;
+> stdIn:2.27-2.45 Warning: Sorting on a record whose fields are not in alphabetical order. Sort order may not be what you expect.
+>   raised at: stdIn:2.27-2.45
+> val it = ["Fred","Velma","Scooby","Shaggy"] : string list
+
 from e in emps
   yield {e.deptno}
   order DESC deptno

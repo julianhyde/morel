@@ -151,7 +151,7 @@ public class Shuttle {
   }
 
   protected Ast.Let visit(Ast.Let let) {
-    return ast.let(let.pos, visitList(let.decls), let.exp);
+    return ast.let(let.pos, visitList(let.decls), let.exp.accept(this));
   }
 
   protected Ast.Exp visit(Ast.Case caseOf) {
@@ -386,7 +386,8 @@ public class Shuttle {
   }
 
   protected Ast.ValBind visit(Ast.ValBind valBind) {
-    return ast.valBind(valBind.pos, valBind.pat, valBind.exp);
+    return ast.valBind(
+        valBind.pos, valBind.pat.accept(this), valBind.exp.accept(this));
   }
 
   protected Ast.Exp visit(Ast.From from) {
@@ -407,7 +408,7 @@ public class Shuttle {
   }
 
   protected AstNode visit(Ast.Order order) {
-    return ast.order(order.pos, order.exp);
+    return ast.order(order.pos, order.exp.accept(this));
   }
 
   protected Ast.Scan visit(Ast.Scan scan) {
@@ -465,24 +466,32 @@ public class Shuttle {
   }
 
   protected AstNode visit(Ast.Into into) {
-    return ast.into(into.pos, into.exp);
+    return ast.into(into.pos, into.exp.accept(this));
   }
 
   protected AstNode visit(Ast.Through through) {
-    return ast.through(through.pos, through.pat, through.exp);
+    return ast.through(
+        through.pos, through.pat.accept(this), through.exp.accept(this));
   }
 
   protected AstNode visit(Ast.Compute compute) {
-    return ast.compute(compute.pos, requireNonNull(compute.aggregate));
+    return ast.compute(
+        compute.pos, requireNonNull(compute.aggregate).accept(this));
   }
 
   protected AstNode visit(Ast.Group group) {
-    return ast.group(group.pos, group.binder, group.group, group.aggregate);
+    return ast.group(
+        group.pos,
+        group.binder,
+        group.group.accept(this),
+        group.aggregate == null ? null : group.aggregate.accept(this));
   }
 
   protected Ast.Aggregate visit(Ast.Aggregate aggregate) {
     return ast.aggregate(
-        aggregate.pos, aggregate.aggregate, aggregate.argument);
+        aggregate.pos,
+        aggregate.aggregate.accept(this),
+        aggregate.argument.accept(this));
   }
 
   protected Ast.TypeDecl visit(Ast.TypeDecl typeDecl) {
