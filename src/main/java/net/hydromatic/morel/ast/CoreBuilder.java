@@ -907,6 +907,10 @@ public enum CoreBuilder {
    */
   public List<Core.Exp> components(
       TypeSystem typeSystem, Core.Exp node, Core.Exp exp) {
+    final Core.@Nullable Exp input = elementPreserved(node);
+    if (input != null) {
+      return components(typeSystem, input, exp);
+    }
     if (!(node instanceof Core.Join) || !isFlat((Core.Join) node)) {
       return ImmutableList.of(exp);
     }
@@ -929,11 +933,44 @@ public enum CoreBuilder {
 
   /** Returns how many components a node's element has. */
   public int componentCount(Core.Exp node) {
+    final Core.@Nullable Exp input = elementPreserved(node);
+    if (input != null) {
+      return componentCount(input);
+    }
     if (node instanceof Core.Join && isFlat((Core.Join) node)) {
       final Core.Join join = (Core.Join) node;
       return componentCount(join.left) + componentCount(join.right);
     }
     return 1;
+  }
+
+  /**
+   * Returns the input whose components a node passes through, or null if the
+   * node's element is its own.
+   *
+   * <p>A filter emits its input's rows unchanged, so its element *is* its
+   * input's element and its components are its input's components. Saying
+   * otherwise -- one component, because the node is not a join -- is invisible
+   * until something removes the filter: {@code join(filter(join(a, b)), c)}
+   * would have element {@code ((a, b), c)} and {@code join(join(a, b), c)} has
+   * {@code (a, b, c)}, so grounding, which drops a filter its generators have
+   * subsumed, re-associated the element under a projection written for the
+   * other shape. The rules of step 4 will remove and reorder filters
+   * constantly, so this has to be the node's own answer rather than a caller's
+   * care. The same holds of every node that changes which rows there are, or in
+   * what order, but not what a row is.
+   */
+  private static Core.@Nullable Exp elementPreserved(Core.Exp node) {
+    switch (node.op) {
+      case FILTER:
+      case SORT:
+      case UNORDER:
+      case SKIP:
+      case TAKE:
+        return ((Core.SingleRel) node).input;
+      default:
+        return null;
+    }
   }
 
   /**
@@ -974,6 +1011,10 @@ public enum CoreBuilder {
    * option-wrapping is not applied twice.
    */
   public List<Type> componentTypes(Core.Exp node) {
+    final Core.@Nullable Exp input = elementPreserved(node);
+    if (input != null) {
+      return componentTypes(input);
+    }
     if (node instanceof Core.Join && isFlat((Core.Join) node)) {
       return ImmutableList.copyOf(
           ((RecordLikeType) node.type.elementType()).argTypes());
