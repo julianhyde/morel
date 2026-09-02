@@ -55,16 +55,28 @@ class SuchThatShuttle extends EnvShuttle {
    */
   private final boolean rowsUnused;
 
-  SuchThatShuttle(TypeSystem typeSystem, Environment env) {
-    this(typeSystem, env, false, false);
+  /**
+   * Where a binder that grounding invents gets its ordinal.
+   *
+   * <p>The session's, which is the resolver's: a name is unique only within one
+   * generator, and grounding runs after inlining has brought names from several
+   * declarations into one scope.
+   */
+  private final NameGenerator nameGenerator;
+
+  SuchThatShuttle(
+      TypeSystem typeSystem, Environment env, NameGenerator nameGenerator) {
+    this(typeSystem, env, nameGenerator, false, false);
   }
 
   private SuchThatShuttle(
       TypeSystem typeSystem,
       Environment env,
+      NameGenerator nameGenerator,
       boolean inRecursiveFunction,
       boolean rowsUnused) {
     super(typeSystem, env);
+    this.nameGenerator = nameGenerator;
     this.inRecursiveFunction = inRecursiveFunction;
     this.rowsUnused = rowsUnused;
   }
@@ -72,7 +84,7 @@ class SuchThatShuttle extends EnvShuttle {
   @Override
   protected EnvShuttle push(Environment env) {
     return new SuchThatShuttle(
-        typeSystem, env, inRecursiveFunction, rowsUnused);
+        typeSystem, env, nameGenerator, inRecursiveFunction, rowsUnused);
   }
 
   @Override
@@ -80,7 +92,8 @@ class SuchThatShuttle extends EnvShuttle {
     if (apply.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)
         || apply.isCallTo(BuiltIn.RELATIONAL_EMPTY)) {
       final SuchThatShuttle inner =
-          new SuchThatShuttle(typeSystem, env, inRecursiveFunction, true);
+          new SuchThatShuttle(
+              typeSystem, env, nameGenerator, inRecursiveFunction, true);
       return apply.copy(apply.fn.accept(inner), apply.arg.accept(inner));
     }
     return super.visit(apply);
@@ -95,7 +108,7 @@ class SuchThatShuttle extends EnvShuttle {
     Compiles.bindPattern(typeSystem, bindings, recValDecl);
     final SuchThatShuttle inner =
         new SuchThatShuttle(
-            typeSystem, env.bindAll(bindings), true, rowsUnused);
+            typeSystem, env.bindAll(bindings), nameGenerator, true, rowsUnused);
     return recValDecl.copy(inner.visitList(recValDecl.list));
   }
 
@@ -125,7 +138,7 @@ class SuchThatShuttle extends EnvShuttle {
     }
 
     final Core.From from2 =
-        Expander.expandFrom(typeSystem, env, from, !rowsUnused);
+        Expander.expandFrom(typeSystem, nameGenerator, env, from, !rowsUnused);
 
     // Expand subqueries.
     return super.visit(from2);
