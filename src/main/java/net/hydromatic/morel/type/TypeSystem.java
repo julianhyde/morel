@@ -339,6 +339,13 @@ public class TypeSystem {
     if (!name.isEmpty()) {
       // A checked type that is not named has no name to look up by.
       typeByName.put(name, aliasType);
+      // A name may be declared again, and the second declaration is a
+      // different type. An annotation that writes the name is keyed by the
+      // name alone, and typeFor caches by key, so without this the cache
+      // goes on answering with the type the name used to have -- and a
+      // value claimed at the name is checked against the condition that
+      // type used to carry, not the one it carries now.
+      typeByKey.put(Keys.name(name), aliasType);
     }
     return aliasType;
   }

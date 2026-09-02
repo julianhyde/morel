@@ -83,6 +83,20 @@ List.hd [n2];
 List.map (fn i => i) [n2];
 > val it = [5] : nat list
 
+(* The name means the declaration in force, at every site that claims it.
+ * A type is cached by the name an annotation writes it as, and the cache
+ * went on answering with the type the name used to have, so a value was
+ * checked against the condition of a type the name no longer meant. 0 is a
+ * 'nat' by the first declaration and not by this one. *)
+val n3: nat = 0;
+> uncaught exception Constraint [0 is not a valid nat]
+>   raised at: stdIn:1.5-1.16
+0 as nat;
+> uncaught exception Constraint [0 is not a valid nat]
+>   raised at: stdIn:1.1-1.9
+0 asOpt nat;
+> val it = NONE : nat option
+
 (* A condition must be closed: it may refer only to the value it is given and
  * to the standard basis. That is what lets a checked type be interned like
  * any other type -- two checked types are the same type when their
@@ -750,9 +764,10 @@ from {i, j}: parityPair where i elem [0..2] andalso j elem [5..8];
 > val it = [{i=0,j=6},{i=0,j=8},{i=1,j=5},{i=1,j=7},{i=2,j=6},{i=2,j=8}]
 >   : {i:int, j:int} list
 
-(*) The condition restricts a scalar scan too.
+(* The condition restricts a scalar scan too. 'nat' is the declaration above,
+ * 'i >= 1', not the one at the top of this file. *)
 from n: nat where n elem [~2..2];
-> val it = [0,1,2] : int list
+> val it = [1,2] : int list
 
 (*) A scan over an unchecked type is unaffected.
 type plainPair = {i: int, j: int};
