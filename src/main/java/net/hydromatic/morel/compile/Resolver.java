@@ -2246,8 +2246,17 @@ public class Resolver {
     @Nullable String ordinalName;
 
     Core.Exp run(List<Ast.FromStep> steps) {
+      if (steps.isEmpty() || !(steps.get(0) instanceof Ast.Scan)) {
+        // A query with no scan -- `from`, `from where p`, `from yield e` --
+        // iterates over one row, which is unit.
+        b.push(
+            core.list(
+                typeMap.typeSystem,
+                PrimitiveType.UNIT,
+                ImmutableList.of(core.unitLiteral())));
+      }
       forEachIndexed(steps, this::acceptStep);
-      if (!(last(steps) instanceof Ast.Yield)) {
+      if (steps.isEmpty() || !(last(steps) instanceof Ast.Yield)) {
         finish();
       }
       return RelLowerer.lower(typeMap.typeSystem, b.build(), scanNames);
@@ -3091,9 +3100,6 @@ public class Resolver {
      * a group, a set operator or an order. Those are the slices after this one.
      */
     private boolean nativelyBuildable(List<Ast.FromStep> steps) {
-      if (steps.isEmpty() || !(steps.get(0) instanceof Ast.Scan)) {
-        return false;
-      }
       // How many names are bound so far, or -1 where a step has made it
       // something only the conversion would know. Only an outer join asks.
       int bound = 0;
