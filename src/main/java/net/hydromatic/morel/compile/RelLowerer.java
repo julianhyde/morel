@@ -74,14 +74,29 @@ public class RelLowerer {
    */
   private final Deque<String> scanNames;
 
-  private RelLowerer(TypeSystem typeSystem, Iterable<String> scanNames) {
+  /**
+   * Where binder ordinals come from.
+   *
+   * <p>The caller's, and not the type system's, because a name is unique only
+   * within one generator: the resolver numbers from the session's, and a
+   * lowering that numbered from another could mint a binder equal to one the
+   * resolver had already minted. `fun isNum n = ...; from n where isNum n` then
+   * inlines `n` to itself, and the inliner does not stop.
+   */
+  private final NameGenerator nameGenerator;
+
+  private RelLowerer(
+      TypeSystem typeSystem,
+      NameGenerator nameGenerator,
+      Iterable<String> scanNames) {
     this.typeSystem = typeSystem;
+    this.nameGenerator = nameGenerator;
     this.scanNames = new ArrayDeque<>(ImmutableList.copyOf(scanNames));
   }
 
   /** Lowers a tree into an executable expression. */
   public static Core.Exp lower(TypeSystem typeSystem, Core.Exp exp) {
-    return lower(typeSystem, exp, ImmutableList.of());
+    return lower(typeSystem, typeSystem.nameGenerator, exp, ImmutableList.of());
   }
 
   /**
@@ -89,8 +104,11 @@ public class RelLowerer {
    * scan, in order, from {@code scanNames}.
    */
   public static Core.Exp lower(
-      TypeSystem typeSystem, Core.Exp exp, Iterable<String> scanNames) {
-    return new RelLowerer(typeSystem, scanNames).lowerRel(exp);
+      TypeSystem typeSystem,
+      NameGenerator nameGenerator,
+      Core.Exp exp,
+      Iterable<String> scanNames) {
+    return new RelLowerer(typeSystem, nameGenerator, scanNames).lowerRel(exp);
   }
 
   private Core.Exp lowerRel(Core.Exp exp) {
@@ -457,7 +475,7 @@ public class RelLowerer {
     // names no one thing, and the tree keeps paths instead.
     return name.isEmpty()
         ? freshPat(type)
-        : core.idPat(type, name, typeSystem.nameGenerator::inc);
+        : core.idPat(type, name, nameGenerator::inc);
   }
 
   /**
@@ -469,7 +487,7 @@ public class RelLowerer {
    * step list whose expressions are the tree's.
    */
   private Core.IdPat freshPat(Type type) {
-    return core.idPat(type, typeSystem.nameGenerator.getPrefixed("w"), 0);
+    return core.idPat(type, nameGenerator.getPrefixed("w"), 0);
   }
 
   /**
