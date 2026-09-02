@@ -2202,8 +2202,58 @@ public class Resolver {
       } else if (step instanceof Ast.Where) {
         b.filter(toCore(((Ast.Where) step).exp));
       } else {
-        b.project(toCore(((Ast.Yield) step).exp));
+        final Ast.Yield yield = (Ast.Yield) step;
+        final Core.Exp exp = toCore(yield.exp);
+        b.project(exp);
+        rebind(yield, exp);
       }
+    }
+
+    /**
+     * Renames what the query binds, now that a yield has replaced the row.
+     *
+     * <p>Follows the rule the step list follows, because the type resolver has
+     * already decided by it which names the steps after this one may use: a
+     * record yield binds its fields, and any other yield binds the row under
+     * one name, if it has one to offer.
+     */
+    private void rebind(Ast.Yield yield, Core.Exp exp) {
+      paths.clear();
+      final Core.Exp element = b.input(0);
+      // 'record' is what the user wrote, not what the expression turned out to
+      // be: a record with modifiers is a record, and yet it is a 'let' by the
+      // time it gets here, so only the Ast can say.
+      if (TypeResolver.letBody(yield.exp).op == Op.RECORD
+          && exp.type.op() == Op.RECORD_TYPE) {
+        forEachIndexed(
+            ((RecordLikeType) exp.type).argNames(),
+            (name, i) ->
+                paths.put(name, core.field(typeMap.typeSystem, element, i)));
+      } else {
+        final @Nullable String name = atomName(exp);
+        if (name != null) {
+          paths.put(name, element);
+        }
+      }
+    }
+
+    /**
+     * Returns the name that an atomizing yield binds its row under, or null if
+     * it offers none, in which case only {@code current} reads the row.
+     *
+     * <p>The same rule as {@link CoreBuilder}'s {@code getIdPat}: a reference
+     * keeps its name, {@code e.deptno} gives {@code deptno}, and anything else
+     * is anonymous.
+     */
+    private @Nullable String atomName(Core.Exp exp) {
+      if (exp instanceof Core.Id) {
+        return ((Core.Id) exp).idPat.name;
+      }
+      if (exp instanceof Core.Apply
+          && ((Core.Apply) exp).fn instanceof Core.RecordSelector) {
+        return ((Core.RecordSelector) ((Core.Apply) exp).fn).fieldName();
+      }
+      return null;
     }
 
     /**
@@ -2408,12 +2458,6 @@ public class Resolver {
           // Nothing more to check; the ordinal test below applies.
         } else if (step instanceof Ast.Yield) {
           if (((Ast.Yield) step).binder != null) {
-            return false;
-          }
-          if (i < steps.size() - 1) {
-            // A yield renames the row, and a later step reads it by the new
-            // name. Only the resolver knows those names; the builder would
-            // have to be told. The slice after this one.
             return false;
           }
         } else {
