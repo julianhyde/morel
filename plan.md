@@ -518,6 +518,38 @@ something settled — §8's principle, applied to the sequence itself.
       cannot represent at all. Both go when grounding moves to
       `RelExpander`, which returns a tree and has no shadowing to
       represent.
+- [x] Slice 1 of the flip, live: a query that scans one plain
+      collection (`from e in emps`), filters it, and optionally
+      projects it last, is now built as a tree by
+      `Resolver.RelFromResolver` and lowered once. Everything else
+      keeps the step list, and `FromResolver.nativelyBuildable`
+      chooses between them from the `Ast` alone -- necessarily, since
+      `toCore` is impure and a half-converted attempt cannot be
+      abandoned.
+
+      What the slice cost, and each item was found by running the
+      suite rather than by reading the code:
+      * A nested query is still a step list, and its `FromBuilder`
+        validates each step against the resolver's environment. So
+        `$0` -- the tree's own reference, which the lowering
+        substitutes away afterwards -- has to be a visible binding
+        while that nested list is built. Otherwise `from x in [10,20]
+        yield (from i in [1,2] take current)` fails with `not found
+        [$0]`.
+      * The builder names the element's *fields* as well as the
+        binder, and binding those shadows an enclosing name the query
+        may read: `fun employeesIn deptno = from e in emps where
+        e.deptno = deptno` silently compared the field to itself. The
+        resolver binds what the query's steps bind, and no more.
+      * `RelLowerer.isNatural` compared *printed* forms, and printing
+        a unary built-in throws (`Core.Apply.unparse` asks a `~` for
+        two arguments). Structural comparison instead; the crash was
+        latent, and only a tree-shaped element reached it.
+      * A tree has no names, so the lowering invents them, and a plan
+        full of `w$1509` is unreadable. `RelLowerer.lower` now takes
+        the scan names the caller knows, with the same ordinal
+        allocation the step list uses -- which `InlineTest.testFromView`
+        insisted on, two `e` binders in one plan.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what

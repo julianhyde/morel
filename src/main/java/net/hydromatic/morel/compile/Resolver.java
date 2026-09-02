@@ -63,6 +63,9 @@ import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.RelBuilder;
+import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.ast.Simplification;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
@@ -2145,6 +2148,115 @@ public class Resolver {
   }
 
   /**
+   * Builds a query as a relational tree, natively, and lowers it to the form
+   * that executes.
+   *
+   * <p>This is the flip (plan.md step 2), one slice of query at a time. It does
+   * not shadow the step-list path and could not: converting a step's
+   * expressions twice corrupts the first conversion, because {@link
+   * Resolver#toCore} is not pure. So it replaces -- {@link
+   * FromResolver#nativelyBuildable} decides in advance which path a query
+   * takes, and the script suite's results say whether the tree agrees with the
+   * step list.
+   *
+   * <p>Names come from {@link RelBuilder}'s map, which is what {@code StepEnv}
+   * was for: it stores the path to each name rather than a flag saying whether
+   * the name is the whole element.
+   */
+  private class RelFromResolver {
+    final RelBuilder b =
+        RelBuilder.create(typeMap.typeSystem, Simplification.all());
+
+    /**
+     * Path to each name that a step of this query binds.
+     *
+     * <p>Only what the query's own steps bind, which is less than the builder
+     * knows: the builder also names the element's fields, and a scan {@code e
+     * in emps} binds {@code e} and nothing else. To bind {@code deptno} as well
+     * would shadow an enclosing {@code deptno} that the query is entitled to
+     * read -- a function's parameter, say.
+     */
+    final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+
+    /** Name of each scan's binder, in the order the scans were pushed. */
+    final List<String> scanNames = new ArrayList<>();
+
+    Core.Exp run(List<Ast.FromStep> steps) {
+      for (Ast.FromStep step : steps) {
+        step(step);
+      }
+      return RelLowerer.lower(typeMap.typeSystem, b.build(), scanNames);
+    }
+
+    private void step(Ast.FromStep step) {
+      if (step instanceof Ast.Scan) {
+        final Ast.Scan scan = (Ast.Scan) step;
+        final String name = ((Ast.IdPat) scan.pat).name;
+        // `nativelyBuildable` refused a scan with no expression.
+        final Core.Exp collection = toCore(requireNonNull(scan.exp));
+        // `nativelyBuildable` refused a second scan, which would join.
+        checkArgument(b.size() == 0, "second scan");
+        b.push(name, collection);
+        paths.put(name, b.input(0));
+        scanNames.add(name);
+      } else if (step instanceof Ast.Where) {
+        b.filter(toCore(((Ast.Where) step).exp));
+      } else {
+        b.project(toCore(((Ast.Yield) step).exp));
+      }
+    }
+
+    /**
+     * Converts an expression, resolving each name to the path that reads it out
+     * of the element.
+     *
+     * <p>The resolver gives a name as a reference to its binder; the builder
+     * says where that binder lives in the element, and the two are joined by
+     * substitution. That is the whole of what {@code withStepEnv} did, minus
+     * the step list.
+     */
+    private Core.Exp toCore(Ast.Exp exp) {
+      if (b.size() == 0) {
+        // The first scan's collection is evaluated before the query has a
+        // row, so it sees the enclosing scope and not this query's -- which
+        // is what the step-list path means by taking `Resolver.this` when the
+        // step environment is empty.
+        return Resolver.this.toCore(exp);
+      }
+      final List<Binding> bindings = new ArrayList<>();
+      paths.forEach(
+          (name, path) ->
+              bindings.add(Binding.of(core.idPat(path.type, name, 0))));
+      // A path, and `current`, read an input of the tree, `$0` or `$1`. A
+      // nested query is still built as a step list, and its FromBuilder
+      // validates each step against this environment, so the inputs must be
+      // visible in it. The lowering substitutes them away afterwards.
+      final Core.Exp current = b.input(0);
+      final Map<String, Core.NamedPat> inputs = new LinkedHashMap<>();
+      final Visitor inputBinder =
+          new Visitor() {
+            @Override
+            protected void visit(Core.Id id) {
+              inputs.put(id.idPat.name, id.idPat);
+            }
+          };
+      paths.values().forEach(path -> path.accept(inputBinder));
+      current.accept(inputBinder);
+      inputs.values().forEach(pat -> bindings.add(Binding.of(pat)));
+      final Core.Exp core0 =
+          Resolver.this.withEnv(bindings).withCurrent(current).toCore(exp);
+      return core0.accept(
+          new Shuttle(typeMap.typeSystem) {
+            @Override
+            protected Core.Exp visit(Core.Id id) {
+              final Core.@Nullable Exp path = paths.get(id.idPat.name);
+              return path == null ? id : core.at(path, id.pos);
+            }
+          });
+    }
+  }
+
+  /**
    * Visitor that converts a {@link Ast.From}, {@link Ast.Exists} or {@link
    * Ast.Forall} to {@link Core.From} by handling each subtype of {@link
    * Ast.FromStep} calling {@link FromBuilder} appropriately.
@@ -2249,8 +2361,71 @@ public class Resolver {
     }
 
     private Core.Exp run(List<Ast.FromStep> steps) {
+      if (nativelyBuildable(steps)) {
+        return new RelFromResolver().run(steps);
+      }
       forEachIndexed(steps, this::acceptStep);
       return fromBuilder.buildSimplify();
+    }
+
+    /**
+     * Returns whether the tree path handles every step of a query.
+     *
+     * <p>Decided on the {@link Ast} alone, before anything is converted, and
+     * that is the point rather than an economy. {@link Resolver#toCore} is not
+     * a pure function: it takes names from the type system's generator and
+     * registers in the type map, so an attempt that converted a few steps and
+     * then gave up would leave the step-list path building on state the attempt
+     * had moved. Try-and-fall-back is unavailable; the choice has to be made in
+     * advance and then kept.
+     *
+     * <p>The slice: a query that scans one plain collection and filters and
+     * projects it. Not an unbounded scan, whose grounding reads step lists
+     * ({@code Expander}); not a scan with a pattern or a condition; not a
+     * second scan, which may read the first and so wants a dependent join; not
+     * a group, a set operator or an order. Those are the slices after this one.
+     */
+    private boolean nativelyBuildable(List<Ast.FromStep> steps) {
+      if (steps.isEmpty() || !(steps.get(0) instanceof Ast.Scan)) {
+        return false;
+      }
+      for (int i = 0; i < steps.size(); i++) {
+        final Ast.FromStep step = steps.get(i);
+        if (step instanceof Ast.Scan) {
+          final Ast.Scan scan = (Ast.Scan) step;
+          if (i > 0) {
+            // A later scan may read an earlier binder, which makes the join
+            // dependent and its collection an expression over a binder rather
+            // than over the enclosing scope. The slice after this one.
+            return false;
+          }
+          if (scan.exp == null
+              || scan.condition != null
+              || !(scan.pat instanceof Ast.IdPat)) {
+            return false;
+          }
+        } else if (step instanceof Ast.Where) {
+          // Nothing more to check; the ordinal test below applies.
+        } else if (step instanceof Ast.Yield) {
+          if (((Ast.Yield) step).binder != null) {
+            return false;
+          }
+          if (i < steps.size() - 1) {
+            // A yield renames the row, and a later step reads it by the new
+            // name. Only the resolver knows those names; the builder would
+            // have to be told. The slice after this one.
+            return false;
+          }
+        } else {
+          return false;
+        }
+        if (i > 0 && usesOrdinal(step)) {
+          // `ordinal` counts rows, so the step list materializes it as a
+          // field and drops it again. The tree has no equivalent yet.
+          return false;
+        }
+      }
+      return true;
     }
 
     /**
