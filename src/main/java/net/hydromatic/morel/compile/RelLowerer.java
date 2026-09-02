@@ -21,7 +21,9 @@ package net.hydromatic.morel.compile;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import com.google.common.collect.ImmutableList;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -62,13 +64,33 @@ import org.jspecify.annotations.Nullable;
 public class RelLowerer {
   private final TypeSystem typeSystem;
 
-  private RelLowerer(TypeSystem typeSystem) {
+  /**
+   * Name for each leaf's binder, in the order the leaves are lowered; empty
+   * once exhausted, and then a name is generated.
+   *
+   * <p>A tree has no names, so the lowering invents them. Where a caller knows
+   * the name the user wrote, saying so keeps it in the plan, which is what the
+   * reader of a plan wants to see.
+   */
+  private final Deque<String> scanNames;
+
+  private RelLowerer(TypeSystem typeSystem, Iterable<String> scanNames) {
     this.typeSystem = typeSystem;
+    this.scanNames = new ArrayDeque<>(ImmutableList.copyOf(scanNames));
   }
 
   /** Lowers a tree into an executable expression. */
   public static Core.Exp lower(TypeSystem typeSystem, Core.Exp exp) {
-    return new RelLowerer(typeSystem).lowerRel(exp);
+    return lower(typeSystem, exp, ImmutableList.of());
+  }
+
+  /**
+   * Lowers a tree into an executable expression, naming the binder of each leaf
+   * scan, in order, from {@code scanNames}.
+   */
+  public static Core.Exp lower(
+      TypeSystem typeSystem, Core.Exp exp, Iterable<String> scanNames) {
+    return new RelLowerer(typeSystem, scanNames).lowerRel(exp);
   }
 
   private Core.Exp lowerRel(Core.Exp exp) {
@@ -258,7 +280,12 @@ public class RelLowerer {
    * the expression that denotes the element.
    */
   private Core.Exp scan(FromBuilder fromBuilder, Core.Exp collection) {
-    final Core.IdPat v = freshPat(collection.type.elementType());
+    final Type elementType = collection.type.elementType();
+    final Core.IdPat v =
+        scanNames.isEmpty()
+            ? freshPat(elementType)
+            : core.idPat(
+                elementType, scanNames.remove(), typeSystem.nameGenerator::inc);
     fromBuilder.scan(v, collection);
     return rebind(fromBuilder, core.id(v));
   }
@@ -293,14 +320,40 @@ public class RelLowerer {
    * Returns whether an expression is already what the bindings denote, in which
    * case a {@code yield} of it would be an identity step.
    *
-   * <p>Compares printed forms: both expressions are built the same way here, so
-   * this is a structural comparison in practice.
+   * <p>With no bindings the natural element is unit, which an element
+   * expression is only if the query says so: {@code group {}} followed by a
+   * yield still needs the yield.
    */
   private boolean isNatural(FromBuilder fromBuilder, Core.Exp element) {
-    // With no bindings the natural element is unit, which an element
-    // expression is only if the query says so -- 'group {}' followed by a
-    // yield still needs the yield.
-    return naturalElement(fromBuilder).toString().equals(element.toString());
+    return same(naturalElement(fromBuilder), element);
+  }
+
+  /**
+   * Returns whether two expressions are the same.
+   *
+   * <p>Only for the shapes {@link #naturalElement} builds -- a reference, or a
+   * record of references -- because {@link Core.Exp} has no structural equality
+   * of its own.
+   */
+  private static boolean same(Core.Exp e0, Core.Exp e1) {
+    if (e0 instanceof Core.Id) {
+      return e1 instanceof Core.Id
+          && ((Core.Id) e0).idPat.equals(((Core.Id) e1).idPat);
+    }
+    if (e0 instanceof Core.Tuple && e1 instanceof Core.Tuple) {
+      final Core.Tuple t0 = (Core.Tuple) e0;
+      final Core.Tuple t1 = (Core.Tuple) e1;
+      if (!t0.type.equals(t1.type) || t0.args.size() != t1.args.size()) {
+        return false;
+      }
+      for (int i = 0; i < t0.args.size(); i++) {
+        if (!same(t0.args.get(i), t1.args.get(i))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
   }
 
   /**
