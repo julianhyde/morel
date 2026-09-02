@@ -49,6 +49,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
+import org.jspecify.annotations.Nullable;
 
 /** Expands generators. */
 public class Expander {
@@ -67,6 +68,57 @@ public class Expander {
    * <p>Returns {@code from} unchanged if no expansion is required.
    */
   public static Core.From expandFrom(
+      TypeSystem typeSystem,
+      NameGenerator nameGenerator,
+      Environment env,
+      Core.From from,
+      boolean rowsUsed) {
+    if (VIA_TREE) {
+      final Core.@Nullable From from2 =
+          expandViaTree(typeSystem, nameGenerator, env, from, rowsUsed);
+      if (from2 != null) {
+        return from2;
+      }
+    }
+    return expandFromSteps(typeSystem, env, from, rowsUsed);
+  }
+
+  /**
+   * Whether to ground a query by translating it to a tree, as step 2 of plan.md
+   * is heading for, rather than over its steps.
+   *
+   * <p>Temporary, and off: the two are being compared by the script suite's
+   * results, which is where `such-that.smli` earns its keep.
+   */
+  private static final boolean VIA_TREE =
+      System.getenv("MOREL_GROUND_VIA_TREE") != null;
+
+  /**
+   * Grounds a query by translating it to a relational tree, expanding that, and
+   * lowering it back.
+   *
+   * <p>Returns null where the translator declines, or where the expansion does
+   * not lower to a step list, so that the caller can ground the steps instead.
+   */
+  private static Core.@Nullable From expandViaTree(
+      TypeSystem typeSystem,
+      NameGenerator nameGenerator,
+      Environment env,
+      Core.From from,
+      boolean rowsUsed) {
+    final Core.@Nullable Exp tree = RelTranslator.toRel(typeSystem, from);
+    if (tree == null) {
+      return null;
+    }
+    final Core.Exp expanded =
+        RelExpander.expand(typeSystem, env, tree, rowsUsed);
+    final Core.Exp lowered =
+        RelLowerer.lower(
+            typeSystem, nameGenerator, expanded, ImmutableList.of());
+    return lowered instanceof Core.From ? (Core.From) lowered : null;
+  }
+
+  private static Core.From expandFromSteps(
       TypeSystem typeSystem,
       Environment env,
       Core.From from,
