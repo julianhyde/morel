@@ -177,6 +177,7 @@ public class MartelliUnifier extends Unifier {
 
       final long duration = System.nanoTime() - start;
       if (false) {
+        // lint:skip 1
         System.out.printf(
             "Term count %,d iterations %,d duration %,d nanos"
                 + " (%,d nanos per iteration)%n",
