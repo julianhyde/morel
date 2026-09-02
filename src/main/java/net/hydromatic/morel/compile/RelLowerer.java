@@ -234,7 +234,13 @@ public class RelLowerer {
       // must be one binding before the join, not an expression over several.
       left = materialize(fromBuilder, left);
     }
-    final Core.IdPat w = freshPat(join.right.type.elementType());
+    // A leaf right input is scanned here rather than by `scan`, so this is
+    // where its name is due; a right input that is a tree scans its own
+    // leaves, and taking a name here would take the one they are owed.
+    final Core.IdPat w =
+        join.right instanceof Core.Rel
+            ? freshPat(join.right.type.elementType())
+            : scanPat(join.right.type.elementType());
     final Core.Exp condition = subst(join.condition, left, core.id(w));
     // A dependent join's right input reads the left element through the
     // binder. The step list has the left bindings in scope at the scan, so
@@ -280,12 +286,7 @@ public class RelLowerer {
    * the expression that denotes the element.
    */
   private Core.Exp scan(FromBuilder fromBuilder, Core.Exp collection) {
-    final Type elementType = collection.type.elementType();
-    final Core.IdPat v =
-        scanNames.isEmpty()
-            ? freshPat(elementType)
-            : core.idPat(
-                elementType, scanNames.remove(), typeSystem.nameGenerator::inc);
+    final Core.IdPat v = scanPat(collection.type.elementType());
     fromBuilder.scan(v, collection);
     return rebind(fromBuilder, core.id(v));
   }
@@ -403,6 +404,16 @@ public class RelLowerer {
       default:
         return Op.SCAN;
     }
+  }
+
+  /**
+   * Returns a binder for a scan: the name its caller asked for, if one is still
+   * owed, and otherwise a generated one.
+   */
+  private Core.IdPat scanPat(Type type) {
+    return scanNames.isEmpty()
+        ? freshPat(type)
+        : core.idPat(type, scanNames.remove(), typeSystem.nameGenerator::inc);
   }
 
   /**
