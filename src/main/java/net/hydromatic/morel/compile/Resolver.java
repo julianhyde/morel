@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
@@ -48,6 +49,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -2182,15 +2184,25 @@ public class Resolver {
         RelBuilder.create(typeMap.typeSystem, Simplification.all());
 
     /**
-     * Path to each name that a step of this query binds.
+     * Names that this query's steps bind.
      *
-     * <p>Only what the query's own steps bind, which is less than the builder
-     * knows: the builder also names the element's fields, and a scan {@code e
-     * in emps} binds {@code e} and nothing else. To bind {@code deptno} as well
-     * would shadow an enclosing {@code deptno} that the query is entitled to
-     * read -- a function's parameter, say.
+     * <p>Fewer than the builder knows: the builder also names the element's
+     * fields, and a scan {@code e in emps} binds {@code e} and nothing else. To
+     * bind {@code deptno} as well would shadow an enclosing {@code deptno} that
+     * the query is entitled to read -- a function's parameter, say. The builder
+     * says where each of these lives; this says which of them exist.
      */
-    final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+    final Set<String> binders = new LinkedHashSet<>();
+
+    /**
+     * Whether the row is the one thing a single binder names, rather than a
+     * record of what the binders name.
+     *
+     * <p>{@code Core.StepEnv.atom} by another name, and the distinction is not
+     * the number of binders: {@code yield {j = i + 1}} binds one name and the
+     * row is still a record, so {@code current} is a record too.
+     */
+    boolean atom = true;
 
     /** Name of each scan's binder, in the order the scans were pushed. */
     final List<String> scanNames = new ArrayList<>();
@@ -2199,7 +2211,48 @@ public class Resolver {
       for (Ast.FromStep step : steps) {
         step(step);
       }
+      if (!(last(steps) instanceof Ast.Yield)) {
+        finish();
+      }
       return RelLowerer.lower(typeMap.typeSystem, b.build(), scanNames);
+    }
+
+    /**
+     * Projects the record that the query's binders denote, which is what a
+     * query with no trailing yield returns.
+     *
+     * <p>One binder is the row itself, and the tree already has it. Several are
+     * a record of them, which the tree does not have: a join leaves its inputs'
+     * components concatenated (discussion.md §15), and naming them is this
+     * projection's job.
+     */
+    private void finish() {
+      if (atom || binders.isEmpty()) {
+        return;
+      }
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+      binders.forEach(name -> paths.put(name, b.name(name)));
+      b.project(natural(paths, b.input(0)));
+    }
+
+    /**
+     * Returns the row as the user sees it: the one thing a single binder names,
+     * or a record of what several name.
+     *
+     * <p>Not the tree's element, which a join leaves as its inputs' components
+     * concatenated. {@code current} means this, and so does a query that ends
+     * without a yield.
+     */
+    private Core.Exp natural(Map<String, Core.Exp> paths, Core.Exp element) {
+      if (paths.isEmpty()) {
+        return element;
+      }
+      if (atom) {
+        return requireNonNull(getOnlyElement(paths.values()));
+      }
+      final PairList<String, Core.Exp> nameExps = PairList.of();
+      paths.forEach(nameExps::add);
+      return core.record(typeMap.typeSystem, nameExps);
     }
 
     private void step(Ast.FromStep step) {
@@ -2207,47 +2260,62 @@ public class Resolver {
         final Ast.Scan scan = (Ast.Scan) step;
         final String name = ((Ast.IdPat) scan.pat).name;
         // `nativelyBuildable` refused a scan with no expression.
-        final Core.Exp collection = toCore(requireNonNull(scan.exp));
-        // `nativelyBuildable` refused a second scan, which would join.
-        checkArgument(b.size() == 0, "second scan");
-        b.push(name, collection);
-        paths.put(name, b.input(0));
+        final Ast.Exp scanExp = requireNonNull(scan.exp);
+        if (b.size() == 0) {
+          b.push(name, toCore(scanExp));
+          atom = true;
+        } else {
+          // The right input is a tree of its own, so it cannot say `$0` and
+          // mean the row so far. A binder crosses that boundary by ordinary
+          // lexical scoping, and the builder drops it again if the collection
+          // turns out to read nothing of the left -- which is the common case,
+          // and an independent join is far the better one.
+          final Core.IdPat binder =
+              b.binder(typeMap.typeSystem.nameGenerator.get());
+          final Core.Exp collection = toCore(scanExp, core.id(binder));
+          b.push(name, collection).pair();
+          b.join(Core.Rel.JoinType.INNER, binder, core.boolLiteral(true));
+          atom = false;
+        }
+        binders.add(name);
         scanNames.add(name);
       } else if (step instanceof Ast.Where) {
         b.filter(toCore(((Ast.Where) step).exp));
       } else {
-        final Ast.Yield yield = (Ast.Yield) step;
-        final Core.Exp exp = toCore(yield.exp);
-        b.project(exp);
-        rebind(yield, exp);
+        yield_((Ast.Yield) step);
       }
     }
 
     /**
-     * Renames what the query binds, now that a yield has replaced the row.
+     * Projects, and renames what the query binds, because the yield has
+     * replaced the row.
      *
      * <p>Follows the rule the step list follows, because the type resolver has
      * already decided by it which names the steps after this one may use: a
      * record yield binds its fields, and any other yield binds the row under
      * one name, if it has one to offer.
      */
-    private void rebind(Ast.Yield yield, Core.Exp exp) {
-      paths.clear();
-      final Core.Exp element = b.input(0);
+    private void yield_(Ast.Yield yield) {
+      final Core.Exp exp = toCore(yield.exp);
+      final @Nullable String name = atomName(yield.exp);
+      binders.clear();
       // 'record' is what the user wrote, not what the expression turned out to
       // be: a record with modifiers is a record, and yet it is a 'let' by the
       // time it gets here, so only the Ast can say.
       if (TypeResolver.letBody(yield.exp).op == Op.RECORD
           && exp.type.op() == Op.RECORD_TYPE) {
-        forEachIndexed(
-            ((RecordLikeType) exp.type).argNames(),
-            (name, i) ->
-                paths.put(name, core.field(typeMap.typeSystem, element, i)));
+        // The builder names an element's fields for us.
+        b.project(exp);
+        binders.addAll(((RecordLikeType) exp.type).argNameTypes().keySet());
+        atom = false;
+        return;
+      }
+      atom = true;
+      if (name == null) {
+        b.project(exp);
       } else {
-        final @Nullable String name = atomName(exp);
-        if (name != null) {
-          paths.put(name, element);
-        }
+        b.project(name, exp);
+        binders.add(name);
       }
     }
 
@@ -2255,19 +2323,48 @@ public class Resolver {
      * Returns the name that an atomizing yield binds its row under, or null if
      * it offers none, in which case only {@code current} reads the row.
      *
-     * <p>The same rule as {@link CoreBuilder}'s {@code getIdPat}: a reference
+     * <p>The same rule as {@link CoreBuilder}'s {@code getIdPat} -- a reference
      * keeps its name, {@code e.deptno} gives {@code deptno}, and anything else
-     * is anonymous.
+     * is anonymous -- but read off the {@link Ast}, because by the time the
+     * expression is converted a reference to a binder has become a path into
+     * the element and no longer looks like one.
      */
-    private @Nullable String atomName(Core.Exp exp) {
-      if (exp instanceof Core.Id) {
-        return ((Core.Id) exp).idPat.name;
+    private @Nullable String atomName(Ast.Exp exp) {
+      switch (exp.op) {
+        case ID:
+          return ((Ast.Id) exp).name;
+
+        case CURRENT:
+          // The row has a name only where one binder is the whole of it.
+          return atom && binders.size() == 1 ? getOnlyElement(binders) : null;
+
+        case APPLY:
+          final Ast.Apply apply = (Ast.Apply) exp;
+          return apply.fn instanceof Ast.RecordSelector
+              ? ((Ast.RecordSelector) apply.fn).name
+              : null;
+
+        default:
+          return null;
       }
-      if (exp instanceof Core.Apply
-          && ((Core.Apply) exp).fn instanceof Core.RecordSelector) {
-        return ((Core.RecordSelector) ((Core.Apply) exp).fn).fieldName();
+    }
+
+    /**
+     * Rewrites a path the builder gave -- which reads the element as {@code $0}
+     * -- to read it as {@code element} instead.
+     */
+    private Core.Exp rootAt(Core.Exp path, Core.Exp element) {
+      if (element.op == Op.ID
+          && ((Core.Id) element).idPat.name.equals(CoreBuilder.INPUT_0)) {
+        return path;
       }
-      return null;
+      return path.accept(
+          new Shuttle(typeMap.typeSystem) {
+            @Override
+            protected Core.Exp visit(Core.Id id) {
+              return id.idPat.name.equals(CoreBuilder.INPUT_0) ? element : id;
+            }
+          });
     }
 
     /**
@@ -2280,7 +2377,16 @@ public class Resolver {
      * the step list.
      */
     private Core.Exp toCore(Ast.Exp exp) {
-      if (b.size() == 0) {
+      return toCore(exp, b.size() == 0 ? null : b.input(0));
+    }
+
+    /**
+     * Converts an expression that reads the row through {@code element}, which
+     * is {@code $0} in a node's own expressions and a join's binder in its
+     * right input.
+     */
+    private Core.Exp toCore(Ast.Exp exp, Core.@Nullable Exp element) {
+      if (element == null) {
         // The first scan's collection is evaluated before the query has a
         // row, so it sees the enclosing scope and not this query's -- which
         // is what the step-list path means by taking `Resolver.this` when the
@@ -2288,14 +2394,17 @@ public class Resolver {
         return Resolver.this.toCore(exp);
       }
       final List<Binding> bindings = new ArrayList<>();
-      paths.forEach(
-          (name, path) ->
-              bindings.add(Binding.of(core.idPat(path.type, name, 0))));
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+      for (String binder : binders) {
+        final Core.Exp path = rootAt(b.name(binder), element);
+        paths.put(binder, path);
+        bindings.add(Binding.of(core.idPat(path.type, binder, 0)));
+      }
       // A path, and `current`, read an input of the tree, `$0` or `$1`. A
       // nested query is still built as a step list, and its FromBuilder
       // validates each step against this environment, so the inputs must be
       // visible in it. The lowering substitutes them away afterwards.
-      final Core.Exp current = b.input(0);
+      final Core.Exp current = natural(paths, element);
       final Map<String, Core.NamedPat> inputs = new LinkedHashMap<>();
       final Visitor inputBinder =
           new Visitor() {
@@ -2457,12 +2566,6 @@ public class Resolver {
         final Ast.FromStep step = steps.get(i);
         if (step instanceof Ast.Scan) {
           final Ast.Scan scan = (Ast.Scan) step;
-          if (i > 0) {
-            // A later scan may read an earlier binder, which makes the join
-            // dependent and its collection an expression over a binder rather
-            // than over the enclosing scope. The slice after this one.
-            return false;
-          }
           if (scan.exp == null
               || scan.condition != null
               || !(scan.pat instanceof Ast.IdPat)) {
