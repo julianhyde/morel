@@ -323,6 +323,19 @@ public class LintTest {
   }
 
   private static void addProgram1(Puffin.Builder<GlobalState, FileState> b) {
+    // A console print in a main source. The compiler has no business writing
+    // to stdout or stderr, and a debug print left in one is invisible: no
+    // test reads stderr, so nothing else catches it. (One was committed, and
+    // found only because it appeared beside a probe added on purpose.) A
+    // command-line tool legitimately prints, and says so with "lint:skip".
+    b.add(
+        line ->
+            line.state().language == Language.JAVA
+                && line.filename().contains("/main/")
+                && line.matches(".*\\bSystem\\.(out|err)\\.print.*")
+                && !lintSkip(line),
+        line -> line.state().message(line, "console print"));
+
     // Broken string, "latch" + "string", should be "latchstring".
     b.add(
         line ->
