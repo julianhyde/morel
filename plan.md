@@ -793,6 +793,28 @@ something settled — §8's principle, applied to the sequence itself.
       is not a scan, and 5 read `ordinal` in a join's condition --
       which counts candidate pairs rather than rows, and is a counter
       the tree has no way to ask for.
+- [x] `ordinal` in a join's condition, which needed no new variable
+      and no new node -- only the exclusion removed. Two counters
+      share the name: a row counter, which the builder materializes
+      into a field, and a *candidate-pair* counter, which belongs to
+      the join. The second is already scoped the way a system variable
+      would be, because the difference between them is exactly whether
+      a field was materialized. Where none was, `Ast.Ordinal` converts
+      to the plain call, the tree carries it in the join's condition
+      as an ordinary expression, and the compiler installs the counter
+      when the join is lowered to a scan -- which is where it installs
+      it for the step list too. The two coexist in one query without
+      interfering: `from i in [1,2,3] where ordinal > 0 join j in
+      ["x"] on ordinal = 0` gives the same answer either way.
+
+      A separate question, and a language one rather than a tree one:
+      whether two counters should share a name. A distinct name for
+      the join's would say which is meant without the reader having to
+      know that a condition is not a step.
+
+      1495 of the suite's 1852 queries build natively. Of the 357 that
+      do not, 341 are unbounded scans and 14 are queries whose first
+      step is not a scan.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what

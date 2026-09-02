@@ -3118,12 +3118,6 @@ public class Resolver {
           if (scan.exp == null || !destructurable(scan.pat)) {
             return false;
           }
-          if (scan.condition != null && containsOrdinal(scan.condition)) {
-            // A scan's condition counts its own candidate pairs, which the
-            // tree has no way to say. `usesOrdinal` answers only for the
-            // extent, so this is asked separately.
-            return false;
-          }
           if (scan.condition != null && i == 0) {
             // Nothing to join to.
             return false;
