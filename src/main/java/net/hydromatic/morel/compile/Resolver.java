@@ -2279,7 +2279,8 @@ public class Resolver {
       if (steps.isEmpty() || !(last(steps) instanceof Ast.Yield)) {
         finish();
       }
-      return RelLowerer.lower(typeMap.typeSystem, b.build(), scanNames);
+      return RelLowerer.lower(
+          typeMap.typeSystem, nameGenerator, b.build(), scanNames);
     }
 
     /**
@@ -2509,7 +2510,8 @@ public class Resolver {
     private void through(Ast.Through through) {
       finish();
       final Core.Exp inner =
-          RelLowerer.lower(typeMap.typeSystem, b.build(), scanNames);
+          RelLowerer.lower(
+              typeMap.typeSystem, nameGenerator, b.build(), scanNames);
       scanNames.clear();
       // The function is evaluated once, on the whole collection, so it reads
       // the enclosing scope and not this query's row.
