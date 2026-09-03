@@ -50,6 +50,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -112,16 +113,61 @@ public class Expander {
       Environment env,
       Core.From from,
       boolean rowsUsed) {
+    if (!containsExtent(from)) {
+      // Nothing to ground. The step list returns the query unchanged, and a
+      // round trip through the tree would return an equal query that is not
+      // the same object -- which the fixed-point loop above reads as progress.
+      return null;
+    }
     final Core.@Nullable Exp tree = RelTranslator.toRel(typeSystem, from);
     if (tree == null) {
       return null;
     }
-    final Core.Exp expanded =
-        RelExpander.expand(typeSystem, env, tree, rowsUsed);
+    final Core.Exp expanded;
+    try {
+      expanded = RelExpander.expand(typeSystem, env, tree, rowsUsed);
+    } catch (CompileException e) {
+      // The step list has its own answer for a query it cannot ground: an
+      // error naming the pattern, or the query unchanged so that a later pass
+      // reports it. Leave that to it rather than say the same thing
+      // differently.
+      return null;
+    }
     final Core.Exp lowered =
         RelLowerer.lower(
             typeSystem, nameGenerator, expanded, ImmutableList.of());
-    return lowered instanceof Core.From ? (Core.From) lowered : null;
+    if (!(lowered instanceof Core.From) || containsExtent(lowered)) {
+      // An extent that survives is one the walk did not reach or could not
+      // bound -- including one inside a nested query, which this walk does not
+      // ground and the step list reaches later. Handing it back would put an
+      // infinite collection in a plan, which fails when the query runs rather
+      // than when it compiles.
+      return null;
+    }
+    return (Core.From) lowered;
+  }
+
+  /**
+   * Returns whether a tree still has a leaf that cannot be enumerated.
+   *
+   * <p>Every scan counts, nested queries included: this asks whether the result
+   * is safe to hand back, and one infinite extent anywhere in it is not. The
+   * step list reaches a nested query later and grounds it then, so declining
+   * here costs only that this query takes the other path.
+   */
+  private static boolean containsExtent(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Scan scan) {
+            super.visit(scan);
+            if (Extents.isInfinite(scan.exp)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
   }
 
   private static Core.From expandFromSteps(
