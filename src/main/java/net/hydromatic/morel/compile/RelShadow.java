@@ -25,11 +25,14 @@ import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
@@ -318,47 +321,70 @@ public class RelShadow {
    * shared scan.
    */
   private static List<String> decisions(Core.Exp exp) {
+    // One renaming for the whole query, applied to each part: a part names
+    // binders that are bound outside it, and renaming each part on its own
+    // would leave those alone and report a difference that is only a name.
+    final Set<String> bound = new LinkedHashSet<>();
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.IdPat idPat) {
+            super.visit(idPat);
+            bound.add(idPat.toString());
+          }
+        });
+    final Renamer renamer = new Renamer(bound);
     final List<String> parts = new ArrayList<>();
     exp.accept(
         new Visitor() {
           @Override
           protected void visit(Core.Scan scan) {
             super.visit(scan);
-            parts.add("scan " + canonical(scan.exp));
+            parts.add("scan " + renamer.apply(scan.exp));
           }
 
           @Override
           protected void visit(Core.Where where) {
             super.visit(where);
-            parts.add("where " + canonical(where.exp));
+            parts.add("where " + renamer.apply(where.exp));
           }
         });
     parts.sort(Comparator.naturalOrder());
     return parts;
   }
 
-  /**
-   * Returns an expression with its binders numbered by first occurrence, so
-   * that two can be compared without the names one of them happened to invent.
-   */
-  private static String canonical(Core.Exp exp) {
+  /** Renames a fixed set of binders, by order of first occurrence. */
+  private static class Renamer {
     final Map<String, String> names = new LinkedHashMap<>();
-    final Matcher matcher = BINDER.matcher(exp.toString());
-    final StringBuilder b = new StringBuilder();
-    while (matcher.find()) {
-      final String name = matcher.group();
-      matcher.appendReplacement(
-          b,
-          Matcher.quoteReplacement(
-              names.computeIfAbsent(name, n -> "v" + names.size())));
-    }
-    matcher.appendTail(b);
-    return b.toString();
-  }
+    final @Nullable Pattern pattern;
 
-  /** Names that a lowering or an expansion invents. */
-  private static final Pattern BINDER =
-      Pattern.compile("\\b[a-z]+\\$[0-9]+\\b");
+    Renamer(Set<String> bound) {
+      pattern =
+          bound.isEmpty()
+              ? null
+              : Pattern.compile(
+                  bound.stream()
+                      .map(Pattern::quote)
+                      .collect(Collectors.joining("|", "\\b(?:", ")\\b")));
+    }
+
+    String apply(Core.Exp exp) {
+      if (pattern == null) {
+        return exp.toString();
+      }
+      final Matcher matcher = pattern.matcher(exp.toString());
+      final StringBuilder b = new StringBuilder();
+      while (matcher.find()) {
+        matcher.appendReplacement(
+            b,
+            Matcher.quoteReplacement(
+                names.computeIfAbsent(
+                    matcher.group(), n -> "v" + names.size())));
+      }
+      matcher.appendTail(b);
+      return b.toString();
+    }
+  }
 
   /** Returns how many queries the two ground alike. */
   public static int groundingSameCount() {

@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
@@ -88,6 +89,13 @@ public class RelExpander {
   private boolean destructure;
 
   /**
+   * Whether removing a generator's duplicate values would change the query's
+   * answer, so that a generator that may produce one twice must be
+   * deduplicated. {@code Expander}'s {@code dedupObservable}.
+   */
+  private boolean dedupObservable;
+
+  /**
    * Conditions that a sealed generator subsumes, and that the filter they came
    * from can therefore drop. Identity, as in {@code Expander}: the same
    * expression written twice is not the same constraint.
@@ -123,8 +131,29 @@ public class RelExpander {
    */
   public static Core.Exp expand(
       TypeSystem typeSystem, Environment env, Core.Exp tree, boolean rowsUsed) {
-    return new RelExpander(typeSystem, env, rowsUsed)
-        .expand(tree, ImmutableList.of());
+    final RelExpander expander = new RelExpander(typeSystem, env, rowsUsed);
+    expander.dedupObservable = rowsUsed || hasTakeOrSkip(tree);
+    return expander.expand(tree, ImmutableList.of());
+  }
+
+  /**
+   * Returns whether a tree has a node that depends on how many rows there are,
+   * which makes a generator's duplicates observable even where the rows
+   * themselves are not read.
+   */
+  private static boolean hasTakeOrSkip(Core.Exp tree) {
+    if (!(tree instanceof Core.Rel)) {
+      return false;
+    }
+    if (tree instanceof Core.Take || tree instanceof Core.Skip) {
+      return true;
+    }
+    for (Core.Exp input : ((Core.Rel) tree).inputs()) {
+      if (hasTakeOrSkip(input)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -765,7 +794,7 @@ public class RelExpander {
     }
     final Core.Exp exp = replace(generator.exp, bound);
     if (generator.pat instanceof Core.IdPat) {
-      return exp;
+      return dedup(generator, (Core.IdPat) generator.pat, exp);
     }
     final Core.@Nullable Exp element =
         path(generator.pat, core.input0(exp.type.elementType()), pat);
@@ -773,6 +802,33 @@ public class RelExpander {
       throw new CompileException("pattern is not grounded", false, pos);
     }
     return core.project(typeSystem, exp, element);
+  }
+
+  /**
+   * Deduplicates a generator's collection where its duplicates would be
+   * observable, as {@code Expander.expandFrom2} does.
+   *
+   * <p>A generator may produce a value more than once -- a collection may hold
+   * duplicates, and a union of ranges may overlap -- but an unbounded scan
+   * yields each assignment once. A query whose rows are only counted, and that
+   * has no {@code take} or {@code skip}, does not need it: removing duplicate
+   * rows cannot change whether there are any, nor how many there are when
+   * nothing reads them.
+   */
+  private Core.Exp dedup(
+      Generator generator, Core.IdPat pat, Core.Exp collection) {
+    if (generator.unique || !dedupObservable) {
+      return collection;
+    }
+    final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+    fromBuilder.scan(pat, collection);
+    fromBuilder.distinct();
+    // An unbounded scan yields its values in the natural order of the
+    // variable. Sort after the 'distinct', whose 'group' has no order of its
+    // own, and before the 'yield', which rebinds the variable the sort names.
+    fromBuilder.order(core.id(pat));
+    fromBuilder.yield_(core.id(pat));
+    return fromBuilder.build();
   }
 
   /**
