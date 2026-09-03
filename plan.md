@@ -832,6 +832,34 @@ something settled — §8's principle, applied to the sequence itself.
 
       1528 of the suite's 1852 queries build natively. The 324 that do
       not are unbounded scans, save a handful of chained outer joins.
+- [ ] Step C, started: ground a query by translating it to a tree,
+      expanding that, and lowering it back -- at the call site where
+      grounding already happens, so it sees inlined Core and knows
+      `rowsUsed`. `Expander.expandFrom` now takes that path when
+      `MOREL_GROUND_VIA_TREE` is set, and the step list otherwise.
+
+      Two defects found and fixed on the way, both committed: the
+      lowering numbered binders from the wrong generator, and a filter
+      did not pass its components through (discussion.md §16).
+
+      The tree path declines wherever the step list has an answer of
+      its own -- the translator declines, expansion throws, the result
+      still holds an infinite extent anywhere, or it does not lower to
+      a step list -- because the step list's error names the pattern
+      and its "unchanged" is read by a later pass.
+
+      What remains, precisely. Four script files still differ, and the
+      one diagnosed is `from p where path p` over a recursive `path`:
+      both paths run once, on the same pass, with the same
+      environment, and the step list's generator comes back sealed
+      while the tree's comes back `sealed=false, provenance=[]`. The
+      step list therefore drops `where path p`, which the generator
+      enforces; the tree keeps it, `path` is re-evaluated per row, and
+      its own unbounded `exists` reaches the evaluator as `infinite:
+      int`. The difference is inside `Generators`, not in either front
+      end's bookkeeping: `RelExpander` looks up provenance by
+      identity, and `strengthen` is written to preserve it.
+
 - [ ] Unbounded scans, the last 324, and the reason is sharper than
       "grounding reads step lists". Tried, and backed out; the branch
       is green without it.
