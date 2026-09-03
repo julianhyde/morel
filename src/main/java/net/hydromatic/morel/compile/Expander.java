@@ -87,7 +87,7 @@ public class Expander {
         return from2;
       }
     }
-    return expandFromSteps(typeSystem, env, from, rowsUsed);
+    return expandFromSteps(typeSystem, nameGenerator, env, from, rowsUsed);
   }
 
   /**
@@ -172,6 +172,7 @@ public class Expander {
 
   private static Core.From expandFromSteps(
       TypeSystem typeSystem,
+      NameGenerator nameGenerator,
       Environment env,
       Core.From from,
       boolean rowsUsed) {
@@ -210,7 +211,7 @@ public class Expander {
               final String message =
                   format("pattern '%s' is not grounded", namedPat.name);
               assert RelShadow.groundingAgrees(
-                  typeSystem, env, from, false, rowsUsed);
+                  typeSystem, nameGenerator, env, from, null, false, rowsUsed);
               throw new CompileException(message, false, scan.exp.pos);
             }
           }
@@ -232,7 +233,8 @@ public class Expander {
       // as an error rather than crashing the builder.
       return from;
     }
-    assert RelShadow.groundingAgrees(typeSystem, env, from, true, rowsUsed);
+    assert RelShadow.groundingAgrees(
+        typeSystem, nameGenerator, env, from, from2, true, rowsUsed);
     return from2.equals(from) ? from : from2;
   }
 

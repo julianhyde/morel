@@ -19,14 +19,24 @@
 package net.hydromatic.morel.compile;
 
 import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
 
+import com.google.common.collect.ImmutableList;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Simplification;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.TypeSystem;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Translates every {@code from} in a declaration into a relational tree and
@@ -50,6 +60,11 @@ public class RelShadow {
   private static final AtomicInteger DECLINED = new AtomicInteger();
   private static final AtomicInteger GROUNDING_AGREED = new AtomicInteger();
   private static final AtomicInteger GROUNDING_UNEXAMINED = new AtomicInteger();
+
+  /** How many queries the two ground alike, and how many differently. */
+  private static final AtomicInteger GROUNDING_SAME = new AtomicInteger();
+
+  private static final AtomicInteger GROUNDING_DIFFERED = new AtomicInteger();
   private static final AtomicInteger REBUILT = new AtomicInteger();
 
   private RelShadow() {}
@@ -153,8 +168,10 @@ public class RelShadow {
    */
   public static boolean groundingAgrees(
       TypeSystem typeSystem,
+      NameGenerator nameGenerator,
       Environment env,
       Core.From from,
+      Core.@Nullable From from2,
       boolean stepGrounded,
       boolean rowsUsed) {
     final Core.Exp tree = RelTranslator.toRel(typeSystem, from);
@@ -163,9 +180,11 @@ public class RelShadow {
       return true;
     }
     boolean treeGrounded;
+    Core.@Nullable Exp expandedExp = null;
     try {
       final Core.Exp expanded =
           RelExpander.expand(typeSystem, env, tree, rowsUsed);
+      expandedExp = expanded;
       // An extent that survives expansion is one the walk did not reach or
       // could not bound; either way the tree has not grounded the query.
       treeGrounded = !containsExtent(expanded);
@@ -177,6 +196,33 @@ public class RelShadow {
       // end that grounds one leaf at a time cannot use. Incompleteness, of
       // the same kind as grounding less, so counted rather than thrown.
       treeGrounded = false;
+    }
+    if (treeGrounded == stepGrounded && stepGrounded && from2 != null) {
+      // Both ground it. Do they ground it the same way? Whether is the
+      // cheaper question and the one this started with; what is the one the
+      // flip needs, because a tree that grounds a query differently is a tree
+      // that answers it differently -- `from x, y, z where (x, y) elem pairs
+      // ...` grounds either way, and only one of the two is right.
+      boolean same;
+      try {
+        final Core.Exp lowered =
+            RelLowerer.lower(
+                typeSystem,
+                nameGenerator,
+                requireNonNull(expandedExp),
+                ImmutableList.of());
+        same = decisions(lowered).equals(decisions(from2));
+      } catch (RuntimeException e) {
+        // An expansion that will not lower is one the tree cannot hand back,
+        // which is a difference like any other. Counted, not thrown: this is
+        // a measurement, and it runs inside an assert.
+        same = false;
+      }
+      if (same) {
+        GROUNDING_SAME.incrementAndGet();
+      } else {
+        GROUNDING_DIFFERED.incrementAndGet();
+      }
     }
     if (treeGrounded != stepGrounded) {
       // Whichever way round, it is a change in what compiles, and the flip
@@ -255,6 +301,73 @@ public class RelShadow {
       }
     }
     return false;
+  }
+
+  /**
+   * Returns what grounding decided about a query: the collection each scan
+   * reads, and the conditions the filters still test, canonically named and
+   * sorted.
+   *
+   * <p>Not the whole query, which differs between the two in ways grounding did
+   * not decide -- the order of steps, a projection one of them emits -- and
+   * comparing that reports hundreds of differences that are not differences.
+   * What grounding decides is what bounds each variable, and what is left for a
+   * filter to test because no generator enforces it. Both of the divergences
+   * known today show up here: one leaves `where path p` that the other drops,
+   * and the other bounds `x` and `y` separately where the other joins them to a
+   * shared scan.
+   */
+  private static List<String> decisions(Core.Exp exp) {
+    final List<String> parts = new ArrayList<>();
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Scan scan) {
+            super.visit(scan);
+            parts.add("scan " + canonical(scan.exp));
+          }
+
+          @Override
+          protected void visit(Core.Where where) {
+            super.visit(where);
+            parts.add("where " + canonical(where.exp));
+          }
+        });
+    parts.sort(Comparator.naturalOrder());
+    return parts;
+  }
+
+  /**
+   * Returns an expression with its binders numbered by first occurrence, so
+   * that two can be compared without the names one of them happened to invent.
+   */
+  private static String canonical(Core.Exp exp) {
+    final Map<String, String> names = new LinkedHashMap<>();
+    final Matcher matcher = BINDER.matcher(exp.toString());
+    final StringBuilder b = new StringBuilder();
+    while (matcher.find()) {
+      final String name = matcher.group();
+      matcher.appendReplacement(
+          b,
+          Matcher.quoteReplacement(
+              names.computeIfAbsent(name, n -> "v" + names.size())));
+    }
+    matcher.appendTail(b);
+    return b.toString();
+  }
+
+  /** Names that a lowering or an expansion invents. */
+  private static final Pattern BINDER =
+      Pattern.compile("\\b[a-z]+\\$[0-9]+\\b");
+
+  /** Returns how many queries the two ground alike. */
+  public static int groundingSameCount() {
+    return GROUNDING_SAME.get();
+  }
+
+  /** Returns how many queries the two ground differently. */
+  public static int groundingDifferedCount() {
+    return GROUNDING_DIFFERED.get();
   }
 
   /** Returns how many queries the two grounding engines agreed on. */
