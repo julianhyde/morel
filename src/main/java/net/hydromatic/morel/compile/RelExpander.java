@@ -103,6 +103,19 @@ public class RelExpander {
   private final Set<Core.Exp> subsumed =
       Collections.newSetFromMap(new IdentityHashMap<>());
 
+  /**
+   * What a generator makes of a condition that it does not entirely enforce:
+   * {@code x > 1 andalso x < 10} against a generator that already bounds {@code
+   * x} below is {@code x < 10}. Identity, as {@link #subsumed} is.
+   *
+   * <p>{@code Expander} does this in {@code expandFrom2}, running every
+   * generator's {@code simplify} over each surviving conjunct. It is how a
+   * query grounded by a transitive closure loses its {@code where}: the
+   * generator is not sealed, and does not need to be, because {@code simplify}
+   * answers {@code true}.
+   */
+  private final Map<Core.Exp, Core.Exp> simplified = new IdentityHashMap<>();
+
   private RelExpander(
       TypeSystem typeSystem, Environment env, boolean rowsUsed) {
     this.typeSystem = typeSystem;
@@ -176,8 +189,12 @@ public class RelExpander {
       final List<Core.Exp> remaining = new ArrayList<>();
       conjuncts.forEach(
           conjunct -> {
-            if (!subsumed.contains(conjunct)) {
-              remaining.add(conjunct);
+            if (subsumed.contains(conjunct)) {
+              return;
+            }
+            final Core.Exp exp2 = simplified.getOrDefault(conjunct, conjunct);
+            if (!exp2.isBoolLiteral(true)) {
+              remaining.add(exp2);
             }
           });
       if (remaining.isEmpty()) {
@@ -907,7 +924,10 @@ public class RelExpander {
         .forEach(
             name -> {
               final @Nullable Generator generator = cache.bestGenerator(name);
-              if (generator != null && generator.sealed) {
+              if (generator == null) {
+                return;
+              }
+              if (generator.sealed) {
                 generator.provenance.forEach(
                     constraint -> {
                       final Core.Exp original = originals.get(constraint);
@@ -916,6 +936,20 @@ public class RelExpander {
                       }
                     });
               }
+              // What the generator makes of each condition it was given,
+              // whether or not it is sealed.
+              originals.forEach(
+                  (constraint, original) -> {
+                    final Core.Exp was =
+                        simplified.getOrDefault(original, original);
+                    final Core.Exp now =
+                        generator.simplify(typeSystem, name, constraint);
+                    if (now != constraint) {
+                      simplified.put(original, now);
+                    } else if (was != original) {
+                      simplified.put(original, was);
+                    }
+                  });
             });
   }
 
