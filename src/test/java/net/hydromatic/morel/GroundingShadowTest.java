@@ -66,6 +66,13 @@ public class GroundingShadowTest {
     final int before = RelShadow.groundingAgreedCount();
     Ml.ml("from i where i elem [1, 2, 3]").assertEval();
     assertThat(RelShadow.groundingAgreedCount(), greaterThan(before));
+    // The two ground alike on some queries and not others. Agreeing that a
+    // query *can* be grounded is the cheap question; grounding it the same
+    // way is the one the flip needs, and `groundingDifferedCount` is the
+    // number to drive to zero -- see plan.md, step C.
+    assertThat(
+        RelShadow.groundingSameCount() + RelShadow.groundingDifferedCount(),
+        greaterThan(0));
   }
 }
 
