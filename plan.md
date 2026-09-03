@@ -885,13 +885,26 @@ something settled — §8's principle, applied to the sequence itself.
         own unbounded `exists` reached the evaluator as `infinite:
         int`. With it, optimize.smli falls from 155 diffs to 9 and
         blog.smli from 790 to 23.
-      * **Shared scans.** For a constraint over several variables --
-        `(x, y) elem pairs` -- the step list introduces a shared
-        pattern and joins to it, which is what makes sealing sound.
-        The tree takes the *product* of per-variable generators, which
-        does not enforce the pair, and then seals anyway: the
-        triangles query in fixed-point.smli answers `{x=1,y=1,z=3}`,
-        which is not a triangle.
+      * **Shared scans** -- *remaining, and the largest*. A generator
+        may bind several names: `(x, y) elem pairs` grounds both. The
+        step list scans it once and lets a later generator join on
+        whichever name is already bound (`sharedPats`, and
+        `addGeneratorScan`'s `patternState` scheduling). The tree has
+        the same idea in `commonGenerator`, but only where *one*
+        generator binds every leaf under a join. The triangles query
+        needs less than that and more than the tree can say: of `x`,
+        `y`, `z`, the last two share a generator and the first does
+        not, and the tree is `join(join(x, y), z)`, so the sharing
+        crosses subtrees. The step list does not care, because it
+        works from a flat list of scans and reorders them.
+
+        So the port is not a rule to add but a scheduling loop to
+        bring across: replace `rebuild`'s leaf-by-leaf substitution
+        with one scan per *distinct* generator, ordered so that each
+        generator's free names are bound before it, and a projection
+        that reads the frame's element out of them. Until then the
+        tree answers `{x=1,y=1,z=3}`, which is not a triangle, and
+        fixed-point.smli's 477 diffs are all of this one shape.
 
       A note on what the residual "same shape, different text" is,
       since it is most of the count and none of it matters: the tree
