@@ -848,8 +848,43 @@ something settled — §8's principle, applied to the sequence itself.
       a step list -- because the step list's error names the pattern
       and its "unchanged" is read by a later pass.
 
+      **How far apart they are, now measured.** The assertion used to
+      compare whether the two ground a query; it now compares *what*
+      they decide -- the collection each scan reads and the conditions
+      the filters still test, canonically named and sorted, which
+      ignores the step order and the projections that are the
+      lowering's business rather than grounding's. 217 distinct
+      queries in the suite ground differently. The old boolean
+      assertion reported none of them, and four failing script files
+      had suggested a much smaller gap.
+
+      Three pieces of `Expander` that `RelExpander` does not have, all
+      visible in one line of the measurement --
+      `from (b, i) where i elem [3, 5] andalso b`:
+
+          tree  [scan [3,5], scan extent "bool",
+                 where op elem (v0,[3,5]) andalso v1]
+          step  [scan [3,5], scan extent "bool",
+                 scan from i in [3,5] group i order i, where b]
+
+      * **Dedup.** The step list deduplicates a generator when
+        duplicates would be observable (`expandFrom2`'s
+        `dedupObservable`, which depends on `rowsUsed` and on whether
+        a take or skip follows). The tree scans the collection as it
+        is.
+      * **Sealing.** The step list drops the `elem` conjunct, which
+        the generator now enforces. The tree keeps it.
+      * **Shared scans.** For a constraint over several variables --
+        `(x, y) elem pairs` -- the step list introduces a shared
+        pattern and joins to it, which is what makes sealing sound.
+        The tree takes the *product* of per-variable generators, which
+        does not enforce the pair, and then seals anyway: the
+        triangles query in fixed-point.smli answers `{x=1,y=1,z=3}`,
+        which is not a triangle.
+
       What remains, precisely. Four script files still differ, and the
-      one diagnosed is `from p where path p` over a recursive `path`:
+      one diagnosed further is `from p where path p` over a recursive
+      `path`:
       both paths run once, on the same pass, with the same
       environment, and the step list's generator comes back sealed
       while the tree's comes back `sealed=false, provenance=[]`. The
