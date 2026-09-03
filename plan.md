@@ -867,11 +867,13 @@ something settled — §8's principle, applied to the sequence itself.
           step  [scan [3,5], scan extent "bool",
                  scan from i in [3,5] group i order i, where b]
 
-      * **Dedup.** The step list deduplicates a generator when
-        duplicates would be observable (`expandFrom2`'s
+      * **Dedup** -- *ported*. The step list deduplicates a generator
+        when duplicates would be observable (`expandFrom2`'s
         `dedupObservable`, which depends on `rowsUsed` and on whether
-        a take or skip follows). The tree scans the collection as it
-        is.
+        a take or skip follows); `RelExpander` now does the same, by
+        building the same `distinct`/`order`/`yield` the step list
+        builds. Only for a generator whose pattern is one name, which
+        is where the two agree that it is sound.
       * **Sealing.** The step list drops the `elem` conjunct, which
         the generator now enforces. The tree keeps it.
       * **Shared scans.** For a constraint over several variables --
@@ -881,6 +883,20 @@ something settled — §8's principle, applied to the sequence itself.
         does not enforce the pair, and then seals anyway: the
         triangles query in fixed-point.smli answers `{x=1,y=1,z=3}`,
         which is not a triangle.
+
+      With dedup ported, and the comparison no longer confusing a
+      name for a difference -- it renames what the *query* binds, once
+      for the whole query, rather than per part, since a part names
+      binders bound outside it -- 153 distinct queries differ, from
+      217. What they are:
+
+      | count | difference |
+      |------:|------------|
+      |    87 | same shape, different text (residual naming) |
+      |    52 | the step list has more scans (shared scans) |
+      |    30 | the tree keeps a filter (sealing) |
+      |    13 | the tree has more scans |
+      |     3 | the tree's expansion will not lower |
 
       What remains, precisely. Four script files still differ, and the
       one diagnosed further is `from p where path p` over a recursive

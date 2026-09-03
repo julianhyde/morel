@@ -45,6 +45,11 @@ import org.junit.jupiter.api.Test;
  * what these tests check is the front end: that naming a leaf's element and
  * rewriting the filters above it in terms of that name yields the generator the
  * step list would have found.
+ *
+ * <p>A generator appears wrapped in {@code group ... order ...} where its
+ * duplicates would be observable, which is {@code Expander}'s rule: a
+ * collection may hold a value twice, and an unbounded scan yields each
+ * assignment once.
  */
 public class RelExpanderTest {
   /**
@@ -158,7 +163,9 @@ public class RelExpanderTest {
    */
   @Test
   void testExpand() {
-    assertThat(expanded("from x where x elem [1, 2, 3]"), is("[1, 2, 3]\n"));
+    assertThat(
+        expanded("from x where x elem [1, 2, 3]"),
+        is("from g$0 in [1, 2, 3] group g$0 order g$0\n"));
   }
 
   /** Tests that a condition a generator does not subsume is kept. */
@@ -168,7 +175,7 @@ public class RelExpanderTest {
         expanded("from x where x elem [1, 2, 3] andalso x > 1"),
         is(
             "filter [$0 > 1]\n" //
-                + "  [1, 2, 3]\n"));
+                + "  from g$0 in [1, 2, 3] group g$0 order g$0\n"));
   }
 
   /**
@@ -266,9 +273,9 @@ public class RelExpanderTest {
             "project [{i = #1 $0, j = #2 $0, k = #3 $0}]\n" //
                 + "  join\n"
                 + "    join\n"
-                + "      [1, 2]\n"
-                + "      [3, 4]\n"
-                + "    [5, 6]\n"));
+                + "      from g$0 in [1, 2] group g$0 order g$0\n"
+                + "      from g$1 in [3, 4] group g$1 order g$1\n"
+                + "    from g$2 in [5, 6] group g$2 order g$2\n"));
   }
 
   /**
@@ -312,8 +319,8 @@ public class RelExpanderTest {
             "project [{dno = #1 $0, v = #2 $0}]\n" //
                 + "  project [(#2 $0, #1 $0)]\n"
                 + "    join [g$0]\n"
-                + "      [[1], [2]]\n"
-                + "      g$0\n"));
+                + "      from g$1 in [[1], [2]] group g$1 order g$1\n"
+                + "      from g$2 in g$0 group g$2 order g$2\n"));
   }
 
   /** Tests that a query that cannot be bounded is an error. */
