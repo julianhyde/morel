@@ -874,8 +874,17 @@ something settled — §8's principle, applied to the sequence itself.
         building the same `distinct`/`order`/`yield` the step list
         builds. Only for a generator whose pattern is one name, which
         is where the two agree that it is sound.
-      * **Sealing.** The step list drops the `elem` conjunct, which
-        the generator now enforces. The tree keeps it.
+      * **Sealing** -- *ported*, and it was not sealing. The step list
+        drops a conjunct two ways: a sealed generator's provenance
+        subsumes it, or every generator's `simplify` is run over it
+        and it comes back `true`. Only the first was in the tree. The
+        second is how a query grounded by a transitive closure loses
+        its `where`: the generator is *not* sealed and does not need
+        to be, because `simplify` answers `true`. Without it `path p`
+        stayed in the filter, `path` was re-evaluated per row, and its
+        own unbounded `exists` reached the evaluator as `infinite:
+        int`. With it, optimize.smli falls from 155 diffs to 9 and
+        blog.smli from 790 to 23.
       * **Shared scans.** For a constraint over several variables --
         `(x, y) elem pairs` -- the step list introduces a shared
         pattern and joins to it, which is what makes sealing sound.
@@ -883,6 +892,16 @@ something settled — §8's principle, applied to the sequence itself.
         does not enforce the pair, and then seals anyway: the
         triangles query in fixed-point.smli answers `{x=1,y=1,z=3}`,
         which is not a triangle.
+
+      A note on what the residual "same shape, different text" is,
+      since it is most of the count and none of it matters: the tree
+      lowers "scan the generator's collection" by inventing a binder,
+      and `FromBuilder` then inlines the collection with a step to
+      rename what it bound -- `... yield {w$4 = g$0} where w$4 >= 0`
+      where the step list says `where n_4 >= 0`. Naming the scan after
+      the collection's own binder removes it, and captures a
+      correlated subquery's variable when the collection is not
+      inlined; tried, reverted, and left as noise the count carries.
 
       With dedup ported, and the comparison no longer confusing a
       name for a difference -- it renames what the *query* binds, once
