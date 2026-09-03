@@ -365,7 +365,14 @@ public class RelShadow {
               : Pattern.compile(
                   bound.stream()
                       .map(Pattern::quote)
-                      .collect(Collectors.joining("|", "\\b(?:", ")\\b")));
+                      .collect(
+                          Collectors.joining(
+                              "|",
+                              // Not \b: a name that needs quoting renders
+                              // inside back-ticks, and \b before a back-tick
+                              // is not a boundary, so `w$4` never matched.
+                              "(?<![A-Za-z0-9_$`])(?:",
+                              ")(?![A-Za-z0-9_$`])")));
     }
 
     String apply(Core.Exp exp) {
