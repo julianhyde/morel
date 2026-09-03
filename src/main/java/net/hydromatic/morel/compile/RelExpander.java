@@ -357,8 +357,13 @@ public class RelExpander {
       core.decomposeAnd(filter.condition)
           .forEach(
               conjunct -> {
-                if (!subsumed.contains(conjunct)) {
-                  remaining.add(conjunct);
+                if (subsumed.contains(conjunct)) {
+                  return;
+                }
+                final Core.Exp exp2 =
+                    simplified.getOrDefault(conjunct, conjunct);
+                if (!exp2.isBoolLiteral(true)) {
+                  remaining.add(exp2);
                 }
               });
       if (remaining.isEmpty()) {
