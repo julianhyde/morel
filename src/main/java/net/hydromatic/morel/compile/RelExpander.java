@@ -37,6 +37,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -334,7 +335,184 @@ public class RelExpander {
                     });
           }
         });
+    final Core.@Nullable Exp chained = scheduled(join, frame, cache);
+    if (chained != null) {
+      return chained;
+    }
     return rebuild(join, frame, cache, ImmutableMap.of());
+  }
+
+  /**
+   * Grounds a join tree whose leaves share a generator, by scanning each
+   * generator once and joining on the names already bound.
+   *
+   * <p>A generator may bind several names: {@code (x, y) elem pairs} grounds
+   * both. Replacing each leaf on its own enumerates the collection once per
+   * leaf and pairs every value with every other, which is not what the
+   * constraint said. {@code Expander} scans a generator once and lets a later
+   * one join on whichever name is bound (its {@code sharedPats}, and the {@code
+   * patternState} ordering of {@code addGeneratorScan}); this builds the same
+   * chain, with the same builder, and the tree scans what it yields.
+   *
+   * <p>A generator per *name*, and then a schedule. A rule that decided at a
+   * join, from that join's two sides, would decide too late: the tree picks a
+   * generator per leaf, so two leaves can hold generators whose patterns
+   * overlap and neither is the one to key on.
+   *
+   * <p>Returns null where this does not apply -- nothing is shared, a leaf is
+   * not an extent, a node between the leaves is not a join, a join carries a
+   * condition, or no order satisfies the generators' dependencies -- and the
+   * ordinary leaf-by-leaf path runs instead.
+   */
+  private Core.@Nullable Exp scheduled(
+      Core.Join join, Frame frame, Generators.Cache cache) {
+    if (!joinsAndExtents(join, frame)) {
+      return null;
+    }
+    // One generator per name, and the names each generator provides.
+    final List<Core.NamedPat> names = new ArrayList<>();
+    frame.leaves.forEach(
+        (leaf, pat) -> {
+          if (contains(join, leaf)) {
+            names.addAll(pat.expand());
+          }
+        });
+    final List<Generator> generators = new ArrayList<>();
+    final List<List<Core.NamedPat>> provided = new ArrayList<>();
+    for (Core.NamedPat name : names) {
+      final @Nullable Generator generator = cache.bestGenerator(name);
+      if (generator == null
+          || generator.cardinality == Generator.Cardinality.INFINITE) {
+        return null;
+      }
+      int i = generators.indexOf(generator);
+      if (i < 0) {
+        generators.add(generator);
+        provided.add(new ArrayList<>());
+        i = generators.size() - 1;
+      }
+      provided.get(i).add(name);
+    }
+    if (generators.size() == names.size()) {
+      // Nothing is shared, so the leaves are independent and the ordinary
+      // path says so more directly.
+      return null;
+    }
+    if (generators.size() == 1) {
+      // One generator binds every name, which `commonGenerator` says in one
+      // projection rather than a chain of one.
+      return null;
+    }
+
+    // Schedule: a generator can be scanned once every name it reads that one
+    // of these leaves binds has been scanned.
+    final List<Integer> order = new ArrayList<>();
+    final Set<Core.NamedPat> bound = new LinkedHashSet<>();
+    while (order.size() < generators.size()) {
+      int next = -1;
+      for (int i = 0; i < generators.size(); i++) {
+        if (order.contains(i)) {
+          continue;
+        }
+        boolean ready = true;
+        for (Core.NamedPat free : generators.get(i).freePats) {
+          if (names.contains(free) && !bound.contains(free)) {
+            ready = false;
+            break;
+          }
+        }
+        if (ready) {
+          next = i;
+          break;
+        }
+      }
+      if (next < 0) {
+        return null;
+      }
+      order.add(next);
+      bound.addAll(generators.get(next).pat.expand());
+    }
+
+    // Build the chain, as `addGeneratorScan` builds it: a name the chain has
+    // already bound is renamed in the scan pattern and tested against what
+    // bound it.
+    final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+    final Set<Core.NamedPat> scanned = new LinkedHashSet<>();
+    boolean projectsAway = false;
+    boolean anyDuplicates = false;
+    for (int i : order) {
+      final Generator generator = generators.get(i);
+      final Map<Core.NamedPat, Core.IdPat> renames = new LinkedHashMap<>();
+      final List<Core.Exp> conditions = new ArrayList<>();
+      for (Core.NamedPat p : generator.pat.expand()) {
+        if (scanned.contains(p)) {
+          final Core.IdPat fresh = core.idPat(p.type, p.name + "'", 0);
+          renames.put(p, fresh);
+          conditions.add(core.equal(typeSystem, core.id(fresh), core.id(p)));
+        } else if (!names.contains(p)) {
+          projectsAway = true;
+        }
+      }
+      anyDuplicates |= !generator.unique;
+      fromBuilder.scan(
+          Expander.renamePatterns(typeSystem, generator.pat, renames),
+          generator.exp,
+          core.andAlso(typeSystem, conditions));
+      scanned.addAll(generator.pat.expand());
+    }
+    final Core.Exp yieldExp = core.recordOrAtom(typeSystem, names);
+    fromBuilder.yield_(yieldExp);
+    if (dedupObservable && (anyDuplicates || projectsAway)) {
+      fromBuilder.distinct();
+      fromBuilder.order(yieldExp);
+    }
+    final Core.Exp collection = fromBuilder.build();
+
+    // The tree above wants the join's element, which is written in terms of
+    // the leaves' names; read each out of the row the chain yields.
+    final Core.Exp row = core.input0(collection.type.elementType());
+    final Map<Core.NamedPat, Core.Exp> paths = new LinkedHashMap<>();
+    if (names.size() == 1) {
+      paths.put(names.get(0), row);
+    } else {
+      final List<String> fields =
+          ImmutableList.copyOf(
+              ((RecordLikeType) collection.type.elementType())
+                  .argNameTypes()
+                  .keySet());
+      names.forEach(
+          name ->
+              paths.put(
+                  name,
+                  core.field(typeSystem, row, fields.indexOf(name.name))));
+    }
+    final Core.Exp element =
+        requireNonNull(frame.elements.get(join))
+            .accept(
+                new Shuttle(typeSystem) {
+                  @Override
+                  protected Core.Exp visit(Core.Id id) {
+                    final Core.@Nullable Exp path = paths.get(id.idPat);
+                    return path != null ? path : id;
+                  }
+                });
+    return core.project(typeSystem, collection, element);
+  }
+
+  /**
+   * Returns whether every node under a join is a join or an extent leaf, and
+   * every join is unconditional -- the shape the chain can stand in for.
+   */
+  private static boolean joinsAndExtents(Core.Exp node, Frame frame) {
+    if (node instanceof Core.Join) {
+      final Core.Join join = (Core.Join) node;
+      return join.joinType == Core.Rel.JoinType.INNER
+          && join.binder == null
+          && join.condition.isBoolLiteral(true)
+          && joinsAndExtents(join.left, frame)
+          && joinsAndExtents(join.right, frame);
+    }
+    return node.isExtent() && frame.leaves.containsKey(node);
   }
 
   /**

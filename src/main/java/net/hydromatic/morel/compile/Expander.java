@@ -789,7 +789,7 @@ public class Expander {
    * <p>For example, if the map is {y -> y$}, then the pattern (x, y, z) becomes
    * (x, y$, z).
    */
-  private static Core.Pat renamePatterns(
+  static Core.Pat renamePatterns(
       TypeSystem typeSystem,
       Core.Pat pat,
       Map<Core.NamedPat, Core.IdPat> renameMap) {
