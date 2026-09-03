@@ -906,6 +906,24 @@ something settled — §8's principle, applied to the sequence itself.
         tree answers `{x=1,y=1,z=3}`, which is not a triangle, and
         fixed-point.smli's 477 diffs are all of this one shape.
 
+        A leaf-local rule was tried and reverted, and the reason it
+        cannot work is the useful part. It made the join dependent
+        where the *right* leaf's generator bound a name the left side
+        binds, and filtered the collection to the matching rows --
+        `Expander`'s "some patterns are already bound" branch,
+        written the same way. That is right as far as it goes: it
+        gives `from x, y, z where (x, y) elem pairs andalso (y, z)
+        elem pairs andalso (z, x) elem pairs` the same three triangles
+        the step list gives, four times faster than the cross product
+        it replaced. It fails on the next instance in fixed-point.smli
+        because the generator chosen for the *left* leaf binds two
+        names as well: the tree picks a generator per leaf, so two
+        leaves can hold generators with overlapping patterns and
+        neither is the "right" one. The step list picks a generator
+        per *name* and then schedules, which is why the question does
+        not arise for it. Any rule that decides at a join, looking
+        only at that join's two sides, is deciding too late.
+
       A note on what the residual "same shape, different text" is,
       since it is most of the count and none of it matters: the tree
       lowers "scan the generator's collection" by inventing a binder,
