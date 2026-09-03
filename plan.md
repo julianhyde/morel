@@ -885,7 +885,7 @@ something settled — §8's principle, applied to the sequence itself.
         own unbounded `exists` reached the evaluator as `infinite:
         int`. With it, optimize.smli falls from 155 diffs to 9 and
         blog.smli from 790 to 23.
-      * **Shared scans** -- *remaining, and the largest*. A generator
+      * **Shared scans** -- *ported*. A generator
         may bind several names: `(x, y) elem pairs` grounds both. The
         step list scans it once and lets a later generator join on
         whichever name is already bound (`sharedPats`, and
@@ -906,8 +906,22 @@ something settled — §8's principle, applied to the sequence itself.
         tree answers `{x=1,y=1,z=3}`, which is not a triangle, and
         fixed-point.smli's 477 diffs are all of this one shape.
 
-        A leaf-local rule was tried and reverted, and the reason it
-        cannot work is the useful part. It made the join dependent
+        Ported as a schedule, not a rule: where the leaves of a join
+        tree share generators, `RelExpander` now scans each generator
+        once, in an order that binds what the next one reads, renaming
+        an already-bound name in the scan pattern and testing it
+        against what bound it -- `addGeneratorScan`'s own shape, built
+        with the same `FromBuilder`, so the chain *is* the step list's
+        construction and the tree scans what it yields. It cedes the
+        one-generator case to `commonGenerator`, which says the same
+        thing in one projection, and declines wherever it does not
+        apply: nothing shared, a leaf that is not an extent, a node
+        between the leaves that is not a join, a join with a
+        condition, or no order that satisfies the dependencies.
+        fixed-point.smli falls from 477 diffs to 17.
+
+        A leaf-local rule was tried first and reverted, and the reason
+        it cannot work is what pointed at the schedule. It made the join dependent
         where the *right* leaf's generator bound a name the left side
         binds, and filtered the collection to the matching rows --
         `Expander`'s "some patterns are already bound" branch,
@@ -933,6 +947,12 @@ something settled — §8's principle, applied to the sequence itself.
       the collection's own binder removes it, and captures a
       correlated subquery's variable when the collection is not
       inlined; tried, reverted, and left as noise the count carries.
+
+      With all three ported, the switch-on state is: such-that.smli
+      1029 diffs, blog.smli 23, optimize.smli 9, fixed-point.smli 17 --
+      from 1102, 790, 155 and 477. And the suite runs in nine seconds
+      with the switch on, against sixty before the schedule: the cross
+      products it replaced were most of the cost.
 
       With dedup ported, and the comparison no longer confusing a
       name for a difference -- it renames what the *query* binds, once
