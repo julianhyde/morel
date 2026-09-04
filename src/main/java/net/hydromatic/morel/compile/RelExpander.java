@@ -998,7 +998,12 @@ public class RelExpander {
     final List<Core.NamedPat> names = pat.expand();
     if (names.size() == 1) {
       final @Nullable Generator generator = cache.bestGenerator(names.get(0));
-      if (generator == null) {
+      if (generator == null || !free(generator, bound).isEmpty()) {
+        // Either nothing bounds this name, or what bounds it reads something
+        // that is not bound yet -- `from x, y where x < y andalso y < x + 10`
+        // bounds each by the other and neither on its own. The multi-name
+        // path below asks the same question; without it here the generator's
+        // free name reached the plan as a reference to nothing.
         throw new CompileException("pattern is not grounded", false, leaf.pos);
       }
       return project(generator, names.get(0), leaf.pos, bound);
