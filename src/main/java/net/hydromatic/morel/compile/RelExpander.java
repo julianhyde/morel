@@ -316,24 +316,14 @@ public class RelExpander {
     }
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     Expander.ground(cache, extents, strengthen(constraints, extents));
+    // The same bookkeeping the single-leaf path does, and by the same method:
+    // an inline copy of it here recorded what a sealed generator subsumes and
+    // not what one simplifies, so `from x, y where path (x, y)` kept a filter
+    // that `from p where path p` had learned to drop.
     frame.leaves.forEach(
         (leaf, pat) -> {
           if (leaf.isExtent()) {
-            pat.expand()
-                .forEach(
-                    name -> {
-                      final Generator generator = cache.bestGenerator(name);
-                      if (generator != null && generator.sealed) {
-                        generator.provenance.forEach(
-                            constraint -> {
-                              final Core.Exp original =
-                                  originals.get(constraint);
-                              if (original != null) {
-                                subsumed.add(original);
-                              }
-                            });
-                      }
-                    });
+            recordSubsumed(pat, cache, originals);
           }
         });
     final Core.@Nullable Exp chained = scheduled(join, frame, cache);
