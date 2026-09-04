@@ -462,7 +462,12 @@ public class RelExpander {
       final List<Core.Exp> conditions = new ArrayList<>();
       for (Core.NamedPat p : generator.pat.expand()) {
         if (scanned.contains(p)) {
-          final Core.IdPat fresh = core.idPat(p.type, p.name + "'", 0);
+          // The name is numbered, and not just the ordinal: the chain is one
+          // scope, where `Expander` builds a subquery per generator so its
+          // `p'` never meets another, and what collides here is the name --
+          // a step's bindings are keyed by it.
+          final Core.IdPat fresh =
+              core.idPat(p.type, p.name + "'" + nextName++, 0);
           renames.put(p, fresh);
           conditions.add(core.equal(typeSystem, core.id(fresh), core.id(p)));
         } else if (!names.contains(p)) {
