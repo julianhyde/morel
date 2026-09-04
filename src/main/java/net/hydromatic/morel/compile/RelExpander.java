@@ -683,6 +683,17 @@ public class RelExpander {
       // separately would enumerate the collection once per leaf and pair
       // every value with every other.
       final Core.Exp collection = replace(common.exp, bound);
+      if (!RelBuilder.destructurable(common.pat)) {
+        // The pattern can fail -- `{deptno = dno, dname = name, loc =
+        // "CHICAGO"} elem depts` binds two names and tests a third field --
+        // and a projection reads every row where the pattern matches only
+        // some. Scanning it filters, and the element is already written in
+        // terms of the names it binds.
+        final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+        fromBuilder.scan(common.pat, collection);
+        fromBuilder.yield_(requireNonNull(frame.elements.get(join)));
+        return fromBuilder.build();
+      }
       final Core.Exp element =
           rename(
               requireNonNull(frame.elements.get(join)),
