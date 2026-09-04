@@ -904,6 +904,35 @@ something settled — §8's principle, applied to the sequence itself.
         already bounded: without per-scan dedup the chain yields a
         tuple several times where the step list yields it once.
 
+        Ported the driver itself next -- by *calling*
+        `Expander.addGeneratorScan` rather than transcribing it, which
+        is what makes `Expander.ground` one implementation rather than
+        two -- and it is callable: the enum and the generator type are
+        package-private, so making the method so is the whole of the
+        plumbing. Two inputs had to be got right, and a third was not:
+        * `allPats` is the names of *extent* scans, `allScanPats` is
+          every scan's; for an all-extent join tree they are the same
+          set, which is what a tree has.
+        * The order names are asked for decides the chain, and
+          `frame.leaves` is an `IdentityHashMap`. Walking the join
+          left to right fixes that.
+        * What did not come right is *which* generator the cache calls
+          best for each name. The step list grounds the Lollipop query
+          as `from (x, z) in wp ... join y in (from (y, z') in wp on
+          z' = z ...) join w in (from (x', w) in wp on x' = x ...)` --
+          each generator correlated on a name the one before it bound.
+          The tree gets generators that *partition* the names, `(g$0,
+          g$3)` and `(g$1, g$2)`, so nothing is bound when either is
+          scanned, nothing correlates, and the chain over-produces:
+          ten rows where there are seven.
+
+        So the driver is not what is missing. What differs is the
+        answer `Generators.Cache.bestGenerator` gives when it is asked
+        about a tree's invented leaf names rather than a query's own,
+        and that is a question about the cache, not about either front
+        end. Reverted; the three attempts are all recorded here
+        because each ruled out a different explanation.
+
       * **Shared scans** -- *ported*. A generator
         may bind several names: `(x, y) elem pairs` grounds both. The
         step list scans it once and lets a later generator join on
