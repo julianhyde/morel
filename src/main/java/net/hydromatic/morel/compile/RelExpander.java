@@ -303,9 +303,19 @@ public class RelExpander {
    * in terms of the leaves by substituting the yields on the way down.
    */
   private Core.Exp expandJoinTree(Core.Join join, List<Core.Exp> conditions) {
+    final int mark = nextName;
     try {
       return expandJoinTree(join, conditions, false);
     } catch (CompileException e) {
+      // The first attempt got far enough to record what it thought a
+      // generator subsumed, or simplified, or which leaf it dropped. None of
+      // that survives the attempt: the second one asks different questions of
+      // different generators, and an answer from the first is about a tree
+      // that is not being built.
+      subsumed.clear();
+      simplified.clear();
+      dropped = null;
+      nextName = mark;
       return expandJoinTree(join, conditions, true);
     }
   }
@@ -313,6 +323,10 @@ public class RelExpander {
   private Core.Exp expandJoinTree(
       Core.Join join, List<Core.Exp> conditions, boolean destructure) {
     this.destructure = destructure;
+    // Whatever a join further up dropped is not this join's business: the
+    // shift belongs to the element the drop changed, and this one has its own.
+    final int @Nullable [] outerDropped = dropped;
+    dropped = null;
     final Frame frame = collect(join);
     final List<Core.Exp> constraints = new ArrayList<>(frame.constraints);
     final Map<Core.Exp, Core.Exp> originals =
@@ -352,10 +366,14 @@ public class RelExpander {
           }
         });
     final Core.@Nullable Exp chained = scheduled(join, frame, cache);
-    if (chained != null) {
-      return chained;
+    final Core.Exp result =
+        chained != null
+            ? chained
+            : rebuild(join, frame, cache, ImmutableMap.of());
+    if (dropped == null) {
+      dropped = outerDropped;
     }
-    return rebuild(join, frame, cache, ImmutableMap.of());
+    return result;
   }
 
   /**
@@ -394,20 +412,15 @@ public class RelExpander {
           }
         });
     final List<Generator> generators = new ArrayList<>();
-    final List<List<Core.NamedPat>> provided = new ArrayList<>();
     for (Core.NamedPat name : names) {
       final @Nullable Generator generator = cache.bestGenerator(name);
       if (generator == null
           || generator.cardinality == Generator.Cardinality.INFINITE) {
         return null;
       }
-      int i = generators.indexOf(generator);
-      if (i < 0) {
+      if (!generators.contains(generator)) {
         generators.add(generator);
-        provided.add(new ArrayList<>());
-        i = generators.size() - 1;
       }
-      provided.get(i).add(name);
     }
     if (generators.size() == names.size()) {
       // Nothing is shared, so the leaves are independent and the ordinary
@@ -466,8 +479,7 @@ public class RelExpander {
           // scope, where `Expander` builds a subquery per generator so its
           // `p'` never meets another, and what collides here is the name --
           // a step's bindings are keyed by it.
-          final Core.IdPat fresh =
-              core.idPat(p.type, p.name + "'" + nextName++, 0);
+          final Core.IdPat fresh = freshPat(p);
           renames.put(p, fresh);
           conditions.add(core.equal(typeSystem, core.id(fresh), core.id(p)));
         } else if (!names.contains(p)) {
@@ -1078,48 +1090,71 @@ public class RelExpander {
     if (element == null) {
       throw new CompileException("pattern is not grounded", false, pos);
     }
-    final List<Core.NamedPat> others = new ArrayList<>();
+    // What else the generator's pattern binds, and where each stands. A name
+    // the query already bound -- by an earlier leaf, whose value is in
+    // `bound`, or by the scope around the query -- has to be *tested*, or the
+    // rows that disagree with it come through: `from target where reachable
+    // (source, target)` would count what is reachable from anywhere. A name
+    // that nothing bound is the generator's own, from an `exists` inside the
+    // constraint, and is projected away -- which can leave the same value
+    // twice, so it is deduplicated. `Expander` draws the same line, by asking
+    // whether a pattern is DONE or is not a scan pattern at all.
+    final Map<Core.NamedPat, Core.Exp> tested = new LinkedHashMap<>();
+    boolean projectsAway = false;
     for (Core.NamedPat p : generator.pat.expand()) {
-      if (!p.equals(pat)) {
-        others.add(p);
+      if (p.equals(pat)) {
+        continue;
+      }
+      final Core.@Nullable Exp value = bound.get(p);
+      if (value != null) {
+        tested.put(p, value);
+      } else if (env.getOpt(p) != null) {
+        tested.put(p, core.id(p));
+      } else {
+        projectsAway = true;
       }
     }
-    if (!others.isEmpty()) {
-      // The generator binds more than the name we want, and the rest are
-      // bound already -- by an earlier leaf, whose value is in `bound`, or by
-      // the scope around the query. Projecting the wanted name out of every
-      // row would ignore them: `from target where reachable (source, target)`
-      // would count what is reachable from anywhere. `Expander` renames each
-      // in the scan pattern and tests it against what bound it; so does this.
-      final Map<Core.NamedPat, Core.IdPat> renames = new LinkedHashMap<>();
-      final List<Core.Exp> conditions = new ArrayList<>();
-      for (Core.NamedPat p : others) {
-        final Core.IdPat fresh =
-            core.idPat(p.type, p.name + "'" + nextName++, 0);
-        renames.put(p, fresh);
-        conditions.add(
-            core.equal(
-                typeSystem, core.id(fresh), bound.getOrDefault(p, core.id(p))));
-      }
-      final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-      fromBuilder.scan(
-          Expander.renamePatterns(typeSystem, generator.pat, renames),
-          exp,
-          core.andAlso(typeSystem, conditions));
-      fromBuilder.yield_(core.id(pat));
-      return fromBuilder.build();
+    if (tested.isEmpty()
+        && !projectsAway
+        && RelBuilder.destructurable(generator.pat)) {
+      // Nothing to test and nothing to drop, and the pattern cannot fail, so
+      // reading the name out of each row says it all.
+      return core.project(typeSystem, exp, element);
     }
-    if (!RelBuilder.destructurable(generator.pat)) {
-      // The pattern can fail -- `(x, 20) elem [(1, 10), (2, 20)]` grounds `x`
-      // by a pattern that holds a literal -- and a projection reads every row
-      // where the pattern matches only some. The step list scans the pattern,
-      // which filters; so does this.
-      final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-      fromBuilder.scan(generator.pat, exp);
-      fromBuilder.yield_(core.id(pat));
-      return fromBuilder.build();
+    // Otherwise scan the pattern, which also filters where it can fail --
+    // `(x, 20) elem [(1, 10), (2, 20)]` grounds `x` by a pattern holding a
+    // literal, and a projection would read every row where the pattern
+    // matches only some.
+    final Map<Core.NamedPat, Core.IdPat> renames = new LinkedHashMap<>();
+    final List<Core.Exp> conditions = new ArrayList<>();
+    tested.forEach(
+        (p, value) -> {
+          final Core.IdPat fresh = freshPat(p);
+          renames.put(p, fresh);
+          conditions.add(core.equal(typeSystem, core.id(fresh), value));
+        });
+    final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+    fromBuilder.scan(
+        Expander.renamePatterns(typeSystem, generator.pat, renames),
+        exp,
+        core.andAlso(typeSystem, conditions));
+    final Core.Exp yieldExp = core.id(pat);
+    fromBuilder.yield_(yieldExp);
+    if (dedupObservable && (projectsAway || !generator.unique)) {
+      fromBuilder.distinct();
+      fromBuilder.order(yieldExp);
     }
-    return core.project(typeSystem, exp, element);
+    return fromBuilder.build();
+  }
+
+  /**
+   * Returns a name for a bound name's stand-in in a scan pattern, numbered so
+   * that two scans in one scope do not both call it {@code p'}: a step's
+   * bindings are keyed by name, and `Expander` never meets this because it
+   * builds a subquery per generator.
+   */
+  private Core.IdPat freshPat(Core.NamedPat pat) {
+    return core.idPat(pat.type, pat.name + "'" + nextName++, 0);
   }
 
   /**
