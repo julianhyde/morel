@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
@@ -96,6 +97,19 @@ public class RelExpander {
    * deduplicated. {@code Expander}'s {@code dedupObservable}.
    */
   private boolean dedupObservable;
+
+  /**
+   * How many components a dropped leaf took off the front of the element, and
+   * how many are left, or null if nothing was dropped.
+   *
+   * <p>A query whose rows are only counted may leave a variable it cannot
+   * enumerate unbounded, and the leaf goes. A step list drops the *binding*,
+   * and its conditions name what is left, so nothing moves; a tree's element is
+   * positional, so what a filter above says as `#2 $0` becomes `$0`. The
+   * projection above needs no such care -- it is unobservable here, and dropped
+   * whole.
+   */
+  private int @Nullable [] dropped;
 
   /**
    * Conditions that a sealed generator subsumes, and that the filter they came
@@ -196,7 +210,7 @@ public class RelExpander {
             }
             final Core.Exp exp2 = simplified.getOrDefault(conjunct, conjunct);
             if (!exp2.isBoolLiteral(true)) {
-              remaining.add(exp2);
+              remaining.add(shiftFields(exp2));
             }
           });
       if (remaining.isEmpty()) {
@@ -566,10 +580,17 @@ public class RelExpander {
       // Nothing looks at the rows, so a side that nothing constrains cannot
       // affect the answer, and need not be enumerated.
       if (droppable(join.right, frame, cache)) {
+        // The right's components come off the end, so what is left keeps its
+        // positions and nothing above needs rewriting.
         return rebuild(join.left, frame, cache, bound);
       }
       if (droppable(join.left, frame, cache)) {
-        return rebuild(join.right, frame, cache, bound);
+        final Core.Exp survivor = rebuild(join.right, frame, cache, bound);
+        dropped =
+            new int[] {
+              core.componentCount(join.left), core.componentCount(join.right)
+            };
+        return survivor;
       }
     }
     final @Nullable Generator common =
@@ -706,6 +727,38 @@ public class RelExpander {
       exps.add(core.field(typeSystem, element, i));
     }
     return core.project(typeSystem, join, core.tuple(typeSystem, null, exps));
+  }
+
+  /**
+   * Moves a condition onto the element a dropped leaf left behind: {@code #2
+   * $0} reads the second component, and with the first gone it is the first, or
+   * the whole element where only one is left.
+   */
+  private Core.Exp shiftFields(Core.Exp exp) {
+    final int @Nullable [] drop = dropped;
+    if (drop == null) {
+      return exp;
+    }
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Apply apply) {
+            if (apply.fn instanceof Core.RecordSelector
+                && apply.arg.op == Op.ID
+                && ((Core.Id) apply.arg)
+                    .idPat.name.equals(CoreBuilder.INPUT_0)) {
+              final int slot = ((Core.RecordSelector) apply.fn).slot;
+              if (slot >= drop[0]) {
+                final Core.Exp element =
+                    core.input0(((Core.Id) apply.arg).type);
+                return drop[1] == 1
+                    ? core.input0(apply.type)
+                    : core.field(typeSystem, element, slot - drop[0]);
+              }
+            }
+            return super.visit(apply);
+          }
+        });
   }
 
   /** Returns whether a node is a leaf that needs no generator. */
