@@ -213,8 +213,19 @@ public class RelExpander {
       final List<Core.Exp> pushed = new ArrayList<>();
       conditions.forEach(
           condition -> pushed.add(subst(condition, project.exp)));
-      return project.copy(
-          typeSystem, expand(project.input, pushed), project.exp);
+      final Core.Exp input = expand(project.input, pushed);
+      if (!rowsUsed) {
+        // Nothing reads the rows, so a projection is unobservable: it maps
+        // each row to a value and changes how many there are not at all. It
+        // must go rather than stay, because dropping a leaf that nothing
+        // constrains -- which is what `rowsUsed` false allows -- leaves the
+        // element with fewer components than this was written for, and `{w =
+        // #1 $0, x = #2 $0}` over `[3]` reads a scalar as a pair. The step
+        // list changes the row's type here too: `exists w, x where x = 3`
+        // becomes `from x in [3]`.
+        return input;
+      }
+      return project.copy(typeSystem, input, project.exp);
     }
     // A step that neither changes the element nor drops rows by position
     // passes the conditions down. The step list does the same, by ignoring
