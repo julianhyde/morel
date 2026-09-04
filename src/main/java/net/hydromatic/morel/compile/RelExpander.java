@@ -35,6 +35,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -1000,6 +1001,16 @@ public class RelExpander {
         path(generator.pat, core.input0(exp.type.elementType()), pat);
     if (element == null) {
       throw new CompileException("pattern is not grounded", false, pos);
+    }
+    if (!RelBuilder.destructurable(generator.pat)) {
+      // The pattern can fail -- `(x, 20) elem [(1, 10), (2, 20)]` grounds `x`
+      // by a pattern that holds a literal -- and a projection reads every row
+      // where the pattern matches only some. The step list scans the pattern,
+      // which filters; so does this.
+      final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+      fromBuilder.scan(generator.pat, exp);
+      fromBuilder.yield_(core.id(pat));
+      return fromBuilder.build();
     }
     return core.project(typeSystem, exp, element);
   }
