@@ -81,6 +81,20 @@ public class RelExpander {
   private int nextName;
 
   /**
+   * Patterns to name the leaves with, in the order a walk reaches them, and how
+   * many have been used.
+   *
+   * <p>A tree has erased the patterns its query was written with, so a leaf is
+   * named `g$0` and the plan says `from g$0 in [1, 2, 4]` where the step list
+   * says `from x in [1, 2, 4]`. The caller still has them -- it translated the
+   * query -- and the translation keeps the scans in order, so handing them back
+   * costs nothing and the plan reads as the user wrote it.
+   */
+  private List<Core.Pat> leafPats = ImmutableList.of();
+
+  private int nextLeafPat;
+
+  /**
    * Whether to name a leaf whose element is a tuple by one variable per
    * component.
    *
@@ -161,8 +175,22 @@ public class RelExpander {
    */
   public static Core.Exp expand(
       TypeSystem typeSystem, Environment env, Core.Exp tree, boolean rowsUsed) {
+    return expand(typeSystem, env, tree, rowsUsed, ImmutableList.of());
+  }
+
+  /**
+   * Replaces every infinite-extent leaf of a tree with a collection that bounds
+   * it, naming the leaves with the patterns the query was written with.
+   */
+  public static Core.Exp expand(
+      TypeSystem typeSystem,
+      Environment env,
+      Core.Exp tree,
+      boolean rowsUsed,
+      List<Core.Pat> leafPats) {
     final RelExpander expander = new RelExpander(typeSystem, env, rowsUsed);
     expander.dedupObservable = rowsUsed || hasTakeOrSkip(tree);
+    expander.leafPats = ImmutableList.copyOf(leafPats);
     return expander.expand(tree, ImmutableList.of());
   }
 
@@ -305,6 +333,7 @@ public class RelExpander {
    */
   private Core.Exp expandJoinTree(Core.Join join, List<Core.Exp> conditions) {
     final int mark = nextName;
+    final int leafMark = nextLeafPat;
     try {
       return expandJoinTree(join, conditions, false);
     } catch (CompileException e) {
@@ -317,6 +346,7 @@ public class RelExpander {
       simplified.clear();
       dropped = null;
       nextName = mark;
+      nextLeafPat = leafMark;
       return expandJoinTree(join, conditions, true);
     }
   }
@@ -1446,6 +1476,15 @@ public class RelExpander {
    * separately, from a different constraint each.
    */
   private Core.Pat elementPat(Core.Exp leaf) {
+    if (!destructure && nextLeafPat < leafPats.size()) {
+      final Core.Pat pat = leafPats.get(nextLeafPat++);
+      if (pat.type.equals(leaf.type.elementType())) {
+        return pat;
+      }
+      // The walk and the scans disagree about which leaf is which, so the
+      // rest of the names are not to be trusted either.
+      leafPats = ImmutableList.of();
+    }
     return pat(leaf.type.elementType());
   }
 
