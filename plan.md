@@ -968,9 +968,23 @@ something settled — §8's principle, applied to the sequence itself.
       at the end. fixed-point.smli went from 17 diffs to 274, so it is
       out until that reasoning is ported too.
 
-      With all three ported, the switch-on state is: such-that.smli
-      1017 diffs, blog.smli 16, optimize.smli 9, fixed-point.smli 17 --
-      from 1102, 790, 155 and 477. And the suite runs in nine seconds
+      A sixth, and it was a copy rather than a gap. `RelExpander`
+      records what a generator subsumes in two places -- once for a
+      single leaf, once inline for a join's frame -- and only the
+      first had learned about `simplify`. So `from p where path p`
+      dropped its filter and `from x, y where path (x, y)` did not,
+      and the second reached the evaluator as `infinite: int`, which
+      is where such-that.smli stopped. The join path calls the same
+      method now.
+
+      With all of that, the switch-on state is: such-that.smli 692
+      diffs, blog.smli 16, optimize.smli 9, fixed-point.smli 17 --
+      from 1102, 790, 155 and 477. Run outside the harness, where it
+      is not cut short, such-that.smli has 306 differing lines, and
+      most are `scott` being unbound there rather than anything the
+      tree did: what is left is six `ClassCastException`, three
+      `NullPointerException: g$1`, some row orderings, and the
+      renaming yield. And the suite runs in nine seconds
       with the switch on, against sixty before the schedule: the cross
       products it replaced were most of the cost.
 
