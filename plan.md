@@ -885,6 +885,25 @@ something settled — §8's principle, applied to the sequence itself.
         own unbounded `exists` reached the evaluator as `infinite:
         int`. With it, optimize.smli falls from 155 diffs to 9 and
         blog.smli from 790 to 23.
+      * **Dedup, once vs per generator** -- *not ported, and the
+        reason matters*. `scheduled` decides once, at the end of the
+        chain, whether the row it yields needs deduplicating;
+        `addGeneratorScan` decides per scan, in a subquery of its own.
+        Porting the shape without the driver was tried and reverted.
+        `addGeneratorScan` is driven *per name*, recursing through
+        each generator's dependencies with an explicit `patternState`,
+        so a generator is scanned exactly once, for the names it
+        provides, and is never reached for a name that is already
+        DONE. A loop over *generators* meets cases that driver never
+        does -- a generator whose names another has already bound,
+        which is then a filter and not a source -- and each one wants
+        a special case. Three were written before it was clear that
+        the driver, not the shape, is what has to come across.
+
+        This is what blocks extending the schedule to leaves that are
+        already bounded: without per-scan dedup the chain yields a
+        tuple several times where the step list yields it once.
+
       * **Shared scans** -- *ported*. A generator
         may bind several names: `(x, y) elem pairs` grounds both. The
         step list scans it once and lets a later generator join on
