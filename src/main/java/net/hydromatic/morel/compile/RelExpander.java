@@ -1078,6 +1078,37 @@ public class RelExpander {
     if (element == null) {
       throw new CompileException("pattern is not grounded", false, pos);
     }
+    final List<Core.NamedPat> others = new ArrayList<>();
+    for (Core.NamedPat p : generator.pat.expand()) {
+      if (!p.equals(pat)) {
+        others.add(p);
+      }
+    }
+    if (!others.isEmpty()) {
+      // The generator binds more than the name we want, and the rest are
+      // bound already -- by an earlier leaf, whose value is in `bound`, or by
+      // the scope around the query. Projecting the wanted name out of every
+      // row would ignore them: `from target where reachable (source, target)`
+      // would count what is reachable from anywhere. `Expander` renames each
+      // in the scan pattern and tests it against what bound it; so does this.
+      final Map<Core.NamedPat, Core.IdPat> renames = new LinkedHashMap<>();
+      final List<Core.Exp> conditions = new ArrayList<>();
+      for (Core.NamedPat p : others) {
+        final Core.IdPat fresh =
+            core.idPat(p.type, p.name + "'" + nextName++, 0);
+        renames.put(p, fresh);
+        conditions.add(
+            core.equal(
+                typeSystem, core.id(fresh), bound.getOrDefault(p, core.id(p))));
+      }
+      final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+      fromBuilder.scan(
+          Expander.renamePatterns(typeSystem, generator.pat, renames),
+          exp,
+          core.andAlso(typeSystem, conditions));
+      fromBuilder.yield_(core.id(pat));
+      return fromBuilder.build();
+    }
     if (!RelBuilder.destructurable(generator.pat)) {
       // The pattern can fail -- `(x, 20) elem [(1, 10), (2, 20)]` grounds `x`
       // by a pattern that holds a literal -- and a projection reads every row
