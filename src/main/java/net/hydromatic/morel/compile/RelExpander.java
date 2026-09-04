@@ -637,7 +637,7 @@ public class RelExpander {
           collection,
           join.condition);
     }
-    if (rightGenerator != null
+    if ((rightGenerator != null || bounded(right, frame))
         && join.condition.isBoolLiteral(true)
         && reads(join.left, frame, cache, bound, frame.leaves.get(right))) {
       // The other way round: the right side grounds on its own and the left
@@ -645,6 +645,10 @@ public class RelExpander {
       // elem depts andalso #deptno v = dno` scans `depts` and reads `dno` out
       // of each row; the step list reorders the same way, deferring `dno`
       // until after `v`, as such-that.smli's comment says.
+      //
+      // The right side grounds on its own where a generator grounds it and
+      // also where it is a leaf that was never unbounded: `from x, y in
+      // [2, 3] where x > y` needs no generator for `y`, and `x` reads it.
       final Core.Pat rightPat = requireNonNull(frame.leaves.get(right));
       final Core.IdPat param =
           core.idPat(right.type.elementType(), "g$" + nextName++, 0);
@@ -657,7 +661,10 @@ public class RelExpander {
                       name,
                       requireNonNull(path(rightPat, core.id(param), name))));
       final Core.Exp left = rebuild(join.left, frame, cache, bound2);
-      final Core.Exp boundedRight = bounded(right, rightPat, cache, bound);
+      final Core.Exp boundedRight =
+          rightGenerator == null
+              ? right
+              : bounded(right, rightPat, cache, bound);
       // The sides swap, so the yield commutes with them: what was `$0` is now
       // `$1` and what was `$1` is now `$0` (spec.md §3.4).
       final Core.Join swapped =
@@ -699,6 +706,11 @@ public class RelExpander {
       exps.add(core.field(typeSystem, element, i));
     }
     return core.project(typeSystem, join, core.tuple(typeSystem, null, exps));
+  }
+
+  /** Returns whether a node is a leaf that needs no generator. */
+  private static boolean bounded(Core.Exp node, Frame frame) {
+    return !node.isExtent() && frame.leaves.containsKey(node);
   }
 
   /**
