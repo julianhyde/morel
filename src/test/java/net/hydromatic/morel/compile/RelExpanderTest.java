@@ -239,14 +239,16 @@ public class RelExpanderTest {
     final Fixture f = new Fixture("from w : int join x : int where x = 3");
     final Core.Exp expanded =
         RelExpander.expand(f.typeSystem, f.env, f.tree(), false);
-    // `w` is gone, and so is the condition, which the generator enforces.
+    // `w` is gone, and so is the condition, which the generator enforces, and
+    // so is the projection: nothing reads the rows, so what a row *is* is not
+    // observable, and a projection written for two components cannot stand
+    // over a collection that now has one. The step list changes the row's
+    // type here too -- `exists w, x where x = 3` becomes `from x in [3]`.
     assertThat(
         expanded instanceof Core.Rel
             ? ((Core.Rel) expanded).describe()
             : expanded + "\n",
-        is(
-            "project [{w = #1 $0, x = #2 $0}]\n" //
-                + "  [3]\n"));
+        is("[3]\n"));
   }
 
   /**
