@@ -123,9 +123,18 @@ public class Expander {
     if (tree == null) {
       return null;
     }
+    // The patterns the query was written with, in scan order, so that the
+    // leaves keep the names the user gave them.
+    final List<Core.Pat> leafPats = new ArrayList<>();
+    from.steps.forEach(
+        step -> {
+          if (step instanceof Core.Scan) {
+            leafPats.add(((Core.Scan) step).pat);
+          }
+        });
     final Core.Exp expanded;
     try {
-      expanded = RelExpander.expand(typeSystem, env, tree, rowsUsed);
+      expanded = RelExpander.expand(typeSystem, env, tree, rowsUsed, leafPats);
     } catch (CompileException e) {
       // The step list has its own answer for a query it cannot ground: an
       // error naming the pattern, or the query unchanged so that a later pass
