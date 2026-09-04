@@ -926,12 +926,37 @@ something settled — §8's principle, applied to the sequence itself.
           scanned, nothing correlates, and the chain over-produces:
           ten rows where there are seven.
 
-        So the driver is not what is missing. What differs is the
-        answer `Generators.Cache.bestGenerator` gives when it is asked
-        about a tree's invented leaf names rather than a query's own,
-        and that is a question about the cache, not about either front
-        end. Reverted; the three attempts are all recorded here
-        because each ruled out a different explanation.
+        So the driver is not what is missing, and neither is the
+        cache. What differed was the *order* the two front ends handed
+        the engine its work.
+
+        `Expander.expandFrom` does not call `ground` at all: it calls
+        `expandSteps`, which walks the query's steps and interleaves
+        them -- `maybeExtent` for a scan, `plusConstraint` and
+        `improveGenerators` for each conjunct of a where. `from i
+        where A join b where B` is extent, A, extent, B. The engine
+        improves its generators after every constraint, so a
+        constraint sees the extents registered before it and not the
+        ones after, and the order is part of the answer.
+
+        `RelExpander` called `ground(cache, extents, constraints)`,
+        which registers every extent and then applies every
+        constraint -- and took its extents from `frame.leaves`, an
+        `IdentityHashMap`, so which order that was varied with the
+        hash. Two wrongs that had been cancelling: making the extents
+        deterministic on its own broke two queries, because the hash
+        order had been supplying by accident what the interleaving
+        supplies by construction.
+
+        Both are fixed. `collect` records extents and constraints in
+        the order the walk reaches them -- a filter's conjuncts after
+        its input, a join's condition after both sides -- and
+        `Expander` grew an overload of `ground` that replays such a
+        sequence, which the old two-list form now delegates to. What
+        strengthening adds has no place in the tree, so it goes last.
+
+        No test moved: the suite is what it was. What is gone is a
+        dependency on hash order in the middle of grounding.
 
       * **Shared scans** -- *ported*. A generator
         may bind several names: `(x, y) elem pairs` grounds both. The
