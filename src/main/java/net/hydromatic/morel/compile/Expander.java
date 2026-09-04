@@ -851,13 +851,44 @@ public class Expander {
       Generators.Cache cache,
       PairList<Core.Pat, Core.Exp> extents,
       List<Core.Exp> constraints) {
-    extents.forEach((pat, exp) -> Generators.maybeExtent(cache, pat, exp));
+    final List<Ground> steps = new ArrayList<>();
+    extents.forEach((pat, exp) -> steps.add(new Ground(pat, exp)));
+    constraints.forEach(constraint -> steps.add(new Ground(null, constraint)));
+    return ground(cache, steps);
+  }
+
+  /**
+   * Registers extents and applies constraints in the order given.
+   *
+   * <p>The order is part of the answer, not a detail: the engine improves its
+   * generators after every constraint, so a constraint sees the extents
+   * registered before it and not the ones after. {@link #expandSteps} gives
+   * them in the order a query's steps are written -- {@code from i where A join
+   * b where B} is extent, A, extent, B -- and a tree walked left to right gives
+   * the same order.
+   */
+  static Generators.Cache ground(Generators.Cache cache, List<Ground> steps) {
     Expander expander = new Expander(cache, ImmutableList.of());
-    for (Core.Exp constraint : constraints) {
-      expander = expander.plusConstraint(constraint);
-      expander.improveGenerators(cache.generators);
+    for (Ground step : steps) {
+      if (step.pat != null) {
+        Generators.maybeExtent(cache, step.pat, step.exp);
+      } else {
+        expander = expander.plusConstraint(step.exp);
+        expander.improveGenerators(cache.generators);
+      }
     }
     return cache;
+  }
+
+  /** One step of grounding: an extent to register, or a constraint to apply. */
+  static class Ground {
+    final Core.@Nullable Pat pat;
+    final Core.Exp exp;
+
+    Ground(Core.@Nullable Pat pat, Core.Exp exp) {
+      this.pat = pat;
+      this.exp = exp;
+    }
   }
 
   static void expandSteps(List<Core.FromStep> steps, Expander expander) {
