@@ -19,6 +19,7 @@
 package net.hydromatic.morel.compile;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.last;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayDeque;
@@ -269,7 +270,7 @@ public class RelLowerer {
     final Core.IdPat w =
         join.right instanceof Core.Rel
             ? freshPat(join.right.type.elementType())
-            : scanPat(join.right.type.elementType());
+            : scanPat(join.right);
     final Core.Exp condition = subst(join.condition, left, core.id(w));
     // A dependent join's right input reads the left element through the
     // binder. The step list has the left bindings in scope at the scan, so
@@ -323,7 +324,7 @@ public class RelLowerer {
       // of one empty row, and a scan of `[()]` into a project over one.
       return core.unitLiteral();
     }
-    final Core.IdPat v = scanPat(collection.type.elementType());
+    final Core.IdPat v = scanPat(collection);
     fromBuilder.scan(v, collection);
     return rebind(fromBuilder, core.id(v));
   }
@@ -466,16 +467,48 @@ public class RelLowerer {
    * Returns a binder for a scan: the name its caller asked for, if one is still
    * owed, and otherwise a generated one.
    */
-  private Core.IdPat scanPat(Type type) {
+  private Core.IdPat scanPat(Core.Exp collection) {
+    final Type type = collection.type.elementType();
     if (scanNames.isEmpty()) {
       return freshPat(type);
     }
     final String name = scanNames.remove();
     // Empty where the caller had a pattern rather than a name: a pattern
     // names no one thing, and the tree keeps paths instead.
-    return name.isEmpty()
-        ? freshPat(type)
-        : core.idPat(type, name, nameGenerator::inc);
+    if (name.isEmpty()) {
+      return freshPat(type);
+    }
+    final Core.@Nullable IdPat own = binderOf(collection);
+    if (own != null && own.name.equals(name)) {
+      // The collection's own last step leaves a binder of this very name --
+      // grounding built `from x in c group x order x yield x` for a scan the
+      // query calls `x`. Numbering a second `x` makes the builder rename what
+      // it inlined, and the plan gains `yield {x = x}` and calls the rest
+      // `x_1`. Reusing the binder makes that rename the identity, which the
+      // builder drops. Only where the names agree: where they differ the
+      // collection may be a correlated subquery, and taking its binder would
+      // capture what the correlation reads.
+      return own;
+    }
+    return core.idPat(type, name, nameGenerator::inc);
+  }
+
+  /**
+   * Returns the binder a collection's own last step leaves, or null if it does
+   * not leave exactly one.
+   */
+  private static Core.@Nullable IdPat binderOf(Core.Exp collection) {
+    if (!(collection instanceof Core.From)) {
+      return null;
+    }
+    final List<Core.FromStep> steps = ((Core.From) collection).steps;
+    if (steps.isEmpty()) {
+      return null;
+    }
+    final List<Binding> bindings = last(steps).env.bindings;
+    return bindings.size() == 1 && bindings.get(0).id instanceof Core.IdPat
+        ? (Core.IdPat) bindings.get(0).id
+        : null;
   }
 
   /**
