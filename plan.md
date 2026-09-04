@@ -948,8 +948,28 @@ something settled — §8's principle, applied to the sequence itself.
       correlated subquery's variable when the collection is not
       inlined; tried, reverted, and left as noise the count carries.
 
+      A fourth thing, which the three uncovered rather than caused: a
+      generator's pattern may be one that can *fail*. `(x, 20) elem
+      [(1, 10), (2, 20)]` grounds `x` by a pattern holding a literal,
+      and the tree *projected* `#1` out of every row where the step
+      list *scans* the pattern, which filters. `from x where (x, 20)
+      elem [(1, 10), (2, 20)]` answered `[1, 2]`. It scans now.
+
+      And a fifth, tried and reverted: extending the schedule to
+      leaves that are already bounded, so that `from x in [1, 2, 3], y
+      where (x, y) elem [(1, 10), (2, 20)]` joins rather than crossing.
+      The schedule builds one chain in one scope, and two scans that
+      rename the same name collided -- `Expander` builds a subquery
+      per generator, so its `p'` never meets another; numbering them
+      fixes that. What it does not fix is duplicate rows: the chain
+      yields the same tuple several times where the step list yields
+      it once, and which scans make duplicates observable is the part
+      `addGeneratorScan` decides per generator and this decides once
+      at the end. fixed-point.smli went from 17 diffs to 274, so it is
+      out until that reasoning is ported too.
+
       With all three ported, the switch-on state is: such-that.smli
-      1029 diffs, blog.smli 23, optimize.smli 9, fixed-point.smli 17 --
+      1017 diffs, blog.smli 16, optimize.smli 9, fixed-point.smli 17 --
       from 1102, 790, 155 and 477. And the suite runs in nine seconds
       with the switch on, against sixty before the schedule: the cross
       products it replaced were most of the cost.
