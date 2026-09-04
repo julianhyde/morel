@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.last;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -336,14 +337,18 @@ public class RelExpander {
           final Core.Exp constraint = subst(condition, frame.element);
           originals.put(constraint, condition);
           constraints.add(constraint);
+          // Above the tree, so after everything in it -- a `where` that
+          // follows every scan.
+          frame.order.add(new Expander.Ground(null, constraint));
         });
+    // Left to right through the tree, and not `frame.leaves`, whose order is
+    // an IdentityHashMap's. The engine registers each extent as it is given
+    // them and improves the generators after every constraint, so the order
+    // decides which generator it settles on for each name -- and a hash
+    // order makes that decision differently from one run to the next. A step
+    // list gives them in the order its scans are written.
     final PairList<Core.Pat, Core.Exp> extents = PairList.of();
-    frame.leaves.forEach(
-        (leaf, pat) -> {
-          if (leaf.isExtent()) {
-            extents.add(pat, leaf);
-          }
-        });
+    extentsInOrder(join, frame, extents);
     if (extents.isEmpty()) {
       return join.copy(
           typeSystem,
@@ -354,7 +359,21 @@ public class RelExpander {
           join.condition);
     }
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
-    Expander.ground(cache, extents, strengthen(constraints, extents));
+    // Interleaved, in the order the walk reached them; the conjuncts that
+    // strengthening added are not in that order, having no place in the tree,
+    // so they go at the end.
+    final Set<Core.Exp> written =
+        Collections.newSetFromMap(new IdentityHashMap<>());
+    written.addAll(constraints);
+    final List<Expander.Ground> order = new ArrayList<>(frame.order);
+    strengthen(constraints, extents)
+        .forEach(
+            constraint -> {
+              if (!written.contains(constraint)) {
+                order.add(new Expander.Ground(null, constraint));
+              }
+            });
+    Expander.ground(cache, order);
     // The same bookkeeping the single-leaf path does, and by the same method:
     // an inline copy of it here recorded what a sealed generator subsumes and
     // not what one simplifies, so `from x, y where path (x, y)` kept a filter
@@ -530,6 +549,20 @@ public class RelExpander {
                   }
                 });
     return core.project(typeSystem, collection, element);
+  }
+
+  /** Collects the extent leaves under a node, left to right. */
+  private static void extentsInOrder(
+      Core.Exp node, Frame frame, PairList<Core.Pat, Core.Exp> extents) {
+    if (node instanceof Core.Join) {
+      extentsInOrder(((Core.Join) node).left, frame, extents);
+      extentsInOrder(((Core.Join) node).right, frame, extents);
+      return;
+    }
+    final Core.@Nullable Pat pat = frame.leaves.get(node);
+    if (pat != null && node.isExtent()) {
+      extents.add(pat, node);
+    }
   }
 
   /**
@@ -1207,6 +1240,18 @@ public class RelExpander {
      */
     final Map<Core.Exp, Core.Exp> elements = new IdentityHashMap<>();
 
+    /**
+     * Extents to register and constraints to apply, in the order a walk of the
+     * tree reaches them.
+     *
+     * <p>Not the extents and then the constraints: the engine improves its
+     * generators after every constraint, so which extents are registered by
+     * then decides what it settles on. A step list gives them interleaved, in
+     * the order its steps are written, and a tree walked left to right gives
+     * the same order.
+     */
+    final List<Expander.Ground> order = new ArrayList<>();
+
     Frame(
         Core.Exp element,
         Map<Core.Exp, Core.Pat> leaves,
@@ -1431,6 +1476,7 @@ public class RelExpander {
                 final Core.Exp constraint = subst(conjunct, input.element);
                 input.originals.put(constraint, conjunct);
                 input.constraints.add(constraint);
+                input.order.add(new Expander.Ground(null, constraint));
               });
       input.elements.put(node, input.element);
       return input;
@@ -1441,6 +1487,9 @@ public class RelExpander {
       leaves.put(node, pat);
       final Frame frame = new Frame(patExp(pat), leaves, new ArrayList<>());
       frame.elements.put(node, frame.element);
+      if (node.isExtent()) {
+        frame.order.add(new Expander.Ground(pat, node));
+      }
       return frame;
     }
     final Core.Join join = (Core.Join) node;
@@ -1465,6 +1514,11 @@ public class RelExpander {
     frame.elements.put(node, frame.element);
     frame.originals.putAll(left.originals);
     frame.originals.putAll(right.originals);
+    frame.order.addAll(left.order);
+    frame.order.addAll(right.order);
+    if (!join.condition.isBoolLiteral(true)) {
+      frame.order.add(new Expander.Ground(null, last(constraints)));
+    }
     return frame;
   }
 
