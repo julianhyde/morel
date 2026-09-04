@@ -136,9 +136,26 @@ public class Expander {
       // differently.
       return null;
     }
+    // The same names again, for the binders the lowering invents. Less
+    // reliable than naming the leaves was -- grounding may have reordered
+    // them, and the lowering takes them positionally -- but a name that ends
+    // up on the wrong scan is still unique, and the common case is that they
+    // are in the order they were written.
+    final List<String> scanNames = new ArrayList<>();
+    leafPats.forEach(
+        pat -> {
+          if (pat instanceof Core.IdPat) {
+            scanNames.add(((Core.IdPat) pat).name);
+          }
+        });
     final Core.Exp lowered =
         RelLowerer.lower(
-            typeSystem, nameGenerator, expanded, ImmutableList.of());
+            typeSystem,
+            nameGenerator,
+            expanded,
+            scanNames.size() == leafPats.size()
+                ? scanNames
+                : ImmutableList.of());
     if (!(lowered instanceof Core.From) || containsExtent(lowered)) {
       // An extent that survives is one the walk did not reach or could not
       // bound -- including one inside a nested query, which this walk does not
