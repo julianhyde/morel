@@ -93,6 +93,16 @@ public class RelExpander {
    */
   private List<Core.Pat> leafPats = ImmutableList.of();
 
+  /**
+   * The name of the leaf that each collection grounding built bounds.
+   *
+   * <p>By identity, because it is the collection that carries the name to the
+   * lowering, not its position: grounding builds the leaves in the order they
+   * were written but assembles them in the order it schedules them, so a list
+   * taken positionally gives a scan the name of another scan's variable.
+   */
+  private final Map<Core.Exp, String> collectionNames = new IdentityHashMap<>();
+
   private int nextLeafPat;
 
   /**
@@ -200,10 +210,29 @@ public class RelExpander {
       Core.Exp tree,
       boolean rowsUsed,
       List<Core.Pat> leafPats) {
+    return expand(
+        typeSystem, env, tree, rowsUsed, leafPats, new IdentityHashMap<>());
+  }
+
+  /**
+   * As {@link #expand(TypeSystem, Environment, Core.Exp, boolean, List)}, and
+   * puts into {@code leafNames} the name of the leaf that each collection it
+   * built bounds, so that the lowering can name each scan after the variable
+   * whose values it is scanning.
+   */
+  public static Core.Exp expand(
+      TypeSystem typeSystem,
+      Environment env,
+      Core.Exp tree,
+      boolean rowsUsed,
+      List<Core.Pat> leafPats,
+      Map<Core.Exp, String> leafNames) {
     final RelExpander expander = new RelExpander(typeSystem, env, rowsUsed);
     expander.dedupObservable = rowsUsed || hasTakeOrSkip(tree);
     expander.leafPats = ImmutableList.copyOf(leafPats);
-    return expander.expand(tree, ImmutableList.of());
+    final Core.Exp expanded = expander.expand(tree, ImmutableList.of());
+    leafNames.putAll(expander.collectionNames);
+    return expanded;
   }
 
   /**
@@ -1144,7 +1173,8 @@ public class RelExpander {
         // free name reached the plan as a reference to nothing.
         throw new CompileException("pattern is not grounded", false, leaf.pos);
       }
-      return project(generator, names.get(0), leaf.pos, bound);
+      return named(
+          project(generator, names.get(0), leaf.pos, bound), names.get(0));
     }
     Core.@Nullable Exp product = null;
     List<Core.Exp> access = new ArrayList<>();
@@ -1156,7 +1186,8 @@ public class RelExpander {
         // dependent join.
         throw new CompileException("pattern is not grounded", false, leaf.pos);
       }
-      final Core.Exp component = project(generator, name, leaf.pos, bound);
+      final Core.Exp component =
+          named(project(generator, name, leaf.pos, bound), name);
       if (product == null) {
         product = component;
         access = new ArrayList<>();
@@ -1570,6 +1601,12 @@ public class RelExpander {
       leafPats = ImmutableList.of();
     }
     return pat(leaf.type.elementType());
+  }
+
+  /** Records that a collection bounds a leaf, and returns the collection. */
+  private Core.Exp named(Core.Exp collection, Core.NamedPat pat) {
+    collectionNames.put(collection, pat.name);
+    return collection;
   }
 
   private Core.Pat pat(Type type) {

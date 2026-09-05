@@ -22,10 +22,14 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.last;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import net.hydromatic.morel.ast.Core;
@@ -93,6 +97,22 @@ public class RelLowerer {
   private final boolean scanOwnBinders;
 
   /**
+   * The name of the leaf that each collection bounds, by identity; empty except
+   * for grounding, which knows what each collection it built is for.
+   *
+   * <p>Consulted before {@link #scanNames}, which is positional and therefore
+   * only right where nothing was reordered.
+   */
+  private final Map<Core.Exp, String> leafNames;
+
+  /**
+   * The names already given to a scan. A step list may not have two scans whose
+   * names share a base -- the environment keys on it -- and a name can now come
+   * from either of two places, so whichever asks first gets it.
+   */
+  private final Set<String> usedNames = new HashSet<>();
+
+  /**
    * Where binder ordinals come from.
    *
    * <p>The caller's, and not the type system's, because a name is unique only
@@ -107,11 +127,13 @@ public class RelLowerer {
       TypeSystem typeSystem,
       NameGenerator nameGenerator,
       Iterable<String> scanNames,
-      boolean scanOwnBinders) {
+      boolean scanOwnBinders,
+      Map<Core.Exp, String> leafNames) {
     this.typeSystem = typeSystem;
     this.nameGenerator = nameGenerator;
     this.scanNames = new ArrayDeque<>(ImmutableList.copyOf(scanNames));
     this.scanOwnBinders = scanOwnBinders;
+    this.leafNames = leafNames;
   }
 
   /** Lowers a tree into an executable expression. */
@@ -142,7 +164,29 @@ public class RelLowerer {
       Core.Exp exp,
       Iterable<String> scanNames,
       boolean scanOwnBinders) {
-    return new RelLowerer(typeSystem, nameGenerator, scanNames, scanOwnBinders)
+    return lower(
+        typeSystem,
+        nameGenerator,
+        exp,
+        scanNames,
+        scanOwnBinders,
+        ImmutableMap.of());
+  }
+
+  /**
+   * As {@link #lower(TypeSystem, NameGenerator, Core.Exp, Iterable, boolean)},
+   * and names a scan whose collection is in {@code leafNames} after the leaf
+   * that collection bounds, rather than from {@code scanNames}.
+   */
+  public static Core.Exp lower(
+      TypeSystem typeSystem,
+      NameGenerator nameGenerator,
+      Core.Exp exp,
+      Iterable<String> scanNames,
+      boolean scanOwnBinders,
+      Map<Core.Exp, String> leafNames) {
+    return new RelLowerer(
+            typeSystem, nameGenerator, scanNames, scanOwnBinders, leafNames)
         .lowerRel(exp);
   }
 
@@ -554,13 +598,26 @@ public class RelLowerer {
    */
   private Core.IdPat scanPat(Core.Exp collection) {
     final Type type = collection.type.elementType();
+    // Grounding knows which leaf this collection bounds, and its name beats
+    // the one the queue has: the queue is positional, and grounding assembles
+    // the leaves in the order it schedules them, not the order they were
+    // written. Take the name out of the queue too, or the next scan is given
+    // it a second time.
+    final @Nullable String leafName = leafNames.get(collection);
+    if (leafName != null && usedNames.add(leafName)) {
+      scanNames.remove(leafName);
+      final Core.@Nullable IdPat leafOwn = binderOf(collection);
+      return leafOwn != null && leafOwn.name.equals(leafName)
+          ? leafOwn
+          : core.idPat(type, leafName, nameGenerator::inc);
+    }
     if (scanNames.isEmpty()) {
       return freshPat(type);
     }
     final String name = scanNames.remove();
     // Empty where the caller had a pattern rather than a name: a pattern
     // names no one thing, and the tree keeps paths instead.
-    if (name.isEmpty()) {
+    if (name.isEmpty() || !usedNames.add(name)) {
       return freshPat(type);
     }
     final Core.@Nullable IdPat own = binderOf(collection);
