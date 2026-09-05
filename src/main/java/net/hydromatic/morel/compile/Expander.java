@@ -156,7 +156,8 @@ public class Expander {
             expanded,
             scanNames.size() == leafPats.size()
                 ? scanNames
-                : ImmutableList.of());
+                : ImmutableList.of(),
+            true);
     if (misaddressed(lowered)) {
       // A selector reading a field the row does not have. Replacing a join
       // with a projection makes the element one component where it was
