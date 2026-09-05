@@ -832,11 +832,17 @@ something settled — §8's principle, applied to the sequence itself.
 
       1528 of the suite's 1852 queries build natively. The 324 that do
       not are unbounded scans, save a handful of chained outer joins.
-- [ ] Step C, started: ground a query by translating it to a tree,
+- [x] Step C, done: ground a query by translating it to a tree,
       expanding that, and lowering it back -- at the call site where
       grounding already happens, so it sees inlined Core and knows
-      `rowsUsed`. `Expander.expandFrom` now takes that path when
-      `MOREL_GROUND_VIA_TREE` is set, and the step list otherwise.
+      `rowsUsed`. `Expander.expandFrom` now takes that path by
+      default; `MOREL_GROUND_VIA_STEPS` puts the step list back, which
+      is how to tell whether a plan changed because of this. The step
+      list is still the fallback for the queries the tree path
+      declines, so it is not yet dead code.
+
+      Every script agrees, both ways, and `fullMake` is green with the
+      variable set and unset.
 
       Two defects found and fixed on the way, both committed: the
       lowering numbered binders from the wrong generator, and a filter
@@ -1088,33 +1094,53 @@ something settled — §8's principle, applied to the sequence itself.
       end's bookkeeping: `RelExpander` looks up provenance by
       identity, and `strengthen` is written to preserve it.
 
-- [ ] Step C's remainder: eight lines of plan text in
-      such-that.smli, and nothing else. Three of the four files that
-      differed when the switch was turned on now pass entirely under
-      the tree grounding -- blog.smli from 790 differing lines,
-      fixed-point.smli from 477, optimize.smli from 155 -- and
-      such-that.smli is at 8 from 1102, with no crashes, no wrong
-      answers and no orderings left.
+- [x] Step C's remainder, closed. All four files that differed when
+      the switch was turned on now pass under the tree grounding:
+      blog.smli from 790 differing lines, fixed-point.smli from 477,
+      optimize.smli from 155, such-that.smli from 1102. Four things
+      were wrong, and each was a difference of kind rather than of
+      degree:
 
-      What the eight are: the tree scans a grounded collection under
-      one name and reads the fields back out of it, where the step
-      list inlines the scan and keeps the names.
+      * **A nest of joins lowered to a nest of queries.** A join whose
+        right input was another inner join lowered the right one as a
+        subquery and scanned it, so the plan held a collection it then
+        read back apart. It now lowers into the same builder: one scan
+        per leaf, the condition a `where`, which is what a step list
+        has.
+      * **A collection with several binders could not be scanned.**
+        `FromBuilder` will not inline one that yields a record, so the
+        plan gained a scan and read the fields out. The step list
+        scans it under a record pattern of the names it wants, which
+        inlines. Making `RelLowerer.scan` do the same was tried and
+        reverted once -- the lowering is shared with the flip, where a
+        scan over a user's subquery must bind the user's `x`, and
+        dual.smli said so at once with `unbound variable deptno_6`.
+        The distinction the lowering lacked is the caller's, so the
+        caller now passes it: grounding's collections are its own and
+        may be scanned under their own binders; the resolver's are the
+        user's and may not.
+      * **A scan could be given another variable's name.** The
+        lowering took its names from a queue, in the order the query
+        was written, which is not the order grounding leaves them in
+        -- a leaf is scheduled after whatever bounds it. Grounding now
+        says, by identity, what each collection it builds is for. The
+        queue stays for what grounding did not build, and a name goes
+        to whichever asks first: two scans whose names share a base
+        are one binding too many for the environment.
+      * **Constraints reached the engine backwards.** Where two
+        constraints could each generate a name the engine keeps the
+        first, so `from dno, v where v.deptno = dno where dno = 30`
+        generates `dno` from `[#deptno v]` and keeps `dno = 30` as a
+        filter. The tree walk carried the conditions of the filters it
+        passed down in the order it met them -- outermost, hence
+        latest, first -- and generated `dno` from `[30]`. It now
+        carries them the other way up.
 
-          step  from ({deptno = dno, ...}) in ... group {dno, name}
-                order ... where dno > 20
-          tree  from dno in (from ({deptno = dno_1, ...}) in ...
-                group ... order ...) where #dno dno > 20 yield {...}
-
-      `FromBuilder` will not inline a collection that yields a record
-      under a scan of one name, and the step list scans it under a
-      record pattern of the names it wants, which inlines. Making
-      `RelLowerer.scan` do the same was tried and reverted: the
-      lowering is shared with the flip, where a scan over a user's
-      subquery must bind the user's `x` and not the subquery's own
-      names, and dual.smli said so at once -- `unbound variable
-      deptno_6`. Closing it means telling the lowering which
-      collections may be scanned under their own binders, which is a
-      distinction its caller has and it does not.
+      A measurement worth keeping: the last of these was found by
+      printing the constraint list the engine sees, from both front
+      ends, on the one query that still differed. Four rounds of
+      reasoning about schedules had not found it, and the two lists
+      side by side took a minute.
 
 - [ ] Unbounded scans, the last 324, and the reason is sharper than
       "grounding reads step lists". Tried, and backed out; the branch
