@@ -1191,9 +1191,27 @@ something settled — §8's principle, applied to the sequence itself.
       step list does, reading the row out of the builder rather than
       out of the pattern, which the tree does not have.
 
-      1780 of 1856 now. What the remaining 76 want: `yield` with a
-      binder, `group` with a binder, the set operators, and an
-      unbounded scan that binds more than one name.
+      1780 of 1856 after that, and 1812 with `yield r = e`, which was
+      the largest thing left at 33 queries. A binder names the whole
+      row, whatever it yields, so a record yielded this way binds one
+      name and not its fields -- which is `FromBuilder`'s rule for a
+      binder, said to the builder instead.
+
+      That one exposed a bug of its own, older than the tree and
+      reachable without it: `from i in [1, 2, 3] yield {h = h}`, where
+      `h` comes from the enclosing scope, failed with "conversion to
+      core did not preserve type". `FromBuilder` decides whether a
+      record is the row renamed by comparing each field's name with
+      the name of the id in it, and never asked whether that id is one
+      of the row's bindings, so it called this one the identity and
+      gave the step the row's own bindings. The suite did not have the
+      query; it had `yield h = {h = h}`, which the tree path had been
+      declining.
+
+      What the remaining 44 want: `group` with a binder (14), an
+      unbounded scan that binds more than one name (8), a scan whose
+      pattern can fail to match -- a constructor, a literal, a cons
+      (16) -- and two chained outer joins.
 
       That last one is a naming limit rather than a translation one.
       `from (b, i)` grounds and answers correctly, but the tree erases
