@@ -173,6 +173,9 @@ public class Expander {
       // than when it compiles.
       return null;
     }
+    if (System.getenv("MOREL_DEBUG") != null) {
+      System.err.println("VT " + lowered); // lint:skip
+    }
     return (Core.From) lowered;
   }
 
