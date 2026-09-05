@@ -62,6 +62,7 @@ public class RelShadow {
   private static final AtomicInteger TRANSLATED = new AtomicInteger();
   private static final AtomicInteger DECLINED = new AtomicInteger();
   private static final AtomicInteger GROUNDING_AGREED = new AtomicInteger();
+  private static final AtomicInteger GROUNDED_VIA_TREE = new AtomicInteger();
   private static final AtomicInteger GROUNDING_UNEXAMINED = new AtomicInteger();
 
   /** How many queries the two ground alike, and how many differently. */
@@ -406,6 +407,19 @@ public class RelShadow {
   /** Returns how many queries the two grounding engines agreed on. */
   public static int groundingAgreedCount() {
     return GROUNDING_AGREED.get();
+  }
+
+  /**
+   * Counts a query that the tree grounded, and that therefore reached a plan
+   * without the step list.
+   */
+  public static void groundedViaTree() {
+    GROUNDED_VIA_TREE.incrementAndGet();
+  }
+
+  /** Returns how many queries the tree grounded. */
+  public static int groundedViaTreeCount() {
+    return GROUNDED_VIA_TREE.get();
   }
 
   /** Returns how many queries the tree grounding did not examine. */
