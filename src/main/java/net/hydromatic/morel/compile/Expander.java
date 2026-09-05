@@ -42,6 +42,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -133,9 +134,14 @@ public class Expander {
             leafPats.add(((Core.Scan) step).pat);
           }
         });
+    // The leaf that each collection grounding builds bounds, so that the
+    // lowering can name each scan after the variable it scans.
+    final Map<Core.Exp, String> leafNames = new IdentityHashMap<>();
     final Core.Exp expanded;
     try {
-      expanded = RelExpander.expand(typeSystem, env, tree, rowsUsed, leafPats);
+      expanded =
+          RelExpander.expand(
+              typeSystem, env, tree, rowsUsed, leafPats, leafNames);
     } catch (CompileException e) {
       // The step list has its own answer for a query it cannot ground: an
       // error naming the pattern, or the query unchanged so that a later pass
@@ -163,7 +169,8 @@ public class Expander {
             scanNames.size() == leafPats.size()
                 ? scanNames
                 : ImmutableList.of(),
-            true);
+            true,
+            leafNames);
     if (misaddressed(lowered)) {
       // A selector reading a field the row does not have. Replacing a join
       // with a projection makes the element one component where it was
