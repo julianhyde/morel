@@ -676,30 +676,7 @@ public class RelExpander {
     final @Nullable Generator common =
         commonGenerator(join, frame, cache, bound);
     if (common != null) {
-      // One generator binds the names of every leaf under this join -- `where
-      // {deptno = dno, dname = name} elem depts` binds both -- so the leaves
-      // and the join between them become one scan of that generator, read
-      // through the paths that its pattern gives each name. Replacing them
-      // separately would enumerate the collection once per leaf and pair
-      // every value with every other.
-      final Core.Exp collection = replace(common.exp, bound);
-      if (!RelBuilder.destructurable(common.pat)) {
-        // The pattern can fail -- `{deptno = dno, dname = name, loc =
-        // "CHICAGO"} elem depts` binds two names and tests a third field --
-        // and a projection reads every row where the pattern matches only
-        // some. Scanning it filters, and the element is already written in
-        // terms of the names it binds.
-        final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
-        fromBuilder.scan(common.pat, collection);
-        fromBuilder.yield_(requireNonNull(frame.elements.get(join)));
-        return fromBuilder.build();
-      }
-      final Core.Exp element =
-          rename(
-              requireNonNull(frame.elements.get(join)),
-              core.input0(collection.type.elementType()),
-              common.pat);
-      return core.project(typeSystem, collection, element);
+      return fromCommon(join, frame, common, bound);
     }
     final Core.Exp right = join.right;
     final @Nullable Generator rightGenerator =
@@ -802,6 +779,63 @@ public class RelExpander {
         rebuild(join.left, frame, cache, bound),
         rebuild(right, frame, cache, bound),
         join.condition);
+  }
+
+  /**
+   * Grounds a join tree that one generator binds every leaf of.
+   *
+   * <p>`where {deptno = dno, dname = name} elem depts` binds both, so the
+   * leaves and the join between them become one scan of that generator, read
+   * through the paths its pattern gives each name. Replacing them separately
+   * would enumerate the collection once per leaf and pair every value with
+   * every other.
+   */
+  private Core.Exp fromCommon(
+      Core.Join join,
+      Frame frame,
+      Generator common,
+      Map<Core.NamedPat, Core.Exp> bound) {
+    final Core.Exp collection = replace(common.exp, bound);
+    if (dedupObservable && !common.unique) {
+      // A generator may repeat a value where an unbounded scan yields each
+      // assignment once, so `Expander` scans it under its own pattern,
+      // deduplicates, and orders by the record of its variables. That order
+      // is the query's answer, not a detail: `from x, y where (y, x) elem
+      // [(1, true), (2, false)]` lists `false 2` before `true 1`.
+      final List<Core.NamedPat> vars = common.pat.expand();
+      final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+      fromBuilder.scan(common.pat, collection);
+      fromBuilder.distinct();
+      final Core.Exp row = core.recordOrAtom(typeSystem, vars);
+      fromBuilder.order(row);
+      fromBuilder.yield_(row);
+      final Core.Exp deduped = fromBuilder.build();
+      // The rows are a record of the variables now, so the element reads
+      // each out of that rather than out of the generator's own row.
+      final Core.Exp element =
+          rename(
+              requireNonNull(frame.elements.get(join)),
+              core.input0(deduped.type.elementType()),
+              core.recordOrAtomPat(typeSystem, vars));
+      return core.project(typeSystem, deduped, element);
+    }
+    if (!RelBuilder.destructurable(common.pat)) {
+      // The pattern can fail -- `{deptno = dno, dname = name, loc =
+      // "CHICAGO"} elem depts` binds two names and tests a third field --
+      // and a projection reads every row where the pattern matches only
+      // some. Scanning it filters, and the element is already written in
+      // terms of the names it binds.
+      final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
+      fromBuilder.scan(common.pat, collection);
+      fromBuilder.yield_(requireNonNull(frame.elements.get(join)));
+      return fromBuilder.build();
+    }
+    final Core.Exp element =
+        rename(
+            requireNonNull(frame.elements.get(join)),
+            core.input0(collection.type.elementType()),
+            common.pat);
+    return core.project(typeSystem, collection, element);
   }
 
   /**
