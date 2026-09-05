@@ -679,6 +679,43 @@ public class Resolver {
     }
   }
 
+  /**
+   * Returns the name a pattern binds, if it binds exactly one and binds it
+   * directly: {@code x} or {@code x : t}. Null otherwise.
+   */
+  private static Ast.@Nullable IdPat bareId(Ast.Pat pat) {
+    if (pat instanceof Ast.AnnotatedPat) {
+      return bareId(((Ast.AnnotatedPat) pat).pat);
+    }
+    return pat instanceof Ast.IdPat ? (Ast.IdPat) pat : null;
+  }
+
+  /**
+   * Returns whether a pattern names its type's values directly: a name, or a
+   * tuple of names.
+   *
+   * <p>Asked of an unbounded scan, whose pattern {@link #extentPat} flattens:
+   * for these two the flattening changes nothing, and for the rest the
+   * collection's element is a tuple where the pattern says a record.
+   */
+  private static boolean flatNames(Ast.Pat pat) {
+    if (pat instanceof Ast.AnnotatedPat) {
+      return flatNames(((Ast.AnnotatedPat) pat).pat);
+    }
+    if (pat instanceof Ast.IdPat) {
+      return true;
+    }
+    if (pat instanceof Ast.TuplePat) {
+      for (Ast.Pat arg : ((Ast.TuplePat) pat).args) {
+        if (!(arg instanceof Ast.IdPat)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
   private static boolean disjoint(Set<Integer> a, Set<Integer> b) {
     for (Integer i : a) {
       if (b.contains(i)) {
@@ -2416,10 +2453,13 @@ public class Resolver {
       final Ast.@Nullable Exp scanExp = scan.exp;
       if (b.size() == 0) {
         binders.addAll(
-            push(scan.pat, scanExp == null ? extent(scan) : toCore(scanExp)));
+            scanExp == null
+                ? pushExtent(scan)
+                : push(scan.pat, toCore(scanExp)));
         // Only a bare name leaves the element as the row; a pattern is erased,
         // and what it bound is read back out by paths.
-        rowIsElement = scan.pat instanceof Ast.IdPat;
+        rowIsElement = bareId(scan.pat) != null;
+        typeCondition(scan, binders);
       } else {
         // The right input is a tree of its own, so it cannot say `$0` and
         // mean the row so far. A binder crosses that boundary by ordinary
@@ -2428,9 +2468,12 @@ public class Resolver {
         // and an independent join is far the better one.
         final Core.IdPat binder =
             b.binder(typeMap.typeSystem.nameGenerator.get());
-        final Core.Exp collection =
-            scanExp == null ? extent(scan) : toCore(scanExp, core.id(binder));
-        final List<String> names = push(scan.pat, collection);
+        final List<String> names;
+        if (scanExp == null) {
+          names = pushExtent(scan);
+        } else {
+          names = push(scan.pat, toCore(scanExp, core.id(binder)));
+        }
         b.pair();
         final Core.Exp condition =
             scan.condition == null
@@ -2439,6 +2482,7 @@ public class Resolver {
         b.join(joinType(scan.op), binder, condition);
         binders.addAll(names);
         rowIsElement = false;
+        typeCondition(scan, names);
       }
       // The step list's rule, and it is about how many names are bound rather
       // than how many the scan added: `from a in [1], _ in [true]` binds one,
@@ -2451,17 +2495,91 @@ public class Resolver {
      * every value of the pattern's type. Grounding replaces it with something
      * finite, or says that it cannot.
      */
-    private Core.Exp extent(Ast.Scan scan) {
-      // The pattern's type, from the type map, rather than the pattern
-      // converted: converting it takes the name from the generator, and then
-      // the lowering's own scan of this collection finds `x` taken and calls
-      // itself `x_1`. The tree has no use for the pattern anyway -- `push`
-      // erases it to paths -- so only the type is wanted.
+    private List<String> pushExtent(Ast.Scan scan) {
+      if (flatNames(scan.pat)) {
+        // The pattern's type, from the type map, rather than the pattern
+        // converted: converting it takes the name from the generator, and then
+        // the lowering's own scan of this collection finds `x` taken and calls
+        // itself `x_1`. The tree has no use for the pattern anyway -- `push`
+        // erases it to paths -- so only the type is wanted.
+        return push(scan.pat, extent(scan.pat.pos, typeMap.getType(scan.pat)));
+      }
+      // A pattern that is not a name or a tuple of names is flattened, as the
+      // step list flattens it: `from {b, i}` scans `bool * int`, and the names
+      // are read out of the tuple rather than out of a record. The tree keeps
+      // paths either way, so which it is makes no difference above the scan.
+      final Core.Pat flat =
+          extentPat(
+              typeMap.typeSystem,
+              Resolver.this.toCore(scan.pat, typeMap.getType(scan.pat)));
+      return push(flat, extent(scan.pat.pos, flat.type));
+    }
+
+    /**
+     * Filters by the condition of the checked type a scan is over, if it is
+     * over one.
+     *
+     * <p>A scan over a checked type enumerates the values of that type, so the
+     * type's condition belongs in the query, where grounding can use it to
+     * generate the values rather than generate and reject them. A step of its
+     * own, as the step list makes it, and not part of a join's condition, which
+     * only a join reads.
+     */
+    private void typeCondition(Ast.Scan scan, Collection<String> names) {
+      if (scan.pat.op != Op.ANNOTATED_PAT) {
+        return;
+      }
+      final @Nullable Type type =
+          enforcer.claimedType(((Ast.AnnotatedPat) scan.pat).type);
+      if (type == null) {
+        return;
+      }
+      final Core.@Nullable Exp value = rowValue(names, type.unalias());
+      if (value == null) {
+        return;
+      }
+      final Core.@Nullable Exp condition =
+          enforcer.deepCondition(
+              type, value.type, value, "", false, scan.pat.pos);
+      if (condition != null) {
+        b.filter(condition);
+      }
+    }
+
+    /**
+     * Returns the value that a scan's names denote, for the type's condition to
+     * be asked of.
+     *
+     * <p>{@link FromResolver#rowValue} by the same rule, but reading the names
+     * out of the builder rather than out of the pattern: the tree has no
+     * pattern. The field names come from the type the user wrote, because a
+     * record pattern reaches the tree as a tuple, whose fields are named 1, 2.
+     */
+    private Core.@Nullable Exp rowValue(
+        Collection<String> names, Type erasedType) {
+      if (names.size() == 1) {
+        return b.name(requireNonNull(getOnlyElement(names)));
+      }
+      if (!(erasedType instanceof RecordLikeType)) {
+        return null;
+      }
+      final Set<String> fields =
+          ((RecordLikeType) erasedType).argNameTypes().keySet();
+      if (fields.size() != names.size()) {
+        return null;
+      }
+      final PairList<String, Core.Exp> nameExps = PairList.of();
+      forEach(
+          ImmutableList.copyOf(fields),
+          ImmutableList.copyOf(names),
+          (field, name) -> nameExps.add(field, b.name(name)));
+      return core.record(typeMap.typeSystem, nameExps);
+    }
+
+    /** Returns the collection of every value of a type. */
+    private Core.Exp extent(Pos pos, Type type) {
       return core.extent(
-          scan.pat.pos,
-          typeMap.typeSystem,
-          typeMap.getType(scan.pat),
-          ImmutableRangeSet.of(Range.all()));
+          pos, typeMap.typeSystem, type, ImmutableRangeSet.of(Range.all()));
     }
 
     /** Returns the kind of join a scan's keyword asks for. */
@@ -2483,14 +2601,19 @@ public class Resolver {
      * binds.
      */
     private List<String> push(Ast.Pat pat, Core.Exp collection) {
-      if (pat instanceof Ast.IdPat) {
-        final String name = ((Ast.IdPat) pat).name;
+      final Ast.@Nullable IdPat id = bareId(pat);
+      if (id != null) {
+        final String name = id.name;
         b.push(name, collection);
         scanNames.add(name);
         return ImmutableList.of(name);
       }
-      final Core.Pat corePat =
-          Resolver.this.toCore(pat, collection.type.elementType());
+      return push(
+          Resolver.this.toCore(pat, collection.type.elementType()), collection);
+    }
+
+    /** As {@link #push(Ast.Pat, Core.Exp)}, for a pattern already converted. */
+    private List<String> push(Core.Pat corePat, Core.Exp collection) {
       b.push(corePat, collection);
       final List<String> names = new ArrayList<>();
       corePat.accept(
@@ -3137,17 +3260,16 @@ public class Resolver {
           if (!destructurable(scan.pat)) {
             return false;
           }
+          if (scan.exp == null && binderCount(scan.pat) > 1) {
+            // The tree erases the pattern, and the lowering can name a scan
+            // but not the parts of one, so the names of an unbounded scan's
+            // components would not survive -- and grounding names them in the
+            // error it raises when it cannot bound one.
+            return false;
+          }
           if (scan.exp == null && !Expander.viaTree()) {
             // Grounding is back on the step list, which cannot ground
             // everything the tree path builds, so build nothing it cannot.
-            return false;
-          }
-          if (scan.exp == null && !flatNames(scan.pat)) {
-            // An unbounded scan's collection is every value of the pattern's
-            // type, and the step list flattens the pattern to name each value
-            // it generates -- `from {b, i}` scans `bool * int`, not the
-            // record. The tree's element is the pattern's own type, so the two
-            // agree only where flattening changes nothing.
             return false;
           }
           if (scan.condition != null && i == 0) {
@@ -3197,25 +3319,6 @@ public class Resolver {
     }
 
     /**
-     * Returns whether a pattern names its type's values directly: a name, or a
-     * tuple of names.
-     */
-    private boolean flatNames(Ast.Pat pat) {
-      if (pat instanceof Ast.IdPat) {
-        return true;
-      }
-      if (pat instanceof Ast.TuplePat) {
-        for (Ast.Pat arg : ((Ast.TuplePat) pat).args) {
-          if (!(arg instanceof Ast.IdPat)) {
-            return false;
-          }
-        }
-        return true;
-      }
-      return false;
-    }
-
-    /**
      * Returns whether an outer join's absent side binds one name, which is when
      * the tree and the step list agree about its type.
      *
@@ -3245,6 +3348,8 @@ public class Resolver {
           return 1;
         case WILDCARD_PAT:
           return 0;
+        case ANNOTATED_PAT:
+          return binderCount(((Ast.AnnotatedPat) pat).pat);
         case TUPLE_PAT:
           return ((Ast.TuplePat) pat)
               .args.stream().mapToInt(this::binderCount).sum();
@@ -3286,6 +3391,12 @@ public class Resolver {
 
         case WILDCARD_PAT:
           return true;
+
+        case ANNOTATED_PAT:
+          // The annotation is a claim about the type. What it claims that the
+          // type alone does not, `scan` conjoins into the query as a step, as
+          // the step list does; the pattern itself is what it wraps.
+          return destructurable(((Ast.AnnotatedPat) pat).pat);
 
         case TUPLE_PAT:
           return allMatch(((Ast.TuplePat) pat).args, this::destructurable);
