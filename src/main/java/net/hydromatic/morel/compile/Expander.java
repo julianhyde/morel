@@ -86,6 +86,7 @@ public class Expander {
       final Core.@Nullable From from2 =
           expandViaTree(typeSystem, nameGenerator, env, from, rowsUsed);
       if (from2 != null) {
+        RelShadow.groundedViaTree();
         return from2;
       }
     }
@@ -96,11 +97,16 @@ public class Expander {
    * Whether to ground a query by translating it to a tree, as step 2 of plan.md
    * is heading for, rather than over its steps.
    *
-   * <p>Temporary, and off: the two are being compared by the script suite's
-   * results, which is where `such-that.smli` earns its keep.
+   * <p>On: every script agrees with what the step list decided, which is the
+   * bar step C set, and `such-that.smli` is where that was earned. Setting
+   * {@code MOREL_GROUND_VIA_STEPS} puts it back, which is the way to tell
+   * whether a plan that has changed changed because of this.
+   *
+   * <p>The step list is still the fallback, for the queries {@link
+   * #expandViaTree} declines, so this is not yet the only way to ground.
    */
   private static final boolean VIA_TREE =
-      System.getenv("MOREL_GROUND_VIA_TREE") != null;
+      System.getenv("MOREL_GROUND_VIA_STEPS") == null;
 
   /**
    * Grounds a query by translating it to a relational tree, expanding that, and
