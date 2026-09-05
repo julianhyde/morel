@@ -77,6 +77,22 @@ public class RelLowerer {
   private final Deque<String> scanNames;
 
   /**
+   * Whether a collection may be scanned under a record pattern of the binders
+   * its own last step leaves.
+   *
+   * <p>True for grounding, whose collections it generated itself: scanning one
+   * under a single name leaves the builder unable to inline it -- it will not
+   * inline a collection that yields a record -- so the plan gains a scan and
+   * reads the fields back out of it, where the step list inlines and keeps the
+   * names.
+   *
+   * <p>False for the resolver, whose collections are the user's subqueries: a
+   * scan over one binds the name the user wrote, and binding the subquery's own
+   * names instead loses it.
+   */
+  private final boolean scanOwnBinders;
+
+  /**
    * Where binder ordinals come from.
    *
    * <p>The caller's, and not the type system's, because a name is unique only
@@ -90,10 +106,12 @@ public class RelLowerer {
   private RelLowerer(
       TypeSystem typeSystem,
       NameGenerator nameGenerator,
-      Iterable<String> scanNames) {
+      Iterable<String> scanNames,
+      boolean scanOwnBinders) {
     this.typeSystem = typeSystem;
     this.nameGenerator = nameGenerator;
     this.scanNames = new ArrayDeque<>(ImmutableList.copyOf(scanNames));
+    this.scanOwnBinders = scanOwnBinders;
   }
 
   /** Lowers a tree into an executable expression. */
@@ -110,7 +128,22 @@ public class RelLowerer {
       NameGenerator nameGenerator,
       Core.Exp exp,
       Iterable<String> scanNames) {
-    return new RelLowerer(typeSystem, nameGenerator, scanNames).lowerRel(exp);
+    return lower(typeSystem, nameGenerator, exp, scanNames, false);
+  }
+
+  /**
+   * Lowers a tree, naming each leaf scan's binder from {@code scanNames} and,
+   * if {@code scanOwnBinders}, scanning a collection under the binders its own
+   * last step leaves.
+   */
+  public static Core.Exp lower(
+      TypeSystem typeSystem,
+      NameGenerator nameGenerator,
+      Core.Exp exp,
+      Iterable<String> scanNames,
+      boolean scanOwnBinders) {
+    return new RelLowerer(typeSystem, nameGenerator, scanNames, scanOwnBinders)
+        .lowerRel(exp);
   }
 
   private Core.Exp lowerRel(Core.Exp exp) {
@@ -265,6 +298,19 @@ public class RelLowerer {
       // must be one binding before the join, not an expression over several.
       left = materialize(fromBuilder, left);
     }
+    if (inner(join) && join.right instanceof Core.Join && inner(join.right)) {
+      // Two inner joins nest to the right, but a step list has no nesting: it
+      // has a scan per leaf. Lowering the right input into this same builder
+      // gives that -- one scan each -- where scanning it as a subquery would
+      // give a scan of a collection that the plan then reads back apart.
+      Core.Rel right = (Core.Join) join.right;
+      if (join.binder != null) {
+        right = (Core.Rel) rename(right, join.binder, left);
+      }
+      final Core.Exp rightElement = lowerInto(fromBuilder, right);
+      fromBuilder.where(subst(join.condition, left, rightElement));
+      return element(join, left, rightElement);
+    }
     // A leaf right input is scanned here rather than by `scan`, so this is
     // where its name is due; a right input that is a tree scans its own
     // leaves, and taking a name here would take the one they are owed.
@@ -285,10 +331,24 @@ public class RelLowerer {
     // The element is the inputs' components in order (discussion.md §15). For
     // an outer join the scan has re-typed the bindings it can leave absent, so
     // the components are read off those, not the pattern variables.
-    final boolean inner = join.joinType == Core.Rel.JoinType.INNER;
+    final boolean inner = inner(join);
     final Core.Exp leftElement = inner ? left : rebind(fromBuilder, left);
     final Core.Exp rightElement =
         inner ? core.id(w) : rebind(fromBuilder, core.id(w));
+    return element(join, leftElement, rightElement);
+  }
+
+  /** Returns whether a join is an inner join. */
+  private static boolean inner(Core.Exp join) {
+    return ((Core.Join) join).joinType == Core.Rel.JoinType.INNER;
+  }
+
+  /**
+   * Returns a join's element: its inputs' components in order (discussion.md
+   * §15).
+   */
+  private Core.Exp element(
+      Core.Join join, Core.Exp leftElement, Core.Exp rightElement) {
     final List<Core.Exp> exps =
         new ArrayList<>(core.components(typeSystem, join.left, leftElement));
     exps.addAll(core.components(typeSystem, join.right, rightElement));
@@ -325,9 +385,33 @@ public class RelLowerer {
       // of one empty row, and a scan of `[()]` into a project over one.
       return core.unitLiteral();
     }
+    if (scanOwnBinders) {
+      final List<Core.NamedPat> own = bindersOf(collection);
+      if (own.size() > 1) {
+        fromBuilder.scan(core.recordOrAtomPat(typeSystem, own), collection);
+        return naturalElement(fromBuilder);
+      }
+    }
     final Core.IdPat v = scanPat(collection);
     fromBuilder.scan(v, collection);
     return rebind(fromBuilder, core.id(v));
+  }
+
+  /**
+   * Returns the binders a collection's own last step leaves, or empty if it is
+   * not a step list.
+   */
+  private static List<Core.NamedPat> bindersOf(Core.Exp collection) {
+    if (!(collection instanceof Core.From)) {
+      return ImmutableList.of();
+    }
+    final List<Core.FromStep> steps = ((Core.From) collection).steps;
+    if (steps.isEmpty()) {
+      return ImmutableList.of();
+    }
+    final List<Core.NamedPat> pats = new ArrayList<>();
+    last(steps).env.bindings.forEach(binding -> pats.add(binding.id));
+    return pats;
   }
 
   /**
