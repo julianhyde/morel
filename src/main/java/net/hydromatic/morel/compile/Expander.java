@@ -48,6 +48,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
@@ -156,6 +157,14 @@ public class Expander {
             scanNames.size() == leafPats.size()
                 ? scanNames
                 : ImmutableList.of());
+    if (misaddressed(lowered)) {
+      // A selector reading a field the row does not have. Replacing a join
+      // with a projection makes the element one component where it was
+      // several (discussion.md §16), and what reads it above was written for
+      // the other shape; `rebuild` does not rebase them. The step list's
+      // answer is the one to use until it does.
+      return null;
+    }
     if (!(lowered instanceof Core.From) || containsExtent(lowered)) {
       // An extent that survives is one the walk did not reach or could not
       // bound -- including one inside a nested query, which this walk does not
@@ -165,6 +174,32 @@ public class Expander {
       return null;
     }
     return (Core.From) lowered;
+  }
+
+  /**
+   * Returns whether an expression reads a field that its row does not have.
+   *
+   * <p>Cheap, and it catches the shape exactly: a selector carries the slot it
+   * was made for, and a substitution can put under it a row of fewer fields.
+   */
+  private static boolean misaddressed(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Apply apply) {
+            super.visit(apply);
+            if (apply.fn instanceof Core.RecordSelector
+                && apply.arg.type instanceof RecordLikeType
+                && ((Core.RecordSelector) apply.fn).slot
+                    >= ((RecordLikeType) apply.arg.type)
+                        .argNameTypes()
+                        .size()) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
   }
 
   /**

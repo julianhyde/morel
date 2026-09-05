@@ -35,6 +35,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -567,7 +568,12 @@ public class RelLowerer {
     if (exp instanceof Core.Apply) {
       final Core.Apply apply = (Core.Apply) exp;
       if (apply.fn instanceof Core.RecordSelector
-          && apply.arg instanceof Core.Tuple) {
+          && apply.arg instanceof Core.Tuple
+          // The selector reads a slot of the record it was made for, and
+          // only there is its slot this tuple's slot. A substitution can put
+          // a tuple under a selector built for another -- one of a different
+          // arity, and then the slot is not even in range.
+          && ((FnType) apply.fn.type).paramType.equals(apply.arg.type)) {
         final int slot = ((Core.RecordSelector) apply.fn).slot;
         return ((Core.Tuple) apply.arg).args.get(slot);
       }
