@@ -223,8 +223,10 @@ public class RelExpanderTest {
                 + "where (i, j) elem [(1, \"a\"), (2, \"b\")]"),
         is(
             "project [{i = #1 $0, j = #2 $0}]\n" //
-                + "  project [(#1 $0, #2 $0)]\n"
-                + "    [(1, \"a\"), (2, \"b\")]\n"));
+                + "  project [(#g$0 $0, #g$1 $0)]\n"
+                + "    from (g$0, g$1) in [(1, \"a\"), (2, \"b\")] "
+                + "group {g$0 = g$0, g$1 = g$1} "
+                + "order {g$0 = g$0, g$1 = g$1}\n"));
   }
 
   /**
