@@ -750,7 +750,14 @@ public class FromBuilder {
       if (arg.op != Op.ID) {
         return TupleType.OTHER;
       }
-      if (!((Core.Id) arg).idPat.name.equals(name)) {
+      final Core.IdPat idPat = (Core.IdPat) ((Core.Id) arg).idPat;
+      if (env.bindings.stream().noneMatch(b -> b.id.equals(idPat))) {
+        // The name is not one the row binds -- `yield {h = h}` where `h` comes
+        // from the enclosing scope -- so the record is not the row renamed,
+        // however much the names look alike.
+        return TupleType.OTHER;
+      }
+      if (!idPat.name.equals(name)) {
         identity = false;
       }
     }
