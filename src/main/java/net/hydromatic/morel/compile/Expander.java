@@ -103,6 +103,18 @@ public class Expander {
       System.getenv("MOREL_GROUND_VIA_STEPS") == null;
 
   /**
+   * Returns whether a query is grounded through its tree.
+   *
+   * <p>The resolver asks, because a query it builds natively can be one that
+   * only the tree can ground -- {@code from (b, i) where i elem [3, 5]} becomes
+   * a single scan of a pair, where the step list wants a pattern per component
+   * -- so putting grounding back has to put the step list back with it.
+   */
+  static boolean viaTree() {
+    return VIA_TREE;
+  }
+
+  /**
    * Grounds a query by translating it to a relational tree, expanding that, and
    * lowering it back.
    *
@@ -624,13 +636,21 @@ public class Expander {
     // The final result should only contain the original query patterns.
     if (!sharedPats.isEmpty()) {
       // Check if any shared patterns are in the current step environment
+      // What is in scope that is not a shared pattern, and whether any shared
+      // pattern is in scope at all. Asked this way round rather than "is it
+      // one of the query's own patterns": a step may have rebound the row --
+      // `distinct` groups on `x` and binds a new `x` -- and a name that is
+      // neither the query's nor shared is still a name the query returns.
       final List<Core.NamedPat> toProject = new ArrayList<>();
+      boolean anyShared = false;
       for (Binding binding : fromBuilder.stepEnv().bindings) {
-        if (originalPats.contains(binding.id)) {
+        if (sharedPats.contains(binding.id)) {
+          anyShared = true;
+        } else {
           toProject.add(binding.id);
         }
       }
-      if (toProject.size() < fromBuilder.stepEnv().bindings.size()) {
+      if (anyShared) {
         // Some shared patterns need to be projected away.
         // We also need distinct because projecting away variables that were
         // used for joining (like y in "exists y where edge(x,y) andalso

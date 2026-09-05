@@ -46,6 +46,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -2175,8 +2176,13 @@ public class Resolver {
       this.outer = outer;
     }
 
+    // Every simplification but FILTER_MERGE, which would turn the `where`
+    // steps the user wrote into one `andalso`. A tree is entitled to say it
+    // either way; a plan the user reads is not.
     final RelBuilder b =
-        RelBuilder.create(typeMap.typeSystem, Simplification.all());
+        RelBuilder.create(
+            typeMap.typeSystem,
+            EnumSet.complementOf(EnumSet.of(Simplification.FILTER_MERGE)));
 
     /**
      * Names that this query's steps bind.
@@ -2407,10 +2413,10 @@ public class Resolver {
      * all for {@code from _ in xs}, whose rows are {@code unit}.
      */
     private void scan(Ast.Scan scan) {
-      // `nativelyBuildable` refused a scan with no expression.
-      final Ast.Exp scanExp = requireNonNull(scan.exp);
+      final Ast.@Nullable Exp scanExp = scan.exp;
       if (b.size() == 0) {
-        binders.addAll(push(scan.pat, toCore(scanExp)));
+        binders.addAll(
+            push(scan.pat, scanExp == null ? extent(scan) : toCore(scanExp)));
         // Only a bare name leaves the element as the row; a pattern is erased,
         // and what it bound is read back out by paths.
         rowIsElement = scan.pat instanceof Ast.IdPat;
@@ -2422,7 +2428,8 @@ public class Resolver {
         // and an independent join is far the better one.
         final Core.IdPat binder =
             b.binder(typeMap.typeSystem.nameGenerator.get());
-        final Core.Exp collection = toCore(scanExp, core.id(binder));
+        final Core.Exp collection =
+            scanExp == null ? extent(scan) : toCore(scanExp, core.id(binder));
         final List<String> names = push(scan.pat, collection);
         b.pair();
         final Core.Exp condition =
@@ -2437,6 +2444,24 @@ public class Resolver {
       // than how many the scan added: `from a in [1], _ in [true]` binds one,
       // so its rows are ints and not records of one field.
       atom = binders.size() == 1;
+    }
+
+    /**
+     * Returns the collection that an unbounded scan -- {@code from i} -- scans:
+     * every value of the pattern's type. Grounding replaces it with something
+     * finite, or says that it cannot.
+     */
+    private Core.Exp extent(Ast.Scan scan) {
+      // The pattern's type, from the type map, rather than the pattern
+      // converted: converting it takes the name from the generator, and then
+      // the lowering's own scan of this collection finds `x` taken and calls
+      // itself `x_1`. The tree has no use for the pattern anyway -- `push`
+      // erases it to paths -- so only the type is wanted.
+      return core.extent(
+          scan.pat.pos,
+          typeMap.typeSystem,
+          typeMap.getType(scan.pat),
+          ImmutableRangeSet.of(Range.all()));
     }
 
     /** Returns the kind of join a scan's keyword asks for. */
@@ -3109,7 +3134,20 @@ public class Resolver {
         final Ast.FromStep step = steps.get(i);
         if (step instanceof Ast.Scan) {
           final Ast.Scan scan = (Ast.Scan) step;
-          if (scan.exp == null || !destructurable(scan.pat)) {
+          if (!destructurable(scan.pat)) {
+            return false;
+          }
+          if (scan.exp == null && !Expander.viaTree()) {
+            // Grounding is back on the step list, which cannot ground
+            // everything the tree path builds, so build nothing it cannot.
+            return false;
+          }
+          if (scan.exp == null && !flatNames(scan.pat)) {
+            // An unbounded scan's collection is every value of the pattern's
+            // type, and the step list flattens the pattern to name each value
+            // it generates -- `from {b, i}` scans `bool * int`, not the
+            // record. The tree's element is the pattern's own type, so the two
+            // agree only where flattening changes nothing.
             return false;
           }
           if (scan.condition != null && i == 0) {
@@ -3156,6 +3194,25 @@ public class Resolver {
         }
       }
       return true;
+    }
+
+    /**
+     * Returns whether a pattern names its type's values directly: a name, or a
+     * tuple of names.
+     */
+    private boolean flatNames(Ast.Pat pat) {
+      if (pat instanceof Ast.IdPat) {
+        return true;
+      }
+      if (pat instanceof Ast.TuplePat) {
+        for (Ast.Pat arg : ((Ast.TuplePat) pat).args) {
+          if (!(arg instanceof Ast.IdPat)) {
+            return false;
+          }
+        }
+        return true;
+      }
+      return false;
     }
 
     /**
