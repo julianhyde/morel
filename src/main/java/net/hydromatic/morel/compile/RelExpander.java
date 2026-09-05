@@ -24,6 +24,7 @@ import static net.hydromatic.morel.util.Static.last;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -125,6 +126,17 @@ public class RelExpander {
    * whole.
    */
   private int @Nullable [] dropped;
+
+  /**
+   * Names that the query's own leaves bind.
+   *
+   * <p>Told from two others: a name the scope around the query binds, and a
+   * name a generator introduced itself, from an {@code exists} inside the
+   * constraint. The first two are in scope where the generator is scanned and
+   * must be *tested* against what bound them; only the third is projected away.
+   * {@code Expander} asks the same question of its {@code allScanPats}.
+   */
+  private Set<Core.NamedPat> leafNames = ImmutableSet.of();
 
   /**
    * Conditions that a sealed generator subsumes, and that the filter they came
@@ -359,6 +371,11 @@ public class RelExpander {
     final int @Nullable [] outerDropped = dropped;
     dropped = null;
     final Frame frame = collect(join);
+    final Set<Core.NamedPat> outerLeafNames = leafNames;
+    final ImmutableSet.Builder<Core.NamedPat> leafNamesB =
+        ImmutableSet.builder();
+    frame.leaves.values().forEach(pat -> leafNamesB.addAll(pat.expand()));
+    leafNames = leafNamesB.build();
     final List<Core.Exp> constraints = new ArrayList<>(frame.constraints);
     final Map<Core.Exp, Core.Exp> originals =
         new IdentityHashMap<>(frame.originals);
@@ -422,6 +439,7 @@ public class RelExpander {
     if (dropped == null) {
       dropped = outerDropped;
     }
+    leafNames = outerLeafNames;
     return result;
   }
 
@@ -1209,6 +1227,7 @@ public class RelExpander {
     // whether a pattern is DONE or is not a scan pattern at all.
     final Map<Core.NamedPat, Core.Exp> tested = new LinkedHashMap<>();
     boolean projectsAway = false;
+    boolean weakened = false;
     for (Core.NamedPat p : generator.pat.expand()) {
       if (p.equals(pat)) {
         continue;
@@ -1216,11 +1235,30 @@ public class RelExpander {
       final Core.@Nullable Exp value = bound.get(p);
       if (value != null) {
         tested.put(p, value);
+      } else if (leafNames.contains(p)) {
+        // Another leaf of this query binds it. Reading it here would need a
+        // dependent join, which the schedule makes only when every leaf is an
+        // extent, so the name is projected away and the generator produces
+        // more rows than the constraint allows -- which is no matter while
+        // the filter above still tests it, and every matter once a sealed
+        // generator has taken it off. It has not earned that: it is not
+        // enforcing the constraint if it is used like this.
+        projectsAway = true;
+        weakened = true;
       } else if (env.getOpt(p) != null) {
+        // The scope around the query binds it, so it is in scope where the
+        // generator is scanned and needs no join to reach.
         tested.put(p, core.id(p));
       } else {
         projectsAway = true;
       }
+    }
+    if (weakened) {
+      // What this generator was thought to enforce, it does not. Keeping a
+      // conjunct that is enforced is only wasted work; dropping one that is
+      // not is a wrong answer.
+      subsumed.clear();
+      simplified.clear();
     }
     if (tested.isEmpty()
         && !projectsAway
@@ -1367,6 +1405,7 @@ public class RelExpander {
     final Generators.Cache cache = new Generators.Cache(typeSystem, env);
     Expander.ground(cache, extents, strengthen(constraints, extents));
     recordSubsumed(pat, cache, originals);
+    leafNames = ImmutableSet.copyOf(pat.expand());
     return bounded(leaf, pat, cache, ImmutableMap.of());
   }
 
