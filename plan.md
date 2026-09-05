@@ -1180,9 +1180,29 @@ something settled — §8's principle, applied to the sequence itself.
         type, so the two agree only for a name or a tuple of names,
         and the rest keep the step list.
 
-      What the remaining 96 want, by shape: an unbounded scan whose
-      pattern is not flat (37), `yield` with a binder, `group` with a
-      binder, and the set operators.
+      Then the annotated pattern, which is most of what was left:
+      `from i : int` and `from p : parityPair` are the way an
+      unbounded scan usually says what it ranges over. The annotation
+      is see-through for the pattern, but not for the type: a checked
+      type's condition belongs in the query, where grounding can use
+      it to generate the values rather than generate and reject them,
+      and without it `from n : nat where n elem [~2..2]` answered
+      `[~2,~1,0,1,2]`. The tree adds it as a step of its own, as the
+      step list does, reading the row out of the builder rather than
+      out of the pattern, which the tree does not have.
+
+      1780 of 1856 now. What the remaining 76 want: `yield` with a
+      binder, `group` with a binder, the set operators, and an
+      unbounded scan that binds more than one name.
+
+      That last one is a naming limit rather than a translation one.
+      `from (b, i)` grounds and answers correctly, but the tree erases
+      the pattern and the lowering can name a scan and not the parts
+      of one, so the components reach the plan as `w$26` -- and
+      grounding names them in the error it raises when it cannot bound
+      one, where `such-that.smli` expects `pattern 'i' is not
+      grounded`. Closing it means a name per component reaching the
+      lowering, which is a change to what `scanNames` carries.
 
       One consequence worth stating: a query the resolver now builds
       natively can be one that only the tree can ground -- `from (b,
