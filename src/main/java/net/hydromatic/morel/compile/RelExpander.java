@@ -266,8 +266,12 @@ public class RelExpander {
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
       final List<Core.Exp> conjuncts = core.decomposeAnd(filter.condition);
-      final List<Core.Exp> conditions2 = new ArrayList<>(conditions);
-      conditions2.addAll(conjuncts);
+      // This filter's conjuncts go before the ones already carried, which are
+      // from filters above it and so were written later. Order counts: where
+      // two constraints could each generate a name, the engine keeps the
+      // first, so the query's own order is the one to present them in.
+      final List<Core.Exp> conditions2 = new ArrayList<>(conjuncts);
+      conditions2.addAll(conditions);
       final Core.Exp input = expand(filter.input, conditions2);
       // A conjunct that a sealed generator subsumes is now enforced by the
       // collection that replaced the leaf, so the filter need not test it
@@ -1537,8 +1541,9 @@ public class RelExpander {
     }
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
-      final List<Core.Exp> conditions2 = new ArrayList<>(conditions);
-      conditions2.addAll(core.decomposeAnd(filter.condition));
+      final List<Core.Exp> conditions2 =
+          new ArrayList<>(core.decomposeAnd(filter.condition));
+      conditions2.addAll(conditions);
       ground(filter.input, conditions2, generators);
       return;
     }
