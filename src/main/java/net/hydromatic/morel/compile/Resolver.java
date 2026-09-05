@@ -2908,8 +2908,17 @@ public class Resolver {
      */
     private void yield_(Ast.Yield yield) {
       final Core.Exp exp = toCore(yield.exp);
-      final @Nullable String name = atomName(yield.exp);
       binders.clear();
+      if (yield.binder != null) {
+        // `yield r = e` names the whole row `r`, whatever `e` is: a record
+        // yielded this way binds one name and not its fields.
+        b.project(yield.binder.name, exp);
+        binders.add(yield.binder.name);
+        atom = true;
+        rowIsElement = true;
+        return;
+      }
+      final @Nullable String name = atomName(yield.exp);
       // 'record' is what the user wrote, not what the expression turned out to
       // be: a record with modifiers is a record, and yet it is a 'let' by the
       // time it gets here, so only the Ast can say.
@@ -3287,7 +3296,6 @@ public class Resolver {
             return false;
           }
           if (scan.condition != null && i == 0) {
-            // Nothing to join to.
             return false;
           }
           final int n = binderCount(scan.pat);
@@ -3321,9 +3329,6 @@ public class Resolver {
           }
           bound = binderCount(((Ast.Through) step).pat);
         } else if (step instanceof Ast.Yield) {
-          if (((Ast.Yield) step).binder != null) {
-            return false;
-          }
           bound = -1;
         } else {
           return false;
