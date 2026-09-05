@@ -1142,33 +1142,54 @@ something settled — §8's principle, applied to the sequence itself.
       reasoning about schedules had not found it, and the two lists
       side by side took a minute.
 
-- [ ] Unbounded scans, the last 324, and the reason is sharper than
-      "grounding reads step lists". Tried, and backed out; the branch
-      is green without it.
+- [x] Unbounded scans, mostly done: 1760 of the suite's 1856 queries
+      now build natively, up from 1528. The scan's collection is
+      `extent` of the pattern's type, exactly as the step list builds
+      it, and grounding -- which now goes through the tree -- takes it
+      from there.
 
-      **Grounding must run after inlining, and the resolver runs
-      before it.** The engine matches on *function literals*, and
-      until `Inliner` has run a built-in such as `elem` is still an
-      `Id` -- which `RelExpanderTest`'s own fixture says in a comment,
-      and which is why `Compiles` runs `SuchThatShuttle` in the inline
-      loop rather than at conversion. Two attempts, each answered by
-      the suite:
-      * Let the tree carry the extent and leave the lowered step list
-        to `SuchThatShuttle`, as today. The pattern is gone by then --
-        a tree erases it -- so the engine cannot tell a pattern that
-        named each component from one that named the whole, and the
-        inliner recursed until it overflowed the stack on
-        `from n where n elem [1,2,3]`.
-      * Call `RelExpander.expand` on the tree inside the resolver. The
-        tree is exactly right (`filter [$0 elem [1, 2, 3]]` over
-        `extent "int"`) and the engine finds no generator, because
-        `elem` is still an `Id`.
+      Two earlier attempts had been backed out, and the note here said
+      the move was blocked until a tree could survive as a tree until
+      after inlining (step 3), because the engine matches on function
+      literals and `elem` is an `Id` until `Inliner` has run. That is
+      still true of the two attempts, both of which tried to ground
+      *inside the resolver*. It is not true of this one, which leaves
+      grounding exactly where it was, in the inline loop; what the
+      resolver hands it is a step list either way. The stack overflow
+      the first attempt hit was the two-name-generator bug, found and
+      fixed later for an unrelated reason.
 
-      So the move is about *when*, not about which class: the tree has
-      to survive as a tree until after inlining, which is step 3's
-      business (`Core.Rel` reaching the compiler) rather than a slice
-      of the flip. Until then unbounded queries keep the step list,
-      and that is the whole of what does.
+      Three things were wrong, and two were bugs of the existing
+      grounding rather than of the tree:
+
+      * **The pattern's name was spent twice.** Converting the pattern
+        to get the extent's type took its ordinal from the generator,
+        so the lowering's own scan found `x` taken and called itself
+        `x_1`. The type map has the type without converting anything.
+      * **A group's key name was assumed to be its value's name.**
+        `Expander` projects its shared patterns away at the end, and
+        decided which by asking which bindings are the query's own.
+        After `distinct` groups on `x_1` and binds a new `x`, none
+        are, so it projected them all away and the query returned
+        `unit list`. It now asks the question the other way up --
+        which bindings are shared -- and does nothing when none is.
+        The old test passed only because the two names usually agree.
+      * **Flattening a pattern changes its type.** `from {b, i}` scans
+        `bool * int` in the step list, not the record, because
+        `extentPat` flattens. The tree's element is the pattern's own
+        type, so the two agree only for a name or a tuple of names,
+        and the rest keep the step list.
+
+      What the remaining 96 want, by shape: an unbounded scan whose
+      pattern is not flat (37), `yield` with a binder, `group` with a
+      binder, and the set operators.
+
+      One consequence worth stating: a query the resolver now builds
+      natively can be one that only the tree can ground -- `from (b,
+      i) where i elem [3, 5]` is a single scan of a pair, where the
+      step list wants a pattern per component. So
+      `MOREL_GROUND_VIA_STEPS` puts the native path for unbounded
+      scans back too; it is one switch for one old world, not two.
 - [ ] Then flip for real: every query flows through the tree, and the
       suite checks the translation by its results. `Sys.plan` output
       changes (it prints the *executable* plan, which is exactly what
