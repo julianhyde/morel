@@ -1088,6 +1088,34 @@ something settled — §8's principle, applied to the sequence itself.
       end's bookkeeping: `RelExpander` looks up provenance by
       identity, and `strengthen` is written to preserve it.
 
+- [ ] Step C's remainder: eight lines of plan text in
+      such-that.smli, and nothing else. Three of the four files that
+      differed when the switch was turned on now pass entirely under
+      the tree grounding -- blog.smli from 790 differing lines,
+      fixed-point.smli from 477, optimize.smli from 155 -- and
+      such-that.smli is at 8 from 1102, with no crashes, no wrong
+      answers and no orderings left.
+
+      What the eight are: the tree scans a grounded collection under
+      one name and reads the fields back out of it, where the step
+      list inlines the scan and keeps the names.
+
+          step  from ({deptno = dno, ...}) in ... group {dno, name}
+                order ... where dno > 20
+          tree  from dno in (from ({deptno = dno_1, ...}) in ...
+                group ... order ...) where #dno dno > 20 yield {...}
+
+      `FromBuilder` will not inline a collection that yields a record
+      under a scan of one name, and the step list scans it under a
+      record pattern of the names it wants, which inlines. Making
+      `RelLowerer.scan` do the same was tried and reverted: the
+      lowering is shared with the flip, where a scan over a user's
+      subquery must bind the user's `x` and not the subquery's own
+      names, and dual.smli said so at once -- `unbound variable
+      deptno_6`. Closing it means telling the lowering which
+      collections may be scanned under their own binders, which is a
+      distinction its caller has and it does not.
+
 - [ ] Unbounded scans, the last 324, and the reason is sharper than
       "grounding reads step lists". Tried, and backed out; the branch
       is green without it.
