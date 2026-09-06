@@ -32,6 +32,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
@@ -185,7 +186,7 @@ public class Expander {
             nameGenerator,
             expanded,
             scanNames.size() == leafPats.size()
-                ? scanNames
+                ? Lists.transform(scanNames, ImmutableList::of)
                 : ImmutableList.of(),
             true,
             leafNames);
