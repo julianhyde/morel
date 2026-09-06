@@ -166,6 +166,10 @@ public class RelTranslatorTest {
    * whose right input yields one element where the pattern matches and none
    * where it does not. The list datatype escapes this because {@code null},
    * {@code hd} and {@code tl} are exactly the accessors it lacks.
+   *
+   * <p>The binder is named by the resolver's generator rather than this
+   * translation's, because the resolver builds this query as a tree and the
+   * step list translated here is what it lowered to.
    */
   @Test
   void testConstructorPattern() {
@@ -173,9 +177,9 @@ public class RelTranslatorTest {
         plan("from (SOME i) in [SOME 1, NONE] yield i"),
         is(
             "project [#2 $0]\n" //
-                + "  join [v$0]\n"
+                + "  join [w$0]\n"
                 + "    [SOME 1, NONE]\n"
-                + "    case v$0 of SOME(i) => [i] | _ => []\n"));
+                + "    case w$0 of SOME(i) => [i] | _ => []\n"));
   }
 
   /**
