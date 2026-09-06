@@ -570,12 +570,12 @@ public class RelBuilder {
     if (i == 0) {
       return exp;
     }
-    final Core.Id input = core.input(frame(i).rel.type.elementType(), i);
+    final Core.Input input = core.input(frame(i).rel.type.elementType(), i);
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.Exp visit(Core.Id id) {
-            return id.idPat.name.equals(CoreBuilder.INPUT_0) ? input : id;
+          protected Core.Exp visit(Core.Input input0) {
+            return input0.i == 0 ? input : input0;
           }
         });
   }
@@ -853,7 +853,7 @@ public class RelBuilder {
    */
   private Core.Exp optionize(
       Core.Exp access, Core.Exp rawRef, Core.Exp component) {
-    if (access.op == Op.ID) {
+    if (access.op == Op.INPUT) {
       return component;
     }
     final Core.IdPat param =
@@ -965,8 +965,7 @@ public class RelBuilder {
   }
 
   private static boolean isInput0(Core.Exp exp) {
-    return exp.op == Op.ID
-        && ((Core.Id) exp).idPat.name.equals(CoreBuilder.INPUT_0);
+    return exp.op == Op.INPUT && ((Core.Input) exp).i == 0;
   }
 
   private static boolean isIntLiteral(Core.Exp exp, int value) {
@@ -1017,8 +1016,8 @@ public class RelBuilder {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.Exp visit(Core.Id id) {
-            return isInput0(id) ? core.at(e0, id.pos) : id;
+          protected Core.Exp visit(Core.Input input) {
+            return input.i == 0 ? core.at(e0, input.pos) : input;
           }
         });
   }

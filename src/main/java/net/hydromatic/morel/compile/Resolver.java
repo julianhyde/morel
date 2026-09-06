@@ -3122,15 +3122,14 @@ public class Resolver {
      * -- to read it as {@code element} instead.
      */
     private Core.Exp rootAt(Core.Exp path, Core.Exp element) {
-      if (element.op == Op.ID
-          && ((Core.Id) element).idPat.name.equals(CoreBuilder.INPUT_0)) {
+      if (element.op == Op.INPUT && ((Core.Input) element).i == 0) {
         return path;
       }
       return path.accept(
           new Shuttle(typeMap.typeSystem) {
             @Override
-            protected Core.Exp visit(Core.Id id) {
-              return id.idPat.name.equals(CoreBuilder.INPUT_0) ? element : id;
+            protected Core.Exp visit(Core.Input input) {
+              return input.i == 0 ? core.at(element, input.pos) : input;
             }
           });
     }

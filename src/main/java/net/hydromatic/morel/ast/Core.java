@@ -816,6 +816,55 @@ public class Core {
     }
   }
 
+  /**
+   * Reference to the element of a node's input: {@code $0} for a one-input node
+   * and for a join's left input, {@code $1} for a join's right.
+   *
+   * <p>Not an {@link Id}, and that is the point (discussion.md §17). It is
+   * bound by the node that encloses it, not by anything the query wrote, so a
+   * pass that reasons about variables must not see it as one: {@code $0} in two
+   * nodes is two different things, and an {@code IdPat} of the same name would
+   * make them one.
+   */
+  public static class Input extends Exp {
+    /** Which input: 0 for the only or left one, 1 for a join's right. */
+    public final int i;
+
+    Input(Pos pos, Type type, int i) {
+      super(pos, Op.INPUT, type);
+      checkArgument(i == 0 || i == 1, "input %s", i);
+      this.i = i;
+    }
+
+    @Override
+    public int hashCode() {
+      return i;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      // Not the type: an expression that reads `$0` is the same expression
+      // wherever it is written, and a rule that moves one between nodes of
+      // different element types is caught by the validator, not here.
+      return o == this || o instanceof Input && ((Input) o).i == i;
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      return w.append("$" + i);
+    }
+  }
+
   /** Record selector function. */
   public static class RecordSelector extends Exp {
     /**
