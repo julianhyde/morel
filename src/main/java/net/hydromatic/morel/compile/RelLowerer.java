@@ -341,9 +341,13 @@ public class RelLowerer {
    */
   private Core.Exp lowerJoin(FromBuilder fromBuilder, Core.Join join) {
     Core.Exp left = lowerInto(fromBuilder, join.left);
-    if (join.joinType != Core.Rel.JoinType.INNER) {
-      // An outer join wraps whole bindings in 'option', so the left element
-      // must be one binding before the join, not an expression over several.
+    if (join.joinType != Core.Rel.JoinType.INNER
+        && fromBuilder.stepEnv().bindings.size() <= 1) {
+      // An outer join wraps a binding in 'option', so a left element of one
+      // binding must be that binding and not an expression over it. Several
+      // stay several: the scan wraps each of them, which is what gives one
+      // option per component (discussion.md §15), and collapsing them into
+      // one binding first would give one option over the lot.
       left = materialize(fromBuilder, left);
     }
     if (inner(join) && join.right instanceof Core.Join && inner(join.right)) {
@@ -560,6 +564,15 @@ public class RelLowerer {
    * builder inlined a scan under a different name.
    */
   private Core.Exp rebind(FromBuilder fromBuilder, Core.Exp exp) {
+    if (exp.op == Op.TUPLE) {
+      // The components of a side that the scan has re-typed one binding at a
+      // time. Rebuilt rather than copied: each component's type has changed,
+      // so the tuple's has too, and a copy would keep the old one.
+      final List<Core.Exp> args = new ArrayList<>();
+      ((Core.Tuple) exp)
+          .args.forEach(arg -> args.add(rebind(fromBuilder, arg)));
+      return core.tuple(typeSystem, null, args);
+    }
     if (exp.op != Op.ID) {
       return exp;
     }

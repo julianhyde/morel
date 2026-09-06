@@ -1275,12 +1275,32 @@ something settled — §8's principle, applied to the sequence itself.
       did this; only the gate had to learn that an unbounded scan asks
       a weaker question than a bounded one.
 
-      1854 of 1856. What is left is two chained outer joins, and that
-      one is not a gap in the translation: a tree's outer join wraps
-      one component in `option` and the step list wraps each binding
-      of the absent side separately, so the second join of a chain
-      sees `(a * b) option` where the query has `a option * b option`.
-      The step list's answer is the one the user has seen.
+      1854 of 1856, and then all 1856. The two that were left were
+      chained outer joins, and the note here had them down as a
+      decision about the IR. They were not: §15 had already decided
+      it -- "a concatenation gives each component of the absent side
+      its own option, and a component is a binder's value, which is
+      Morel's rule exactly" -- and the implementation had drifted.
+      `CoreBuilder.joinElementType` wraps per component, as §15 says;
+      `isFlat` said an outer join is one component, which is the
+      *pair* §15 rejected, and the two contradicted each other.
+
+      The reason `isFlat` gave was that "the step list the tree lowers
+      to re-types whole bindings, not fields of them". It re-types
+      each binding, and additively -- its own comment says so, and
+      that is where `int option option` comes from when two outer
+      joins chain.
+
+      So `isFlat` is true for every join, and three things follow.
+      The lowering leaves a side of several bindings apart rather than
+      materializing it into one, so the scan wraps each. `rebind`
+      handles an expression over several bindings, rebuilding the
+      tuple rather than copying it, because the components' types have
+      changed. And a name that reads *into* an option-wrapped
+      component maps through the option, which is the `Option.map`
+      that `RelTranslator` already had for exactly this: `left join
+      (j, k) in pairs` binds two names inside one component, and they
+      are `int option` apiece.
 
       **Measured, not assumed.** Letting them through and following
       the failure narrows it to one place. The lowering *can* produce
@@ -1325,12 +1345,9 @@ something settled — §8's principle, applied to the sequence itself.
       step list wants a pattern per component. So
       `MOREL_GROUND_VIA_STEPS` puts the native path for unbounded
       scans back too; it is one switch for one old world, not two.
-- [x] Then flip for real, as far as it goes: 1854 of the suite's 1856
-      queries flow through the tree, and the suite checks the
-      translation by its results. The two that do not are chained
-      outer joins, where the tree and the step list disagree about the
-      type of the absent side, and that is a design question for the
-      `option` shape rather than a hole in the translation.
+- [x] Then flip for real: every one of the suite's 1856 queries flows
+      through the tree, and the suite checks the translation by its
+      results.
 - [ ] Delete the AST→From path; the resolver builds trees natively.
       Build them through a *builder*, not by constructing nodes
       directly and not by aping `FromBuilder`. The research is done
