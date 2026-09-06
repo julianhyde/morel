@@ -2651,6 +2651,62 @@ public class Resolver {
       return core.record(typeMap.typeSystem, nameExps);
     }
 
+    /**
+     * Scans a collection under a pattern that filters but has no total test: a
+     * user datatype's constructor, which needs a {@code case} both to ask
+     * whether a value matches and to reach what it holds.
+     *
+     * <p>The {@code case} yields a collection of nought or one row, and a
+     * dependent join over it is the flat-map that keeps the rows that match --
+     * the same shape {@code RelTranslator} builds for such a scan. The join's
+     * left component is the value that was matched, which nothing above wants,
+     * so a projection drops it.
+     */
+    private List<String> pushMatching(Core.Pat pat, Core.Exp collection) {
+      final List<Core.NamedPat> bound = pat.expand();
+      final Core.Exp element = core.recordOrAtom(typeMap.typeSystem, bound);
+      final Type elementType = collection.type.elementType();
+      b.push(collection);
+      final Core.IdPat binder =
+          b.binder(typeMap.typeSystem.nameGenerator.get());
+      final Core.Exp body =
+          core.caseOf(
+              Pos.ZERO,
+              typeMap.typeSystem.listType(element.type),
+              core.id(binder),
+              ImmutableList.of(
+                  core.match(
+                      Pos.ZERO,
+                      pat,
+                      core.list(
+                          typeMap.typeSystem,
+                          element.type,
+                          ImmutableList.of(element))),
+                  core.match(
+                      Pos.ZERO,
+                      core.wildcardPat(elementType),
+                      core.list(
+                          typeMap.typeSystem,
+                          element.type,
+                          ImmutableList.of()))));
+      b.push(body);
+      b.pair();
+      b.join(Core.Rel.JoinType.INNER, binder, core.boolLiteral(true));
+      final Core.Exp matched = core.field(typeMap.typeSystem, b.input(0), 1);
+      final List<String> names = new ArrayList<>();
+      bound.forEach(p -> names.add(p.name));
+      if (names.size() == 1) {
+        // One binder names the row, so the projection has to say the name; a
+        // record's fields the builder names for us.
+        b.project(names.get(0), matched);
+      } else {
+        b.project(matched);
+      }
+      // The pattern is gone, and what it bound is read back out by paths.
+      scanNames.add(ImmutableList.of());
+      return names;
+    }
+
     /** Returns the collection of every value of a type. */
     private Core.Exp extent(Pos pos, Type type) {
       return core.extent(
@@ -2709,6 +2765,10 @@ public class Resolver {
 
     /** As {@link #push(Ast.Pat, Core.Exp)}, for a pattern already converted. */
     private List<String> push(Core.Pat corePat, Core.Exp collection) {
+      if (!RelBuilder.destructurable(corePat)
+          && !RelBuilder.testable(corePat)) {
+        return pushMatching(corePat, collection);
+      }
       b.push(corePat, collection);
       final List<String> names = new ArrayList<>();
       corePat.accept(
@@ -3385,9 +3445,7 @@ public class Resolver {
         final Ast.FromStep step = steps.get(i);
         if (step instanceof Ast.Scan) {
           final Ast.Scan scan = (Ast.Scan) step;
-          if (scan.exp == null
-              ? !enumerable(scan.pat)
-              : !destructurable(scan.pat)) {
+          if (scan.exp == null && !enumerable(scan.pat)) {
             return false;
           }
           if (scan.exp == null && !Expander.viaTree()) {
@@ -3417,9 +3475,6 @@ public class Resolver {
           // it would see is not known here.
           bound = -1;
         } else if (step instanceof Ast.Through) {
-          if (!destructurable(((Ast.Through) step).pat)) {
-            return false;
-          }
           bound = binderCount(((Ast.Through) step).pat);
         } else if (step instanceof Ast.Yield) {
           bound = -1;
