@@ -3385,7 +3385,9 @@ public class Resolver {
         final Ast.FromStep step = steps.get(i);
         if (step instanceof Ast.Scan) {
           final Ast.Scan scan = (Ast.Scan) step;
-          if (!destructurable(scan.pat)) {
+          if (scan.exp == null
+              ? !enumerable(scan.pat)
+              : !destructurable(scan.pat)) {
             return false;
           }
           if (scan.exp == null && !Expander.viaTree()) {
@@ -3433,6 +3435,32 @@ public class Resolver {
     }
 
     /**
+     * Returns whether an unbounded scan's pattern can be enumerated as a tree.
+     *
+     * <p>Weaker than {@link #destructurable}, because such a scan generates the
+     * values that match rather than filtering values it is given: {@link
+     * #extentPat} keeps only the pattern's variables, so a constructor or a
+     * literal in it says which values are wanted and then plays no further part
+     * -- {@code from SOME (i : int)} scans the extent of {@code int}.
+     *
+     * <p>An "as" pattern is the exception {@code extentPat} makes, keeping the
+     * pattern whole, so that one has to be destructurable as it stands.
+     */
+    private boolean enumerable(Ast.Pat pat) {
+      return containsAs(pat) ? destructurable(pat) : true;
+    }
+
+    /** Returns whether a pattern has an "as" anywhere within it. */
+    private boolean containsAs(Ast.Pat pat) {
+      if (pat.op == Op.AS_PAT) {
+        return true;
+      }
+      final AtomicBoolean found = new AtomicBoolean();
+      pat.forEachArg((arg, i) -> found.compareAndSet(false, containsAs(arg)));
+      return found.get();
+    }
+
+    /**
      * Returns whether an outer join's absent side binds one name, which is when
      * the tree and the step list agree about its type.
      *
@@ -3462,8 +3490,6 @@ public class Resolver {
           return 1;
         case WILDCARD_PAT:
           return 0;
-        case AS_PAT:
-          return 1 + binderCount(((Ast.AsPat) pat).pat);
         case ANNOTATED_PAT:
           return binderCount(((Ast.AnnotatedPat) pat).pat);
         case TUPLE_PAT:
@@ -3472,6 +3498,10 @@ public class Resolver {
         case RECORD_PAT:
           return ((Ast.RecordPat) pat)
               .args.values().stream().mapToInt(this::binderCount).sum();
+        case CON_PAT:
+          return binderCount(((Ast.ConPat) pat).pat);
+        case AS_PAT:
+          return 1 + binderCount(((Ast.AsPat) pat).pat);
         case CONS_PAT:
           return binderCount(((Ast.InfixPat) pat).p0)
               + binderCount(((Ast.InfixPat) pat).p1);
