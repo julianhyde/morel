@@ -1237,9 +1237,26 @@ something settled — §8's principle, applied to the sequence itself.
       output across ten files, because those plans are named the way
       they are for reasons of their own.
 
-      What the remaining 22 want: a scan whose pattern can fail to
-      match -- a constructor, a literal, a cons, an "as" (16) -- a
-      record scan pattern (4), and two chained outer joins.
+      Then the scan whose pattern can fail to match, which is the
+      last slice worth a name and takes it to 1844. A pattern that can
+      fail filters as well as binds, and the two halves are separate
+      nodes: a filter for the condition, the paths for the binding.
+      `RelTranslator` had worked that out already -- it is how it
+      translates such a scan -- so the move was to put `test` and
+      `testable` where `RelBuilder` can reach them, beside
+      `destructurable`, which is the question they answer a harder
+      version of. `RelTranslator` now asks `RelBuilder` rather than
+      keeping its own copy.
+
+      Left with the step list: a user datatype's constructor, which
+      has no total accessor for what it holds and so needs a `case`,
+      and an "as" pattern, whose variable and its parts are not
+      independent.
+
+      Two plans in `RelTranslatorTest` lost a projection by it: the
+      tree names what a cons pattern binds with paths rather than
+      binding it, so nothing materializes the `xs` that `from (x ::
+      xs) ... yield x` does not read.
 
       That last one is a naming limit rather than a translation one.
       `from (b, i)` grounds and answers correctly, but the tree erases
