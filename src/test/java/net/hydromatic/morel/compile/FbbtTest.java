@@ -20,12 +20,11 @@ package net.hydromatic.morel.compile;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasToString;
-import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -100,7 +99,7 @@ public class FbbtTest {
 
   /** Returns the conjunction of {@code exps}. */
   private Core.Exp and(Core.Exp... exps) {
-    return core.andAlso(typeSystem, ImmutableSet.copyOf(exps));
+    return core.andAlso(typeSystem, ImmutableList.copyOf(exps));
   }
 
   /**
@@ -372,9 +371,11 @@ public class FbbtTest {
             core.lessThan(typeSystem, xId, zId));
     final Core.Exp result =
         Fbbt.strengthen(typeSystem, ImmutableSet.of(xPat), w);
-    // 'x < 3' is deduced; nothing is deduced for 'z'.
-    assertThat(result, hasToString(startsWith("x < 3 andalso")));
-    assertThat(result.toString(), not(containsString("z >= 1 andalso z >= 1")));
+    // 'x < 3' is deduced, and the conjuncts about 'z' are the ones we
+    // started with: nothing is deduced for 'z'.
+    assertThat(
+        result,
+        hasToString("x < 3 andalso (z >= 1 andalso (z <= 3 andalso x < z))"));
   }
 }
 

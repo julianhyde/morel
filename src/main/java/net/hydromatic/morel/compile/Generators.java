@@ -4245,10 +4245,6 @@ class Generators {
     final Map<Pair<Core.NamedPat, Integer>, Core.IdPat> fieldPats =
         new LinkedHashMap<>();
 
-    Cache(TypeSystem typeSystem, Environment env) {
-      this(typeSystem, env, ImmutableSet.of());
-    }
-
     Cache(
         TypeSystem typeSystem,
         Environment env,

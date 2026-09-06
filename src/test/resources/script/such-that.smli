@@ -760,6 +760,23 @@ from x in [3, 5, 7], y
 >
 > val it : {count:int, y:int} list
 
+(* Preferring the dependent generator changes the order in which rows
+ * come out. Here 'y' bounds 'x', so 'y' is enumerated in the outer
+ * loop and the rows are y-major; before, 'x' came from a constant
+ * range in the outer loop and they were x-major. Neither query is
+ * ordered, so neither order is wrong, but the choice is observable. *)
+from x, y in [3, 5] where x > 0 andalso x < 10 andalso x < y;
+> x y
+> - -
+> 1 3
+> 2 3
+> 1 5
+> 2 5
+> 3 5
+> 4 5
+>
+> val it : {x:int, y:int} list
+
 (* A scan whose expression mentions an unbounded variable cannot run
  * until that variable has a generator, so its own variable is no
  * better as a bound. If 'y' were the upper bound of 'x' here, each

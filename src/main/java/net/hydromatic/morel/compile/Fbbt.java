@@ -51,20 +51,22 @@ import org.jspecify.annotations.Nullable;
  * where} clause as conjuncts; the existing range extractor in {@link
  * Generators} then turns them into finite generators.
  *
- * <p>Current scope: int- or real-valued patterns over (a) linear constraints of
- * the form {@code (varA + kA) OP (varB + kB)} for {@code OP} in {@code <, <=,
- * >, >=, =}, where {@code kA} and {@code kB} are numeric literal offsets and
- * either side may be a bare constant; (b) {@code abs(x) OP c} for the
- * connected-interval cases ({@code <}, {@code <=}, and {@code = 0}); and (c)
- * {@code (a * b) OP c} with non-negative operands. For real-typed patterns FBBT
- * deduces bounds the same way it does for int, but real extents are uncountable
- * so the downstream "not grounded" check still fires when nothing else makes
- * the pattern finite (e.g. a literal range scan, or a finite source like {@code
- * from e in emps}).
+ * <p>Current scope: int- or real-valued patterns over (a) linear constraints,
+ * for {@code OP} in {@code <, <=, >, >=, =}, with each side a sum of terms
+ * {@code c * atom} and a constant, where an atom is a variable or an absolute
+ * value {@code abs (e)} whose argument is itself linear; and (b) {@code (a * b)
+ * OP c} with non-negative operands. Each constraint is propagated on its own,
+ * so what one constraint cannot see, FBBT cannot deduce; combining constraints
+ * would be Fourier-Motzkin, which this is not.
  *
- * <p>Shares the {@link Bounds.Term} decomposition and {@link
- * Bounds#linearTerm}, {@link Bounds#numericLiteral} helpers with {@link
- * Generators} and {@link RangePushdown}.
+ * <p>For real-typed patterns FBBT deduces bounds the same way it does for int,
+ * but real extents are uncountable so the downstream "not grounded" check still
+ * fires when nothing else makes the pattern finite (e.g. a literal range scan,
+ * or a finite source like {@code from e in emps}).
+ *
+ * <p>Shares the {@link Bounds.LinearForm} decomposition and the {@link
+ * Bounds#linearForm}, {@link Bounds#linearTerm}, {@link Bounds#numericLiteral}
+ * helpers with {@link Generators} and {@link RangePushdown}.
  *
  * <p>See <a href="https://github.com/hydromatic/morel/issues/373">issue
  * #373</a>.
