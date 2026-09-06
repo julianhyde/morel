@@ -181,24 +181,25 @@ public class RelTranslatorTest {
   /**
    * Tests {@code group}, {@code order}, {@code skip} and {@code take}.
    *
-   * <p>The identity projection over the group is the {@code yield i} that the
-   * resolver leaves in the step list, not something the translation adds.
+   * <p>The projection over the group is the translation's: the group builds a
+   * record whether it has one label or many, and this query's value is the bare
+   * key, so an ordinary projection of the field says so. That projection is a
+   * node a rule can see and move, where a group that collapsed its own element
+   * was not (discussion.md §14).
    *
-   * <p>The projection below it is: the group builds a record whether it has one
-   * label or many, and this query's value is the bare key, so an ordinary
-   * projection of the field says so. That projection is a node a rule can see
-   * and move, where a group that collapsed its own element was not
-   * (discussion.md §14).
+   * <p>There was a second, identity projection over it once -- the {@code yield
+   * i} the resolver used to leave in the step list -- and there is not now,
+   * because the resolver builds a {@code group} with a binder natively and the
+   * tree has no reason to say the row twice.
    */
   @Test
   void testGroupOrderSkipTake() {
     assertThat(
         plan("from i in [1, 2, 3] group j = i"),
         is(
-            "project [$0]\n" //
-                + "  project [#i $0]\n"
-                + "    group [i = $0]\n"
-                + "      [1, 2, 3]\n"));
+            "project [#i $0]\n" //
+                + "  group [i = $0]\n"
+                + "    [1, 2, 3]\n"));
     assertThat(
         plan("from i in [1, 2, 3] order i skip 1 take 1"),
         is(
