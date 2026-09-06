@@ -721,14 +721,14 @@ public class RelLowerer {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.Exp visit(Core.Id id) {
-            if (e0 != null && id.idPat.name.equals("$0")) {
-              return core.at(e0, id.pos);
+          protected Core.Exp visit(Core.Input input) {
+            if (e0 != null && input.i == 0) {
+              return core.at(e0, input.pos);
             }
-            if (e1 != null && id.idPat.name.equals("$1")) {
-              return core.at(e1, id.pos);
+            if (e1 != null && input.i == 1) {
+              return core.at(e1, input.pos);
             }
-            return id;
+            return input;
           }
 
           @Override
