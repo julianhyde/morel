@@ -975,17 +975,19 @@ public enum CoreBuilder {
 
   /**
    * Returns whether a join's components are its inputs' components rather than
-   * one apiece.
+   * one apiece. Every join's are (discussion.md §15).
    *
-   * <p>An inner join flattens. An outer join does not: its element has each
-   * component of the absent side option-wrapped, and a join above it would have
-   * to wrap them again, one option per component, which nothing below can
-   * express -- the step list the tree lowers to re-types whole bindings, not
-   * fields of them. So an outer join is one component, and a projection above
-   * it can take it apart where a query wants the parts.
+   * <p>An outer join wraps each component of the absent side in {@code option},
+   * one option per component, which is Morel's own rule: {@code left join (j,
+   * k) in pairs} binds {@code j : int option} and {@code k : int option}, not
+   * {@code (int * int) option} (spec.md §3.4). A join above one wraps them
+   * again, and the step list says the same thing -- a scan with an outer join
+   * re-types each binding of the side it can leave absent, and wrapping is
+   * additive, which is where {@code int option option} comes from when two
+   * outer joins chain.
    */
   private static boolean isFlat(Core.Join join) {
-    return join.joinType == Core.Rel.JoinType.INNER;
+    return true;
   }
 
   /** Returns the element type of a join: its inputs' components, in order. */

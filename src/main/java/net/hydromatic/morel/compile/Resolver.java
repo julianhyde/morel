@@ -3398,11 +3398,7 @@ public class Resolver {
           if (scan.condition != null && i == 0) {
             return false;
           }
-          final int n = binderCount(scan.pat);
-          if (scan.op != Op.SCAN && !outerJoinAgrees(scan.op, bound, n)) {
-            return false;
-          }
-          bound = bound < 0 ? -1 : bound + n;
+          bound = bound < 0 ? -1 : bound + binderCount(scan.pat);
         } else if (step instanceof Ast.Where
             || step instanceof Ast.Order
             || step instanceof Ast.Unorder
@@ -3458,29 +3454,6 @@ public class Resolver {
       final AtomicBoolean found = new AtomicBoolean();
       pat.forEachArg((arg, i) -> found.compareAndSet(false, containsAs(arg)));
       return found.get();
-    }
-
-    /**
-     * Returns whether an outer join's absent side binds one name, which is when
-     * the tree and the step list agree about its type.
-     *
-     * <p>A tree's outer join contributes one component, and wraps it in {@code
-     * option} (discussion.md §15); the step list wraps each binding of the
-     * absent side separately. For one binding those are the same type, and for
-     * several they are not -- {@code (a * b) option} against {@code a option *
-     * b option} -- and it is the step list's answer that the user has seen.
-     * Chained outer joins are the case that finds it: the second one's left
-     * side is the first join, which binds two.
-     */
-    private boolean outerJoinAgrees(Op op, int leftCount, int rightCount) {
-      switch (op) {
-        case LEFT_JOIN:
-          return rightCount == 1;
-        case RIGHT_JOIN:
-          return leftCount == 1;
-        default:
-          return leftCount == 1 && rightCount == 1;
-      }
     }
 
     /** Returns how many names a pattern binds. */
