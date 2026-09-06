@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.FromBuilder;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
@@ -894,7 +893,7 @@ public class RelExpander {
    * tree above expects: the last {@code k} first, then the first {@code m}.
    */
   private Core.Exp permute(Core.Exp join, int m, int k) {
-    final Core.Id element = core.input0(join.type.elementType());
+    final Core.Input element = core.input0(join.type.elementType());
     final List<Core.Exp> exps = new ArrayList<>();
     for (int i = 0; i < k; i++) {
       exps.add(core.field(typeSystem, element, m + i));
@@ -920,13 +919,11 @@ public class RelExpander {
           @Override
           protected Core.Exp visit(Core.Apply apply) {
             if (apply.fn instanceof Core.RecordSelector
-                && apply.arg.op == Op.ID
-                && ((Core.Id) apply.arg)
-                    .idPat.name.equals(CoreBuilder.INPUT_0)) {
+                && apply.arg.op == Op.INPUT
+                && ((Core.Input) apply.arg).i == 0) {
               final int slot = ((Core.RecordSelector) apply.fn).slot;
               if (slot >= drop[0]) {
-                final Core.Exp element =
-                    core.input0(((Core.Id) apply.arg).type);
+                final Core.Exp element = core.input0(apply.arg.type);
                 return drop[1] == 1
                     ? core.input0(apply.type)
                     : core.field(typeSystem, element, slot - drop[0]);
@@ -1731,14 +1728,14 @@ public class RelExpander {
         exp.accept(
             new Shuttle(typeSystem) {
               @Override
-              protected Core.Exp visit(Core.Id id) {
-                if (id.idPat.name.equals("$0")) {
-                  return e0;
+              protected Core.Exp visit(Core.Input input) {
+                if (input.i == 0) {
+                  return core.at(e0, input.pos);
                 }
-                if (e1 != null && id.idPat.name.equals("$1")) {
-                  return e1;
+                if (e1 != null && input.i == 1) {
+                  return core.at(e1, input.pos);
                 }
-                return id;
+                return input;
               }
             });
     return simplify(exp2);

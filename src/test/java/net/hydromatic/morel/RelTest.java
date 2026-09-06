@@ -23,11 +23,13 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.RelValidator;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -58,10 +60,10 @@ public class RelTest {
     final PrimitiveType intType = PrimitiveType.INT;
 
     /** {@code $0}, the element of a node's input, of type {@code int}. */
-    final Core.Id input0 = core.input0(intType);
+    final Core.Input input0 = core.input0(intType);
 
     /** {@code $1}, the element of a join's right input. */
-    final Core.Id input1 = core.input1(intType);
+    final Core.Input input1 = core.input1(intType);
 
     final Core.Exp list12 = core.list(typeSystem, intLiteral(1), intLiteral(2));
     final Core.Exp list34 = core.list(typeSystem, intLiteral(3), intLiteral(4));
@@ -386,6 +388,58 @@ public class RelTest {
 
     // There is no yield to misuse the binder in; the condition is the only
     // expression a join carries, and `binderNotIn` guards that.
+  }
+
+  /**
+   * Tests that {@code $0} is not a variable, however many nodes reference it
+   * (discussion.md §17).
+   *
+   * <p>It is bound by the node that encloses it, so a pass that reasons about
+   * variables -- and every one of them walks {@link Core.Id} -- must not see it
+   * as one. When {@code $0} was an {@code Id} over an {@code IdPat} named
+   * {@code "$0"} this found two, and thought they were the same variable,
+   * because {@code IdPat} equality compares the name and the ordinal and not
+   * the type.
+   */
+  @Test
+  void testInputIsNotAVariable() {
+    final Fixture f = new Fixture();
+
+    // filter [#1 $0 = 1] over project [{...}] over a leaf: two nodes, each
+    // reading its own input, and the two `$0` are of different types.
+    final Core.Exp project =
+        core.project(f.typeSystem, f.list12, f.record(f.input0, f.input0));
+    final Core.Exp filter =
+        core.filter(
+            project,
+            core.equal(
+                f.typeSystem,
+                core.field(
+                    f.typeSystem, core.input0(project.type.elementType()), 0),
+                f.intLiteral(1)));
+
+    assertThat(ids(filter), empty());
+
+    // A name the query wrote is one, so the walk is not simply blind.
+    final Core.IdPat e = core.idPat(f.intType, "e", 0);
+    assertThat(
+        ids(
+            core.filter(
+                f.list12, core.equal(f.typeSystem, core.id(e), core.id(e)))),
+        is(ImmutableList.of("e", "e")));
+  }
+
+  /** Returns the names of every {@link Core.Id} in an expression. */
+  private static List<String> ids(Core.Exp exp) {
+    final List<String> names = new ArrayList<>();
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            names.add(id.idPat.name);
+          }
+        });
+    return names;
   }
 }
 
