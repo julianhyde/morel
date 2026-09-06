@@ -51,6 +51,9 @@ public class FbbtTest {
   private final Core.IdPat zPat = core.idPat(PrimitiveType.INT, "z", 0);
   private final Core.Id zId = core.id(zPat);
 
+  private final Core.IdPat rPat = core.idPat(PrimitiveType.REAL, "r", 0);
+  private final Core.Id rId = core.id(rPat);
+
   private Core.Literal i(int n) {
     return core.intLiteral(BigDecimal.valueOf(n));
   }
@@ -73,6 +76,20 @@ public class FbbtTest {
   /** Returns {@code abs exp}. */
   private Core.Exp abs(Core.Exp exp) {
     return core.call(typeSystem, BuiltIn.INT_ABS, exp);
+  }
+
+  /** Returns {@code abs exp}, for a real-valued {@code exp}. */
+  private Core.Exp realAbs(Core.Exp exp) {
+    return core.call(typeSystem, BuiltIn.REAL_ABS, exp);
+  }
+
+  /** Returns {@code x * exp}, for a real-valued {@code exp}. */
+  private Core.Exp realTimes(String x, Core.Exp exp) {
+    return core.call(
+        typeSystem,
+        BuiltIn.REAL_OP_TIMES,
+        core.realLiteral(new BigDecimal(x)),
+        exp);
   }
 
   /** Returns {@code a <= b}. */
@@ -290,6 +307,38 @@ public class FbbtTest {
     final Core.Exp result =
         Fbbt.strengthen(typeSystem, ImmutableSet.of(xPat), w);
     assertThat(result, hasToString(startsWith("x > ~1 andalso (x < 5")));
+  }
+
+  /**
+   * A negative coefficient inside the absolute value swaps the ends of the
+   * interval: {@code abs (~3 * x) < 10} is {@code ~10/3 < x < 10/3}. Each end
+   * still rounds outwards, so {@code ~4 < x < 4} -- weaker than the truth, but
+   * never excluding a solution.
+   */
+  @Test
+  void testNegativeCoefficientInsideAbs() {
+    final Core.Exp w = core.lessThan(typeSystem, abs(times(-3, xId)), i(10));
+    final Core.Exp result =
+        Fbbt.strengthen(typeSystem, ImmutableSet.of(xPat), w);
+    assertThat(result, hasToString(startsWith("x >= ~3 andalso (x <= 3")));
+  }
+
+  /**
+   * A large negative coefficient makes both ends round to the same place if
+   * they round inwards. They must not: rounding outwards keeps the interval
+   * non-empty, so {@code Range.open} has something to hold.
+   */
+  @Test
+  void testLargeNegativeCoefficientInsideAbs() {
+    final Core.Exp w =
+        core.lessThan(
+            typeSystem,
+            realAbs(realTimes("-10000000000000.0", rId)),
+            core.realLiteral(BigDecimal.ONE));
+    final Core.Exp result =
+        Fbbt.strengthen(typeSystem, ImmutableSet.of(rPat), w);
+    assertThat(
+        result, hasToString(startsWith("r > ~1E-12 andalso (r < 1E-12")));
   }
 
   /**

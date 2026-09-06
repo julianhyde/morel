@@ -646,21 +646,32 @@ class Fbbt {
         return state.tighten(inner.left, ImmutableRangeSet.of());
       }
       // 'abs (c * x + k) OP b' is '(~b - k) / c OP x OP (b - k) / c', with
-      // the ends swapped if c is negative.
+      // the ends swapped if c is negative. Round each end outwards -- the
+      // lower down, the upper up -- so that the deduced interval is never
+      // tighter than the truth.
       final Bounds.LinearForm form =
           requireNonNull(Bounds.linearForm(Bounds.absArg(atom)));
       final BigDecimal c = inner.right;
       final BigDecimal k = form.constant;
-      final BigDecimal end1 =
-          b.negate().subtract(k).divide(c, SCALE, RoundingMode.FLOOR);
-      final BigDecimal end2 =
-          b.subtract(k).divide(c, SCALE, RoundingMode.CEILING);
+      final BigDecimal end1 = b.negate().subtract(k);
+      final BigDecimal end2 = b.subtract(k);
+      final BigDecimal lower;
+      final BigDecimal upper;
+      if (c.signum() > 0) {
+        lower = end1.divide(c, SCALE, RoundingMode.FLOOR);
+        upper = end2.divide(c, SCALE, RoundingMode.CEILING);
+      } else {
+        lower = end2.divide(c, SCALE, RoundingMode.FLOOR);
+        upper = end1.divide(c, SCALE, RoundingMode.CEILING);
+      }
+      if (strict && lower.compareTo(upper) >= 0) {
+        // The ends have met; no value satisfies the constraint.
+        return state.tighten(inner.left, ImmutableRangeSet.of());
+      }
       return state.tighten(
           inner.left,
           ImmutableRangeSet.of(
-              strict
-                  ? Range.open(end1.min(end2), end1.max(end2))
-                  : Range.closed(end1.min(end2), end1.max(end2))));
+              strict ? Range.open(lower, upper) : Range.closed(lower, upper)));
     }
 
     /**

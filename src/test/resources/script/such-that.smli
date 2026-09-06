@@ -550,6 +550,14 @@ from x where 3 * abs (x - 2) < 9;
 from x where abs (2 * x - 1) <= 5;
 > val it = [~2,~1,0,1,2,3] : int list
 
+(* A negative coefficient swaps the ends of the interval. Each end
+ * still rounds away from zero, so that no solution is excluded:
+ * 'abs (~3 * x) < 10' gives '~10/3 < x < 10/3', hence '~3 <= x <= 3'. *)
+from x where abs (~3 * x) < 10;
+> val it = [~3,~2,~1,0,1,2,3] : int list
+from x where abs (~2 * x - 3) < 4;
+> val it = [~3,~2,~1,0] : int list
+
 (* Manhattan distance: all the points within 5 steps of (2, 3). Each
  * absolute value is bounded by what the other leaves over -- and the
  * other is at least zero -- so 'abs (x - 2) < 5' and
