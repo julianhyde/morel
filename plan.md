@@ -1422,6 +1422,47 @@ something settled — §8's principle, applied to the sequence itself.
 
 ## Step 3 — Flip observability
 
+**Surveyed before starting, because it is a different size of thing
+from step 2's slices.** What is already in place: the printer
+(`Core.Rel.describe(withTypes)`, which is what `RelTranslatorTest`
+prints and what spec.md §6 specifies, `withTypes` being planEx's
+`: type`), and the validator (`RelValidator.violations`, run by the
+shadow on every query the suite compiles). What is missing is only
+that no tree survives to where `Sys.plan` looks: the resolver lowers
+it immediately, so what executes and what prints is a step list.
+
+Which passes would have to learn `Core.Rel`, counted by how many
+times each names `Core.From` today:
+
+* `Inliner` (0) and `Analyzer` (0) name it not at all, and `Shuttle`
+  and `Visitor` already traverse every `Core.Rel` node, so they would
+  descend correctly by inheritance.
+* `SuchThatShuttle` (2) hands a `Core.From` to `Expander.expandFrom`.
+  A tree wants `RelExpander.expand`, which it already has -- and that
+  is also what collapses the round trip this step is named for, since
+  grounding would stop translating a lowered step list back into the
+  tree it came from.
+* `Relationalizer` (11), `Compiler` (11) and `CalciteCompiler` (4)
+  case on `Core.From` throughout. The compilers could lower at their
+  own boundary, which would let the tree survive every *rewrite* pass
+  and be lowered only for code generation -- that is enough for the
+  plan text this step is about.
+
+**The hazard, and it is not in any of those.** `$0` is an ordinary
+`Core.Id` over an `IdPat` named `"$0"` with ordinal 0, and
+`IdPat.equals` compares name and ordinal and *not type*. So every
+`$0` in a tree is the same variable to anything that reasons about
+free variables: `Analyzer`'s use counts, `Inliner`'s substitution,
+`freePats`. Today that is harmless, because a tree is built, lowered
+and discarded inside one pass and no such pass ever sees one. The
+moment a tree survives the inline loop it is not harmless, and it
+will not announce itself -- a use count that is too high only makes
+the inliner decline, while one that is too low makes it substitute
+across a node boundary. Decide how `$0` is told apart (a distinct
+`Core` node rather than an `Id`, a per-node ordinal, or a scoping
+rule the free-variable walk honours) before the first pass sees a
+tree, not after.
+
 - [ ] Sys.plan and Sys.planEx print the tree.
 - [ ] Script-convert test expectations (one flip, final format).
       These changes are benign by construction: only plan text moves,
