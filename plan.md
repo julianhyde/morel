@@ -1349,6 +1349,19 @@ something settled — §8's principle, applied to the sequence itself.
       through the tree, and the suite checks the translation by its
       results.
 - [ ] Delete the AST→From path; the resolver builds trees natively.
+      The last shape that needed the step list was a *bounded* scan
+      over a constructor pattern -- `from SOME x in xs` -- which the
+      suite does not have and which `nativelyBuildable` was declining
+      through `destructurable`. It needs a `case` both to ask whether
+      a value matches and to reach what it holds, and the tree says
+      that as `RelTranslator` does: a dependent join whose right input
+      is a `case` yielding nought or one row, with a projection
+      dropping the value that was matched. With that, the only things
+      the resolver still declines are an unbounded scan whose "as"
+      pattern wraps something it cannot enumerate, a condition on the
+      first scan, and `MOREL_GROUND_VIA_STEPS` -- so what remains
+      before the deletion is retiring that switch.
+
       Build them through a *builder*, not by constructing nodes
       directly and not by aping `FromBuilder`. The research is done
       (discussion.md §13): of `FromBuilder`'s 855 lines, the parts
