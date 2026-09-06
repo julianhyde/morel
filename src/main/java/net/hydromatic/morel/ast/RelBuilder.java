@@ -218,14 +218,6 @@ public class RelBuilder {
     return this;
   }
 
-  /**
-   * Returns whether {@link #push(Core.Pat, Core.Exp)} accepts a pattern: it
-   * binds names, and where it also filters the filter has a total expression.
-   */
-  public static boolean pushable(Core.Pat pat) {
-    return destructurable(pat) || testable(pat);
-  }
-
   /** Returns whether a pattern binds names without also filtering. */
   public static boolean destructurable(Core.Pat pat) {
     switch (pat.op) {
@@ -403,11 +395,11 @@ public class RelBuilder {
         list);
   }
 
-  public static Core.Exp isNull(TypeSystem typeSystem, Core.Exp list) {
+  private static Core.Exp isNull(TypeSystem typeSystem, Core.Exp list) {
     return listCall(typeSystem, BuiltIn.LIST_NULL, list, PrimitiveType.BOOL);
   }
 
-  public static Core.Exp length(TypeSystem typeSystem, Core.Exp list) {
+  private static Core.Exp length(TypeSystem typeSystem, Core.Exp list) {
     return listCall(typeSystem, BuiltIn.LIST_LENGTH, list, PrimitiveType.INT);
   }
 
