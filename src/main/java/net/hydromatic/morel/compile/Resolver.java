@@ -2857,6 +2857,22 @@ public class Resolver {
       aggs.keySet().forEach(name -> labels.put(name, b.name(name)));
       final Scope after = new Scope(labels, b.input(0), null);
       binders.clear();
+      if (group.binder != null) {
+        // `group g = {...}` names the whole result `g`, as `yield g = ...`
+        // does: one name, and not the labels the group made.
+        final PairList<String, Core.Exp> nameExps = PairList.of();
+        postExps.forEach(
+            (name, exp) -> nameExps.add(name, after.substitute(exp)));
+        b.project(
+            group.binder.name,
+            groupIsAtom
+                ? nameExps.right(0)
+                : core.record(typeMap.typeSystem, nameExps));
+        binders.add(group.binder.name);
+        atom = true;
+        rowIsElement = true;
+        return;
+      }
       if (groupIsAtom) {
         final String name = postExps.left(0);
         b.project(name, after.substitute(postExps.right(0)));
@@ -3311,9 +3327,6 @@ public class Resolver {
           // Nothing more to check; the ordinal test below applies. None of
           // these changes the row, so the binders survive them unchanged.
         } else if (step instanceof Ast.Group) {
-          if (((Ast.Group) step).binder != null) {
-            return false;
-          }
           bound = -1;
         } else if (step instanceof Ast.SetStep
             || step instanceof Ast.Require

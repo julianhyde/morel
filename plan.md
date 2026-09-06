@@ -1198,7 +1198,11 @@ something settled — §8's principle, applied to the sequence itself.
       binder, said to the builder instead.
 
       That one exposed a bug of its own, older than the tree and
-      reachable without it: `from i in [1, 2, 3] yield {h = h}`, where
+      reachable without it, now logged as issue #468 and to be fixed
+      on main. The fix here is only what this branch needs to stay
+      green; take main's when the two meet.
+
+      `from i in [1, 2, 3] yield {h = h}`, where
       `h` comes from the enclosing scope, failed with "conversion to
       core did not preserve type". `FromBuilder` decides whether a
       record is the row renamed by comparing each field's name with
@@ -1208,10 +1212,18 @@ something settled — §8's principle, applied to the sequence itself.
       query; it had `yield h = {h = h}`, which the tree path had been
       declining.
 
-      What the remaining 44 want: `group` with a binder (14), an
-      unbounded scan that binds more than one name (8), a scan whose
-      pattern can fail to match -- a constructor, a literal, a cons
-      (16) -- and two chained outer joins.
+      Then `group g = ...`, which is the same shape as the yield
+      binder -- one name for the whole result, not the labels the
+      group made -- and takes it to 1826. `from i in [1, 2, 3] group
+      j = i` now loses a projection: the identity `yield i` that the
+      resolver used to leave in the step list is not there when the
+      tree builds it, which `RelTranslatorTest` had documented as
+      belonging to the resolver rather than to the translation.
+
+      What the remaining 30 want: a scan whose pattern can fail to
+      match -- a constructor, a literal, a cons, an "as" (16) -- an
+      unbounded scan that binds more than one name (8), a record scan
+      pattern (4), and two chained outer joins.
 
       That last one is a naming limit rather than a translation one.
       `from (b, i)` grounds and answers correctly, but the tree erases
