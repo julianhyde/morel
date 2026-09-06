@@ -232,6 +232,8 @@ public class RelBuilder {
       case ID_PAT:
       case WILDCARD_PAT:
         return true;
+      case AS_PAT:
+        return destructurable(((Core.AsPat) pat).pat);
       case TUPLE_PAT:
       case RECORD_PAT:
         for (Core.Pat arg : args(pat)) {
@@ -251,6 +253,9 @@ public class RelBuilder {
    */
   public static boolean testable(Core.Pat pat) {
     switch (pat.op) {
+      case AS_PAT:
+        // The name matches whatever the pattern it wraps matches.
+        return testable(((Core.AsPat) pat).pat);
       case ID_PAT:
       case WILDCARD_PAT:
       case BOOL_LITERAL_PAT:
@@ -301,6 +306,9 @@ public class RelBuilder {
       case ID_PAT:
       case WILDCARD_PAT:
         return null;
+
+      case AS_PAT:
+        return test(typeSystem, ((Core.AsPat) pat).pat, element);
 
       case BOOL_LITERAL_PAT:
       case CHAR_LITERAL_PAT:
@@ -441,6 +449,14 @@ public class RelBuilder {
         return true;
       case WILDCARD_PAT:
         return true;
+      case AS_PAT:
+        // `p as (a, b)` names the whole value and its parts, and in a tree
+        // both are paths to the same element -- so, unlike a pattern that
+        // reaches Core as a value to be taken apart, there is nothing here
+        // that makes the two dependent.
+        final Core.AsPat asPat = (Core.AsPat) pat;
+        names.put(asPat.name, element);
+        return destructure(asPat.pat, element, names);
       case TUPLE_PAT:
       case RECORD_PAT:
         final List<Core.Pat> args = args(pat);

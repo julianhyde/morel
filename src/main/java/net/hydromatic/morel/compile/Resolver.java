@@ -2578,7 +2578,7 @@ public class Resolver {
               typeMap.typeSystem,
               Resolver.this.toCore(scan.pat, typeMap.getType(scan.pat)));
       final List<String> names = push(flat, extent(scan.pat.pos, flat.type));
-      if (names.size() > 1) {
+      if (names.size() > 1 && flatIdPats(flat)) {
         // `extentPat` flattens to a tuple of the pattern's variables, one per
         // value the scan generates, so the lowering can scan under a pattern
         // of their names. It numbers them -- converting the pattern above
@@ -2687,6 +2687,26 @@ public class Resolver {
           Resolver.this.toCore(pat, collection.type.elementType()), collection);
     }
 
+    /**
+     * Returns whether a pattern is a tuple of plain names, which is when the
+     * names it binds are the components of what it matches, one apiece.
+     *
+     * <p>False for an "as" pattern, which {@link #extentPat} leaves alone: it
+     * names the whole value as well as the parts, so it binds more names than
+     * the element has components.
+     */
+    private boolean flatIdPats(Core.Pat pat) {
+      if (!(pat instanceof Core.TuplePat)) {
+        return false;
+      }
+      for (Core.Pat arg : ((Core.TuplePat) pat).args) {
+        if (!(arg instanceof Core.IdPat)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
     /** As {@link #push(Ast.Pat, Core.Exp)}, for a pattern already converted. */
     private List<String> push(Core.Pat corePat, Core.Exp collection) {
       b.push(corePat, collection);
@@ -2696,6 +2716,14 @@ public class Resolver {
             @Override
             protected void visit(Core.IdPat idPat) {
               names.add(idPat.name);
+            }
+
+            @Override
+            protected void visit(Core.AsPat asPat) {
+              // Both halves: `p as (a, b)` binds `p` and what it wraps binds,
+              // and each is a name the tree has a path for.
+              names.add(asPat.name);
+              super.visit(asPat);
             }
           });
       // A pattern names no one thing, so the lowering invents a binder.
@@ -3434,6 +3462,8 @@ public class Resolver {
           return 1;
         case WILDCARD_PAT:
           return 0;
+        case AS_PAT:
+          return 1 + binderCount(((Ast.AsPat) pat).pat);
         case ANNOTATED_PAT:
           return binderCount(((Ast.AnnotatedPat) pat).pat);
         case TUPLE_PAT:
@@ -3489,6 +3519,11 @@ public class Resolver {
           // type alone does not, `scan` conjoins into the query as a step, as
           // the step list does; the pattern itself is what it wraps.
           return destructurable(((Ast.AnnotatedPat) pat).pat);
+
+        case AS_PAT:
+          // `p as (a, b)` binds the whole value and its parts, and in a tree
+          // both are paths to the same element.
+          return destructurable(((Ast.AsPat) pat).pat);
 
         case TUPLE_PAT:
           return allMatch(((Ast.TuplePat) pat).args, this::destructurable);

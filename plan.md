@@ -1248,10 +1248,26 @@ something settled — §8's principle, applied to the sequence itself.
       version of. `RelTranslator` now asks `RelBuilder` rather than
       keeping its own copy.
 
+      Then the "as" pattern, which had looked like it belonged with
+      the constructor and does not. `p as (a, b)` binds the whole
+      value and its parts, and in a tree both are paths to the same
+      element, so nothing makes the two dependent -- what
+      `extentPat`'s comment says about them is true of a step list,
+      where the pattern reaches Core as a value to be taken apart.
+      1847 of 1856.
+
+      Three places had to learn about it, and the third was the one
+      the suite found: `destructure`, so the name is bound; `test`, so
+      that `p as (h :: t)` filters by what it wraps; and the resolver's
+      own collection of a pattern's names, which walked for
+      `Core.IdPat` and an `AsPat` is a `NamedPat` that is not one. And
+      the names of such a pattern do not line up with the element's
+      components -- it binds one more -- so it is not one the lowering
+      can scan under.
+
       Left with the step list: a user datatype's constructor, which
       has no total accessor for what it holds and so needs a `case`,
-      and an "as" pattern, whose variable and its parts are not
-      independent.
+      and two chained outer joins.
 
       Two plans in `RelTranslatorTest` lost a projection by it: the
       tree names what a cons pattern binds with paths rather than
