@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import java.math.BigDecimal;
@@ -34,7 +35,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.Function;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -207,14 +210,23 @@ public class RelBuilder {
           "pattern cannot be destructured, because it can fail to match: "
               + pat);
     }
-    stack.push(new Frame(rel, elementNames(rel, names)));
+    // A pattern that can fail to match filters as well as binds, and the two
+    // halves are separate nodes: the filter here, the binding in the names.
+    final Core.@Nullable Exp test = test(typeSystem, pat, element);
+    final Core.Exp rel2 = test == null ? rel : core.filter(rel, test);
+    stack.push(new Frame(rel2, elementNames(rel2, names)));
     return this;
   }
 
   /**
-   * Returns whether {@link #push(Core.Pat, Core.Exp)} accepts a pattern, that
-   * is, whether it binds names without also filtering.
+   * Returns whether {@link #push(Core.Pat, Core.Exp)} accepts a pattern: it
+   * binds names, and where it also filters the filter has a total expression.
    */
+  public static boolean pushable(Core.Pat pat) {
+    return destructurable(pat) || testable(pat);
+  }
+
+  /** Returns whether a pattern binds names without also filtering. */
   public static boolean destructurable(Core.Pat pat) {
     switch (pat.op) {
       case ID_PAT:
@@ -231,6 +243,187 @@ public class RelBuilder {
       default:
         return false;
     }
+  }
+
+  /**
+   * Returns whether {@link #test} can express a pattern's condition, and {@link
+   * #destructure} its bindings, as expressions over the element.
+   */
+  public static boolean testable(Core.Pat pat) {
+    switch (pat.op) {
+      case ID_PAT:
+      case WILDCARD_PAT:
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+      case WORD_LITERAL_PAT:
+        return true;
+      case TUPLE_PAT:
+        return ((Core.TuplePat) pat)
+            .args.stream().allMatch(RelBuilder::testable);
+      case RECORD_PAT:
+        return ((Core.RecordPat) pat)
+            .args.stream().allMatch(RelBuilder::testable);
+      case CONS_PAT:
+        // `::` is a constructor, but the list datatype has total accessors --
+        // `null`, `hd`, `tl` -- where a user datatype has none.
+        return ((Core.ConPat) pat).pat.op == Op.TUPLE_PAT
+            && testable(((Core.ConPat) pat).pat);
+      case LIST_PAT:
+        return ((Core.ListPat) pat)
+            .args.stream().allMatch(RelBuilder::testable);
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Returns the condition under which a pattern matches an element, or null if
+   * it always matches.
+   *
+   * <p>A pattern that can fail to match filters as well as binds, and the two
+   * halves separate: this is the filter, and {@link #destructure} is the
+   * binding. A scan is then a leaf with a filter above it and, where the
+   * bindings do not describe the element, a projection above that -- three
+   * ordinary nodes, each of which a rule can see through, rather than one node
+   * holding a {@code case} that yields a collection.
+   *
+   * <p>Callers must first ask {@link #testable}. A constructor pattern is not
+   * testable here, because extracting what it binds needs a {@code case} of its
+   * own: a datatype has no total accessor for a constructor's argument, and no
+   * value to give the branch that does not match.
+   */
+  public static Core.@Nullable Exp test(
+      TypeSystem typeSystem, Core.Pat pat, Core.Exp element) {
+    switch (pat.op) {
+      case ID_PAT:
+      case WILDCARD_PAT:
+        return null;
+
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+      case WORD_LITERAL_PAT:
+        final Core.LiteralPat literalPat = (Core.LiteralPat) pat;
+        return core.equal(
+            typeSystem,
+            element,
+            core.literal((PrimitiveType) pat.type, literalPat.value));
+
+      case TUPLE_PAT:
+      case RECORD_PAT:
+        final List<Core.Pat> args =
+            pat.op == Op.TUPLE_PAT
+                ? ((Core.TuplePat) pat).args
+                : ((Core.RecordPat) pat).args;
+        final List<Core.Exp> tests = new ArrayList<>();
+        for (int i = 0; i < args.size(); i++) {
+          final Core.@Nullable Exp test =
+              test(typeSystem, args.get(i), core.field(typeSystem, element, i));
+          if (test != null) {
+            tests.add(test);
+          }
+        }
+        return tests.isEmpty() ? null : core.andAlso(typeSystem, tests);
+
+      case CONS_PAT:
+        // A non-empty list, whose head and tail must match in turn.
+        final Core.TuplePat consPat = (Core.TuplePat) ((Core.ConPat) pat).pat;
+        final List<Core.Exp> consTests = new ArrayList<>();
+        consTests.add(core.not(typeSystem, isNull(typeSystem, element)));
+        addTest(
+            typeSystem,
+            consTests,
+            consPat.args.get(0),
+            hd(typeSystem, element));
+        addTest(
+            typeSystem,
+            consTests,
+            consPat.args.get(1),
+            tl(typeSystem, element));
+        return core.andAlso(typeSystem, consTests);
+
+      case LIST_PAT:
+        // A list of exactly this length, whose items must match in turn.
+        final List<Core.Pat> listItems = ((Core.ListPat) pat).args;
+        if (listItems.isEmpty()) {
+          return isNull(typeSystem, element);
+        }
+        final List<Core.Exp> listTests = new ArrayList<>();
+        listTests.add(
+            core.equal(
+                typeSystem,
+                length(typeSystem, element),
+                core.literal(PrimitiveType.INT, listItems.size())));
+        for (int i = 0; i < listItems.size(); i++) {
+          addTest(
+              typeSystem,
+              listTests,
+              listItems.get(i),
+              nth(typeSystem, element, i));
+        }
+        return core.andAlso(typeSystem, listTests);
+
+      default:
+        throw new AssertionError("not testable: " + pat);
+    }
+  }
+
+  /** Adds a pattern's test to a list, if it has one. */
+  private static void addTest(
+      TypeSystem typeSystem,
+      List<Core.Exp> tests,
+      Core.Pat pat,
+      Core.Exp element) {
+    final Core.@Nullable Exp test = test(typeSystem, pat, element);
+    if (test != null) {
+      tests.add(test);
+    }
+  }
+
+  /** Applies a one-argument list built-in to a list. */
+  private static Core.Exp listCall(
+      TypeSystem typeSystem, BuiltIn builtIn, Core.Exp list, Type resultType) {
+    return core.apply(
+        Pos.ZERO,
+        resultType,
+        core.functionLiteral(typeSystem.fnType(list.type, resultType), builtIn),
+        list);
+  }
+
+  public static Core.Exp isNull(TypeSystem typeSystem, Core.Exp list) {
+    return listCall(typeSystem, BuiltIn.LIST_NULL, list, PrimitiveType.BOOL);
+  }
+
+  public static Core.Exp length(TypeSystem typeSystem, Core.Exp list) {
+    return listCall(typeSystem, BuiltIn.LIST_LENGTH, list, PrimitiveType.INT);
+  }
+
+  public static Core.Exp hd(TypeSystem typeSystem, Core.Exp list) {
+    return listCall(typeSystem, BuiltIn.LIST_HD, list, list.type.elementType());
+  }
+
+  public static Core.Exp tl(TypeSystem typeSystem, Core.Exp list) {
+    return listCall(typeSystem, BuiltIn.LIST_TL, list, list.type);
+  }
+
+  public static Core.Exp nth(TypeSystem typeSystem, Core.Exp list, int i) {
+    final Type elementType = list.type.elementType();
+    final Type fnType =
+        typeSystem.fnType(
+            typeSystem.tupleType(list.type, PrimitiveType.INT), elementType);
+    return core.apply(
+        Pos.ZERO,
+        elementType,
+        core.functionLiteral(fnType, BuiltIn.LIST_NTH),
+        core.tuple(
+            typeSystem,
+            null,
+            ImmutableList.of(list, core.literal(PrimitiveType.INT, i))));
   }
 
   /** Returns the components of a tuple or record pattern. */
@@ -258,7 +451,35 @@ public class RelBuilder {
           }
         }
         return true;
+
+      case BOOL_LITERAL_PAT:
+      case CHAR_LITERAL_PAT:
+      case INT_LITERAL_PAT:
+      case REAL_LITERAL_PAT:
+      case STRING_LITERAL_PAT:
+      case WORD_LITERAL_PAT:
+        // A literal binds nothing; it filters, and `test` says how.
+        return true;
+
+      case CONS_PAT:
+        // `h :: t` binds the head and the tail, which `hd` and `tl` reach.
+        final Core.TuplePat headTail = (Core.TuplePat) ((Core.ConPat) pat).pat;
+        return destructure(headTail.args.get(0), hd(typeSystem, element), names)
+            && destructure(
+                headTail.args.get(1), tl(typeSystem, element), names);
+
+      case LIST_PAT:
+        final List<Core.Pat> items = ((Core.ListPat) pat).args;
+        for (int i = 0; i < items.size(); i++) {
+          if (!destructure(items.get(i), nth(typeSystem, element, i), names)) {
+            return false;
+          }
+        }
+        return true;
+
       default:
+        // A user datatype's constructor also filters, but extracting what it
+        // binds has no total expression -- see `test`.
         return false;
     }
   }

@@ -2563,7 +2563,17 @@ public class Resolver {
           extentPat(
               typeMap.typeSystem,
               Resolver.this.toCore(scan.pat, typeMap.getType(scan.pat)));
-      return push(flat, extent(scan.pat.pos, flat.type));
+      final List<String> names = push(flat, extent(scan.pat.pos, flat.type));
+      if (names.size() > 1) {
+        // `extentPat` flattens to a tuple of the pattern's variables, one per
+        // value the scan generates, so the lowering can scan under a pattern
+        // of their names. It numbers them -- converting the pattern above
+        // took the ordinals -- and a numbered name still says which variable
+        // it is, which `w$27` does not, and grounding quotes it in the error
+        // it raises when it cannot bound the leaf.
+        scanNames.set(scanNames.size() - 1, ImmutableList.copyOf(names));
+      }
+      return names;
     }
 
     /**
@@ -3418,6 +3428,12 @@ public class Resolver {
         case RECORD_PAT:
           return ((Ast.RecordPat) pat)
               .args.values().stream().mapToInt(this::binderCount).sum();
+        case CONS_PAT:
+          return binderCount(((Ast.InfixPat) pat).p0)
+              + binderCount(((Ast.InfixPat) pat).p1);
+        case LIST_PAT:
+          return ((Ast.ListPat) pat)
+              .args.stream().mapToInt(this::binderCount).sum();
         default:
           return 0;
       }
@@ -3468,6 +3484,26 @@ public class Resolver {
           // the omitted fields are wildcards, which bind nothing.
           return allMatch(
               ((Ast.RecordPat) pat).args.values(), this::destructurable);
+
+        case BOOL_LITERAL_PAT:
+        case CHAR_LITERAL_PAT:
+        case INT_LITERAL_PAT:
+        case REAL_LITERAL_PAT:
+        case STRING_LITERAL_PAT:
+        case WORD_LITERAL_PAT:
+          // A literal binds nothing and filters, and the tree says the
+          // filtering with a node of its own -- see `RelBuilder.test`.
+          return true;
+
+        case CONS_PAT:
+          // `::` is a constructor, and the tree could not see through a user
+          // datatype's; the list datatype is the exception, because `null`,
+          // `hd` and `tl` reach what it holds without a `case`.
+          final Ast.InfixPat consPat = (Ast.InfixPat) pat;
+          return destructurable(consPat.p0) && destructurable(consPat.p1);
+
+        case LIST_PAT:
+          return allMatch(((Ast.ListPat) pat).args, this::destructurable);
 
         default:
           return false;

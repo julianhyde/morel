@@ -269,24 +269,25 @@ public class RelTranslatorTest {
                 + "    [(1, 2), (3, 4)]\n"));
     // `::` is a constructor, but the list datatype has the total accessors a
     // user datatype lacks, so a cons pattern takes the same path: `null` is
-    // the test, `hd` and `tl` are the paths.
+    // the test, `hd` and `tl` are the paths. One projection, not two: the
+    // resolver builds this query natively, and the tree names `x` and `xs`
+    // with paths rather than binding them, so nothing materializes the `xs`
+    // that the query does not read.
     assertThat(
         plan("from (x :: xs) in [[1, 2], []] yield x"),
         is(
-            "project [#x $0]\n" //
-                + "  project [{x = #hd List $0, xs = #tl List $0}]\n"
-                + "    filter [not (#null List $0)]\n"
-                + "      [[1, 2], []]\n"));
+            "project [#hd List $0]\n" //
+                + "  filter [not (#null List $0)]\n"
+                + "    [[1, 2], []]\n"));
 
-    // An empty-list pattern is the test alone; it binds nothing, so the
-    // element the bindings describe is unit.
+    // An empty-list pattern is the test alone; it binds nothing, and the
+    // yield replaces the row, so nothing below it has to say what the row was.
     assertThat(
         plan("from [] in [[1], []] yield 1"),
         is(
             "project [1]\n" //
-                + "  project [()]\n"
-                + "    filter [#null List $0]\n"
-                + "      [[1], []]\n"));
+                + "  filter [#null List $0]\n"
+                + "    [[1], []]\n"));
   }
 
   /**
