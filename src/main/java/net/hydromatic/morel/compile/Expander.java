@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.compile.FreeFinder.freePats;
 import static net.hydromatic.morel.compile.Generators.maybeGenerator;
 import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.forEachInIntersection;
@@ -36,6 +37,7 @@ import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -82,7 +84,7 @@ public class Expander {
     from = applyFbbt(typeSystem, from);
 
     final Generators.Cache cache =
-        new Generators.Cache(typeSystem, env, extentPats(from));
+        new Generators.Cache(typeSystem, env, ungroundedPats(typeSystem, from));
     final Expander expander = new Expander(cache, ImmutableList.of());
 
     // First, deduce generators.
@@ -191,6 +193,31 @@ public class Expander {
       if (step.op == Op.SCAN) {
         final Core.Scan scan = (Core.Scan) step;
         if (scan.exp.isExtent()) {
+          pats.addAll(scan.pat.expand());
+        }
+      }
+    }
+    return pats;
+  }
+
+  /**
+   * Returns the patterns that are not yet bound when we are looking for a
+   * generator: the patterns of {@code from}'s extent scans, plus the patterns
+   * of any scan that is correlated with them, directly or transitively.
+   *
+   * <p>A correlated scan such as {@code y in [x * 2]} cannot run until {@code
+   * x} has a generator, so {@code y} is no better than {@code x} as a bound for
+   * {@code x}; treating it as bound would let {@link Generators} choose a pair
+   * of generators that depend on each other.
+   */
+  private static Set<Core.NamedPat> ungroundedPats(
+      TypeSystem typeSystem, Core.From from) {
+    final Set<Core.NamedPat> pats = new LinkedHashSet<>();
+    for (Core.FromStep step : from.steps) {
+      if (step.op == Op.SCAN) {
+        final Core.Scan scan = (Core.Scan) step;
+        if (scan.exp.isExtent()
+            || !Collections.disjoint(freePats(typeSystem, scan.exp), pats)) {
           pats.addAll(scan.pat.expand());
         }
       }

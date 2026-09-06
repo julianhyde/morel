@@ -760,6 +760,25 @@ from x in [3, 5, 7], y
 >
 > val it : {count:int, y:int} list
 
+(* A scan whose expression mentions an unbounded variable cannot run
+ * until that variable has a generator, so its own variable is no
+ * better as a bound. If 'y' were the upper bound of 'x' here, each
+ * generator would be waiting for the other. *)
+from x, y in [x * 2] where x > 0 andalso x < 10 andalso x < y;
+> x y
+> - --
+> 1  2
+> 2  4
+> 3  6
+> 4  8
+> 5 10
+> 6 12
+> 7 14
+> 8 16
+> 9 18
+>
+> val it : {x:int, y:int} list
+
 from x where x = 3 andalso x < 10;
 > val it = [3] : int list
 
