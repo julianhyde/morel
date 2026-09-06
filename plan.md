@@ -1265,9 +1265,22 @@ something settled — §8's principle, applied to the sequence itself.
       components -- it binds one more -- so it is not one the lowering
       can scan under.
 
-      Left with the step list: a user datatype's constructor, which
-      has no total accessor for what it holds and so needs a `case`,
-      and two chained outer joins.
+      And then the constructor, which turned out not to need the
+      `case` after all -- not here. All seven were *unbounded* scans,
+      and such a scan generates the values that match rather than
+      filtering values it is given, so `extentPat` keeps only the
+      pattern's variables and the constructor says which values are
+      wanted and then plays no further part: `from SOME (i : int)`
+      scans the extent of `int`. The tree's flattening path already
+      did this; only the gate had to learn that an unbounded scan asks
+      a weaker question than a bounded one.
+
+      1854 of 1856. What is left is two chained outer joins, and that
+      one is not a gap in the translation: a tree's outer join wraps
+      one component in `option` and the step list wraps each binding
+      of the absent side separately, so the second join of a chain
+      sees `(a * b) option` where the query has `a option * b option`.
+      The step list's answer is the one the user has seen.
 
       Two plans in `RelTranslatorTest` lost a projection by it: the
       tree names what a cons pattern binds with paths rather than
@@ -1289,10 +1302,12 @@ something settled — §8's principle, applied to the sequence itself.
       step list wants a pattern per component. So
       `MOREL_GROUND_VIA_STEPS` puts the native path for unbounded
       scans back too; it is one switch for one old world, not two.
-- [ ] Then flip for real: every query flows through the tree, and the
-      suite checks the translation by its results. `Sys.plan` output
-      changes (it prints the *executable* plan, which is exactly what
-      this step changes); query results must not.
+- [x] Then flip for real, as far as it goes: 1854 of the suite's 1856
+      queries flow through the tree, and the suite checks the
+      translation by its results. The two that do not are chained
+      outer joins, where the tree and the step list disagree about the
+      type of the absent side, and that is a design question for the
+      `option` shape rather than a hole in the translation.
 - [ ] Delete the AST→From path; the resolver builds trees natively.
       Build them through a *builder*, not by constructing nodes
       directly and not by aping `FromBuilder`. The research is done
