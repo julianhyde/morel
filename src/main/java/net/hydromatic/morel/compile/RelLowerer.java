@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
@@ -446,10 +447,17 @@ public class RelLowerer {
       // lose them, and grounding quotes them in what it says about a leaf it
       // cannot bound.
       final List<String> names = requireNonNull(scanNames.remove());
+      final List<Type> argTypes =
+          ((RecordLikeType) collection.type.elementType()).argTypes();
+      checkArgument(
+          names.size() == argTypes.size(),
+          "a name per component, but %s names and %s components",
+          names.size(),
+          argTypes.size());
       final List<Core.NamedPat> pats = new ArrayList<>();
       forEach(
           names,
-          ((RecordLikeType) collection.type.elementType()).argTypes(),
+          argTypes,
           (name, argType) ->
               pats.add(core.idPat(argType, name, nameGenerator::inc)));
       // A tuple pattern, not `recordOrAtomPat`: the names are the query's and
