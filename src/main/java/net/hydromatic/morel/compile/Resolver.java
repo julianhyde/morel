@@ -691,6 +691,30 @@ public class Resolver {
   }
 
   /**
+   * Returns a pattern as a tuple of two or more plain names, or null if it is
+   * not one. Such a pattern's binders line up with the components of what it
+   * matches, one apiece.
+   */
+  private static Ast.@Nullable TuplePat flatTuple(Ast.Pat pat) {
+    if (pat instanceof Ast.AnnotatedPat) {
+      return flatTuple(((Ast.AnnotatedPat) pat).pat);
+    }
+    if (!(pat instanceof Ast.TuplePat)) {
+      return null;
+    }
+    final Ast.TuplePat tuplePat = (Ast.TuplePat) pat;
+    if (tuplePat.args.size() < 2) {
+      return null;
+    }
+    for (Ast.Pat arg : tuplePat.args) {
+      if (bareId(arg) == null) {
+        return null;
+      }
+    }
+    return tuplePat;
+  }
+
+  /**
    * Returns whether a pattern names its type's values directly: a name, or a
    * tuple of names.
    *
@@ -2254,7 +2278,7 @@ public class Resolver {
     boolean rowIsElement = true;
 
     /** Name of each scan's binder, in the order the scans were pushed. */
-    final List<String> scanNames = new ArrayList<>();
+    final List<List<String>> scanNames = new ArrayList<>();
 
     /**
      * Ordinal for the next binder that a {@link Scope} makes, counting down.
@@ -2496,6 +2520,33 @@ public class Resolver {
      * finite, or says that it cannot.
      */
     private List<String> pushExtent(Ast.Scan scan) {
+      final Ast.@Nullable TuplePat tuplePat = flatTuple(scan.pat);
+      if (tuplePat != null) {
+        // `from (b, i)` names each component, and each is a value the scan
+        // generates. Scanning under a pattern of those names keeps them, where
+        // scanning under one name and reading the components out would lose
+        // them -- and grounding quotes them in what it says about a leaf it
+        // cannot bound. The patterns here are throwaway: the tree erases them
+        // to paths, and the lowering mints the ones the plan has, so taking
+        // the names from the Ast rather than converting it leaves the
+        // generator's ordinals for those.
+        final Type type = typeMap.getType(scan.pat);
+        final List<String> names = new ArrayList<>();
+        final List<Core.Pat> pats = new ArrayList<>();
+        forEach(
+            tuplePat.args,
+            ((RecordLikeType) type).argTypes(),
+            (arg, argType) -> {
+              final String name = requireNonNull(bareId(arg)).name;
+              names.add(name);
+              pats.add(core.idPat(argType, name, 0));
+            });
+        b.push(
+            core.tuplePat(typeMap.typeSystem, pats),
+            extent(scan.pat.pos, type));
+        scanNames.add(ImmutableList.copyOf(names));
+        return names;
+      }
       if (flatNames(scan.pat)) {
         // The pattern's type, from the type map, rather than the pattern
         // converted: converting it takes the name from the generator, and then
@@ -2605,7 +2656,7 @@ public class Resolver {
       if (id != null) {
         final String name = id.name;
         b.push(name, collection);
-        scanNames.add(name);
+        scanNames.add(ImmutableList.of(name));
         return ImmutableList.of(name);
       }
       return push(
@@ -2624,7 +2675,7 @@ public class Resolver {
             }
           });
       // A pattern names no one thing, so the lowering invents a binder.
-      scanNames.add("");
+      scanNames.add(ImmutableList.of());
       return names;
     }
 
@@ -3283,13 +3334,6 @@ public class Resolver {
         if (step instanceof Ast.Scan) {
           final Ast.Scan scan = (Ast.Scan) step;
           if (!destructurable(scan.pat)) {
-            return false;
-          }
-          if (scan.exp == null && binderCount(scan.pat) > 1) {
-            // The tree erases the pattern, and the lowering can name a scan
-            // but not the parts of one, so the names of an unbounded scan's
-            // components would not survive -- and grounding names them in the
-            // error it raises when it cannot bound one.
             return false;
           }
           if (scan.exp == null && !Expander.viaTree()) {

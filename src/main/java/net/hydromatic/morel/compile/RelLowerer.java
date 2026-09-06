@@ -18,7 +18,9 @@
  */
 package net.hydromatic.morel.compile;
 
+import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Static.last;
 
 import com.google.common.collect.ImmutableList;
@@ -41,6 +43,7 @@ import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
@@ -78,7 +81,7 @@ public class RelLowerer {
    * the name the user wrote, saying so keeps it in the plan, which is what the
    * reader of a plan wants to see.
    */
-  private final Deque<String> scanNames;
+  private final Deque<List<String>> scanNames;
 
   /**
    * Whether a collection may be scanned under a record pattern of the binders
@@ -126,7 +129,7 @@ public class RelLowerer {
   private RelLowerer(
       TypeSystem typeSystem,
       NameGenerator nameGenerator,
-      Iterable<String> scanNames,
+      Iterable<List<String>> scanNames,
       boolean scanOwnBinders,
       Map<Core.Exp, String> leafNames) {
     this.typeSystem = typeSystem;
@@ -149,7 +152,7 @@ public class RelLowerer {
       TypeSystem typeSystem,
       NameGenerator nameGenerator,
       Core.Exp exp,
-      Iterable<String> scanNames) {
+      Iterable<List<String>> scanNames) {
     return lower(typeSystem, nameGenerator, exp, scanNames, false);
   }
 
@@ -162,7 +165,7 @@ public class RelLowerer {
       TypeSystem typeSystem,
       NameGenerator nameGenerator,
       Core.Exp exp,
-      Iterable<String> scanNames,
+      Iterable<List<String>> scanNames,
       boolean scanOwnBinders) {
     return lower(
         typeSystem,
@@ -182,7 +185,7 @@ public class RelLowerer {
       TypeSystem typeSystem,
       NameGenerator nameGenerator,
       Core.Exp exp,
-      Iterable<String> scanNames,
+      Iterable<List<String>> scanNames,
       boolean scanOwnBinders,
       Map<Core.Exp, String> leafNames) {
     return new RelLowerer(
@@ -436,6 +439,25 @@ public class RelLowerer {
         return naturalElement(fromBuilder);
       }
     }
+    if (scanNames.size() > 0 && requireNonNull(scanNames.peek()).size() > 1) {
+      // The queue has a name per component, because the query's pattern named
+      // each -- `from (b, i)`. Scanning under a pattern of them keeps those
+      // names, where scanning under one name and reading the fields out would
+      // lose them, and grounding quotes them in what it says about a leaf it
+      // cannot bound.
+      final List<String> names = requireNonNull(scanNames.remove());
+      final List<Core.NamedPat> pats = new ArrayList<>();
+      forEach(
+          names,
+          ((RecordLikeType) collection.type.elementType()).argTypes(),
+          (name, argType) ->
+              pats.add(core.idPat(argType, name, nameGenerator::inc)));
+      // A tuple pattern, not `recordOrAtomPat`: the names are the query's and
+      // the element is a tuple of the values it generates, so the pattern
+      // matches by position.
+      fromBuilder.scan(core.tuplePat(typeSystem, pats), collection);
+      return naturalElement(fromBuilder);
+    }
     final Core.IdPat v = scanPat(collection);
     fromBuilder.scan(v, collection);
     return rebind(fromBuilder, core.id(v));
@@ -605,7 +627,7 @@ public class RelLowerer {
     // it a second time.
     final @Nullable String leafName = leafNames.get(collection);
     if (leafName != null && usedNames.add(leafName)) {
-      scanNames.remove(leafName);
+      scanNames.remove(ImmutableList.of(leafName));
       final Core.@Nullable IdPat leafOwn = binderOf(collection);
       return leafOwn != null && leafOwn.name.equals(leafName)
           ? leafOwn
@@ -614,7 +636,8 @@ public class RelLowerer {
     if (scanNames.isEmpty()) {
       return freshPat(type);
     }
-    final String name = scanNames.remove();
+    final List<String> names = requireNonNull(scanNames.remove());
+    final String name = names.size() == 1 ? names.get(0) : "";
     // Empty where the caller had a pattern rather than a name: a pattern
     // names no one thing, and the tree keeps paths instead.
     if (name.isEmpty() || !usedNames.add(name)) {
