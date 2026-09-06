@@ -1362,19 +1362,25 @@ something settled — §8's principle, applied to the sequence itself.
 - [x] Then flip for real: every one of the suite's 1856 queries flows
       through the tree, and the suite checks the translation by its
       results.
-- [ ] Delete the AST→From path; the resolver builds trees natively.
-      The last shape that needed the step list was a *bounded* scan
-      over a constructor pattern -- `from SOME x in xs` -- which the
-      suite does not have and which `nativelyBuildable` was declining
-      through `destructurable`. It needs a `case` both to ask whether
-      a value matches and to reach what it holds, and the tree says
-      that as `RelTranslator` does: a dependent join whose right input
-      is a `case` yielding nought or one row, with a projection
-      dropping the value that was matched. With that, the only things
-      the resolver still declines are an unbounded scan whose "as"
-      pattern wraps something it cannot enumerate, a condition on the
-      first scan, and `MOREL_GROUND_VIA_STEPS` -- so what remains
-      before the deletion is retiring that switch.
+- [x] Delete the AST→From path; the resolver builds trees natively.
+      Done: 595 lines out of `Resolver`, and `nativelyBuildable` with
+      them -- there is no longer a choice to make. What went is the
+      step-by-step conversion (`acceptStep`, `withStepEnv`, a `visit`
+      per step kind, `scanTypeCondition`, `rowValue`) and
+      `FromResolver`'s `FromBuilder`; what stays is the query-level
+      wrapping that `into`, `exists`, `forall` and `compute` need, and
+      the questions the step conversion asks about `ordinal`.
+
+      **`MOREL_GROUND_VIA_STEPS` is retired with it, and that is a
+      real loss.** It was the way to ask whether a plan that changed
+      changed because of grounding, and it could not survive: a query
+      the resolver builds as a tree can be one only the tree can
+      ground -- `from (b, i) where i elem [3, 5]` is a single scan of
+      a pair -- so reverting the grounding without also reverting the
+      resolver breaks queries, and reverting the resolver is what this
+      step deletes. `Expander`'s step-list grounding remains as the
+      fallback for what `expandViaTree` declines; it is simply no
+      longer switchable.
 
       Build them through a *builder*, not by constructing nodes
       directly and not by aping `FromBuilder`. The research is done
