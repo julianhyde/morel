@@ -2574,7 +2574,7 @@ public class Core {
     }
 
     @Override
-    public Filter accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2610,7 +2610,7 @@ public class Core {
     }
 
     @Override
-    public Project accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2695,7 +2695,7 @@ public class Core {
     }
 
     @Override
-    public Join accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2756,7 +2756,7 @@ public class Core {
     }
 
     @Override
-    public Group accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2810,7 +2810,7 @@ public class Core {
     }
 
     @Override
-    public IfEmpty accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2849,7 +2849,7 @@ public class Core {
     }
 
     @Override
-    public Sort accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2877,7 +2877,7 @@ public class Core {
     }
 
     @Override
-    public Unorder accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2916,7 +2916,7 @@ public class Core {
     }
 
     @Override
-    public Skip accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -2957,7 +2957,7 @@ public class Core {
     }
 
     @Override
-    public Take accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -3019,7 +3019,7 @@ public class Core {
     }
 
     @Override
-    public Union accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -3049,7 +3049,7 @@ public class Core {
     }
 
     @Override
-    public Intersect accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
@@ -3079,7 +3079,7 @@ public class Core {
     }
 
     @Override
-    public Except accept(Shuttle shuttle) {
+    public Exp accept(Shuttle shuttle) {
       return shuttle.visit(this);
     }
 
