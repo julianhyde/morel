@@ -331,8 +331,8 @@ public class RelBuilderTest {
   }
 
   /**
-   * Tests that an outer join is one component, so a name from inside it reads
-   * that component rather than a position of its own.
+   * Tests that an outer join concatenates like any other, so a name from inside
+   * it keeps a position of its own (discussion.md §15).
    */
   @Test
   void testNamesAcrossAnOuterJoin() {
@@ -343,9 +343,15 @@ public class RelBuilderTest {
     b.push("g", f.emps).pair();
     b.join(Core.Rel.JoinType.INNER, core.boolLiteral(true));
 
-    // The left join did not flatten, so it is one component and 'g' is the
-    // second -- not the third.
-    assertThat(b.name("g"), hasToString("#2 $0"));
+    // The left join flattened, so its two components keep their places and
+    // 'g' is the third. Each component of the absent side is option-wrapped
+    // on its own, which is what Morel binds: 'e' and 'd' are options here,
+    // not one option over the pair.
+    assertThat(b.name("g"), hasToString("#3 $0"));
+    // The left join leaves its right side absent, so 'd' is an option and
+    // 'e' is not -- one option per component, and not one over the pair.
+    assertThat(b.name("e").type, hasToString("{deptno:int}"));
+    assertThat(b.name("d").type, hasToString("{deptno:int} option"));
   }
 
   /** Tests that a set operator takes as many inputs as it is given. */

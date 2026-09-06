@@ -800,10 +800,16 @@ public class RelBuilder {
    */
   private ImmutableMap<String, Core.Exp> joinNames(
       Core.Exp rel, Frame left, Frame right) {
+    final Core.Rel.JoinType joinType = ((Core.Join) rel).joinType;
     final Core.Exp element = core.input0(rel.type.elementType());
     final Map<String, Core.Exp> names = new LinkedHashMap<>();
-    rebaseInto(names, left, 0, element);
-    rebaseInto(names, right, core.componentCount(left.rel), element);
+    rebaseInto(names, left, 0, element, joinType.leftIsOption());
+    rebaseInto(
+        names,
+        right,
+        core.componentCount(left.rel),
+        element,
+        joinType.rightIsOption());
     return ImmutableMap.copyOf(names);
   }
 
@@ -813,15 +819,58 @@ public class RelBuilder {
    * join has several, whose indexes shift by the offset.
    */
   private void rebaseInto(
-      Map<String, Core.Exp> names, Frame frame, int offset, Core.Exp element) {
+      Map<String, Core.Exp> names,
+      Frame frame,
+      int offset,
+      Core.Exp element,
+      boolean absent) {
     final int n = core.componentCount(frame.rel);
     frame.names.forEach(
-        (name, a) ->
-            names.put(
-                name,
-                n == 1
-                    ? substitute(a, core.field(typeSystem, element, offset))
-                    : shift(a, offset, element)));
+        (name, a) -> {
+          if (n != 1) {
+            names.put(name, shift(a, offset, element));
+            return;
+          }
+          final Core.Exp component = core.field(typeSystem, element, offset);
+          names.put(
+              name,
+              absent
+                  ? optionize(
+                      a, core.input0(frame.rel.type.elementType()), component)
+                  : substitute(a, component));
+        });
+  }
+
+  /**
+   * Re-expresses a name's path into a component as a path into an option of
+   * that component, for the side an outer join can leave absent.
+   *
+   * <p>Where the name is the whole component, the option-typed component is the
+   * path. Otherwise the path maps through the option, because Morel makes each
+   * *binder* of the absent side an option and not the side as a whole: {@code
+   * left join (j, k) in pairs} binds {@code j : int option} and {@code k : int
+   * option}, not {@code (int * int) option} (spec.md §3.4).
+   */
+  private Core.Exp optionize(
+      Core.Exp access, Core.Exp rawRef, Core.Exp component) {
+    if (access.op == Op.ID) {
+      return component;
+    }
+    final Core.IdPat param =
+        core.idPat(rawRef.type, typeSystem.nameGenerator::get);
+    final Core.Exp body = substitute(access, core.id(param));
+    final Core.Fn fn =
+        core.fn(typeSystem.fnType(rawRef.type, body.type), param, body);
+    final Type optionType = typeSystem.option(body.type);
+    return core.apply(
+        Pos.ZERO,
+        optionType,
+        core.apply(
+            Pos.ZERO,
+            typeSystem.fnType(component.type, optionType),
+            core.functionLiteral(typeSystem, BuiltIn.OPTION_MAP),
+            fn),
+        component);
   }
 
   /** Rewrites {@code #j $0} to {@code #(offset + j) $0}. */

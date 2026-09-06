@@ -758,6 +758,17 @@ is flat, which was the reason to look past §7's two options at all.
 the query wants something else.** Done. What follows is what building
 it took, including the two things the design did not anticipate.
 
+*A postscript, because the outer join was built the other way first.*
+`isFlat` excluded it -- an outer join was one component, which is the
+pair this section rejected -- on the ground that "the step list the
+tree lowers to re-types whole bindings, not fields of them". That is
+not so: a scan with an outer join re-types each binding of the side
+it can leave absent, and wrapping is additive, which is exactly where
+`i option option` comes from when two outer joins chain. The
+contradiction was visible in the code, since `joinElementType` wrapped
+per component all along. Concatenating every join is what makes the
+chained case come out with the types Morel has always given it.
+
 **The path arithmetic.** After the join, a binder's access has to be
 rebased onto the concatenated element. Left components occupy
 positions 1..k where k is `components(left).size()`, and right
