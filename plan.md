@@ -37,16 +37,15 @@ configuration to test.
 The feature is finished when a tree is what executes and what prints.
 Six goals, in order, each with the thing that says it is done.
 
-1. **Decide how `$0` is told apart, and implement it.** Blocking, and
-   the reason step 3 was surveyed rather than started -- see the
-   survey under step 3 for why it will not announce itself. Three
-   candidates: a distinct `Core` node carrying its input ordinal
-   rather than an `Id`; an `IdPat` whose ordinal distinguishes the
-   node, so that equality separates two `$0`s; or a scoping rule that
-   every free-variable walk honours. Argue it in discussion.md as §2
-   and §7 were argued. *Done when* `Analyzer`, `Inliner` and
-   `freePats` cannot conflate the `$0` of two nodes, with a test that
-   fails without the change.
+1. ~~Decide how `$0` is told apart, and implement it.~~ **Done.** It
+   is a node of its own, `Core.Input`, carrying the ordinal of the
+   input it names -- argued in discussion.md §17 against the two
+   alternatives (an `IdPat` ordinal per node, a scoping rule every
+   walk honours). A pass that reasons about variables walks
+   `Core.Id`, and `$0` has stopped being one, so `Analyzer`,
+   `Inliner` and `freePats` are right about it without being told.
+   `RelTest.testInputIsNotAVariable` is the regression test, and the
+   13 places that compared its *name* are now type tests.
 
 2. **The resolver stops lowering, and the tree survives the rewrite
    passes.** `Resolver` returns the `Core.Rel`; `Compiler` and

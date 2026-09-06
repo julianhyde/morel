@@ -538,6 +538,8 @@ public class Visitor {
 
   // Relational tree (Core.Rel) nodes.
 
+  protected void visit(Core.Input input) {}
+
   protected void visit(Core.Filter filter) {
     filter.input.accept(this);
     filter.condition.accept(this);

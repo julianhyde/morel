@@ -45,15 +45,11 @@ import net.hydromatic.morel.type.TypeSystem;
  * here than in the wrong query results it would otherwise cause.
  */
 public class RelValidator {
-  /** The element of a node's input. */
-  private static final String INPUT_0 = "$0";
+  /** Which inputs an expression may reference. */
+  private static final Set<Integer> NONE = ImmutableSet.of();
 
-  /** The element of a join's right input. */
-  private static final String INPUT_1 = "$1";
-
-  private static final Set<String> NONE = ImmutableSet.of();
-  private static final Set<String> ZERO = ImmutableSet.of(INPUT_0);
-  private static final Set<String> ZERO_ONE = ImmutableSet.of(INPUT_0, INPUT_1);
+  private static final Set<Integer> ZERO = ImmutableSet.of(0);
+  private static final Set<Integer> ZERO_ONE = ImmutableSet.of(0, 1);
 
   private final TypeSystem typeSystem;
   private final List<String> violations = new ArrayList<>();
@@ -253,15 +249,13 @@ public class RelValidator {
    * <p>The walk stops at a nested node, whose expressions are in that node's
    * scope, not this one; the nested node is validated in its own right.
    */
-  private void scope(Core.Exp exp, Set<String> allowed, String what) {
+  private void scope(Core.Exp exp, Set<Integer> allowed, String what) {
     exp.accept(
         new RelBoundaryVisitor() {
           @Override
-          protected void visit(Core.Id id) {
-            final String name = id.idPat.name;
-            if ((name.equals(INPUT_0) || name.equals(INPUT_1))
-                && !allowed.contains(name)) {
-              violation("%s cannot reference %s", what, name);
+          protected void visit(Core.Input input) {
+            if (!allowed.contains(input.i)) {
+              violation("%s cannot reference $%s", what, input.i);
             }
           }
 

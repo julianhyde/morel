@@ -866,3 +866,65 @@ It has to be the node's own answer rather than a caller's care, because
 the rules of step 4 will remove and reorder filters constantly, and a
 rule that has to remember to re-associate its parent's projection is a
 rule that will forget.
+
+## 17. `$0` is not a variable
+
+`core.input0(t)` builds `Core.Id` over `IdPat("$0", 0)`, and
+`IdPat.equals` compares name and ordinal and *not* type. So every
+`$0` in a tree is one variable to anything that reasons about free
+variables — `Analyzer`'s use counts, `Inliner`'s substitution,
+`freePats` — however many nodes there are and whatever their element
+types.
+
+Nothing is wrong today, because a tree is built, lowered and
+discarded inside a single pass and no such pass ever sees one. Step 3
+ends that: the tree survives the inline loop so that it can be what
+executes and what prints.
+
+**It would not announce itself.** A use count that comes out too high
+makes the inliner decline — a missed rewrite, invisible. One that
+comes out too low makes it substitute across a node boundary, and
+only on a query that happens to have the same shape at two depths.
+Neither is a crash, and the script suite would show the second as a
+wrong answer in some unrelated-looking query.
+
+Three ways to fix it.
+
+|  | tells two `$0` apart | walks that must know | plan text |
+| --- | --- | --- | --- |
+| distinct node | by construction | none | `$0` |
+| per-node ordinal | by equality | every one, still | `$0` + ordinal, or suppressed |
+| scoping rule | not at all; they defer to it | every one | `$0` |
+
+**Resolution: `$0` becomes a node of its own, not an `Id`.** It is
+what is true. `$0` is a positional reference to the element of the
+enclosing node's input, bound by that node; it is not a name the
+query wrote, and a `$` cannot occur in an identifier precisely so
+that it can never be one. Writing it as an `Id` was the shortcut, and
+the 13 places that compare its *name* — in `RelValidator`,
+`RelTranslator`, `RelBuilder`, `RelExpander` and the resolver — are
+each a string comparison standing in for a type test.
+
+The gain is that no walk has to know. A pass that reasons about
+variables reasons about `Core.Id`, and `$0` stops being one, so
+`Analyzer`, `Inliner` and `freePats` are right about it without being
+told — including the passes step 4 has not written yet. That is the
+argument of §8 and §15 again: a thing that is one thing composes, and
+an invariant the datatype enforces beats one every reader must
+remember.
+
+*The per-node ordinal is rejected* because it makes `$0` a different
+free variable per node rather than not a variable at all. A walk can
+still substitute one; a rule that moves an expression between nodes
+must renumber and is silently wrong if it forgets; and the ordinal
+has to reach the plan text or be suppressed there, in the step that
+freezes it.
+
+*The scoping rule is rejected* on the ground §8 rejected
+`projectMany`: it is a convention, and every walk that forgets it is
+a bug that looks like nothing.
+
+Cost: 28 sites build `$0` or `$1` and all of them keep working, since
+they go through `CoreBuilder`; the 13 name comparisons become
+`instanceof`; and the handful of shuttles that rewrite `$0` move from
+`visit(Core.Id)` to `visit(Core.Input)`.

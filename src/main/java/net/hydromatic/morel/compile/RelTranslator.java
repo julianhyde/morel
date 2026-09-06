@@ -59,8 +59,6 @@ import org.jspecify.annotations.Nullable;
  * wildcard, a tuple or a record -- make it return null rather than guess.
  */
 public class RelTranslator {
-  /** The name that an expression uses for the element of its input. */
-  private static final String INPUT_0 = "$0";
 
   private final TypeSystem typeSystem;
 
@@ -355,9 +353,10 @@ public class RelTranslator {
       int offset,
       boolean option,
       Core.Join join) {
-    final Core.Id element = core.input0(join.type.elementType());
+    final Core.Input element = core.input0(join.type.elementType());
     final int n = core.componentCount(input);
-    final Core.Id rawRef = core.input(input.type.elementType(), inputOrdinal);
+    final Core.Input rawRef =
+        core.input(input.type.elementType(), inputOrdinal);
     for (Map.Entry<Core.NamedPat, Core.Exp> entry : source.entrySet()) {
       final Core.Exp a = entry.getValue();
       final Core.Exp rebased;
@@ -388,18 +387,17 @@ public class RelTranslator {
     }
     final Core.Apply apply = (Core.Apply) exp;
     return apply.fn instanceof Core.RecordSelector
-        && apply.arg.op == Op.ID
-        && ((Core.Id) apply.arg).idPat.name.equals("$" + inputOrdinal);
+        && apply.arg.op == Op.INPUT
+        && ((Core.Input) apply.arg).i == inputOrdinal;
   }
 
   /** Replaces {@code $i} in an expression with another expression. */
   private Core.Exp subst1(Core.Exp exp, int i, Core.Exp e) {
-    final String name = "$" + i;
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.Exp visit(Core.Id id) {
-            return id.idPat.name.equals(name) ? core.at(e, id.pos) : id;
+          protected Core.Exp visit(Core.Input input) {
+            return input.i == i ? core.at(e, input.pos) : input;
           }
         });
   }
@@ -411,15 +409,14 @@ public class RelTranslator {
    * and then its own field.
    */
   private Core.Exp shift(
-      Core.Exp exp, int inputOrdinal, int offset, Core.Id element) {
-    final String name = "$" + inputOrdinal;
+      Core.Exp exp, int inputOrdinal, int offset, Core.Input element) {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
           protected Core.Exp visit(Core.Apply apply) {
             if (apply.fn instanceof Core.RecordSelector
-                && apply.arg.op == Op.ID
-                && ((Core.Id) apply.arg).idPat.name.equals(name)) {
+                && apply.arg.op == Op.INPUT
+                && ((Core.Input) apply.arg).i == inputOrdinal) {
               final int j = ((Core.RecordSelector) apply.fn).slot;
               return core.field(typeSystem, element, offset + j);
             }
@@ -498,8 +495,9 @@ public class RelTranslator {
       yieldAccess.putAll(sideAccess);
       return true;
     }
-    final Core.Id rawRef = core.input(rawElementType, i);
-    final Core.Id optionRef = core.input(typeSystem.option(rawElementType), i);
+    final Core.Input rawRef = core.input(rawElementType, i);
+    final Core.Input optionRef =
+        core.input(typeSystem.option(rawElementType), i);
     for (Map.Entry<Core.NamedPat, Core.Exp> entry : sideAccess.entrySet()) {
       final Core.@Nullable NamedPat binding = binding(env, entry.getKey().name);
       if (binding == null) {
@@ -523,8 +521,8 @@ public class RelTranslator {
    * {@code k : int option}, not {@code (int * int) option}.
    */
   private Core.Exp optionize(
-      Core.Exp access, Core.Id rawRef, Core.Exp optionRef, Type optionType) {
-    if (access.op == Op.ID) {
+      Core.Exp access, Core.Input rawRef, Core.Exp optionRef, Type optionType) {
+    if (access.op == Op.INPUT) {
       return optionRef;
     }
     final Core.IdPat param = freshPat(rawRef.type);
@@ -532,10 +530,8 @@ public class RelTranslator {
         access.accept(
             new Shuttle(typeSystem) {
               @Override
-              protected Core.Exp visit(Core.Id id) {
-                return id.idPat.name.equals(rawRef.idPat.name)
-                    ? core.id(param)
-                    : id;
+              protected Core.Exp visit(Core.Input input) {
+                return input.i == rawRef.i ? core.id(param) : input;
               }
             });
     final Core.Fn fn =
@@ -744,7 +740,7 @@ public class RelTranslator {
   }
 
   private static boolean isInput0(Core.Exp exp) {
-    return exp.op == Op.ID && ((Core.Id) exp).idPat.name.equals(INPUT_0);
+    return exp.op == Op.INPUT && ((Core.Input) exp).i == 0;
   }
 
   /** Returns the ordinal of a field in a record type, or -1. */
@@ -886,8 +882,8 @@ public class RelTranslator {
                 exp.accept(
                     new Shuttle(typeSystem) {
                       @Override
-                      protected Core.Exp visit(Core.Id id) {
-                        return id.idPat.name.equals(INPUT_0) ? paramId : id;
+                      protected Core.Exp visit(Core.Input input) {
+                        return input.i == 0 ? paramId : input;
                       }
                     })));
     return map;
@@ -936,7 +932,7 @@ public class RelTranslator {
     if (access.size() == 1) {
       final Map.Entry<Core.NamedPat, Core.Exp> only =
           access.entrySet().iterator().next();
-      if (only.getValue().op == Op.ID
+      if (isInput0(only.getValue())
           && only.getKey() instanceof Core.IdPat
           && only.getKey().type.equals(elementType)) {
         return (Core.IdPat) only.getKey();

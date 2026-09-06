@@ -275,6 +275,9 @@ public enum CoreBuilder {
     switch (exp.op) {
       case ID:
         return id(pos, ((Core.Id) exp).idPat);
+      case INPUT:
+        final Core.Input input = (Core.Input) exp;
+        return input(pos, input.type, input.i);
       case APPLY:
         final Core.Apply apply = (Core.Apply) exp;
         return apply(pos, apply.type, apply.fn, apply.arg);
@@ -798,25 +801,30 @@ public enum CoreBuilder {
   // Relational tree (Core.Rel) nodes. These will replace the step builders
   // above when step 2 of plan.md lowers trees instead of building steps.
 
-  /** Name that an expression uses for the element of a node's input. */
-  public static final String INPUT_0 = "$0";
-
-  /** Name that a join's expressions use for the element of its right input. */
-  public static final String INPUT_1 = "$1";
-
   /** Creates a reference to the element of a node's input, {@code $0}. */
-  public Core.Id input0(Type elementType) {
+  public Core.Input input0(Type elementType) {
     return input(elementType, 0);
   }
 
   /** Creates a reference to the element of a join's right input, {@code $1}. */
-  public Core.Id input1(Type elementType) {
+  public Core.Input input1(Type elementType) {
     return input(elementType, 1);
   }
 
   /** Creates a reference to the element of input {@code i}. */
-  public Core.Id input(Type elementType, int i) {
-    return id(idPat(elementType, "$" + i, 0));
+  public Core.Input input(Type elementType, int i) {
+    return input(Pos.ZERO, elementType, i);
+  }
+
+  /**
+   * Creates a reference to the element of input {@code i}, at a position.
+   *
+   * <p>An expression substituted for one is blamed where the reference was --
+   * {@code order i} is the {@code i} the user wrote -- so the reference has to
+   * carry a position for {@link #at} to move onto it.
+   */
+  public Core.Input input(Pos pos, Type elementType, int i) {
+    return new Core.Input(pos, elementType, i);
   }
 
   /**

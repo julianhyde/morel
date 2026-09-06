@@ -701,6 +701,10 @@ public class Shuttle {
 
   // Relational tree (Core.Rel) nodes.
 
+  protected Core.Exp visit(Core.Input input) {
+    return input;
+  }
+
   protected Core.Filter visit(Core.Filter filter) {
     return filter.copy(
         filter.input.accept(this), filter.condition.accept(this));
