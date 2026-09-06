@@ -54,6 +54,31 @@ Six goals, in order, each with the thing that says it is done.
    declines it explicitly. *Done when* the suite is green and
    `Sys.planEx "0"` prints a tree.
 
+   **Tried far enough to find where it stops.** Letting the resolver
+   return `b.build()` and lowering in `Compiler.compile` at
+   `expression instanceof Core.Rel` is two small changes, and
+   ordinary bounded queries then run correctly all the way through --
+   `Inliner` and `Analyzer` pass a tree along without complaint, as
+   the survey said they would.
+
+   What stops it is grounding. `SuchThatShuttle` intercepts
+   `Core.From`, and with the resolver emitting trees there are none,
+   so an unbounded query reaches the evaluator with its extent
+   intact. Grounding a tree wants `RelExpander.expand` on the
+   *outermost* `Core.Rel`, and a `Shuttle` cannot see which node that
+   is. Goals 2 and 3 therefore land together, and with them goal 5,
+   because the plan text moves the moment the resolver stops
+   lowering.
+
+   The prerequisite is done: `Shuttle`'s twelve `Core.Rel` visits and
+   the matching `accept` methods returned narrow types (`Core.Filter`
+   in, `Core.Filter` out), which forbids the rewrites step 4 exists
+   to write -- dropping a `filter true` replaces a filter with its
+   input, and no `Shuttle` override could say so. They return
+   `Core.Exp` now. Nothing overrode them, which is itself the
+   evidence: `RelExpander.rebuild` walks the tree with its own
+   recursion rather than a `Shuttle`, and that was why.
+
 3. **Grounding takes the tree directly.** `SuchThatShuttle` calls
    `RelExpander.expand` instead of `Expander.expandFrom`, so a query
    is no longer lowered, translated back and lowered again. This is
