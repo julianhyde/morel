@@ -1282,6 +1282,29 @@ something settled — §8's principle, applied to the sequence itself.
       sees `(a * b) option` where the query has `a option * b option`.
       The step list's answer is the one the user has seen.
 
+      **Measured, not assumed.** Letting them through and following
+      the failure narrows it to one place. The lowering *can* produce
+      the step list's shape: leave a side of several bindings apart
+      rather than materializing it into one, and `FromBuilder`'s scan
+      wraps each of them, which is where `i option option` comes from.
+      Two things had to be fixed to get that far -- `rebind` handled
+      only a bare id, and rebuilding the re-typed components as a
+      tuple has to construct rather than copy, because a copy keeps
+      the old type -- and after both, the element handed up is
+      correctly `int option option * int option`.
+
+      The result is still `{i:int option, j:int, k:int}`, because the
+      *resolver's* paths address the tree's shape: `i` is inside the
+      one `option`-wrapped component, and no amount of work in the
+      lowering changes where the name map says to look. So the two
+      shapes have to be reconciled where they are decided -- either a
+      tree's outer join contributes a component per binding, each
+      wrapped (a change to discussion.md §15), or the query's type
+      changes and the step list's answer is no longer the one users
+      see. That is a decision about the IR, not a defect in the
+      translation, and it is the last thing between this and every
+      query flowing through the tree.
+
       Two plans in `RelTranslatorTest` lost a projection by it: the
       tree names what a cons pattern binds with paths rather than
       binding it, so nothing materializes the `xs` that `from (x ::
