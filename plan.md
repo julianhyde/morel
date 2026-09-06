@@ -27,17 +27,26 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 
 ## Step 0 — Freeze the datatype and the plan-text grammar
 
-- [ ] Constructor set: SCAN-free leaves (bare expressions), FILTER,
-      JOIN (with yield expression over `$0` and `$1`), PROJECT_MANY
-      (lambda `v => collection`, subsuming the dependent scan; the
-      one node that names its input element rather than binding
-      `$0`), PROJECT, GROUP (key/agg shapes), SORT, UNORDER, TAKE,
-      SKIP, UNION, INTERSECT, EXCEPT, COMPUTE; DISTINCT desugars to
-      GROUP; AND/OR n-ary.
-- [ ] Per-constructor bag/list kind signatures, transcribed from
+All six are written in spec.md, and the constructor set is not the
+one this step first listed. `JOIN` carries no yield -- it
+concatenates its inputs' components, and a projection follows
+(discussion.md §15) -- and `PROJECT_MANY` is gone, because a
+dependent join is a join carrying a binder and needs no constructor
+of its own (§8). `IF_EMPTY` arrived instead. spec.md §3.4 described
+the join with a yield until step 2 was finished, under a note saying
+it would be rewritten "when it lands, which is before this text is
+frozen"; it has landed, and it is rewritten.
+
+- [x] Constructor set: SCAN-free leaves (bare expressions), FILTER,
+      JOIN (kind, optional binder, condition; no yield), PROJECT,
+      GROUP (key/agg shapes), IF_EMPTY, SORT, UNORDER, TAKE, SKIP,
+      UNION, INTERSECT, EXCEPT; DISTINCT desugars to GROUP, COMPUTE
+      to GROUP plus the extraction its wrapper performs; AND/OR
+      n-ary. spec.md §3.
+- [x] Per-constructor bag/list kind signatures, transcribed from
       current step semantics (SORT : bag -> list; UNORDER; kind of
-      join; set operators).
-- [ ] Scoping invariants: a one-input node binds `$0` to its input
+      join; set operators). spec.md §4.
+- [x] Scoping invariants: a one-input node binds `$0` to its input
       element, a two-input node binds `$0` and `$1` to its left and
       right input elements, in addition to the environment enclosing
       the tree; expressions evaluated before the first row (SKIP and
@@ -45,15 +54,20 @@ tests green. Plan text and rewrite ports are each paid exactly once.
       in them is an error; every other free variable of an embedded
       expression is bound outside the tree; per-node label
       distinctness; deterministic rename convention at scope merges.
-- [ ] Element-type derivation specified normatively, including
+      spec.md §2 and §5.
+- [x] Element-type derivation specified normatively, including
       singleton atomization and the zero-binding (unit) case.
-- [ ] Plan-text grammar for Sys.plan / Sys.planEx, written once in
+      spec.md §1 and §3 -- atomization by being abolished, since an
+      element's type is the type of the expression that builds it,
+      and the unit case by the `[()]` leaf of §3.1.
+- [x] Plan-text grammar for Sys.plan / Sys.planEx, written once in
       final form: this is the contract morel-rust and morel-go
       implement. planEx prints the element type at every node.
       Pin the collation of generated labels against user labels.
-- [ ] Record rejected alternatives (pair-based join; lambdas for
+      spec.md §6.
+- [x] Record rejected alternatives (pair-based join; lambdas for
       scalar fields; advisory names; row-representation Plans A/B/B′)
-      in discussion.md.
+      in discussion.md -- §15, §2, §3 and §7 respectively.
 
 ## Step 1 — Shadow tree (no behavior change)
 
