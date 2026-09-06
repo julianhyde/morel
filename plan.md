@@ -1220,10 +1220,26 @@ something settled — §8's principle, applied to the sequence itself.
       tree builds it, which `RelTranslatorTest` had documented as
       belonging to the resolver rather than to the translation.
 
-      What the remaining 30 want: a scan whose pattern can fail to
-      match -- a constructor, a literal, a cons, an "as" (16) -- an
-      unbounded scan that binds more than one name (8), a record scan
-      pattern (4), and two chained outer joins.
+      Then the unbounded scan that binds more than one name, which
+      was left out earlier because the lowering could name a scan and
+      not the parts of one, so `from (b, i)` reached the plan as
+      `w$26` and grounding quoted that in the error it raises when it
+      cannot bound a leaf. What `scanNames` carries is now a list per
+      scan rather than a name, and where it holds several the lowering
+      scans under a tuple pattern of them. 1834 of 1856.
+
+      Two things had to be right for that. The names come from the
+      Ast, not from converting the pattern: converting it takes the
+      ordinals, and the lowering -- which mints the patterns the plan
+      actually has -- would then call them `b_1` and `i_1`. And only
+      an unbounded scan gets this; supplying the names for an ordinary
+      `from (a, b) in pairs` as well moved 561 lines of expected
+      output across ten files, because those plans are named the way
+      they are for reasons of their own.
+
+      What the remaining 22 want: a scan whose pattern can fail to
+      match -- a constructor, a literal, a cons, an "as" (16) -- a
+      record scan pattern (4), and two chained outer joins.
 
       That last one is a naming limit rather than a translation one.
       `from (b, i)` grounds and answers correctly, but the tree erases
