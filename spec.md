@@ -84,8 +84,8 @@ Three rules complete the picture:
    denotes the current element of the left input. The right input is
    the one argument that routinely contains a nested tree, which
    would shadow `$0`; a bound name crosses that boundary by ordinary
-   lexical scoping. The condition and the yield see `$0` and `$1` as
-   any join's do. See discussion.md §8.
+   lexical scoping. The condition sees `$0` and `$1` as any join's
+   does. See discussion.md §8.
 3. **Nested trees shadow.** Inside a tree that appears within an
    expression, `$0` is that tree's own input element. To use the
    outer element inside a nested tree, bind it first —
@@ -174,16 +174,16 @@ from d in scott.depts, e in d.emps where e.sal > 1000 yield {d, e}
 ```
 
 ```
-join [d] [{d = $0, e = $1}]
-  scott.depts
-  filter [#sal $0 > 1000]
-    #emps d
+project [{d = #1 $0, e = #2 $0}]
+  join [d]
+    scott.depts
+    filter [#sal $0 > 1000]
+      #emps d
 ```
 
 The binder `d` names the left element inside the right input, where
 `$0` cannot reach because the right input is a tree of its own and
-rebinds `$0`. The condition and the yield are over `$0` and `$1`, as
-in any join.
+rebinds `$0`. The condition is over `$0` and `$1`, as in any join.
 
 **Dependence is still not a mode of the node.** The binder is a
 scoping device, not a flag. Dependence is a free occurrence of the
@@ -239,20 +239,34 @@ yields nothing the join still emits a row with `$1` absent.
 
 | Constructor | Arguments | Element type | Scope |
 | --- | --- | --- | --- |
-| `join` | kind ∈ {inner, left, right, full}, binder `v` (optional), `cond : bool`, yield `e` | type of `e` | `$0` (left element), `$1` (right element); `v` names the left element in the right input (§3.3) |
+| `join` | kind ∈ {inner, left, right, full}, binder `v` (optional), `cond : bool` | the inputs' components concatenated, each component of a side the kind can leave absent wrapped in `option` | `$0` (left element), `$1` (right element); `v` names the left element in the right input (§3.3) |
 | `union`, `intersect`, `except` | `r₀ … rₙ`, `distinct : bool` | `τ₀` | — |
 
-For an outer join the absent side is an `option`, which transcribes
-current behavior: `from a in [1, 2] left join b in [1] on a = b` has
-type `{a: int, b: int option} list`.
+**A join has no yield.** It concatenates, and a projection follows
+where the query wants something else (discussion.md §15). The
+*components* of a node are
 
-**The condition and the yield see different types on that side.** The
-condition is evaluated on candidate pairs, where both elements are
-present, so it sees `$0 : τ₀` and `$1 : τ₁` whatever the join's kind.
-The yield is evaluated once per output row, including rows that
-matched nothing, so on a side the join can leave absent it sees an
-`option`: `$1 : τ₁ option` in a `left` join, `$0 : τ₀ option` in a
-`right` join, both in a `full` join.
+```
+components(join(r₀, r₁)) = components(r₀) ++ components(r₁)
+components(anything else) = [it]
+```
+
+so `(A ⋈ B) ⋈ C` and `A ⋈ (B ⋈ C)` both have components `A, B, C`:
+flat, three of them, and the same in both associations. Reassociating
+therefore changes no type and nothing above the node rewrites.
+Commuting swaps the inputs and substitutes `$0` ↔ `$1` in the
+condition; it renumbers the components, so a projection above does
+re-path.
+
+A component is not a field of an element: `from e in emps, d in
+depts` has two components, each a whole row, not sixteen.
+
+**The condition and the element see different types on an absent
+side.** The condition is evaluated on candidate pairs, where both
+elements are present, so it sees `$0 : τ₀` and `$1 : τ₁` whatever the
+join's kind. The element is the output row, including rows that
+matched nothing, so a component of a side the join can leave absent
+is an `option`.
 
 The asymmetry is the standard one — it is what every relational
 executor does, and it is what makes `on a = b` mean what it says
@@ -262,38 +276,29 @@ condition too) costs every outer join a partial function in its plan
 text. So, for `from a in [1, 2] left join b in [1] on a = b`:
 
 ```
-join [left] [$0 = $1] [{a = $0, b = $1}]
-  [1, 2]
-  [1]
+project [{a = #1 $0, b = #2 $0}]
+  join [left] [$0 = $1]
+    [1, 2]
+    [1]
 ```
 
-where `$1` is `int` in the condition and `int option` in the yield.
+where `$1` is `int` in the condition, and the join's element is `int *
+int option`.
 
 Morel makes each *binder* of the absent side an option, not the side
 as a whole — `left join (j, k) in pairs` binds `j : int option` and
-`k : int option`, not `(int * int) option` — so a yield that reads
-more than one binder maps each access through the option, with
-`Option.map`. The node stays simple; the arithmetic of which value
-becomes `NONE` is in the expression, where a rule can see it.
+`k : int option`, not `(int * int) option`. Where a query's binder is
+a whole component, which is the usual case, the node's rule is
+Morel's rule and nothing distributes: `left join d in depts` binds `d
+: {…} option`, and two chained outer joins give `i : int option
+option` because wrapping is additive. Where a *pattern* binds several
+names inside one component, as `(j, k)` does, the projection above
+maps each access through the option with `Option.map`. The node stays
+simple either way.
 
 Set operators require the element types of all their inputs to be
 equal. They are n-ary; `distinct` distinguishes `union` from `union
 all`.
-
-Commuting a join swaps its inputs and substitutes `$0` ↔ `$1` in the
-condition and the yield. The element type is unchanged, so nothing
-above the node rewrites, and no compensating projection appears.
-
-*Review.* The yield is to go (discussion.md §15). A join will emit
-the concatenation of its inputs' components — a join contributing its
-own, anything else contributing one, so that `(A ⋈ B) ⋈ C` and `A ⋈
-(B ⋈ C)` both have components `A, B, C` — and a projection will
-follow where the query wants something else. Measured over the suite,
-495 of 497 yields only pair their inputs; commute and reassociation
-become free rather than local rewrites; and an outer join gives each
-component of the absent side its own option, which is the rule above,
-without the `Option.map` a yield needs to express it. Written here
-when it lands, which is before this text is frozen.
 
 ## 4. Kinds
 
@@ -330,14 +335,14 @@ place to look when a rule is wrong.
    `join`, neither in a `skip` or `take` argument, and no free
    variable other than those and the enclosing environment's. A
    join's binder is in scope in its right input only: an occurrence
-   in its condition or its yield is ill-formed, and so is one in a
-   join that has no binder.
+   in its condition is ill-formed, and so is one in a join that has
+   no binder.
 4. **Labels.** Within one node, output labels are distinct: the
-   fields of a `project` or `join` yield record, and the keys and
-   aggregates of a `group`.
+   fields of a `project`'s record, and the keys and aggregates of a
+   `group`. A join has no labels; its components are positional.
 5. **Root type.** A rewrite preserves the type of the tree's root —
    both element type and kind. This is the cheap litmus that catches
-   most rule bugs, including every rule that forgets a yield.
+   most rule bugs, including every rule that forgets a projection.
 
 Rewrites that merge scopes — decorrelation, subquery unnesting — can
 bring two identically-named binders together. The rename convention
@@ -356,8 +361,8 @@ change across three implementations and every golden file.
 One node per line. A node's inputs are the lines below it, indented
 by two spaces. A line is an operator name followed by its arguments,
 each in brackets, in the order §3 lists them; arguments that are
-absent (an inner join's kind, a `true` condition, a `project` yield
-that is `$0`) are omitted.
+absent (an inner join's kind, a `true` condition, a `project`
+expression that is `$0`) are omitted.
 
 ```
 plan     ::= node
@@ -434,14 +439,17 @@ from e in scott.emps
 ```
 
 ```
-join [#deptno $0 = #deptno $1] [{dname = #dname $1, e = $0, id = #deptno $1}]
-  scott.emps
-  scott.depts
+project [{dname = #dname (#2 $0), e = #1 $0, id = #deptno (#2 $0)}]
+  join [#deptno $0 = #deptno $1]
+    scott.emps
+    scott.depts
 ```
 
+The join contributes two components, `scott.emps` and `scott.depts`.
 The pattern's binders (`dname`, `id`) and the record punning have
-become field accesses in the yield; the element type is the yield's
-type, and no binding list records what `dname` used to mean.
+become field accesses in the projection above it; the element type is
+that projection's, and no binding list records what `dname` used to
+mean.
 
 A correlated scan:
 
@@ -450,14 +458,15 @@ from d in scott.depts, e in d.emps where e.sal > 1000 yield {d, e}
 ```
 
 ```
-join [d] [{d = $0, e = $1}]
-  scott.depts
-  filter [#sal $0 > 1000]
-    #emps d
+project [{d = #1 $0, e = #2 $0}]
+  join [d]
+    scott.depts
+    filter [#sal $0 > 1000]
+      #emps d
 ```
 
-The binder prints as an argument, before the condition and the yield,
-and is omitted when the join has none. Its two inputs are its two
+The binder prints as an argument, before the condition, and is
+omitted when the join has none. Its two inputs are its two
 children, as any join's are; there is no lambda header, because the
 right input is an ordinary input rather than the body of a function.
 
