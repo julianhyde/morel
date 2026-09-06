@@ -20,10 +20,77 @@ License.
 -->
 # Plan: Core query representation, step list → balanced tree
 
-Destination: value-passing relational tree (parameterized-yield join,
+Destination: value-passing relational tree (concatenating join,
 expressions over numbered inputs for scalar fields, self-describing
 element types), able to apply rewrite rules. Each step keeps all
 tests green. Plan text and rewrite ports are each paid exactly once.
+
+## Where this stands, and what the next session does
+
+Steps 0, 1 and 2 are done. All 1856 of the script suite's queries are
+built as trees by the resolver, grounding goes through the tree, the
+AST-to-From path is deleted, and spec.md is frozen against what was
+built rather than what was first designed. `fullMake` is green and is
+the gate; `MOREL_GROUND_VIA_STEPS` no longer exists, so there is one
+configuration to test.
+
+The feature is finished when a tree is what executes and what prints.
+Six goals, in order, each with the thing that says it is done.
+
+1. **Decide how `$0` is told apart, and implement it.** Blocking, and
+   the reason step 3 was surveyed rather than started -- see the
+   survey under step 3 for why it will not announce itself. Three
+   candidates: a distinct `Core` node carrying its input ordinal
+   rather than an `Id`; an `IdPat` whose ordinal distinguishes the
+   node, so that equality separates two `$0`s; or a scoping rule that
+   every free-variable walk honours. Argue it in discussion.md as §2
+   and §7 were argued. *Done when* `Analyzer`, `Inliner` and
+   `freePats` cannot conflate the `$0` of two nodes, with a test that
+   fails without the change.
+
+2. **The resolver stops lowering, and the tree survives the rewrite
+   passes.** `Resolver` returns the `Core.Rel`; `Compiler` and
+   `CalciteCompiler` lower at their own boundary with
+   `RelLowerer.lower`; `Relationalizer` is either taught the tree or
+   declines it explicitly. *Done when* the suite is green and
+   `Sys.planEx "0"` prints a tree.
+
+3. **Grounding takes the tree directly.** `SuchThatShuttle` calls
+   `RelExpander.expand` instead of `Expander.expandFrom`, so a query
+   is no longer lowered, translated back and lowered again. This is
+   what makes step 2's "the lowering runs once" true. *Done when* no
+   query round-trips twice, and `RelShadow`'s translation shadow has
+   nothing left to check.
+
+4. **`Sys.plan` and `Sys.planEx` print the tree.** The printer is
+   already there: `Core.Rel.describe(withTypes)`, which is spec.md
+   §6's grammar, `withTypes` being planEx's `: type`.
+
+5. **Script-convert the expectations, in one flip.** Only plan text
+   moves. A query with no scan gains a visible `[()]` leaf (spec.md
+   §3.1) and a set operator may gain a projection that aligns its
+   branches; both return what they returned before. *A test whose
+   result changes in this step is a bug, not a re-baseline.*
+
+6. **Freeze the plan text.** Golden files become the
+   cross-implementation contract, and morel-rust (#33) and the Go
+   work can begin against them, in parallel with steps 4 and 5.
+
+Three things not to re-derive, each of which cost a detour once:
+
+* Grounding must run *after* inlining, because the engine matches on
+  function literals and `elem` is an `Id` until `Inliner` has run.
+  That is why it lives in the inline loop and not in the resolver.
+* `Resolver.toCore` is not pure -- it takes names from a generator and
+  registers in the type map -- so nothing can shadow the resolver by
+  re-running it. Replace, and let the suite's results be the oracle.
+* An outer join concatenates like any other, each component of the
+  absent side wrapped in `option` on its own (discussion.md §15).
+
+One loose end that is not ours: issue #468, the `yield {h = h}`
+type bug in `FromBuilder.tupleType`, is being fixed on main. The fix
+on this branch is only what the yield-binder slice needed to stay
+green; take main's when the two meet.
 
 ## Step 0 — Freeze the datatype and the plan-text grammar
 
