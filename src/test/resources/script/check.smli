@@ -867,14 +867,19 @@ firstOrNat ~1;
 > uncaught exception Constraint [~1 is not a valid nat]
 >   raised at: stdIn:1.24-1.47
 
-(* A pattern that destructures inside a 'case' branch is not checked: the
- * check is put on a name the pattern binds, and this one binds none that
- * covers the whole value. The same is true of a tuple, so this is a limit of
- * where the check is inserted rather than anything to do with records. *)
+(* A pattern that destructures inside a 'case' branch is checked too. It
+ * binds no one name that covers the whole value, so the check goes on the
+ * value and the pattern is matched against what it gives back. *)
 case (~1, 2) of (n: nat, m) => n;
-> val it = ~1 : int
+> uncaught exception Constraint [~1 is not a valid nat: component 1]
+>   raised at: stdIn:1.17-1.33
+case (1, 2) of (n: nat, m) => n;
+> val it = 1 : int
 case {x = ~1, y = 2} of {x: nat, y: int} => x;
-> val it = ~1 : int
+> uncaught exception Constraint [~1 is not a valid nat: field x]
+>   raised at: stdIn:1.25-1.46
+case {x = 1, y = 2} of {x: nat, y: int} => x;
+> val it = 1 : int
 
 (* --- A schema of tables, each level a named type ---------------- *)
 

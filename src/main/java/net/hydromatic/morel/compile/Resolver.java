@@ -1904,7 +1904,7 @@ public class Resolver {
     Compiles.acceptBinding(typeMap.typeSystem, pat, bindings);
     final Core.Exp exp = withEnv(bindings).toCore(match.exp);
     final Type claimed = enforcer.claimedPatType(match.pat, pat.type);
-    if (claimed != null && pat instanceof Core.NamedPat) {
+    if (claimed != null) {
       // Entering a branch whose pattern claims a type is where a value flows
       // into the claim, so that is where the check goes. A branch is what a
       // function's parameter and a 'case' have in common, so both are checked
@@ -1922,16 +1922,30 @@ public class Resolver {
       // entitled to remove: the body reads the name the check binds.
       final Core.IdPat rawPat =
           core.idPat(pat.type, () -> nameGenerator.getPrefixed("v"));
+      final Core.Exp checked =
+          enforcer.checked(core.id(rawPat), claimed, match.pos);
+      if (pat instanceof Core.NamedPat) {
+        return core.match(
+            match.pos,
+            rawPat,
+            core.let(
+                core.nonRecValDecl(
+                    match.pos, (Core.NamedPat) pat, null, checked),
+                exp));
+      }
+      // A pattern that destructures binds no one name that covers the
+      // whole value, so the check goes on the value and the pattern is
+      // matched against what it gives back. The pattern is the one that
+      // was written, so it decides as it did before; it is only reached
+      // through the check.
       return core.match(
           match.pos,
           rawPat,
-          core.let(
-              core.nonRecValDecl(
-                  match.pos,
-                  (Core.NamedPat) pat,
-                  null,
-                  enforcer.checked(core.id(rawPat), claimed, match.pos)),
-              exp));
+          core.caseOf(
+              match.pos,
+              exp.type,
+              checked,
+              ImmutableList.of(core.match(match.pos, pat, exp))));
     }
     return core.match(match.pos, pat, exp);
   }
