@@ -127,8 +127,9 @@ public class RelTranslatorTest {
   }
 
   /**
-   * Tests that an independent scan becomes a join whose yield names both
-   * binders, and that a later step reads them as fields of {@code $0}.
+   * Tests that an independent scan becomes a join, and that a later step reads
+   * its two components as fields of {@code $0}. The join carries no yield; the
+   * projection above it is where the binders are named.
    */
   @Test
   void testJoin() {
@@ -331,7 +332,7 @@ public class RelTranslatorTest {
 
   /**
    * Tests an outer join: the condition sees both elements as they are, and the
-   * yield sees an option on the side that can be absent.
+   * element has an option on the side that can be absent.
    */
   @Test
   void testOuterJoin() {
