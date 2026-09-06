@@ -705,17 +705,17 @@ public class Shuttle {
     return input;
   }
 
-  protected Core.Filter visit(Core.Filter filter) {
+  protected Core.Exp visit(Core.Filter filter) {
     return filter.copy(
         filter.input.accept(this), filter.condition.accept(this));
   }
 
-  protected Core.Project visit(Core.Project project) {
+  protected Core.Exp visit(Core.Project project) {
     return project.copy(
         typeSystem, project.input.accept(this), project.exp.accept(this));
   }
 
-  protected Core.Join visit(Core.Join join) {
+  protected Core.Exp visit(Core.Join join) {
     return join.copy(
         typeSystem,
         join.joinType,
@@ -725,7 +725,7 @@ public class Shuttle {
         join.condition.accept(this));
   }
 
-  protected Core.Group visit(Core.Group group) {
+  protected Core.Exp visit(Core.Group group) {
     return group.copy(
         typeSystem,
         group.input.accept(this),
@@ -733,37 +733,37 @@ public class Shuttle {
         visitSortedMap(group.aggregates));
   }
 
-  protected Core.IfEmpty visit(Core.IfEmpty ifEmpty) {
+  protected Core.Exp visit(Core.IfEmpty ifEmpty) {
     return ifEmpty.copy(ifEmpty.input.accept(this), ifEmpty.exp.accept(this));
   }
 
-  protected Core.Sort visit(Core.Sort sort) {
+  protected Core.Exp visit(Core.Sort sort) {
     return sort.copy(
         typeSystem, sort.input.accept(this), sort.exp.accept(this));
   }
 
-  protected Core.Unorder visit(Core.Unorder unorder) {
+  protected Core.Exp visit(Core.Unorder unorder) {
     return unorder.copy(typeSystem, unorder.input.accept(this));
   }
 
-  protected Core.Skip visit(Core.Skip skip) {
+  protected Core.Exp visit(Core.Skip skip) {
     return skip.copy(skip.input.accept(this), skip.count.accept(this));
   }
 
-  protected Core.Take visit(Core.Take take) {
+  protected Core.Exp visit(Core.Take take) {
     return take.copy(take.input.accept(this), take.count.accept(this));
   }
 
-  protected Core.Union visit(Core.Union union) {
+  protected Core.Exp visit(Core.Union union) {
     return union.copy(typeSystem, union.distinct, visitList(union.inputs));
   }
 
-  protected Core.Intersect visit(Core.Intersect intersect) {
+  protected Core.Exp visit(Core.Intersect intersect) {
     return intersect.copy(
         typeSystem, intersect.distinct, visitList(intersect.inputs));
   }
 
-  protected Core.Except visit(Core.Except except) {
+  protected Core.Exp visit(Core.Except except) {
     return except.copy(typeSystem, except.distinct, visitList(except.inputs));
   }
 
