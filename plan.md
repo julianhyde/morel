@@ -142,11 +142,27 @@ Six goals, in order, each with the thing that says it is done.
    before any validator saw it.
 
    So the next piece is in the resolver: where a nested query reads
-   `current`, bind the row first. After that, re-measure -- 384 lines
-   and 64 results at the point this was written, with the composition
-   changed rather than the count, because `foreign` and half of
-   `check` came clean while `relational` grew by the violations the
-   validator can now see.
+   `current`, bind the row first. 384 lines and 64 results at the
+   point this was written, with the composition changed rather than
+   the count, because `foreign` and half of `check` came clean while
+   `relational` grew by the violations the validator can now see.
+
+   **The binding was written, and it collides with `ordinal`.** The
+   shape is: convert the expression with the row bound to a fresh
+   name, then keep the `let` only where a tree nested in the
+   expression actually reads it -- an expression with no nested tree,
+   or one that reads nothing of the row, is left alone, so no plan
+   moves and the suite is green without the flip. With the flip,
+   `from i in [2, 3], x in (from k in [1..6] where k mod i = 0 group
+   {} compute {c = count over ()})` fails: "'ordinal' occurs outside a
+   yield: $ordinal ()". The check that says where `ordinal` may appear
+   is positional, and a `let` between the step and its expression puts
+   it somewhere the check does not expect.
+
+   So the remedy the spec names needs the ordinal rule to be about
+   scope rather than position, or the binding has to go somewhere the
+   rule already allows. That is the next thing to settle, and it is a
+   question about `ordinal`, not about trees.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
