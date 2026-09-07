@@ -97,22 +97,39 @@ Six goals, in order, each with the thing that says it is done.
      The same hook on `Visitor` answers it.
    * *The compiler boundary.* `Compiler.compile` lowering at
      `expression instanceof Core.Rel` is enough for code generation.
-   * *The environment machinery is the real work.* `EnvVisitor` builds
-     an aggregate's environment from the `Core.From` group **step** on
-     its `fromStack`, and a tree's `Core.Group` puts nothing there, so
-     `fromStack.element()` throws. Skipping the push is not the fix,
-     though it looks like one: the aggregate's *argument* reads `$0`
-     and needs nothing, but the aggregate *function* needs the group's
-     keys in scope, and without them `Inliner` resolves `sum` as the
-     scalar and dies with "PrimitiveType cannot be cast to FnType". A
-     tree's `group` needs a context of its own, with the keys as
-     bindings.
+   * *The environment machinery.* `EnvVisitor` builds an aggregate's
+     environment from the `Core.From` group **step** on its
+     `fromStack`, and a tree's `Core.Group` puts nothing there, so
+     `fromStack.element()` throws. A tree's `group` needs a context of
+     its own: the aggregate's *argument* reads `$0` and needs nothing,
+     but the aggregate *function* may name a key -- `fn list =>
+     List.size list + k` -- so the keys have to be bound for it.
+     Giving `EnvVisitor` a `visit(Core.Group)` that does exactly that
+     is written and works.
 
-   Measured with the first three and a crude version of the fourth:
-   the suite goes from 1500 differing lines across 19 files to 950
-   across 16, and what is left is concentrated in that environment
-   machinery. The plan text moves too, which is goal 5, so the
-   verification to insist on is that no *result* changes.
+   Measured with all four: the suite goes from 1500 differing lines
+   across 19 files to 950 across 16. The plan text moves too, which is
+   goal 5, so the verification to insist on is that no *result*
+   changes -- and results do still change, so this is not yet the
+   flip.
+
+   **What the remaining 950 are, run down to one cause.**
+   `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
+   "PrimitiveType cannot be cast to FnType", and the id it is looking
+   at is `sum : int`. That is not the built-in `sum`; it is the
+   *label* of the aggregate, referred to by the projection the
+   resolver builds over the group. Nothing in a tree binds it -- a
+   tree has labels, not bindings -- so the inliner matches the name
+   against the built-in and finds a `Macro` where it expected a value.
+
+   In the step list the same reference works, because the group step
+   binds `sum` and lowering turns the reference into that binding. So
+   the tree carries a name that only resolves after it is lowered,
+   which is exactly the class of defect that keeping a tree alive
+   exposes. **The fix is in the resolver, not in any pass**: a
+   projection over a group must read its labels as paths -- `#sum $0`
+   -- and never as ids. Worth auditing `RelFromResolver.group_`'s
+   `after.substitute` for why the substitution leaves one behind.
 
 3. **Grounding takes the tree directly.** `SuchThatShuttle` calls
    `RelExpander.expand` instead of `Expander.expandFrom`, so a query
