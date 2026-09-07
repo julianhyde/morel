@@ -200,16 +200,29 @@ Six goals, in order, each with the thing that says it is done.
      the compiler is `union [$0]` and it dies with "op not handled:
      INPUT". Declining to substitute a value that mentions a
      `Core.Input` stops it.
-   * *`Analyzer` does not count the use.* With that guard the
-     reference survives but the binding does not -- `union [v$0]`,
-     then "NullPointerException: v$0" -- so the use inside the nested
-     tree was counted as zero and the binding collected as dead. That
-     is the next thing to fix, and it is in `Analyzer`'s walk over a
-     `let` whose only use is inside a `Core.Rel`.
+   * *And the same guard is needed a second time.* `Inliner.visit(Core
+     .Let)` decides the declaration's fate from the analysis before
+     `visit(Core.Id)` is ever reached, so the id-level guard alone
+     leaves the reference with nothing to bind it --
+     `NullPointerException: v$0`. Guarding only the let is no better:
+     the declaration stays, and the id-level substitution puts `$0`
+     back. Both, and `from x in [10, 20] yield (from i in [1, 2] union
+     [current])` gives the right answer through the whole inline loop.
+
+     (An earlier note here blamed `Analyzer` for counting the use as
+     zero. It does not; the declaration was simply removed before the
+     count mattered.)
 
    Neither guard is committed: with no tree surviving the resolver
    there is no `$0`-valued `let` for either to act on, so they cannot
    be tested on their own. They belong with the flip.
+
+   With both, the flip measures 432 lines across 8 files and 71
+   results -- flat against the 427 and 74 before them, because
+   `relational` loses ten of its failures and `such-that` gains seven.
+   What is left is no longer one cause: it is a tail, and the way
+   through it is one query at a time, `MOREL_DUMP` on the lowered
+   Core, which is how the last four were found.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
