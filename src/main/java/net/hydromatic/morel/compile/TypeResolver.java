@@ -892,15 +892,19 @@ public class TypeResolver {
   }
 
   /**
-   * Returns the type to display for a query whose first scan names the type of
-   * what it scans, or null if there is none to display.
+   * Returns the type to display for a query whose scan names the type of what
+   * it scans, or null if there is none to display.
    *
-   * <p>The annotation names the elements only while they are still those
-   * elements: a step that computes new ones -- a {@code yield}, a {@code
-   * group}, a join -- gives the query a different element type, and the
-   * annotation is then not about it. Rather than enumerate which steps those
-   * are, the deduced element type is compared with what the annotation expands
-   * to, and the name is put back only where they agree.
+   * <p>Either half of the scan may name it: the pattern, as in {@code from n:
+   * nat in [1, 2]}, or the source, as in {@code from n in ([1] : nat list)}.
+   *
+   * <p>The name is the elements' only while they are still the values the scan
+   * produced. A step that computes new ones -- a {@code group}, an {@code
+   * into}, a {@code yield} of anything but the scanned value itself -- gives
+   * the query a different element type, and the name is not about it. {@code
+   * from n: nat in [1, 2] yield n} is a {@code nat list}; {@code yield n + 0}
+   * is an {@code int list}, because an operator drops a condition just as it
+   * does in {@code fun decr (n: nat) = n - 1}.
    */
   private @Nullable Type queryRealType(
       TypeMap typeMap,
@@ -911,30 +915,84 @@ public class TypeResolver {
       return null;
     }
     final Ast.Scan scan = (Ast.Scan) query.steps.get(0);
-    if (!(scan.pat instanceof Ast.AnnotatedPat)) {
+    final @Nullable String name = scannedName(scan.pat);
+    final Type writtenType = scanWrittenType(scan, expKeys);
+    if (writtenType == null || !writtenType.containsAlias()) {
       return null;
     }
-    final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) scan.pat;
-    if (!(annotatedPat.pat instanceof Ast.IdPat)) {
-      // A pattern that destructures binds parts, and it is the parts that
-      // have types; there is no one name covering the whole value for the
-      // annotation to be the type of.
-      return null;
-    }
-    final Type annotatedType = toType(annotatedPat.type, typeSystem, expKeys);
-    if (!annotatedType.containsAlias()) {
-      return null;
+    for (Ast.FromStep step : skip(query.steps)) {
+      if (!preservesElements(step, name)) {
+        return null;
+      }
     }
     final Type deduced = typeMap.getTypeOpt(pat);
     if (deduced == null || !deduced.isCollection()) {
       return null;
     }
-    if (!deduced.elementType().equals(annotatedType.unalias())) {
+    if (!deduced.elementType().equals(writtenType.unalias())) {
       return null;
     }
     return deduced instanceof ListType
-        ? typeSystem.listType(annotatedType)
-        : typeSystem.bag(annotatedType);
+        ? typeSystem.listType(writtenType)
+        : typeSystem.bag(writtenType);
+  }
+
+  /**
+   * Returns the name a scan pattern binds to the whole value it scans, or null
+   * if it binds none.
+   *
+   * <p>A pattern that destructures binds parts, and it is the parts that have
+   * types; no one name covers the whole value.
+   */
+  private static @Nullable String scannedName(Ast.Pat pat) {
+    if (pat instanceof Ast.AnnotatedPat) {
+      return scannedName(((Ast.AnnotatedPat) pat).pat);
+    }
+    return pat instanceof Ast.IdPat ? ((Ast.IdPat) pat).name : null;
+  }
+
+  /**
+   * Returns the type written for the values a scan produces -- on the pattern,
+   * or on the source -- or null if neither says.
+   */
+  private @Nullable Type scanWrittenType(
+      Ast.Scan scan, Function<Ast.ExpressionType, Type.Key> expKeys) {
+    if (scan.pat instanceof Ast.AnnotatedPat && scannedName(scan.pat) != null) {
+      return toType(((Ast.AnnotatedPat) scan.pat).type, typeSystem, expKeys);
+    }
+    if (scan.exp instanceof Ast.AnnotatedExp) {
+      final Type sourceType =
+          toType(((Ast.AnnotatedExp) scan.exp).type, typeSystem, expKeys);
+      return sourceType.isCollection() ? sourceType.elementType() : null;
+    }
+    return null;
+  }
+
+  /**
+   * Returns whether a step leaves the query's elements the values the scan
+   * produced, so that a name written on them is still theirs. {@code name} is
+   * what the scan bound them to, or null if it bound no one name.
+   */
+  private static boolean preservesElements(
+      Ast.FromStep step, @Nullable String name) {
+    switch (step.op) {
+      case WHERE:
+      case REQUIRE:
+      case ORDER:
+      case SKIP:
+      case TAKE:
+      case DISTINCT:
+      case UNORDER:
+        return true;
+      case YIELD:
+        // Yielding the scanned value itself changes nothing.
+        final Ast.Yield yield = (Ast.Yield) step;
+        return yield.binder == null
+            && yield.exp instanceof Ast.Id
+            && ((Ast.Id) yield.exp).name.equals(name);
+      default:
+        return false;
+    }
   }
 
   private @Nullable Type deduceRealType(

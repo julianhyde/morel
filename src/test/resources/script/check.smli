@@ -769,6 +769,33 @@ from {i, j}: parityPair where i elem [0..2] andalso j elem [5..8];
 from n: nat where n elem [~2..2];
 > val it = [1,2] : nat list
 
+(* Whether the name is displayed does not turn on whether it has a condition,
+ * so a plain alias is named the same way. *)
+type myInt = int;
+> type myInt = int
+from n: myInt in [1, 2];
+> val it = [1,2] : myInt list
+
+(* The source may name the type instead of the pattern. *)
+from n in ([1] : nat list);
+> val it = [1] : nat list
+
+(* The name is the elements' only while they are still the values the scan
+ * produced. Yielding them is not computing new ones, so it changes nothing;
+ * an expression built from them is, and an operator drops a condition here
+ * as it does anywhere. *)
+from n: nat in [1, 2] yield n;
+> val it = [1,2] : nat list
+from n: nat in [1, 2] yield n + 0;
+> val it = [1,2] : int list
+from n: nat in [1, 2] yield {a = n};
+> val it = [{a=1},{a=2}] : {a:int} list
+
+(* A pattern that destructures binds parts, and it is the parts that have
+ * types; no one name covers the whole value. *)
+from {i, j}: parityPair in [{i = 1, j = 3}];
+> val it = [{i=1,j=3}] : {i:int, j:int} list
+
 (*) A scan over an unchecked type is unaffected.
 type plainPair = {i: int, j: int};
 > type plainPair = {i:int, j:int}
@@ -1350,6 +1377,24 @@ val direct: (int check i => i >= 0) list = [1];
 > val direct = [1] : (int check i => i >= 0) list
 val pair: (int check i => i >= 0) * int = (1, 2);
 > val pair = (1,2) : (int check i => i >= 0) * int
+
+(* An annotation on an expression claims the whole type, so it claims what
+ * the type says of a component too: the value is checked against the type
+ * written, and the type it is shown to have is the type it was checked
+ * against. *)
+val listOfNat = [1] : nat list;
+> val listOfNat = [1] : nat list
+[~1] : nat list;
+> uncaught exception Constraint [~1 is not a valid nat: [_]]
+>   raised at: stdIn:1.1-1.16
+val tupleOfNat = (1, 2) : nat * int;
+> val tupleOfNat = (1,2) : nat * int
+val recordOfNat = {a = 1} : {a: nat};
+> val recordOfNat = {a=1} : {a:nat}
+val optionOfNat = SOME 1 : nat option;
+> val optionOfNat = SOME 1 : nat option
+val listOfAnon = [1] : (int check i => i >= 0) list;
+> val listOfAnon = [1] : (int check i => i >= 0) list
 val notNat: (int check i => i >= 0) = ~1;
 > uncaught exception Constraint [~1 is not a valid value]
 >   raised at: stdIn:1.5-1.41
