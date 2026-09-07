@@ -1654,7 +1654,13 @@ public class Compiler {
     final List<Binding> bindings = new ArrayList<>();
     Compiles.acceptBinding(typeSystem, valDecl.pat, bindings);
     final Context cx2 =
-        new Context(cx.env.bindAll(bindings), newLayout, cx.localDepth + 1);
+        new Context(
+            cx.env.bindAll(bindings),
+            newLayout,
+            cx.localDepth + 1,
+            cx.globalSlotMap,
+            cx.recPeers,
+            cx.ordinalSlots);
     final Code bodyCode = compile(cx2, bodyExp);
     return Codes.stackLet1(
         expCode, postProcessLetBody(cx2, bodyCode, bodyExp.type));
@@ -1693,7 +1699,13 @@ public class Compiler {
     final List<Binding> bindings = new ArrayList<>();
     Compiles.acceptBinding(typeSystem, valDecl.pat, bindings);
     final Context cx2 =
-        new Context(cx.env.bindAll(bindings), newLayout, cx.localDepth + 1);
+        new Context(
+            cx.env.bindAll(bindings),
+            newLayout,
+            cx.localDepth + 1,
+            cx.globalSlotMap,
+            cx.recPeers,
+            cx.ordinalSlots);
     final Code bodyCode = compileTail(cx2, bodyExp);
     return Codes.stackLet1(
         expCode, postProcessLetBody(cx2, bodyCode, bodyExp.type));
