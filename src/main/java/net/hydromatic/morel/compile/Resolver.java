@@ -2986,6 +2986,8 @@ public class Resolver {
       keys.keySet().forEach(name -> labels.put(name, b.name(name)));
       aggs.keySet().forEach(name -> labels.put(name, b.name(name)));
       final Scope after = new Scope(labels, b.input(0), null);
+      groupExps.forEach((pat, exp) -> after.alias(pat, b.name(pat.name)));
+      aggregates.forEach((pat, agg) -> after.alias(pat, b.name(pat.name)));
       binders.clear();
       if (group.binder != null) {
         // `group g = {...}` names the whole result `g`, as `yield g = ...`
@@ -3262,6 +3264,20 @@ public class Resolver {
           byPat.put(requireNonNull(ordinalPat), ordinalPath);
           bindings.add(Binding.of(ordinalPat));
         }
+      }
+
+      /**
+       * Adds a path for a pattern the caller already has.
+       *
+       * <p>The constructor invents a pattern per name, with an ordinal of its
+       * own, because in general it has only names. A {@code group}'s keys and
+       * aggregates are the exception: the resolver made those patterns and the
+       * expressions it is about to substitute refer to *them*, so the paths
+       * have to be filed under the patterns themselves or the substitution
+       * misses and a bare reference survives into the tree.
+       */
+      void alias(Core.NamedPat pat, Core.Exp path) {
+        byPat.put(pat, path);
       }
 
       /** Returns a resolver that reads this scope's names. */
