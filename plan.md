@@ -121,14 +121,32 @@ Six goals, in order, each with the thing that says it is done.
    lowering became a pass. Of those 389, 53 are results and the rest
    is plan text, which is goal 5.
 
-   Most of the 389 are in such-that (189) and relational (57); the
-   suspicious ones are such-that 28, relational 11, optimize 6, check
-   5, foreign 2. One class is identified: a nested query in a `where`
-   -- `from d in depts where d.deptno elem (from e in emps ...)` --
-   fails with "Index 5 out of bounds for length 3", a selector reading
-   a field the row has not got. That is the same shape as the
-   `misaddressed` case `Expander.expandViaTree` already declines on,
-   so start there.
+   **The nested query, and what it uncovered.** `from d in depts where
+   d.deptno elem (from e in emps ...)` failed with "Index 5 out of
+   bounds for length 3" -- the outer row read at a field only the
+   inner one has. `RelLowerer.subst` was substituting the element for
+   `$0` right through a tree nested in an expression, whose `$0` is
+   its own (spec.md §2 rule 3). Stopping the walk at a nested node
+   fixes it, and `foreign` comes clean.
+
+   It also makes `relational` worse, and that is the finding.
+   `RelValidator` starts rejecting the resolver's own trees: "take
+   count cannot reference `$0`", "leaf cannot reference `$0`". They
+   are queries like `from x in [10, 20] yield (from i in [1, 2] union
+   [current])`, where `current` is the enclosing row and the resolver
+   plants the enclosing `$0` inside a nested tree. The spec forbids
+   exactly that and names the remedy in the same breath -- "to use the
+   outer element inside a nested tree, bind it first, `let v = $0 in
+   <tree mentioning v>`". Nothing caught it because the resolver
+   lowers immediately and the substitution took the reference away
+   before any validator saw it.
+
+   So the next piece is in the resolver: where a nested query reads
+   `current`, bind the row first. After that, re-measure -- 384 lines
+   and 64 results at the point this was written, with the composition
+   changed rather than the count, because `foreign` and half of
+   `check` came clean while `relational` grew by the violations the
+   validator can now see.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
