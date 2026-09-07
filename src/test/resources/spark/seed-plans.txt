@@ -1,0 +1,472 @@
+# Licensed to Julian Hyde under one or more contributor license
+# agreements.  See the NOTICE file distributed with this work
+# for additional information regarding copyright ownership.
+# Julian Hyde licenses this file to you under the Apache
+# License, Version 2.0 (the "License"); you may not use this
+# file except in compliance with the License.  You may obtain a
+# copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+# either express or implied.  See the License for the specific
+# language governing permissions and limitations under the
+# License.
+#
+# Expected Spark Connect plans for the five seed queries in
+# script/spark.smli, one section per query.
+#
+# Captured from the PySpark Connect client (pyspark-client 4.0.4) by
+# capture.py in this directory, then canonicalized: plan ids are
+# renumbered in order of first appearance, and a LocalRelation's Arrow
+# payload is replaced by its row count. Spark's plan.toString must
+# produce exactly this text.
+
+=== q1 ===
+root {
+  common {
+    plan_id: 0
+  }
+  project {
+    input {
+      common {
+        plan_id: 1
+      }
+      filter {
+        input {
+          common {
+            plan_id: 2
+          }
+          subquery_alias {
+            input {
+              common {
+                plan_id: 3
+              }
+              local_relation {
+                data: [3 rows]
+                schema: "{\"fields\":[{\"metadata\":{},\"name\":\"b\",\"nullable\":false,\"type\":\"boolean\"},{\"metadata\":{},\"name\":\"i\",\"nullable\":false,\"type\":\"integer\"},{\"metadata\":{},\"name\":\"s\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"x\",\"nullable\":false,\"type\":\"double\"}],\"type\":\"struct\"}"
+              }
+            }
+            alias: "r"
+          }
+        }
+        condition {
+          unresolved_function {
+            function_name: "and"
+            arguments {
+              unresolved_attribute {
+                unparsed_identifier: "r.b"
+                is_metadata_column: false
+              }
+            }
+            arguments {
+              unresolved_function {
+                function_name: ">"
+                arguments {
+                  unresolved_attribute {
+                    unparsed_identifier: "r.i"
+                    is_metadata_column: false
+                  }
+                }
+                arguments {
+                  literal {
+                    integer: 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    expressions {
+      unresolved_attribute {
+        unparsed_identifier: "r.s"
+        is_metadata_column: false
+      }
+    }
+    expressions {
+      alias {
+        expr {
+          unresolved_function {
+            function_name: "*"
+            arguments {
+              unresolved_attribute {
+                unparsed_identifier: "r.x"
+                is_metadata_column: false
+              }
+            }
+            arguments {
+              literal {
+                double: 2.0
+              }
+            }
+          }
+        }
+        name: "y"
+      }
+    }
+  }
+}
+
+
+=== q2 ===
+root {
+  common {
+    plan_id: 0
+  }
+  project {
+    input {
+      common {
+        plan_id: 1
+      }
+      join {
+        left {
+          common {
+            plan_id: 2
+          }
+          subquery_alias {
+            input {
+              common {
+                plan_id: 3
+              }
+              read {
+                named_table {
+                  unparsed_identifier: "emp"
+                }
+              }
+            }
+            alias: "e"
+          }
+        }
+        right {
+          common {
+            plan_id: 4
+          }
+          subquery_alias {
+            input {
+              common {
+                plan_id: 5
+              }
+              read {
+                named_table {
+                  unparsed_identifier: "dept"
+                }
+              }
+            }
+            alias: "d"
+          }
+        }
+        join_condition {
+          unresolved_function {
+            function_name: "=="
+            arguments {
+              unresolved_attribute {
+                unparsed_identifier: "e.deptno"
+                is_metadata_column: false
+              }
+            }
+            arguments {
+              unresolved_attribute {
+                unparsed_identifier: "d.deptno"
+                is_metadata_column: false
+              }
+            }
+          }
+        }
+        join_type: JOIN_TYPE_INNER
+      }
+    }
+    expressions {
+      unresolved_attribute {
+        unparsed_identifier: "d.dname"
+        is_metadata_column: false
+      }
+    }
+    expressions {
+      unresolved_attribute {
+        unparsed_identifier: "e.ename"
+        is_metadata_column: false
+      }
+    }
+  }
+}
+
+
+=== q3 ===
+root {
+  common {
+    plan_id: 0
+  }
+  aggregate {
+    input {
+      common {
+        plan_id: 1
+      }
+      subquery_alias {
+        input {
+          common {
+            plan_id: 2
+          }
+          read {
+            named_table {
+              unparsed_identifier: "emp"
+            }
+          }
+        }
+        alias: "e"
+      }
+    }
+    group_type: GROUP_TYPE_GROUPBY
+    grouping_expressions {
+      unresolved_attribute {
+        unparsed_identifier: "e.deptno"
+        is_metadata_column: false
+      }
+    }
+    aggregate_expressions {
+      alias {
+        expr {
+          unresolved_function {
+            function_name: "count"
+            arguments {
+              literal {
+                integer: 1
+              }
+            }
+          }
+        }
+        name: "c"
+      }
+    }
+    aggregate_expressions {
+      alias {
+        expr {
+          unresolved_function {
+            function_name: "max"
+            arguments {
+              unresolved_attribute {
+                unparsed_identifier: "e.sal"
+                is_metadata_column: false
+              }
+            }
+          }
+        }
+        name: "top"
+      }
+    }
+    aggregate_expressions {
+      alias {
+        expr {
+          unresolved_function {
+            function_name: "sum"
+            arguments {
+              unresolved_attribute {
+                unparsed_identifier: "e.sal"
+                is_metadata_column: false
+              }
+            }
+          }
+        }
+        name: "total"
+      }
+    }
+  }
+}
+
+
+=== q4 ===
+root {
+  common {
+    plan_id: 0
+  }
+  limit {
+    input {
+      common {
+        plan_id: 1
+      }
+      sort {
+        input {
+          common {
+            plan_id: 2
+          }
+          project {
+            input {
+              common {
+                plan_id: 3
+              }
+              subquery_alias {
+                input {
+                  common {
+                    plan_id: 4
+                  }
+                  read {
+                    named_table {
+                      unparsed_identifier: "emp"
+                    }
+                  }
+                }
+                alias: "e"
+              }
+            }
+            expressions {
+              unresolved_attribute {
+                unparsed_identifier: "e.ename"
+                is_metadata_column: false
+              }
+            }
+            expressions {
+              unresolved_attribute {
+                unparsed_identifier: "e.sal"
+                is_metadata_column: false
+              }
+            }
+          }
+        }
+        order {
+          child {
+            unresolved_attribute {
+              unparsed_identifier: "sal"
+              is_metadata_column: false
+            }
+          }
+          direction: SORT_DIRECTION_DESCENDING
+          null_ordering: SORT_NULLS_LAST
+        }
+        order {
+          child {
+            unresolved_attribute {
+              unparsed_identifier: "ename"
+              is_metadata_column: false
+            }
+          }
+          direction: SORT_DIRECTION_ASCENDING
+          null_ordering: SORT_NULLS_FIRST
+        }
+        is_global: true
+      }
+    }
+    limit: 3
+  }
+}
+
+
+=== q5 ===
+root {
+  common {
+    plan_id: 0
+  }
+  project {
+    input {
+      common {
+        plan_id: 1
+      }
+      with_relations {
+        root {
+          common {
+            plan_id: 2
+          }
+          filter {
+            input {
+              common {
+                plan_id: 3
+              }
+              subquery_alias {
+                input {
+                  common {
+                    plan_id: 4
+                  }
+                  read {
+                    named_table {
+                      unparsed_identifier: "dept"
+                    }
+                  }
+                }
+                alias: "d"
+              }
+            }
+            condition {
+              subquery_expression {
+                plan_id: 5
+                subquery_type: SUBQUERY_TYPE_EXISTS
+              }
+            }
+          }
+        }
+        references {
+          common {
+            plan_id: 5
+          }
+          filter {
+            input {
+              common {
+                plan_id: 6
+              }
+              subquery_alias {
+                input {
+                  common {
+                    plan_id: 7
+                  }
+                  read {
+                    named_table {
+                      unparsed_identifier: "emp"
+                    }
+                  }
+                }
+                alias: "e"
+              }
+            }
+            condition {
+              unresolved_function {
+                function_name: "and"
+                arguments {
+                  unresolved_function {
+                    function_name: "=="
+                    arguments {
+                      unresolved_attribute {
+                        unparsed_identifier: "e.deptno"
+                        is_metadata_column: false
+                      }
+                    }
+                    arguments {
+                      unresolved_attribute {
+                        unparsed_identifier: "d.deptno"
+                        is_metadata_column: false
+                      }
+                    }
+                  }
+                }
+                arguments {
+                  unresolved_function {
+                    function_name: "=="
+                    arguments {
+                      unresolved_attribute {
+                        unparsed_identifier: "e.job"
+                        is_metadata_column: false
+                      }
+                    }
+                    arguments {
+                      literal {
+                        string: "CLERK"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    expressions {
+      unresolved_attribute {
+        unparsed_identifier: "d.dname"
+        is_metadata_column: false
+      }
+    }
+  }
+}
+
+# End seed-plans.txt
