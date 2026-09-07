@@ -79,6 +79,41 @@ Six goals, in order, each with the thing that says it is done.
    evidence: `RelExpander.rebuild` walks the tree with its own
    recursion rather than a `Shuttle`, and that was why.
 
+   **Then taken far enough to map the rest, and backed out.** Four
+   things, of which the first three work:
+
+   * *Picking the root out.* A `visitRel(Core.Rel)` hook on `Shuttle`,
+     called on entering each of the twelve visits and returning null
+     to descend as usual, is the one place a pass sees a node before
+     its children -- which is how it tells a root from what is under
+     it, since a shuttle does not know its parent. Grounding a tree
+     at its root then works: `RelExpander.expand` bounds every leaf,
+     so descending into what it returns finds nothing left, and a
+     nested query is a root of its own.
+   * *The latch.* `Compiles` stops running `SuchThatShuttle` once
+     `containsUnbounded` says no, so that has to be exact. It looks
+     for a `Core.Scan` with an infinite collection, and a tree has no
+     scans: its leaves are the inputs that are not themselves nodes.
+     The same hook on `Visitor` answers it.
+   * *The compiler boundary.* `Compiler.compile` lowering at
+     `expression instanceof Core.Rel` is enough for code generation.
+   * *The environment machinery is the real work.* `EnvVisitor` builds
+     an aggregate's environment from the `Core.From` group **step** on
+     its `fromStack`, and a tree's `Core.Group` puts nothing there, so
+     `fromStack.element()` throws. Skipping the push is not the fix,
+     though it looks like one: the aggregate's *argument* reads `$0`
+     and needs nothing, but the aggregate *function* needs the group's
+     keys in scope, and without them `Inliner` resolves `sum` as the
+     scalar and dies with "PrimitiveType cannot be cast to FnType". A
+     tree's `group` needs a context of its own, with the keys as
+     bindings.
+
+   Measured with the first three and a crude version of the fourth:
+   the suite goes from 1500 differing lines across 19 files to 950
+   across 16, and what is left is concentrated in that environment
+   machinery. The plan text moves too, which is goal 5, so the
+   verification to insist on is that no *result* changes.
+
 3. **Grounding takes the tree directly.** `SuchThatShuttle` calls
    `RelExpander.expand` instead of `Expander.expandFrom`, so a query
    is no longer lowered, translated back and lowered again. This is
