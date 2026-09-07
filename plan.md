@@ -138,7 +138,10 @@ server Morel would have to decorrelate first.
 `src/test/resources/spark/start-spark.sh` creates the container (or reuses or
 restarts an existing one, or removes it with `--stop`) and prints the `sc://`
 URI once the server is ready; `capture.py --seed` creates the seed tables
-over Spark Connect.
+over Spark Connect. `./morel --spark[=URI]` enables the backend for a shell
+or script run, starting the container when no URI is given and `SPARK_REMOTE`
+is unset; without the flag, `SPARK_REMOTE` is hidden from Morel, so Spark is
+opt-in.
 
 **Packaging.** The Spark adapter lives in its own package, and the rest of
 Morel reaches it only through an interface declared outside that package,
