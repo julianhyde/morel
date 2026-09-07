@@ -166,10 +166,18 @@ Six goals, in order, each with the thing that says it is done.
    `acceptStep` singles `Ast.Yield` out as the one step that keeps the
    call.
 
-   So the binding must not come between a yield and the counter it
-   installs. Settle it by reading how that counter is threaded --
-   `Context.withOrdinalSlots`, and which of the paths through
-   `compileLet` carry it -- and not by loosening the check.
+   **And the rule was not what was wrong; the threading was.** Both
+   stack-`let` paths in `Compiler` built their body's context with the
+   three-argument `Context` constructor, which passes null for
+   `ordinalSlots`, where `bindAll` and `withRecPeers` carry it. So a
+   `let` inside a yield lost the counter -- a bug of its own, with
+   nothing to do with trees: `from i in [1, 2, 3] yield (let val x = i
+   * 2 in x + x + ordinal end)` raised the assertion on the branch as
+   it stood. Fixed, and `relational.smli` has the query.
+
+   The offer to allow `ordinal` in any clause of an ordered query
+   stands on the record, and this is not a reason to take it: the rule
+   cost nothing here.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
