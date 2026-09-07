@@ -187,14 +187,29 @@ Six goals, in order, each with the thing that says it is done.
    as `let val v$0 = $0 in union [all] ...`, which is the shape the
    spec asks for.
 
-   What fails is later: "op not handled: INPUT", a `Core.Input`
-   reaching the compiler. So one `$0` is not substituted by the
-   lowering, and the question is which -- the `let`'s own value, which
-   `RelLowerer.lowerProject` should replace with the element, or one
-   inside the nested tree that the pass lowers separately. Print the
-   Core just before compilation and look; that is a smaller question
-   than the three this note has been through, and each of those was
-   settled by looking rather than reasoning.
+   **And the tree path is right.** With `inlinePassCount = 0` the
+   query returns `[[1,2,10],[1,2,20]]`, which is the answer. What
+   breaks it is the inline loop, in two ways, and both are the `$0`
+   finding again: a pass that moves or counts expressions has to know
+   that a nested tree is a scope.
+
+   * *`Inliner` moves `$0` across the boundary.* The binding `v$0 =
+     $0` is used once, so it is `ONCE_SAFE` and the inliner
+     substitutes the value at the use -- which is inside the nested
+     tree, where `$0` means that tree's own element. The Core reaching
+     the compiler is `union [$0]` and it dies with "op not handled:
+     INPUT". Declining to substitute a value that mentions a
+     `Core.Input` stops it.
+   * *`Analyzer` does not count the use.* With that guard the
+     reference survives but the binding does not -- `union [v$0]`,
+     then "NullPointerException: v$0" -- so the use inside the nested
+     tree was counted as zero and the binding collected as dead. That
+     is the next thing to fix, and it is in `Analyzer`'s walk over a
+     `let` whose only use is inside a `Core.Rel`.
+
+   Neither guard is committed: with no tree surviving the resolver
+   there is no `$0`-valued `let` for either to act on, so they cannot
+   be tested on their own. They belong with the flip.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
