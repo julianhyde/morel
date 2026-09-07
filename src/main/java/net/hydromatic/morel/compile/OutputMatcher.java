@@ -62,11 +62,11 @@ import org.jspecify.annotations.Nullable;
 public class OutputMatcher {
   /**
    * A top-level string value in a statement's output: {@code val name = "..." :
-   * string}, the literal possibly wrapped onto the following line.
+   * string}, the literal and the type possibly wrapped onto following lines.
    */
   private static final Pattern TOP_LEVEL_STRING =
       Pattern.compile(
-          "^(val \\S+ =)\\s+(\"(?:[^\"\\\\]|\\\\.)*\") : string$",
+          "^(val \\S+ =)\\s+(\"(?:[^\"\\\\]|\\\\.)*\")\\s+: string$",
           Pattern.MULTILINE);
 
   private final TypeSystem typeSystem;
@@ -480,18 +480,19 @@ public class OutputMatcher {
 
   /**
    * Rewrites the output of a statement so that each top-level string value that
-   * contains a newline is a raw string literal.
+   * contains a newline, and has no space or tab before a newline, is a raw
+   * string literal.
    *
    * <p>A top-level string value is a line {@code val name = "..." : string},
-   * the literal possibly wrapped onto the following line. It is replaced by
-   * {@code val name = {|...|} : string}, the content verbatim, its lines after
-   * the first starting at column 0, and the type following the closing fence. A
-   * trailing newline in the content leaves the closing fence alone on the last
-   * line. If the content contains "|}", the fences carry the shortest
-   * identifier that does not occur in it.
+   * the literal and the type possibly wrapped onto following lines. It is
+   * replaced by {@code val name = {|...|} : string}, the content verbatim, its
+   * lines after the first starting at column 0, and the type following the
+   * closing fence. A trailing newline in the content leaves the closing fence
+   * alone on the last line. If the content contains "|}", the fences carry the
+   * shortest identifier that does not occur in it.
    *
-   * <p>Strings without a newline, and strings inside collections and records,
-   * are unchanged.
+   * <p>Strings without a newline, strings with trailing whitespace on a line,
+   * and strings inside collections and records, are unchanged.
    */
   public static String toRawStrings(String output) {
     final Matcher m = TOP_LEVEL_STRING.matcher(output);
@@ -499,7 +500,7 @@ public class OutputMatcher {
     int last = 0;
     while (m.find()) {
       final String content = Parsers.unquoteString(m.group(2));
-      if (content.indexOf('\n') < 0) {
+      if (!wantsRaw(content)) {
         continue;
       }
       if (b == null) {
@@ -516,6 +517,25 @@ public class OutputMatcher {
       return output;
     }
     return b.append(output, last, output.length()).toString();
+  }
+
+  /**
+   * Returns whether a string is written as a raw literal: it contains a
+   * newline, and no line ends with a space or tab. (Trailing whitespace is
+   * invisible in a raw literal, and is easily lost by editors.)
+   */
+  static boolean wantsRaw(String content) {
+    final int i = content.indexOf('\n');
+    if (i < 0) {
+      return false;
+    }
+    for (int j = i; j >= 0; j = content.indexOf('\n', j + 1)) {
+      if (j > 0
+          && (content.charAt(j - 1) == ' ' || content.charAt(j - 1) == '\t')) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Writes a string as a raw literal whose fences do not occur in it. */

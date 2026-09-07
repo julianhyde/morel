@@ -257,6 +257,25 @@ public class TypeTest {
         is(true));
     assertThat(m.codeEqual(stringType, "\"1\"", "1"), is(false));
     assertThat(m.codeEqual(stringType, "{|1|}", "1"), is(false));
+    // A fence inside a regular literal is just text, and a raw literal may
+    // contain a fence with a different tag.
+    assertThat(
+        m.codeEqual(stringType, "\"{ab|x|ab}\"", "{|{ab|x|ab}|}"), is(true));
+    assertThat(m.codeEqual(stringType, "\"{|x|}\"", "{a|{|x|}|a}"), is(true));
+    assertThat(
+        m.codeEqual(stringType, "\"{ab|x|ab}\"", "\"{ab|x|ab}\""), is(true));
+    assertThat(
+        m.codeEqual(
+            typeSystem.listType(stringType),
+            "[\"{|a|}\", \"b\"]",
+            "[ \"{|a|}\",  \"b\" ]"),
+        is(true));
+    assertThat(
+        m.equivalent(
+            stringType,
+            "val it = \"{ab| : |ab}\" : string",
+            "val it = \"{ab| : |ab}\" : string"),
+        is(true));
     // Whole lines, including the type suffix
     assertThat(
         m.equivalent(
@@ -298,6 +317,17 @@ public class TypeTest {
     assertThat(
         OutputMatcher.toRawStrings("val it = \"a\\\\nb\" : string"),
         is("val it = \"a\\\\nb\" : string"));
+    // Unchanged: a space or tab before a newline
+    assertThat(
+        OutputMatcher.toRawStrings("val it = \"a \\nb\" : string"),
+        is("val it = \"a \\nb\" : string"));
+    assertThat(
+        OutputMatcher.toRawStrings("val it = \"a\\t\\nb\" : string"),
+        is("val it = \"a\\t\\nb\" : string"));
+    // A space at the very end is visible (the fence follows it)
+    assertThat(
+        OutputMatcher.toRawStrings("val it = \"a\\nb \" : string"),
+        is(lines("val it = {|a", "b |} : string")));
     // Unchanged: not a top-level string
     assertThat(
         OutputMatcher.toRawStrings("val it = [\"a\\nb\"] : string list"),
