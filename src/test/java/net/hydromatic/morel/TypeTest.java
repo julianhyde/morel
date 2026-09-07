@@ -347,11 +347,20 @@ public class TypeTest {
     assertThat(
         OutputMatcher.toRawStrings("val it = \"a\\n\" : string"),
         is(lines("val it = {|a", "|} : string")));
-    // A literal wrapped onto the next line is put back on the "val" line
+    // If the printer wrapped the literal onto the next line, the raw literal
+    // starts on the next line too, indented; the type suffix may also have
+    // been wrapped, and follows the closing fence.
     assertThat(
         OutputMatcher.toRawStrings(
             lines("val program =", "  \"a\\nb\" : string")),
-        is(lines("val program = {|a", "b|} : string")));
+        is(lines("val program =", "  {|a", "b|} : string")));
+    assertThat(
+        OutputMatcher.toRawStrings(
+            lines("val program =", "  \"a\\nb\"", "  : string")),
+        is(lines("val program =", "  {|a", "b|} : string")));
+    assertThat(
+        OutputMatcher.toRawStrings(lines("val it = \"a\\nb\"", "  : string")),
+        is(lines("val it = {|a", "b|} : string")));
     // Several bindings, and surrounding lines, in one output
     assertThat(
         OutputMatcher.toRawStrings(

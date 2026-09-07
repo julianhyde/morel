@@ -35,7 +35,8 @@ val program = ".decl edge(x:int, y:int)
 edge(1,2).
 edge(2,3).
 .output edge";
-> val program = {|.decl edge(x:int, y:int)
+> val program =
+>   {|.decl edge(x:int, y:int)
 > edge(1,2).
 > edge(2,3).
 > .output edge|} : string
@@ -53,7 +54,8 @@ Datalog.translate program;
 
 (*) Basic validation - parse error
 Datalog.validate ".decl edge(x:int";
-> val it = {|Parse error: Encountered "<EOF>" at line 1, column 16.
+> val it =
+>   {|Parse error: Encountered "<EOF>" at line 1, column 16.
 > Was expecting one of:
 >     ")" ...
 >     "," ...
@@ -218,7 +220,8 @@ edge(2,3).
 path(X,Y) :- edge(X,Y).
 path(X,Z) :- path(X,Y), edge(Y,Z).
 .output path";
-> val program = {|.decl edge(x:int, y:int)
+> val program =
+>   {|.decl edge(x:int, y:int)
 > .decl path(x:int, y:int)
 > edge(1,2).
 > edge(2,3).
@@ -466,7 +469,8 @@ val program = ".decl fact(n:int, value:int)
 fact(0, 1).
 fact(N + 1, value * (N + 1)) :- fact(N, value), N < 10.
 .output fact";
-> val program = {|.decl fact(n:int, value:int)
+> val program =
+>   {|.decl fact(n:int, value:int)
 > fact(0, 1).
 > fact(N + 1, value * (N + 1)) :- fact(N, value), N < 10.
 > .output fact|} : string
@@ -616,7 +620,8 @@ edge(\"a\", \"c\").
 path(X, Y, 1) :- edge(X, Y).
 path(X, Z, N+1) :- path(X, Y, N), edge(Y, Z).
 .output path";
-> val program = {|.decl edge(x:string, y:string)
+> val program =
+>   {|.decl edge(x:string, y:string)
 > .decl path(x:string, y:string, n:int)
 > edge("a", "b").
 > edge("b", "c").
@@ -691,7 +696,8 @@ edge(\"a\", \"c\").
 path(X, Y, 1) :- edge(X, Y).
 path(X, Z, N+1) :- path(X, Y, N), edge(Y, Z), N < 3.
 .output path";
-> val program = {|.decl edge(x:string, y:string)
+> val program =
+>   {|.decl edge(x:string, y:string)
 > .decl path(x:string, y:string, n:int)
 > edge("a", "b").
 > edge("b", "c").

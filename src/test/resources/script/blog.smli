@@ -1188,7 +1188,8 @@ from d in scott.depts
 > val it = [{deptno=40,dname="OPERATIONS",loc="BOSTON"}]
 >   : {deptno:int, dname:string, loc:string} bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
+> val it =
+>   {|globalMarshal(globals [scott], body calcite(plan LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
 >   LogicalFilter(condition=[IS NULL($4)])
 >     LogicalJoin(condition=[=($0, $3)], joinType=[left])
 >       LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
