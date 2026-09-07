@@ -95,8 +95,16 @@ Six goals, in order, each with the thing that says it is done.
      for a `Core.Scan` with an infinite collection, and a tree has no
      scans: its leaves are the inputs that are not themselves nodes.
      The same hook on `Visitor` answers it.
-   * *The compiler boundary.* `Compiler.compile` lowering at
-     `expression instanceof Core.Rel` is enough for code generation.
+   * *The lowering is a pass, not a boundary.* Lowering inside
+     `Compiler.compile`, at `expression instanceof Core.Rel`, looks
+     like the tidy place and is wrong: the compiler lays out the stack
+     from the Core it is given, so a binder minted while it compiles
+     has no slot, and what should have been in one is read from the
+     name environment instead. `fun sym c s = from (i, c2) in mk s
+     where c2 = c yield i` then fails with `NullPointerException: c`
+     -- on `c`, which is nowhere near the binder that caused it.
+     Lower in a pass of its own, after the rewrites and before the
+     compiler.
    * *The environment machinery.* `EnvVisitor` builds an aggregate's
      environment from the `Core.From` group **step** on its
      `fromStack`, and a tree's `Core.Group` puts nothing there, so
@@ -107,11 +115,20 @@ Six goals, in order, each with the thing that says it is done.
      Giving `EnvVisitor` a `visit(Core.Group)` that does exactly that
      is written and works.
 
-   Measured with all four: the suite goes from 1500 differing lines
-   across 19 files to 950 across 16. The plan text moves too, which is
-   goal 5, so the verification to insist on is that no *result*
-   changes -- and results do still change, so this is not yet the
-   flip.
+   Measured as each was found: 1500 differing lines across 19 files,
+   then 950 across 16 with the environment context, then 790 across 11
+   with the resolver fix below, then **389 across 8** once the
+   lowering became a pass. Of those 389, 53 are results and the rest
+   is plan text, which is goal 5.
+
+   Most of the 389 are in such-that (189) and relational (57); the
+   suspicious ones are such-that 28, relational 11, optimize 6, check
+   5, foreign 2. One class is identified: a nested query in a `where`
+   -- `from d in depts where d.deptno elem (from e in emps ...)` --
+   fails with "Index 5 out of bounds for length 3", a selector reading
+   a field the row has not got. That is the same shape as the
+   `misaddressed` case `Expander.expandViaTree` already declines on,
+   so start there.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
