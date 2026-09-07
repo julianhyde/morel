@@ -220,9 +220,26 @@ Six goals, in order, each with the thing that says it is done.
    With both, the flip measures 432 lines across 8 files and 71
    results -- flat against the 427 and 74 before them, because
    `relational` loses ten of its failures and `such-that` gains seven.
-   What is left is no longer one cause: it is a tail, and the way
-   through it is one query at a time, `MOREL_DUMP` on the lowered
-   Core, which is how the last four were found.
+
+   **And 14 of the 71 are not failures at all.** They are `pattern 'j'
+   is not grounded` becoming `pattern is not grounded`, which is what
+   discussion.md §11 decided: the tree has no `j` to name, a
+   diagnostic hint is the advisory name of §3 in another costume, and
+   a message that confidently names the *wrong* variable is worse than
+   one that names none. The expectations move when the flip lands.
+   Net real: 57.
+
+   The rest of that class *is* real -- queries that grounded before
+   and now do not. `SuchThatShuttle` calls the four-argument
+   `RelExpander.expand`, with no `leafPats`, where the old path passed
+   the query's own scan patterns; and `elementPat`'s comment says what
+   they were for: "a leaf whose element is a tuple is named by a tuple
+   of variables ... it is what lets the engine ground the components
+   separately, from a different constraint each". Under the flip there
+   are no scans to take them from. Either the destructure retry has to
+   cover it, or the names have to reach grounding another way. That is
+   the next question, and it is the same one §11 answered for
+   messages, asked again for grounding.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
