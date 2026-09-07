@@ -486,44 +486,92 @@ class Enforcer {
       return condition;
     }
     if (claimedType.isCollection()) {
-      final Type elementType = claimedType.elementType();
-      if (deepCondition(elementType, null, null, "", walk) == null) {
-        return null;
-      }
-      if (value == null) {
-        return core.boolLiteral(true); // placeholder; only nullness is read
-      }
-      // Every element must satisfy the element type's condition.
-      final Type erasedElementType = requireNonNull(erasedType).elementType();
-      final Core.IdPat idPat =
-          core.idPat(erasedElementType, () -> nameGenerator.getPrefixed("e"));
-      final Core.Exp elementCondition =
-          requireNonNull(
-              deepCondition(
-                  elementType,
-                  erasedElementType,
-                  core.id(idPat),
-                  appendElement(blame),
-                  walk));
-      final Core.Fn predicate =
-          core.fn(
-              typeSystem.fnType(erasedElementType, PrimitiveType.BOOL),
-              idPat,
-              elementCondition);
       // A bag is walked by Bag.all, a list by List.all.
-      final BuiltIn all =
-          claimedType instanceof ListType ? BuiltIn.LIST_ALL : BuiltIn.BAG_ALL;
-      return core.apply(
-          walk.pos,
-          PrimitiveType.BOOL,
-          core.call(typeSystem, all, erasedElementType, walk.pos, predicate),
-          value);
+      return elementsCondition(
+          claimedType.elementType(),
+          erasedType == null ? null : erasedType.elementType(),
+          value,
+          blame,
+          claimedType instanceof ListType ? BuiltIn.LIST_ALL : BuiltIn.BAG_ALL,
+          walk);
+    }
+    final Type vectorElementType = vectorElementType(claimedType);
+    if (vectorElementType != null) {
+      // A vector is not a collection -- a query cannot scan one -- but a
+      // condition inside one is claimed just the same, so it must be checked
+      // just the same. Nothing below would: a vector is an eqtype, so it has
+      // no constructors for datatypeCondition to walk, and the answer would
+      // be "nothing here is checked", which every enclosing walk believes.
+      return elementsCondition(
+          vectorElementType,
+          erasedType == null ? null : vectorElementType(erasedType),
+          value,
+          blame,
+          BuiltIn.VECTOR_ALL,
+          walk);
     }
     if (claimedType instanceof DataType) {
       return datatypeCondition(
           (DataType) claimedType, erasedType, value, blame, walk);
     }
     return null;
+  }
+
+  /**
+   * Returns the element type of a vector, or null if {@code type} is not a
+   * vector. A vector is an eqtype, hence a {@link DataType} with no
+   * constructors.
+   */
+  private static @Nullable Type vectorElementType(Type type) {
+    if (type instanceof DataType
+        && ((DataType) type).name.equals(BuiltIn.Eqtype.VECTOR.mlName())) {
+      return ((DataType) type).arg(0);
+    }
+    return null;
+  }
+
+  /**
+   * Returns a condition that holds if every element of {@code value} satisfies
+   * {@code elementType}'s condition, or null if the element type constrains
+   * nothing. A list, a bag and a vector differ only in the built-in that walks
+   * them.
+   */
+  private Core.@Nullable Exp elementsCondition(
+      Type elementType,
+      @Nullable Type erasedElementType,
+      Core.@Nullable Exp value,
+      String blame,
+      BuiltIn all,
+      Walk walk) {
+    final TypeSystem typeSystem = typeMap.typeSystem;
+    if (deepCondition(elementType, null, null, "", walk) == null) {
+      return null;
+    }
+    if (value == null) {
+      return core.boolLiteral(true); // placeholder; only nullness is read
+    }
+    // Every element must satisfy the element type's condition.
+    final Type elementType2 = requireNonNull(erasedElementType);
+    final Core.IdPat idPat =
+        core.idPat(elementType2, () -> nameGenerator.getPrefixed("e"));
+    final Core.Exp elementCondition =
+        requireNonNull(
+            deepCondition(
+                elementType,
+                elementType2,
+                core.id(idPat),
+                appendElement(blame),
+                walk));
+    final Core.Fn predicate =
+        core.fn(
+            typeSystem.fnType(elementType2, PrimitiveType.BOOL),
+            idPat,
+            elementCondition);
+    return core.apply(
+        walk.pos,
+        PrimitiveType.BOOL,
+        core.call(typeSystem, all, elementType2, walk.pos, predicate),
+        value);
   }
 
   /**

@@ -83,6 +83,20 @@ List.hd [n2];
 List.map (fn i => i) [n2];
 > val it = [5] : nat list
 
+(* The name means the declaration in force, at every site that claims it.
+ * A type is cached by the name an annotation writes it as, and the cache
+ * went on answering with the type the name used to have, so a value was
+ * checked against the condition of a type the name no longer meant. 0 is a
+ * 'nat' by the first declaration and not by this one. *)
+val n3: nat = 0;
+> uncaught exception Constraint [0 is not a valid nat]
+>   raised at: stdIn:1.5-1.16
+0 as nat;
+> uncaught exception Constraint [0 is not a valid nat]
+>   raised at: stdIn:1.1-1.9
+0 asOpt nat;
+> val it = NONE : nat option
+
 (* A condition must be closed: it may refer only to the value it is given and
  * to the standard basis. That is what lets a checked type be interned like
  * any other type -- two checked types are the same type when their
@@ -160,22 +174,32 @@ val z1: zero = 1;
 
 (* 'as' converts a value to a type, checking the type's condition; 'asOpt'
  * tests the condition instead, giving SOME if it holds and NONE if it does
- * not. The type converted to is the one the user named, not the one inference
- * deduces: inference gives the meet of the two, which for a checked type
- * is the type it abbreviates, so the printed type is 'int'. *)
+ * not. A conversion displays the type it was asked for, not the type
+ * inference deduces: inference gives the meet, which for a checked type is
+ * the type it abbreviates, and the conversion is the record of what was
+ * verified. 'asOpt' wraps that type in 'option'. *)
 val i = 5;
 > val i = 5 : int
 val j = ~5;
 > val j = ~5 : int
 i as nat;
-> val it = 5 : int
+> val it = 5 : nat
 j as nat;
 > uncaught exception Constraint [~5 is not a valid nat]
 >   raised at: stdIn:1.1-1.9
 i asOpt nat;
-> val it = SOME 5 : int option
+> val it = SOME 5 : nat option
 j asOpt nat;
-> val it = NONE : int option
+> val it = NONE : nat option
+
+(* The type survives into a binding, and is the element type of a list of
+ * conversions, so what a conversion verified is not lost at the next step. *)
+val n = i as nat;
+> val n = 5 : nat
+val ns = [i as nat, 0];
+> val ns = [5,0] : nat list
+val no = i asOpt nat;
+> val no = SOME 5 : nat option
 
 (*) Converting to an unchecked type claims nothing, and cannot fail.
 i as int;
@@ -185,18 +209,26 @@ j asOpt int;
 
 (*) They bind as loosely as ':', so the whole expression is converted.
 i - 1 as nat;
-> val it = 4 : int
+> val it = 4 : nat
 (i as nat) + 1;
 > val it = 6 : int
 i - 10 as nat;
 > uncaught exception Constraint [~5 is not a valid nat]
 >   raised at: stdIn:1.1-1.14
 
-(*) They are left-associative, and mix with ':'.
+(* They are left-associative, and mix with ':'. The last conversion is the
+ * one that decides the type, so 'i as nat as int' is an 'int'. *)
 i as nat as int;
 > val it = 5 : int
 (i : int) as nat;
-> val it = 5 : int
+> val it = 5 : nat
+
+(* Every conversion in a chain is checked, so widening at the end does not
+ * excuse a narrowing before it that fails. The position blames the
+ * conversion that raised, not the whole expression. *)
+~1 as nat as int;
+> uncaught exception Constraint [~1 is not a valid nat]
+>   raised at: stdIn:1.1-1.10
 
 (* A conversion between types with different erasures is an ordinary type
  * error, reported by the unifier without any constraint reasoning. *)
@@ -332,6 +364,28 @@ val ns: nats = [1, 2];
 val ns2: nats = [1, ~2];
 > uncaught exception Constraint [~2 is not a valid nat: [_]]
 >   raised at: stdIn:1.5-1.24
+
+(* A vector is walked element by element, as a list is. It is not a
+ * collection -- a query cannot scan one -- and it is an eqtype, so it has no
+ * constructors to walk either; before this it fell between the two, and a
+ * condition inside one was claimed and never checked. *)
+type natVector = nat vector;
+> type natVector = nat vector
+val vs: natVector = Vector.fromList [1, 2];
+> val vs = #[1,2] : natVector
+val vs2: natVector = Vector.fromList [1, ~2];
+> uncaught exception Constraint [~2 is not a valid nat: [_]]
+>   raised at: stdIn:1.5-1.45
+
+(* The claim is reached through whatever encloses the vector: a walk that
+ * answers "nothing here is checked" is believed by every walk above it. *)
+val vs3: nat vector list = [Vector.fromList [~1]];
+> uncaught exception Constraint [~1 is not a valid nat: [_][_]]
+>   raised at: stdIn:1.5-1.50
+
+(*) A vector whose element type constrains nothing is not checked.
+val vs4: int vector = Vector.fromList [~1];
+> val vs4 = #[~1] : int vector
 
 (* Components are checked before the whole, so a type's own condition may
  * assume that its components satisfy theirs. *)
@@ -692,9 +746,9 @@ val os3: odds = [3, 0];
 (* 'asOpt' asks rather than claims, so a condition that is false is an answer;
  * but one that raises has no answer, so it raises too. *)
 3 asOpt odd;
-> val it = SOME 3 : int option
+> val it = SOME 3 : odd option
 2 asOpt odd;
-> val it = NONE : int option
+> val it = NONE : odd option
 0 asOpt odd;
 > uncaught exception Constraint [cannot tell whether 0 is a valid odd; Div [divide by zero]]
 >   raised at: stdIn:1.1-1.12
@@ -710,9 +764,10 @@ from {i, j}: parityPair where i elem [0..2] andalso j elem [5..8];
 > val it = [{i=0,j=6},{i=0,j=8},{i=1,j=5},{i=1,j=7},{i=2,j=6},{i=2,j=8}]
 >   : {i:int, j:int} list
 
-(*) The condition restricts a scalar scan too.
+(* The condition restricts a scalar scan too. 'nat' is the declaration above,
+ * 'i >= 1', not the one at the top of this file. *)
 from n: nat where n elem [~2..2];
-> val it = [0,1,2] : int list
+> val it = [1,2] : int list
 
 (*) A scan over an unchecked type is unaffected.
 type plainPair = {i: int, j: int};

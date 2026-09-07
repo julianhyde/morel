@@ -339,6 +339,7 @@ public class TypeSystem {
     if (!name.isEmpty()) {
       // A checked type that is not named has no name to look up by.
       typeByName.put(name, aliasType);
+      typeByKey.put(Keys.name(name), aliasType);
     }
     return aliasType;
   }

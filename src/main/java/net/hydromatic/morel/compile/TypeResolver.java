@@ -914,6 +914,15 @@ public class TypeResolver {
         return realType;
       }
     }
+    // A conversion displays the type it was asked for, as an annotation
+    // does. Inference gives the meet, which for a checked type is the type
+    // it abbreviates, so without this a conversion would display the base
+    // type and lose the record of what it verified.
+    if (exp instanceof Ast.Cast && pat instanceof Ast.IdPat) {
+      final Type realType = castRealType((Ast.Cast) exp, expKeys);
+      consumer.accept(pat, realType);
+      return realType;
+    }
     if (exp instanceof Ast.ListExp) {
       final Ast.ListExp listExp = (Ast.ListExp) exp;
       if (!listExp.args.isEmpty()) {
@@ -933,6 +942,16 @@ public class TypeResolver {
     return null;
   }
 
+  /**
+   * Returns the type a conversion displays: {@code e as t} has type {@code t},
+   * and {@code e asOpt t} has type {@code t option}.
+   */
+  private Type castRealType(
+      Ast.Cast cast, Function<Ast.ExpressionType, Type.Key> expKeys) {
+    final Type castType = toType(cast.type, typeSystem, expKeys);
+    return cast.op == Op.AS ? castType : typeSystem.option(castType);
+  }
+
   private @Nullable Type deduceRealType(
       @Nullable Type annotatedType,
       Ast.Exp exp,
@@ -946,6 +965,9 @@ public class TypeResolver {
       if (realType != null) {
         return realType;
       }
+    }
+    if (exp instanceof Ast.Cast) {
+      return castRealType((Ast.Cast) exp, expKeys);
     }
     if (exp instanceof Ast.ListExp) {
       final Ast.ListExp listExp = (Ast.ListExp) exp;
