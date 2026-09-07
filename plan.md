@@ -126,10 +126,18 @@ Six goals, in order, each with the thing that says it is done.
    binds `sum` and lowering turns the reference into that binding. So
    the tree carries a name that only resolves after it is lowered,
    which is exactly the class of defect that keeping a tree alive
-   exposes. **The fix is in the resolver, not in any pass**: a
-   projection over a group must read its labels as paths -- `#sum $0`
-   -- and never as ids. Worth auditing `RelFromResolver.group_`'s
-   `after.substitute` for why the substitution leaves one behind.
+   exposes.
+
+   **Found and fixed.** `Scope.substitute` files its paths under a
+   pattern it invents per name, with an ordinal of its own -- rightly,
+   because a name is not unique. A `group`'s keys and aggregates are
+   the exception: the resolver made *those* patterns, at ordinal 0,
+   and the expressions it then substitutes refer to them, so every
+   lookup missed and the reference survived. The scope now takes the
+   patterns the caller already has. No plan moved, because lowering
+   was producing the same step list either way; measured through the
+   flip, the difference drops from 950 lines across 16 files to 790 across 11,
+   and dual, file, type-alias, type-inference and wordle come clean.
 
 3. **Grounding takes the tree directly.** `SuchThatShuttle` calls
    `RelExpander.expand` instead of `Expander.expandFrom`, so a query
