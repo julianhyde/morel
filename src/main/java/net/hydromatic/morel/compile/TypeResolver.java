@@ -864,6 +864,22 @@ public class TypeResolver {
           }
           continue;
         }
+        if (valBind.exp instanceof Ast.Query) {
+          // A scan over a checked or aliased type enumerates the values of
+          // that type, so it is the type of the query's elements. The
+          // annotation is written, not computed, and survives inference the
+          // way one on a value binding does.
+          final Type realType =
+              queryRealType(
+                  typeMap,
+                  valBind.pat,
+                  (Ast.Query) valBind.exp,
+                  t -> requireNonNull(typeMap.displayedKey(t.exp)));
+          if (realType != null) {
+            realTypes.put(valBind.pat, realType);
+            continue;
+          }
+        }
         deduceRealType(
             valBind.pat,
             null,
@@ -873,6 +889,52 @@ public class TypeResolver {
       }
     }
     return realTypes;
+  }
+
+  /**
+   * Returns the type to display for a query whose first scan names the type of
+   * what it scans, or null if there is none to display.
+   *
+   * <p>The annotation names the elements only while they are still those
+   * elements: a step that computes new ones -- a {@code yield}, a {@code
+   * group}, a join -- gives the query a different element type, and the
+   * annotation is then not about it. Rather than enumerate which steps those
+   * are, the deduced element type is compared with what the annotation expands
+   * to, and the name is put back only where they agree.
+   */
+  private @Nullable Type queryRealType(
+      TypeMap typeMap,
+      Ast.Pat pat,
+      Ast.Query query,
+      Function<Ast.ExpressionType, Type.Key> expKeys) {
+    if (query.steps.isEmpty() || !(query.steps.get(0) instanceof Ast.Scan)) {
+      return null;
+    }
+    final Ast.Scan scan = (Ast.Scan) query.steps.get(0);
+    if (!(scan.pat instanceof Ast.AnnotatedPat)) {
+      return null;
+    }
+    final Ast.AnnotatedPat annotatedPat = (Ast.AnnotatedPat) scan.pat;
+    if (!(annotatedPat.pat instanceof Ast.IdPat)) {
+      // A pattern that destructures binds parts, and it is the parts that
+      // have types; there is no one name covering the whole value for the
+      // annotation to be the type of.
+      return null;
+    }
+    final Type annotatedType = toType(annotatedPat.type, typeSystem, expKeys);
+    if (!annotatedType.containsAlias()) {
+      return null;
+    }
+    final Type deduced = typeMap.getTypeOpt(pat);
+    if (deduced == null || !deduced.isCollection()) {
+      return null;
+    }
+    if (!deduced.elementType().equals(annotatedType.unalias())) {
+      return null;
+    }
+    return deduced instanceof ListType
+        ? typeSystem.listType(annotatedType)
+        : typeSystem.bag(annotatedType);
   }
 
   private @Nullable Type deduceRealType(

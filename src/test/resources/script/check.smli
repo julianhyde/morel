@@ -767,7 +767,7 @@ from {i, j}: parityPair where i elem [0..2] andalso j elem [5..8];
 (* The condition restricts a scalar scan too. 'nat' is the declaration above,
  * 'i >= 1', not the one at the top of this file. *)
 from n: nat where n elem [~2..2];
-> val it = [1,2] : int list
+> val it = [1,2] : nat list
 
 (*) A scan over an unchecked type is unaffected.
 type plainPair = {i: int, j: int};
