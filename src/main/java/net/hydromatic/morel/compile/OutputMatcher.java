@@ -66,8 +66,13 @@ public class OutputMatcher {
    */
   private static final Pattern TOP_LEVEL_STRING =
       Pattern.compile(
-          "^(val \\S+ =)\\s+(\"(?:[^\"\\\\]|\\\\.)*\")\\s+: string$",
+          "^(val \\S+ =)(\\s+)(\"(?:[^\"\\\\]|\\\\.)*\")\\s+: string$",
           Pattern.MULTILINE);
+
+  /** Separator used when the printer wrapped a value onto the next line. */
+  private static final String WRAPPED_INDENT =
+      "\n" //
+          + "  ";
 
   private final TypeSystem typeSystem;
 
@@ -487,9 +492,11 @@ public class OutputMatcher {
    * the literal and the type possibly wrapped onto following lines. It is
    * replaced by {@code val name = {|...|} : string}, the content verbatim, its
    * lines after the first starting at column 0, and the type following the
-   * closing fence. A trailing newline in the content leaves the closing fence
-   * alone on the last line. If the content contains "|}", the fences carry the
-   * shortest identifier that does not occur in it.
+   * closing fence. If the printer had wrapped the literal onto the line after
+   * {@code val name =}, the raw literal starts there too, indented by two
+   * spaces. A trailing newline in the content leaves the closing fence alone on
+   * the last line. If the content contains "|}", the fences carry the shortest
+   * identifier that does not occur in it.
    *
    * <p>Strings without a newline, strings with trailing whitespace on a line,
    * and strings inside collections and records, are unchanged.
@@ -499,7 +506,7 @@ public class OutputMatcher {
     StringBuilder b = null;
     int last = 0;
     while (m.find()) {
-      final String content = Parsers.unquoteString(m.group(2));
+      final String content = Parsers.unquoteString(m.group(3));
       if (!wantsRaw(content)) {
         continue;
       }
@@ -508,7 +515,9 @@ public class OutputMatcher {
       }
       b.append(output, last, m.start())
           .append(m.group(1))
-          .append(' ')
+          // Keep the printer's layout: if it wrapped the value onto the next
+          // line, the raw literal starts on the next line too.
+          .append(m.group(2).indexOf('\n') < 0 ? " " : WRAPPED_INDENT)
           .append(rawLiteral(content))
           .append(" : string");
       last = m.end();

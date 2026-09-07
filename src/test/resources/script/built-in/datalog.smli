@@ -51,7 +51,8 @@ Datalog.execute program;
 
 (*) Basic validation - parse error
 Datalog.validate ".decl edge(x:int";
-> val it = {|Parse error: Encountered "<EOF>" at line 1, column 16.
+> val it =
+>   {|Parse error: Encountered "<EOF>" at line 1, column 16.
 > Was expecting one of:
 >     ")" ...
 >     "," ...

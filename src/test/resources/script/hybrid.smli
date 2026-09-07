@@ -31,7 +31,8 @@ where e.deptno = 20
 yield e.empno;
 > val it = [7369,7566,7788,7876,7902] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
+> val it =
+>   {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
 >   LogicalFilter(condition=[=($1, 20)])
 >     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >       JdbcTableScan(table=[[scott, EMP]])
@@ -43,7 +44,8 @@ where e.deptno = 20
 yield e.empno;
 > val it = [7369,7566] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
+> val it =
+>   {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
 >   LogicalFilter(condition=[=($1, 20)])
 >     LogicalTableFunctionScan(invocation=[morelTable('#filter Bag (fn e2 => #empno e2 < 7700) (#emps scott)', '{
 >   "fields": [
@@ -106,7 +108,8 @@ in
 end;
 > val it = [7369,7566,7788,7876,7902] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
+> val it =
+>   {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
 >   LogicalFilter(condition=[=($1, 20)])
 >     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >       JdbcTableScan(table=[[scott, EMP]])
@@ -124,7 +127,8 @@ in
 end;
 > val it = [7372,7569,7791,7879,7905] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body let1(expCode apply2(fnValue Int.+, constant(7), constant(3)), resultCode calcite(plan LogicalProject($f0=[+($2, MOD(13, morelScalar('ten', '{
+> val it =
+>   {|globalMarshal(globals [scott], body let1(expCode apply2(fnValue Int.+, constant(7), constant(3)), resultCode calcite(plan LogicalProject($f0=[+($2, MOD(13, morelScalar('ten', '{
 >   "type": "INTEGER",
 >   "nullable": false
 > }')))])
@@ -146,7 +150,8 @@ in
 end;
 > val it = [20,40,60,80] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject($f0=[*($0, 2)])
+> val it =
+>   {|globalMarshal(globals [scott], body calcite(plan LogicalProject($f0=[*($0, 2)])
 >   JdbcTableScan(table=[[scott, DEPT]])
 > ))|} : string
 
@@ -162,7 +167,8 @@ Sys.plan();
 map (fn e => {a = 1, b = true}) [];
 > val it = [] : {a:int, b:bool} list
 Sys.plan();
-> val it = {|apply2(fnValue List.map, match(e, tuple(constant(1), constant(true))), calcite(plan LogicalValues(tuples=[[]])
+> val it =
+>   {|apply2(fnValue List.map, match(e, tuple(constant(1), constant(true))), calcite(plan LogicalValues(tuples=[[]])
 > ))|} : string
 
 (*) Query on an empty list whose element is referenced
@@ -170,7 +176,8 @@ from e in []
   yield {a = 1 + e, b = true};
 > val it = [] : {a:int, b:bool} list
 Sys.plan();
-> val it = {|calcite(plan LogicalProject(a=[+(1, $0)], b=[true])
+> val it =
+>   {|calcite(plan LogicalProject(a=[+(1, $0)], b=[true])
 >   LogicalValues(tuples=[[]])
 > )|} : string
 
@@ -178,7 +185,8 @@ Sys.plan();
 map (fn e => {a = 1 + e, b = true}) [];
 > val it = [] : {a:int, b:bool} list
 Sys.plan();
-> val it = {|apply2(fnValue List.map, match(e, tuple(apply2(fnValue Int.+, constant(1), stack(offset 1, name e)), constant(true))), calcite(plan LogicalValues(tuples=[[]])
+> val it =
+>   {|apply2(fnValue List.map, match(e, tuple(apply2(fnValue Int.+, constant(1), stack(offset 1, name e)), constant(true))), calcite(plan LogicalValues(tuples=[[]])
 > ))|} : string
 
 (*) Query on a singleton list whose element is not referenced
@@ -193,14 +201,16 @@ Sys.plan();
 map (fn e => {a = 1, b = true}) [0];
 > val it = [{a=1,b=true}] : {a:int, b:bool} list
 Sys.plan();
-> val it = {|apply2(fnValue List.map, match(e, tuple(constant(1), constant(true))), calcite(plan LogicalValues(tuples=[[{ 0 }]])
+> val it =
+>   {|apply2(fnValue List.map, match(e, tuple(constant(1), constant(true))), calcite(plan LogicalValues(tuples=[[{ 0 }]])
 > ))|} : string
 
 (*) Simple query with scan, filter, project
 from e in scott.emps where e.deptno = 30 yield e.empno;
 > val it = [7499,7521,7654,7698,7844,7900] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
+> val it =
+>   {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
 >   LogicalFilter(condition=[=($1, 30)])
 >     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >       JdbcTableScan(table=[[scott, EMP]])
@@ -216,7 +226,8 @@ in
 end;
 > val it = [7499,7521,7654,7698,7844,7900] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
+> val it =
+>   {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
 >   LogicalFilter(condition=[=($1, 30)])
 >     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >       JdbcTableScan(table=[[scott, EMP]])
@@ -233,7 +244,8 @@ in
 end;
 > val it = [7499,7521,7654,7698,7844,7900] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
+> val it =
+>   {|globalMarshal(globals [scott], body calcite(plan LogicalProject(empno=[$2])
 >   LogicalFilter(condition=[=($1, 30)])
 >     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >       JdbcTableScan(table=[[scott, EMP]])
@@ -244,7 +256,8 @@ Bag.map (fn e => (#empno e))
   (Bag.filter (fn e => (#deptno e) = 30) (#emps scott));
 > val it = [7499,7521,7654,7698,7844,7900] : int bag
 Sys.plan();
-> val it = {|globalMarshal(globals [scott], body apply2(fnValue Bag.map, match(e, tailApply(fnValue nth:2, argCode stack(offset 1, name e))), apply2(fnValue Bag.filter, match(e_1, apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 1, name e)), constant(30))), calcite(plan LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+> val it =
+>   {|globalMarshal(globals [scott], body apply2(fnValue Bag.map, match(e, tailApply(fnValue nth:2, argCode stack(offset 1, name e))), apply2(fnValue Bag.filter, match(e_1, apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 1, name e)), constant(30))), calcite(plan LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >   JdbcTableScan(table=[[scott, EMP]])
 > ))))|} : string
 

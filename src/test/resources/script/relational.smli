@@ -3425,7 +3425,8 @@ yield {r.j, r.s};
 >   [{j=3,s=""},{j=4,s="m"},{j=5,s="mo"},{j=6,s="mor"},{j=7,s="more"},
 >    {j=8,s="morel"}] : {j:int, s:string} list
 Sys.plan();
-> val it = {|calcite(plan LogicalProject(j=[$1], s=[$2])
+> val it =
+>   {|calcite(plan LogicalProject(j=[$1], s=[$2])
 >   LogicalTableFunctionScan(invocation=[morelTable('#tabulate List (6, fn i2 => {i = i2, j = i2 + 3, s = #substring String ("morel", 0, i2)})', '{
 >   "fields": [
 >     {
