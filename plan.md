@@ -179,6 +179,26 @@ Six goals, in order, each with the thing that says it is done.
    stands on the record, and this is not a reason to take it: the rule
    cost nothing here.
 
+   **Re-measured with everything, and the binding still does not
+   fire.** 427 lines across 8 files, 74 of them results. `relational`
+   still reports "leaf cannot reference $0" (18), "take count cannot
+   reference $0" (4) and "skip count cannot reference $0" (4), which
+   is what the binding was meant to remove -- and a trace says
+   `bindRow` is never called on `from x in [10, 20] yield (from i in
+   [1, 2] union [current])`, the very query that raises the first of
+   them. So `readsInputInNestedRel` answers no where it should answer
+   yes, and *why* is not established. Two candidates, neither checked:
+   the nested query may not be a `Core.Rel` at the moment the
+   enclosing step's expression is converted, or the leak may not come
+   through `Scope.toCore` at all -- `skip` and `take` convert their
+   counts with `toCore(exp, null)`, which goes to `Resolver.this` and
+   never touches the scope, and `Resolver.this` is where the enclosing
+   `current` sits.
+
+   Start by proving which, with a trace on `readsInputInNestedRel`
+   rather than by reasoning: two rounds of reasoning about this have
+   each been wrong.
+
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
    "PrimitiveType cannot be cast to FnType", and the id it is looking
