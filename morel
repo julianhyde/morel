@@ -48,6 +48,13 @@ usage() {
   echo
   echo "Options (all commands):"
   echo "  --foreign=CLASS     Load foreign dataset from Java class."
+  echo "  --spark[=URI]       Enable the Spark backend, connecting to the Spark"
+  echo "                      Connect server at URI (e.g. sc://localhost:15002)."
+  echo "                      Without URI, uses \$SPARK_REMOTE if set; otherwise"
+  echo "                      starts (or reuses) the Docker container via"
+  echo "                      src/test/resources/spark/start-spark.sh."
+  echo "  --no-spark          Disable the Spark backend (default). \$SPARK_REMOTE"
+  echo "                      is then hidden from Morel."
   echo
   echo "Cell syntax (inside <!-- morel ... --> comments):"
   echo "  Commands (mutually exclusive; default is 'run'):"
@@ -75,6 +82,7 @@ HELP=
 EVAL_EXPR=
 ECHO=
 FOREIGN=
+SPARK=
 FILES=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -108,6 +116,18 @@ while [ $# -gt 0 ]; do
       ;;
     (--foreign=*)
       FOREIGN="$FOREIGN $1"
+      shift
+      ;;
+    (--spark)
+      SPARK=${SPARK_REMOTE:-start}
+      shift
+      ;;
+    (--spark=*)
+      SPARK="${1#--spark=}"
+      shift
+      ;;
+    (--no-spark)
+      SPARK=
       shift
       ;;
     (*.smli)
@@ -161,6 +181,17 @@ if [ "$cygwin" ]; then
 fi
 
 export JAVA_OPTS=-Djavax.xml.parsers.DocumentBuilderFactory=com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl
+
+# The Spark backend is enabled by SPARK_REMOTE, the URI of a Spark Connect
+# server. With "--spark" and no URI, start (or reuse) the Docker container.
+if [ "$SPARK" = start ]; then
+  SPARK=$(src/test/resources/spark/start-spark.sh) || exit
+fi
+if [ "$SPARK" ]; then
+  export SPARK_REMOTE="$SPARK"
+else
+  unset SPARK_REMOTE
+fi
 
 # Default foreign dataset for all modes.
 DEFAULT_FOREIGN="--foreign=net.hydromatic.morel.BuiltInDataSet\$Dictionary"

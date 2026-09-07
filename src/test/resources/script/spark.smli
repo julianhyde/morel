@@ -20,9 +20,9 @@
  *
  * Each query pins one translation decision, and its expected Spark
  * plan is recorded in src/test/resources/spark/seed-plans.txt. The
- * queries currently run locally; when the Spark structure exists, each
- * will also be prepared, its plan printed, and its result executed
- * remotely.
+ * queries currently run locally; when the Spark structure exists,
+ * each will also be prepared, its plan printed, and its result
+ * executed remotely.
  *
  * The emp and dept tables below have the same rows as the seed tables
  * in the Spark test container, so a query gives the same answer
