@@ -134,14 +134,23 @@ Scripts that need a live connection skip when it is unset; translation-only
 scripts always run. Spark 4.0 is the floor because it is the first release
 whose Connect protocol has `SubqueryExpression`, which references the outer
 plan by id and so can carry a correlated subquery (M1 query 5); against a 3.x
-server Morel would have to decorrelate first.
+server Morel would have to decorrelate first. Done:
 `src/test/resources/spark/start-spark.sh` creates the container (or reuses or
 restarts an existing one, or removes it with `--stop`) and prints the `sc://`
-URI once the server is ready; `capture.py --seed` creates the seed tables
-over Spark Connect. `./morel --spark[=URI]` enables the backend for a shell
-or script run, starting the container when no URI is given and `SPARK_REMOTE`
-is unset; without the flag, `SPARK_REMOTE` is hidden from Morel, so Spark is
-opt-in.
+URI once the server is ready. The container's driver program is `seed.py`,
+run by `spark-submit` with the Spark Connect plugin, so the server runs in
+the driver's context and clients see the tables it creates: `emp`, `dept`,
+and `zoo` (one column per Spark type; a typical row, an edge row, and a null
+row). The server runs in the UTC time zone. `.github/workflows/spark.yml`
+runs weekly (and on demand): it starts the container, runs the seed queries
+with the PySpark client, and runs the build with `-Dmorel.spark=true` and
+`SPARK_REMOTE` set. A finding for M2: Spark's built-in catalog does not keep
+NOT NULL for tables stored as files, so every column of a catalog table reads
+back as nullable, even `emp.empno`; only views over typed data (global
+temporary views) keep non-null columns. `./morel --spark[=URI]` enables the
+backend for a shell or script run, starting the container when no URI is
+given and `SPARK_REMOTE` is unset; without the flag, `SPARK_REMOTE` is hidden
+from Morel, so Spark is opt-in.
 
 **Packaging.** The Spark adapter lives in its own package, and the rest of
 Morel reaches it only through an interface declared outside that package,
@@ -195,7 +204,13 @@ zero values, which is lossy. Two halves. Pure: a function mapping Spark
 schema strings (DDL or JSON) to Morel types, tested in `.smli` with no
 cluster; includes tested rejections (`map`, intervals) and nullability at
 every nesting level. Live: browse the zoo table, print the inferred type,
-select and print the decoded values (needs M6).
+select and print the decoded values (needs M6). Open question, raised by the
+M0 finding that catalog columns are always nullable: mapping every nullable
+column to `option` would make every column of `emp` an `option`, and the seed
+queries would not typecheck without unwrapping. Candidates: map nullable to
+`option` strictly and give the catalog a way to declare columns non-null; or
+map to the plain type and raise an exception when a null arrives. Decide
+before M7.
 
 **M3.** Candidate design: phantom-typed plan (`type 'a plan`; `prepare: 'a ->
 'a plan`; `execute: 'a plan -> 'a`). `prepare` is not an ordinary function:

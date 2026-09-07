@@ -1,0 +1,57 @@
+# Licensed to Julian Hyde under one or more contributor license
+# agreements.  See the NOTICE file distributed with this work
+# for additional information regarding copyright ownership.
+# Julian Hyde licenses this file to you under the Apache
+# License, Version 2.0 (the "License"); you may not use this
+# file except in compliance with the License.  You may obtain a
+# copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+# either express or implied.  See the License for the specific
+# language governing permissions and limitations under the
+# License.
+#
+# Tests against a live Spark Connect server, weekly. The regular CI
+# (main.yml) never starts Spark; it runs the translation-only tests.
+name: Spark
+
+on:
+  workflow_dispatch: # allow manual triggering
+  schedule:
+    # Run at 0617 UTC every Monday
+    #        m  h  dom mon dow
+    - cron: '17 06   *   *   1'
+
+jobs:
+  spark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: 'temurin'
+          cache: 'maven'
+      - name: Start Spark Connect server
+        run: |
+          uri=$(src/test/resources/spark/start-spark.sh --new)
+          echo "SPARK_REMOTE=$uri" >> "$GITHUB_ENV"
+      - name: Run the seed queries with the PySpark client
+        run: |
+          python3 -m venv pyenv
+          pyenv/bin/pip install --quiet pyspark-client
+          pyenv/bin/python src/test/resources/spark/capture.py --execute
+      - name: Build and test with live Spark
+        run: ./mvnw --batch-mode verify -Dmorel.spark=true
+      - name: Server log on failure
+        if: failure()
+        run: docker logs --tail 200 morel-spark
+
+# End spark.yml
