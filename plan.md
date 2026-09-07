@@ -135,6 +135,10 @@ scripts always run. Spark 4.0 is the floor because it is the first release
 whose Connect protocol has `SubqueryExpression`, which references the outer
 plan by id and so can carry a correlated subquery (M1 query 5); against a 3.x
 server Morel would have to decorrelate first.
+`src/test/resources/spark/start-spark.sh` creates the container (or reuses or
+restarts an existing one, or removes it with `--stop`) and prints the `sc://`
+URI once the server is ready; `capture.py --seed` creates the seed tables
+over Spark Connect.
 
 **Packaging.** The Spark adapter lives in its own package, and the rest of
 Morel reaches it only through an interface declared outside that package,
@@ -152,14 +156,35 @@ Java 8) to decode result batches and encode LocalRelation payloads. This
 is how the Go and Rust Connect clients work, and it means the client's
 Java floor is independent of the server's Spark version.
 
-**M1.** Capture reference plans from a stock client (PySpark Connect exposes
-the unresolved proto client-side) rather than handwriting them. The
-`toString` rendering must canonicalize nondeterministic fields (plan ids,
-session ids) or expectations will flake. The five queries each pin a
-translation decision: (1) filter+project over an inline relation; (2)
-equijoin; (3) group by with aggregates; (4) sort+limit; (5) correlated
-exists subquery. Query 5 is emitted as Connect's `SubqueryExpression`, not
-decorrelated; it is the reason M0 pins Spark 4.x.
+**M1.** Done. The five queries and their local results are in
+`src/test/resources/script/spark.smli`, and their expected Spark plans in
+`src/test/resources/spark/seed-plans.txt`, captured by
+`src/test/resources/spark/capture.py` from the PySpark Connect client
+(`pyspark-client`, a small package that builds plans without a server once
+its config and column-validation round trips are stubbed). All five have been
+executed against a Spark 4.0.0 Connect server in Docker and return the rows
+Morel computes locally. The queries: (1) filter+project over an inline
+relation of int, string, bool and real columns; (2) equijoin of `emp` and
+`dept` on `deptno`; (3) group by `deptno` with count, sum and max; (4)
+project, sort on two keys of mixed direction, take 3; (5) `exists` subquery
+correlated on `deptno`. The `emp` and `dept` tables have the scott rows, and
+M0's seed tables must match. The text rendering is protobuf text format with
+plan ids renumbered in order of first appearance and a LocalRelation's Arrow
+payload replaced by its row count. Translation decisions the captured plans
+pin: every scan is wrapped in a `subquery_alias` named by its Morel binder,
+and every column reference is the dotted `binder.field`; after a projection
+the names are the projected labels, unqualified. This is the only form in
+which Spark 4.0.0 resolves the outer reference of a correlated subquery when
+both sides have a column of the same name; qualifying by the producing
+relation's `plan_id`, which is what the DataFrame API emits for a join, fails
+in a subquery with `CANNOT_RESOLVE_DATAFRAME_COLUMN`. A correlated subquery
+is `with_relations`, whose `references` hold the inner plan and whose root
+refers to it by `subquery_expression { plan_id }`. A sort names its null
+ordering explicitly (descending defaults to nulls last, ascending to nulls
+first). `count` is over the literal 1 and returns a `long`, so the decoder
+narrows it to `int`. A LocalRelation carries its schema as JSON with
+per-column nullability. Binders that shadow one another across nested queries
+will need renaming before emission, since the alias namespace is flat.
 
 **M2.** The mapping is new code. The Calcite `Converters` mapping is not
 reused: it represents `option` as a nullable column and coerces nulls back to
