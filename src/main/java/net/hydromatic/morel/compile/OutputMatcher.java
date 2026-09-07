@@ -29,6 +29,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.RecordType;
@@ -49,8 +52,23 @@ import org.jspecify.annotations.Nullable;
  * bags, and datatypes; records are stored as tuples with field values in the
  * order they occur in the type; a datatype instance is a list of length 1 or 2;
  * atoms are represented as {@link String}.
+ *
+ * <p>A string value may be written as a raw string literal, {@code {|...|}} or
+ * {@code {id|...|id}}, whose content is verbatim (no escape processing, and
+ * newlines are real newlines). A raw literal is equivalent to the regular
+ * literal with the same content. Raw literals are a feature of the script
+ * format, not of the Morel language; {@link #toRawStrings} writes them.
  */
 public class OutputMatcher {
+  /**
+   * A top-level string value in a statement's output: {@code val name = "..." :
+   * string}, the literal possibly wrapped onto the following line.
+   */
+  private static final Pattern TOP_LEVEL_STRING =
+      Pattern.compile(
+          "^(val \\S+ =)\\s+(\"(?:[^\"\\\\]|\\\\.)*\") : string$",
+          Pattern.MULTILINE);
+
   private final TypeSystem typeSystem;
 
   public OutputMatcher(TypeSystem typeSystem) {
@@ -118,6 +136,15 @@ public class OutputMatcher {
         }
         buf.append(c);
         inString = true;
+        lastWasSpace = false;
+      } else if (c == '{' && rawFenceLength(s, i) > 0) {
+        // Copy a raw string literal verbatim, newlines included.
+        final int end = rawEnd(s, i);
+        if (lastWasSpace && buf.length() > 0) {
+          buf.append(' ');
+        }
+        buf.append(s, i, end);
+        i = end - 1;
         lastWasSpace = false;
       } else if (c == ' ' || c == '\n' || c == '\r' || c == '\t') {
         lastWasSpace = true;
@@ -289,7 +316,7 @@ public class OutputMatcher {
     if (c == '#') {
       sc.consume("#");
       return "#" + sc.consumeString();
-    } else if (c == '"') {
+    } else if (c == '"' || c == '{' && sc.atRawFence()) {
       return sc.consumeString();
     } else if (c == '~' || isDigit(c)) {
       return sc.consumeNumber();
@@ -418,6 +445,97 @@ public class OutputMatcher {
     return -1;
   }
 
+  // --- Raw string literals ---
+
+  /**
+   * Returns the length of the opening fence of a raw string literal starting at
+   * {@code pos} : 2 for "{|", or 2 + n for "{id|" where the identifier has n
+   * characters; or 0 if there is no raw literal there.
+   */
+  static int rawFenceLength(String s, int pos) {
+    if (pos >= s.length() || s.charAt(pos) != '{') {
+      return 0;
+    }
+    int i = pos + 1;
+    while (i < s.length() && Character.isLetterOrDigit(s.charAt(i))) {
+      i++;
+    }
+    if (i < s.length() && s.charAt(i) == '|') {
+      return i + 1 - pos;
+    }
+    return 0;
+  }
+
+  /**
+   * Returns the position just after the closing fence of the raw string literal
+   * that starts at {@code pos}; if the literal is not closed, returns a
+   * position beyond the end of the string.
+   */
+  static int rawEnd(String s, int pos) {
+    final int fence = rawFenceLength(s, pos);
+    final String closing = "|" + s.substring(pos + 1, pos + fence - 1) + "}";
+    final int i = s.indexOf(closing, pos + fence);
+    return i < 0 ? s.length() + 1 : i + closing.length();
+  }
+
+  /**
+   * Rewrites the output of a statement so that each top-level string value that
+   * contains a newline is a raw string literal.
+   *
+   * <p>A top-level string value is a line {@code val name = "..." : string},
+   * the literal possibly wrapped onto the following line. It is replaced by
+   * {@code val name = {|...|} : string}, the content verbatim, its lines after
+   * the first starting at column 0, and the type following the closing fence. A
+   * trailing newline in the content leaves the closing fence alone on the last
+   * line. If the content contains "|}", the fences carry the shortest
+   * identifier that does not occur in it.
+   *
+   * <p>Strings without a newline, and strings inside collections and records,
+   * are unchanged.
+   */
+  public static String toRawStrings(String output) {
+    final Matcher m = TOP_LEVEL_STRING.matcher(output);
+    StringBuilder b = null;
+    int last = 0;
+    while (m.find()) {
+      final String content = Parsers.unquoteString(m.group(2));
+      if (content.indexOf('\n') < 0) {
+        continue;
+      }
+      if (b == null) {
+        b = new StringBuilder();
+      }
+      b.append(output, last, m.start())
+          .append(m.group(1))
+          .append(' ')
+          .append(rawLiteral(content))
+          .append(" : string");
+      last = m.end();
+    }
+    if (b == null) {
+      return output;
+    }
+    return b.append(output, last, output.length()).toString();
+  }
+
+  /** Writes a string as a raw literal whose fences do not occur in it. */
+  public static String rawLiteral(String content) {
+    String id = "";
+    for (int i = 1; content.contains("|" + id + "}"); i++) {
+      id = identifier(i);
+    }
+    return "{" + id + "|" + content + "|" + id + "}";
+  }
+
+  /** Returns the i-th identifier in the sequence a, b, ..., z, aa, ab, ... */
+  private static String identifier(int i) {
+    final StringBuilder b = new StringBuilder();
+    for (; i > 0; i = (i - 1) / 26) {
+      b.append((char) ('a' + (i - 1) % 26));
+    }
+    return b.reverse().toString();
+  }
+
   // --- Scanner ---
 
   /** Simple scanner over whitespace-normalized text. */
@@ -472,8 +590,30 @@ public class OutputMatcher {
       return s.substring(start, pos);
     }
 
+    boolean atRawFence() {
+      skipSpaces();
+      return rawFenceLength(s, pos) > 0;
+    }
+
+    /**
+     * Consumes a string literal, regular or raw, and returns its content in a
+     * canonical form: a double-quote followed by the unescaped content. Thus a
+     * regular literal and a raw literal with the same content are equal, and no
+     * string is equal to a word or a number.
+     */
     String consumeString() {
       skipSpaces();
+      final int fence = rawFenceLength(s, pos);
+      if (fence > 0) {
+        final int end = rawEnd(s, pos);
+        if (end > s.length()) {
+          throw new IllegalStateException(
+              "unterminated raw string at pos " + pos + " in: " + s);
+        }
+        final String content = s.substring(pos + fence, end - fence);
+        pos = end;
+        return '"' + content;
+      }
       if (s.charAt(pos) != '"') {
         throw new IllegalStateException(
             "expected '\"' at pos " + pos + " in: " + s);
@@ -487,7 +627,7 @@ public class OutputMatcher {
         pos++;
       }
       pos++; // skip closing "
-      return s.substring(start, pos);
+      return '"' + Parsers.unquoteString(s.substring(start, pos));
     }
 
     String consumeNumber() {
@@ -583,9 +723,15 @@ public class OutputMatcher {
             case '"':
               inString = true;
               break;
+            case '{':
+              if (rawFenceLength(s, i) > 0) {
+                i = rawEnd(s, i) - 1;
+                break;
+              }
+              depth++;
+              break;
             case '(':
             case '[':
-            case '{':
               depth++;
               break;
             case ')':

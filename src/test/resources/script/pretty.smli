@@ -832,4 +832,56 @@ Sys.unset "lineWidth";
 Sys.unset "matchStrict";
 > val it = () : unit
 
+(* -------------------------------------------------------------------
+ * Raw string literals
+ *
+ * In a script, a top-level string value that contains a newline is
+ * written as a raw string literal, {|...|}, whose content is verbatim:
+ * no escapes, and lines after the first start at column 0. This is a
+ * feature of the script format, not of the Morel language.
+ *)
+
+(*) A string with newlines
+"root {\n  common {\n    plan_id: 0\n  }\n}";
+> val it = {|root {
+>   common {
+>     plan_id: 0
+>   }
+> }|} : string
+
+(*) A bound name
+val s = "one\ntwo";
+> val s = {|one
+> two|} : string
+
+(*) A trailing newline leaves the closing fence alone on the last line
+"a\nb\n";
+> val it = {|a
+> b
+> |} : string
+
+(*) Empty lines are preserved
+"a\n\nb";
+> val it = {|a
+>
+> b|} : string
+
+(*) Quotes and backslashes are verbatim
+"say \"hi\"\n\\bye";
+> val it = {|say "hi"
+> \bye|} : string
+
+(*) If the content contains "|}", the fences carry an identifier
+"a|}\nb";
+> val it = {a|a|}
+> b|a} : string
+
+(*) A string without a newline is a regular literal
+"a|}b";
+> val it = "a|}b" : string
+
+(*) A string inside a collection is a regular literal
+["a\nb"];
+> val it = ["a\nb"] : string list
+
 (*) End pretty.smli
