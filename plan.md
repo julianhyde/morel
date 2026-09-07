@@ -155,14 +155,21 @@ Six goals, in order, each with the thing that says it is done.
    moves and the suite is green without the flip. With the flip,
    `from i in [2, 3], x in (from k in [1..6] where k mod i = 0 group
    {} compute {c = count over ()})` fails: "'ordinal' occurs outside a
-   yield: $ordinal ()". The check that says where `ordinal` may appear
-   is positional, and a `let` between the step and its expression puts
-   it somewhere the check does not expect.
+   yield: $ordinal ()".
 
-   So the remedy the spec names needs the ordinal rule to be about
-   scope rather than position, or the binding has to go somewhere the
-   rule already allows. That is the next thing to settle, and it is a
-   question about `ordinal`, not about trees.
+   **That assertion is right, and the binding is what is wrong.**
+   `Z_ORDINAL` compiles to a read of `cx.ordinalSlots`, and only a
+   `yield` installs that counter, so a call reaching anywhere else has
+   nothing to read: it is a requirement of the runtime, not a rule
+   about where the text may sit. Everywhere but a yield the resolver
+   materializes the ordinal into a field first, which is why
+   `acceptStep` singles `Ast.Yield` out as the one step that keeps the
+   call.
+
+   So the binding must not come between a yield and the counter it
+   installs. Settle it by reading how that counter is threaded --
+   `Context.withOrdinalSlots`, and which of the paths through
+   `compileLet` carry it -- and not by loosening the check.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
