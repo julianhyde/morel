@@ -123,15 +123,34 @@ will add any missing data types, e.g. a `decimal` type.
 
 ## Notes
 
-**M0.** Pinned stock Spark image plus an init script: start the Connect
-server, enable ANSI mode, register seed tables (`emp`, `dept`, and a
+**M0.** Pinned stock Spark image, 4.x minimum, plus an init script: start the
+Connect server, enable ANSI mode, register seed tables (`emp`, `dept`, and a
 "datatype zoo" table with one column per Spark type, nullable and
 non-nullable, edge values). Keep the image dumb; phase 2's interpreter jar
 ships per-session via Spark Connect's `AddArtifacts`, not baked into the
 image. Gate live tests on a JVM property; connection URI comes from
-`SPARK_REMOTE` so the same tests run against the container or a real
-cluster. Scripts that need a live connection skip when it is unset;
-translation-only scripts always run.
+`SPARK_REMOTE` so the same tests run against the container or a real cluster.
+Scripts that need a live connection skip when it is unset; translation-only
+scripts always run. Spark 4.0 is the floor because it is the first release
+whose Connect protocol has `SubqueryExpression`, which references the outer
+plan by id and so can carry a correlated subquery (M1 query 5); against a 3.x
+server Morel would have to decorrelate first.
+
+**Packaging.** The Spark adapter lives in its own package, and the rest of
+Morel reaches it only through an interface declared outside that package,
+instantiated via `Class.forName`. Nothing outside the package imports
+gRPC, protobuf, Arrow, or the adapter's classes. This lets the adapter
+later take on requirements (Java floor, dependency weight) that the rest
+of Morel does not.
+
+**Client library and Java floor.** Morel compiles at source level 8 and
+CI builds on Java 8 through 25. Spark 4's `spark-connect-client-jvm`
+requires Java 17 and Scala 2.13 and is a large shaded jar, so we do not
+use it. Instead: protobuf stubs generated from Spark's `.proto` files,
+grpc-java for transport, and Arrow Java 17.x (the last line supporting
+Java 8) to decode result batches and encode LocalRelation payloads. This
+is how the Go and Rust Connect clients work, and it means the client's
+Java floor is independent of the server's Spark version.
 
 **M1.** Capture reference plans from a stock client (PySpark Connect exposes
 the unresolved proto client-side) rather than handwriting them. The
@@ -139,28 +158,35 @@ the unresolved proto client-side) rather than handwriting them. The
 session ids) or expectations will flake. The five queries each pin a
 translation decision: (1) filter+project over an inline relation; (2)
 equijoin; (3) group by with aggregates; (4) sort+limit; (5) correlated
-exists subquery. Query 5 determines whether Connect can express correlated
-subqueries or Morel must decorrelate into joins before emitting.
+exists subquery. Query 5 is emitted as Connect's `SubqueryExpression`, not
+decorrelated; it is the reason M0 pins Spark 4.x.
 
-**M2.** Two halves. Pure: a function mapping Spark schema strings (DDL or
-JSON) to Morel types, tested in `.smli` with no cluster; includes tested
-rejections (`map`, intervals) and nullability at every nesting level.
-Live: browse the zoo table, print the inferred type, select and print the
-decoded values (needs M6).
+**M2.** The mapping is new code. The Calcite `Converters` mapping is not
+reused: it represents `option` as a nullable column and coerces nulls back to
+zero values, which is lossy. Two halves. Pure: a function mapping Spark
+schema strings (DDL or JSON) to Morel types, tested in `.smli` with no
+cluster; includes tested rejections (`map`, intervals) and nullability at
+every nesting level. Live: browse the zoo table, print the inferred type,
+select and print the decoded values (needs M6).
 
-**M3.** Candidate design: phantom-typed plan (`type 'a plan`; `prepare: 'a
--> 'a plan`; `execute: 'a plan -> 'a`). Non-query results wrap as a
-single-row, single-column relation. `prepare` of a function value returns a
+**M3.** Candidate design: phantom-typed plan (`type 'a plan`; `prepare: 'a ->
+'a plan`; `execute: 'a plan -> 'a`). `prepare` is not an ordinary function:
+Morel evaluates arguments eagerly, so a function would receive the query's
+result, not the query. It is an intrinsic that operates on its argument's
+parse tree, in the same way as `Plan.program`
+([#359](https://github.com/hydromatic/morel/issues/359)); the type signature
+is as above, but the compiler recognizes the call. Non-query results wrap as
+a single-row, single-column relation. `prepare` of a function value returns a
 function of the same type; applying it splices arguments as literals or
 LocalRelations. Boundary-representable types are exactly those with an image
-in the M2 mapping; sum types cross via a tagged struct encoding (`option`
-is the degenerate case, via nullability); recursive datatypes and function
-types are rejected. Connection lifecycle: explicit `connect`/`close` (test
-scripts open once, run many statements, close); a `use` wrapper for scoped
-use; no pooling in phase 1; a registry of open connections, a cleaner that
-warns on leaks, a shutdown hook, and a harness check that scripts leave the
-registry empty. Use after close raises a closed-connection error, including
-when forcing a lazy remote value.
+in the M2 mapping; sum types cross via a tagged struct encoding (`option` is
+the degenerate case, via nullability); recursive datatypes and function types
+are rejected. Connection lifecycle: explicit `connect`/`close` (test scripts
+open once, run many statements, close); a `use` wrapper for scoped use; no
+pooling in phase 1; a registry of open connections, a cleaner that warns on
+leaks, a shutdown hook, and a harness check that scripts leave the registry
+empty. Use after close raises a closed-connection error, including when
+forcing a lazy remote value.
 
 **M4.** Represent the mapping as data, ideally in Morel, shared by all
 ports: each entry classifies an operator as direct, renamed, rewritten (an
@@ -173,6 +199,8 @@ iterate the table through the triple format.
 `449-tree`): Connect's Relation proto is a conventional operator tree, and
 translating from the balanced tree is near 1:1. The M1 expectations are
 substrate-independent and serve as this milestone's acceptance tests.
+Everything that depends on #449 (M5, and through it M8, M9 and M11) is
+done last; M0 through M4, M6 and M7 do not depend on it and come first.
 
 **M10.** Three categories: runtime errors (e.g. divide by zero) must raise
 the same Morel exception as local evaluation, testable in the triple
@@ -186,4 +214,7 @@ must remain usable.
 
 **Testing throughout.** The `.smli` checker matches bag-valued output as a
 multiset, so query output need not be deterministic. Expected error output
-is part of the contract.
+is part of the contract. `ScriptTest` gains a simple way to skip a script
+(scripts needing a live server skip unless the gating property is set).
+The live tests run in a separate weekly GitHub workflow; the existing
+workflow keeps its short timeout and never starts Docker.
