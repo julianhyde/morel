@@ -17,9 +17,11 @@
 # language governing permissions and limitations under the
 # License.
 #
-# Starts a Spark Connect server in a Docker container, in ANSI mode,
-# and prints its URI (for example "sc://localhost:15002") on stdout
-# once it accepts connections. Everything else goes to stderr, so
+# Starts a Spark Connect server in a Docker container, in ANSI mode
+# with the UTC time zone, seeds it with the tables that seed.py (in
+# this directory) creates, and prints its URI (for example
+# "sc://localhost:15002") on stdout once it accepts connections.
+# Everything else goes to stderr, so
 #
 #   export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
 #
@@ -105,24 +107,29 @@ elif [ -n "$s" ]; then
   docker start "$name" >/dev/null
 else
   log "creating container $name from $image on port $port"
-  docker run -d --name "$name" -p "$port:15002" "$image" \
+  # seed.py is the driver program; the Connect server runs inside it
+  # (spark.plugins), so clients see the tables it creates.
+  dir=$(cd "$(dirname "$0")" && pwd)
+  docker run -d --name "$name" -p "$port:15002" \
+    -v "$dir:/morel:ro" "$image" \
     /opt/spark/bin/spark-submit \
-    --class org.apache.spark.sql.connect.service.SparkConnectServer \
-    --name "Spark Connect server" \
+    --conf spark.plugins=org.apache.spark.sql.connect.SparkConnectPlugin \
+    --conf spark.connect.grpc.binding.port=15002 \
     --conf spark.sql.ansi.enabled=true \
-    --conf spark.connect.grpc.binding.port=15002 >/dev/null
+    --conf spark.sql.session.timeZone=UTC \
+    /morel/seed.py >/dev/null
 fi
 
-# Wait until the server logs that it is listening. A restarted
-# container appends to its log, so count only lines since the last
-# container start.
+# Wait until the driver logs that the seed tables exist, which is
+# after the server started listening. A restarted container appends to
+# its log, so count only lines since the last container start.
 started=$(docker inspect --format '{{.State.StartedAt}}' "$name")
 deadline=$((SECONDS + timeout))
 ready() {
   # Not "grep -q": it would close the pipe early, and under pipefail
   # the pipeline would fail even when the line was found.
   [ "$(docker logs --since "$started" "$name" 2>&1 \
-      | grep -c "Spark Connect server started")" -gt 0 ]
+      | grep -c "Morel seed tables created")" -gt 0 ]
 }
 until ready; do
   if [ "$(state)" != running ]; then
