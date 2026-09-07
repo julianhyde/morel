@@ -695,6 +695,13 @@ from e in emps
 > val it = [{name="Shaggy",`ordinal`=0},{name="Scooby",`ordinal`=1}]
 >   : {name:string, `ordinal`:int} list
 
+(* 'ordinal' inside a 'let' in a yield. Only a yield installs the counter
+ * that 'ordinal' reads, and a 'let' in its expression does not end the row,
+ * so the counter reaches into one. 'x' is read twice, so the let survives
+ * inlining and the compiler really does see it. *)
+from i in [1, 2, 3] yield (let val x = i * 2 in x + x + ordinal end);
+> val it = [4,9,14] : int list
+
 from e in emps
   order e.deptno
   join i in [2,3]
