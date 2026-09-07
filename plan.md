@@ -1,0 +1,189 @@
+<!--
+{% comment %}
+Licensed to Julian Hyde under one or more contributor license
+agreements.  See the NOTICE file distributed with this work
+for additional information regarding copyright ownership.
+Julian Hyde licenses this file to you under the Apache
+License, Version 2.0 (the "License"); you may not use this
+file except in compliance with the License.  You may obtain a
+copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied.  See the License for the specific
+language governing permissions and limitations under the
+License.
+{% endcomment %}
+-->
+
+# Morel on Spark: phase 1 plan
+
+Plan for [issue #467](https://github.com/hydromatic/morel/issues/467),
+developed on branch `467-spark`. The specification below is the issue text,
+verbatim. Milestones state goals and open questions; the notes record
+decisions made so far.
+
+## Specification (issue #467)
+
+Create a first version of Morel running with an Apache Spark backend.
+
+**Benefits**. Spark is a scalable, massively parallel data platform. It can
+access data in a variety of formats, and its catalog is a gateway to an
+enterprise's key data sets. Spark programs are typically a hybrid of SQL,
+Python, Scala and data engineers will benefit from being able to express the
+whole program in one language.
+
+**Basic functionality**. A Morel program executes as a program in the Spark
+cluster, accessing data sets stored in Spark's catalog. Conversely, from
+phase 2 one can execute Morel commands from the Spark CLI similar to Spark
+SQL, for example `df = morel.execute_query("from r in [{i=1, b=true}, {i=2,
+b=false}]")`; when Morel is executed from within Spark, the connection is in
+a value named `spark`, and `spark.catalog` gives access to data sets.
+
+**Data exploration**. A Spark instance contains data sets whose type was not
+known when the session started but we nevertheless wish to access in a
+strongly-typed manner. This is the same requirement as the file reader
+([#209](https://github.com/hydromatic/morel/issues/209)). A Spark connection
+yields a catalog object that, like the `Sys.file` object, is a progressively
+typed record.
+
+**Data types**. Morel manages all coercions to and from Spark types. We will
+need to devise and document a mapping from Spark types to Morel types. Morel
+has `string`, `int`, `bool`, `real`; `option` for nullable columns; `bag` for
+tables; `list` for arrays; record types for struct; Morel types for `byte`,
+`short`, `long`, `binary`, `map` are TBD. Morel's `Time.time` type (which
+represents instants, measured from UTC epoch) approximates SQL's
+TIMESTAMP_LTZ type; Morel has no decimal type yet. Until the type mapping is
+completed in phase 3, `decimal` columns will map to Morel's `real` type;
+`byte`, `short`, `long` to `int`; `binary` to `word list`.
+
+**Connectivity and planning**. Morel talks to Spark via Spark Connect (data
+exploration and plans in protobuf over gRPC) in ANSI mode. Spark's plans are
+a DAG of relational operators encoded in Protobuf. Any local data sets used
+in a query are sent via Spark Connect's LocalRelation (over gRPC in Apache
+Arrow format). If a query contains non-relational operators, its plan will
+contain leaves, UDFs and table functions that are executed by the Morel
+interpreter (phase 2).
+
+**Built-in library**. A new `Spark` structure, with a `connection` type
+(typically assigned to a value called `spark`) with a `catalog` method that
+returns the root of the catalog, a `prepare` function that converts a Morel
+value to a pair consisting of a Spark plan and an equivalent value, and an
+`execute` function that evaluates a plan. (The "equivalent value" has the
+same type and the same semantics but executes using Spark.) `plan` is an
+opaque type over a Protobuf value, and has a `toString` method that we can
+use for tests.
+
+**Configuration and testing**. A full test environment will require Spark
+running in a Docker container. However, it is too slow, expensive and flaky
+for everyday development/testing. Regular builds and CI will run without
+Spark, using mock data sources and testing conversion to Spark plans without
+executing them. Ideally, a large fraction of tests are `.smli` scripts,
+calling the built-in library, in particular Morel-to-Spark planning. A
+periodic (e.g. weekly) CI will test with a Docker container, enabled via a
+JVM property.
+
+**Phased delivery**. Phase 1 will execute purely relational expressions
+(including join, aggregate, sort, and correlated subqueries) against
+Spark-native data sets and data uploaded via LocalRelation. Phase 2 will
+package Morel's Java interpreter in Spark, thus allowing hybrid plans
+(embedding Morel UDFs) and `morel.execute_query` from within Spark. Phase 3
+will add any missing data types, e.g. a `decimal` type.
+
+## Phase 1 milestones
+
+* **M0 Oracle.** Build a Docker image running a Spark Connect server with
+  seed data, and wire it into CI.
+* **M1 Seed queries.** Decide 5 representative queries and the text
+  rendering of their Spark plans.
+* **M2 Type mapping.** Define the mapping between Spark and Morel types, and
+  write a test that demonstrates it works.
+* **M3 API.** Design the `Spark` structure, including the behavior of the
+  `plan` type. How do we execute programs that are not queries (do not
+  return a collection of records)? Programs that take arguments, of all
+  possible types? Are sum types possible?
+* **M4 Function inventory.** Define the list of Morel functions/operators
+  that must be pushed down to Spark, and design a representation for the
+  mapping.
+* **M5 Translator.** Translate Morel's logical plan (core) to Spark plans,
+  making the M1 tests pass.
+* **M6 Connectivity.** Open a session, execute a plan, decode Arrow results
+  into Morel values.
+* **M7 Catalog.** Browse Spark's catalog as a progressively typed record.
+* **M8 Execution.** Compile and execute queries against catalog data.
+* **M9 Local data.** Upload local values via LocalRelation; force remote
+  execution of queries over local data.
+* **M10 Errors.** Map expected and unexpected Spark errors to good Morel
+  exceptions.
+* **M11 Edge cases.** Extend coverage to the tricky operators; repurpose the
+  `dual` tests into a triple (local/Calcite/Spark) format.
+
+## Notes
+
+**M0.** Pinned stock Spark image plus an init script: start the Connect
+server, enable ANSI mode, register seed tables (`emp`, `dept`, and a
+"datatype zoo" table with one column per Spark type, nullable and
+non-nullable, edge values). Keep the image dumb; phase 2's interpreter jar
+ships per-session via Spark Connect's `AddArtifacts`, not baked into the
+image. Gate live tests on a JVM property; connection URI comes from
+`SPARK_REMOTE` so the same tests run against the container or a real
+cluster. Scripts that need a live connection skip when it is unset;
+translation-only scripts always run.
+
+**M1.** Capture reference plans from a stock client (PySpark Connect exposes
+the unresolved proto client-side) rather than handwriting them. The
+`toString` rendering must canonicalize nondeterministic fields (plan ids,
+session ids) or expectations will flake. The five queries each pin a
+translation decision: (1) filter+project over an inline relation; (2)
+equijoin; (3) group by with aggregates; (4) sort+limit; (5) correlated
+exists subquery. Query 5 determines whether Connect can express correlated
+subqueries or Morel must decorrelate into joins before emitting.
+
+**M2.** Two halves. Pure: a function mapping Spark schema strings (DDL or
+JSON) to Morel types, tested in `.smli` with no cluster; includes tested
+rejections (`map`, intervals) and nullability at every nesting level.
+Live: browse the zoo table, print the inferred type, select and print the
+decoded values (needs M6).
+
+**M3.** Candidate design: phantom-typed plan (`type 'a plan`; `prepare: 'a
+-> 'a plan`; `execute: 'a plan -> 'a`). Non-query results wrap as a
+single-row, single-column relation. `prepare` of a function value returns a
+function of the same type; applying it splices arguments as literals or
+LocalRelations. Boundary-representable types are exactly those with an image
+in the M2 mapping; sum types cross via a tagged struct encoding (`option`
+is the degenerate case, via nullability); recursive datatypes and function
+types are rejected. Connection lifecycle: explicit `connect`/`close` (test
+scripts open once, run many statements, close); a `use` wrapper for scoped
+use; no pooling in phase 1; a registry of open connections, a cleaner that
+warns on leaks, a shutdown hook, and a harness check that scripts leave the
+registry empty. Use after close raises a closed-connection error, including
+when forcing a lazy remote value.
+
+**M4.** Represent the mapping as data, ideally in Morel, shared by all
+ports: each entry classifies an operator as direct, renamed, rewritten (an
+expression template), or unsupported, with a flag for known semantic
+divergence (integer division, overflow, collation, NaN ordering). Tests
+iterate the table through the triple format.
+
+**M5.** Sequenced after the core tree restructuring
+([#449](https://github.com/hydromatic/morel/issues/449), branch
+`449-tree`): Connect's Relation proto is a conventional operator tree, and
+translating from the balanced tree is near 1:1. The M1 expectations are
+substrate-independent and serve as this milestone's acceptance tests.
+
+**M10.** Three categories: runtime errors (e.g. divide by zero) must raise
+the same Morel exception as local evaluation, testable in the triple
+format; analysis errors are translator bugs and dump the offending plan —
+except schema drift (table dropped after typechecking), which is a
+user-facing error and gets its own test; environmental errors (refused,
+auth, session expired) are user-facing connection errors. Unrecognized
+server errors map to a catch-all exception carrying Spark's error class and
+message (from the gRPC ErrorInfo metadata); after any error the connection
+must remain usable.
+
+**Testing throughout.** The `.smli` checker matches bag-valued output as a
+multiset, so query output need not be deterministic. Expected error output
+is part of the contract.
