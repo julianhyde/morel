@@ -288,10 +288,11 @@ Notes:
   authoritative output (a single placeholder expands to a multi-line result).
   Copy it back over the source. Operator/reserved members are invoked with
   backticks, e.g. `` Word.`<<` (a, b) ``.
-- In expected output, a top-level string value that contains a newline is
-  written as a raw string literal, `{|...|}` (or `{id|...|id}` if the
-  content contains `|}`), with verbatim content; the harness generates this
-  form, and `OutputMatcher` treats it as equivalent to the escaped literal.
+- In expected output, a top-level string value that contains a newline
+  (and no space or tab before a newline) is written as a raw string
+  literal, `{|...|}` (or `{id|...|id}` if the content contains `|}`), with
+  verbatim content; the harness generates this form, and `OutputMatcher`
+  treats it as equivalent to the escaped literal.
 - Adding a structure adds one top-level binding, so regenerate the
   environment-count tests in `built-in/sys.smli` and `misc.smli`.
 

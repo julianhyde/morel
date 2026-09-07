@@ -58,7 +58,9 @@ PP.render (80, PP.hsep [PP.text "a", PP.text "b", PP.text "c"]);
 
 (*) `vsep` separates with line breaks.
 PP.render (80, PP.vsep [PP.text "a", PP.text "b", PP.text "c"]);
-> val it = "a\nb\nc" : string
+> val it = {|a
+> b
+> c|} : string
 
 (*) `sep` is flat if it fits.
 PP.render (80, PP.sep [PP.text "a", PP.text "b", PP.text "c"]);
@@ -66,7 +68,8 @@ PP.render (80, PP.sep [PP.text "a", PP.text "b", PP.text "c"]);
 
 (*) `sep` breaks if it does not fit.
 PP.render (3, PP.sep [PP.text "aa", PP.text "bb"]);
-> val it = "aa\nbb" : string
+> val it = {|aa
+> bb|} : string
 
 (*) `group` lays out on one line if it fits.
 PP.render (80, PP.`group` (PP.vsep [PP.text "a", PP.text "b"]));
@@ -74,12 +77,15 @@ PP.render (80, PP.`group` (PP.vsep [PP.text "a", PP.text "b"]));
 
 (*) The same group breaks when the width is too small.
 PP.render (1, PP.`group` (PP.vsep [PP.text "a", PP.text "b"]));
-> val it = "a\nb" : string
+> val it = {|a
+> b|} : string
 
 (*) `nest` increases indentation after a line break.
 PP.render (3,
   PP.nest (2, PP.vsep [PP.text "a", PP.text "b", PP.text "c"]));
-> val it = "a\n  b\n  c" : string
+> val it = {|a
+>   b
+>   c|} : string
 
 (*) `cat` concatenates with no separator when flat.
 PP.render (80, PP.cat [PP.text "a", PP.text "b", PP.text "c"]);
@@ -88,7 +94,8 @@ PP.render (80, PP.cat [PP.text "a", PP.text "b", PP.text "c"]);
 (*) `fillSep` fills lines, breaking only when needed.
 PP.render (5,
   PP.fillSep [PP.text "a", PP.text "b", PP.text "c", PP.text "d"]);
-> val it = "a b c\nd" : string
+> val it = {|a b c
+> d|} : string
 
 (*) `pack` packs as many documents onto each line as fit, joined by `glue`.
 val atoms = [PP.text "1,", PP.text "2,", PP.text "3,", PP.text "4,",
@@ -97,7 +104,9 @@ val atoms = [PP.text "1,", PP.text "2,", PP.text "3,", PP.text "4,",
 PP.render (80, PP.align (PP.pack (PP.empty, atoms)));
 > val it = "1,2,3,4,5" : string
 PP.render (4, PP.align (PP.pack (PP.empty, atoms)));
-> val it = "1,2,\n3,4,\n5" : string
+> val it = {|1,2,
+> 3,4,
+> 5|} : string
 
 (* `pack` treats each document as an indivisible unit, so a list of records
  * wraps between records; `fillCat`, whose gap lets the following record
@@ -113,9 +122,12 @@ val recs = [PP.beside (r1, PP.text ","), PP.beside (r2, PP.text ","), r3];
 PP.render (80, PP.align (PP.pack (PP.empty, recs)));
 > val it = "[a b],[c d],[e f]" : string
 PP.render (9, PP.align (PP.pack (PP.empty, recs)));
-> val it = "[a b],\n[c d],\n[e f]" : string
+> val it = {|[a b],
+> [c d],
+> [e f]|} : string
 PP.render (9, PP.align (PP.fillCat recs));
-> val it = "[a b],[c\nd],[e f]" : string
+> val it = {|[a b],[c
+> d],[e f]|} : string
 
 (*) `pack` of no documents is empty.
 PP.render (80, PP.pack (PP.empty, []));
@@ -147,7 +159,8 @@ PP.render (80, PP.indent (4, PP.text "x"));
 
 (*) `hardLine` always breaks, even inside a group.
 PP.render (80, PP.`group` (PP.hcat [PP.text "a", PP.hardLine, PP.text "b"]));
-> val it = "a\nb" : string
+> val it = {|a
+> b|} : string
 
 (* A group accounts for the text that a following group puts on this line
  * before that group breaks. Laying out `d1` flat would give "ab cdefefgh",
@@ -158,6 +171,7 @@ val d1 = PP.`group` (PP.hcat [PP.text "ab", PP.line, PP.text "cdef"]);
 val d2 = PP.`group` (PP.hcat [PP.text "efgh", PP.line, PP.text "X"]);
 > val d2 = - : doc
 PP.render (10, PP.beside (d1, d2));
-> val it = "ab\ncdefefgh X" : string
+> val it = {|ab
+> cdefefgh X|} : string
 
 (*) End pp.smli
