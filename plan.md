@@ -175,8 +175,12 @@ Morel evaluates arguments eagerly, so a function would receive the query's
 result, not the query. It is an intrinsic that operates on its argument's
 parse tree, in the same way as `Plan.program`
 ([#359](https://github.com/hydromatic/morel/issues/359)); the type signature
-is as above, but the compiler recognizes the call. Non-query results wrap as
-a single-row, single-column relation. `prepare` of a function value returns a
+is as above, but the compiler recognizes the call.
+[#470](https://github.com/hydromatic/morel/issues/470) proposes `Plan.core :
+'a -> Core.expr`, an intrinsic of exactly this shape that reifies an
+expression as a value; `prepare` and `Plan.core` should share one mechanism,
+so keep this design in sync with #470. Non-query results wrap as a
+single-row, single-column relation. `prepare` of a function value returns a
 function of the same type; applying it splices arguments as literals or
 LocalRelations. Boundary-representable types are exactly those with an image
 in the M2 mapping; sum types cross via a tagged struct encoding (`option` is
