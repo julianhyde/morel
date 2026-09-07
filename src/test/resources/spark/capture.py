@@ -26,8 +26,8 @@
 # Without arguments no server is contacted: the client's config and
 # column-validation round trips are stubbed, and plans are built
 # offline. With --execute, the queries also run against a Spark
-# Connect server at localhost:15002 and print their rows; --seed
-# first creates the emp and dept tables there.
+# Connect server at localhost:15002 (started by start-spark.sh, which
+# seeds the emp and dept tables) and print their rows.
 import re, sys
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -52,40 +52,6 @@ if not EXECUTE:
         "spark.sql.execution.arrow.useLargeVarTypes": "false"}
     spark._client.get_config_dict = lambda *keys: {k: _defaults.get(k) for k in keys}
 
-def seed():
-    emp_schema = StructType([
-        StructField("empno", IntegerType(), False),
-        StructField("ename", StringType(), False),
-        StructField("job", StringType(), False),
-        StructField("mgr", IntegerType(), False),
-        StructField("hiredate", StringType(), False),
-        StructField("sal", DoubleType(), False),
-        StructField("comm", DoubleType(), False),
-        StructField("deptno", IntegerType(), False)])
-    emp_rows = [
-        (7369, "SMITH", "CLERK", 7902, "1980-12-17", 800.0, 0.0, 20),
-        (7499, "ALLEN", "SALESMAN", 7698, "1981-02-20", 1600.0, 300.0, 30),
-        (7521, "WARD", "SALESMAN", 7698, "1981-02-22", 1250.0, 500.0, 30),
-        (7566, "JONES", "MANAGER", 7839, "1981-02-04", 2975.0, 0.0, 20),
-        (7654, "MARTIN", "SALESMAN", 7698, "1981-09-28", 1250.0, 1400.0, 30),
-        (7698, "BLAKE", "MANAGER", 7839, "1981-01-05", 2850.0, 0.0, 30),
-        (7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.0, 0.0, 10),
-        (7788, "SCOTT", "ANALYST", 7566, "1987-04-19", 3000.0, 0.0, 20),
-        (7839, "KING", "PRESIDENT", 0, "1981-11-17", 5000.0, 0.0, 10),
-        (7844, "TURNER", "SALESMAN", 7698, "1981-09-08", 1500.0, 0.0, 30),
-        (7876, "ADAMS", "CLERK", 7788, "1987-05-23", 1100.0, 0.0, 20),
-        (7900, "JAMES", "CLERK", 7698, "1981-12-03", 950.0, 0.0, 30),
-        (7902, "FORD", "ANALYST", 7566, "1981-12-03", 3000.0, 0.0, 20),
-        (7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.0, 0.0, 10)]
-    dept_schema = StructType([
-        StructField("deptno", IntegerType(), False),
-        StructField("dname", StringType(), False),
-        StructField("loc", StringType(), False)])
-    dept_rows = [(10, "ACCOUNTING", "NEW YORK"), (20, "RESEARCH", "DALLAS"),
-                 (30, "SALES", "CHICAGO"), (40, "OPERATIONS", "BOSTON")]
-    spark.createDataFrame(emp_rows, emp_schema).write.mode("overwrite").saveAsTable("emp")
-    spark.createDataFrame(dept_rows, dept_schema).write.mode("overwrite").saveAsTable("dept")
-
 def canon(text):
     # plan ids are per-session counters; renumber in order of appearance
     ids = {}
@@ -103,8 +69,6 @@ def show(name, df, execute=None):
             print("  ", tuple(row))
     print()
 
-if "--seed" in sys.argv:
-    seed()
 # Every scan is aliased by its Morel binder, and every column reference
 # is qualified by that alias. This is the only form in which Spark 4.0.0
 # resolves the outer reference of a correlated subquery (query 5) when
