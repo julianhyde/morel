@@ -459,7 +459,7 @@ public class TypeResolver {
 
       // If any value bindings have aliased types (e.g. 'myInt' rather than
       // the expanded type 'int'), populate a map with those types.
-      final Map<Ast.Pat, Type> realTypes = deduceRealTypes(typeMap0, decl);
+      final Map<Ast.Pat, Type> realTypes = deduceRealTypes(typeMap0, node2);
 
       final TypeMap typeMap =
           realTypes.isEmpty()
