@@ -132,7 +132,8 @@ License.
 
     <git-commit-id.skip>false</git-commit-id.skip>
     <maven-javadoc-plugin.additionalOptions>-html5</maven-javadoc-plugin.additionalOptions>
-    <maven-javadoc-plugin.excludePackageNames>net.hydromatic.morel.parse:org.apache.spark.connect.proto</maven-javadoc-plugin.excludePackageNames>
+    <!-- The 'spark' profile overrides this to include the Spark adapter. -->
+    <maven-javadoc-plugin.excludePackageNames>net.hydromatic.morel.parse:net.hydromatic.morel.spark:org.apache.spark.connect.proto</maven-javadoc-plugin.excludePackageNames>
     <nullaway.severity>ERROR</nullaway.severity>
   </properties>
 
@@ -654,6 +655,9 @@ License.
       <activation>
         <jdk>[17,)</jdk>
       </activation>
+      <properties>
+        <maven-javadoc-plugin.excludePackageNames>net.hydromatic.morel.parse:org.apache.spark.connect.proto</maven-javadoc-plugin.excludePackageNames>
+      </properties>
       <dependencies>
         <dependency>
           <groupId>com.google.protobuf</groupId>

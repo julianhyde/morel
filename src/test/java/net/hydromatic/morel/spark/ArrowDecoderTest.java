@@ -33,7 +33,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -42,6 +44,7 @@ import net.hydromatic.morel.type.TypeSystem;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
@@ -101,7 +104,7 @@ public class ArrowDecoderTest {
         ts.recordType(
             ImmutableMap.of("b", PrimitiveType.STRING, "a", intOption)
                 .entrySet());
-    final java.util.Map<String, Object> struct = new java.util.HashMap<>();
+    final Map<String, Object> struct = new HashMap<>();
     struct.put("b", new Text("x"));
     struct.put("a", null);
     assertThat(
@@ -157,7 +160,6 @@ public class ArrowDecoderTest {
                     "arr",
                     0));
     assertThat(e3.errorClass, is("NULL_VALUE"));
-    assertThat(ts, org.hamcrest.CoreMatchers.notNullValue());
   }
 
   /** Decodes an Arrow IPC stream, as Spark Connect sends one. */
@@ -182,8 +184,7 @@ public class ArrowDecoderTest {
       x.set(1, 2.5);
       big.set(0, 4L);
       big.setNull(1);
-      for (org.apache.arrow.vector.FieldVector v :
-          Arrays.asList(id, s, x, big)) {
+      for (FieldVector v : Arrays.asList(id, s, x, big)) {
         v.setValueCount(2);
       }
       try (VectorSchemaRoot root = VectorSchemaRoot.of(id, s, x, big);

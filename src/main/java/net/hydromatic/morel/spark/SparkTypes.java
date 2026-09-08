@@ -19,6 +19,7 @@
 package net.hydromatic.morel.spark;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -154,7 +155,7 @@ public class SparkTypes {
         }
         return b.append(">").toString();
       default:
-        return t.getKindCase().name().toLowerCase(java.util.Locale.ROOT);
+        return t.getKindCase().name().toLowerCase(Locale.ROOT);
     }
   }
 }
