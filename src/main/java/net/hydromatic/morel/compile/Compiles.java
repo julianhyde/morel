@@ -226,6 +226,7 @@ public abstract class Compiles {
         tracer.onCore(i + 2, coreDecl);
       }
     }
+    coreDecl = lowerTrees(typeSystem, session.nameGenerator, coreDecl);
     checkExtentsFinite(coreDecl);
     // Shadow: translate every query into a relational tree and check it. Runs
     // only when assertions are enabled, that is, when the tests run.
@@ -342,8 +343,23 @@ public abstract class Compiles {
       }
     }
 
-    // Pass -1 or any pass beyond the last: return the final result
-    return coreDecl;
+    // Pass -1 or any pass beyond the last: return the final result, lowered as
+    // the pipeline lowers it. An earlier pass returns the tree, which is what
+    // it has.
+    return lowerTrees(typeSystem, session.nameGenerator, coreDecl);
+  }
+
+  /**
+   * Lowers every relational tree into the step list that executes it.
+   *
+   * <p>A pass of its own, after the rewrites and before the compiler. Not
+   * inside {@link Compiler#compile}: the compiler lays out the stack from the
+   * Core it is given, so a binder minted while it compiles would have no slot,
+   * and what should have been in one is read from the name environment instead.
+   */
+  private static Core.Decl lowerTrees(
+      TypeSystem typeSystem, NameGenerator nameGenerator, Core.Decl decl) {
+    return RelLowerer.lowerAll(typeSystem, nameGenerator, decl);
   }
 
   /**
