@@ -146,8 +146,22 @@ public abstract class AstNode {
     }
 
     @Override
+    public AstWriter id(String name) {
+      return super.id(rename(name));
+    }
+
+    @Override
     public AstWriter id(String name, int i) {
       return super.id(rename(name), register(name, i));
+    }
+
+    // A record label may be the name of a generated binder -- a tree's
+    // projection names its element's components after them -- so a label is
+    // renumbered like the id that reads it. Otherwise the two disagree, and a
+    // plan reads as if it bound one name and used another.
+    @Override
+    public AstWriter idQuoted(String name) {
+      return super.idQuoted(rename(name));
     }
 
     @Override
