@@ -818,7 +818,11 @@ public class Main {
       } catch (Codes.MorelRuntimeException e) {
         appendToOutput(e, outLines);
         if (buffered) {
-          outLines.bufferedLines().forEach(outLines.consumer());
+          // As in emit, but there is no expected output to keep: the
+          // statement failed, and its output is what it is.
+          final String output = String.join("\n", outLines.bufferedLines());
+          Arrays.stream(OutputMatcher.toRawStrings(output).split("\n", -1))
+              .forEach(outLines.consumer());
         }
       }
     }

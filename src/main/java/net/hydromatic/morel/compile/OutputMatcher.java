@@ -144,8 +144,9 @@ public class OutputMatcher {
         inString = true;
         lastWasSpace = false;
       } else if (c == '{' && rawFenceLength(s, i) > 0) {
-        // Copy a raw string literal verbatim, newlines included.
-        final int end = rawEnd(s, i);
+        // Copy a raw string literal verbatim, newlines included. (If the
+        // literal is not closed, rawEnd is past the end; copy to the end.)
+        final int end = Math.min(rawEnd(s, i), s.length());
         if (lastWasSpace && buf.length() > 0) {
           buf.append(' ');
         }
@@ -540,21 +541,25 @@ public class OutputMatcher {
 
   /**
    * Returns whether a string is written as a raw literal: it contains a
-   * newline, and no line ends with a space or tab. (Trailing whitespace is
-   * invisible in a raw literal, and is easily lost by editors.)
+   * newline; every other character is printable ASCII (so no tab, carriage
+   * return, control character or non-ASCII character, which would be invisible
+   * or fragile in the script, and a tab would fail the linter); and no line
+   * ends with a space (which is invisible, and easily lost by editors).
    */
   static boolean wantsRaw(String content) {
-    final int i = content.indexOf('\n');
-    if (i < 0) {
-      return false;
-    }
-    for (int j = i; j >= 0; j = content.indexOf('\n', j + 1)) {
-      if (j > 0
-          && (content.charAt(j - 1) == ' ' || content.charAt(j - 1) == '\t')) {
+    boolean newline = false;
+    for (int i = 0; i < content.length(); i++) {
+      final char c = content.charAt(i);
+      if (c == '\n') {
+        newline = true;
+        if (i > 0 && content.charAt(i - 1) == ' ') {
+          return false;
+        }
+      } else if (c < ' ' || c > '~') {
         return false;
       }
     }
-    return true;
+    return newline;
   }
 
   /** Writes a string as a raw literal whose fences do not occur in it. */
