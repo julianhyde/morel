@@ -225,10 +225,29 @@ public class RelLowerer {
       protected Core.@Nullable Exp visitRel(Core.Rel rel) {
         final Set<Core.NamedPat> rowPats = rowBindings(rel);
         final Core.Exp lowered =
-            lower(typeSystem, nameGenerator, rel, ImmutableList.of());
+            lower(typeSystem, nameGenerator, rel, scanNames(rel));
         return unbindRow(typeSystem, lowered, rowPats).accept(this);
       }
     };
+  }
+
+  /**
+   * Returns the name for each of a tree's leaf scans, as the query wrote them.
+   *
+   * <p>The resolver used to hand these to the lowering; a tree does not carry
+   * them, but its projection names its element's components after the binders
+   * they came from, and {@link RelExpander#leafPats} reads them back.
+   */
+  private static Iterable<List<String>> scanNames(Core.Rel rel) {
+    final List<Core.Pat> pats = RelExpander.leafPats(rel);
+    final ImmutableList.Builder<List<String>> names = ImmutableList.builder();
+    for (Core.Pat pat : pats) {
+      if (!(pat instanceof Core.IdPat)) {
+        return ImmutableList.of();
+      }
+      names.add(ImmutableList.of(((Core.IdPat) pat).name));
+    }
+    return names.build();
   }
 
   /**
