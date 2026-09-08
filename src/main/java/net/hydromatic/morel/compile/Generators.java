@@ -22,15 +22,12 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.compile.FreeFinder.freePats;
-import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.MultimapBuilder;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -62,6 +59,7 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.Pair;
+import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
 /** Implementations of {@link Generator}, and supporting methods. */
@@ -1946,7 +1944,7 @@ class Generators {
       return null;
     }
     final Generator baseGenerator =
-        last(baseCache.generators.get((Core.NamedPat) goalPat));
+        requireNonNull(baseCache.bestGenerator((Core.NamedPat) goalPat));
 
     // 2. Similarly, substitute and invert the step predicate
     final Core.Exp substitutedStep =
@@ -1970,7 +1968,7 @@ class Generators {
       return null;
     }
     final Generator stepGenerator =
-        last(stepCache.generators.get((Core.NamedPat) stepGoalPat));
+        requireNonNull(stepCache.bestGenerator((Core.NamedPat) stepGoalPat));
 
     // 3. Build the unrolled iteration
     return unrollBoundedIterate(
@@ -2910,26 +2908,23 @@ class Generators {
       if (constraint.isCallTo(BuiltIn.Z_ORELSE)) {
         final List<Generator> generators = new ArrayList<>();
 
-        // Save generator count before trying branches.
-        // If any branch fails, we need to clean up generators from successful
-        // branches so they don't leak into the cache.
-        final int initialCount =
-            cache.generators.get((Core.NamedPat) pat).size();
+        // Save the generator count before trying the branches. If any branch
+        // fails, what the earlier ones added must not leak into the cache, and
+        // truncating the list to what it was takes out everything they
+        // registered -- for this name and for any other, which removing from
+        // one name's list did not.
+        final int initialCount = cache.generators.size();
 
         for (Core.Exp exp : core.decomposeOr(constraint)) {
           if (!maybeGenerator(
               cache, pat, ordered, new Context(core.decomposeAnd(exp)))) {
-            // Clean up generators added by successful branches before this one.
-            // Remove generators until we're back to the initial count.
-            while (cache.generators.get((Core.NamedPat) pat).size()
-                > initialCount) {
-              final List<Generator> genList =
-                  (List<Generator>) cache.generators.get((Core.NamedPat) pat);
-              genList.remove(genList.size() - 1);
+            while (cache.generators.size() > initialCount) {
+              cache.generators.remove(cache.generators.size() - 1);
             }
             continue next_constraint;
           }
-          generators.add(last(cache.generators.get((Core.NamedPat) pat)));
+          generators.add(
+              requireNonNull(cache.bestGenerator((Core.NamedPat) pat)));
         }
         generateUnion(cache, ordered, generators, constraint);
         return true;
@@ -4276,17 +4271,30 @@ class Generators {
      */
     final Set<Core.NamedPat> ungrounded;
 
+    
     /**
-     * Generators for each name, in the order the engine was given them.
+     * Generators, in the order the engine was given them.
      *
-     * <p>Linked, not hashed: `improveGenerators` walks this and acts on what it
-     * finds, each step changing what the next one sees, so a hash order makes
-     * the engine's answer depend on the names' hash codes -- and a generated
-     * name is whatever number its counter had reached. Grounding must depend on
-     * the query and nothing else.
+     * <p>A list of pairs and not a multimap, so that the order is the structure
+     * rather than a builder's option. `improveGenerators` walks this and acts
+     * on what it finds, each step changing what the next one sees, so an order
+     * that depends on a name's hash code makes the engine's answer depend on
+     * the name -- and a generated name is whatever number its counter had
+     * reached. Grounding must depend on the query and nothing else.
      */
-    final Multimap<Core.NamedPat, Generator> generators =
-        MultimapBuilder.linkedHashKeys().arrayListValues().build();
+    final PairList<Core.NamedPat, Generator> generators = PairList.of();
+
+    /** Returns the generators registered for a name, in that order. */
+    List<Generator> generatorsFor(Core.NamedPat pat) {
+      final List<Generator> list = new ArrayList<>();
+      generators.forEach(
+          (p, generator) -> {
+            if (p.equals(pat)) {
+              list.add(generator);
+            }
+          });
+      return list;
+    }
 
     /**
      * Maps (variable, fieldIndex) to the fresh pattern created for {@code #i
@@ -4520,11 +4528,14 @@ class Generators {
 
     @Nullable
     Generator bestGenerator(Core.NamedPat namedPat) {
-      Generator bestGenerator = null;
-      for (Generator generator : generators.get(namedPat)) {
-        bestGenerator = generator;
+      // The last one registered for the name, which is the best: the engine
+      // improves a generator by registering a better one after it.
+      for (int i = generators.size() - 1; i >= 0; i--) {
+        if (generators.left(i).equals(namedPat)) {
+          return generators.right(i);
+        }
       }
-      return bestGenerator;
+      return null;
     }
 
     /**
@@ -4549,7 +4560,7 @@ class Generators {
         for (Core.Pat component : tuplePat.args) {
           if (component instanceof Core.NamedPat) {
             final Set<Generator> componentGens =
-                new HashSet<>(generators.get((Core.NamedPat) component));
+                new HashSet<>(generatorsFor((Core.NamedPat) component));
             if (candidates == null) {
               candidates = componentGens;
             } else {
@@ -4574,7 +4585,7 @@ class Generators {
      */
     public <G extends Generator> G add(G generator) {
       for (Core.NamedPat namedPat : generator.pat.expand()) {
-        generators.put(namedPat, generator);
+        generators.add(namedPat, generator);
       }
       return generator;
     }

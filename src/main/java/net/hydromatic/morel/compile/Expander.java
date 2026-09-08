@@ -25,7 +25,6 @@ import static net.hydromatic.morel.compile.FreeFinder.freePats;
 import static net.hydromatic.morel.compile.Generators.maybeGenerator;
 import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.forEachInIntersection;
-import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.only;
 import static net.hydromatic.morel.util.Static.skip;
 import static net.hydromatic.morel.util.Static.transformEager;
@@ -33,7 +32,6 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
 import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -1108,7 +1106,7 @@ public class Expander {
    * that is a single value or is empty.
    */
   private void improveGenerators(
-      Multimap<Core.NamedPat, Generator> generators) {
+      PairList<Core.NamedPat, Generator> generators) {
     // Create a snapshot of the generators map, to avoid concurrent
     // modification.
     final PairList<Core.NamedPat, Generator> infiniteGenerators = PairList.of();
@@ -1124,8 +1122,8 @@ public class Expander {
           final boolean ordered = generator.exp.type instanceof ListType;
           if (maybeGenerator(
               cache, pat, ordered, new Generators.Context(constraints))) {
-            Generator g = last(cache.generators.get(pat));
-            g.pat.expand().forEach(p2 -> generators.put(p2, g));
+            final Generator g = requireNonNull(cache.bestGenerator(pat));
+            g.pat.expand().forEach(p2 -> generators.add(p2, g));
           }
         });
   }
