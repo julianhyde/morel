@@ -333,6 +333,38 @@ public class RelExpander {
   }
 
   /**
+   * Returns the pattern of the first leaf that nothing bounds, or null where
+   * the tree does not name it.
+   *
+   * <p>The name a diagnostic wants. A tree holds no names, so this is
+   * `leafPats` again -- the projection at the root, read back -- and a query
+   * with one binder has no projection and so no name; discussion.md §11.
+   */
+  public static Core.@Nullable NamedPat ungrounded(
+      Core.Exp tree, List<Core.Pat> leafPats) {
+    final List<Core.Exp> leaves = new ArrayList<>();
+    allLeaves(tree, leaves);
+    for (int i = 0; i < leaves.size(); i++) {
+      final Core.Exp leaf = leaves.get(i);
+      if (Extents.isInfinite(leaf) || RangePushdown.isInfiniteRange(leaf)) {
+        return i < leafPats.size() && leafPats.get(i) instanceof Core.NamedPat
+            ? (Core.NamedPat) leafPats.get(i)
+            : null;
+      }
+    }
+    return null;
+  }
+
+  /** Collects a tree's leaves, left to right. */
+  private static void allLeaves(Core.Exp node, List<Core.Exp> leaves) {
+    if (!(node instanceof Core.Rel)) {
+      leaves.add(node);
+      return;
+    }
+    ((Core.Rel) node).inputs().forEach(input -> allLeaves(input, leaves));
+  }
+
+  /**
    * Returns whether a tree has a leaf that is an infinite extent, and therefore
    * needs grounding.
    *
@@ -527,7 +559,14 @@ public class RelExpander {
       dropped = null;
       nextName = mark;
       nextLeafPat = leafMark;
-      return expandJoinTree(join, conditions, true);
+      try {
+        return expandJoinTree(join, conditions, true);
+      } catch (CompileException e2) {
+        // Both attempts failed, so the query cannot be grounded. Report the
+        // first one's message: it was made with the names the query wrote,
+        // and the retry destructures, which throws them away.
+        throw e;
+      }
     }
   }
 
@@ -1311,7 +1350,8 @@ public class RelExpander {
         // bounds each by the other and neither on its own. The multi-name
         // path below asks the same question; without it here the generator's
         // free name reached the plan as a reference to nothing.
-        throw new CompileException("pattern is not grounded", false, leaf.pos);
+        throw new CompileException(
+            Expander.notGrounded(names.get(0)), false, leaf.pos);
       }
       return named(
           project(generator, names.get(0), leaf.pos, bound), names.get(0));
@@ -1424,7 +1464,7 @@ public class RelExpander {
       Pos pos,
       Map<Core.NamedPat, Core.Exp> bound) {
     if (generator.cardinality == Generator.Cardinality.INFINITE) {
-      throw new CompileException("pattern is not grounded", false, pos);
+      throw new CompileException(Expander.notGrounded(pat), false, pos);
     }
     final Core.Exp exp = replace(generator.exp, bound);
     if (generator.pat instanceof Core.IdPat) {
@@ -1433,7 +1473,7 @@ public class RelExpander {
     final Core.@Nullable Exp element =
         path(generator.pat, core.input0(exp.type.elementType()), pat);
     if (element == null) {
-      throw new CompileException("pattern is not grounded", false, pos);
+      throw new CompileException(Expander.notGrounded(pat), false, pos);
     }
     // What else the generator's pattern binds, and where each stands. A name
     // the query already bound -- by an earlier leaf, whose value is in
