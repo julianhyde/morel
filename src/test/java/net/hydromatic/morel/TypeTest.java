@@ -257,6 +257,12 @@ public class TypeTest {
         is(true));
     assertThat(m.codeEqual(stringType, "\"1\"", "1"), is(false));
     assertThat(m.codeEqual(stringType, "{|1|}", "1"), is(false));
+    // A tag consists of lower-case letters and underscores; anything else
+    // is not a fence.
+    assertThat(m.codeEqual(stringType, "\"x\"", "{a_b|x|a_b}"), is(true));
+    assertThat(m.codeEqual(stringType, "\"x\"", "{A|x|A}"), is(false));
+    assertThat(m.codeEqual(stringType, "\"x\"", "{a1|x|a1}"), is(false));
+    assertThat(m.codeEqual(stringType, "\"x\"", "{a-b|x|a-b}"), is(false));
     // A fence inside a regular literal is just text, and a raw literal may
     // contain a fence with a different tag.
     assertThat(
