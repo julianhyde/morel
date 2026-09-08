@@ -56,41 +56,52 @@ What is left, in the order it is worth doing:
    shadow exists to guard the translator, and the translator is only
    still needed for the fallback.
 
-   **The residue is 16 of 240**, measured over the whole script suite by
-   counting the fallback: `optimize.smli` 10 of 33, `such-that.smli` 6
-   of 191, every other file 0. It was 37 at the start of the session and
-   28 after `Analyzer.isAtom`; grounding through a nested query took the
-   remaining 12. What is left:
+   **The residue is 12 of 240**, measured over the whole script suite by
+   counting the fallback: `optimize.smli` 6 of 33, `such-that.smli` 6 of
+   191, every other file 0. It was 37 at the start of the session. And
+   **ten of the twelve are queries that are meant to fail** -- `from x
+   where abs x > 5`, `from x, y where x < y andalso y < x + 10`, `from
+   i, j` over type variables, and so on. Both engines decline, and the
+   fallback runs only so that `Expander` can produce the message.
 
-   * *An infinite range leaf with the bound above it* (10, all in
-     optimize). `filter [$0 < 5] (#flatten Range ([AT_LEAST 1]))`, and
-     the same over a join of two with `#* Int (#1 $0, #2 $0 + 3) < 30`.
-     The step list has `Fbbt.strengthen` and `RangePushdown.apply` for
-     exactly this; the tree engine has neither, and `RelExpander` does
-     not treat a range as a leaf it could bound at all. **The next
-     piece**, and the only one with a class of its own.
-   * *Neither engine can ground it* (~4 of the 6 left in such-that).
-     `from i where i elem [1..]`, `from x where (x + 2) * (x - 3) = 0`,
-     `from i, j` over type variables. The expected output is an error,
-     both decline, and the fallback runs only to produce the message.
-     Not residue to remove, though it is work done twice.
-   * *`elem` over a collection that is itself a tree* (2). `op elem ((n,
-     d), project [(#name $0, #deptno $0)] [...])` -- the engine inverts
-     `elem` against a collection, and this one is a `project`.
+   **So the engineering left is one class with two instances**: an
+   infinite range leaf under a *join*. `from x in [1..], y in [1..]
+   where x * (y + 3) < 30` needs the range's implied lower bound
+   injected before FBBT, so that FBBT can deduce the upper bound, and
+   then the deduced bound pushed back into the range -- which is what
+   `Expander.expandFromSteps` does with `rangeImpliedBounds`,
+   `Fbbt.strengthen` and `RangePushdown.apply`, in that order. The
+   single-leaf case now works; the join path does not reach it, because
+   `extentsInOrder` collects extents and a range is not one, so
+   `extents` is empty and the join returns early without grounding
+   anything. Note that the *extent* form of the same query, `from x, y
+   where x >= 1 andalso y >= 1 andalso x * (y + 3) < 30`, does ground on
+   the tree: FBBT is already wired in for extents.
 
-   Three things tried and measured, so they are not tried again:
+   **And then the endgame.** The fallback cannot go while it is what
+   produces the message, so the last step is for the tree engine to name
+   the ungrounded pattern itself -- it has `leafPats` now, so it can --
+   and for `visitRel` to be sure that declining means ungroundable
+   rather than unimplemented. `Expander`, `RelTranslator` and
+   `RelShadow` all go at that point, which is what goal 3's second
+   sentence asks for.
+
+   Four things tried and measured, so they are not tried again:
    `Core.Input` in `Analyzer.isAtom` took the residue from 37 to 28 and
    changed no output; lowering the argument of `Relational.nonEmpty` in
    `Generators.maybeExists`, with `RelExpander.subst` dropping the row
-   binding it had just made redundant, took it from 28 to 16; and
+   binding it had just made redundant, took it from 28 to 16;
+   `RangePushdown.tighten` on a single leaf took it from 16 to 12; and
    treating `#1 $0` as atomic in `Inliner.isAtomic`, so that a `case`
    over a tree's components would reduce the way one over a step list's
    variables does, removed no declines and broke a script.
 
-   The pattern in the two that worked: a pass that reads a query's shape
-   was written against a step list, and the resolver now leaves a tree
-   where it looks. `fnBody`, `maybeExists` and the `let` that binds the
-   row are three instances; expect more, and expect them to be small.
+   The pattern in the three that worked: a pass that reads a query's
+   shape was written against a step list, and the resolver now leaves a
+   tree where it looks -- or, in `RangePushdown`'s case, the pass asks
+   for a pattern where a tree has only `$0`. `fnBody`, `maybeExists`,
+   the `let` that binds the row and `findTightening`'s predicate are
+   four instances, and each was small.
 2. **Goal 6, freeze** -- but not before the plan text is stable. A tree
    prints its bracketed expressions with `StringBuilder.append(exp)`,
    which is `toString()` and a plain writer, so an identifier keeps the
