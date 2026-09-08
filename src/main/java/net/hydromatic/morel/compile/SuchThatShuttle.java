@@ -150,7 +150,8 @@ class SuchThatShuttle extends EnvShuttle {
     final boolean rowsUsed = !rowsUnused;
     try {
       final Core.Exp expanded =
-          RelExpander.expand(typeSystem, env, rel, rowsUsed);
+          RelExpander.expand(
+              typeSystem, env, rel, rowsUsed, RelExpander.leafPats(rel));
       // The same questions `Expander.expandViaTree` asks of its answer: every
       // leaf bounded, and no expression reading a field its row does not have.
       // Replacing a join with a projection makes the element one component
