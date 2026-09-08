@@ -274,6 +274,9 @@ public class Inliner extends EnvShuttle {
   private @Nullable Map<Core.NamedPat, Core.Exp> getSub(
       Core.Exp exp, Core.Match match) {
     if (match.pat.op == Op.ID_PAT && isAtomic(exp)) {
+      if (carriesInputIntoRel(exp, (Core.IdPat) match.pat, match.exp)) {
+        return null;
+      }
       return ImmutableMap.of((Core.IdPat) match.pat, exp);
     }
     if (exp.op == Op.TUPLE && match.pat.op == Op.TUPLE_PAT) {
@@ -283,19 +286,36 @@ public class Inliner extends EnvShuttle {
           && allMatch(tuplePat.args, arg -> arg.op == Op.ID_PAT)) {
         final ImmutableMap.Builder<Core.NamedPat, Core.Exp> builder =
             ImmutableMap.builder();
+        final boolean[] blocked = {false};
         forEach(
             tuple.args,
             tuplePat.args,
-            (arg, pat) -> builder.put((Core.IdPat) pat, arg));
-        return builder.build();
+            (arg, pat) -> {
+              if (carriesInputIntoRel(arg, (Core.IdPat) pat, match.exp)) {
+                blocked[0] = true;
+              }
+              builder.put((Core.IdPat) pat, arg);
+            });
+        return blocked[0] ? null : builder.build();
       }
     }
     return null;
   }
 
-  /** Returns whether an expression can be inlined without expansion. */
+  /**
+   * Returns whether an expression can be inlined without expansion.
+   *
+   * <p>{@code $0} counts. It is a node and not a variable (discussion.md §17),
+   * but it is as cheap to duplicate as an id, and a {@code case} over a tuple
+   * of the row's components is what beta-reducing a call in a query leaves:
+   * {@code case (x, $0) of (x, y) => (x, y) elem edges}. Leaving that unreduced
+   * hides the constraint from the grounding engine, which matches on {@code
+   * elem} over the query's variables.
+   */
   static boolean isAtomic(Core.Exp exp) {
-    return exp instanceof Core.Literal || exp instanceof Core.Id;
+    return exp instanceof Core.Literal
+        || exp instanceof Core.Id
+        || exp instanceof Core.Input;
   }
 
   /**
@@ -377,11 +397,19 @@ public class Inliner extends EnvShuttle {
     return found[0];
   }
 
-  /** Returns whether an expression reads an input of a relational tree. */
+  /**
+   * Returns whether an expression reads an input of the node that encloses it.
+   *
+   * <p>The walk stops at a nested node: a reference below one is that node's
+   * own element, and moving the expression does not take it out of scope. A
+   * function whose body is a tree -- {@code fn x => exists y where edge (x, y)}
+   * -- is an ordinary value, and must still be inlined, or the engine never
+   * sees the constraint that grounds the query calling it.
+   */
   private static boolean containsInput(Core.Exp exp) {
     final boolean[] found = {false};
     exp.accept(
-        new Visitor() {
+        new Visitor.RelBoundary() {
           @Override
           protected void visit(Core.Input input) {
             found[0] = true;
