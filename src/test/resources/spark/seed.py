@@ -22,10 +22,11 @@
 # waits forever, keeping the server up.
 #
 # Seed tables:
-#   emp, dept  The scott rows, as in script/spark.smli.
-#   zoo        One column per Spark type. Row 1 has typical values, row 2
-#              edge values (extremes, NaN, empty, non-ASCII), and row 3
-#              nulls in every column but id.
+#   scott.emps, scott.depts, scott.bonuses, scott.salgrades
+#              Morel's built-in "scott" data set.
+#   zoo        In the default database. One column per Spark type. Row 1
+#              has typical values, row 2 edge values (extremes, NaN, empty,
+#              non-ASCII), and row 3 nulls in every column but id.
 #
 # Nullability: Spark's built-in catalog does not keep NOT NULL for
 # tables stored as files, so every column of these tables reads back as
@@ -50,11 +51,16 @@ warehouse = spark.conf.get("spark.sql.warehouse.dir")
 if warehouse.startswith("file:"):
     shutil.rmtree(warehouse[len("file:"):], ignore_errors=True)
 
-sql("DROP TABLE IF EXISTS emp")
-sql("""CREATE TABLE emp (
+# The scott database holds the same tables and rows as Morel's built-in
+# "scott" data set, so that "spark.catalog.scott.emps" on a real
+# connection and on the offline connection (backed by the data set)
+# give the same values.
+sql("CREATE DATABASE IF NOT EXISTS scott")
+sql("DROP TABLE IF EXISTS scott.emps")
+sql("""CREATE TABLE scott.emps (
   empno INT, ename STRING, job STRING, mgr INT, hiredate STRING,
   sal DOUBLE, comm DOUBLE, deptno INT) USING parquet""")
-sql("""INSERT INTO emp VALUES
+sql("""INSERT INTO scott.emps VALUES
   (7369, 'SMITH', 'CLERK', 7902, '1980-12-17', 800.0, 0.0, 20),
   (7499, 'ALLEN', 'SALESMAN', 7698, '1981-02-20', 1600.0, 300.0, 30),
   (7521, 'WARD', 'SALESMAN', 7698, '1981-02-22', 1250.0, 500.0, 30),
@@ -70,13 +76,27 @@ sql("""INSERT INTO emp VALUES
   (7902, 'FORD', 'ANALYST', 7566, '1981-12-03', 3000.0, 0.0, 20),
   (7934, 'MILLER', 'CLERK', 7782, '1982-01-23', 1300.0, 0.0, 10)""")
 
-sql("DROP TABLE IF EXISTS dept")
-sql("CREATE TABLE dept (deptno INT, dname STRING, loc STRING) USING parquet")
-sql("""INSERT INTO dept VALUES
+sql("DROP TABLE IF EXISTS scott.depts")
+sql("CREATE TABLE scott.depts (deptno INT, dname STRING, loc STRING) USING parquet")
+sql("""INSERT INTO scott.depts VALUES
   (10, 'ACCOUNTING', 'NEW YORK'),
   (20, 'RESEARCH', 'DALLAS'),
   (30, 'SALES', 'CHICAGO'),
   (40, 'OPERATIONS', 'BOSTON')""")
+
+sql("DROP TABLE IF EXISTS scott.bonuses")
+sql("""CREATE TABLE scott.bonuses (
+  ename STRING, job STRING, sal DOUBLE, comm DOUBLE) USING parquet""")
+
+sql("DROP TABLE IF EXISTS scott.salgrades")
+sql("""CREATE TABLE scott.salgrades (
+  grade INT, losal DOUBLE, hisal DOUBLE) USING parquet""")
+sql("""INSERT INTO scott.salgrades VALUES
+  (1, 700.0, 1200.0),
+  (2, 1201.0, 1400.0),
+  (3, 1401.0, 2000.0),
+  (4, 2001.0, 3000.0),
+  (5, 3001.0, 9999.0)""")
 
 sql("DROP TABLE IF EXISTS zoo")
 sql("""CREATE TABLE zoo (
@@ -111,7 +131,8 @@ sql("""INSERT INTO zoo VALUES
   (3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, NULL, NULL)""")
 
-print("Morel seed tables created: emp, dept, zoo", flush=True)
+print("Morel seed tables created: scott.emps, scott.depts, scott.bonuses,"
+      " scott.salgrades, zoo", flush=True)
 
 while True:
     time.sleep(3600)
