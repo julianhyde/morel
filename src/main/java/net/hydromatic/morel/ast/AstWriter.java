@@ -57,6 +57,14 @@ public class AstWriter {
         : new AstWriter(this.b, parenthesize);
   }
 
+  /**
+   * Returns whether a relational node should print the collection type of every
+   * line, as {@code Sys.planEx} prints it (spec.md §6).
+   */
+  public boolean withTypes() {
+    return false;
+  }
+
   /** Appends a string to the output. */
   public AstWriter append(String s) {
     b.append(s);

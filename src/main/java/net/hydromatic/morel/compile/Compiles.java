@@ -343,10 +343,10 @@ public abstract class Compiles {
       }
     }
 
-    // Pass -1 or any pass beyond the last: return the final result, lowered as
-    // the pipeline lowers it. An earlier pass returns the tree, which is what
-    // it has.
-    return lowerTrees(typeSystem, session.nameGenerator, coreDecl);
+    // Pass -1 or any pass beyond the last: the final result, which is a tree.
+    // Not lowered: `Sys.planEx` prints the tree (spec.md §6), and the lowering
+    // is a pass of its own that runs after this.
+    return coreDecl;
   }
 
   /**
