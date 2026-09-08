@@ -39,59 +39,74 @@ Six goals, in order, each with the thing that says it is done.
 
 ### Start here
 
-The flip of goals 2, 3 and 5 has been built and measured several
-times, each time backed out, so what is committed is green without
-it. The pieces are listed under goal 2 with the evidence for each;
-this is the recipe, because the script that applied them lived in a
-scratchpad and is gone.
+**The flip is one line.** Everything it needs is committed and green;
+what is left is to change `Resolver.RelFromResolver.run` from
 
-0. **Prove the instrumentation before believing it.** The last
-   session's final measurement was worthless: a trace in
-   `SuchThatShuttle` never fired although the error could only come
-   from `RelExpander`, and a trace in `Compiles` did not fire for
-   `val x = 1` either. Put a print in `Compiles` beside
-   `checkExtentsFinite`, run `val x = 1`, and see it before going on.
+```java
+      return RelLowerer.lower(
+          typeMap.typeSystem, nameGenerator, b.build(), scanNames);
+```
 
-1. **Apply the flip.** Nine changes:
-   * `Shuttle`: `protected Core.@Nullable Exp visitRel(Core.Rel rel)
-     { return null; }`, called at the top of each of the twelve
-     `Core.Rel` visits, returning early when it is not null.
-   * `Visitor`: the same hook, returning void.
-   * `Resolver.RelFromResolver.run`: return `b.build()` rather than
-     lowering.
-   * `Resolver.Scope.toCore`: bind the row where a tree nested in the
-     expression reads `$0` -- `let v = $0 in body` with `$0`
-     substituted, and only where a nested tree really reads one.
-   * `Compiles`: after the inline loop and before
-     `checkExtentsFinite`, lower every tree root, `RelLowerer.lower(
-     ...).accept(this)` from a `visitRel`. Not in `Compiler.compile`:
-     the compiler lays out the stack from the Core it is given.
-   * `SuchThatShuttle`: ground from `visitRel` with
-     `RelExpander.expand` when the node has an unbounded leaf; and
-     teach `containsUnbounded`'s visitor the same hook, because it
-     looks for a `Core.Scan` and a tree has none.
-   * `EnvVisitor`: `visit(Core.Group)` binding the keys for the
-     aggregate function; the argument reads `$0` and needs nothing.
-   * `RelLowerer.subst`: `visitRel` returns the node, so substitution
-     stops at a nested tree.
-   * `Inliner`: a `containsInput` guard in **both** `visit(Core.Let)`
-     (treat as `MULTI_UNSAFE`) and `visit(Core.Id)` (do not
-     substitute). Either alone fails, in different ways.
+to `return b.build();` and chase what is listed below. The nine changes
+the last recipe described are commits of their own, each inert while the
+resolver still lowers, so the branch stays green with the line as it is:
+the `visitRel` hooks on `Shuttle` and `Visitor`, the lowering pass in
+`Compiles`, `RelLowerer.lowerAll`, grounding from `SuchThatShuttle
+.visitRel`, `EnvVisitor.visit(Core.Group)`, the resolver's row binding
+and the `Inliner` guard that protects it.
 
-   Expect about 432 differing lines across 8 files, of which 14 are
-   §11's intended message change, so 57 real.
+**With the line flipped: 145 differing lines across 6 files, 61 hunks.**
+Fourteen are §11's message change, which is intended; 44 are plan text,
+which is goal 5; and **three are results**, of which only one is a
+failure:
 
-2. **Chase the tail, one query at a time**, with the lowered Core in
-   front of you. Every cause so far was found that way and none by
-   reasoning. Start with `from n where isNum n andalso isEven n`: a
-   predicate written as a function, which the engine must match after
-   inlining. The tuple shapes already ground correctly, so this is not
-   about `leafPats`.
+* `such-that.smli:1411` -- `fun self_loop x = (exists y where edge (x,
+  y) andalso x = y)` then `from x where self_loop x` answers "pattern is
+  not grounded", at a position inside the function body. The
+  declarations compile on their own; it is the call that fails. Related:
+  with a narrower `Inliner` guard (see below) the same query trips
+  `RelShadow.groundingAgrees` with a name capture, `from w$282 : int
+  join ... where #nonEmpty Relational (from w$282 in [w$281] ...)` --
+  two scans a page apart with the same binder. Both are the same query,
+  and probably the same defect.
+* `such-that.smli:1834` and `:2133` are **row order**, not rows: every
+  row is there. Neither query says `order`, and the order they had came
+  from the labels of the group that grounding builds -- the query's own
+  names under the old path, generated ones now, and they sort
+  differently. Cheap to fix by carrying the query's names into the tree;
+  see the next paragraph.
 
-3. **When no result differs**, the rest is bookkeeping: goal 5's
-   script conversion in one flip, goal 4's `Sys.plan` printing the
-   tree, goal 6's freeze. A result that changes at that point is a
-   bug, not a re-baseline.
+**What plan text loses, and why.** The resolver passed
+`RelLowerer.lower` a `scanNames` list, so a scan kept the name the user
+wrote. Returning the tree drops it, and the lowering invents `w$0`. Two
+consequences: the "not grounded" message no longer names the pattern
+(§11 decided that is right), and a group's labels are generated, which
+is what moves the two row orders above. Carrying leaf names on the tree
+is not in spec.md §3, so either the datatype gains them or the lowering
+derives them -- the final projection does name the output.
+
+**One inlining regression, deliberate.** `Inliner`'s guard declines to
+move a value that mentions a `Core.Input`. A function whose body is a
+tree -- `fn (emps, deptno) => from e in emps ...` -- mentions one, so it
+is no longer inlined; `relational.smli:3456` and `check.smli:3472` show
+the `let1` that results. The narrow fix is to stop the walk at a nested
+node, which is what `Visitor.RelBoundary` in `RelValidator` does; it was
+tried, and it made `such-that` far worse through the capture above. Fix
+the capture first.
+
+**Two things this session established, worth not re-deriving.**
+
+* *Build before you run.* `./morel` defaults to `--no-build`, so a
+  source edit does not reach it. The last session's traces "not firing"
+  was that, nothing more: with `./mvnw compile` first, a print beside
+  `checkExtentsFinite` fires for `val x = 1`.
+* *The step list's engine is still needed.* `SuchThatShuttle.visitRel`
+  tries `RelExpander.expand` and falls back to lowering plus
+  `Expander.expandFrom`, exactly as `Expander.expandFrom` falls back to
+  `expandFromSteps`. Grounding entirely on the tree measured 1841 lines;
+  lowering before grounding measured 1835; tree first with the fallback
+  measured 145. The fallback must lower *deeply*, because that engine
+  reads the constraints inside a nested query.
 
 1. ~~Decide how `$0` is told apart, and implement it.~~ **Done.** It
    is a node of its own, `Core.Input`, carrying the ordinal of the
@@ -110,232 +125,84 @@ scratchpad and is gone.
    declines it explicitly. *Done when* the suite is green and
    `Sys.planEx "0"` prints a tree.
 
-   **Tried far enough to find where it stops.** Letting the resolver
-   return `b.build()` and lowering in `Compiler.compile` at
-   `expression instanceof Core.Rel` is two small changes, and
-   ordinary bounded queries then run correctly all the way through --
-   `Inliner` and `Analyzer` pass a tree along without complaint, as
-   the survey said they would.
+   **Every piece is built and committed; one line is left.** Lowering
+   is a pass of its own, in `Compiles`, after the rewrites and before
+   the compiler -- not inside `Compiler.compile` at `expression
+   instanceof Core.Rel`, which looks like the tidy place and is wrong:
+   the compiler lays out the stack from the Core it is given, so a
+   binder minted while it compiles has no slot, and `fun sym c s = from
+   (i, c2) in mk s where c2 = c yield i` fails with
+   `NullPointerException: c`, on `c`, nowhere near the binder that
+   caused it.
 
-   What stops it is grounding. `SuchThatShuttle` intercepts
-   `Core.From`, and with the resolver emitting trees there are none,
-   so an unbounded query reaches the evaluator with its extent
-   intact. Grounding a tree wants `RelExpander.expand` on the
-   *outermost* `Core.Rel`, and a `Shuttle` cannot see which node that
-   is. Goals 2 and 3 therefore land together, and with them goal 5,
-   because the plan text moves the moment the resolver stops
-   lowering.
+   The prerequisite was done first: `Shuttle`'s twelve `Core.Rel` visits
+   and the matching `accept` methods returned narrow types (`Core.Filter`
+   in, `Core.Filter` out), which forbids the rewrites step 4 exists to
+   write -- dropping a `filter true` replaces a filter with its input,
+   and no `Shuttle` override could say so. They return `Core.Exp` now.
+   Nothing overrode them, which is itself the evidence: `RelExpander
+   .rebuild` walks the tree with its own recursion rather than a
+   `Shuttle`, and that was why.
 
-   The prerequisite is done: `Shuttle`'s twelve `Core.Rel` visits and
-   the matching `accept` methods returned narrow types (`Core.Filter`
-   in, `Core.Filter` out), which forbids the rewrites step 4 exists
-   to write -- dropping a `filter true` replaces a filter with its
-   input, and no `Shuttle` override could say so. They return
-   `Core.Exp` now. Nothing overrode them, which is itself the
-   evidence: `RelExpander.rebuild` walks the tree with its own
-   recursion rather than a `Shuttle`, and that was why.
-
-   **Then taken far enough to map the rest, and backed out.** Four
-   things, of which the first three work:
+   The findings, in the order they were made, each now a commit:
 
    * *Picking the root out.* A `visitRel(Core.Rel)` hook on `Shuttle`,
-     called on entering each of the twelve visits and returning null
-     to descend as usual, is the one place a pass sees a node before
-     its children -- which is how it tells a root from what is under
-     it, since a shuttle does not know its parent. Grounding a tree
-     at its root then works: `RelExpander.expand` bounds every leaf,
-     so descending into what it returns finds nothing left, and a
-     nested query is a root of its own.
+     called on entering each of the twelve visits and returning null to
+     descend as usual, is the one place a pass sees a node before its
+     children -- which is how it tells a root from what is under it,
+     since a shuttle does not know its parent.
    * *The latch.* `Compiles` stops running `SuchThatShuttle` once
-     `containsUnbounded` says no, so that has to be exact. It looks
-     for a `Core.Scan` with an infinite collection, and a tree has no
-     scans: its leaves are the inputs that are not themselves nodes.
-     The same hook on `Visitor` answers it.
-   * *The lowering is a pass, not a boundary.* Lowering inside
-     `Compiler.compile`, at `expression instanceof Core.Rel`, looks
-     like the tidy place and is wrong: the compiler lays out the stack
-     from the Core it is given, so a binder minted while it compiles
-     has no slot, and what should have been in one is read from the
-     name environment instead. `fun sym c s = from (i, c2) in mk s
-     where c2 = c yield i` then fails with `NullPointerException: c`
-     -- on `c`, which is nowhere near the binder that caused it.
-     Lower in a pass of its own, after the rewrites and before the
-     compiler.
-   * *The environment machinery.* `EnvVisitor` builds an aggregate's
+     `containsUnbounded` says no, so that has to be exact. It looked for
+     a `Core.Scan` with an infinite collection, and a tree has no scans:
+     its leaves are the inputs that are not themselves nodes. The same
+     hook on `Visitor` answers it, through
+     `RelExpander.containsUnbounded`. The latch must also know an
+     infinite *range* leaf, `[1..]`, or the pushdown never runs and the
+     query raises `Size` at run time.
+   * *The environment machinery.* `EnvVisitor` built an aggregate's
      environment from the `Core.From` group **step** on its
-     `fromStack`, and a tree's `Core.Group` puts nothing there, so
-     `fromStack.element()` throws. A tree's `group` needs a context of
-     its own: the aggregate's *argument* reads `$0` and needs nothing,
-     but the aggregate *function* may name a key -- `fn list =>
-     List.size list + k` -- so the keys have to be bound for it.
-     Giving `EnvVisitor` a `visit(Core.Group)` that does exactly that
-     is written and works.
+     `fromStack`, and a tree's `Core.Group` puts nothing there. A
+     tree's group needs a context of its own: the aggregate's
+     *argument* reads `$0` and needs nothing, but the aggregate
+     *function* may name a key -- `fn list => List.size list + k`.
+   * *A group's projection must read its own labels.* `Scope
+     .substitute` files its paths under a pattern it invents per name,
+     with an ordinal of its own -- rightly, because a name is not
+     unique. A `group`'s keys and aggregates are the exception: the
+     resolver made *those* patterns, at ordinal 0, and the expressions
+     it then substitutes refer to them, so every lookup missed and a
+     bare `sum` survived into the tree, where the inliner matched it
+     against the built-in and found a `Macro`. The scope now takes the
+     patterns the caller already has.
+   * *The nested query.* `RelLowerer.subst` was substituting the
+     element for `$0` right through a tree nested in an expression,
+     whose `$0` is its own (spec.md §2 rule 3), and `from d in depts
+     where d.deptno elem (from e in emps ...)` read the outer row at a
+     field only the inner one has. The walk stops at a nested node now,
+     and the resolver binds the row first, as the spec says in the same
+     breath.
+   * *The row binding, and what protects it.* Two things plant the
+     enclosing row -- a path, and the `current` keyword -- and routing
+     `current` through `byPat` makes them one case. `Inliner` must then
+     leave the binding alone, at the declaration *and* at the
+     reference: guarding only the id leaves the reference unbound,
+     guarding only the let lets the id put `$0` back. Hiding the
+     value from the environment does both.
+   * *`ordinal` in a `let`.* Both stack-`let` paths in `Compiler` built
+     their body's context with the three-argument `Context`
+     constructor, which passes null for `ordinalSlots`, so a `let`
+     inside a `yield` lost the counter and `$ordinal ()` raised "occurs
+     outside a yield". A bug of its own, with nothing to do with trees;
+     fixed, and `relational.smli` has the query.
+   * *Names must be unique across expanders.* `RelExpander` numbered
+     its invented binders from zero with ordinal zero, so two expanders
+     named two things `g$0` and a record over both lost a field. They
+     come from the type system's generator now, and the printer
+     renumbers what it prints -- which the step list's printer did not
+     do until this session, and now does.
+   * *The step list's grounding engine is still needed.* See "Start
+     here".
 
-   Measured as each was found: 1500 differing lines across 19 files,
-   then 950 across 16 with the environment context, then 790 across 11
-   with the resolver fix below, then **389 across 8** once the
-   lowering became a pass. Of those 389, 53 are results and the rest
-   is plan text, which is goal 5.
-
-   **The nested query, and what it uncovered.** `from d in depts where
-   d.deptno elem (from e in emps ...)` failed with "Index 5 out of
-   bounds for length 3" -- the outer row read at a field only the
-   inner one has. `RelLowerer.subst` was substituting the element for
-   `$0` right through a tree nested in an expression, whose `$0` is
-   its own (spec.md §2 rule 3). Stopping the walk at a nested node
-   fixes it, and `foreign` comes clean.
-
-   It also makes `relational` worse, and that is the finding.
-   `RelValidator` starts rejecting the resolver's own trees: "take
-   count cannot reference `$0`", "leaf cannot reference `$0`". They
-   are queries like `from x in [10, 20] yield (from i in [1, 2] union
-   [current])`, where `current` is the enclosing row and the resolver
-   plants the enclosing `$0` inside a nested tree. The spec forbids
-   exactly that and names the remedy in the same breath -- "to use the
-   outer element inside a nested tree, bind it first, `let v = $0 in
-   <tree mentioning v>`". Nothing caught it because the resolver
-   lowers immediately and the substitution took the reference away
-   before any validator saw it.
-
-   So the next piece is in the resolver: where a nested query reads
-   `current`, bind the row first. 384 lines and 64 results at the
-   point this was written, with the composition changed rather than
-   the count, because `foreign` and half of `check` came clean while
-   `relational` grew by the violations the validator can now see.
-
-   **The binding was written, and it collides with `ordinal`.** The
-   shape is: convert the expression with the row bound to a fresh
-   name, then keep the `let` only where a tree nested in the
-   expression actually reads it -- an expression with no nested tree,
-   or one that reads nothing of the row, is left alone, so no plan
-   moves and the suite is green without the flip. With the flip,
-   `from i in [2, 3], x in (from k in [1..6] where k mod i = 0 group
-   {} compute {c = count over ()})` fails: "'ordinal' occurs outside a
-   yield: $ordinal ()".
-
-   **That assertion is right, and the binding is what is wrong.**
-   `Z_ORDINAL` compiles to a read of `cx.ordinalSlots`, and only a
-   `yield` installs that counter, so a call reaching anywhere else has
-   nothing to read: it is a requirement of the runtime, not a rule
-   about where the text may sit. Everywhere but a yield the resolver
-   materializes the ordinal into a field first, which is why
-   `acceptStep` singles `Ast.Yield` out as the one step that keeps the
-   call.
-
-   **And the rule was not what was wrong; the threading was.** Both
-   stack-`let` paths in `Compiler` built their body's context with the
-   three-argument `Context` constructor, which passes null for
-   `ordinalSlots`, where `bindAll` and `withRecPeers` carry it. So a
-   `let` inside a yield lost the counter -- a bug of its own, with
-   nothing to do with trees: `from i in [1, 2, 3] yield (let val x = i
-   * 2 in x + x + ordinal end)` raised the assertion on the branch as
-   it stood. Fixed, and `relational.smli` has the query.
-
-   The offer to allow `ordinal` in any clause of an ordered query
-   stands on the record, and this is not a reason to take it: the rule
-   cost nothing here.
-
-   **Re-measured with everything: 427 lines across 8 files, 74 of them
-   results.** And the binding is not the problem -- an earlier note
-   here said `bindRow` never fires, and that was wrong. A trace on
-   `from x in [10, 20] yield (from i in [1, 2] union [current])` says
-   `readsInputInNestedRel` answers yes and the expression comes out
-   as `let val v$0 = $0 in union [all] ...`, which is the shape the
-   spec asks for.
-
-   **And the tree path is right.** With `inlinePassCount = 0` the
-   query returns `[[1,2,10],[1,2,20]]`, which is the answer. What
-   breaks it is the inline loop, in two ways, and both are the `$0`
-   finding again: a pass that moves or counts expressions has to know
-   that a nested tree is a scope.
-
-   * *`Inliner` moves `$0` across the boundary.* The binding `v$0 =
-     $0` is used once, so it is `ONCE_SAFE` and the inliner
-     substitutes the value at the use -- which is inside the nested
-     tree, where `$0` means that tree's own element. The Core reaching
-     the compiler is `union [$0]` and it dies with "op not handled:
-     INPUT". Declining to substitute a value that mentions a
-     `Core.Input` stops it.
-   * *And the same guard is needed a second time.* `Inliner.visit(Core
-     .Let)` decides the declaration's fate from the analysis before
-     `visit(Core.Id)` is ever reached, so the id-level guard alone
-     leaves the reference with nothing to bind it --
-     `NullPointerException: v$0`. Guarding only the let is no better:
-     the declaration stays, and the id-level substitution puts `$0`
-     back. Both, and `from x in [10, 20] yield (from i in [1, 2] union
-     [current])` gives the right answer through the whole inline loop.
-
-     (An earlier note here blamed `Analyzer` for counting the use as
-     zero. It does not; the declaration was simply removed before the
-     count mattered.)
-
-   Neither guard is committed: with no tree surviving the resolver
-   there is no `$0`-valued `let` for either to act on, so they cannot
-   be tested on their own. They belong with the flip.
-
-   With both, the flip measures 432 lines across 8 files and 71
-   results -- flat against the 427 and 74 before them, because
-   `relational` loses ten of its failures and `such-that` gains seven.
-
-   **And 14 of the 71 are not failures at all.** They are `pattern 'j'
-   is not grounded` becoming `pattern is not grounded`, which is what
-   discussion.md §11 decided: the tree has no `j` to name, a
-   diagnostic hint is the advisory name of §3 in another costume, and
-   a message that confidently names the *wrong* variable is worse than
-   one that names none. The expectations move when the flip lands.
-   Net real: 57.
-
-   The rest of that class *is* real -- queries that grounded before
-   and now do not. `SuchThatShuttle` calls the four-argument
-   `RelExpander.expand`, with no `leafPats`, where the old path passed
-   the query's own scan patterns; and `elementPat`'s comment says what
-   they were for: "a leaf whose element is a tuple is named by a tuple
-   of variables ... it is what lets the engine ground the components
-   separately, from a different constraint each". Under the flip there
-   are no scans to take them from.
-
-   But that is a hypothesis, not a finding, and the obvious shapes do
-   not support it: with the flip applied, `from i, j where (i, j) elem
-   [(1,2),(3,4)]`, `from (b, i) where i elem [3, 5] andalso b` and
-   `from i, j where i elem [1,2] andalso j elem [i+1 .. i+2]` all
-   ground and answer correctly, so the destructure retry covers the
-   tuple case on its own. What fails is `from n where isNum n andalso
-   isEven n` -- a predicate written as a function -- and that is a
-   different question, about what the engine can match after inlining.
-
-   **Chase it with working instrumentation.** The last attempt could
-   not be trusted: a trace in `SuchThatShuttle.visitRel` never fired
-   although the error can only come from `RelExpander`, and a trace in
-   `Compiles` did not fire for `val x = 1` either, so the running code
-   was not the compiled code. Re-apply the flip from a clean tree,
-   prove a trace fires on a trivial statement, and only then read
-   anything into where it does not.
-
-   **What the remaining 950 are, run down to one cause.**
-   `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
-   "PrimitiveType cannot be cast to FnType", and the id it is looking
-   at is `sum : int`. That is not the built-in `sum`; it is the
-   *label* of the aggregate, referred to by the projection the
-   resolver builds over the group. Nothing in a tree binds it -- a
-   tree has labels, not bindings -- so the inliner matches the name
-   against the built-in and finds a `Macro` where it expected a value.
-
-   In the step list the same reference works, because the group step
-   binds `sum` and lowering turns the reference into that binding. So
-   the tree carries a name that only resolves after it is lowered,
-   which is exactly the class of defect that keeping a tree alive
-   exposes.
-
-   **Found and fixed.** `Scope.substitute` files its paths under a
-   pattern it invents per name, with an ordinal of its own -- rightly,
-   because a name is not unique. A `group`'s keys and aggregates are
-   the exception: the resolver made *those* patterns, at ordinal 0,
-   and the expressions it then substitutes refer to them, so every
-   lookup missed and the reference survived. The scope now takes the
-   patterns the caller already has. No plan moved, because lowering
-   was producing the same step list either way; measured through the
-   flip, the difference drops from 950 lines across 16 files to 790 across 11,
-   and dual, file, type-alias, type-inference and wordle come clean.
 
 3. **Grounding takes the tree directly.** `SuchThatShuttle` calls
    `RelExpander.expand` instead of `Expander.expandFrom`, so a query
@@ -343,6 +210,28 @@ scratchpad and is gone.
    what makes step 2's "the lowering runs once" true. *Done when* no
    query round-trips twice, and `RelShadow`'s translation shadow has
    nothing left to check.
+
+   **Half done, and no longer bundled with goal 2.** `SuchThatShuttle
+   .visitRel` grounds the tree at its root, which is what the flip
+   needed; where the tree engine declines it lowers and hands the query
+   to `Expander.expandFrom`, so the round trip is paid on the residue
+   rather than on everything. What the tree engine will not yet take is
+   what shrinks that residue: measured, grounding *only* on the tree
+   costs 1841 differing lines against 145 with the fallback, so the gap
+   is wide and worth measuring query by query.
+
+   Two known members of the residue: a predicate written as a function
+   that reads a global, which the inliner leaves alone, so the
+   constraint is behind a call (`from n where isNum n`); and a
+   constraint inside a nested query, which the step list's engine reads
+   through and the tree engine does not (`exists x where (exists y where
+   (x, y) elem pairs)`).
+
+   `Generators` reads a constraint out of a *function's body*, and is
+   written against a step list -- `Relational.nonEmpty (from ...)`, and
+   `nonEmpty.arg.op != Op.FROM` declines anything else. `fnBody` lowers
+   what it reads. That is a plaster: the reading itself should learn the
+   tree, and until it does a body is lowered once per analysis.
 
 4. **`Sys.plan` and `Sys.planEx` print the tree.** The printer is
    already there: `Core.Rel.describe(withTypes)`, which is spec.md
