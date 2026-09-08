@@ -37,6 +37,62 @@ configuration to test.
 The feature is finished when a tree is what executes and what prints.
 Six goals, in order, each with the thing that says it is done.
 
+### Start here
+
+The flip of goals 2, 3 and 5 has been built and measured several
+times, each time backed out, so what is committed is green without
+it. The pieces are listed under goal 2 with the evidence for each;
+this is the recipe, because the script that applied them lived in a
+scratchpad and is gone.
+
+0. **Prove the instrumentation before believing it.** The last
+   session's final measurement was worthless: a trace in
+   `SuchThatShuttle` never fired although the error could only come
+   from `RelExpander`, and a trace in `Compiles` did not fire for
+   `val x = 1` either. Put a print in `Compiles` beside
+   `checkExtentsFinite`, run `val x = 1`, and see it before going on.
+
+1. **Apply the flip.** Nine changes:
+   * `Shuttle`: `protected Core.@Nullable Exp visitRel(Core.Rel rel)
+     { return null; }`, called at the top of each of the twelve
+     `Core.Rel` visits, returning early when it is not null.
+   * `Visitor`: the same hook, returning void.
+   * `Resolver.RelFromResolver.run`: return `b.build()` rather than
+     lowering.
+   * `Resolver.Scope.toCore`: bind the row where a tree nested in the
+     expression reads `$0` -- `let v = $0 in body` with `$0`
+     substituted, and only where a nested tree really reads one.
+   * `Compiles`: after the inline loop and before
+     `checkExtentsFinite`, lower every tree root, `RelLowerer.lower(
+     ...).accept(this)` from a `visitRel`. Not in `Compiler.compile`:
+     the compiler lays out the stack from the Core it is given.
+   * `SuchThatShuttle`: ground from `visitRel` with
+     `RelExpander.expand` when the node has an unbounded leaf; and
+     teach `containsUnbounded`'s visitor the same hook, because it
+     looks for a `Core.Scan` and a tree has none.
+   * `EnvVisitor`: `visit(Core.Group)` binding the keys for the
+     aggregate function; the argument reads `$0` and needs nothing.
+   * `RelLowerer.subst`: `visitRel` returns the node, so substitution
+     stops at a nested tree.
+   * `Inliner`: a `containsInput` guard in **both** `visit(Core.Let)`
+     (treat as `MULTI_UNSAFE`) and `visit(Core.Id)` (do not
+     substitute). Either alone fails, in different ways.
+
+   Expect about 432 differing lines across 8 files, of which 14 are
+   §11's intended message change, so 57 real.
+
+2. **Chase the tail, one query at a time**, with the lowered Core in
+   front of you. Every cause so far was found that way and none by
+   reasoning. Start with `from n where isNum n andalso isEven n`: a
+   predicate written as a function, which the engine must match after
+   inlining. The tuple shapes already ground correctly, so this is not
+   about `leafPats`.
+
+3. **When no result differs**, the rest is bookkeeping: goal 5's
+   script conversion in one flip, goal 4's `Sys.plan` printing the
+   tree, goal 6's freeze. A result that changes at that point is a
+   bug, not a re-baseline.
+
 1. ~~Decide how `$0` is told apart, and implement it.~~ **Done.** It
    is a node of its own, `Core.Input`, carrying the ordinal of the
    input it names -- argued in discussion.md §17 against the two
