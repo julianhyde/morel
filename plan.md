@@ -64,17 +64,31 @@ What is left, in the order it is worth doing:
    away; and a one-binder query has no projection and so no name, which
    is §11 and which the expected output already said.
 
-   **What is left of the round trip is not the fallback.**
-   `visit(Core.From)` still grounds, and seven queries in
-   `such-that.smli` need it -- `either`-typed unions, and a transitive
-   closure whose body is a step list. Those step lists are not the
-   resolver's: grounding *builds* them, in `Expander.ground` and in the
-   `Relational.iterate` a closure becomes, and they arrive with extents
-   of their own. So `Expander`, `RelTranslator` and `RelShadow` stay
-   until the machinery that generates a step list generates a tree
-   instead. Measured by making `visit(Core.From)` skip `expandFrom`:
-   every script passes but that one, with seven hunks, all "cannot
-   enumerate all values of type 'int'".
+   **What is left of the round trip is not the fallback, and the step
+   list's engine is already dead.** `visit(Core.From)` still grounds the
+   step lists that reach it, but `expandFromSteps` -- the engine that
+   was the other half of this from the start -- **never changes a query
+   anywhere in the suite**. Verified by comparing its result with its
+   input, as text, over every script: not one differs. Everything is
+   ground by `expandViaTree`, which translates to a tree and uses the
+   tree engine.
+
+   So the shape of the finish is: `expandFromSteps` goes, `expandFrom`
+   becomes `expandViaTree` or nothing, and `visit(Core.From)` is a
+   translate-ground-lower for the step lists that grounding itself
+   builds -- `Expander.ground`'s collections, and the
+   `Relational.iterate` a transitive closure becomes.
+
+   **One thing stands in the way, and it is not what it looks like.**
+   Deleting `expandFromSteps` breaks exactly one query --
+   `such-that.smli`'s `from x, y where edge (x, y) join y2, z where ...
+   group {x, y}` -- and not because of anything it returned. It consumes
+   names from the generator, and what the tree engine makes of that
+   query depends on which names it gets. The same sensitivity showed up
+   twice earlier this session, in the `cousin` query and in `d_14`
+   becoming `d_16`. **Grounding should not depend on generated names**,
+   and finding out why it does is the next piece: it is a bug in its own
+   right, and it is what the deletion is waiting on.
 
    **How the residue was closed**, from 37 declines of 240 grounding
    attempts to none. Five changes, each measured:
