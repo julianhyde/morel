@@ -56,37 +56,56 @@ What is left, in the order it is worth doing:
    shadow exists to guard the translator, and the translator is only
    still needed for the fallback.
 
-   **The residue is 28 of 240**, measured over the whole script suite by
-   counting the fallback: `such-that.smli` 18 of 191, `optimize.smli` 10
-   of 33, every other file 0. Four classes, with counts from that run:
+   **The residue is 16 of 240**, measured over the whole script suite by
+   counting the fallback: `optimize.smli` 10 of 33, `such-that.smli` 6
+   of 191, every other file 0. It was 37 at the start of the session and
+   28 after `Analyzer.isAtom`; grounding through a nested query took the
+   remaining 12. What is left:
 
-   * *A nested query grounds the outer leaf* (8). `filter [let val v =
-     $0 in #nonEmpty Relational (<tree>) end] extent "int"` -- the
-     constraint that bounds the outer variable is inside the nested
-     tree, which the tree engine treats as opaque and the step list's
-     engine reads through. The largest class, and the one to do first.
-   * *An infinite range leaf with the bound above it* (6, all in
+   * *An infinite range leaf with the bound above it* (10, all in
      optimize). `filter [$0 < 5] (#flatten Range ([AT_LEAST 1]))`, and
-     the same over a join of two. The step list has `Fbbt.strengthen`
-     and `RangePushdown.apply` for exactly this; the tree engine has
-     neither, and `RelExpander` does not treat a range as a leaf it
-     could bound at all.
-   * *Neither engine can ground it* (~10). `from i where i elem [1..]`,
-     `from x where (x + 2) * (x - 3) = 0`, `from i, j` over type
-     variables. The expected output is an error, both decline, and the
-     fallback runs only to produce the message. Not residue to remove,
-     though it is work done twice.
-   * *`elem` over a collection that is itself a tree* (3). `op elem ((n,
+     the same over a join of two with `#* Int (#1 $0, #2 $0 + 3) < 30`.
+     The step list has `Fbbt.strengthen` and `RangePushdown.apply` for
+     exactly this; the tree engine has neither, and `RelExpander` does
+     not treat a range as a leaf it could bound at all. **The next
+     piece**, and the only one with a class of its own.
+   * *Neither engine can ground it* (~4 of the 6 left in such-that).
+     `from i where i elem [1..]`, `from x where (x + 2) * (x - 3) = 0`,
+     `from i, j` over type variables. The expected output is an error,
+     both decline, and the fallback runs only to produce the message.
+     Not residue to remove, though it is work done twice.
+   * *`elem` over a collection that is itself a tree* (2). `op elem ((n,
      d), project [(#name $0, #deptno $0)] [...])` -- the engine inverts
      `elem` against a collection, and this one is a `project`.
 
-   Two things tried and measured, for the next attempt: adding
-   `Core.Input` to `Analyzer.isAtom` took the residue from 37 to 28 and
-   changed no output (committed); treating `#1 $0` as atomic in
-   `Inliner.isAtomic`, so that a `case` over a tree's components would
-   reduce the way one over a step list's variables does, removed no
-   declines and broke a script.
-2. **Goal 6, freeze.**
+   Three things tried and measured, so they are not tried again:
+   `Core.Input` in `Analyzer.isAtom` took the residue from 37 to 28 and
+   changed no output; lowering the argument of `Relational.nonEmpty` in
+   `Generators.maybeExists`, with `RelExpander.subst` dropping the row
+   binding it had just made redundant, took it from 28 to 16; and
+   treating `#1 $0` as atomic in `Inliner.isAtomic`, so that a `case`
+   over a tree's components would reduce the way one over a step list's
+   variables does, removed no declines and broke a script.
+
+   The pattern in the two that worked: a pass that reads a query's shape
+   was written against a step list, and the resolver now leaves a tree
+   where it looks. `fnBody`, `maybeExists` and the `let` that binds the
+   row are three instances; expect more, and expect them to be small.
+2. **Goal 6, freeze** -- but not before the plan text is stable. A tree
+   prints its bracketed expressions with `StringBuilder.append(exp)`,
+   which is `toString()` and a plain writer, so an identifier keeps the
+   ordinal its generator gave it: `let val d_14 = $0 in ...`. Change
+   anything upstream that draws a name and it becomes `d_16`. Golden
+   files cannot be a cross-implementation contract while they say that.
+
+   `Core.Rel.describe` renumbers `x$N` afterwards with a regex, and
+   `AstNode.unparseRenumbered` renumbers ordinals properly, through
+   `AstWriter`, but the two do not meet: `describe` never uses a writer.
+   The fix is for `describe` to build its text with one
+   `RenumberingAstWriter` over the whole tree -- which would also
+   subsume the regex pass -- and it means changing `describeArgs` and
+   its helpers from `StringBuilder` to that writer, in about a dozen
+   places.
 
 **One thing the flip cost, which goal 4 mostly retires.** A leaf is a
 bare expression (spec.md §3.1), so a tree holds no names. A query with
