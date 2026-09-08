@@ -189,6 +189,8 @@ if [ "$SPARK" = start ]; then
 fi
 if [ "$SPARK" ]; then
   export SPARK_REMOTE="$SPARK"
+  # The adapter's Arrow library needs this on JDK 9 and later.
+  JAVA_OPTS="$JAVA_OPTS --add-opens=java.base/java.nio=ALL-UNNAMED"
 else
   unset SPARK_REMOTE
 fi
