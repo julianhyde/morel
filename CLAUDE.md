@@ -290,15 +290,14 @@ Notes:
   authoritative output (a single placeholder expands to a multi-line result).
   Copy it back over the source. Operator/reserved members are invoked with
   backticks, e.g. `` Word.`<<` (a, b) ``.
-- In expected output, a top-level string value that contains a newline, has
-  no space before a newline, and is otherwise printable ASCII is written as a
-  raw string literal, `{|...|}` (or `{id|...|id}` if the content contains
-  `|}`, the tag being lower-case letters and underscores), with verbatim
-  content, except that a newline right after the opening fence is not
-  content; the `{_|` form, with the content starting on the next line, is
-  used when the second line starts with a space. The harness generates
-  these forms, and `OutputMatcher` treats them as equivalent to the escaped
-  literal.
+- In expected output, a top-level string value that contains a newline, has no
+  space before a newline, and is otherwise printable ASCII is written as a raw
+  string literal, `{|...|}` (or `{id|...|id}` if the content contains `|}`,
+  the tag being lower-case letters and underscores), with verbatim content;
+  the `{_|` form, whose tag starts with an underscore and whose content starts
+  on the next line (the newline after the fence is not content), is used when
+  the second line starts with a space. The harness generates these forms, and
+  `OutputMatcher` treats them as equivalent to the escaped literal.
 - Adding a structure adds one top-level binding, so regenerate the
   environment-count tests in `built-in/sys.smli` and `misc.smli`.
 

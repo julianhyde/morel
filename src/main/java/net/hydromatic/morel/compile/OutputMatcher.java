@@ -56,10 +56,11 @@ import org.jspecify.annotations.Nullable;
  * <p>A string value may be written as a raw string literal, {@code {|...|}} or
  * {@code {id|...|id}} where the tag {@code id} consists of lower-case letters
  * {@code a} to {@code z} and underscores, whose content is verbatim (no escape
- * processing, and newlines are real newlines), except that a newline right
- * after the opening fence is not content. A raw literal is equivalent to the
- * regular literal with the same content. Raw literals are a feature of the
- * script format, not of the Morel language; {@link #toRawStrings} writes them.
+ * processing, and newlines are real newlines), except that if the tag starts
+ * with an underscore, a newline right after the opening fence is not content. A
+ * raw literal is equivalent to the regular literal with the same content. Raw
+ * literals are a feature of the script format, not of the Morel language;
+ * {@link #toRawStrings} writes them.
  */
 public class OutputMatcher {
   /**
@@ -568,32 +569,31 @@ public class OutputMatcher {
   /**
    * Writes a string as a raw literal whose fences do not occur in it.
    *
-   * <p>If the content starts with a newline, or its second line starts with a
-   * space, the content starts on the line after the opening fence, which
-   * carries the tag "_": the literal reads {@code {_|}, a newline, the content,
-   * {@code |_}}. (The reader discards a newline that immediately follows an
-   * opening fence.) Otherwise the content starts right after the opening
-   * fence, {@code {|}.
+   * <p>If the content's second line starts with a space, the content starts on
+   * the line after the opening fence, so that its lines line up in the script;
+   * the tag then starts with "_", which tells the reader to discard the newline
+   * after the fence: the literal reads {@code {_|}, a newline, the content,
+   * {@code |_}}. Otherwise the content starts right after the opening fence,
+   * {@code {|}, and every newline in the literal is content.
    */
   public static String rawLiteral(String content) {
     final boolean nextLine = startsOnNextLine(content);
-    String tag = nextLine ? "_" : "";
+    final String prefix = nextLine ? "_" : "";
+    String tag = prefix;
     for (int i = 1; content.contains("|" + tag + "}"); i++) {
-      tag = identifier(i);
+      tag = prefix + identifier(i);
     }
     return "{" + tag + "|" + (nextLine ? "\n" : "") + content + "|" + tag + "}";
   }
 
   /**
    * Returns whether a raw literal's content starts on the line after the
-   * opening fence: when the content starts with a newline (which the reader
-   * would otherwise discard), or its second line starts with a space (so that
-   * the lines line up in the script).
+   * opening fence: when its second line starts with a space, so that the lines
+   * line up in the script.
    */
   static boolean startsOnNextLine(String content) {
     final int i = content.indexOf('\n');
-    return i == 0
-        || i > 0 && i + 1 < content.length() && content.charAt(i + 1) == ' ';
+    return i > 0 && i + 1 < content.length() && content.charAt(i + 1) == ' ';
   }
 
   /** Returns the i-th identifier in the sequence a, b, ..., z, aa, ab, ... */
@@ -680,9 +680,12 @@ public class OutputMatcher {
               "unterminated raw string at pos " + pos + " in: " + s);
         }
         int start = pos + fence;
-        if (start < end - fence && s.charAt(start) == '\n') {
-          // A newline right after the opening fence is not content; it lets
-          // the content start on the next line.
+        if (fence > 2
+            && s.charAt(pos + 1) == '_'
+            && start < end - fence
+            && s.charAt(start) == '\n') {
+          // The tag starts with "_": the content starts on the next line, and
+          // the newline right after the opening fence is not content.
           start++;
         }
         final String content = s.substring(start, end - fence);
