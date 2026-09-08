@@ -185,7 +185,7 @@ public class Expander {
    * <p>Cheap, and it catches the shape exactly: a selector carries the slot it
    * was made for, and a substitution can put under it a row of fewer fields.
    */
-  private static boolean misaddressed(Core.Exp exp) {
+  static boolean misaddressed(Core.Exp exp) {
     final boolean[] found = {false};
     exp.accept(
         new Visitor() {
