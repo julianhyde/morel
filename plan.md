@@ -198,25 +198,29 @@ narrows it to `int`. A LocalRelation carries its schema as JSON with
 per-column nullability. Binders that shadow one another across nested queries
 will need renaming before emission, since the alias namespace is flat.
 
-**M2.** The mapping is new code. The Calcite `Converters` mapping is not
-reused: it represents `option` as a nullable column and coerces nulls back to
-zero values, which is lossy. Two halves. Pure: a function mapping Spark
-schema strings (DDL or JSON) to Morel types, tested in `.smli` with no
-cluster; includes tested rejections (`map`, intervals) and nullability at
-every nesting level. Live: browse the zoo table, print the inferred type,
-select and print the decoded values (needs M6). Open question, raised by the
-M0 finding that catalog columns are always nullable: mapping every nullable
-column to `option` would make every column of `emp` an `option`, and the seed
-queries would not typecheck without unwrapping. Candidates: map nullable to
-`option` strictly and give the catalog a way to declare columns non-null; or
-map to the plain type and raise an exception when a null arrives. Decide
-before M7.
+**M2.** Drafted in spec.md §1: the type table, nullability at every level,
+dates and times, precision, the mapping function and its DDL and JSON inputs,
+and the reverse mapping. The mapping is new code. The Calcite `Converters`
+mapping is not reused: it represents `option` as a nullable column and
+coerces nulls back to zero values, which is lossy. Two halves. Pure: a
+function mapping Spark schema strings (DDL or JSON) to Morel types, tested in
+`.smli` with no cluster; includes tested rejections (`map`, intervals) and
+nullability at every nesting level. Live: browse the zoo table, print the
+inferred type, select and print the decoded values (needs M6). Open question,
+raised by the M0 finding that catalog columns are always nullable: mapping
+every nullable column to `option` would make every column of `emp` an
+`option`, and the seed queries would not typecheck without unwrapping.
+Candidates: map nullable to `option` strictly and give the catalog a way to
+declare columns non-null; or map to the plain type and raise an exception
+when a null arrives. Decide before M7.
 
-**M3.** Candidate design: phantom-typed plan (`type 'a plan`; `prepare: 'a ->
-'a plan`; `execute: 'a plan -> 'a`). `prepare` is not an ordinary function:
-Morel evaluates arguments eagerly, so a function would receive the query's
-result, not the query. It is an intrinsic that operates on its argument's
-parse tree, in the same way as `Plan.program`
+**M3.** Drafted in spec.md §2: the signature, what `prepare` accepts,
+lifecycle, errors, and a mock connection for testing translation without a
+cluster. Candidate design: phantom-typed plan (`type 'a plan`; `prepare: 'a
+-> 'a plan`; `execute: 'a plan -> 'a`). `prepare` is not an ordinary
+function: Morel evaluates arguments eagerly, so a function would receive the
+query's result, not the query. It is an intrinsic that operates on its
+argument's parse tree, in the same way as `Plan.program`
 ([#359](https://github.com/hydromatic/morel/issues/359)); the type signature
 is as above, but the compiler recognizes the call.
 [#470](https://github.com/hydromatic/morel/issues/470) proposes `Plan.core :
@@ -235,11 +239,12 @@ leaks, a shutdown hook, and a harness check that scripts leave the registry
 empty. Use after close raises a closed-connection error, including when
 forcing a lazy remote value.
 
-**M4.** Represent the mapping as data, ideally in Morel, shared by all
-ports: each entry classifies an operator as direct, renamed, rewritten (an
-expression template), or unsupported, with a flag for known semantic
-divergence (integer division, overflow, collation, NaN ordering). Tests
-iterate the table through the triple format.
+**M4.** Drafted in spec.md §3: the table's format and first contents.
+Represent the mapping as data, ideally in Morel, shared by all ports: each
+entry classifies an operator as direct, renamed, rewritten (an expression
+template), or unsupported, with a flag for known semantic divergence (integer
+division, overflow, collation, NaN ordering). Tests iterate the table through
+the triple format.
 
 **M5.** Sequenced after the core tree restructuring
 ([#449](https://github.com/hydromatic/morel/issues/449), branch
