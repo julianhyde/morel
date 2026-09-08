@@ -19,6 +19,7 @@
 package net.hydromatic.morel.foreign;
 
 import java.util.List;
+import java.util.Map;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import org.jspecify.annotations.Nullable;
@@ -73,6 +74,22 @@ public interface SparkBackend {
    */
   Connection connect(TypeSystem typeSystem, String uri);
 
+  /**
+   * Opens a connection: to a Spark Connect server if {@code uri} has scheme
+   * "sc", loading the adapter; or, if it is "mock:", the offline connection
+   * whose catalog is the session's foreign data sets (see spec.md section 2.5),
+   * which needs no adapter.
+   */
+  static Connection open(
+      TypeSystem typeSystem,
+      Map<String, ForeignValue> foreignValues,
+      String uri) {
+    if (uri.equals(MockSparkConnection.URI)) {
+      return new MockSparkConnection(typeSystem, foreignValues);
+    }
+    return load().connect(typeSystem, uri);
+  }
+
   /** A connection to a Spark Connect server. */
   interface Connection extends AutoCloseable {
     /** Returns the URI this connection was opened with. */
@@ -85,6 +102,26 @@ public interface SparkBackend {
      *     closed
      */
     Result sql(String sql);
+
+    /**
+     * Returns the names of the databases in the catalog.
+     *
+     * @throws SparkException if Spark reports an error, or the connection is
+     *     closed
+     */
+    List<String> databases();
+
+    /** Returns the names of the tables in a database. */
+    List<String> tables(String database);
+
+    /**
+     * Returns the Morel type of a table: a bag of records, per the mapping of
+     * spec.md section 1.
+     */
+    Type tableType(String database, String table);
+
+    /** Returns the rows of a table, as Morel values (see {@link Result}). */
+    List<Object> rows(String database, String table);
 
     /** Closes the connection; any later use raises {@link SparkException}. */
     @Override
