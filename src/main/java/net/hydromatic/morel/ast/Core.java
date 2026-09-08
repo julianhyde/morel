@@ -40,13 +40,11 @@ import com.google.common.collect.Ordering;
 import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.function.ObjIntConsumer;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
@@ -2356,9 +2354,6 @@ public class Core {
    * element, because its body may contain a tree that would shadow {@code $0}.
    */
   public abstract static class Rel extends Exp {
-    /** A binder that the compiler generated, such as {@code v$0}. */
-    private static final Pattern GENERATED_BINDER = NamedPat.GENERATED;
-
     Rel(Op op, Type type) {
       super(Pos.ZERO, op, type);
       if (!type.isCollection()) {
@@ -2391,7 +2386,7 @@ public class Core {
      * <p>Arguments that carry no information (an inner join's kind, a condition
      * that is {@code true}) are omitted.
      */
-    protected void describeArgs(StringBuilder b) {}
+    protected void describeArgs(AstWriter w) {}
 
     /** Returns this node's plan text, as {@code Sys.plan} prints it. */
     public String describe() {
@@ -2403,72 +2398,26 @@ public class Core {
      * collection type of every node, as {@code Sys.planEx} prints it.
      */
     public String describe(boolean withTypes) {
-      final StringBuilder b = new StringBuilder();
-      describe(b, 0, withTypes);
-      return renumber(b.toString());
+      final AstWriter w = AstNode.renumberingWriter(withTypes);
+      describe(w, 0, withTypes);
+      return w.toString();
     }
 
-    /**
-     * Renumbers generated binders by first occurrence, so that a query's plan
-     * text does not depend on what was compiled before it.
-     *
-     * <p>Allocation stays free -- a fresh binder takes the next number from
-     * whatever counter its maker uses, and uniqueness is all that is asked of
-     * it. Determinism is a property of the *text*, and so belongs to the
-     * printer: `v$123`, `v$110`, `v$200`, `v$110` print as `v$0`, `v$1`, `v$2`,
-     * `v$1`. It is what {@link
-     * net.hydromatic.morel.type.TypeSystem#unqualified} does for type
-     * variables, where `('b * 'a * 'b)` prints as `('a * 'b * 'a)`.
-     *
-     * <p>This is what spec.md §6 asks for, and it gets it without the counter
-     * threading the rule seemed to need: two nested trees may both allocate
-     * `v$0` and still print apart, because the printer sees the whole text and
-     * numbers what it finds.
-     */
-    private static String renumber(String plan) {
-      final Matcher matcher = GENERATED_BINDER.matcher(plan);
-      final Map<String, String> map = new LinkedHashMap<>();
-      final StringBuilder b = new StringBuilder();
-      while (matcher.find()) {
-        final String name = matcher.group();
-        String replacement = map.get(name);
-        if (replacement == null) {
-          // The prefix distinguishes a tree's binders from the lowering's;
-          // each is numbered in its own sequence.
-          final String prefix = name.substring(0, name.indexOf('$') + 1);
-          int n = 0;
-          for (String s : map.values()) {
-            if (s.startsWith(prefix)) {
-              ++n;
-            }
-          }
-          replacement = prefix + n;
-          map.put(name, replacement);
-        }
-        // Quoted, because a replacement is not a literal: the `$` in `v$0`
-        // would otherwise read as a group reference.
-        matcher.appendReplacement(b, Matcher.quoteReplacement(replacement));
-      }
-      matcher.appendTail(b);
-      return b.toString();
-    }
-
-    protected void describe(StringBuilder b, int indent, boolean withTypes) {
-      describeLine(b, indent, withTypes);
+    protected void describe(AstWriter w, int indent, boolean withTypes) {
+      describeLine(w, indent, withTypes);
       for (Exp input : inputs()) {
-        describeInput(input, b, indent + 2, withTypes);
+        describeInput(input, w, indent + 2, withTypes);
       }
     }
 
-    protected void describeLine(
-        StringBuilder b, int indent, boolean withTypes) {
-      indent(b, indent);
-      b.append(opName());
-      describeArgs(b);
+    protected void describeLine(AstWriter w, int indent, boolean withTypes) {
+      indent(w, indent);
+      w.append(opName());
+      describeArgs(w);
       if (withTypes) {
-        b.append(" : ").append(type.moniker());
+        w.append(" : ").append(type.moniker());
       }
-      b.append('\n');
+      w.append("\n");
     }
 
     /**
@@ -2476,47 +2425,57 @@ public class Core {
      * expression prints as a leaf line.
      */
     static void describeInput(
-        Exp input, StringBuilder b, int indent, boolean withTypes) {
+        Exp input, AstWriter w, int indent, boolean withTypes) {
       if (input instanceof Rel) {
-        ((Rel) input).describe(b, indent, withTypes);
+        ((Rel) input).describe(w, indent, withTypes);
         return;
       }
-      indent(b, indent);
-      b.append(input);
+      indent(w, indent);
+      w.append(input, 0, 0);
       if (withTypes) {
-        b.append(" : ").append(input.type.moniker());
+        w.append(" : ").append(input.type.moniker());
       }
-      b.append('\n');
+      w.append("\n");
     }
 
-    static void indent(StringBuilder b, int indent) {
+    static void indent(AstWriter w, int indent) {
       for (int i = 0; i < indent; i++) {
-        b.append(' ');
+        w.append(" ");
       }
     }
 
     /** Appends an argument, in brackets, to a plan-text line. */
-    protected static void arg(StringBuilder b, Object arg) {
-      b.append(" [").append(arg).append(']');
+    protected static void arg(AstWriter w, Object arg) {
+      w.append(" [");
+      if (arg instanceof AstNode) {
+        w.append((AstNode) arg, 0, 0);
+      } else {
+        w.append(String.valueOf(arg));
+      }
+      w.append("]");
     }
 
     /** Appends a named-argument list, in brackets, to a plan-text line. */
     protected static void args(
-        StringBuilder b, Map<String, ? extends AstNode> map) {
-      b.append(" [");
+        AstWriter w, Map<String, ? extends AstNode> map) {
+      w.append(" [");
       int i = 0;
       for (Map.Entry<String, ? extends AstNode> entry : map.entrySet()) {
         if (i++ > 0) {
-          b.append(", ");
+          w.append(", ");
         }
-        b.append(entry.getKey()).append(" = ").append(entry.getValue());
+        w.append(entry.getKey()).append(" = ").append(entry.getValue(), 0, 0);
       }
-      b.append(']');
+      w.append("]");
     }
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(describe(w.withTypes()));
+      // Onto the caller's writer, not as a string built by another: the
+      // binders a plan renumbers are numbered by first occurrence over the
+      // whole text, so a tree nested in an expression must share the count.
+      describe(w, 0, w.withTypes());
+      return w;
     }
 
     /** How a {@link Join} treats elements that have no match. */
@@ -2582,8 +2541,8 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
-      arg(b, condition);
+    protected void describeArgs(AstWriter w) {
+      arg(w, condition);
     }
 
     @Override
@@ -2618,8 +2577,8 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
-      arg(b, exp);
+    protected void describeArgs(AstWriter w) {
+      arg(w, exp);
     }
 
     @Override
@@ -2695,15 +2654,15 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
+    protected void describeArgs(AstWriter w) {
       if (joinType != Rel.JoinType.INNER) {
-        arg(b, joinType.opName());
+        arg(w, joinType.opName());
       }
       if (binder != null) {
-        arg(b, binder.name);
+        arg(w, binder.name);
       }
       if (!condition.isBoolLiteral(true)) {
-        arg(b, condition);
+        arg(w, condition);
       }
     }
 
@@ -2761,10 +2720,10 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
-      args(b, keys);
+    protected void describeArgs(AstWriter w) {
+      args(w, keys);
       if (!aggregates.isEmpty()) {
-        args(b, aggregates);
+        args(w, aggregates);
       }
     }
 
@@ -2818,8 +2777,8 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
-      arg(b, exp);
+    protected void describeArgs(AstWriter w) {
+      arg(w, exp);
     }
 
     @Override
@@ -2857,8 +2816,8 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
-      arg(b, exp);
+    protected void describeArgs(AstWriter w) {
+      arg(w, exp);
     }
 
     @Override
@@ -2924,8 +2883,8 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
-      arg(b, count);
+    protected void describeArgs(AstWriter w) {
+      arg(w, count);
     }
 
     @Override
@@ -2965,8 +2924,8 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
-      arg(b, count);
+    protected void describeArgs(AstWriter w) {
+      arg(w, count);
     }
 
     @Override
@@ -3010,9 +2969,9 @@ public class Core {
     }
 
     @Override
-    protected void describeArgs(StringBuilder b) {
+    protected void describeArgs(AstWriter w) {
       if (!distinct) {
-        arg(b, "all");
+        arg(w, "all");
       }
     }
 

@@ -79,7 +79,18 @@ public abstract class AstNode {
    * prints the collection type of every line, as {@code Sys.planEx} prints it.
    */
   public final String unparseRenumbered(boolean withTypes) {
-    return unparse(new RenumberingAstWriter(withTypes));
+    return unparse(renumberingWriter(withTypes));
+  }
+
+  /**
+   * Returns a writer that renumbers the binders it prints.
+   *
+   * <p>One writer per plan, because the numbering is by first occurrence over
+   * the whole text: two of them number the same binder differently, and a
+   * binder printed by one and read by the other reads as two.
+   */
+  public static AstWriter renumberingWriter(boolean withTypes) {
+    return new RenumberingAstWriter(withTypes);
   }
 
   /** Converts this node into an ML string, with a given writer. */
