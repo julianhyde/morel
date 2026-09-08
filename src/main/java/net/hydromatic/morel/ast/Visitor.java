@@ -538,55 +538,75 @@ public class Visitor {
 
   // Relational tree (Core.Rel) nodes.
 
+  /**
+   * Called on entering each {@link Core.Rel} node, before its children are
+   * visited.
+   *
+   * <p>It is the one place a visitor sees a node before what is under it, and
+   * therefore the one place it can tell the root of a tree from an interior
+   * node.
+   */
+  protected void visitRel(Core.Rel rel) {}
+
   protected void visit(Core.Input input) {}
 
   protected void visit(Core.Filter filter) {
+    visitRel(filter);
     filter.input.accept(this);
     filter.condition.accept(this);
   }
 
   protected void visit(Core.Project project) {
+    visitRel(project);
     project.input.accept(this);
     project.exp.accept(this);
   }
 
   protected void visit(Core.IfEmpty ifEmpty) {
+    visitRel(ifEmpty);
     ifEmpty.input.accept(this);
     ifEmpty.exp.accept(this);
   }
 
   protected void visit(Core.Join join) {
+    visitRel(join);
     join.left.accept(this);
     join.right.accept(this);
     join.condition.accept(this);
   }
 
   protected void visit(Core.Group group) {
+    visitRel(group);
     group.input.accept(this);
     group.keys.values().forEach(this::accept);
     group.aggregates.values().forEach(this::accept);
   }
 
   protected void visit(Core.Sort sort) {
+    visitRel(sort);
     sort.input.accept(this);
     sort.exp.accept(this);
   }
 
   protected void visit(Core.Unorder unorder) {
+    visitRel(unorder);
     unorder.input.accept(this);
   }
 
   protected void visit(Core.Skip skip) {
+    visitRel(skip);
     skip.input.accept(this);
     skip.count.accept(this);
   }
 
   protected void visit(Core.Take take) {
+    visitRel(take);
     take.input.accept(this);
     take.count.accept(this);
   }
 
   protected void visit(Core.SetRel setRel) {
+    visitRel(setRel);
     setRel.inputs.forEach(this::accept);
   }
 

@@ -30,6 +30,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
+import org.jspecify.annotations.Nullable;
 
 /** Visits and transforms syntax trees. */
 public class Shuttle {
@@ -701,21 +702,46 @@ public class Shuttle {
 
   // Relational tree (Core.Rel) nodes.
 
+  /**
+   * Called on entering each {@link Core.Rel} node, before its children are
+   * visited.
+   *
+   * <p>It is the one place a shuttle sees a node before what is under it, and
+   * therefore the one place it can tell the root of a tree from an interior
+   * node. Returns null to descend as usual, or an expression to use in place of
+   * the node, in which case its children are not visited.
+   */
+  protected Core.@Nullable Exp visitRel(Core.Rel rel) {
+    return null;
+  }
+
   protected Core.Exp visit(Core.Input input) {
     return input;
   }
 
   protected Core.Exp visit(Core.Filter filter) {
+    final Core.@Nullable Exp exp = visitRel(filter);
+    if (exp != null) {
+      return exp;
+    }
     return filter.copy(
         filter.input.accept(this), filter.condition.accept(this));
   }
 
   protected Core.Exp visit(Core.Project project) {
+    final Core.@Nullable Exp exp = visitRel(project);
+    if (exp != null) {
+      return exp;
+    }
     return project.copy(
         typeSystem, project.input.accept(this), project.exp.accept(this));
   }
 
   protected Core.Exp visit(Core.Join join) {
+    final Core.@Nullable Exp exp = visitRel(join);
+    if (exp != null) {
+      return exp;
+    }
     return join.copy(
         typeSystem,
         join.joinType,
@@ -726,6 +752,10 @@ public class Shuttle {
   }
 
   protected Core.Exp visit(Core.Group group) {
+    final Core.@Nullable Exp exp = visitRel(group);
+    if (exp != null) {
+      return exp;
+    }
     return group.copy(
         typeSystem,
         group.input.accept(this),
@@ -734,36 +764,68 @@ public class Shuttle {
   }
 
   protected Core.Exp visit(Core.IfEmpty ifEmpty) {
+    final Core.@Nullable Exp exp = visitRel(ifEmpty);
+    if (exp != null) {
+      return exp;
+    }
     return ifEmpty.copy(ifEmpty.input.accept(this), ifEmpty.exp.accept(this));
   }
 
   protected Core.Exp visit(Core.Sort sort) {
+    final Core.@Nullable Exp exp = visitRel(sort);
+    if (exp != null) {
+      return exp;
+    }
     return sort.copy(
         typeSystem, sort.input.accept(this), sort.exp.accept(this));
   }
 
   protected Core.Exp visit(Core.Unorder unorder) {
+    final Core.@Nullable Exp exp = visitRel(unorder);
+    if (exp != null) {
+      return exp;
+    }
     return unorder.copy(typeSystem, unorder.input.accept(this));
   }
 
   protected Core.Exp visit(Core.Skip skip) {
+    final Core.@Nullable Exp exp = visitRel(skip);
+    if (exp != null) {
+      return exp;
+    }
     return skip.copy(skip.input.accept(this), skip.count.accept(this));
   }
 
   protected Core.Exp visit(Core.Take take) {
+    final Core.@Nullable Exp exp = visitRel(take);
+    if (exp != null) {
+      return exp;
+    }
     return take.copy(take.input.accept(this), take.count.accept(this));
   }
 
   protected Core.Exp visit(Core.Union union) {
+    final Core.@Nullable Exp exp = visitRel(union);
+    if (exp != null) {
+      return exp;
+    }
     return union.copy(typeSystem, union.distinct, visitList(union.inputs));
   }
 
   protected Core.Exp visit(Core.Intersect intersect) {
+    final Core.@Nullable Exp exp = visitRel(intersect);
+    if (exp != null) {
+      return exp;
+    }
     return intersect.copy(
         typeSystem, intersect.distinct, visitList(intersect.inputs));
   }
 
   protected Core.Exp visit(Core.Except except) {
+    final Core.@Nullable Exp exp = visitRel(except);
+    if (exp != null) {
+      return exp;
+    }
     return except.copy(typeSystem, except.distinct, visitList(except.inputs));
   }
 
