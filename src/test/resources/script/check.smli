@@ -730,7 +730,7 @@ from p: parityPair where p.i elem [0..2] andalso p.j elem [5..8];
 
 (*) A field left unconstrained leaves the record ungrounded.
 from p: parityPair where p.i elem [0..2];
-> stdIn:1.6-1.19 Error: pattern 'p' is not grounded
+> stdIn:1.6-1.19 Error: pattern is not grounded
 >   raised at: stdIn:1.6-1.19
 
 (*) The forms may be mixed, and there may be more than two fields.

@@ -34,18 +34,17 @@ Sys.set ("stringDepth", ~1);
 from i where i > 0 andalso i < 10;
 > val it = [1,2,3,4,5,6,7,8,9] : int list
 Sys.planEx "3";
-> val it = "val it = from i in #flatten Range ([OPEN (0, 10)])" : string
+> val it = "val it = #flatten Range ([OPEN (0, 10)])" : string
 
 from i where i >= 0 andalso i <= 10;
 > val it = [0,1,2,3,4,5,6,7,8,9,10] : int list
 Sys.planEx "3";
-> val it = "val it = from i in #flatten Range ([CLOSED (0, 10)])" : string
+> val it = "val it = #flatten Range ([CLOSED (0, 10)])" : string
 
 from i where i >= 0 andalso i <= 5 orelse i = 8 orelse i > 20 andalso i < 22;
 > val it = [0,1,2,3,4,5,8,21] : int list
 Sys.planEx "3";
-> val it =
->   "val it = from i in #flatten Range ([CLOSED (0, 5), POINT 8, OPEN (20, 22)])"
+> val it = "val it = #flatten Range ([CLOSED (0, 5), POINT 8, OPEN (20, 22)])"
 >   : string
 
 from i where i > 0 andalso i < 4 yield {j = i + 1};
@@ -81,8 +80,7 @@ from i where i = 0 orelse i = 12;
 from i where i > 0 andalso i < 10 orelse i > 12 andalso i <= 15;
 > val it = [1,2,3,4,5,6,7,8,9,13,14,15] : int list
 Sys.planEx "3";
-> val it =
->   "val it = from i in #flatten Range ([OPEN (0, 10), OPEN_CLOSED (12, 15)])"
+> val it = "val it = #flatten Range ([OPEN (0, 10), OPEN_CLOSED (12, 15)])"
 >   : string
 
 (*) Ranges over int * bool: point constraints merged into a single discreteSetOf.
@@ -95,7 +93,7 @@ from t where t = (1, true) orelse t = (3, false);
 > val it : (int * bool) list
 Sys.planEx "3";
 > val it =
->   "val it = from t in #toList Range (#discreteSetOf Range ([POINT (1, true), POINT (3, false)]))"
+>   "val it = #toList Range (#discreteSetOf Range ([POINT (1, true), POINT (3, false)]))"
 >   : string
 
 (*) Ranges over bool * int: a point and a range.
@@ -110,7 +108,7 @@ from t where t = (true, 1) orelse t >= (false, 3) andalso t <= (false, 5);
 > val it : (bool * int) list
 Sys.planEx "3";
 > val it =
->   "val it = from t in #toList Range (#discreteSetOf Range ([POINT (true, 1), CLOSED ((false, 3), (false, 5))]))"
+>   "val it = #toList Range (#discreteSetOf Range ([POINT (true, 1), CLOSED ((false, 3), (false, 5))]))"
 >   : string
 
 (*) Ranges over int * bool * int * bool (4-tuple): a single closed range.
@@ -125,7 +123,7 @@ from t where t >= (1, false, 2, true) andalso t <= (1, false, 4, false);
 > val it : (int * bool * int * bool) list
 Sys.planEx "3";
 > val it =
->   "val it = from t in #flatten Range ([CLOSED ((1, false, 2, true), (1, false, 4, false))])"
+>   "val it = #flatten Range ([CLOSED ((1, false, 2, true), (1, false, 4, false))])"
 >   : string
 
 from i
@@ -201,7 +199,7 @@ from y where y elem [1,2] andalso y elem [2,3];
 
 (*) An 'elem' over an infinite range does not ground the variable.
 from j where j elem [1 ..];
-> stdIn:1.6 Error: pattern 'j' is not grounded
+> stdIn:1.6 Error: pattern is not grounded
 >   raised at: stdIn:1.6
 
 (* An infinite-range 'elem' combines with another bound to give a
@@ -309,7 +307,7 @@ from e where (case e of
  * With symbolic math we could deduce that the solution is [~2,3],
  * but we don't have symbolic math. *)
 from x where (x + 2) * (x - 3) = 0;
-> stdIn:1.6 Error: pattern 'x' is not grounded
+> stdIn:1.6 Error: pattern is not grounded
 >   raised at: stdIn:1.6
 
 (* FBBT (feasibility-based bound tightening) lets the planner ground
@@ -419,7 +417,7 @@ from n where isSmall n orelse isLarge n;
 from x where x elem [1, 2, 4];
 > val it = [1,2,4] : int list
 Sys.planEx "999";
-> val it = "val it = from x in [1, 2, 4] group x order x" : string
+> val it = "val it = from g$0 in [1, 2, 4] group g$0 order g$0" : string
 
 (* In the following case, we solve for x given a value of y. This
  * requires predicate-inversion because it cannot be solved using
@@ -447,7 +445,7 @@ from x in [3, 5, 7], y where x > y andalso x < y + 5 yield y;
 > val it = [~1,0,1,2,1,2,3,4,3,4,5,6] : int list
 Sys.planEx "3";
 > val it =
->   "val it = from x in [3, 5, 7] join y in #flatten Range ([OPEN (#- Int (x, 5), x)]) yield y"
+>   "val it = from w$0 in [3, 5, 7] join w$1 in #flatten Range ([OPEN (#- Int (w$0, 5), w$0)]) yield w$1"
 >   : string
 
 from x in [3, 5, 7], y
@@ -968,7 +966,7 @@ from SOME (i: int);
 > stdIn:1.6-1.19 Error: cannot enumerate all values of type 'int'
 >   raised at: stdIn:1.6-1.19
 from i :: t;
-> stdIn:1.6-1.12 Error: pattern 'i' is not grounded
+> stdIn:1.6-1.12 Error: pattern is not grounded
 >   raised at: stdIn:1.6-1.12
 from (i: int, ());
 > stdIn:1.6-1.18 Error: cannot enumerate all values of type 'int'
@@ -989,7 +987,7 @@ from b: bool, i;
 > stdIn:1.15 Error: pattern 'i' is not grounded
 >   raised at: stdIn:1.15
 from (b: bool, i);
-> stdIn:1.6-1.18 Error: pattern 'i' is not grounded
+> stdIn:1.6-1.18 Error: pattern is not grounded
 >   raised at: stdIn:1.6-1.18
 
 (* A query that only counts its rows, as 'exists' does, may ignore a variable
@@ -1109,7 +1107,7 @@ in
     where isEmp50 e
     yield e.ename
 end;
-> stdIn:5.8 Error: pattern 'e' is not grounded
+> stdIn:5.8 Error: pattern is not grounded
 >   raised at: stdIn:5.8
 
 (*) A function with external extent.
@@ -1154,7 +1152,7 @@ from p where String.isPrefix p "abcd";
 > val it = ["","a","ab","abc","abcd"] : string list
 Sys.planEx "999";
 > val it =
->   "val it = from p in #tabulate List (#size String \"abcd\" + 1, fn i => #substring String (\"abcd\", 0, i))"
+>   "val it = #tabulate List (#size String \"abcd\" + 1, fn i => #substring String (\"abcd\", 0, i))"
 >   : string
 
 from s in ["abcd", "ant"], p where String.isPrefix p s;
@@ -1184,7 +1182,7 @@ from p where (exists s in ["abcd", "ant"] where String.isPrefix p s) order p;
 (* TODO: remove spurious 'where' *)
 Sys.planEx "999";
 > val it =
->   "val it = from s in [\"abcd\", \"ant\"] join p in #tabulate Bag (#size String s + 1, fn i => #substring String (s, 0, i)) yield p group p order p where #nonEmpty Relational (from s in [\"abcd\", \"ant\"] where #isPrefix String p s) order p"
+>   "val it = from w$0 in [\"abcd\", \"ant\"] join w$1 in #tabulate Bag (#size String w$0 + 1, fn i => #substring String (w$0, 0, i)) yield w$1 group w$1 order w$1 where #nonEmpty Relational (from w$0 in [\"abcd\", \"ant\"] where #isPrefix String w$1 w$0) order w$1"
 >   : string
 
 (* A string function with external extent.
@@ -1608,7 +1606,7 @@ from x where isS3 x;
 fun tuPair (a, b) = true;
 > val tuPair = fn : 'a * 'b -> bool
 from p where tuPair p;
-> stdIn:1.6 Error: pattern 'p' is not grounded
+> stdIn:1.6 Error: pattern is not grounded
 >   raised at: stdIn:1.6
 from x, y where tuPair (x, y);
 > stdIn:1.6 Error: pattern 'x' is not grounded
@@ -2119,10 +2117,10 @@ from d where d elem scott.depts;
 > val it : {deptno:int, dname:string, loc:string} list
 Sys.planEx "0";
 > val it =
->   "val it = from d : {deptno:int, dname:string, loc:string} where op elem (d, #depts scott)"
+>   "val it = filter [op elem ($0, #depts scott_1)]\n  extent \"{deptno:int, dname:string, loc:string}\"\n"
 >   : string
 Sys.planEx "3";
-> val it = "val it = from d in #toList Bag (#depts scott) group d order d"
+> val it = "val it = from g$0 in #toList Bag (#depts scott) group g$0 order g$0"
 >   : string
 
 (* testFromSuchThat2c - Record pattern with field renaming *)
@@ -2138,12 +2136,12 @@ where {deptno, loc, dname = name} elem scott.depts;
 > val it : {deptno:int, loc:string, name:string} list
 Sys.planEx "0";
 > val it =
->   "val it = from loc : string join deptno : int join name : string where op elem ({deptno = deptno, dname = name, loc = loc}, #depts scott)"
+>   "val it = project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}]\n  filter [op elem ({deptno = #2 $0, dname = #3 $0, loc = #1 $0}, #depts scott_1)]\n    join\n      join\n        extent \"string\"\n        extent \"int\"\n      extent \"string\"\n"
 >   : string
 (* TODO: remove spurious 'where' *)
 Sys.planEx "3";
 > val it =
->   "val it = from ({deptno = deptno, dname = name, loc = loc}) in #toList Bag (#depts scott) group {deptno = deptno, loc = loc, name = name} order {deptno = deptno, loc = loc, name = name}"
+>   "val it = from w$0 in (from ({deptno = deptno, dname = name, loc = loc}) in #toList Bag (#depts scott) group {deptno = deptno, loc = loc, name = name} order {deptno = deptno, loc = loc, name = name}) yield {deptno = #deptno w$0, loc = #loc w$0, name = #name w$0}"
 >   : string
 
 (* testFromSuchThat2d - Record pattern with literal and additional
@@ -2159,11 +2157,11 @@ from dno, name
 > val it : {dno:int, name:string} list
 Sys.planEx "0";
 > val it =
->   "val it = from dno : int join name : string where op elem ({deptno = dno, dname = name, loc = \"CHICAGO\"}, #depts scott) andalso dno > 20"
+>   "val it = project [{dno = #1 $0, name = #2 $0}]\n  filter [op elem ({deptno = #1 $0, dname = #2 $0, loc = \"CHICAGO\"}, #depts scott_1) andalso #1 $0 > 20]\n    join\n      extent \"int\"\n      extent \"string\"\n"
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = from ({deptno = dno, dname = name, loc = \"CHICAGO\"}) in #toList Bag (#depts scott) group {dno = dno, name = name} order {dno = dno, name = name} where dno > 20"
+>   "val it = from w$0 in (from ({deptno = dno, dname = name, loc = \"CHICAGO\"}) in #toList Bag (#depts scott) group {dno = dno, name = name} order {dno = dno, name = name}) where #dno w$0 > 20 yield {dno = #dno w$0, name = #name w$0}"
 >   : string
 
 (* testFromSuchThat2d3 - Forward references with equality constraint *)
@@ -2181,11 +2179,11 @@ yield {dno = #deptno v, name = #dname v};
 > val it : {dno:int, name:string} list
 Sys.planEx "0";
 > val it =
->   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
+>   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}]\n  filter [#1 $0 = 30]\n    filter [#loc (#3 $0) = \"CHICAGO\"]\n      filter [#2 $0 = #dname (#3 $0)]\n        filter [#deptno (#3 $0) = #1 $0]\n          filter [op elem (#3 $0, #depts scott_1)]\n            join\n              join\n                extent \"int\"\n                extent \"string\"\n              extent \"{deptno:int, dname:string, loc:string}\"\n"
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = from v in #toList Bag (#depts scott) group v order v join dno in [#deptno v] join name in [#dname v] where #loc v = \"CHICAGO\" where dno = 30 yield {dno = #deptno v, name = #dname v}"
+>   "val it = from g$0 in #toList Bag (#depts scott) group g$0 order g$0 join w$0 in [#deptno g$0] join w$1 in [#dname g$0] where #loc g$0 = \"CHICAGO\" where w$0 = 30 yield {dno = #deptno g$0, name = #dname g$0}"
 >   : string
 
 (* testFromSuchThat2d4 - Forward references with inequality constraint *)
@@ -2203,11 +2201,11 @@ yield {dno = #deptno v, name = #dname v};
 > val it : {dno:int, name:string} list
 Sys.planEx "0";
 > val it =
->   "val it = from dno : int join name : string join v : {deptno:int, dname:string, loc:string} where op elem (v, #depts scott) where #deptno v = dno where name = #dname v where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
+>   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}]\n  filter [#1 $0 > 25]\n    filter [#loc (#3 $0) = \"CHICAGO\"]\n      filter [#2 $0 = #dname (#3 $0)]\n        filter [#deptno (#3 $0) = #1 $0]\n          filter [op elem (#3 $0, #depts scott_1)]\n            join\n              join\n                extent \"int\"\n                extent \"string\"\n              extent \"{deptno:int, dname:string, loc:string}\"\n"
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = from v in #toList Bag (#depts scott) group v order v join dno in [#deptno v] join name in [#dname v] where #loc v = \"CHICAGO\" where dno > 25 yield {dno = #deptno v, name = #dname v}"
+>   "val it = from g$0 in #toList Bag (#depts scott) group g$0 order g$0 join w$0 in [#deptno g$0] join w$1 in [#dname g$0] where #loc g$0 = \"CHICAGO\" where w$0 > 25 yield {dno = #deptno g$0, name = #dname g$0}"
 >   : string
 
 (* testFromSuchThat2e - Function inlining with elem predicate.
@@ -2222,11 +2220,11 @@ from d
 > val it = ["RESEARCH"] : string list
 Sys.planEx "0";
 > val it =
->   "val it = from d : {deptno:int, dname:string, loc:string} where (let val d_1 = d in op elem (d_1, #depts scott) end) andalso #deptno d = 20 yield #dname d"
+>   "val it = project [#dname $0]\n  filter [(let val d_14 = $0 in op elem (d_14, #depts scott_1) end) andalso #deptno $0 = 20]\n    extent \"{deptno:int, dname:string, loc:string}\"\n"
 >   : string
 Sys.planEx "999";
 > val it =
->   "val it = from d in #toList Bag (#depts scott) group d order d where #deptno d = 20 yield #dname d"
+>   "val it = from g$0 in #toList Bag (#depts scott) group g$0 order g$0 where #deptno g$0 = 20 yield #dname g$0"
 >   : string
 
 (* testFromSuchThat2f - Join via suchthat with two functions *)
@@ -2247,11 +2245,11 @@ end;
 >   : string list
 Sys.planEx "0";
 > val it =
->   "val it = let val isDept = fn d => op elem (d, #depts scott) in let val isEmp = fn e => op elem (e, #emps scott) in from d_1 : {deptno:int, dname:string, loc:string} join e_1 : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} where isDept d_1 andalso isEmp e_1 andalso #deptno d_1 = #deptno e_1 andalso #deptno d_1 = 20 yield #dname d_1 end end"
+>   "val it = let val isDept = fn d => op elem (d, #depts scott) in let val isEmp = fn e => op elem (e, #emps scott) in project [#dname (#1 $0)]\n  filter [isDept_1 (#1 $0) andalso isEmp_3 (#2 $0) andalso #deptno (#1 $0) = #deptno (#2 $0) andalso #deptno (#1 $0) = 20]\n    join\n      extent \"{deptno:int, dname:string, loc:string}\"\n      extent \"{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}\"\n end end"
 >   : string
 Sys.planEx "999";
 > val it =
->   "val it = from d in #toList Bag (#depts scott) group d order d join e in (from e in #toList Bag (#emps scott) group e order e) where #deptno d = #deptno e andalso #deptno d = 20 yield #dname d"
+>   "val it = from g$0 in #toList Bag (#depts scott) group g$0 order g$0 join g$1 in (from g$1 in #toList Bag (#emps scott) group g$1 order g$1) where #deptno g$0 = #deptno g$1 andalso #deptno g$0 = 20 yield #dname g$0"
 >   : string
 
 (* testProvenanceThroughFunction - Provenance propagation through
@@ -2269,10 +2267,10 @@ end;
 > val it = [1,2,3] : int list
 Sys.planEx "0";
 > val it =
->   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in from x_1 : int where f x_1 end end"
+>   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in filter [f $0]\n  extent \"int\"\n end end"
 >   : string
 Sys.planEx "999";
-> val it = "val it = from x in [1, 2, 3] group x order x" : string
+> val it = "val it = from g$0 in [1, 2, 3] group g$0 order g$0" : string
 
 (* testProvenanceThroughFunctionWithFilter - Same as above but
  * with an additional filter. Provenance removes 'f x'
@@ -2286,10 +2284,11 @@ end;
 > val it = [2,3] : int list
 Sys.planEx "0";
 > val it =
->   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in from x_1 : int where f x_1 andalso x_1 > 1 end end"
+>   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in filter [f_1 $0 andalso $0 > 1]\n  extent \"int\"\n end end"
 >   : string
 Sys.planEx "999";
-> val it = "val it = from x in [1, 2, 3] group x order x where x > 1" : string
+> val it = "val it = from g$0 in [1, 2, 3] group g$0 order g$0 where g$0 > 1"
+>   : string
 
 (* testFromSuchThat3 - Smaller version of testFromSuchThat *)
 let

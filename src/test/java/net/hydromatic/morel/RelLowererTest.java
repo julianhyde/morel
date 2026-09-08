@@ -35,7 +35,6 @@ import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.RelLowerer;
-import net.hydromatic.morel.compile.RelTranslator;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.eval.Session;
@@ -81,30 +80,27 @@ public class RelLowererTest {
     final Resolver resolver = Resolver.of(resolved.typeMap, env, null);
     final Core.ValDecl valDecl2 = resolver.toCore((Ast.ValDecl) resolved.node);
 
-    final Core.From[] froms = {null};
+    // The resolver returns the tree; take the outermost one.
+    final Core.Rel[] rels = {null};
     valDecl2.accept(
         new Visitor() {
           @Override
-          protected void visit(Core.From from) {
-            if (froms[0] == null) {
-              froms[0] = from;
+          protected void visitRel(Core.Rel rel) {
+            if (rels[0] == null) {
+              rels[0] = rel;
             }
-            super.visit(from);
           }
         });
-    if (froms[0] == null) {
+    if (rels[0] == null) {
       // The resolver simplified the query away; there is nothing to lower.
       return null;
     }
-    final Core.Exp rel = RelTranslator.toRel(typeSystem, froms[0]);
-    if (rel == null) {
-      return null;
-    }
+    final Core.Rel rel = rels[0];
     final Core.Exp lowered = RelLowerer.lower(typeSystem, rel);
     assertThat(
-        "lowered step list has the element type of the from",
+        "lowered step list has the element type of the tree",
         lowered.type,
-        is(froms[0].type));
+        is(rel.type));
     return lowered;
   }
 

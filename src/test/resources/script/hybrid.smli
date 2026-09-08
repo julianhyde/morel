@@ -290,19 +290,19 @@ from w in [0w1, 0wxFFFFFFFFFFFFFFFF] compute max over w;
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat w, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink collect(get(name max))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat w$40, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink collect(get(name max))))))"
 >   : string
 from p in [(1, 2), (2, 1), (1, 9)] compute max over p;
 > val it = (2,1) : int * int
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat p, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink collect(get(name max))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat w$42, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink collect(get(name max))))))"
 >   : string
 from ox in [SOME 1, NONE, SOME 3] compute min over ox;
 > val it = NONE : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat ox, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink collect(get(name min)))))))"
+>   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat w$44, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink collect(get(name min)))))))"
 >   : string
 Sys.set ("hybrid", false);
 > val it = () : unit

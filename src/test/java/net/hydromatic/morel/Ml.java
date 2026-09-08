@@ -55,6 +55,7 @@ import net.hydromatic.morel.compile.CompiledStatement;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.RelLowerer;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
@@ -356,7 +357,17 @@ class Ml {
     final Ast.ValDecl valDecl2 = (Ast.ValDecl) resolved.node;
     final Session session = null;
     final Resolver resolver = Resolver.of(resolved.typeMap, env, session);
-    final Core.ValDecl valDecl3 = resolver.toCore(valDecl2);
+    // The resolver returns a tree; the Calcite compiler is given the step
+    // list, as it is in the pipeline, where lowering is a pass of its own.
+    // The type system the Core was resolved with, not the local one: a type
+    // the lowering builds must be looked up where its name is known.
+    final TypeSystem typeSystem2 = resolved.typeMap.typeSystem;
+    final Core.ValDecl valDecl3 =
+        (Core.ValDecl)
+            RelLowerer.lowerAll(
+                typeSystem2,
+                typeSystem2.nameGenerator,
+                resolver.toCore(valDecl2));
     assertThat(valDecl3, instanceOf(Core.NonRecValDecl.class));
     final RelNode rel =
         new CalciteCompiler(typeSystem, calcite)
