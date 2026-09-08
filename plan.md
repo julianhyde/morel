@@ -254,6 +254,26 @@ substrate-independent and serve as this milestone's acceptance tests.
 Everything that depends on #449 (M5, and through it M8, M9 and M11) is
 done last; M0 through M4, M6 and M7 do not depend on it and come first.
 
+**M6.** Done. The adapter is package `net.hydromatic.morel.spark`, compiled
+only under the `spark` Maven profile (JDK 17 and later), with protobuf
+messages and gRPC stubs generated from Spark 4.0.0's `.proto` files in
+`src/main/protobuf`; on JDK 8 and 11 the package is excluded and Morel builds
+without it. The rest of Morel sees only `foreign.SparkBackend`, an interface
+whose `load()` instantiates the adapter by name. A connection opens a gRPC
+channel, and a query is an ExecutePlan request whose result arrives as Arrow
+batches with a DataType schema; `SparkTypes` maps the schema to a Morel type
+(spec.md §1, including decision B) and `ArrowDecoder` converts the batches to
+Morel values, driven by that type. Spark's error condition comes from the
+"errorClass" key of the ErrorInfo metadata on the gRPC status. Two things
+learned: Arrow's netty allocator is incompatible with the netty that Calcite
+brings, so the adapter uses the unsafe allocator; and Arrow needs
+`--add-opens=java.base/java.nio=ALL-UNNAMED` on JDK 9 and later, which the
+surefire configuration and `./morel --spark` supply. Tests: `SparkTypesTest`
+and `ArrowDecoderTest` run everywhere the adapter compiles;
+`SparkConnectTest` runs against the container when `-Dmorel.spark=true` and
+`SPARK_REMOTE` are set, and reads the seed tables, including every column of
+`zoo` and the error cases.
+
 **M10.** Three categories: runtime errors (e.g. divide by zero) must raise
 the same Morel exception as local evaluation, testable in the triple
 format; analysis errors are translator bugs and dump the offending plan —
