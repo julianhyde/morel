@@ -125,6 +125,8 @@ License.
     <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     <nullaway.version>0.14.0</nullaway.version>
     <protobuf.version>4.36.1</protobuf.version>
+    <!-- protobuf-maven-plugin 4.x and later require Maven 3.9.6, which
+         is newer than the Maven bundled with IntelliJ. -->
     <protobuf-maven-plugin.version>3.10.3</protobuf-maven-plugin.version>
     <scott-data-hsqldb.version>0.3</scott-data-hsqldb.version>
     <slf4j.version>2.1.0-alpha1</slf4j.version>
