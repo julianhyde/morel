@@ -59,7 +59,7 @@ public class RelExpanderTest {
   private static class Fixture {
     final TypeSystem typeSystem = new TypeSystem();
     final Environment env;
-    final Core.From from;
+    final Core.Rel rel;
 
     Fixture(String ml) {
       final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
@@ -78,24 +78,22 @@ public class RelExpanderTest {
               resolver
                   .toCore((Ast.ValDecl) resolved.node)
                   .accept(Inliner.of(typeSystem, env, null));
-      final Core.From[] froms = {null};
+      // The resolver returns the tree; take the outermost one.
+      final Core.Rel[] rels = {null};
       valDecl2.accept(
           new Visitor() {
             @Override
-            protected void visit(Core.From from) {
-              super.visit(from);
-              if (froms[0] == null) {
-                froms[0] = from;
+            protected void visitRel(Core.Rel rel) {
+              if (rels[0] == null) {
+                rels[0] = rel;
               }
             }
           });
-      from = froms[0];
+      rel = rels[0];
     }
 
     Core.Exp tree() {
-      return requireNonNull(
-          RelTranslator.toRel(typeSystem, from),
-          "translator declined a query these tests need a tree for");
+      return requireNonNull(rel, "no query in this statement");
     }
   }
 
