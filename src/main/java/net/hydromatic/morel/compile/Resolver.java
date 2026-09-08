@@ -2335,8 +2335,9 @@ public class Resolver {
       if (steps.isEmpty() || !(last(steps) instanceof Ast.Yield)) {
         finish();
       }
-      return RelLowerer.lower(
-          typeMap.typeSystem, nameGenerator, b.build(), scanNames);
+      // The tree is what the resolver returns. Lowering is a pass of its own,
+      // after the rewrites and before the compiler; see Compiles.
+      return b.build();
     }
 
     /**

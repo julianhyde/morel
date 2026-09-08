@@ -33,6 +33,7 @@ import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
+import net.hydromatic.morel.compile.RelLowerer;
 import net.hydromatic.morel.compile.RelShadow;
 import net.hydromatic.morel.compile.RelTranslator;
 import net.hydromatic.morel.compile.RelValidator;
@@ -78,8 +79,13 @@ public class RelTranslatorTest {
     final Resolver resolver = Resolver.of(resolved.typeMap, env, null);
     final Core.ValDecl valDecl2 = resolver.toCore((Ast.ValDecl) resolved.node);
 
+    // The resolver returns a tree, and this tests the translator, whose input
+    // is a step list. Lower the tree to get one, as the pipeline does before
+    // the compiler and as `RelShadow` does before it translates.
+    final Core.Decl decl2 =
+        RelLowerer.lowerAll(typeSystem, typeSystem.nameGenerator, valDecl2);
     final Core.From[] froms = {null};
-    valDecl2.accept(
+    decl2.accept(
         new Visitor() {
           @Override
           protected void visit(Core.From from) {
@@ -96,7 +102,7 @@ public class RelTranslatorTest {
 
     // The shadow does the same for every query the test suite compiles; check
     // that it is happy with this one too.
-    assertThat(RelShadow.check(typeSystem, valDecl2), is(true));
+    assertThat(RelShadow.check(typeSystem, decl2), is(true));
 
     final Core.Exp rel = RelTranslator.toRel(typeSystem, froms[0]);
     if (rel == null) {
