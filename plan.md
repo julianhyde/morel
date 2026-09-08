@@ -52,12 +52,40 @@ What is left, in the order it is worth doing:
    and falls back to lowering plus `Expander.expandFrom` where the tree
    engine declines. Each query that stops needing the fallback is a
    round trip removed and, eventually, `RelShadow`'s translation shadow
-   with nothing left to check. Two known members of the residue: a
-   predicate written as a function that reads a global, so the
-   constraint is behind a call (`from n where isNum n`); and a
-   constraint inside a nested query, which the step list's engine reads
-   through and the tree engine does not (`exists x where (exists y where
-   (x, y) elem pairs)`).
+   with nothing left to check -- the two are the same work, because the
+   shadow exists to guard the translator, and the translator is only
+   still needed for the fallback.
+
+   **The residue is 28 of 240**, measured over the whole script suite by
+   counting the fallback: `such-that.smli` 18 of 191, `optimize.smli` 10
+   of 33, every other file 0. Four classes, with counts from that run:
+
+   * *A nested query grounds the outer leaf* (8). `filter [let val v =
+     $0 in #nonEmpty Relational (<tree>) end] extent "int"` -- the
+     constraint that bounds the outer variable is inside the nested
+     tree, which the tree engine treats as opaque and the step list's
+     engine reads through. The largest class, and the one to do first.
+   * *An infinite range leaf with the bound above it* (6, all in
+     optimize). `filter [$0 < 5] (#flatten Range ([AT_LEAST 1]))`, and
+     the same over a join of two. The step list has `Fbbt.strengthen`
+     and `RangePushdown.apply` for exactly this; the tree engine has
+     neither, and `RelExpander` does not treat a range as a leaf it
+     could bound at all.
+   * *Neither engine can ground it* (~10). `from i where i elem [1..]`,
+     `from x where (x + 2) * (x - 3) = 0`, `from i, j` over type
+     variables. The expected output is an error, both decline, and the
+     fallback runs only to produce the message. Not residue to remove,
+     though it is work done twice.
+   * *`elem` over a collection that is itself a tree* (3). `op elem ((n,
+     d), project [(#name $0, #deptno $0)] [...])` -- the engine inverts
+     `elem` against a collection, and this one is a `project`.
+
+   Two things tried and measured, for the next attempt: adding
+   `Core.Input` to `Analyzer.isAtom` took the residue from 37 to 28 and
+   changed no output (committed); treating `#1 $0` as atomic in
+   `Inliner.isAtomic`, so that a `case` over a tree's components would
+   reduce the way one over a step list's variables does, removed no
+   declines and broke a script.
 2. **Goal 6, freeze.**
 
 **One thing the flip cost, which goal 4 mostly retires.** A leaf is a
