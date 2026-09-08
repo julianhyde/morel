@@ -125,6 +125,22 @@ final class RangePushdown {
    */
   static @Nullable Tightening tighten(
       TypeSystem typeSystem, Core.Exp leaf, List<Core.Exp> conditions) {
+    return tighten(
+        typeSystem,
+        leaf,
+        conditions,
+        e -> e instanceof Core.Input && ((Core.Input) e).i == 0);
+  }
+
+  /**
+   * As {@link #tighten(TypeSystem, Core.Exp, List)}, where the leaf is one of a
+   * join's and the conditions name it rather than saying {@code $0}.
+   */
+  static @Nullable Tightening tighten(
+      TypeSystem typeSystem,
+      Core.Exp leaf,
+      List<Core.Exp> conditions,
+      Predicate<Core.Exp> isVar) {
     final RangeInfo info = matchExp(leaf);
     if (info == null) {
       return null;
@@ -135,9 +151,42 @@ final class RangePushdown {
         info.op,
         info.value,
         info.bagWrapped,
-        e -> e instanceof Core.Input && ((Core.Input) e).i == 0,
+        isVar,
         conditions,
         ImmutableSet.of());
+  }
+
+  /**
+   * Returns what an infinite range says about its element -- {@code v >= 1} for
+   * {@code [1..]} -- or null if the leaf is not one.
+   *
+   * <p>FBBT deduces a bound from the bounds it is given, and a range's is not
+   * among them until it is written as a constraint. {@code Expander} does the
+   * same for a step list, in {@code rangeImpliedBounds}.
+   */
+  static Core.@Nullable Exp impliedBound(
+      TypeSystem typeSystem, Core.Exp leaf, Core.Exp varExp) {
+    final RangeInfo info = matchExp(leaf);
+    if (info == null) {
+      return null;
+    }
+    // CHAR_OP_* are concretely typed (char * char -> bool); the OP_* family is
+    // polymorphic and needs the type-parameter form of core.call.
+    switch (info.op) {
+      case CHAR_OP_LT:
+      case CHAR_OP_LE:
+      case CHAR_OP_GT:
+      case CHAR_OP_GE:
+        return core.call(typeSystem, info.op, varExp, info.value);
+      default:
+        return core.call(
+            typeSystem,
+            info.op,
+            PrimitiveType.BOOL,
+            Pos.ZERO,
+            varExp,
+            info.value);
+    }
   }
 
   /**
