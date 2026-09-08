@@ -31,7 +31,9 @@ import java.util.ArrayList;
 import java.util.List;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.foreign.SparkBackend;
+import net.hydromatic.morel.foreign.SparkCatalog;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -190,6 +192,45 @@ public class SparkConnectTest {
       assertThat(
           c.sql("SELECT 1 AS one").rows(),
           is(ImmutableList.of(ImmutableList.of(1))));
+    }
+  }
+
+  /** Browses the catalog: the scott database matches Morel's data set. */
+  @Test
+  void testCatalog() {
+    try (SparkBackend.Connection c = connect()) {
+      assertThat(c.databases().contains("scott"), is(true));
+      assertThat(c.databases().contains("default"), is(true));
+      assertThat(
+          c.tables("scott"),
+          is(ImmutableList.of("bonuses", "depts", "emps", "salgrades")));
+      assertThat(
+          c.tableType("scott", "emps").moniker(),
+          is(
+              "{comm:real, deptno:int, empno:int, ename:string, hiredate:string,"
+                  + " job:string, mgr:int, sal:real} bag"));
+      assertThat(c.rows("scott", "depts").size(), is(4));
+      assertThat(c.tables("default"), is(ImmutableList.of("zoo")));
+      // The zoo has a map column, which has no Morel type
+      final SparkBackend.SparkException e =
+          assertThrows(
+              SparkBackend.SparkException.class,
+              () -> c.tableType("default", "zoo"));
+      assertThat(e.errorClass, is("UNSUPPORTED_TYPE"));
+      final SparkBackend.SparkException e2 =
+          assertThrows(
+              SparkBackend.SparkException.class, () -> c.tables("no_such_db"));
+      assertThat(e2.errorClass, is("SCHEMA_NOT_FOUND"));
+
+      // Through the progressively typed catalog
+      final SparkCatalog catalog = new SparkCatalog(c);
+      final TypeSystem ts = new TypeSystem();
+      BuiltIn.dataTypes(ts, new ArrayList<>());
+      catalog.discoverField(ts, "scott");
+      final TypedValue scott = catalog.fieldValueAs("scott", TypedValue.class);
+      scott.discoverField(ts, "emps");
+      final TypedValue emps = scott.fieldValueAs("emps", TypedValue.class);
+      assertThat(emps.valueAs(List.class).size(), is(14));
     }
   }
 

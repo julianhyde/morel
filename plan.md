@@ -278,6 +278,22 @@ and `ArrowDecoderTest` run everywhere the adapter compiles;
 `SPARK_REMOTE` are set, and reads the seed tables, including every column of
 `zoo` and the error cases.
 
+**M7.** Backend half done. `SparkBackend.Connection` gained catalog methods
+(databases, tables, a table's Morel type, a table's rows);
+`foreign.SparkCatalog` is the catalog as a progressively typed record, built
+like `Files`: databases are fetched when the root's type is first asked for,
+a database's tables when it is first discovered, a table's type when it is
+first discovered, and its rows when first forced, each bumping the expand
+count so the resolver deduces again. `foreign.MockSparkConnection` is the
+offline connection (`mock:`), whose catalog is the session's foreign data
+sets (now kept on `Session`), and `SparkBackend.open` chooses between it and
+the adapter by URI. The adapter lists databases and tables with `SHOW`
+statements and gets a table's type from the AnalyzePlan schema RPC. Tested
+offline over the scott data set and live against the container, where
+`scott.emps` has the same type and rows on both. What remains is the
+Morel-visible half, the `Spark` structure, which hinges on how a script
+reaches the catalog: see the note under M3.
+
 **M10.** Three categories: runtime errors (e.g. divide by zero) must raise
 the same Morel exception as local evaluation, testable in the triple
 format; analysis errors are translator bugs and dump the offending plan —

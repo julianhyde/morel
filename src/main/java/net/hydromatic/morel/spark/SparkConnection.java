@@ -38,12 +38,16 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import net.hydromatic.morel.foreign.SparkBackend;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import org.apache.spark.connect.proto.AnalyzePlanRequest;
+import org.apache.spark.connect.proto.AnalyzePlanResponse;
 import org.apache.spark.connect.proto.DataType;
 import org.apache.spark.connect.proto.ExecutePlanRequest;
 import org.apache.spark.connect.proto.ExecutePlanResponse;
 import org.apache.spark.connect.proto.Plan;
+import org.apache.spark.connect.proto.Read;
 import org.apache.spark.connect.proto.Relation;
 import org.apache.spark.connect.proto.SQL;
 import org.apache.spark.connect.proto.SparkConnectServiceGrpc;
@@ -179,6 +183,74 @@ class SparkConnection implements SparkBackend.Connection {
       }
     }
     return new SparkBackend.SparkException(errorClass, message, e);
+  }
+
+  @Override
+  public List<String> databases() {
+    return column(sql("SHOW DATABASES"), "namespace");
+  }
+
+  @Override
+  public List<String> tables(String database) {
+    return column(sql("SHOW TABLES IN " + quote(database)), "tableName");
+  }
+
+  /** Returns a column of a result as strings. */
+  private static List<String> column(SparkBackend.Result result, String name) {
+    final RecordLikeType rowType = (RecordLikeType) result.rowType();
+    final int i =
+        ImmutableList.copyOf(rowType.argNameTypes().keySet()).indexOf(name);
+    if (i < 0) {
+      throw new SparkBackend.SparkException(
+          "CONNECTION", "Result has no column " + name);
+    }
+    final List<String> values = new ArrayList<>();
+    for (Object row : result.rows()) {
+      values.add((String) ((List<?>) row).get(i));
+    }
+    return values;
+  }
+
+  @Override
+  public Type tableType(String database, String table) {
+    checkOpen();
+    final Relation relation =
+        Relation.newBuilder()
+            .setRead(
+                Read.newBuilder()
+                    .setNamedTable(
+                        Read.NamedTable.newBuilder()
+                            .setUnparsedIdentifier(
+                                quote(database) + "." + quote(table))))
+            .build();
+    final AnalyzePlanRequest request =
+        AnalyzePlanRequest.newBuilder()
+            .setSessionId(sessionId)
+            .setUserContext(userContext)
+            .setClientType("morel")
+            .setSchema(
+                AnalyzePlanRequest.Schema.newBuilder()
+                    .setPlan(Plan.newBuilder().setRoot(relation)))
+            .build();
+    final AnalyzePlanResponse response;
+    try {
+      response = stub.analyzePlan(request);
+    } catch (StatusRuntimeException e) {
+      throw toException(e);
+    }
+    final Type rowType =
+        SparkTypes.rowType(typeSystem, response.getSchema().getSchema());
+    return typeSystem.bagType(rowType);
+  }
+
+  @Override
+  public List<Object> rows(String database, String table) {
+    return sql("SELECT * FROM " + quote(database) + "." + quote(table)).rows();
+  }
+
+  /** Quotes an identifier with back-ticks, as Spark SQL does. */
+  private static String quote(String identifier) {
+    return "`" + identifier.replace("`", "``") + "`";
   }
 
   private void checkOpen() {
