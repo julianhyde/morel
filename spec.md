@@ -176,9 +176,12 @@ signature SPARK = sig
      value that was read from it lazily, raises Spark. *)
   val close : connection -> unit
 
-  (* Applies f to the connection, and closes the connection
-     afterwards, whether or not f raised. *)
-  val using : connection * (connection -> 'a) -> 'a
+  (* Wraps a function that needs a connection in one that opens the
+     default connection (as connectDefault does), passes it, and
+     closes it afterwards, whether or not the function raised. So
+     "using (fn (c, x) => x + 1)" is a function that, applied to 4,
+     returns 5. *)
+  val using : (connection * 'a -> 'b) -> 'a -> 'b
 
   (* The root of the connection's catalog: a progressively typed
      record whose fields are catalogs, then databases, then tables. A
@@ -208,8 +211,8 @@ end
 ```
 
 `connection` and `('a, 'b) plan` are opaque. `catalog`, `close`,
-`using`, `prepare` and `remote` are methods on `connection`, and
-`execute` and `toString` on `plan`, so a script reads
+`prepare` and `remote` are methods on `connection`, and `execute` and
+`toString` on `plan`, so a script reads
 
 ```sml
 val spark = Spark.connectDefault ();
@@ -224,7 +227,14 @@ spark.close ();
 ```
 
 A plan is a function, and a query with no parameters is a function of
-`unit`. The argument is the only thing that varies between executions
+`unit`. `using` gives a function its connection for the duration of
+one call:
+
+```sml
+val clerks = Spark.using (fn (spark, job) =>
+  (spark.remote (fn j => from e in spark.catalog.emp where e.job = j)) job);
+clerks "CLERK";
+``` The argument is the only thing that varies between executions
 of a plan; everything else the function refers to is fixed when the
 plan is prepared (2.2).
 
