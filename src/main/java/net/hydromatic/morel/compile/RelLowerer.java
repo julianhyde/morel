@@ -258,9 +258,9 @@ public class RelLowerer {
    * tree's {@code $0} is its own and not the enclosing node's (spec.md §2 rule
    * 3).
    */
-  private static Set<Core.NamedPat> rowBindings(Core.Rel rel) {
+  static Set<Core.NamedPat> rowBindings(Core.Exp exp) {
     final Set<Core.NamedPat> pats = new LinkedHashSet<>();
-    rel.accept(
+    exp.accept(
         new Visitor() {
           @Override
           protected void visit(Core.NonRecValDecl valDecl) {
@@ -285,7 +285,7 @@ public class RelLowerer {
    * grounding engine expects to see -- a {@code let} between a query and its
    * constraint is opaque to it.
    */
-  private static Core.Exp unbindRow(
+  static Core.Exp unbindRow(
       TypeSystem typeSystem, Core.Exp exp, Set<Core.NamedPat> pats) {
     if (pats.isEmpty()) {
       return exp;

@@ -225,8 +225,16 @@ class Generators {
       final Core.Exp constraint = context.constraints.get(j);
       if (constraint.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)) {
         final Core.Apply apply = (Core.Apply) constraint;
-        if (apply.arg instanceof Core.From) {
-          final Core.From from = (Core.From) apply.arg;
+        // A tree says the same thing as a step list, and this reads a step
+        // list: `Relational.nonEmpty (from ... where pat ...)`. Lower what the
+        // resolver left, as `fnBody` does for a function's body.
+        final Core.Exp arg =
+            apply.arg instanceof Core.Rel
+                ? RelLowerer.lowerAll(
+                    cache.typeSystem, cache.typeSystem.nameGenerator, apply.arg)
+                : apply.arg;
+        if (arg instanceof Core.From) {
+          final Core.From from = (Core.From) arg;
 
           // Create a copy of constraints with this constraint removed.
           // When we encounter a "where" step, we will add more constraints.

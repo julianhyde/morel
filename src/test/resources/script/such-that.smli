@@ -1182,7 +1182,7 @@ from p where (exists s in ["abcd", "ant"] where String.isPrefix p s) order p;
 (* TODO: remove spurious 'where' *)
 Sys.planEx "999";
 > val it =
->   "val it = from w$0 in [\"abcd\", \"ant\"] join w$1 in #tabulate Bag (#size String w$0 + 1, fn i => #substring String (w$0, 0, i)) yield w$1 group w$1 order w$1 where #nonEmpty Relational (from w$0 in [\"abcd\", \"ant\"] where #isPrefix String w$1 w$0) order w$1"
+>   "val it = sort [$0] : string list\n  filter [let val v$0 = $0 in #nonEmpty Relational (filter [#isPrefix String v$1 $0]\n  [\"abcd\", \"ant\"]\n) end] : string list\n    from w$0 in [\"abcd\", \"ant\"] join g$0 in #tabulate Bag (#size String w$0 + 1, fn i => #substring String (w$0, 0, i)) yield g$0 group g$0 order g$0 : string list\n"
 >   : string
 
 (* A string function with external extent.
@@ -1503,8 +1503,8 @@ from x, z
   distinct;
 > x z
 > - -
-> 1 3
 > 1 2
+> 1 3
 > 4 3
 >
 > val it : {x:int, z:int} list
@@ -1515,8 +1515,8 @@ from x, z
   distinct;
 > x z
 > - -
-> 1 3
 > 1 2
+> 1 3
 > 4 3
 >
 > val it : {x:int, z:int} list
@@ -2220,7 +2220,7 @@ from d
 > val it = ["RESEARCH"] : string list
 Sys.planEx "0";
 > val it =
->   "val it = project [#dname $0] : string list\n  filter [(let val d_14 = $0 in op elem (d_14, #depts scott_1) end) andalso #deptno $0 = 20] : {deptno:int, dname:string, loc:string} list\n    extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
+>   "val it = project [#dname $0] : string list\n  filter [(let val d_16 = $0 in op elem (d_16, #depts scott_1) end) andalso #deptno $0 = 20] : {deptno:int, dname:string, loc:string} list\n    extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
 >   : string
 Sys.planEx "999";
 > val it =
