@@ -335,6 +335,26 @@ Note the `LargeInt`-is-fixed-precision gotcha: `LargeInt.int` = the 32-bit
 `int`, so `Word.toLargeInt`/`toLargeIntX` raise `Overflow` for values that
 don't fit in `int` and cannot honor the spec's "never raises" for `toLargeIntX`.
 
+### The Spark adapter
+
+The Spark backend (`net.hydromatic.morel.spark`) needs JDK 17 and the gRPC,
+protobuf and Arrow libraries, so it is compiled only under the `spark` Maven
+profile, which activates on JDK 17 and later; on older JDKs the package is
+excluded and Morel builds without it. The rest of Morel refers to it only
+through `foreign.SparkBackend`, which loads it by name. Protobuf messages and
+gRPC stubs are generated from `src/main/protobuf/spark/connect/*.proto`
+(vendored from Spark 4.0.0) into `target/generated-sources/protobuf`.
+
+To run the tests that need a Spark Connect server (Docker required):
+
+```bash
+export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
+./mvnw test -Dtest=SparkConnectTest -Dmorel.spark=true
+```
+
+`plan.md` and `spec.md` at the root of the repository hold the plan and
+design for the Spark work.
+
 ### Adding a Language Feature
 
 1. Update `MorelParser.jj` grammar
