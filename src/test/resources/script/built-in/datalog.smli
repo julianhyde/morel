@@ -35,7 +35,8 @@ val program = ".decl edge(x:int, y:int)
 edge(1,2).
 edge(2,3).
 .output edge";
-> val program = {|.decl edge(x:int, y:int)
+> val program =
+>   {|.decl edge(x:int, y:int)
 > edge(1,2).
 > edge(2,3).
 > .output edge|} : string

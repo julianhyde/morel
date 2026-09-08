@@ -93,22 +93,37 @@ A string value that contains a newline, and has no space or tab
 before any newline, is written as a *raw string literal*:
 
 ```
-"root {\n  common {\n    plan_id: 0\n  }\n}";
-> val it = {|root {
->   common {
->     plan_id: 0
->   }
-> }|} : string
+"a\nb";
+> val it = {|a
+> b|} : string
 ```
 
 The content between the fences `{|` and `|}` is verbatim: there are
 no escapes, a newline in the content is a newline in the script, and
 lines after the first start at column 0 (immediately after the `> `
 prefix). A trailing newline in the content leaves the closing fence
-alone on the last line. If the content contains `|}`, the fences
-carry a tag, `{a|...|a}`. A tag consists of lower-case letters `a` to
-`z` and underscores; the harness chooses the shortest (`a`, `b`, ...,
-`z`, `aa`, ...) such that `|tag}` does not occur in the content.
+alone on the last line.
+
+One exception to "verbatim": a newline immediately after the opening
+fence is not content. The harness uses that when the content's second
+line starts with a space, so that the content's lines line up in the
+script, and when the content itself starts with a newline; the
+opening fence then carries the tag `_`:
+
+```
+"root {\n  common {\n    plan_id: 0\n  }\n}";
+> val it = {_|
+> root {
+>   common {
+>     plan_id: 0
+>   }
+> }|_} : string
+```
+
+If the content contains `|}` (or `|_}`), the fences carry another
+tag, `{a|...|a}`. A tag consists of lower-case letters `a` to `z` and
+underscores; the harness chooses the shortest (`a`, `b`, ..., `z`,
+`aa`, ...) such that `|tag}` does not occur in the content.
 
 Only a top-level string value is written this way. A string inside a
 list, record or other value keeps the regular escaped form. So does a

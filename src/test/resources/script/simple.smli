@@ -1210,8 +1210,9 @@ classify 0w7;
  * spaces and tabs that begin the next line are ignored. *)
 "abc
   def";
-> val it = {|abc
->   def|} : string
+> val it = {_|
+> abc
+>   def|_} : string
 val text = "This is a very \
             long string split \
             across lines.";
