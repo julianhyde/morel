@@ -445,7 +445,7 @@ List.length (from x in [1..], y in [1..] where x * (y + 3) < 30);
 > val it = 51 : int
 Sys.planEx "3";
 > val it =
->   "val it = #length List (from x in #flatten Range ([CLOSED (1, 7)]) join y in #flatten Range ([CLOSED_OPEN (1, 27)]) where #* Int (x, y + 3) < 30)"
+>   "val it = #length List (project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list\n  filter [#* Int (#1 $0, #2 $0 + 3) < 30] : (int * int) list\n    join : (int * int) list\n      #flatten Range ([CLOSED (1, 7)]) : int list\n      #flatten Range ([CLOSED_OPEN (1, 27)]) : int list\n)"
 >   : string
 
 (* RangePushdown also handles char-typed infinite range scans. *)
