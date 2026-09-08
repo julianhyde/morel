@@ -649,6 +649,76 @@ public class Visitor {
   protected void visit(Core.LiteralPat idPat) {}
 
   protected void visit(Core.WildcardPat wildcardPat) {}
+
+  /**
+   * Visitor that does not descend into a relational node, because the node
+   * rebinds {@code $0}: an input reference below it is the node's own, not the
+   * enclosing expression's.
+   */
+  public abstract static class RelBoundary extends Visitor {
+    /** Called in place of descending into a node. */
+    protected void rel(Core.Rel rel) {}
+
+    @Override
+    protected void visit(Core.Filter filter) {
+      rel(filter);
+    }
+
+    @Override
+    protected void visit(Core.Project project) {
+      rel(project);
+    }
+
+    @Override
+    protected void visit(Core.IfEmpty ifEmpty) {
+      rel(ifEmpty);
+    }
+
+    @Override
+    protected void visit(Core.Join join) {
+      rel(join);
+    }
+
+    @Override
+    protected void visit(Core.Group group) {
+      rel(group);
+    }
+
+    @Override
+    protected void visit(Core.Sort sort) {
+      rel(sort);
+    }
+
+    @Override
+    protected void visit(Core.Unorder unorder) {
+      rel(unorder);
+    }
+
+    @Override
+    protected void visit(Core.Skip skip) {
+      rel(skip);
+    }
+
+    @Override
+    protected void visit(Core.Take take) {
+      rel(take);
+    }
+
+    @Override
+    protected void visit(Core.Union union) {
+      rel(union);
+    }
+
+    @Override
+    protected void visit(Core.Intersect intersect) {
+      rel(intersect);
+    }
+
+    @Override
+    protected void visit(Core.Except except) {
+      rel(except);
+    }
+  }
 }
 
 // End Visitor.java
