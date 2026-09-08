@@ -1182,7 +1182,7 @@ from p where (exists s in ["abcd", "ant"] where String.isPrefix p s) order p;
 (* TODO: remove spurious 'where' *)
 Sys.planEx "999";
 > val it =
->   "val it = sort [$0] : string list\n  filter [let val v$0 = $0 in #nonEmpty Relational (filter [#isPrefix String v$1 $0]\n  [\"abcd\", \"ant\"]\n) end] : string list\n    from w$0 in [\"abcd\", \"ant\"] join g$0 in #tabulate Bag (#size String w$0 + 1, fn i => #substring String (w$0, 0, i)) yield g$0 group g$0 order g$0 : string list\n"
+>   "val it = sort [$0] : string list\n  filter [let val v$0 = $0 in #nonEmpty Relational (filter [#isPrefix String v$0 $0] : string list\n  [\"abcd\", \"ant\"] : string list\n) end] : string list\n    from w$0 in [\"abcd\", \"ant\"] join g$0 in #tabulate Bag (#size String w$0 + 1, fn i => #substring String (w$0, 0, i)) yield g$0 group g$0 order g$0 : string list\n"
 >   : string
 
 (* A string function with external extent.
@@ -2117,7 +2117,7 @@ from d where d elem scott.depts;
 > val it : {deptno:int, dname:string, loc:string} list
 Sys.planEx "0";
 > val it =
->   "val it = filter [op elem ($0, #depts scott_1)] : {deptno:int, dname:string, loc:string} list\n  extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
+>   "val it = filter [op elem ($0, #depts scott)] : {deptno:int, dname:string, loc:string} list\n  extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
 >   : string
 Sys.planEx "3";
 > val it = "val it = from g$0 in #toList Bag (#depts scott) group g$0 order g$0"
@@ -2136,12 +2136,12 @@ where {deptno, loc, dname = name} elem scott.depts;
 > val it : {deptno:int, loc:string, name:string} list
 Sys.planEx "0";
 > val it =
->   "val it = project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}] : {deptno:int, loc:string, name:string} list\n  filter [op elem ({deptno = #2 $0, dname = #3 $0, loc = #1 $0}, #depts scott_1)] : (string * int * string) list\n    join : (string * int * string) list\n      join : (string * int) list\n        extent \"string\" : string list\n        extent \"int\" : int list\n      extent \"string\" : string list\n"
+>   "val it = project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}] : {deptno:int, loc:string, name:string} list\n  filter [op elem ({deptno = #2 $0, dname = #3 $0, loc = #1 $0}, #depts scott)] : (string * int * string) list\n    join : (string * int * string) list\n      join : (string * int) list\n        extent \"string\" : string list\n        extent \"int\" : int list\n      extent \"string\" : string list\n"
 >   : string
 (* TODO: remove spurious 'where' *)
 Sys.planEx "3";
 > val it =
->   "val it = project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}] : {deptno:int, loc:string, name:string} list\n  project [(#loc $0, #deptno $0, #name $0)] : (string * int * string) list\n    from ({deptno = deptno, dname = name, loc = loc}) in #toList Bag (#depts scott_1) group {deptno = deptno, loc = loc, name = name} order {deptno = deptno, loc = loc, name = name} : {deptno:int, loc:string, name:string} list\n"
+>   "val it = project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}] : {deptno:int, loc:string, name:string} list\n  project [(#loc $0, #deptno $0, #name $0)] : (string * int * string) list\n    from ({deptno = deptno, dname = name, loc = loc}) in #toList Bag (#depts scott) group {deptno = deptno, loc = loc, name = name} order {deptno = deptno, loc = loc, name = name} : {deptno:int, loc:string, name:string} list\n"
 >   : string
 
 (* testFromSuchThat2d - Record pattern with literal and additional
@@ -2157,11 +2157,11 @@ from dno, name
 > val it : {dno:int, name:string} list
 Sys.planEx "0";
 > val it =
->   "val it = project [{dno = #1 $0, name = #2 $0}] : {dno:int, name:string} list\n  filter [op elem ({deptno = #1 $0, dname = #2 $0, loc = \"CHICAGO\"}, #depts scott_1) andalso #1 $0 > 20] : (int * string) list\n    join : (int * string) list\n      extent \"int\" : int list\n      extent \"string\" : string list\n"
+>   "val it = project [{dno = #1 $0, name = #2 $0}] : {dno:int, name:string} list\n  filter [op elem ({deptno = #1 $0, dname = #2 $0, loc = \"CHICAGO\"}, #depts scott) andalso #1 $0 > 20] : (int * string) list\n    join : (int * string) list\n      extent \"int\" : int list\n      extent \"string\" : string list\n"
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = project [{dno = #1 $0, name = #2 $0}] : {dno:int, name:string} list\n  filter [#1 $0 > 20] : (int * string) list\n    project [(#dno $0, #name $0)] : (int * string) list\n      from ({deptno = dno, dname = name, loc = \"CHICAGO\"}) in #toList Bag (#depts scott_1) group {dno = dno, name = name} order {dno = dno, name = name} : {dno:int, name:string} list\n"
+>   "val it = project [{dno = #1 $0, name = #2 $0}] : {dno:int, name:string} list\n  filter [#1 $0 > 20] : (int * string) list\n    project [(#dno $0, #name $0)] : (int * string) list\n      from ({deptno = dno, dname = name, loc = \"CHICAGO\"}) in #toList Bag (#depts scott) group {dno = dno, name = name} order {dno = dno, name = name} : {dno:int, name:string} list\n"
 >   : string
 
 (* testFromSuchThat2d3 - Forward references with equality constraint *)
@@ -2179,11 +2179,11 @@ yield {dno = #deptno v, name = #dname v};
 > val it : {dno:int, name:string} list
 Sys.planEx "0";
 > val it =
->   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : {dno:int, name:string} list\n  filter [#1 $0 = 30] : (int * string * {deptno:int, dname:string, loc:string}) list\n    filter [#loc (#3 $0) = \"CHICAGO\"] : (int * string * {deptno:int, dname:string, loc:string}) list\n      filter [#2 $0 = #dname (#3 $0)] : (int * string * {deptno:int, dname:string, loc:string}) list\n        filter [#deptno (#3 $0) = #1 $0] : (int * string * {deptno:int, dname:string, loc:string}) list\n          filter [op elem (#3 $0, #depts scott_1)] : (int * string * {deptno:int, dname:string, loc:string}) list\n            join : (int * string * {deptno:int, dname:string, loc:string}) list\n              join : (int * string) list\n                extent \"int\" : int list\n                extent \"string\" : string list\n              extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
+>   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : {dno:int, name:string} list\n  filter [#1 $0 = 30] : (int * string * {deptno:int, dname:string, loc:string}) list\n    filter [#loc (#3 $0) = \"CHICAGO\"] : (int * string * {deptno:int, dname:string, loc:string}) list\n      filter [#2 $0 = #dname (#3 $0)] : (int * string * {deptno:int, dname:string, loc:string}) list\n        filter [#deptno (#3 $0) = #1 $0] : (int * string * {deptno:int, dname:string, loc:string}) list\n          filter [op elem (#3 $0, #depts scott)] : (int * string * {deptno:int, dname:string, loc:string}) list\n            join : (int * string * {deptno:int, dname:string, loc:string}) list\n              join : (int * string) list\n                extent \"int\" : int list\n                extent \"string\" : string list\n              extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : {dno:int, name:string} list\n  filter [#1 $0 = 30] : (int * string * {deptno:int, dname:string, loc:string}) list\n    filter [#loc (#3 $0) = \"CHICAGO\"] : (int * string * {deptno:int, dname:string, loc:string}) list\n      project [(#2 $0, #3 $0, #1 $0)] : (int * string * {deptno:int, dname:string, loc:string}) list\n        join [g$0] : ({deptno:int, dname:string, loc:string} * int * string) list\n          from g$1 in #toList Bag (#depts scott_1) group g$1 order g$1 : {deptno:int, dname:string, loc:string} list\n          join : (int * string) list\n            [#deptno g$0] : int list\n            [#dname g$0] : string list\n"
+>   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : {dno:int, name:string} list\n  filter [#1 $0 = 30] : (int * string * {deptno:int, dname:string, loc:string}) list\n    filter [#loc (#3 $0) = \"CHICAGO\"] : (int * string * {deptno:int, dname:string, loc:string}) list\n      project [(#2 $0, #3 $0, #1 $0)] : (int * string * {deptno:int, dname:string, loc:string}) list\n        join [g$0] : ({deptno:int, dname:string, loc:string} * int * string) list\n          from g$1 in #toList Bag (#depts scott) group g$1 order g$1 : {deptno:int, dname:string, loc:string} list\n          join : (int * string) list\n            [#deptno g$0] : int list\n            [#dname g$0] : string list\n"
 >   : string
 
 (* testFromSuchThat2d4 - Forward references with inequality constraint *)
@@ -2201,11 +2201,11 @@ yield {dno = #deptno v, name = #dname v};
 > val it : {dno:int, name:string} list
 Sys.planEx "0";
 > val it =
->   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : {dno:int, name:string} list\n  filter [#1 $0 > 25] : (int * string * {deptno:int, dname:string, loc:string}) list\n    filter [#loc (#3 $0) = \"CHICAGO\"] : (int * string * {deptno:int, dname:string, loc:string}) list\n      filter [#2 $0 = #dname (#3 $0)] : (int * string * {deptno:int, dname:string, loc:string}) list\n        filter [#deptno (#3 $0) = #1 $0] : (int * string * {deptno:int, dname:string, loc:string}) list\n          filter [op elem (#3 $0, #depts scott_1)] : (int * string * {deptno:int, dname:string, loc:string}) list\n            join : (int * string * {deptno:int, dname:string, loc:string}) list\n              join : (int * string) list\n                extent \"int\" : int list\n                extent \"string\" : string list\n              extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
+>   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : {dno:int, name:string} list\n  filter [#1 $0 > 25] : (int * string * {deptno:int, dname:string, loc:string}) list\n    filter [#loc (#3 $0) = \"CHICAGO\"] : (int * string * {deptno:int, dname:string, loc:string}) list\n      filter [#2 $0 = #dname (#3 $0)] : (int * string * {deptno:int, dname:string, loc:string}) list\n        filter [#deptno (#3 $0) = #1 $0] : (int * string * {deptno:int, dname:string, loc:string}) list\n          filter [op elem (#3 $0, #depts scott)] : (int * string * {deptno:int, dname:string, loc:string}) list\n            join : (int * string * {deptno:int, dname:string, loc:string}) list\n              join : (int * string) list\n                extent \"int\" : int list\n                extent \"string\" : string list\n              extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
 >   : string
 Sys.planEx "3";
 > val it =
->   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : {dno:int, name:string} list\n  filter [#1 $0 > 25] : (int * string * {deptno:int, dname:string, loc:string}) list\n    filter [#loc (#3 $0) = \"CHICAGO\"] : (int * string * {deptno:int, dname:string, loc:string}) list\n      project [(#2 $0, #3 $0, #1 $0)] : (int * string * {deptno:int, dname:string, loc:string}) list\n        join [g$0] : ({deptno:int, dname:string, loc:string} * int * string) list\n          from g$1 in #toList Bag (#depts scott_1) group g$1 order g$1 : {deptno:int, dname:string, loc:string} list\n          join : (int * string) list\n            [#deptno g$0] : int list\n            [#dname g$0] : string list\n"
+>   "val it = project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : {dno:int, name:string} list\n  filter [#1 $0 > 25] : (int * string * {deptno:int, dname:string, loc:string}) list\n    filter [#loc (#3 $0) = \"CHICAGO\"] : (int * string * {deptno:int, dname:string, loc:string}) list\n      project [(#2 $0, #3 $0, #1 $0)] : (int * string * {deptno:int, dname:string, loc:string}) list\n        join [g$0] : ({deptno:int, dname:string, loc:string} * int * string) list\n          from g$1 in #toList Bag (#depts scott) group g$1 order g$1 : {deptno:int, dname:string, loc:string} list\n          join : (int * string) list\n            [#deptno g$0] : int list\n            [#dname g$0] : string list\n"
 >   : string
 
 (* testFromSuchThat2e - Function inlining with elem predicate.
@@ -2220,11 +2220,11 @@ from d
 > val it = ["RESEARCH"] : string list
 Sys.planEx "0";
 > val it =
->   "val it = project [#dname $0] : string list\n  filter [(let val d_16 = $0 in op elem (d_16, #depts scott_1) end) andalso #deptno $0 = 20] : {deptno:int, dname:string, loc:string} list\n    extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
+>   "val it = project [#dname $0] : string list\n  filter [(let val d = $0 in op elem (d, #depts scott) end) andalso #deptno $0 = 20] : {deptno:int, dname:string, loc:string} list\n    extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n"
 >   : string
 Sys.planEx "999";
 > val it =
->   "val it = project [#dname $0] : string list\n  filter [#deptno $0 = 20] : {deptno:int, dname:string, loc:string} list\n    from g$0 in #toList Bag (#depts scott_1) group g$0 order g$0 : {deptno:int, dname:string, loc:string} list\n"
+>   "val it = project [#dname $0] : string list\n  filter [#deptno $0 = 20] : {deptno:int, dname:string, loc:string} list\n    from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : {deptno:int, dname:string, loc:string} list\n"
 >   : string
 
 (* testFromSuchThat2f - Join via suchthat with two functions *)
@@ -2245,11 +2245,11 @@ end;
 >   : string list
 Sys.planEx "0";
 > val it =
->   "val it = let val isDept = fn d => op elem (d, #depts scott) in let val isEmp = fn e => op elem (e, #emps scott) in project [#dname (#1 $0)] : string list\n  filter [isDept_1 (#1 $0) andalso isEmp_3 (#2 $0) andalso #deptno (#1 $0) = #deptno (#2 $0) andalso #deptno (#1 $0) = 20] : ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list\n    join : ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list\n      extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n      extent \"{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}\" : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list\n end end"
+>   "val it = let val isDept = fn d => op elem (d, #depts scott) in let val isEmp = fn e => op elem (e, #emps scott) in project [#dname (#1 $0)] : string list\n  filter [isDept (#1 $0) andalso isEmp (#2 $0) andalso #deptno (#1 $0) = #deptno (#2 $0) andalso #deptno (#1 $0) = 20] : ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list\n    join : ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list\n      extent \"{deptno:int, dname:string, loc:string}\" : {deptno:int, dname:string, loc:string} list\n      extent \"{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}\" : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list\n end end"
 >   : string
 Sys.planEx "999";
 > val it =
->   "val it = project [#dname (#1 $0)] : string list\n  filter [#deptno (#1 $0) = #deptno (#2 $0) andalso #deptno (#1 $0) = 20] : ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list\n    join : ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list\n      from g$0 in #toList Bag (#depts scott_1) group g$0 order g$0 : {deptno:int, dname:string, loc:string} list\n      from g$1 in #toList Bag (#emps scott_1) group g$1 order g$1 : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list\n"
+>   "val it = project [#dname (#1 $0)] : string list\n  filter [#deptno (#1 $0) = #deptno (#2 $0) andalso #deptno (#1 $0) = 20] : ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list\n    join : ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list\n      from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : {deptno:int, dname:string, loc:string} list\n      from g$1 in #toList Bag (#emps scott) group g$1 order g$1 : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list\n"
 >   : string
 
 (* testProvenanceThroughFunction - Provenance propagation through
@@ -2284,7 +2284,7 @@ end;
 > val it = [2,3] : int list
 Sys.planEx "0";
 > val it =
->   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in filter [f_1 $0 andalso $0 > 1] : int list\n  extent \"int\" : int list\n end end"
+>   "val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in filter [f $0 andalso $0 > 1] : int list\n  extent \"int\" : int list\n end end"
 >   : string
 Sys.planEx "999";
 > val it =
