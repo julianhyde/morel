@@ -1,0 +1,105 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Tests for the Spark structure, using the offline connection, whose
+ * catalog is the session's foreign data sets.
+ *)
+Spark;
+> val it = {catalog=fn,close=fn,connect=fn,connectDefault=fn,using=fn}
+>   : {catalog:connection -> {...}, close:connection -> unit,
+>       connect:string -> {catalog:{...}, connection:connection},
+>       connectDefault:unit -> {catalog:{...}, connection:connection},
+>       using:(connection * 'a -> 'b) -> 'a -> 'b}
+
+(*) The offline connection. Its catalog has one database, scott.
+val spark = Spark.connect "mock:";
+> val spark = {catalog={},connection=<connection mock:>}
+>   : {catalog:{...}, connection:connection, ...}
+spark.catalog;
+> val it = {foodmart={},scott={}} : {foodmart:{...}, scott:{...}, ...}
+
+(*) Browsing the catalog discovers a database's tables, then a table's type.
+spark.catalog.scott;
+> val it =
+>   {bonuses=<relation>,depts=<relation>,emps=<relation>,salgrades=<relation>}
+>   : {bonuses:{...} bag, depts:{...} bag, emps:{...} bag, salgrades:{...} bag,
+>       ...}
+spark.catalog.scott.depts;
+> val it =
+>   [{deptno=10,dname="ACCOUNTING",loc="NEW YORK"},
+>    {deptno=20,dname="RESEARCH",loc="DALLAS"},
+>    {deptno=30,dname="SALES",loc="CHICAGO"},
+>    {deptno=40,dname="OPERATIONS",loc="BOSTON"}]
+>   : {deptno:int, dname:string, loc:string} bag
+spark;
+> val it =
+>   {catalog={foodmart={},
+>             scott={bonuses=<relation>,depts=<relation>,emps=<relation>,
+>                    salgrades=<relation>}},connection=<connection mock:>}
+>   : {catalog:{foodmart:{...},
+>                scott:{bonuses:{...} bag,
+>                        depts:{deptno:int, dname:string, loc:string} bag,
+>                        emps:{...} bag, salgrades:{...} bag, ...}, ...},
+>       connection:connection, ...}
+
+(*) A table is a bag of records, and can be queried.
+from e in spark.catalog.scott.emps
+  where e.sal > 2500.0
+  yield {e.ename, e.sal};
+> val it =
+>   [{ename="JONES",sal=2975},{ename="BLAKE",sal=2850},{ename="SCOTT",sal=3000},
+>    {ename="KING",sal=5000},{ename="FORD",sal=3000}]
+>   : {ename:string, sal:real} bag
+from d in spark.catalog.scott.depts
+  join e in spark.catalog.scott.emps on d.deptno = e.deptno
+  group d.dname compute {c = count over ()}
+  order dname;
+> val it = [{c=3,dname="ACCOUNTING"},{c=5,dname="RESEARCH"},{c=6,dname="SALES"}]
+>   : {c:int, dname:string} list
+
+(*) The connection itself, and its catalog bound to a name.
+val c = spark.connection;
+> val c = <connection mock:> : connection
+val catalog = c.catalog ();
+> val catalog = {} : {...}
+catalog.scott.salgrades;
+> val it =
+>   [{grade=1,hisal=1200,losal=700},{grade=2,hisal=1400,losal=1201},
+>    {grade=3,hisal=2000,losal=1401},{grade=4,hisal=3000,losal=2001},
+>    {grade=5,hisal=9999,losal=3001}] : {grade:int, hisal:real, losal:real} bag
+
+(*) Closing the connection; a later use raises Spark.
+c.close ();
+> val it = () : unit
+c.close ();
+> val it = () : unit
+
+(*) An unknown URI is rejected when the connection is used.
+val bad = Spark.connect "http://nowhere";
+> uncaught exception Spark [Spark: CONNECTION: Invalid Spark Connect URI: http://nowhere (expected sc://host[:port][/;param=value...])]
+>   raised at: stdIn:1.11-1.41
+
+(*) There is no default server in the test environment.
+Spark.connectDefault ();
+> uncaught exception Spark [Spark: CONNECTION: No default Spark Connect server: SPARK_REMOTE is not set]
+>   raised at: stdIn:1.1-1.24
+Spark.using (fn (c, x) => x + 1) 4;
+> uncaught exception Spark [Spark: CONNECTION: No default Spark Connect server: SPARK_REMOTE is not set]
+>   raised at: stdIn:1.1-1.33
+
+(*) End spark.smli

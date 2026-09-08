@@ -273,6 +273,11 @@ class SparkConnection implements SparkBackend.Connection {
     }
   }
 
+  @Override
+  public String toString() {
+    return "<connection " + uri + ">";
+  }
+
   /** Implementation of {@link SparkBackend.Result}. */
   private static class ResultImpl implements SparkBackend.Result {
     private final Type rowType;
