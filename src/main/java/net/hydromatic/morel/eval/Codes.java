@@ -77,6 +77,8 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Macro;
 import net.hydromatic.morel.datalog.DatalogEvaluator;
 import net.hydromatic.morel.foreign.RelList;
+import net.hydromatic.morel.foreign.SparkBackend;
+import net.hydromatic.morel.foreign.SparkConnections;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.DataType;
@@ -4963,6 +4965,123 @@ public abstract class Codes {
         throw notDefined(BuiltIn.RELATIONAL_SUM, argType, pos);
       };
 
+  /** @see BuiltIn#SPARK_CATALOG */
+  private static final Applicable1 SPARK_CATALOG =
+      new BaseApplicable1<Object, SparkBackend.Connection>(
+          BuiltIn.SPARK_CATALOG) {
+        @Override
+        public Object apply(SparkBackend.Connection connection) {
+          return SparkConnections.catalog(connection);
+        }
+      };
+
+  /** @see BuiltIn#SPARK_CLOSE */
+  private static final Applicable1 SPARK_CLOSE =
+      new BaseApplicable1<Unit, SparkBackend.Connection>(BuiltIn.SPARK_CLOSE) {
+        @Override
+        public Unit apply(SparkBackend.Connection connection) {
+          SparkConnections.close(connection);
+          return Unit.INSTANCE;
+        }
+      };
+
+  /** @see BuiltIn#SPARK_CONNECT */
+  private static final Applicable SPARK_CONNECT = new SparkConnect(Pos.ZERO);
+
+  /** Implements {@link #SPARK_CONNECT}. */
+  private static class SparkConnect extends BasePositionedApplicable {
+    SparkConnect(Pos pos) {
+      super(BuiltIn.SPARK_CONNECT, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new SparkConnect(pos);
+    }
+
+    @Override
+    public Object apply(Stack stack, Object arg) {
+      try {
+        return SparkConnections.open(stack.session, (String) arg);
+      } catch (SparkBackend.SparkException e) {
+        throw sparkException(e, pos);
+      }
+    }
+  }
+
+  /** @see BuiltIn#SPARK_CONNECT_DEFAULT */
+  private static final Applicable SPARK_CONNECT_DEFAULT =
+      new SparkConnectDefault(Pos.ZERO);
+
+  /** Implements {@link #SPARK_CONNECT_DEFAULT}. */
+  private static class SparkConnectDefault extends BasePositionedApplicable {
+    SparkConnectDefault(Pos pos) {
+      super(BuiltIn.SPARK_CONNECT_DEFAULT, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new SparkConnectDefault(pos);
+    }
+
+    @Override
+    public Object apply(Stack stack, Object arg) {
+      try {
+        return SparkConnections.openDefault(stack.session);
+      } catch (SparkBackend.SparkException e) {
+        throw sparkException(e, pos);
+      }
+    }
+  }
+
+  /** @see BuiltIn#SPARK_USING */
+  private static final Applicable SPARK_USING = new SparkUsing(Pos.ZERO);
+
+  /**
+   * Implements {@link #SPARK_USING}. Applied to a function, returns a function
+   * that opens the default connection for each call.
+   */
+  private static class SparkUsing extends BasePositionedApplicable {
+    SparkUsing(Pos pos) {
+      super(BuiltIn.SPARK_USING, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new SparkUsing(pos);
+    }
+
+    @Override
+    public Object apply(Stack stack, Object arg) {
+      final Session session = stack.session;
+      @SuppressWarnings("unchecked")
+      final Applicable1<Object, Object> f = (Applicable1<Object, Object>) arg;
+      return new BaseApplicable1<Object, Object>(BuiltIn.SPARK_USING) {
+        @Override
+        public Object apply(Object x) {
+          final SparkConnections.ConnectionRecord record;
+          try {
+            record = SparkConnections.openDefault(session);
+          } catch (SparkBackend.SparkException e) {
+            throw sparkException(e, pos);
+          }
+          try {
+            return f.apply(ImmutableList.of(record.connection, x));
+          } finally {
+            SparkConnections.close(record.connection);
+          }
+        }
+      };
+    }
+  }
+
+  /** Converts an error from Spark into the Morel exception {@code Spark}. */
+  static MorelRuntimeException sparkException(
+      SparkBackend.SparkException e, Pos pos) {
+    return new MorelRuntimeException(
+        BuiltInExn.SPARK, SparkConnections.payload(e), pos);
+  }
+
   /** @see BuiltIn#STRING_COLLATE */
   private static final Applicable2 STRING_COLLATE =
       new BaseApplicable2<List, Applicable1, List>(BuiltIn.STRING_COLLATE) {
@@ -7692,6 +7811,11 @@ public abstract class Codes {
     b.add(BuiltIn.RELATIONAL_NON_EMPTY, RELATIONAL_NON_EMPTY);
     b.add(BuiltIn.RELATIONAL_ONLY, RELATIONAL_ONLY);
     b.add(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM);
+    b.add(BuiltIn.SPARK_CATALOG, SPARK_CATALOG);
+    b.add(BuiltIn.SPARK_CLOSE, SPARK_CLOSE);
+    b.add(BuiltIn.SPARK_CONNECT, SPARK_CONNECT);
+    b.add(BuiltIn.SPARK_CONNECT_DEFAULT, SPARK_CONNECT_DEFAULT);
+    b.add(BuiltIn.SPARK_USING, SPARK_USING);
     b.add(BuiltIn.STRING_COLLATE, STRING_COLLATE);
     b.add(BuiltIn.STRING_COMPARE, STRING_COMPARE);
     b.add(BuiltIn.STRING_CONCAT, STRING_CONCAT);
@@ -8195,6 +8319,7 @@ public abstract class Codes {
     OVERFLOW("General", BuiltIn.Constructor.EXN_OVERFLOW, "overflow"),
     SIZE("General", BuiltIn.Constructor.EXN_SIZE, "size"),
     SPAN("General", BuiltIn.Constructor.EXN_SPAN, null),
+    SPARK("Spark", BuiltIn.Constructor.EXN_SPARK, null),
     SUBSCRIPT(
         "General",
         BuiltIn.Constructor.EXN_SUBSCRIPT,
