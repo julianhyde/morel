@@ -2796,9 +2796,11 @@ public class Resolver {
      */
     private void through(Ast.Through through) {
       finish();
-      final Core.Exp inner =
-          RelLowerer.lower(
-              typeMap.typeSystem, nameGenerator, b.build(), scanNames);
+      // The tree, not the step list it lowers to: a tree is an expression, so
+      // it can be the function's argument as it stands, and the lowering is a
+      // pass of its own. Lowering here would leave a step list for grounding
+      // to meet, and grounding a step list is the other engine.
+      final Core.Exp inner = b.build();
       scanNames.clear();
       // The function is evaluated once, on the whole collection, so it reads
       // the enclosing scope and not this query's row.
