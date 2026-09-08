@@ -5728,7 +5728,9 @@ public abstract class Codes {
                     session.environment,
                     session,
                     phase);
-            return coreAtPhase.unparseRenumbered();
+            // With types: spec.md §6 says planEx prints the tree with the
+            // collection type of every line.
+            return coreAtPhase.unparseRenumbered(true);
           } catch (Exception e) {
             return "Error re-planning: " + e.getMessage();
           }
