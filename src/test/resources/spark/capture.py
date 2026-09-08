@@ -27,7 +27,7 @@
 # column-validation round trips are stubbed, and plans are built
 # offline. With --execute, the queries also run against a Spark
 # Connect server at localhost:15002 (started by start-spark.sh, which
-# seeds the emp and dept tables) and print their rows.
+# seeds the scott database) and print their rows.
 import re, sys
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -74,8 +74,8 @@ def show(name, df, execute=None):
 # resolves the outer reference of a correlated subquery (query 5) when
 # both sides have a column of the same name; qualifying by plan id
 # fails with CANNOT_RESOLVE_DATAFRAME_COLUMN.
-e = spark.table("emp").alias("e")
-d = spark.table("dept").alias("d")
+e = spark.table("scott.emps").alias("e")
+d = spark.table("scott.depts").alias("d")
 
 # Query 1: filter and project over an inline relation.
 local_schema = StructType([
