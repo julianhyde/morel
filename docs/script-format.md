@@ -111,9 +111,12 @@ carry a tag, `{a|...|a}`. A tag consists of lower-case letters `a` to
 `z`, `aa`, ...) such that `|tag}` does not occur in the content.
 
 Only a top-level string value is written this way. A string inside a
-list, record or other value keeps the regular escaped form, as does a
-string with whitespace before a newline (which would be invisible,
-and easily lost). If the printer would have wrapped the value onto
+list, record or other value keeps the regular escaped form. So does a
+string with a space before a newline (which would be invisible, and
+easily lost), or with any character that is not printable ASCII: a
+tab, a carriage return, a control character or a non-ASCII character
+would be invisible or fragile in the script, and a tab would fail the
+linter. If the printer would have wrapped the value onto
 the line after `val name =`, the raw literal starts on that line
 too, indented by two spaces.
 

@@ -119,12 +119,22 @@ val s = "one\ntwo";
 ["a\nb"];
 > val it = ["a\nb"] : string list
 
-(* A space or tab before a newline keeps the regular literal, because
- * trailing whitespace would be invisible in a raw literal. *)
+(* A space before a newline keeps the regular literal, because trailing
+ * whitespace would be invisible in a raw literal. So does a tab, carriage
+ * return, control character or non-ASCII character anywhere, because they
+ * would be invisible or fragile in the script. *)
 "a \nb";
 > val it = "a \nb" : string
 "a\t\nb";
 > val it = "a\t\nb" : string
+"a\tb\nc";
+> val it = "a\tb\nc" : string
+"a\r\nb";
+> val it = "a\r\nb" : string
+"a\^Lb\nc";
+> val it = "a\^Lb\nc" : string
+"caf\233\nb";
+> val it = "caf\233\nb" : string
 
 (*) A space at the very end is visible, because the fence follows it
 "a\nb ";

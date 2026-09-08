@@ -257,6 +257,15 @@ public class TypeTest {
         is(true));
     assertThat(m.codeEqual(stringType, "\"1\"", "1"), is(false));
     assertThat(m.codeEqual(stringType, "{|1|}", "1"), is(false));
+    // An unterminated fence, even in the prefix, gives "not equivalent"
+    // rather than an exception
+    assertThat(m.codeEqual(stringType, "{a|x", "\"x\""), is(false));
+    assertThat(
+        m.equivalent(
+            stringType,
+            "{a| val it = \"x\" : string",
+            "{a| val it = \"x\" : string"),
+        is(false));
     // A tag consists of lower-case letters and underscores; anything else
     // is not a fence.
     assertThat(m.codeEqual(stringType, "\"x\"", "{a_b|x|a_b}"), is(true));
@@ -341,14 +350,28 @@ public class TypeTest {
     assertThat(
         OutputMatcher.toRawStrings("val it = \"a\\nb\" : string variant"),
         is("val it = \"a\\nb\" : string variant"));
-    // A newline makes a raw literal; other escapes become verbatim
+    // A newline makes a raw literal; quotes and backslashes become verbatim
     assertThat(
         OutputMatcher.toRawStrings("val it = \"a\\nb\" : string"),
         is(lines("val it = {|a", "b|} : string")));
     assertThat(
         OutputMatcher.toRawStrings(
-            "val s = \"say \\\"hi\\\"\\n\\tbye\" : string"),
-        is(lines("val s = {|say \"hi\"", "\tbye|} : string")));
+            "val s = \"say \\\"hi\\\"\\n\\\\bye\" : string"),
+        is(lines("val s = {|say \"hi\"", "\\bye|} : string")));
+    // Unchanged: a tab, carriage return, control character or non-ASCII
+    // character anywhere, which would be invisible or fragile in the script
+    assertThat(
+        OutputMatcher.toRawStrings("val s = \"a\\n\\tb\" : string"),
+        is("val s = \"a\\n\\tb\" : string"));
+    assertThat(
+        OutputMatcher.toRawStrings("val s = \"a\\r\\nb\" : string"),
+        is("val s = \"a\\r\\nb\" : string"));
+    assertThat(
+        OutputMatcher.toRawStrings("val s = \"a\\^Lb\\nc\" : string"),
+        is("val s = \"a\\^Lb\\nc\" : string"));
+    assertThat(
+        OutputMatcher.toRawStrings("val s = \"a\\252\\nb\" : string"),
+        is("val s = \"a\\252\\nb\" : string"));
     // A trailing newline leaves the closing fence alone on the last line
     assertThat(
         OutputMatcher.toRawStrings("val it = \"a\\n\" : string"),
