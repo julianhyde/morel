@@ -67,7 +67,7 @@ at every level, so `array<int>` with nullable elements is
 `int option list`, and a nullable struct with a nullable field `a` is
 `{a: int option, ...} option`.
 
-**Open: catalog columns.** Spark's built-in catalog keeps no NOT NULL
+**Catalog columns.** Spark's built-in catalog keeps no NOT NULL
 constraint for tables stored as files (the M0 finding), so every column
 of every ordinary table is nullable, and under the rule above every
 column of `emp` is an `option`. The seed queries then do not typecheck:
@@ -84,10 +84,10 @@ column of `emp` is an `option`. The seed queries then do not typecheck:
   as in the seed script; a table with nulls fails at run time, on the
   column, with a message naming it.
 
-Recommendation: **B** for phase 1, recorded as a mapping decision
-rather than a language one, and revisited when Morel has better
-`option` ergonomics. Whichever is chosen, the pure mapping function
-(1.5) takes the flag as an argument, so both are testable.
+**Decided: B**, as a mapping decision rather than a language one, to
+be revisited when Morel has better `option` ergonomics. The pure
+mapping function (1.5) still takes the flag as an argument, so the
+strict mapping stays testable.
 
 ### 1.3 Dates and times
 
@@ -125,9 +125,9 @@ to a Morel type. Spark states a schema two ways, and both are accepted:
   LocalRelation carries and that `DataFrame.schema.json()` prints.
 
 The pure half of M2 is a `.smli` test that exercises the function
-without a cluster, through a mock connection (2.5): each seed table
-schema, the `zoo` schema, nullability at each level, and every rejected
-type with its message. The live half browses `zoo` on the container,
+without a cluster, through an offline connection (2.5): each seed
+table schema, the `zoo` schema, nullability at each level, and every
+rejected type with its message. The live half browses `zoo` on the container,
 prints its type and its rows.
 
 ### 1.6 Morel to Spark
@@ -153,9 +153,11 @@ signature SPARK = sig
   (* A connection to a Spark Connect server. *)
   type connection
 
-  (* A Spark plan for a value of type 'a. The type parameter is
-     phantom: it records what the plan computes, and nothing else. *)
-  type 'a plan
+  (* A Spark plan that computes a value of type 'b from an argument of
+     type 'a. The type parameters are phantom: they record what the
+     plan takes and computes, and nothing else. A plan with no
+     parameters has 'a = unit. *)
+  type ('a, 'b) plan
 
   (* Raised by any Spark operation that fails. errorClass is Spark's
      error class, such as DIVIDE_BY_ZERO or TABLE_OR_VIEW_NOT_FOUND;
@@ -170,63 +172,80 @@ signature SPARK = sig
      environment variable. *)
   val connectDefault : unit -> connection
 
-  (* A connection to no server, whose catalog holds the named tables
-     with the given DDL schemas, for testing translation. Executing a
-     plan raises Spark. *)
-  val mock : (string * string) list -> connection
-
   (* Closes a connection. Any later use of it, including forcing a
      value that was read from it lazily, raises Spark. *)
   val close : connection -> unit
 
-  (* Runs f with a new connection to the given URI, and closes it
+  (* Applies f to the connection, and closes the connection
      afterwards, whether or not f raised. *)
-  val using : string -> (connection -> 'a) -> 'a
+  val using : connection * (connection -> 'a) -> 'a
 
   (* The root of the connection's catalog: a progressively typed
      record whose fields are catalogs, then databases, then tables. A
      table is a bag of records. *)
   val catalog : connection -> {...}
 
-  (* Converts an expression into a plan that computes the same value
+  (* Converts a function into a plan that computes the same function
      on the connection. This is an intrinsic: it operates on the parse
      tree of its argument, as Plan.core does, and does not evaluate
      it. *)
-  val prepare : connection * 'a -> 'a plan
+  val prepare : connection * ('a -> 'b) -> ('a, 'b) plan
 
-  (* Executes a plan and returns its value. *)
-  val execute : 'a plan -> 'a
+  (* Executes a plan on an argument and returns the result. *)
+  val execute : ('a, 'b) plan * 'a -> 'b
 
   (* The plan as text, in the rendering that seed-plans.txt fixes:
      protobuf text format with plan ids renumbered in order of first
      appearance, and a LocalRelation's payload replaced by its row
-     count. *)
-  val toString : 'a plan -> string
+     count. The argument's value is not part of the text; where the
+     plan uses it, the text shows a parameter marker. *)
+  val toString : ('a, 'b) plan -> string
 
-  (* Prepares and executes. *)
-  val remote : connection * 'a -> 'a
+  (* Prepares a function, and returns a function of the same type
+     that executes the plan on the connection. *)
+  val remote : connection * ('a -> 'b) -> 'a -> 'b
 end
 ```
 
-`connection` and `'a plan` are opaque. `catalog`, `close`,
-`prepare` and `remote` are methods on `connection`, so a script reads
+`connection` and `('a, 'b) plan` are opaque. `catalog`, `close`,
+`using`, `prepare` and `remote` are methods on `connection`, and
+`execute` and `toString` on `plan`, so a script reads
 
 ```sml
 val spark = Spark.connectDefault ();
-val q = spark.prepare (from e in spark.catalog.emp where e.sal > 1000.0);
+val q = spark.prepare (fn () =>
+  from e in spark.catalog.emp where e.sal > 1000.0);
 q.toString;
-q.execute;
+q.execute ();
+val byDept = spark.prepare (fn d =>
+  from e in spark.catalog.emp where e.deptno = d);
+byDept.execute 10;
 spark.close ();
 ```
 
+A plan is a function, and a query with no parameters is a function of
+`unit`. The argument is the only thing that varies between executions
+of a plan; everything else the function refers to is fixed when the
+plan is prepared (2.2).
+
 ### 2.2 What `prepare` accepts
 
-`prepare` captures its second argument's parse tree, resolves and
-types it in the current environment, and translates its core to a
-Spark plan. Free variables of the expression are bound in the
+`prepare` captures its second argument's parse tree, which in phase 1
+must be a function expression, `fn pat => body`. It resolves and types
+the function in the current environment, and translates the body's
+core to a Spark plan in which the parameter is a placeholder. Free
+variables of the body other than the parameter are bound in the
 environment at that point, and their values cross the boundary
-according to 1.6; a table read from the catalog becomes a table scan,
-and any other collection becomes a LocalRelation.
+according to 1.6 when the plan is prepared: a table read from the
+catalog becomes a table scan, and any other collection becomes a
+LocalRelation. At `execute`, the argument crosses the same way, as a
+literal or a LocalRelation, and the plan runs.
+
+A function bound to a name (`prepare (spark, f)`) is not accepted in
+phase 1, because the compiler has the name's value, a closure, and not
+its parse tree; this is the same limit as `Plan.core`
+([#470](https://github.com/hydromatic/morel/issues/470)), and lifts
+with it.
 
 Phase 1 accepts an expression whose core is relational: a `from` whose
 steps and scalar expressions the translator handles (M4 says which),
@@ -238,11 +257,9 @@ push-down in phase 1: a plan is all Spark or it is an error.
 A non-collection result (an `int`, a record) is computed as a
 single-row, single-column relation, and `execute` unwraps it.
 
-`prepare` of a function value returns a function of the same type;
-applying it prepares and executes the body with the arguments spliced
-as literals or LocalRelations. This is how a parameterized query is
-run repeatedly. It is specified here so that the API does not
-foreclose it, and is delivered after M9.
+`remote` is `prepare` followed by a function that calls `execute`;
+it is the "equivalent value" of the issue: a function of the same
+type that runs on Spark.
 
 ### 2.3 Lifecycle
 
@@ -262,14 +279,19 @@ remotely as locally: `DIVIDE_BY_ZERO` to `Div`, `ARITHMETIC_OVERFLOW`
 and `CAST_OVERFLOW` to `Overflow`. After any error the connection is
 usable.
 
-### 2.5 The mock connection
+### 2.5 The offline connection
 
-`Spark.mock` exists so that translation is testable without a
-cluster. Its catalog has one database, `default`, with the given
-tables; the type of each is the DDL schema mapped by 1.1. `prepare`
-works normally, and `toString` gives the plan text; `execute` raises
-`Spark {errorClass = "MOCK", ...}`. The seed queries of `spark.smli`
-are tested this way in M5, and the type mapping in M2.
+Translation must be testable without a cluster, but the signature
+does not need a function for it: `connect` accepts a URI, and the
+adapter recognizes the scheme `mock:` as a connection to no server.
+Its catalog has one database, `default`, whose tables are declared by
+DDL in the test resources (`src/test/resources/spark/tables`, one
+file per table, the seed tables among them); the type of each is the
+DDL schema mapped by 1.1. `prepare` works normally and `toString`
+gives the plan text; `execute` raises `Spark {errorClass = "MOCK",
+...}`. The seed queries of `spark.smli` are tested this way in M5,
+and the type mapping in M2. Scripts that need a live server connect
+to `SPARK_REMOTE` instead, and skip when it is unset.
 
 ### 2.6 The `spark` value
 
