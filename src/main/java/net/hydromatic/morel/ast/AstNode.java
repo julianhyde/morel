@@ -23,6 +23,7 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -100,6 +101,7 @@ public abstract class AstNode {
    */
   private static class RenumberingAstWriter extends AstWriter {
     final Map<String, List<Integer>> nameIds = new HashMap<>();
+    final Map<String, String> names = new LinkedHashMap<>();
 
     private int register(String name, int i) {
       final List<Integer> list =
@@ -112,14 +114,45 @@ public abstract class AstNode {
       return j;
     }
 
+    /**
+     * Renumbers a generated binder by first occurrence, so that a plan's text
+     * does not depend on what was compiled before it.
+     *
+     * <p>Allocation stays free -- a binder takes the next number from whatever
+     * counter its maker uses, and uniqueness is all that is asked of it -- and
+     * determinism is a property of the text, so it belongs to the printer. This
+     * is what {@link Core.Rel#describe} does for a tree's plan.
+     */
+    private String rename(String name) {
+      if (!Core.NamedPat.isGenerated(name)) {
+        return name;
+      }
+      final String existing = names.get(name);
+      if (existing != null) {
+        return existing;
+      }
+      // The prefix distinguishes what one maker generated from another's;
+      // each is numbered in its own sequence.
+      final String prefix = name.substring(0, name.indexOf('$') + 1);
+      int n = 0;
+      for (String s : names.values()) {
+        if (s.startsWith(prefix)) {
+          ++n;
+        }
+      }
+      final String replacement = prefix + n;
+      names.put(name, replacement);
+      return replacement;
+    }
+
     @Override
     public AstWriter id(String name, int i) {
-      return super.id(name, register(name, i));
+      return super.id(rename(name), register(name, i));
     }
 
     @Override
     public AstWriter idQuoted(String name, int i) {
-      return super.idQuoted(name, register(name, i));
+      return super.idQuoted(rename(name), register(name, i));
     }
   }
 }
