@@ -150,27 +150,34 @@ Function types, and types containing them, are rejected.
 
 ```sml
 signature SPARK = sig
-  (* A connection to a Spark Connect server. *)
-  type connection
+  (* A connection to a Spark Connect server, or the offline connection. *)
+  eqtype connection
 
   (* A Spark plan that computes a value of type 'b from an argument of
      type 'a. The type parameters are phantom: they record what the
      plan takes and computes, and nothing else. A plan with no
-     parameters has 'a = unit. *)
+     parameters has 'a = unit. (Phase 1, from M5.) *)
   type ('a, 'b) plan
 
   (* Raised by any Spark operation that fails. errorClass is Spark's
-     error class, such as DIVIDE_BY_ZERO or TABLE_OR_VIEW_NOT_FOUND;
-     message is Spark's message. *)
+     error condition, such as DIVIDE_BY_ZERO or TABLE_OR_VIEW_NOT_FOUND,
+     or one of the adapter's own; message is the message. *)
   exception Spark of {errorClass: string, message: string}
 
   (* Opens a connection to the server at the given URI, such as
-     "sc://localhost:15002". *)
-  val connect : string -> connection
+     "sc://localhost:15002", or the offline connection if the URI is
+     "mock:". Returns a record: the connection, and the root of its
+     catalog, a progressively typed record whose fields are databases,
+     whose fields in turn are tables, each a bag of records. *)
+  val connect : string -> {catalog: {...}, connection: connection}
 
   (* Opens a connection to the server named by the SPARK_REMOTE
-     environment variable. *)
-  val connectDefault : unit -> connection
+     environment variable, as connect does. *)
+  val connectDefault : unit -> {catalog: {...}, connection: connection}
+
+  (* The root of a connection's catalog, as the catalog field of
+     connect returns it. Bind it to a name with val to browse it. *)
+  val catalog : connection -> {...}
 
   (* Closes a connection. Any later use of it, including forcing a
      value that was read from it lazily, raises Spark. *)
@@ -183,25 +190,16 @@ signature SPARK = sig
      returns 5. *)
   val using : (connection * 'a -> 'b) -> 'a -> 'b
 
-  (* The root of the connection's catalog: a progressively typed
-     record whose fields are catalogs, then databases, then tables. A
-     table is a bag of records. *)
-  val catalog : connection -> {...}
-
   (* Converts a function into a plan that computes the same function
      on the connection. This is an intrinsic: it operates on the parse
      tree of its argument, as Plan.core does, and does not evaluate
-     it. *)
+     it. (From M5.) *)
   val prepare : connection * ('a -> 'b) -> ('a, 'b) plan
 
   (* Executes a plan on an argument and returns the result. *)
   val execute : ('a, 'b) plan * 'a -> 'b
 
-  (* The plan as text, in the rendering that seed-plans.txt fixes:
-     protobuf text format with plan ids renumbered in order of first
-     appearance, and a LocalRelation's payload replaced by its row
-     count. The argument's value is not part of the text; where the
-     plan uses it, the text shows a parameter marker. *)
+  (* The plan as text, in the rendering that seed-plans.txt fixes. *)
   val toString : ('a, 'b) plan -> string
 
   (* Prepares a function, and returns a function of the same type
@@ -210,20 +208,24 @@ signature SPARK = sig
 end
 ```
 
-`connection` and `('a, 'b) plan` are opaque. `catalog`, `close`,
-`prepare` and `remote` are methods on `connection`, and `execute` and
-`toString` on `plan`, so a script reads
+`connection` and `('a, 'b) plan` are opaque. `connect` returns a
+record rather than a bare connection because of how progressive
+typing works: the resolver discovers a catalog's fields by walking
+from a *named* value through record selectors, and it types a name
+from its value. So `spark.catalog.scott.emps` is ordinary record
+syntax when `spark` is bound to the record, while a function result
+such as `Spark.catalog c` cannot be browsed inline; bind it to a name
+first (`val catalog = c.catalog ()`) and browse from there. A script
+reads
 
 ```sml
-val spark = Spark.connectDefault ();
-val q = spark.prepare (fn () =>
-  from e in spark.catalog.emp where e.sal > 1000.0);
+val spark = Spark.connect "mock:";
+from e in spark.catalog.scott.emps where e.sal > 2500.0 yield e.ename;
+val q = spark.connection.prepare (fn () =>
+  from e in spark.catalog.scott.emps where e.sal > 1000.0);
 q.toString;
 q.execute ();
-val byDept = spark.prepare (fn d =>
-  from e in spark.catalog.emp where e.deptno = d);
-byDept.execute 10;
-spark.close ();
+spark.connection.close ();
 ```
 
 A plan is a function, and a query with no parameters is a function of

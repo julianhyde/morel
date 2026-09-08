@@ -217,14 +217,18 @@ raises when a null arrives; nested array elements and struct fields keep
 
 **M3.** Drafted in spec.md §2: the signature, what `prepare` accepts,
 lifecycle, errors, and an offline `mock:` URI for testing translation without
-a cluster (no `mock` function in the signature). Decided design: a plan is a
-function, `type ('a, 'b) plan`, prepared from a function expression (`prepare
-: connection * ('a -> 'b) -> ('a, 'b) plan`) and executed on an argument
-(`execute : ('a, 'b) plan * 'a -> 'b`); a query with no parameters is a
-function of `unit`. `prepare` is not an ordinary function: Morel evaluates
-arguments eagerly, so a function would receive the query's result, not the
-query. It is an intrinsic that operates on its argument's parse tree, in the
-same way as `Plan.program`
+a cluster (no `mock` function in the signature). Decided design (spec.md
+§2.1): `connect` returns `{catalog: {...}, connection: connection}`, a
+record, because the resolver types a name from its value and discovers a
+catalog's fields only by walking from a name through record selectors; so
+`spark.catalog.scott.emps` works inline, and `Spark.catalog c` must be bound
+to a name before browsing. A plan is a function, `type ('a, 'b) plan`,
+prepared from a function expression (`prepare : connection * ('a -> 'b) ->
+('a, 'b) plan`) and executed on an argument (`execute : ('a, 'b) plan * 'a ->
+'b`); a query with no parameters is a function of `unit`. `prepare` is not an
+ordinary function: Morel evaluates arguments eagerly, so a function would
+receive the query's result, not the query. It is an intrinsic that operates
+on its argument's parse tree, in the same way as `Plan.program`
 ([#359](https://github.com/hydromatic/morel/issues/359)); the type signature
 is as above, but the compiler recognizes the call.
 [#470](https://github.com/hydromatic/morel/issues/470) proposes `Plan.core :
@@ -278,21 +282,23 @@ and `ArrowDecoderTest` run everywhere the adapter compiles;
 `SPARK_REMOTE` are set, and reads the seed tables, including every column of
 `zoo` and the error cases.
 
-**M7.** Backend half done. `SparkBackend.Connection` gained catalog methods
-(databases, tables, a table's Morel type, a table's rows);
-`foreign.SparkCatalog` is the catalog as a progressively typed record, built
-like `Files`: databases are fetched when the root's type is first asked for,
-a database's tables when it is first discovered, a table's type when it is
-first discovered, and its rows when first forced, each bumping the expand
-count so the resolver deduces again. `foreign.MockSparkConnection` is the
-offline connection (`mock:`), whose catalog is the session's foreign data
-sets (now kept on `Session`), and `SparkBackend.open` chooses between it and
-the adapter by URI. The adapter lists databases and tables with `SHOW`
-statements and gets a table's type from the AnalyzePlan schema RPC. Tested
-offline over the scott data set and live against the container, where
-`scott.emps` has the same type and rows on both. What remains is the
-Morel-visible half, the `Spark` structure, which hinges on how a script
-reaches the catalog: see the note under M3.
+**M7.** Done. `SparkBackend.Connection` gained catalog methods (databases,
+tables, a table's Morel type, a table's rows); `foreign.SparkCatalog` is the
+catalog as a progressively typed record, built like `Files`: databases are
+fetched when the root's type is first asked for, a database's tables when it
+is first discovered, a table's type when it is first discovered, and its rows
+when first forced, each bumping the expand count so the resolver deduces
+again. `foreign.MockSparkConnection` is the offline connection (`mock:`),
+whose catalog is the session's foreign data sets (now kept on `Session`), and
+`SparkBackend.open` chooses between it and the adapter by URI. The adapter
+lists databases and tables with `SHOW` statements and gets a table's type
+from the AnalyzePlan schema RPC. Tested offline over the scott data set and
+live against the container, where `scott.emps` has the same type and rows on
+both. The `Spark` structure (`lib/spark.sig`, `docs/lib/spark.md`) has
+`connection`, the `Spark` exception, `connect`, `connectDefault`, `catalog`,
+`close` and `using`; `built-in/spark.smli` browses and queries the offline
+catalog. Printing a catalog level shows a table as `<relation>` rather than
+fetching its rows; forcing the table fetches them once.
 
 **M10.** Three categories: runtime errors (e.g. divide by zero) must raise
 the same Morel exception as local evaluation, testable in the triple

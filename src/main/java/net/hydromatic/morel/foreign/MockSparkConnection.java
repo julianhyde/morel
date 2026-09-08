@@ -132,6 +132,11 @@ public class MockSparkConnection implements SparkBackend.Connection {
   public void close() {
     closed = true;
   }
+
+  @Override
+  public String toString() {
+    return "<connection " + URI + ">";
+  }
 }
 
 // End MockSparkConnection.java
