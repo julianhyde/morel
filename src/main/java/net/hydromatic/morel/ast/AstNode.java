@@ -155,13 +155,25 @@ public abstract class AstNode {
       return super.id(rename(name), register(name, i));
     }
 
-    // A record label may be the name of a generated binder -- a tree's
-    // projection names its element's components after them -- so a label is
-    // renumbered like the id that reads it. Otherwise the two disagree, and a
-    // plan reads as if it bound one name and used another.
     @Override
     public AstWriter idQuoted(String name) {
       return super.idQuoted(rename(name));
+    }
+
+    /**
+     * Renumbers a record label, which a record writes as plain text rather than
+     * as an identifier.
+     *
+     * <p>A tree's projection names its element's components after the binders
+     * they came from, so a label is often a generated binder's name, and it
+     * must be renumbered like the id that reads it. Otherwise the two disagree
+     * and the plan reads as if the query bound one name and used another. Only
+     * a string that is entirely a generated binder is renamed, and no
+     * punctuation or keyword is.
+     */
+    @Override
+    public AstWriter append(String s) {
+      return super.append(rename(s));
     }
 
     @Override
