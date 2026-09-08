@@ -102,21 +102,18 @@ What is left, in the order it is worth doing:
    for a pattern where a tree has only `$0`. `fnBody`, `maybeExists`,
    the `let` that binds the row and `findTightening`'s predicate are
    four instances, and each was small.
-2. **Goal 6, freeze** -- but not before the plan text is stable. A tree
-   prints its bracketed expressions with `StringBuilder.append(exp)`,
-   which is `toString()` and a plain writer, so an identifier keeps the
-   ordinal its generator gave it: `let val d_14 = $0 in ...`. Change
-   anything upstream that draws a name and it becomes `d_16`. Golden
-   files cannot be a cross-implementation contract while they say that.
+2. **Goal 6, freeze.** The text is stable now: `describe` builds it with
+   one renumbering writer, so `#depts scott_1` is `#depts scott` and
+   `let val d_16` is `let val d`, whatever was compiled before. Checked
+   by printing the same query with and without two declarations ahead of
+   it.
 
-   `Core.Rel.describe` renumbers `x$N` afterwards with a regex, and
-   `AstNode.unparseRenumbered` renumbers ordinals properly, through
-   `AstWriter`, but the two do not meet: `describe` never uses a writer.
-   The fix is for `describe` to build its text with one
-   `RenumberingAstWriter` over the whole tree -- which would also
-   subsume the regex pass -- and it means changing `describeArgs` and
-   its helpers from `StringBuilder` to that writer, in about a dozen
-   places.
+   What the freeze still wants deciding: `Sys.plan` prints the
+   executable code and says `w$0` where the query said `e`, because a
+   one-binder query has no projection to read a name off (see below).
+   Freezing that text is fine -- it is a different contract from the
+   tree's -- but it is worth being deliberate about which files are the
+   cross-implementation contract and which are Morel's own.
 
 **One thing the flip cost, which goal 4 mostly retires.** A leaf is a
 bare expression (spec.md §3.1), so a tree holds no names. A query with
