@@ -4265,7 +4265,6 @@ class Generators {
   static class Cache {
     final TypeSystem typeSystem;
     final Environment env;
-
     /**
      * Patterns that are still looking for a generator.
      *
@@ -4277,8 +4276,17 @@ class Generators {
      */
     final Set<Core.NamedPat> ungrounded;
 
+    /**
+     * Generators for each name, in the order the engine was given them.
+     *
+     * <p>Linked, not hashed: `improveGenerators` walks this and acts on what it
+     * finds, each step changing what the next one sees, so a hash order makes
+     * the engine's answer depend on the names' hash codes -- and a generated
+     * name is whatever number its counter had reached. Grounding must depend on
+     * the query and nothing else.
+     */
     final Multimap<Core.NamedPat, Generator> generators =
-        MultimapBuilder.hashKeys().arrayListValues().build();
+        MultimapBuilder.linkedHashKeys().arrayListValues().build();
 
     /**
      * Maps (variable, fieldIndex) to the fresh pattern created for {@code #i
