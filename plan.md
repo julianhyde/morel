@@ -236,10 +236,24 @@ Six goals, in order, each with the thing that says it is done.
    they were for: "a leaf whose element is a tuple is named by a tuple
    of variables ... it is what lets the engine ground the components
    separately, from a different constraint each". Under the flip there
-   are no scans to take them from. Either the destructure retry has to
-   cover it, or the names have to reach grounding another way. That is
-   the next question, and it is the same one §11 answered for
-   messages, asked again for grounding.
+   are no scans to take them from.
+
+   But that is a hypothesis, not a finding, and the obvious shapes do
+   not support it: with the flip applied, `from i, j where (i, j) elem
+   [(1,2),(3,4)]`, `from (b, i) where i elem [3, 5] andalso b` and
+   `from i, j where i elem [1,2] andalso j elem [i+1 .. i+2]` all
+   ground and answer correctly, so the destructure retry covers the
+   tuple case on its own. What fails is `from n where isNum n andalso
+   isEven n` -- a predicate written as a function -- and that is a
+   different question, about what the engine can match after inlining.
+
+   **Chase it with working instrumentation.** The last attempt could
+   not be trusted: a trace in `SuchThatShuttle.visitRel` never fired
+   although the error can only come from `RelExpander`, and a trace in
+   `Compiles` did not fire for `val x = 1` either, so the running code
+   was not the compiled code. Re-apply the flip from a clean tree,
+   prove a trace fires on a trivial statement, and only then read
+   anything into where it does not.
 
    **What the remaining 950 are, run down to one cause.**
    `from i in [1, 2, 3] compute sum over i` dies in `Inliner` with
