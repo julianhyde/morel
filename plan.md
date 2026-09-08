@@ -39,8 +39,8 @@ Six goals, in order, each with the thing that says it is done.
 
 ### Start here
 
-**The flip has landed. Goals 1, 2, 4 and 5 are done, and goal 3 is half
-done.** The resolver returns the tree, the rewrite passes carry it,
+**The flip has landed. Goals 1, 2, 4 and 5 are done, and goal 3 all but
+its last piece.** The resolver returns the tree, the rewrite passes carry it,
 grounding works on it, lowering is a pass of its own in `Compiles`, and
 `Sys.planEx "0"` prints a tree. No query answers differently: the
 expectations moved for plan text and for eight §11 messages, and for
@@ -48,60 +48,65 @@ nothing else. `fullMake` is the gate and it is green.
 
 What is left, in the order it is worth doing:
 
-1. **Goal 3's other half.** `SuchThatShuttle.visitRel` grounds the tree
-   and falls back to lowering plus `Expander.expandFrom` where the tree
-   engine declines. Each query that stops needing the fallback is a
-   round trip removed and, eventually, `RelShadow`'s translation shadow
-   with nothing left to check -- the two are the same work, because the
-   shadow exists to guard the translator, and the translator is only
-   still needed for the fallback.
+1. ~~**Goal 3's other half.**~~ **The fallback is gone.**
+   `SuchThatShuttle.visitRel` grounds the tree and nothing else: every
+   query the step list grounded, the tree engine grounds, and the ten it
+   cannot report the same message at the same position. No golden file
+   moved when the fallback came out, which is the evidence that the two
+   engines agree.
 
-   **The residue is 12 of 240**, measured over the whole script suite by
-   counting the fallback: `optimize.smli` 6 of 33, `such-that.smli` 6 of
-   191, every other file 0. It was 37 at the start of the session. And
-   **ten of the twelve are queries that are meant to fail** -- `from x
-   where abs x > 5`, `from x, y where x < y andalso y < x + 10`, `from
-   i, j` over type variables, and so on. Both engines decline, and the
-   fallback runs only so that `Expander` can produce the message.
+   Naming the pattern was the work, not the grounding. `RelExpander` has
+   `leafPats`, so `Expander.notGrounded` can name what `bounded` and
+   `project` fail on, and `ungrounded` finds the leaf where the answer
+   comes back unbounded rather than throwing. Two details: both
+   attempts of `expandJoinTree` failing reports the *first* one's
+   message, because the retry destructures and throws the query's names
+   away; and a one-binder query has no projection and so no name, which
+   is §11 and which the expected output already said.
 
-   **So the engineering left is one class with two instances**: an
-   infinite range leaf under a *join*. `from x in [1..], y in [1..]
-   where x * (y + 3) < 30` needs the range's implied lower bound
-   injected before FBBT, so that FBBT can deduce the upper bound, and
-   then the deduced bound pushed back into the range -- which is what
-   `Expander.expandFromSteps` does with `rangeImpliedBounds`,
-   `Fbbt.strengthen` and `RangePushdown.apply`, in that order. The
-   single-leaf case now works; the join path does not reach it, because
-   `extentsInOrder` collects extents and a range is not one, so
-   `extents` is empty and the join returns early without grounding
-   anything. Note that the *extent* form of the same query, `from x, y
-   where x >= 1 andalso y >= 1 andalso x * (y + 3) < 30`, does ground on
-   the tree: FBBT is already wired in for extents.
+   **What is left of the round trip is not the fallback.**
+   `visit(Core.From)` still grounds, and seven queries in
+   `such-that.smli` need it -- `either`-typed unions, and a transitive
+   closure whose body is a step list. Those step lists are not the
+   resolver's: grounding *builds* them, in `Expander.ground` and in the
+   `Relational.iterate` a closure becomes, and they arrive with extents
+   of their own. So `Expander`, `RelTranslator` and `RelShadow` stay
+   until the machinery that generates a step list generates a tree
+   instead. Measured by making `visit(Core.From)` skip `expandFrom`:
+   every script passes but that one, with seven hunks, all "cannot
+   enumerate all values of type 'int'".
 
-   **And then the endgame.** The fallback cannot go while it is what
-   produces the message, so the last step is for the tree engine to name
-   the ungrounded pattern itself -- it has `leafPats` now, so it can --
-   and for `visitRel` to be sure that declining means ungroundable
-   rather than unimplemented. `Expander`, `RelTranslator` and
-   `RelShadow` all go at that point, which is what goal 3's second
-   sentence asks for.
+   **How the residue was closed**, from 37 declines of 240 grounding
+   attempts to none. Five changes, each measured:
 
-   Four things tried and measured, so they are not tried again:
-   `Core.Input` in `Analyzer.isAtom` took the residue from 37 to 28 and
-   changed no output; lowering the argument of `Relational.nonEmpty` in
-   `Generators.maybeExists`, with `RelExpander.subst` dropping the row
-   binding it had just made redundant, took it from 28 to 16;
-   `RangePushdown.tighten` on a single leaf took it from 16 to 12; and
+   * `Core.Input` in `Analyzer.isAtom`, so that `let val e = $0 in e
+     elem emps andalso #job e = "CLERK" end` is substituted however
+     often it is read and the engine sees the `elem`. 37 to 28.
+   * `Generators.maybeExists` lowers the argument of
+     `Relational.nonEmpty`, and `RelExpander.subst` drops the row
+     binding it has just made redundant, so a constraint inside a nested
+     query grounds the outer leaf. 28 to 16.
+   * `RangePushdown.tighten` on a leaf that stands alone: `filter [$0 <
+     5] (#flatten Range ([AT_LEAST 1]))`. 16 to 12.
+   * `RelExpander.tightenRanges` for a range leaf under a join, which
+     needs the range's own bound written down before FBBT has anything
+     to propagate from. 12 to 10.
+   * Naming the ungrounded pattern, which let the fallback go. The last
+     ten declined because the query cannot be grounded at all, and they
+     decline still; they just report it themselves now.
+
+   And one thing tried that did not work, so it is not tried again:
    treating `#1 $0` as atomic in `Inliner.isAtomic`, so that a `case`
    over a tree's components would reduce the way one over a step list's
-   variables does, removed no declines and broke a script.
+   variables does. It removed no declines and broke a script.
 
-   The pattern in the three that worked: a pass that reads a query's
+   The pattern in the four that worked: a pass that reads a query's
    shape was written against a step list, and the resolver now leaves a
    tree where it looks -- or, in `RangePushdown`'s case, the pass asks
    for a pattern where a tree has only `$0`. `fnBody`, `maybeExists`,
    the `let` that binds the row and `findTightening`'s predicate are
-   four instances, and each was small.
+   four instances, and each was small. Expect the same shape in what is
+   left.
 2. **Goal 6, freeze.** The text is stable now: `describe` builds it with
    one renumbering writer, so `#depts scott_1` is `#depts scott` and
    `let val d_16` is `let val d`, whatever was compiled before. Checked
@@ -272,13 +277,14 @@ is a change to spec.md §3.1 and worth its own argument.
    query round-trips twice, and `RelShadow`'s translation shadow has
    nothing left to check.
 
-   **Half done.** `SuchThatShuttle.visitRel` grounds the tree at its
-   root; where the tree engine declines it lowers and hands the query to
-   `Expander.expandFrom`, so the round trip is paid on the residue
-   rather than on everything. What the tree engine will not yet take is
-   what shrinks that residue: measured, grounding *only* on the tree
-   costs 1841 differing lines against 106 with the fallback, so the gap
-   is wide and worth measuring query by query.
+   **All but its last piece.** `SuchThatShuttle.visitRel` grounds the
+   tree and nothing else; the fallback to `Expander.expandFrom` is gone,
+   and no golden file moved when it went. What remains is
+   `visit(Core.From)`, which grounds the step lists that grounding
+   itself builds -- `Expander.ground`'s collections, and the
+   `Relational.iterate` a transitive closure becomes. Seven queries in
+   `such-that.smli` need it. Until those are built as trees,
+   `RelTranslator` and `RelShadow` have something to do.
 
    Two known members of the residue: a predicate written as a function
    that reads a global, which the inliner leaves alone, so the
