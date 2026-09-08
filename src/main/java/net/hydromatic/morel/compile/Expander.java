@@ -265,8 +265,7 @@ public class Expander {
             final Generator generator = cache.bestGenerator(namedPat);
             if (generator == null
                 || generator.cardinality == Generator.Cardinality.INFINITE) {
-              final String message =
-                  format("pattern '%s' is not grounded", namedPat.name);
+              final String message = notGrounded(namedPat);
               assert RelShadow.groundingAgrees(
                   typeSystem, nameGenerator, env, from, null, false, rowsUsed);
               throw new CompileException(message, false, scan.exp.pos);
@@ -670,12 +669,24 @@ public class Expander {
             }
             if (patternState.get(p) != PatternState.DONE) {
               throw new CompileException(
-                  format("pattern '%s' is not grounded", p.name),
-                  false,
-                  patternPos.getOrDefault(p, Pos.ZERO));
+                  notGrounded(p), false, patternPos.getOrDefault(p, Pos.ZERO));
             }
           }
         });
+  }
+
+  /**
+   * Returns the message for a pattern that nothing bounds.
+   *
+   * <p>A binder the compiler generated names nothing the user wrote -- under a
+   * tree the query's own names do not reach the lowering -- so the message
+   * leaves it out. A diagnostic that confidently names the wrong variable is
+   * worse than one that names none; discussion.md §11.
+   */
+  static String notGrounded(Core.NamedPat pat) {
+    return Core.NamedPat.isGenerated(pat.name)
+        ? "pattern is not grounded"
+        : format("pattern '%s' is not grounded", pat.name);
   }
 
   /**

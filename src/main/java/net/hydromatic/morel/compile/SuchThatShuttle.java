@@ -25,6 +25,7 @@ import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import org.apache.calcite.util.Holder;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Converts unbounded variables to bounded variables.
@@ -124,8 +125,59 @@ class SuchThatShuttle extends EnvShuttle {
               found.set(true);
             }
           }
+
+          @Override
+          protected void visitRel(Core.Rel rel) {
+            // A tree has no scans: its leaves are the inputs that are not
+            // themselves nodes. The latch in Compiles stops running this
+            // shuttle once this says no, so it has to be exact.
+            if (RelExpander.containsUnbounded(rel)) {
+              found.set(true);
+            }
+          }
         });
     return found.get();
+  }
+
+  @Override
+  protected Core.@Nullable Exp visitRel(Core.Rel rel) {
+    // Ground at the root of the tree, which is the one node a shuttle sees
+    // before what is under it. A tree nested in an expression is a root of its
+    // own, and is grounded when the walk reaches it.
+    if (inRecursiveFunction || !RelExpander.containsUnbounded(rel)) {
+      return null;
+    }
+    final boolean rowsUsed = !rowsUnused;
+    try {
+      final Core.Exp expanded =
+          RelExpander.expand(typeSystem, env, rel, rowsUsed);
+      if (!RelExpander.containsUnbounded(expanded)) {
+        // Descend into what came back, to ground the trees nested in it.
+        return expanded.accept(this);
+      }
+    } catch (CompileException e) {
+      // The tree engine declined; the step list is the fallback, as it is in
+      // Expander.expandFrom.
+    }
+    // What the tree engine will not take, the step list's engine still can:
+    // `from n where isNum n`, where the predicate is a function that the
+    // inliner leaves alone because it reads a global. Lower the tree and hand
+    // it over. The round trip that goal 3 removes is paid only here, on the
+    // queries the tree engine declines, and it shrinks as that engine grows.
+    //
+    // Lower it deeply: the step list's engine reads the constraints inside a
+    // nested query -- `exists x where (exists y where (x, y) elem pairs)`
+    // grounds x from the inner query's constraint -- and a tree left in a
+    // condition is opaque to it.
+    final Core.Exp lowered =
+        RelLowerer.lowerAll(typeSystem, nameGenerator, rel);
+    if (!(lowered instanceof Core.From)) {
+      return null;
+    }
+    final Core.From expanded =
+        Expander.expandFrom(
+            typeSystem, nameGenerator, env, (Core.From) lowered, rowsUsed);
+    return super.visit(expanded);
   }
 
   @Override

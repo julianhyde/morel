@@ -1152,6 +1152,19 @@ class Generators {
   }
 
   /**
+   * Returns a function's body as a step list.
+   *
+   * <p>This machinery reads a constraint out of a body -- "{@code e elem
+   * emps}", or the recursive step of "{@code Relational.nonEmpty (from ...)}"
+   * -- and it is written against a step list. The resolver leaves a relational
+   * tree there until the lowering pass, which runs after grounding, so lower
+   * what is read. A body that is already a step list is returned unchanged.
+   */
+  private static Core.Exp fnBody(TypeSystem typeSystem, Core.Fn fn) {
+    return RelLowerer.lowerAll(typeSystem, typeSystem.nameGenerator, fn.exp);
+  }
+
+  /**
    * Inlines a function body by substituting actual arguments for formal
    * parameters.
    *
@@ -1162,7 +1175,7 @@ class Generators {
   private static Core.Exp inlineFunctionBody(
       TypeSystem ts, Environment env, Core.Fn fn, Core.Exp actualArgs) {
     // Unwrap CASE expression if present (from tuple pattern matching)
-    Core.Exp body = fn.exp;
+    Core.Exp body = fnBody(ts, fn);
     Core.Pat formalParams = fn.idPat;
     if (body.op == Op.CASE) {
       final Core.Case caseExp = (Core.Case) body;
@@ -1197,7 +1210,8 @@ class Generators {
       Cache cache, Core.Fn fn, Core.Exp callArgs, String fnName) {
 
     // Step 1: Check for "n > 0 andalso body" structure
-    if (!fn.exp.isCallTo(BuiltIn.Z_ANDALSO)) {
+    final Core.Exp fnExp = fnBody(cache.typeSystem, fn);
+    if (!fnExp.isCallTo(BuiltIn.Z_ANDALSO)) {
       return null;
     }
 
@@ -1206,7 +1220,7 @@ class Generators {
     int boundParamIndex = -1;
     final List<Core.Exp> bodyParts = new ArrayList<>();
 
-    for (Core.Exp conjunct : core.decomposeAnd(fn.exp)) {
+    for (Core.Exp conjunct : core.decomposeAnd(fnExp)) {
       if (conjunct.isCallTo(BuiltIn.OP_GT)) {
         final Core.Apply gt = (Core.Apply) conjunct;
         if (gt.arg(0).op == Op.ID && isZeroLiteral(gt.arg(1))) {
@@ -1371,7 +1385,12 @@ class Generators {
     // Unwrap CASE expression from tuple pattern matching
     // fun path (x, y) = ... becomes fn v => case v of (x, y) => body
     // We need to extract the actual pattern (x, y) for proper substitution
-    Core.Exp body = fn.exp;
+    //
+    // Lower any relational tree in the body first: this analysis reads the
+    // recursive step out of "Relational.nonEmpty (from ...)", and the resolver
+    // now leaves a tree there until the lowering pass, which runs after
+    // grounding. A body that is already a step list is unchanged.
+    Core.Exp body = fnBody(cache.typeSystem, fn);
     Core.Pat formalParams = fn.idPat; // Default to lambda param
     if (body.op == Op.CASE) {
       final Core.Case caseExp = (Core.Case) body;
