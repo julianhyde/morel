@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transform;
 
 import java.util.ArrayList;
@@ -121,6 +122,30 @@ abstract class EnvVisitor extends Visitor {
     scan.pat.accept(this);
     scan.exp.accept(this);
     scan.condition.accept(bind(scan.env.bindings));
+  }
+
+  @Override
+  protected void visit(Core.Group group) {
+    group.input.accept(this);
+    group.keys.values().forEach(this::accept);
+    // A tree's group is not a step, so there is no FromContext to build an
+    // aggregate's environment from. The aggregate's argument reads `$0` and
+    // needs nothing bound; the aggregate function may name a key -- `fn list
+    // => List.size list + k` -- so bind the keys for it.
+    final List<Binding> bindings = new ArrayList<>();
+    group.keys.forEach(
+        (name, key) -> bindings.add(Binding.of(core.idPat(key.type, name, 0))));
+    final EnvVisitor v2 = bind(bindings);
+    group
+        .aggregates
+        .values()
+        .forEach(
+            aggregate -> {
+              aggregate.aggregate.accept(v2);
+              if (aggregate.argument != null) {
+                aggregate.argument.accept(this);
+              }
+            });
   }
 
   @Override
