@@ -29,7 +29,9 @@ import com.google.common.collect.ImmutableMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -192,6 +194,118 @@ public class RelLowerer {
     return new RelLowerer(
             typeSystem, nameGenerator, scanNames, scanOwnBinders, leafNames)
         .lowerRel(exp);
+  }
+
+  /**
+   * Lowers every tree in an expression, including the trees nested in the
+   * expressions of a tree.
+   *
+   * <p>{@link #lower} stops at a nested node, because a tree's own {@code $0}
+   * is not the enclosing node's; this walks what comes back, so that a nested
+   * tree is lowered as a root of its own.
+   */
+  public static Core.Exp lowerAll(
+      TypeSystem typeSystem, NameGenerator nameGenerator, Core.Exp exp) {
+    return exp.accept(lowerAllShuttle(typeSystem, nameGenerator));
+  }
+
+  /**
+   * As {@link #lowerAll(TypeSystem, NameGenerator, Core.Exp)}, for a
+   * declaration.
+   */
+  public static Core.Decl lowerAll(
+      TypeSystem typeSystem, NameGenerator nameGenerator, Core.Decl decl) {
+    return decl.accept(lowerAllShuttle(typeSystem, nameGenerator));
+  }
+
+  private static Shuttle lowerAllShuttle(
+      TypeSystem typeSystem, NameGenerator nameGenerator) {
+    return new Shuttle(typeSystem) {
+      @Override
+      protected Core.@Nullable Exp visitRel(Core.Rel rel) {
+        final Set<Core.NamedPat> rowPats = rowBindings(rel);
+        final Core.Exp lowered =
+            lower(typeSystem, nameGenerator, rel, ImmutableList.of());
+        return unbindRow(typeSystem, lowered, rowPats).accept(this);
+      }
+    };
+  }
+
+  /**
+   * Returns the binders that hold this node's element for a tree nested in one
+   * of its expressions.
+   *
+   * <p>The resolver binds the element where a nested tree reads it, because a
+   * tree's {@code $0} is its own and not the enclosing node's (spec.md §2 rule
+   * 3).
+   */
+  private static Set<Core.NamedPat> rowBindings(Core.Rel rel) {
+    final Set<Core.NamedPat> pats = new LinkedHashSet<>();
+    rel.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.NonRecValDecl valDecl) {
+            super.visit(valDecl);
+            if (valDecl.pat instanceof Core.IdPat
+                && containsInput(valDecl.exp)) {
+              pats.add(valDecl.pat);
+            }
+          }
+        });
+    return pats;
+  }
+
+  /**
+   * Replaces each of {@code pats} with the value it is bound to, and drops the
+   * binding.
+   *
+   * <p>Once the node is lowered its element is an ordinary variable, and the
+   * binding has nothing left to protect: what reads it is no longer inside a
+   * tree that rebinds {@code $0}. Dropping it keeps the plan the shape it had
+   * before the resolver stopped lowering, and it is what the step list's
+   * grounding engine expects to see -- a {@code let} between a query and its
+   * constraint is opaque to it.
+   */
+  private static Core.Exp unbindRow(
+      TypeSystem typeSystem, Core.Exp exp, Set<Core.NamedPat> pats) {
+    if (pats.isEmpty()) {
+      return exp;
+    }
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          final Map<Core.NamedPat, Core.Exp> values = new HashMap<>();
+
+          @Override
+          protected Core.Exp visit(Core.Let let) {
+            if (let.decl instanceof Core.NonRecValDecl) {
+              final Core.NonRecValDecl decl = (Core.NonRecValDecl) let.decl;
+              if (pats.contains(decl.pat)) {
+                values.put(decl.pat, decl.exp.accept(this));
+                return let.exp.accept(this);
+              }
+            }
+            return super.visit(let);
+          }
+
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            final Core.@Nullable Exp value = values.get(id.idPat);
+            return value == null ? id : core.at(value, id.pos);
+          }
+        });
+  }
+
+  /** Returns whether an expression reads an input of a relational tree. */
+  static boolean containsInput(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Input input) {
+            found[0] = true;
+          }
+        });
+    return found[0];
   }
 
   private Core.Exp lowerRel(Core.Exp exp) {
@@ -712,14 +826,20 @@ public class RelLowerer {
   /**
    * Replaces {@code $0} and {@code $1} with expressions.
    *
-   * <p>A nested node is lowered rather than descended into: its own {@code $0}
-   * is its own input's element, and the spec forbids it from reading this
-   * node's.
+   * <p>The walk stops at a nested node: its own {@code $0} is its own input's
+   * element, and the spec forbids it from reading this node's. To use this
+   * node's element inside a nested tree the resolver binds it first, and the
+   * binding is an ordinary name that substitution leaves alone.
    */
   private Core.Exp subst(
       Core.Exp exp, Core.@Nullable Exp e0, Core.@Nullable Exp e1) {
     return exp.accept(
         new Shuttle(typeSystem) {
+          @Override
+          protected Core.@Nullable Exp visitRel(Core.Rel rel) {
+            return rel;
+          }
+
           @Override
           protected Core.Exp visit(Core.Input input) {
             if (e0 != null && input.i == 0) {
