@@ -54,11 +54,14 @@ import net.hydromatic.morel.eval.code.OptionCodes;
 import net.hydromatic.morel.eval.code.RangeCodes;
 import net.hydromatic.morel.eval.code.RealCodes;
 import net.hydromatic.morel.eval.code.RelationalCodes;
+import net.hydromatic.morel.eval.code.SparkCodes;
 import net.hydromatic.morel.eval.code.StringCodes;
 import net.hydromatic.morel.eval.code.SysCodes;
 import net.hydromatic.morel.eval.code.VectorCodes;
 import net.hydromatic.morel.eval.code.WordCodes;
 import net.hydromatic.morel.foreign.RelList;
+import net.hydromatic.morel.foreign.SparkBackend;
+import net.hydromatic.morel.foreign.SparkConnections;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -566,6 +569,7 @@ public abstract class Codes {
     RelationalCodes.register(b::add);
     RangeCodes.register(b::add);
     SysCodes.register(b::add);
+    SparkCodes.register(b::add);
     GeneralCodes.register(b::add);
     // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
     b.add(BuiltIn.BAG_NIL, ImmutableList.of());
@@ -614,6 +618,13 @@ public abstract class Codes {
 
   public static StringBuilder appendFloat(StringBuilder buf, float f) {
     return buf.append(realToString(f));
+  }
+
+  /** Converts an error from Spark into the Morel exception {@code Spark}. */
+  public static MorelRuntimeException sparkException(
+      SparkBackend.SparkException e, Pos pos) {
+    return new MorelRuntimeException(
+        BuiltInExn.SPARK, SparkConnections.payload(e), pos);
   }
 
   /**
