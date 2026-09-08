@@ -235,6 +235,28 @@ public class RelExpander {
   }
 
   /**
+   * Returns whether a tree has a leaf that is an infinite extent, and therefore
+   * needs grounding.
+   *
+   * <p>The walk does not descend into a nested tree, which is a root of its own
+   * and is grounded when the pass that walks the expression reaches it.
+   */
+  public static boolean containsUnbounded(Core.Exp tree) {
+    if (!(tree instanceof Core.Rel)) {
+      // A leaf that is an infinite range -- `[1..]` -- is unbounded too, and
+      // the pipeline that bounds it (FBBT, then the pushdown) runs from the
+      // same latch.
+      return Extents.isInfinite(tree) || RangePushdown.isInfiniteRange(tree);
+    }
+    for (Core.Exp input : ((Core.Rel) tree).inputs()) {
+      if (containsUnbounded(input)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Returns whether a tree has a node that depends on how many rows there are,
    * which makes a generator's duplicates observable even where the rows
    * themselves are not read.
@@ -740,8 +762,7 @@ public class RelExpander {
       // element. The left side need not be a leaf: `from x, y where edge
       // (x, y) join y2 where y2 = y` reads `y` out of a pair.
       final Core.Exp leftElement = frame.elements.get(join.left);
-      final Core.IdPat param =
-          core.idPat(join.left.type.elementType(), "g$" + nextName++, 0);
+      final Core.IdPat param = groundPat(join.left.type.elementType());
       final Map<Core.NamedPat, Core.Exp> paths = new LinkedHashMap<>();
       for (Core.NamedPat name : free(rightGenerator, bound)) {
         final Core.@Nullable Exp path =
@@ -789,8 +810,7 @@ public class RelExpander {
       // also where it is a leaf that was never unbounded: `from x, y in
       // [2, 3] where x > y` needs no generator for `y`, and `x` reads it.
       final Core.Pat rightPat = requireNonNull(frame.leaves.get(right));
-      final Core.IdPat param =
-          core.idPat(right.type.elementType(), "g$" + nextName++, 0);
+      final Core.IdPat param = groundPat(right.type.elementType());
       final Map<Core.NamedPat, Core.Exp> bound2 = new LinkedHashMap<>(bound);
       rightPat
           .expand()
@@ -1617,7 +1637,23 @@ public class RelExpander {
       ((TupleType) type).argTypes.forEach(argType -> args.add(pat(argType)));
       return core.tuplePat(typeSystem, args);
     }
-    return core.idPat(type, "g$" + nextName++, 0);
+    return groundPat(type);
+  }
+
+  /**
+   * Creates a binder for a leaf's element.
+   *
+   * <p>The name comes from the type system's generator, not from a counter of
+   * this expander's own: grounding runs once per tree, a query has a tree for
+   * each nested query in it, and two of them meet in one expression. Two
+   * expanders that each numbered from zero would give the same name to
+   * different things, and a record built over both loses a field -- {@code from
+   * p where happy p} in such-that.smli names the outer leaf and one of the
+   * inner ones {@code g$0}. Plan text stays deterministic because the printer
+   * renumbers what it prints.
+   */
+  private Core.IdPat groundPat(Type type) {
+    return core.idPat(type, typeSystem.nameGenerator.getPrefixed("g"), 0);
   }
 
   /**
