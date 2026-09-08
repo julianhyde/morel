@@ -170,6 +170,16 @@ public class RelExpander {
    */
   private final Map<Core.Exp, Core.Exp> simplified = new IdentityHashMap<>();
 
+  /**
+   * What a leaf that is an infinite range was tightened to, by identity.
+   *
+   * <p>A range is not an extent, so grounding has nothing to give it; what
+   * bounds it is a literal bound in a condition above. `Expander` does this for
+   * a step list with `rangeImpliedBounds`, `Fbbt.strengthen` and
+   * `RangePushdown.apply`, in that order, and so does this.
+   */
+  private final Map<Core.Exp, Core.Exp> tightened = new IdentityHashMap<>();
+
   private RelExpander(
       TypeSystem typeSystem, Environment env, boolean rowsUsed) {
     this.typeSystem = typeSystem;
@@ -513,6 +523,7 @@ public class RelExpander {
       // that is not being built.
       subsumed.clear();
       simplified.clear();
+      tightened.clear();
       dropped = null;
       nextName = mark;
       nextLeafPat = leafMark;
@@ -551,9 +562,10 @@ public class RelExpander {
     // decides which generator it settles on for each name -- and a hash
     // order makes that decision differently from one run to the next. A step
     // list gives them in the order its scans are written.
+    tightenRanges(frame, constraints);
     final PairList<Core.Pat, Core.Exp> extents = PairList.of();
     extentsInOrder(join, frame, extents);
-    if (extents.isEmpty()) {
+    if (extents.isEmpty() && tightened.isEmpty()) {
       return join.copy(
           typeSystem,
           join.joinType,
@@ -822,6 +834,10 @@ public class RelExpander {
     }
     if (!(node instanceof Core.Join)) {
       if (!node.isExtent()) {
+        final Core.@Nullable Exp finite = tightened.get(node);
+        if (finite != null) {
+          return finite;
+        }
         return node instanceof Core.Rel
             ? expand(node, ImmutableList.of())
             : node;
@@ -1328,6 +1344,54 @@ public class RelExpander {
       }
     }
     return requireNonNull(product, "product");
+  }
+
+  /**
+   * Replaces each leaf that is an infinite range with the finite range that the
+   * conditions make of it.
+   *
+   * <p>The join's answer to what {@link #expand} does for a leaf that stands
+   * alone. Two things it needs that the single-leaf case does not: the range's
+   * own bound has to be written as a constraint, or FBBT has nothing to
+   * propagate from; and the bound that comes back names the leaf, because a
+   * join's condition speaks of its components and not of {@code $0}.
+   */
+  private void tightenRanges(Frame frame, List<Core.Exp> constraints) {
+    final PairList<Core.Exp, Core.NamedPat> ranges = PairList.of();
+    frame.leaves.forEach(
+        (leaf, pat) -> {
+          if (pat instanceof Core.NamedPat
+              && RangePushdown.isInfiniteRange(leaf)) {
+            ranges.add(leaf, (Core.NamedPat) pat);
+          }
+        });
+    if (ranges.isEmpty()) {
+      return;
+    }
+    final List<Core.Exp> augmented = new ArrayList<>(constraints);
+    final Set<Core.NamedPat> pats = new LinkedHashSet<>();
+    ranges.forEach(
+        (leaf, pat) -> {
+          pats.add(pat);
+          final Core.@Nullable Exp implied =
+              RangePushdown.impliedBound(typeSystem, leaf, core.id(pat));
+          if (implied != null) {
+            augmented.add(implied);
+          }
+        });
+    final List<Core.Exp> strengthened =
+        core.decomposeAnd(
+            Fbbt.strengthen(
+                typeSystem, pats, core.andAlso(typeSystem, augmented)));
+    ranges.forEach(
+        (leaf, pat) -> {
+          final RangePushdown.@Nullable Tightening t =
+              RangePushdown.tighten(
+                  typeSystem, leaf, strengthened, e -> Bounds.isIdRef(e, pat));
+          if (t != null) {
+            tightened.put(leaf, t.newExp);
+          }
+        });
   }
 
   /**
