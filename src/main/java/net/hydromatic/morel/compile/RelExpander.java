@@ -1794,7 +1794,14 @@ public class RelExpander {
             if (exp2 instanceof Core.Apply) {
               final Core.Apply apply2 = (Core.Apply) exp2;
               if (apply2.fn.op == Op.RECORD_SELECTOR
-                  && apply2.arg.op == Op.TUPLE) {
+                  && apply2.arg.op == Op.TUPLE
+                  // The selector reads a slot of the record it was made for,
+                  // and a substitution can put a tuple under a selector built
+                  // for another, of a different arity, where the slot is not
+                  // even in range. Fold only what is; folding is what lets the
+                  // engine see a constraint, so decline no more than this.
+                  && ((Core.RecordSelector) apply2.fn).slot
+                      < ((Core.Tuple) apply2.arg).args.size()) {
                 return ((Core.Tuple) apply2.arg)
                     .args.get(((Core.RecordSelector) apply2.fn).slot);
               }
