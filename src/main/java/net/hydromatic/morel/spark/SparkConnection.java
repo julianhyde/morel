@@ -25,6 +25,7 @@ import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.rpc.ErrorInfo;
+import com.google.rpc.Status;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
@@ -159,7 +160,7 @@ class SparkConnection implements SparkBackend.Connection {
    * error has one.
    */
   static SparkBackend.SparkException toException(StatusRuntimeException e) {
-    final com.google.rpc.Status status = StatusProto.fromThrowable(e);
+    final Status status = StatusProto.fromThrowable(e);
     String errorClass = "CONNECTION";
     final String description = e.getStatus().getDescription();
     final String message =
