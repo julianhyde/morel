@@ -3247,6 +3247,9 @@ public class Resolver {
        */
       private final Map<Core.NamedPat, Core.Exp> byPat = new LinkedHashMap<>();
 
+      /** The pattern that {@code current} resolves to; see the constructor. */
+      private final Core.IdPat currentPat;
+
       Scope(
           Map<String, Core.Exp> paths,
           Core.Exp current,
@@ -3278,6 +3281,13 @@ public class Resolver {
           byPat.put(requireNonNull(ordinalPat), ordinalPath);
           bindings.add(Binding.of(ordinalPat));
         }
+        // `current` is a path like any other, so that a nested tree that reads
+        // the row is caught by the same rule that catches a nested tree
+        // reading a name. The pattern never survives substitution: outside a
+        // tree it becomes `current`, inside one the binder that `toCore` then
+        // binds.
+        currentPat = core.idPat(current.type, "current", --scopeOrdinal);
+        byPat.put(currentPat, current);
       }
 
       /**
@@ -3296,18 +3306,80 @@ public class Resolver {
 
       /** Returns a resolver that reads this scope's names. */
       Resolver resolver() {
-        final Resolver r = Resolver.this.withEnv(bindings).withCurrent(current);
+        final Resolver r =
+            Resolver.this.withEnv(bindings).withCurrent(core.id(currentPat));
         return ordinalName == null ? r : r.withOrdinalPat(ordinalPat);
       }
 
-      /** Replaces each reference to a name with the path that reads it. */
+      /**
+       * Binder for each input that a nested tree reads, invented on demand.
+       *
+       * <p>A path reads the element as {@code $i}, and inside a tree nested in
+       * the expression that means the nested tree's own element, not this one
+       * (spec.md §2 rule 3). The remedy the spec names in the same breath is to
+       * bind the element first, so a path planted inside a nested tree reads
+       * the binder instead, and {@link #toCore} wraps the expression in the
+       * {@code let} that binds it.
+       */
+      private final Map<Integer, Core.IdPat> rowPats = new LinkedHashMap<>();
+
+      /**
+       * Replaces each reference to a name with the path that reads it, and
+       * binds the element where a nested tree reads it.
+       */
       Core.Exp substitute(Core.Exp exp) {
+        // Per call, not per scope: a scope converts several expressions, and
+        // only the ones with a nested tree that reads the element get a let.
+        rowPats.clear();
+        Core.Exp e = substitute(exp, false);
+        for (Map.Entry<Integer, Core.IdPat> entry : rowPats.entrySet()) {
+          e =
+              core.let(
+                  core.nonRecValDecl(
+                      Pos.ZERO,
+                      entry.getValue(),
+                      null,
+                      core.input(entry.getValue().type, entry.getKey())),
+                  e);
+        }
+        rowPats.clear();
+        return e;
+      }
+
+      private Core.Exp substitute(Core.Exp exp, boolean inRel) {
         return exp.accept(
             new Shuttle(typeMap.typeSystem) {
               @Override
+              protected Core.@Nullable Exp visitRel(Core.Rel rel) {
+                // Once inside a nested tree we stay inside: every path planted
+                // below here reads the binder rather than the input.
+                return inRel ? null : substitute(rel, true);
+              }
+
+              @Override
               protected Core.Exp visit(Core.Id id) {
                 final Core.@Nullable Exp path = byPat.get(id.idPat);
-                return path == null ? id : core.at(path, id.pos);
+                if (path == null) {
+                  return id;
+                }
+                return core.at(inRel ? bindInputs(path) : path, id.pos);
+              }
+            });
+      }
+
+      /** Replaces each input reference in a path with a binder for it. */
+      private Core.Exp bindInputs(Core.Exp path) {
+        return path.accept(
+            new Shuttle(typeMap.typeSystem) {
+              @Override
+              protected Core.Exp visit(Core.Input input) {
+                return core.id(
+                    rowPats.computeIfAbsent(
+                        input.i,
+                        i ->
+                            core.idPat(
+                                input.type,
+                                () -> nameGenerator.getPrefixed("v"))));
               }
             });
       }
