@@ -39,7 +39,7 @@ Six goals, in order, each with the thing that says it is done.
 
 ### Start here
 
-**The flip has landed. Goals 1, 2 and 5 are done, and goal 3 is half
+**The flip has landed. Goals 1, 2, 4 and 5 are done, and goal 3 is half
 done.** The resolver returns the tree, the rewrite passes carry it,
 grounding works on it, lowering is a pass of its own in `Compiles`, and
 `Sys.planEx "0"` prints a tree. No query answers differently: the
@@ -48,12 +48,7 @@ nothing else. `fullMake` is the gate and it is green.
 
 What is left, in the order it is worth doing:
 
-1. **Goal 4, `Sys.plan` and `Sys.planEx` print the tree.** The printer
-   is written -- `Core.Rel.describe(withTypes)` -- and this is what
-   makes the plan text worth freezing, because a tree's plan says `$0`
-   and wants no name. It also retires most of what the flip cost in
-   readability; see below.
-2. **Goal 3's other half.** `SuchThatShuttle.visitRel` grounds the tree
+1. **Goal 3's other half.** `SuchThatShuttle.visitRel` grounds the tree
    and falls back to lowering plus `Expander.expandFrom` where the tree
    engine declines. Each query that stops needing the fallback is a
    round trip removed and, eventually, `RelShadow`'s translation shadow
@@ -63,7 +58,7 @@ What is left, in the order it is worth doing:
    constraint inside a nested query, which the step list's engine reads
    through and the tree engine does not (`exists x where (exists y where
    (x, y) elem pairs)`).
-3. **Goal 6, freeze.**
+2. **Goal 6, freeze.**
 
 **One thing the flip cost, which goal 4 mostly retires.** A leaf is a
 bare expression (spec.md §3.1), so a tree holds no names. A query with
@@ -75,11 +70,12 @@ pattern. A query with **one** binder has no projection and no name
 anywhere, so `from e in emps` lowers to `from w$0 in emps` and eight
 messages say "pattern is not grounded" with no name.
 
-That is only visible where a *lowered* plan is printed. After goal 4 the
-plan is the tree, where the element is `$0` and a name is neither
-present nor wanted. If it still grates after that, the answer is to give
-a leaf an optional binder, which is a change to spec.md §3.1 and worth
-its own argument.
+That is only visible where a *lowered* plan is printed, and goal 4 has
+taken most of those away: `Sys.planEx` prints the tree, where the
+element is `$0` and a name is neither present nor wanted. What is left
+is `Sys.plan`, which prints the executable code and still says `w$0`.
+If that grates, the answer is to give a leaf an optional binder, which
+is a change to spec.md §3.1 and worth its own argument.
 
 **Three things worth not re-deriving.**
 
@@ -242,9 +238,18 @@ its own argument.
    what it reads. That is a plaster: the reading itself should learn the
    tree, and until it does a body is lowered once per analysis.
 
-4. **`Sys.plan` and `Sys.planEx` print the tree.** The printer is
-   already there: `Core.Rel.describe(withTypes)`, which is spec.md
-   §6's grammar, `withTypes` being planEx's `: type`.
+4. ~~**`Sys.plan` and `Sys.planEx` print the tree.**~~ **Done for
+   `planEx`**, which is what was decided: `AstWriter.withTypes` carries
+   the flag, `Core.Rel.unparse` reads it, and the final phase is the
+   tree rather than the step list, because the lowering is a pass that
+   runs after the plan is taken.
+
+   `Sys.plan` is untouched, deliberately. It prints the executable code
+   -- the step list that `Compiler` compiles -- and a tree there would
+   say something that is not what runs. It flips when the tree executes,
+   which is what spec.md §6 means by "once step 3 flips `Sys.plan` to
+   print it"; the 196 `Sys.plan` sites re-baseline then, and whether
+   the code view survives under another name is a question for then.
 
 5. ~~**Script-convert the expectations, in one flip.**~~ **Done**, with
    goals 2 and 3, because the plan text moves the moment the resolver
