@@ -125,7 +125,7 @@ License.
     <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     <nullaway.version>0.14.0</nullaway.version>
     <protobuf.version>4.36.1</protobuf.version>
-    <protobuf-maven-plugin.version>5.1.8</protobuf-maven-plugin.version>
+    <protobuf-maven-plugin.version>3.10.3</protobuf-maven-plugin.version>
     <scott-data-hsqldb.version>0.3</scott-data-hsqldb.version>
     <slf4j.version>2.1.0-alpha1</slf4j.version>
     <versions-maven-plugin.version>2.21.0</versions-maven-plugin.version>
@@ -706,15 +706,17 @@ License.
             <groupId>io.github.ascopes</groupId>
             <artifactId>protobuf-maven-plugin</artifactId>
             <version>${protobuf-maven-plugin.version}</version>
+            <!-- Version 3.x needs only Maven 3.8, which IntelliJ's bundled
+                 Maven satisfies; 4.x and later need 3.9.6. -->
             <configuration>
-              <protoc>${protobuf.version}</protoc>
-              <plugins>
-                <plugin kind="binary-maven">
+              <protocVersion>${protobuf.version}</protocVersion>
+              <binaryMavenPlugins>
+                <binaryMavenPlugin>
                   <groupId>io.grpc</groupId>
                   <artifactId>protoc-gen-grpc-java</artifactId>
                   <version>${grpc.version}</version>
-                </plugin>
-              </plugins>
+                </binaryMavenPlugin>
+              </binaryMavenPlugins>
             </configuration>
             <executions>
               <execution>
