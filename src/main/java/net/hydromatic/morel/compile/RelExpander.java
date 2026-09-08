@@ -1846,11 +1846,26 @@ public class RelExpander {
     return subst(exp, element, null);
   }
 
-  /** Replaces {@code $0} and {@code $1} with expressions. */
+  /**
+   * Replaces {@code $0} and {@code $1} with expressions.
+   *
+   * <p>The walk stops at a nested node, whose {@code $0} is its own input's
+   * element (spec.md §2 rule 3). What the enclosing node's element is called
+   * inside a nested tree is a binder the resolver made for it, and once the
+   * element is an ordinary name that binder has nothing left to protect: the
+   * binding is dropped, so that the engine reads `Relational.nonEmpty (…)`
+   * where it would otherwise read a `let`.
+   */
   private Core.Exp subst(Core.Exp exp, Core.Exp e0, Core.@Nullable Exp e1) {
+    final Set<Core.NamedPat> rowPats = RelLowerer.rowBindings(exp);
     final Core.Exp exp2 =
         exp.accept(
             new Shuttle(typeSystem) {
+              @Override
+              protected Core.@Nullable Exp visitRel(Core.Rel rel) {
+                return rel;
+              }
+
               @Override
               protected Core.Exp visit(Core.Input input) {
                 if (input.i == 0) {
@@ -1862,7 +1877,7 @@ public class RelExpander {
                 return input;
               }
             });
-    return simplify(exp2);
+    return simplify(RelLowerer.unbindRow(typeSystem, exp2, rowPats));
   }
 
   /**
