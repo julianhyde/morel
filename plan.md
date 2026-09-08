@@ -39,8 +39,7 @@ Six goals, in order, each with the thing that says it is done.
 
 ### Start here
 
-**The flip is one line, and it answers every query correctly.** What is
-left is to change `Resolver.RelFromResolver.run` from
+**The flip is one line.** Change `Resolver.RelFromResolver.run` from
 
 ```java
       return RelLowerer.lower(
@@ -54,51 +53,86 @@ lowering pass in `Compiles`, `RelLowerer.lowerAll`, grounding from
 `SuchThatShuttle.visitRel`, `EnvVisitor.visit(Core.Group)`, the
 resolver's row binding and the `Inliner` rules that protect it.
 
-**With the line flipped: 142 differing lines across 6 files, 60 hunks.**
-Fourteen are §11's message change, which is intended. Forty-four are
-plan text, which is goal 5. **Two are row order, and none is a wrong
-answer.**
+**With the line flipped: 142 differing lines across 6 files, 67 hunks.**
+Fourteen are §11's message change, which is intended. Forty-six are plan
+text, which is goal 5. Seven lines are results, and they are two
+queries:
 
-The two are `such-that.smli:1834` (the `cousin` query's `k k`) and
-`:2133` (`from loc, deptno, name where {deptno, loc, dname = name} elem
-scott.depts`). Every row is there; neither query says `order`. The order
-they had came from the labels of the group that grounding builds to
-deduplicate, and a group's key record sorts its fields by label: under
-the old path those labels were `deptno, loc, name`, and now they are
-`g$0, g$1, g$2` in leaf order.
+* **`such-that.smli:1821`, `from p where cousin p`, is wrong.** It
+  answers `b b`, `c c`, `e e`, `f f`, `g g`, `i i`, `j j` as well as the
+  right rows: the seed of the transitive closure loses `where #1 p <> #2
+  p`. The seed is the grounding of `sib`, and `from p where sib p`, two
+  statements earlier, is right. See below for how far this was run down.
+* **`such-that.smli:2131`, `from loc, deptno, name where {deptno, loc,
+  dname = name} elem scott.depts`, returns its rows reversed.** Every
+  row is there. The order came from the labels of the group that
+  grounding builds to deduplicate -- a key record sorts its fields by
+  label -- and those labels were `deptno, loc, name` and are now `g$0,
+  g$1, g$2` in leaf order.
 
-**So the last thing before goal 5 is names.** The resolver passed
-`RelLowerer.lower` a `scanNames` list and a scan kept the name the user
-wrote; returning the tree drops it, and the lowering invents `w$0`.
-Three consequences, in order of how much they matter:
+*(An earlier note here said "no wrong answers". It was wrong, and the
+mistake is worth knowing: the script that classified the hunks skipped
+those with no `<` line, so seven added rows were invisible. Classify
+additions too.)*
 
-1. the two row orders above, which goal 5's rule says are bugs and not
-   a re-baseline;
-2. the "not grounded" message no longer names the pattern, which §11
-   decided is right;
-3. every scan in every plan is `w$0`, which is goal 5's churn.
+**How far the `cousin` failure was run down.** The grounded body of
+`sib` differs between the two paths, and that is what the closure
+analysis inverts to build its seed:
 
-Carrying leaf names is not in spec.md §3, so either the datatype gains
-them or something derives them. The tree does hold them: the projection
-at the root of `from loc, deptno, name where ...` is `project [{deptno =
-#2 $0, loc = #1 $0, name = #3 $0}]`, which is exactly the map from leaf
-position to the name the user wrote. Deriving them there and passing
-them to `RelExpander.expand` as `leafPats` -- the argument the old path
-filled from the query's scans -- is the cheap route, and it is worth
-trying before the datatype grows a field.
+```
+base: from (x'0, g$0) in par_facts on x'0 = x yield g$0
+        where par (x, g$0) andalso par (y, g$0) andalso x <> y
+flip: from (x'0, g$0) in par_facts on x'0 = x yield {w$0 = g$0}
+        where par (x, w$0) andalso par (y, w$0) andalso x <> y
+```
 
-**Two things worth not re-deriving.**
+A one-field record where the base has the atom. Three things it is
+*not*, each measured:
+
+* Not `leafPats`. Disabling them in `Expander.expandViaTree` -- the
+  argument the base path fills from the query's scans -- still yields
+  the atom.
+* Not `scanOwnBinders`. Passing `true` from `RelLowerer.lowerAll`
+  changes neither this plan nor the totals.
+* Not something matching `expandViaTree` fixes. Making `visitRel` lower
+  what grounding built, with `leafNames` and `scanOwnBinders` as
+  `expandViaTree` passes them, and return that step list, measures 1835
+  lines: `such-that` truncates on a crash. So does delegating to
+  `Expander.expandFrom` outright (1835). Tree first, with the fallback
+  and the tree returned, is 142.
+
+So the next move is to find what puts the projection there -- most
+likely `RelExpander.rebuild` naming a one-binder query's element -- and
+not to reshuffle the lowering's arguments, which has now been tried
+three ways.
+
+**And after that, names.** The resolver passed `RelLowerer.lower` a
+`scanNames` list and a scan kept the name the user wrote; returning the
+tree drops it, and the lowering invents `w$0`. That is the second
+query's row order, the §11 message change, and most of the 46 plan-text
+hunks.
+
+The tree does hold the names, but only for a query with several
+binders: the projection at its root is `project [{deptno = #2 $0, loc =
+#1 $0, name = #3 $0}]`, which is the map from leaf position to the name
+the user wrote. A one-binder query -- `from p where cousin p` -- has no
+projection and no name anywhere in the tree, so deriving is a partial
+answer and spec.md §3.1's "a leaf is a bare expression" is the thing to
+revisit if a whole answer is wanted.
+
+**Three things worth not re-deriving.**
 
 * *Build before you run.* `./morel` defaults to `--no-build`, so a
   source edit does not reach it. A previous session's traces "not
-  firing" was that, nothing more: with `./mvnw compile` first, a print
-  beside `checkExtentsFinite` fires for `val x = 1`.
-* *The step list's engine is still needed.* `SuchThatShuttle.visitRel`
-  tries `RelExpander.expand` and falls back to lowering plus
+  firing" was that, nothing more.
+* *Read the surefire output, not the last one you looked at.*
+  `fullMake` reruns the suite and overwrites
+  `target/test-classes/script/surefire/`, so a measurement taken before
+  it and read after it describes a different build.
+* *The step list's grounding engine is still needed.* `SuchThatShuttle
+  .visitRel` tries `RelExpander.expand` and falls back to lowering plus
   `Expander.expandFrom`, exactly as `Expander.expandFrom` falls back to
-  `expandFromSteps`. Grounding entirely on the tree measured 1841 lines;
-  lowering before grounding measured 1835; tree first with the fallback
-  measured 142.
+  `expandFromSteps`.
 
 
 1. ~~Decide how `$0` is told apart, and implement it.~~ **Done.** It
@@ -209,7 +243,15 @@ trying before the datatype grows a field.
      see a constraint a yield was substituted into, and it read past the
      end of a record a substitution had made smaller. The shape that
      survives the fold fails at run time instead, so `visitRel` asks
-     `misaddressed` of the lowered answer, as `expandViaTree` does.
+     `misaddressed` of the lowered answer, as `expandViaTree` does. The
+     guard is a range check and not the type equality `RelLowerer
+     .readField` uses: the stricter one declines folds the engine needs,
+     and `check.smli` and `such-that.smli` lose queries that grounded.
+   * *A record label is printed as text.* `RenumberingAstWriter` renamed
+     what goes through `id` and `idQuoted`, and a record writes its
+     labels with `append`, so a plan read `yield {w$3 = g$0} ... where
+     par (x, w$0)` -- one binder under two names. Half an hour went on
+     believing that.
    * *The step list's grounding engine is still needed.* See "Start
      here".
 
