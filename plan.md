@@ -27,112 +27,71 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 
 ## Where this stands, and what the next session does
 
-Steps 0, 1 and 2 are done. All 1856 of the script suite's queries are
-built as trees by the resolver, grounding goes through the tree, the
-AST-to-From path is deleted, and spec.md is frozen against what was
-built rather than what was first designed. `fullMake` is green and is
-the gate; `MOREL_GROUND_VIA_STEPS` no longer exists, so there is one
-configuration to test.
+Steps 0, 1 and 2 are done, and so are goals 1, 2 and 5. The resolver
+returns a relational tree; it is what the rewrite passes carry and what
+grounding works on; lowering is a pass of its own, after the rewrites
+and before the compiler. The AST-to-From path is deleted, and spec.md is
+frozen against what was built rather than what was first designed.
+`fullMake` is green and is the gate; there is one configuration to test.
 
 The feature is finished when a tree is what executes and what prints.
 Six goals, in order, each with the thing that says it is done.
 
 ### Start here
 
-**The flip is one line.** Change `Resolver.RelFromResolver.run` from
+**The flip has landed. Goals 1, 2 and 5 are done, and goal 3 is half
+done.** The resolver returns the tree, the rewrite passes carry it,
+grounding works on it, lowering is a pass of its own in `Compiles`, and
+`Sys.planEx "0"` prints a tree. No query answers differently: the
+expectations moved for plan text and for eight §11 messages, and for
+nothing else. `fullMake` is the gate and it is green.
 
-```java
-      return RelLowerer.lower(
-          typeMap.typeSystem, nameGenerator, b.build(), scanNames);
-```
+What is left, in the order it is worth doing:
 
-to `return b.build();`. Everything it needs is committed, and each piece
-is inert while the resolver still lowers, so the branch stays green with
-the line as it is: the `visitRel` hooks on `Shuttle` and `Visitor`, the
-lowering pass in `Compiles`, `RelLowerer.lowerAll`, grounding from
-`SuchThatShuttle.visitRel`, `EnvVisitor.visit(Core.Group)`, the
-resolver's row binding and the `Inliner` rules that protect it.
+1. **Goal 4, `Sys.plan` and `Sys.planEx` print the tree.** The printer
+   is written -- `Core.Rel.describe(withTypes)` -- and this is what
+   makes the plan text worth freezing, because a tree's plan says `$0`
+   and wants no name. It also retires most of what the flip cost in
+   readability; see below.
+2. **Goal 3's other half.** `SuchThatShuttle.visitRel` grounds the tree
+   and falls back to lowering plus `Expander.expandFrom` where the tree
+   engine declines. Each query that stops needing the fallback is a
+   round trip removed and, eventually, `RelShadow`'s translation shadow
+   with nothing left to check. Two known members of the residue: a
+   predicate written as a function that reads a global, so the
+   constraint is behind a call (`from n where isNum n`); and a
+   constraint inside a nested query, which the step list's engine reads
+   through and the tree engine does not (`exists x where (exists y where
+   (x, y) elem pairs)`).
+3. **Goal 6, freeze.**
 
-**With the line flipped: 142 differing lines across 6 files, 67 hunks.**
-Fourteen are §11's message change, which is intended. Forty-six are plan
-text, which is goal 5. Seven lines are results, and they are two
-queries:
+**One thing the flip cost, which goal 4 mostly retires.** A leaf is a
+bare expression (spec.md §3.1), so a tree holds no names. A query with
+several binders ends in a projection that names its element's components
+-- `project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}]` -- and
+`RelExpander.leafPats` reads them back, which is enough for grounding to
+name what it builds and for the "not grounded" message to name the
+pattern. A query with **one** binder has no projection and no name
+anywhere, so `from e in emps` lowers to `from w$0 in emps` and eight
+messages say "pattern is not grounded" with no name.
 
-* **`such-that.smli:1821`, `from p where cousin p`, is wrong.** It
-  answers `b b`, `c c`, `e e`, `f f`, `g g`, `i i`, `j j` as well as the
-  right rows: the seed of the transitive closure loses `where #1 p <> #2
-  p`. The seed is the grounding of `sib`, and `from p where sib p`, two
-  statements earlier, is right. See below for how far this was run down.
-* **`such-that.smli:2131`, `from loc, deptno, name where {deptno, loc,
-  dname = name} elem scott.depts`, returns its rows reversed.** Every
-  row is there. The order came from the labels of the group that
-  grounding builds to deduplicate -- a key record sorts its fields by
-  label -- and those labels were `deptno, loc, name` and are now `g$0,
-  g$1, g$2` in leaf order.
-
-*(An earlier note here said "no wrong answers". It was wrong, and the
-mistake is worth knowing: the script that classified the hunks skipped
-those with no `<` line, so seven added rows were invisible. Classify
-additions too.)*
-
-**How far the `cousin` failure was run down.** The grounded body of
-`sib` differs between the two paths, and that is what the closure
-analysis inverts to build its seed:
-
-```
-base: from (x'0, g$0) in par_facts on x'0 = x yield g$0
-        where par (x, g$0) andalso par (y, g$0) andalso x <> y
-flip: from (x'0, g$0) in par_facts on x'0 = x yield {w$0 = g$0}
-        where par (x, w$0) andalso par (y, w$0) andalso x <> y
-```
-
-A one-field record where the base has the atom. Three things it is
-*not*, each measured:
-
-* Not `leafPats`. Disabling them in `Expander.expandViaTree` -- the
-  argument the base path fills from the query's scans -- still yields
-  the atom.
-* Not `scanOwnBinders`. Passing `true` from `RelLowerer.lowerAll`
-  changes neither this plan nor the totals.
-* Not something matching `expandViaTree` fixes. Making `visitRel` lower
-  what grounding built, with `leafNames` and `scanOwnBinders` as
-  `expandViaTree` passes them, and return that step list, measures 1835
-  lines: `such-that` truncates on a crash. So does delegating to
-  `Expander.expandFrom` outright (1835). Tree first, with the fallback
-  and the tree returned, is 142.
-
-So the next move is to find what puts the projection there -- most
-likely `RelExpander.rebuild` naming a one-binder query's element -- and
-not to reshuffle the lowering's arguments, which has now been tried
-three ways.
-
-**And after that, names.** The resolver passed `RelLowerer.lower` a
-`scanNames` list and a scan kept the name the user wrote; returning the
-tree drops it, and the lowering invents `w$0`. That is the second
-query's row order, the §11 message change, and most of the 46 plan-text
-hunks.
-
-The tree does hold the names, but only for a query with several
-binders: the projection at its root is `project [{deptno = #2 $0, loc =
-#1 $0, name = #3 $0}]`, which is the map from leaf position to the name
-the user wrote. A one-binder query -- `from p where cousin p` -- has no
-projection and no name anywhere in the tree, so deriving is a partial
-answer and spec.md §3.1's "a leaf is a bare expression" is the thing to
-revisit if a whole answer is wanted.
+That is only visible where a *lowered* plan is printed. After goal 4 the
+plan is the tree, where the element is `$0` and a name is neither
+present nor wanted. If it still grates after that, the answer is to give
+a leaf an optional binder, which is a change to spec.md §3.1 and worth
+its own argument.
 
 **Three things worth not re-deriving.**
 
 * *Build before you run.* `./morel` defaults to `--no-build`, so a
-  source edit does not reach it. A previous session's traces "not
-  firing" was that, nothing more.
+  source edit does not reach it.
 * *Read the surefire output, not the last one you looked at.*
   `fullMake` reruns the suite and overwrites
   `target/test-classes/script/surefire/`, so a measurement taken before
   it and read after it describes a different build.
-* *The step list's grounding engine is still needed.* `SuchThatShuttle
-  .visitRel` tries `RelExpander.expand` and falls back to lowering plus
-  `Expander.expandFrom`, exactly as `Expander.expandFrom` falls back to
-  `expandFromSteps`.
+* *Classify diff hunks that add lines, not only those that delete
+  them.* A script that skipped pure additions hid seven wrong rows and
+  cost a session's worth of wrong conclusions.
 
 
 1. ~~Decide how `$0` is told apart, and implement it.~~ **Done.** It
@@ -145,14 +104,13 @@ revisit if a whole answer is wanted.
    `RelTest.testInputIsNotAVariable` is the regression test, and the
    13 places that compared its *name* are now type tests.
 
-2. **The resolver stops lowering, and the tree survives the rewrite
-   passes.** `Resolver` returns the `Core.Rel`; `Compiler` and
-   `CalciteCompiler` lower at their own boundary with
-   `RelLowerer.lower`; `Relationalizer` is either taught the tree or
-   declines it explicitly. *Done when* the suite is green and
-   `Sys.planEx "0"` prints a tree.
+2. ~~**The resolver stops lowering, and the tree survives the rewrite
+   passes.**~~ **Done.** `Resolver` returns the `Core.Rel`, the rewrite
+   passes carry it, and lowering is a pass of its own in `Compiles` --
+   not at the compiler's boundary, for the reason below. The suite is
+   green and `Sys.planEx "0"` prints a tree.
 
-   **Every piece is built and committed; one line is left.** Lowering
+   Lowering
    is a pass of its own, in `Compiles`, after the rewrites and before
    the compiler -- not inside `Compiler.compile` at `expression
    instanceof Core.Rel`, which looks like the tidy place and is wrong:
@@ -263,13 +221,12 @@ revisit if a whole answer is wanted.
    query round-trips twice, and `RelShadow`'s translation shadow has
    nothing left to check.
 
-   **Half done, and no longer bundled with goal 2.** `SuchThatShuttle
-   .visitRel` grounds the tree at its root, which is what the flip
-   needed; where the tree engine declines it lowers and hands the query
-   to `Expander.expandFrom`, so the round trip is paid on the residue
+   **Half done.** `SuchThatShuttle.visitRel` grounds the tree at its
+   root; where the tree engine declines it lowers and hands the query to
+   `Expander.expandFrom`, so the round trip is paid on the residue
    rather than on everything. What the tree engine will not yet take is
    what shrinks that residue: measured, grounding *only* on the tree
-   costs 1841 differing lines against 145 with the fallback, so the gap
+   costs 1841 differing lines against 106 with the fallback, so the gap
    is wide and worth measuring query by query.
 
    Two known members of the residue: a predicate written as a function
@@ -289,11 +246,15 @@ revisit if a whole answer is wanted.
    already there: `Core.Rel.describe(withTypes)`, which is spec.md
    §6's grammar, `withTypes` being planEx's `: type`.
 
-5. **Script-convert the expectations, in one flip.** Only plan text
-   moves. A query with no scan gains a visible `[()]` leaf (spec.md
-   §3.1) and a set operator may gain a projection that aligns its
-   branches; both return what they returned before. *A test whose
-   result changes in this step is a bug, not a re-baseline.*
+5. ~~**Script-convert the expectations, in one flip.**~~ **Done**, with
+   goals 2 and 3, because the plan text moves the moment the resolver
+   stops lowering. Only plan text moved: 106 lines across six script
+   files, 50 hunks, of which 8 were §11's message and 42 were plan text,
+   and no result changed. A query with no scan did gain a visible
+   `[()]` leaf (spec.md §3.1), as this said it would, and it reaches
+   Calcite as the values it is with a project over it. Four Java test
+   fixtures took the resolver's output as a `Core.From` and now take the
+   tree.
 
 6. **Freeze the plan text.** Golden files become the
    cross-implementation contract, and morel-rust (#33) and the Go
