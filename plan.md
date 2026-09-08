@@ -79,16 +79,36 @@ What is left, in the order it is worth doing:
    builds -- `Expander.ground`'s collections, and the
    `Relational.iterate` a transitive closure becomes.
 
-   **One thing stands in the way, and it is not what it looks like.**
-   Deleting `expandFromSteps` breaks exactly one query --
-   `such-that.smli`'s `from x, y where edge (x, y) join y2, z where ...
-   group {x, y}` -- and not because of anything it returned. It consumes
-   names from the generator, and what the tree engine makes of that
-   query depends on which names it gets. The same sensitivity showed up
-   twice earlier this session, in the `cousin` query and in `d_14`
-   becoming `d_16`. **Grounding should not depend on generated names**,
-   and finding out why it does is the next piece: it is a bug in its own
-   right, and it is what the deletion is waiting on.
+   **And nothing stands in the way any more.** What did was that
+   deleting `expandFromSteps` broke one query -- not through anything it
+   returned, but because it draws names, and the engine's answer
+   depended on them. `Generators.Cache.generators` was a multimap with
+   hashed keys, and `improveGenerators` walks it and acts on what it
+   finds, each step changing what the next one sees; so the order was
+   the pats' hash codes, which is their names, which is whatever number
+   the counter had reached. It is a `PairList` now, in the order the
+   engine was given them, which is the query's own order. The `cousin`
+   query answering differently depending on what preceded it, and `d_14`
+   becoming `d_16`, were the same bug.
+
+   With that fixed, `expandFromSteps` can be made to return the query
+   unchanged and **every script still passes**. Reproduce with a
+   one-line flag in `Expander.expandFrom`.
+
+   **So the deletion is available, and it is about 700 lines.**
+   `expandFromSteps`, `applyFbbt`, `stripConjunctsByIdentity`,
+   `expandFrom2`, `checkAllGrounded`, `addGeneratorScan`,
+   `expandSteps`, `StepAnalyzer`, `StepVarSet`, and `Expander`'s own
+   `hasTakeOrSkip` and `containsExtent`. What must stay, because
+   `RelExpander` uses it: `ground` and `Ground`, `renamePatterns`,
+   `misaddressed`, `notGrounded`, and the instance side that `ground`
+   needs. `RelShadow.groundingAgrees` loses its only caller, and most of
+   `RelShadow` with it.
+
+   It is worth doing deliberately rather than at the end of a session,
+   and there is an argument for waiting: the step list's engine is the
+   only independent check on the tree's, which is what
+   `groundingAgrees` was built to be.
 
    **How the residue was closed**, from 37 declines of 240 grounding
    attempts to none. Five changes, each measured:
