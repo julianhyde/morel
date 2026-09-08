@@ -70,7 +70,8 @@ sig
   (**
    * re-plans the most recently executed expression and returns the Core
    * representation at the specified phase. The phase argument can be "0" (initial),
-   * "-1" (final), or a specific pass number.
+   * "-1" (final), or a specific pass number. A query prints as a relational tree,
+   * one node per line, with the collection type of each node.
    *)
   val planEx : string -> string [@@prototype "planEx phase"]
 

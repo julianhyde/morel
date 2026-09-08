@@ -93,7 +93,8 @@ from `.smli` scripts. Raises `Error` if the string does not parse.
 
 `planEx phase` re-plans the most recently executed expression and returns the Core
 representation at the specified phase. The phase argument can be "0" (initial),
-"-1" (final), or a specific pass number.
+"-1" (final), or a specific pass number. A query prints as a relational tree,
+one node per line, with the collection type of each node.
 
 <a id="set-impl"></a>
 <h3><code>set</code></h3>
