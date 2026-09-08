@@ -24,61 +24,14 @@
  * each will also be prepared, its plan printed, and its result
  * executed remotely.
  *
- * The emp and dept tables below have the same rows as the seed tables
- * in the Spark test container, so a query gives the same answer
- * whether it runs here or there.
+ * The queries read the scott data set, which the Spark test container
+ * holds as a database of the same name with the same rows, so a query
+ * gives the same answer whether it runs here or there.
  *)
 Sys.set ("printLength", 64);
 > val it = () : unit
 Sys.set ("output", "tabular");
 > val it = () : unit
-
-val emp = bag [
-  {empno = 7369, ename = "SMITH", job = "CLERK", mgr = 7902, hiredate = "1980-12-17", sal = 800.0, comm = 0.0, deptno = 20},
-  {empno = 7499, ename = "ALLEN", job = "SALESMAN", mgr = 7698, hiredate = "1981-02-20", sal = 1600.0, comm = 300.0, deptno = 30},
-  {empno = 7521, ename = "WARD", job = "SALESMAN", mgr = 7698, hiredate = "1981-02-22", sal = 1250.0, comm = 500.0, deptno = 30},
-  {empno = 7566, ename = "JONES", job = "MANAGER", mgr = 7839, hiredate = "1981-02-04", sal = 2975.0, comm = 0.0, deptno = 20},
-  {empno = 7654, ename = "MARTIN", job = "SALESMAN", mgr = 7698, hiredate = "1981-09-28", sal = 1250.0, comm = 1400.0, deptno = 30},
-  {empno = 7698, ename = "BLAKE", job = "MANAGER", mgr = 7839, hiredate = "1981-01-05", sal = 2850.0, comm = 0.0, deptno = 30},
-  {empno = 7782, ename = "CLARK", job = "MANAGER", mgr = 7839, hiredate = "1981-06-09", sal = 2450.0, comm = 0.0, deptno = 10},
-  {empno = 7788, ename = "SCOTT", job = "ANALYST", mgr = 7566, hiredate = "1987-04-19", sal = 3000.0, comm = 0.0, deptno = 20},
-  {empno = 7839, ename = "KING", job = "PRESIDENT", mgr = 0, hiredate = "1981-11-17", sal = 5000.0, comm = 0.0, deptno = 10},
-  {empno = 7844, ename = "TURNER", job = "SALESMAN", mgr = 7698, hiredate = "1981-09-08", sal = 1500.0, comm = 0.0, deptno = 30},
-  {empno = 7876, ename = "ADAMS", job = "CLERK", mgr = 7788, hiredate = "1987-05-23", sal = 1100.0, comm = 0.0, deptno = 20},
-  {empno = 7900, ename = "JAMES", job = "CLERK", mgr = 7698, hiredate = "1981-12-03", sal = 950.0, comm = 0.0, deptno = 30},
-  {empno = 7902, ename = "FORD", job = "ANALYST", mgr = 7566, hiredate = "1981-12-03", sal = 3000.0, comm = 0.0, deptno = 20},
-  {empno = 7934, ename = "MILLER", job = "CLERK", mgr = 7782, hiredate = "1982-01-23", sal = 1300.0, comm = 0.0, deptno = 10}];
-> comm deptno empno ename  hiredate   job       mgr  sal
-> ---- ------ ----- ------ ---------- --------- ---- ----
->    0     20  7369 SMITH  1980-12-17 CLERK     7902  800
->  300     30  7499 ALLEN  1981-02-20 SALESMAN  7698 1600
->  500     30  7521 WARD   1981-02-22 SALESMAN  7698 1250
->    0     20  7566 JONES  1981-02-04 MANAGER   7839 2975
-> 1400     30  7654 MARTIN 1981-09-28 SALESMAN  7698 1250
->    0     30  7698 BLAKE  1981-01-05 MANAGER   7839 2850
->    0     10  7782 CLARK  1981-06-09 MANAGER   7839 2450
->    0     20  7788 SCOTT  1987-04-19 ANALYST   7566 3000
->    0     10  7839 KING   1981-11-17 PRESIDENT    0 5000
->    0     30  7844 TURNER 1981-09-08 SALESMAN  7698 1500
->    0     20  7876 ADAMS  1987-05-23 CLERK     7788 1100
->    0     30  7900 JAMES  1981-12-03 CLERK     7698  950
->    0     20  7902 FORD   1981-12-03 ANALYST   7566 3000
->    0     10  7934 MILLER 1982-01-23 CLERK     7782 1300
->
-> val emp : {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
-val dept = bag [
-  {deptno = 10, dname = "ACCOUNTING", loc = "NEW YORK"},
-  {deptno = 20, dname = "RESEARCH", loc = "DALLAS"},
-  {deptno = 30, dname = "SALES", loc = "CHICAGO"},
-  {deptno = 40, dname = "OPERATIONS", loc = "BOSTON"}];
-> deptno dname      loc
-> ------ ---------- --------
->     10 ACCOUNTING NEW YORK
->     20 RESEARCH   DALLAS
->     30 SALES      CHICAGO
->     40 OPERATIONS BOSTON
->
-> val dept : {deptno:int, dname:string, loc:string} bag
 
 (* Query 1: filter and project over an inline relation. Pins the
  * LocalRelation encoding (one column each of int, string, bool, real),
@@ -97,8 +50,8 @@ from r in [{i = 1, s = "one", b = true, x = 1.5},
 (* Query 2: equijoin. Pins the join relation, the qualification of
  * a column name that both inputs have, and projection over the
  * concatenated row. *)
-from e in emp
-  join d in dept on e.deptno = d.deptno
+from e in scott.emps
+  join d in scott.depts on e.deptno = d.deptno
   yield {e.ename, d.dname};
 > dname      ename
 > ---------- ------
@@ -121,7 +74,7 @@ from e in emp
 
 (* Query 3: group by with aggregates. Pins the aggregate relation, the
  * grouping key, and count, sum and max. *)
-from e in emp
+from e in scott.emps
   group e.deptno
     compute {c = count over (), total = sum over e.sal, top = max over e.sal};
 > c deptno top  total
@@ -134,7 +87,7 @@ from e in emp
 
 (* Query 4: sort and limit. Pins the sort relation with mixed
  * directions, a limit, and that the result is an ordered list. *)
-from e in emp
+from e in scott.emps
   yield {e.ename, e.sal}
   order (DESC sal, ename)
   take 3;
@@ -148,8 +101,8 @@ from e in emp
 
 (* Query 5: correlated exists subquery. Pins the subquery expression
  * whose inner plan refers to the outer row. *)
-from d in dept
-  where (exists e in emp where e.deptno = d.deptno andalso e.job = "CLERK")
+from d in scott.depts
+  where (exists e in scott.emps where e.deptno = d.deptno andalso e.job = "CLERK")
   yield d.dname;
 > val it = ["ACCOUNTING","RESEARCH","SALES"] : string bag
 

@@ -139,8 +139,11 @@ server Morel would have to decorrelate first. Done:
 restarts an existing one, or removes it with `--stop`) and prints the `sc://`
 URI once the server is ready. The container's driver program is `seed.py`,
 run by `spark-submit` with the Spark Connect plugin, so the server runs in
-the driver's context and clients see the tables it creates: `emp`, `dept`,
-and `zoo` (one column per Spark type; a typical row, an edge row, and a null
+the driver's context and clients see the tables it creates: a `scott`
+database holding the four tables of Morel's built-in `scott` data set with
+the same rows (so `spark.catalog.scott.emps` reads the same on a real
+connection and on the offline one, spec.md §2.5), and `zoo` in the default
+database (one column per Spark type; a typical row, an edge row, and a null
 row). The server runs in the UTC time zone. `.github/workflows/spark.yml`
 runs weekly (and on demand): it starts the container, runs the seed queries
 with the PySpark client, and runs the build with `-Dmorel.spark=true` and
@@ -176,27 +179,28 @@ Java floor is independent of the server's Spark version.
 its config and column-validation round trips are stubbed). All five have been
 executed against a Spark 4.0.0 Connect server in Docker and return the rows
 Morel computes locally. The queries: (1) filter+project over an inline
-relation of int, string, bool and real columns; (2) equijoin of `emp` and
-`dept` on `deptno`; (3) group by `deptno` with count, sum and max; (4)
-project, sort on two keys of mixed direction, take 3; (5) `exists` subquery
-correlated on `deptno`. The `emp` and `dept` tables have the scott rows, and
-M0's seed tables must match. The text rendering is protobuf text format with
-plan ids renumbered in order of first appearance and a LocalRelation's Arrow
-payload replaced by its row count. Translation decisions the captured plans
-pin: every scan is wrapped in a `subquery_alias` named by its Morel binder,
-and every column reference is the dotted `binder.field`; after a projection
-the names are the projected labels, unqualified. This is the only form in
-which Spark 4.0.0 resolves the outer reference of a correlated subquery when
-both sides have a column of the same name; qualifying by the producing
-relation's `plan_id`, which is what the DataFrame API emits for a join, fails
-in a subquery with `CANNOT_RESOLVE_DATAFRAME_COLUMN`. A correlated subquery
-is `with_relations`, whose `references` hold the inner plan and whose root
-refers to it by `subquery_expression { plan_id }`. A sort names its null
-ordering explicitly (descending defaults to nulls last, ascending to nulls
-first). `count` is over the literal 1 and returns a `long`, so the decoder
-narrows it to `int`. A LocalRelation carries its schema as JSON with
-per-column nullability. Binders that shadow one another across nested queries
-will need renaming before emission, since the alias namespace is flat.
+relation of int, string, bool and real columns; (2) equijoin of `scott.emps`
+and `scott.depts` on `deptno`; (3) group by `deptno` with count, sum and max;
+(4) project, sort on two keys of mixed direction, take 3; (5) `exists`
+subquery correlated on `deptno`. The queries read the `scott` data set, which
+M0 seeds into the container as a database of the same name. The text
+rendering is protobuf text format with plan ids renumbered in order of first
+appearance and a LocalRelation's Arrow payload replaced by its row count.
+Translation decisions the captured plans pin: every scan is wrapped in a
+`subquery_alias` named by its Morel binder, and every column reference is the
+dotted `binder.field`; after a projection the names are the projected labels,
+unqualified. This is the only form in which Spark 4.0.0 resolves the outer
+reference of a correlated subquery when both sides have a column of the same
+name; qualifying by the producing relation's `plan_id`, which is what the
+DataFrame API emits for a join, fails in a subquery with
+`CANNOT_RESOLVE_DATAFRAME_COLUMN`. A correlated subquery is `with_relations`,
+whose `references` hold the inner plan and whose root refers to it by
+`subquery_expression { plan_id }`. A sort names its null ordering explicitly
+(descending defaults to nulls last, ascending to nulls first). `count` is
+over the literal 1 and returns a `long`, so the decoder narrows it to `int`.
+A LocalRelation carries its schema as JSON with per-column nullability.
+Binders that shadow one another across nested queries will need renaming
+before emission, since the alias namespace is flat.
 
 **M2.** Drafted in spec.md §1: the type table, nullability at every level,
 dates and times, precision, the mapping function and its DDL and JSON inputs,

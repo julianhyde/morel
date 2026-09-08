@@ -68,7 +68,8 @@ public class SparkConnectTest {
   void testEmp() {
     try (SparkBackend.Connection c = connect()) {
       final SparkBackend.Result result =
-          c.sql("SELECT ename, sal FROM emp ORDER BY sal DESC, ename LIMIT 3");
+          c.sql(
+              "SELECT ename, sal FROM scott.emps ORDER BY sal DESC, ename LIMIT 3");
       assertThat(result.rowType().moniker(), is("{ename:string, sal:real}"));
       assertThat(
           result.rows(),
@@ -77,7 +78,8 @@ public class SparkConnectTest {
                   ImmutableList.of("KING", 5000f),
                   ImmutableList.of("FORD", 3000f),
                   ImmutableList.of("SCOTT", 3000f))));
-      final SparkBackend.Result count = c.sql("SELECT COUNT(*) AS c FROM emp");
+      final SparkBackend.Result count =
+          c.sql("SELECT COUNT(*) AS c FROM scott.emps");
       assertThat(count.rowType().moniker(), is("{c:int}"));
       assertThat(count.rows(), is(ImmutableList.of(ImmutableList.of(14))));
     }

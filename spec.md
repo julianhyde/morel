@@ -234,7 +234,9 @@ one call:
 val clerks = Spark.using (fn (spark, job) =>
   (spark.remote (fn j => from e in spark.catalog.emp where e.job = j)) job);
 clerks "CLERK";
-``` The argument is the only thing that varies between executions
+```
+
+The argument is the only thing that varies between executions
 of a plan; everything else the function refers to is fixed when the
 plan is prepared (2.2).
 
@@ -294,14 +296,28 @@ usable.
 Translation must be testable without a cluster, but the signature
 does not need a function for it: `connect` accepts a URI, and the
 adapter recognizes the scheme `mock:` as a connection to no server.
-Its catalog has one database, `default`, whose tables are declared by
-DDL in the test resources (`src/test/resources/spark/tables`, one
-file per table, the seed tables among them); the type of each is the
-DDL schema mapped by 1.1. `prepare` works normally and `toString`
-gives the plan text; `execute` raises `Spark {errorClass = "MOCK",
-...}`. The seed queries of `spark.smli` are tested this way in M5,
-and the type mapping in M2. Scripts that need a live server connect
-to `SPARK_REMOTE` instead, and skip when it is unset.
+
+The offline connection's catalog is the session's foreign data sets:
+the values that the environment binds from `--foreign`, such as
+`scott`. Each data set is a database, and each of its tables a table,
+so `spark.catalog.scott.emps` on the offline connection is the
+environment's `scott.emps`. The test container seeds a `scott`
+database with the same tables and rows (M0), so on a real connection
+`spark.catalog.scott.emps` has the same type and the same values, and
+a script written against it runs unchanged on either.
+
+`prepare` works normally on the offline connection, and `toString`
+gives the plan text, so a translation is checked against the golden
+plans without a cluster. `execute` evaluates the expression that was
+prepared, locally, in the Morel interpreter. So one script with one
+expected output is checked three ways: local evaluation, offline (the
+plan text, then the same values by local evaluation), and live. What
+the offline connection cannot catch is a translation that yields a
+wrong plan with a plausible shape; the golden plan text guards that,
+and a live run is the final word.
+
+Scripts that need a live server connect to `SPARK_REMOTE` instead,
+and skip when it is unset.
 
 ### 2.6 The `spark` value
 
