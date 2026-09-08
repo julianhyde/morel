@@ -238,8 +238,14 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
 
     @Override
     public <V> V valueAs(Class<V> clazz) {
-      if (clazz.isInstance(this)) {
+      if (clazz.isInstance(this) && clazz != Object.class) {
+        // Asked for a TypedValue (or a Table, or a List): the table itself,
+        // which fetches its rows only when they are read.
         return clazz.cast(this);
+      }
+      if (clazz.isAssignableFrom(ImmutableList.class)) {
+        // Asked for the value: the rows.
+        return clazz.cast(rows());
       }
       throw new IllegalArgumentException("not a " + clazz);
     }
