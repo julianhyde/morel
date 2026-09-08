@@ -134,7 +134,7 @@ root {
               }
               read {
                 named_table {
-                  unparsed_identifier: "emp"
+                  unparsed_identifier: "scott.emps"
                 }
               }
             }
@@ -152,7 +152,7 @@ root {
               }
               read {
                 named_table {
-                  unparsed_identifier: "dept"
+                  unparsed_identifier: "scott.depts"
                 }
               }
             }
@@ -212,7 +212,7 @@ root {
           }
           read {
             named_table {
-              unparsed_identifier: "emp"
+              unparsed_identifier: "scott.emps"
             }
           }
         }
@@ -304,7 +304,7 @@ root {
                   }
                   read {
                     named_table {
-                      unparsed_identifier: "emp"
+                      unparsed_identifier: "scott.emps"
                     }
                   }
                 }
@@ -380,7 +380,7 @@ root {
                   }
                   read {
                     named_table {
-                      unparsed_identifier: "dept"
+                      unparsed_identifier: "scott.depts"
                     }
                   }
                 }
@@ -411,7 +411,7 @@ root {
                   }
                   read {
                     named_table {
-                      unparsed_identifier: "emp"
+                      unparsed_identifier: "scott.emps"
                     }
                   }
                 }
