@@ -509,9 +509,8 @@ public class OutputMatcher {
    * {@code val name =}, the raw literal starts there too, indented by two
    * spaces. A trailing newline in the content leaves the closing fence alone on
    * the last line. If the content contains "|}", the fences carry the shortest
-   * identifier that does not occur in it. See {@link #rawLiteral} for the
-   * {@code {_|} form, whose content starts on the line after the opening
-   * fence.
+   * identifier that does not occur in it. See {@link #rawLiteral} for the "{_|"
+   * form, whose content starts on the line after the opening fence.
    *
    * <p>Strings without a newline, strings with trailing whitespace on a line,
    * and strings inside collections and records, are unchanged.
@@ -572,9 +571,9 @@ public class OutputMatcher {
    * <p>If the content's second line starts with a space, the content starts on
    * the line after the opening fence, so that its lines line up in the script;
    * the tag then starts with "_", which tells the reader to discard the newline
-   * after the fence: the literal reads {@code {_|}, a newline, the content,
-   * {@code |_}}. Otherwise the content starts right after the opening fence,
-   * {@code {|}, and every newline in the literal is content.
+   * after the fence: the literal reads "{_|", a newline, the content, "|_}".
+   * Otherwise the content starts right after the opening fence, "{|", and every
+   * newline in the literal is content.
    */
   public static String rawLiteral(String content) {
     final boolean nextLine = startsOnNextLine(content);
