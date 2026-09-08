@@ -370,7 +370,22 @@ public class RelExpander {
    */
   private Core.Exp expand(Core.Exp exp, List<Core.Exp> conditions) {
     if (!(exp instanceof Core.Rel)) {
-      return exp.isExtent() ? bound(exp, conditions) : exp;
+      if (exp.isExtent()) {
+        return bound(exp, conditions);
+      }
+      // An infinite range is unbounded too, and what bounds it is a literal
+      // bound in a filter above rather than a generator: `[1..]` under `where
+      // x < 5` is `[1..^5]`. The step list does this in `RangePushdown.apply`,
+      // after FBBT has deduced what bounds it can; a tree has no FBBT yet, so
+      // this reaches only the bounds the query wrote.
+      final RangePushdown.@Nullable Tightening tightening =
+          RangePushdown.tighten(typeSystem, exp, conditions);
+      if (tightening != null) {
+        // The range now enforces the conjunct, so the filter can drop it.
+        subsumed.add(tightening.consumedConjunct);
+        return tightening.newExp;
+      }
+      return exp;
     }
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;

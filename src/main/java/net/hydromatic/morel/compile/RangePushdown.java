@@ -22,11 +22,13 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
@@ -109,6 +111,104 @@ final class RangePushdown {
         return true;
       default:
         return false;
+    }
+  }
+
+  /**
+   * Tightens a tree's leaf against a condition carried down to it, and returns
+   * the finite range and the conjunct it consumed, or null.
+   *
+   * <p>The tree's answer to what {@link #apply} does for a step list: {@code
+   * filter [$0 < 5] (#flatten Range ([AT_LEAST 1]))} is {@code #flatten Range
+   * ([CLOSED_OPEN (1, 5)])}, which is finite, so grounding has nothing left to
+   * do. The condition is on {@code $0}, because a leaf has no pattern.
+   */
+  static @Nullable Tightening tighten(
+      TypeSystem typeSystem, Core.Exp leaf, List<Core.Exp> conditions) {
+    final RangeInfo info = matchExp(leaf);
+    if (info == null) {
+      return null;
+    }
+    return findTightening(
+        typeSystem,
+        leaf.type.elementType(),
+        info.op,
+        info.value,
+        info.bagWrapped,
+        e -> e instanceof Core.Input && ((Core.Input) e).i == 0,
+        conditions,
+        ImmutableSet.of());
+  }
+
+  /**
+   * If {@code exp} is {@code Range.flatten [<single_infinite_ctor>]}, possibly
+   * wrapped in {@code Bag.fromList}, returns what the constructor says;
+   * otherwise null.
+   *
+   * <p>The part of {@link #match} that does not need a pattern. {@code match}
+   * needs one to know whether the element is a char, and a leaf says so with
+   * its type.
+   */
+  private static @Nullable RangeInfo matchExp(Core.Exp exp) {
+    if (!(exp instanceof Core.Apply)) {
+      return null;
+    }
+    Core.Apply apply = (Core.Apply) exp;
+    final boolean bagWrapped;
+    if (apply.builtIn() == BuiltIn.BAG_FROM_LIST
+        && apply.arg instanceof Core.Apply) {
+      apply = (Core.Apply) apply.arg;
+      bagWrapped = true;
+    } else {
+      bagWrapped = false;
+    }
+    if (apply.builtIn() != BuiltIn.RANGE_FLATTEN
+        || !apply.arg.isCallTo(BuiltIn.Z_LIST)) {
+      return null;
+    }
+    final Core.Apply list = (Core.Apply) apply.arg;
+    if (list.args().size() != 1
+        || !(list.args().get(0) instanceof Core.Apply)) {
+      return null;
+    }
+    final Core.Apply ctor = (Core.Apply) list.args().get(0);
+    if (!(ctor.fn instanceof Core.Id)) {
+      return null;
+    }
+    final BuiltIn.Constructor ctorEnum =
+        BuiltIn.Constructor.forName(((Core.Id) ctor.fn).idPat.name);
+    if (ctorEnum == null) {
+      return null;
+    }
+    final boolean isChar = exp.type.elementType() == PrimitiveType.CHAR;
+    switch (ctorEnum) {
+      case RANGE_AT_LEAST:
+        return new RangeInfo(
+            ctor.arg, isChar ? BuiltIn.CHAR_OP_GE : BuiltIn.OP_GE, bagWrapped);
+      case RANGE_AT_MOST:
+        return new RangeInfo(
+            ctor.arg, isChar ? BuiltIn.CHAR_OP_LE : BuiltIn.OP_LE, bagWrapped);
+      case RANGE_GREATER_THAN:
+        return new RangeInfo(
+            ctor.arg, isChar ? BuiltIn.CHAR_OP_GT : BuiltIn.OP_GT, bagWrapped);
+      case RANGE_LESS_THAN:
+        return new RangeInfo(
+            ctor.arg, isChar ? BuiltIn.CHAR_OP_LT : BuiltIn.OP_LT, bagWrapped);
+      default:
+        return null;
+    }
+  }
+
+  /** What an infinite single-constructor range says, without a pattern. */
+  private static final class RangeInfo {
+    final Core.Exp value;
+    final BuiltIn op;
+    final boolean bagWrapped;
+
+    RangeInfo(Core.Exp value, BuiltIn op, boolean bagWrapped) {
+      this.value = value;
+      this.op = op;
+      this.bagWrapped = bagWrapped;
     }
   }
 
@@ -267,13 +367,42 @@ final class RangePushdown {
       ScanInfo info,
       List<Core.Exp> whereConjuncts,
       Set<Core.Exp> consumed) {
+    return findTightening(
+        typeSystem,
+        info.pat.type,
+        info.op,
+        info.value,
+        info.bagWrapped,
+        e -> Bounds.isIdRef(e, info.pat),
+        whereConjuncts,
+        consumed);
+  }
+
+  /**
+   * As {@link #findTightening(TypeSystem, ScanInfo, List, Set)}, given the
+   * pieces rather than a scan's.
+   *
+   * <p>A step list knows the variable a bound must be on by its pattern; a
+   * tree's leaf has no pattern, and the bound is on {@code $0}. {@code isVar}
+   * is what tells one side of a comparison from the other, and is all that
+   * differs between the two.
+   */
+  private static @Nullable Tightening findTightening(
+      TypeSystem typeSystem,
+      Type elementType,
+      BuiltIn scanOp,
+      Core.Exp scanValue,
+      boolean bagWrapped,
+      Predicate<Core.Exp> isVar,
+      List<Core.Exp> whereConjuncts,
+      Set<Core.Exp> consumed) {
     // AT_LEAST/GREATER_THAN -> need an upper bound; AT_MOST/LESS_THAN ->
     // need a lower bound.
     final boolean needUpper =
-        info.op == BuiltIn.OP_GE
-            || info.op == BuiltIn.OP_GT
-            || info.op == BuiltIn.CHAR_OP_GE
-            || info.op == BuiltIn.CHAR_OP_GT;
+        scanOp == BuiltIn.OP_GE
+            || scanOp == BuiltIn.OP_GT
+            || scanOp == BuiltIn.CHAR_OP_GE
+            || scanOp == BuiltIn.CHAR_OP_GT;
     Core.Exp bestConjunct = null;
     BigDecimal bestValue = null;
     boolean bestStrict = false;
@@ -281,7 +410,7 @@ final class RangePushdown {
       if (consumed.contains(c)) {
         continue;
       }
-      final LiteralBound lb = extractLiteralBound(c, info.pat);
+      final LiteralBound lb = extractLiteralBound(c, isVar);
       if (lb == null || lb.isUpper != needUpper) {
         continue;
       }
@@ -298,25 +427,25 @@ final class RangePushdown {
     }
     // 'bestValue' is assigned whenever 'bestConjunct' is.
     final BigDecimal bestValue2 = requireNonNull(bestValue);
-    final Core.@Nullable Literal scanLit = Bounds.scalarLiteral(info.value);
+    final Core.@Nullable Literal scanLit = Bounds.scalarLiteral(scanValue);
     if (scanLit == null) {
       return null;
     }
-    final BigDecimal scanValue = Bounds.asBigDecimal(scanLit);
+    final BigDecimal scanNumber = Bounds.asBigDecimal(scanLit);
     final BigDecimal lowerValue;
     final boolean lowerStrict;
     final BigDecimal upperValue;
     final boolean upperStrict;
     if (needUpper) {
-      lowerValue = scanValue;
-      lowerStrict = info.op == BuiltIn.OP_GT || info.op == BuiltIn.CHAR_OP_GT;
+      lowerValue = scanNumber;
+      lowerStrict = scanOp == BuiltIn.OP_GT || scanOp == BuiltIn.CHAR_OP_GT;
       upperValue = bestValue2;
       upperStrict = bestStrict;
     } else {
       lowerValue = bestValue2;
       lowerStrict = bestStrict;
-      upperValue = scanValue;
-      upperStrict = info.op == BuiltIn.OP_LT || info.op == BuiltIn.CHAR_OP_LT;
+      upperValue = scanNumber;
+      upperStrict = scanOp == BuiltIn.OP_LT || scanOp == BuiltIn.CHAR_OP_LT;
     }
     if (lowerValue.compareTo(upperValue) > 0) {
       return null;
@@ -324,12 +453,7 @@ final class RangePushdown {
     final BuiltIn.Constructor ctor = finiteCtor(lowerStrict, upperStrict);
     final Core.Exp newExp =
         buildRangeFlatten(
-            typeSystem,
-            info.pat.type,
-            ctor,
-            lowerValue,
-            upperValue,
-            info.bagWrapped);
+            typeSystem, elementType, ctor, lowerValue, upperValue, bagWrapped);
     return new Tightening(newExp, bestConjunct);
   }
 
@@ -404,7 +528,7 @@ final class RangePushdown {
    * {@code <, <=, >, >=}, returns a {@link LiteralBound}; otherwise null.
    */
   private static @Nullable LiteralBound extractLiteralBound(
-      Core.Exp c, Core.NamedPat pat) {
+      Core.Exp c, Predicate<Core.Exp> isVar) {
     if (c.op != Op.APPLY) {
       return null;
     }
@@ -414,8 +538,8 @@ final class RangePushdown {
     }
     final Core.Exp lhs = c.arg(0);
     final Core.Exp rhs = c.arg(1);
-    final boolean lhsIsPat = Bounds.isIdRef(lhs, pat);
-    final boolean rhsIsPat = Bounds.isIdRef(rhs, pat);
+    final boolean lhsIsPat = isVar.test(lhs);
+    final boolean rhsIsPat = isVar.test(rhs);
     final BuiltIn normalized;
     final Core.Exp constSide;
     if (lhsIsPat && !rhsIsPat) {
@@ -513,7 +637,7 @@ final class RangePushdown {
    * Result of {@link #findTightening}: the new finite-range scan expression and
    * the where conjunct it consumed.
    */
-  private static final class Tightening {
+  static final class Tightening {
     final Core.Exp newExp;
     final Core.Exp consumedConjunct;
 

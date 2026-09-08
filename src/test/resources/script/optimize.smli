@@ -452,9 +452,7 @@ Sys.planEx "3";
 from c in [#"a"..] where c < #"e";
 > val it = [#"a",#"b",#"c",#"d"] : char list
 Sys.planEx "3";
-> val it =
->   "val it = from w$0 in #flatten Range ([CLOSED_OPEN (#\"a\", #\"e\")])"
->   : string
+> val it = "val it = #flatten Range ([CLOSED_OPEN (#\"a\", #\"e\")])" : string
 from c in [#"a"..] where c <= #"d";
 > val it = [#"a",#"b",#"c",#"d"] : char list
 
