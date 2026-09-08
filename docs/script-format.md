@@ -172,6 +172,35 @@ source, and prints a diff if they differ. To write a new test, put a
 placeholder `> x` after each statement, run the script, check the
 generated output, and copy `.out` back over the source.
 
+### Running scripts in the other implementations
+
+The Rust and Go implementations keep copies of the scripts and run
+them the same way; a script that they run should keep the same text
+in every implementation.
+
+[Morel Rust](https://github.com/hydromatic/morel-rust) keeps its
+scripts in `tests/script`. To run one, writing the regenerated script
+to `.out` next to the source and printing a diff if they differ:
+
+```bash
+cargo run -- test tests/script/simple.smli
+```
+
+Without `test`, `cargo run -- tests/script/simple.smli` prints the
+regenerated script to standard output. The suite is `cargo test`, and
+the script tests alone are `cargo test --test smile`.
+
+[Morel Go](https://github.com/hydromatic/morel-go) keeps its scripts
+in `testdata/script`. Running a script prints the regenerated script to
+standard output, so compare it with the source:
+
+```bash
+diff testdata/script/simple.smli <(./morel testdata/script/simple.smli)
+```
+
+The suite is `go test ./...`; one script is `go test -run
+'TestScripts/simple.smli' .`
+
 ## Matching
 
 `OutputMatcher` decides whether an actual output and an expected
