@@ -769,6 +769,24 @@ public class RelLowerer {
           : core.idPat(type, leafName, nameGenerator::inc);
     }
     if (scanNames.isEmpty()) {
+      // No name is owed. The collection's own binder is still better than a
+      // fresh one, and for the reason below: inventing a second name makes the
+      // builder rename what it inlined, so `from ... yield g$0` scanned under
+      // `w$0` becomes `yield {w$0 = g$0}`, a one-field record where the
+      // element was an atom. What reads the element then reads a field, and
+      // the engine that inverts a function's body to build a generator does
+      // not recognise it -- which is how `from p where cousin p` lost the
+      // `x <> y` of its seed.
+      // Only a binder grounding generated: it is unique, so reusing it cannot
+      // capture, and it names nothing the user wrote. A name the query itself
+      // chose may be a correlated subquery's, and scanning under it would take
+      // the name the correlation reads.
+      final Core.@Nullable IdPat own = binderOf(collection);
+      if (own != null
+          && Core.NamedPat.isGenerated(own.name)
+          && usedNames.add(own.name)) {
+        return own;
+      }
       return freshPat(type);
     }
     final List<String> names = requireNonNull(scanNames.remove());
