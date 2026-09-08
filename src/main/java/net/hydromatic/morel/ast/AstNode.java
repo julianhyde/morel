@@ -71,7 +71,15 @@ public abstract class AstNode {
 
   /** Converts this node into a string with fewer id ordinals. */
   public final String unparseRenumbered() {
-    return unparse(new RenumberingAstWriter());
+    return unparseRenumbered(false);
+  }
+
+  /**
+   * As {@link #unparseRenumbered()}, and if {@code withTypes} a relational node
+   * prints the collection type of every line, as {@code Sys.planEx} prints it.
+   */
+  public final String unparseRenumbered(boolean withTypes) {
+    return unparse(new RenumberingAstWriter(withTypes));
   }
 
   /** Converts this node into an ML string, with a given writer. */
@@ -102,6 +110,16 @@ public abstract class AstNode {
   private static class RenumberingAstWriter extends AstWriter {
     final Map<String, List<Integer>> nameIds = new HashMap<>();
     final Map<String, String> names = new LinkedHashMap<>();
+    final boolean withTypes;
+
+    RenumberingAstWriter(boolean withTypes) {
+      this.withTypes = withTypes;
+    }
+
+    @Override
+    public boolean withTypes() {
+      return withTypes;
+    }
 
     private int register(String name, int i) {
       final List<Integer> list =

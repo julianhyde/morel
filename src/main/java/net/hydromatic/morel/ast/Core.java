@@ -2516,7 +2516,7 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(describe());
+      return w.append(describe(w.withTypes()));
     }
 
     /** How a {@link Join} treats elements that have no match. */
