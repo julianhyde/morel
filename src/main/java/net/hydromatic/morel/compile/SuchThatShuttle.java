@@ -148,47 +148,26 @@ class SuchThatShuttle extends EnvShuttle {
       return null;
     }
     final boolean rowsUsed = !rowsUnused;
-    try {
-      final Core.Exp expanded =
-          RelExpander.expand(
-              typeSystem, env, rel, rowsUsed, RelExpander.leafPats(rel));
-      // The same questions `Expander.expandViaTree` asks of its answer: every
-      // leaf bounded, and no expression reading a field its row does not have.
-      // Replacing a join with a projection makes the element one component
-      // where it was several (discussion.md §16), and what reads it above was
-      // written for the other shape; `rebuild` does not rebase them, and the
-      // failure is at run time, in a record selector, a long way from the pass
-      // that caused it. The reading happens in the lowered form, so that is
-      // what to ask; the lowering here is thrown away.
-      if (!RelExpander.containsUnbounded(expanded)
-          && !Expander.misaddressed(
-              RelLowerer.lowerAll(typeSystem, nameGenerator, expanded))) {
-        // Descend into what came back, to ground the trees nested in it.
-        return expanded.accept(this);
-      }
-    } catch (CompileException e) {
-      // The tree engine declined; the step list is the fallback, as it is in
-      // Expander.expandFrom.
+    final List<Core.Pat> leafPats = RelExpander.leafPats(rel);
+    final Core.Exp expanded =
+        RelExpander.expand(typeSystem, env, rel, rowsUsed, leafPats);
+    // The same questions `Expander.expandViaTree` used to ask of its answer:
+    // every leaf bounded, and no expression reading a field its row does not
+    // have. Replacing a join with a projection makes the element one component
+    // where it was several (discussion.md §16), and what reads it above was
+    // written for the other shape; the failure is at run time, in a record
+    // selector, a long way from the pass that caused it.
+    if (RelExpander.containsUnbounded(expanded)
+        || Expander.misaddressed(
+            RelLowerer.lowerAll(typeSystem, nameGenerator, expanded))) {
+      final Core.@Nullable NamedPat pat = RelExpander.ungrounded(rel, leafPats);
+      throw new CompileException(
+          pat == null ? "pattern is not grounded" : Expander.notGrounded(pat),
+          false,
+          rel.pos);
     }
-    // What the tree engine will not take, the step list's engine still can:
-    // `from n where isNum n`, where the predicate is a function that the
-    // inliner leaves alone because it reads a global. Lower the tree and hand
-    // it over. The round trip that goal 3 removes is paid only here, on the
-    // queries the tree engine declines, and it shrinks as that engine grows.
-    //
-    // Lower it deeply: the step list's engine reads the constraints inside a
-    // nested query -- `exists x where (exists y where (x, y) elem pairs)`
-    // grounds x from the inner query's constraint -- and a tree left in a
-    // condition is opaque to it.
-    final Core.Exp lowered =
-        RelLowerer.lowerAll(typeSystem, nameGenerator, rel);
-    if (!(lowered instanceof Core.From)) {
-      return null;
-    }
-    final Core.From expanded =
-        Expander.expandFrom(
-            typeSystem, nameGenerator, env, (Core.From) lowered, rowsUsed);
-    return super.visit(expanded);
+    // Descend into what came back, to ground the trees nested in it.
+    return expanded.accept(this);
   }
 
   @Override
