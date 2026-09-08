@@ -266,15 +266,23 @@ public class TypeTest {
             "{a| val it = \"x\" : string",
             "{a| val it = \"x\" : string"),
         is(false));
-    // A newline right after the opening fence is not content
+    // If the tag starts with "_", a newline right after the opening fence
+    // is not content; otherwise it is
+    assertThat(
+        m.codeEqual(stringType, "\"a\\nb\"", lines("{_|", "a", "b|_}")),
+        is(true));
+    assertThat(
+        m.codeEqual(stringType, "\"a\\nb\"", lines("{_x|", "a", "b|_x}")),
+        is(true));
+    assertThat(
+        m.codeEqual(stringType, "\"\\na\\nb\"", lines("{|", "a", "b|}")),
+        is(true));
     assertThat(
         m.codeEqual(stringType, "\"a\\nb\"", lines("{|", "a", "b|}")),
-        is(true));
+        is(false));
     assertThat(
         m.codeEqual(stringType, "\"\\na\"", lines("{_|", "", "a|_}")),
         is(true));
-    assertThat(
-        m.codeEqual(stringType, "\"\\na\"", lines("{_|", "a|_}")), is(false));
     // A tag consists of lower-case letters and underscores; anything else
     // is not a fence.
     assertThat(m.codeEqual(stringType, "\"x\"", "{a_b|x|a_b}"), is(true));
@@ -421,14 +429,15 @@ public class TypeTest {
         OutputMatcher.toRawStrings("val it = \"|}|a}\\n\" : string"),
         is(lines("val it = {b||}|a}", "|b} : string")));
     assertThat(OutputMatcher.rawLiteral("x"), is("{|x|}"));
-    // If the second line starts with a space, or the content starts with a
-    // newline, the content starts on the line after the "{_|" fence
+    // If the second line starts with a space, the content starts on the
+    // line after the "{_|" fence; content that starts with a newline does
+    // not need that, because a newline after "{|" is content
     assertThat(
         OutputMatcher.toRawStrings("val it = \"a\\n  b\" : string"),
         is(lines("val it = {_|", "a", "  b|_} : string")));
     assertThat(
         OutputMatcher.toRawStrings("val it = \"\\na\" : string"),
-        is(lines("val it = {_|", "", "a|_} : string")));
+        is(lines("val it = {|", "a|} : string")));
     assertThat(
         OutputMatcher.toRawStrings("val it = \"a\\nb\\n  c\" : string"),
         is(lines("val it = {|a", "b", "  c|} : string")));
@@ -437,7 +446,7 @@ public class TypeTest {
         is(lines("{_|", "a", " b|_}")));
     assertThat(
         OutputMatcher.rawLiteral(lines("a|_}", " b")),
-        is(lines("{a|", "a|_}", " b|a}")));
+        is(lines("{_a|", "a|_}", " b|_a}")));
     final StringBuilder b = new StringBuilder("|}");
     for (char c = 'a'; c <= 'z'; c++) {
       b.append('|').append(c).append('}');

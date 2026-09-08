@@ -104,11 +104,11 @@ lines after the first start at column 0 (immediately after the `> `
 prefix). A trailing newline in the content leaves the closing fence
 alone on the last line.
 
-One exception to "verbatim": a newline immediately after the opening
-fence is not content. The harness uses that when the content's second
-line starts with a space, so that the content's lines line up in the
-script, and when the content itself starts with a newline; the
-opening fence then carries the tag `_`:
+If the content's second line starts with a space, the harness starts
+the content on the line after the opening fence, so that the content's
+lines line up in the script. The tag then starts with an underscore,
+`{_|`, which is what tells the reader that the newline right after the
+opening fence is not content:
 
 ```
 "root {\n  common {\n    plan_id: 0\n  }\n}";
@@ -120,10 +120,12 @@ opening fence then carries the tag `_`:
 > }|_} : string
 ```
 
-If the content contains `|}` (or `|_}`), the fences carry another
-tag, `{a|...|a}`. A tag consists of lower-case letters `a` to `z` and
-underscores; the harness chooses the shortest (`a`, `b`, ..., `z`,
-`aa`, ...) such that `|tag}` does not occur in the content.
+If the content contains `|}` (or `|_}`), the fences carry a longer
+tag, `{a|...|a}` or `{_a|...|_a}`. A tag consists of lower-case
+letters `a` to `z` and underscores, and starts with an underscore
+exactly when the content starts on the next line; the harness chooses
+the shortest (`a`, `b`, ..., `z`, `aa`, ...) such that `|tag}` does
+not occur in the content.
 
 Only a top-level string value is written this way. A string inside a
 list, record or other value keeps the regular escaped form. So does a

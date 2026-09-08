@@ -86,19 +86,19 @@ val x = 10 - 1;
 > }|_} : string
 
 (* If the second line starts with a space, the content starts on the line
- * after the opening fence, whose tag is "_", so that the lines line up;
- * the newline after the fence is not part of the content. *)
+ * after the opening fence, so that the lines line up. The tag then starts
+ * with "_", which means that the newline after the fence is not part of
+ * the content. *)
 "a\n  b\nc";
 > val it = {_|
 > a
 >   b
 > c|_} : string
 
-(*) Content that starts with a newline uses the same form
+(*) After "{|", a newline is content
 "\na";
-> val it = {_|
->
-> a|_} : string
+> val it = {|
+> a|} : string
 
 (*) A bound name
 val s = "one\ntwo";
