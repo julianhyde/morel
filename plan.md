@@ -206,21 +206,21 @@ coerces nulls back to zero values, which is lossy. Two halves. Pure: a
 function mapping Spark schema strings (DDL or JSON) to Morel types, tested in
 `.smli` with no cluster; includes tested rejections (`map`, intervals) and
 nullability at every nesting level. Live: browse the zoo table, print the
-inferred type, select and print the decoded values (needs M6). Open question,
-raised by the M0 finding that catalog columns are always nullable: mapping
-every nullable column to `option` would make every column of `emp` an
-`option`, and the seed queries would not typecheck without unwrapping.
-Candidates: map nullable to `option` strictly and give the catalog a way to
-declare columns non-null; or map to the plain type and raise an exception
-when a null arrives. Decide before M7.
+inferred type, select and print the decoded values (needs M6). Decided
+(spec.md §1.2): a catalog column maps to the plain type and the decoder
+raises when a null arrives; nested array elements and struct fields keep
+`option`.
 
 **M3.** Drafted in spec.md §2: the signature, what `prepare` accepts,
-lifecycle, errors, and a mock connection for testing translation without a
-cluster. Candidate design: phantom-typed plan (`type 'a plan`; `prepare: 'a
--> 'a plan`; `execute: 'a plan -> 'a`). `prepare` is not an ordinary
-function: Morel evaluates arguments eagerly, so a function would receive the
-query's result, not the query. It is an intrinsic that operates on its
-argument's parse tree, in the same way as `Plan.program`
+lifecycle, errors, and an offline `mock:` URI for testing translation without
+a cluster (no `mock` function in the signature). Decided design: a plan is a
+function, `type ('a, 'b) plan`, prepared from a function expression (`prepare
+: connection * ('a -> 'b) -> ('a, 'b) plan`) and executed on an argument
+(`execute : ('a, 'b) plan * 'a -> 'b`); a query with no parameters is a
+function of `unit`. `prepare` is not an ordinary function: Morel evaluates
+arguments eagerly, so a function would receive the query's result, not the
+query. It is an intrinsic that operates on its argument's parse tree, in the
+same way as `Plan.program`
 ([#359](https://github.com/hydromatic/morel/issues/359)); the type signature
 is as above, but the compiler recognizes the call.
 [#470](https://github.com/hydromatic/morel/issues/470) proposes `Plan.core :
@@ -233,7 +233,7 @@ LocalRelations. Boundary-representable types are exactly those with an image
 in the M2 mapping; sum types cross via a tagged struct encoding (`option` is
 the degenerate case, via nullability); recursive datatypes and function types
 are rejected. Connection lifecycle: explicit `connect`/`close` (test scripts
-open once, run many statements, close); a `use` wrapper for scoped use; no
+open once, run many statements, close); a `using` wrapper for scoped use; no
 pooling in phase 1; a registry of open connections, a cleaner that warns on
 leaks, a shutdown hook, and a harness check that scripts leave the registry
 empty. Use after close raises a closed-connection error, including when
