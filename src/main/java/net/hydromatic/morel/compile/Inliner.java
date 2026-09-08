@@ -344,6 +344,53 @@ public class Inliner extends EnvShuttle {
   }
 
   /**
+   * Returns whether moving {@code exp} to the uses of {@code pat} in {@code
+   * body} would carry an input reference into a tree that does not bind it.
+   *
+   * <p>{@code $0} means the element of whichever node encloses it, so
+   * substituting a value that mentions one at a use inside a nested tree makes
+   * it that tree's element instead. The resolver binds the element precisely so
+   * that a nested tree can read it by name (spec.md §2 rule 3), and inlining
+   * the binding would undo that.
+   *
+   * <p>Only a use that crosses into a tree is a problem. A binding whose value
+   * is an input and whose uses are beside it -- what beta-reducing {@code from
+   * n where isNum n} leaves, {@code let val n = $0 in n elem nums end} -- must
+   * still be substituted, or the engine cannot see the constraint it grounds
+   * on.
+   */
+  private static boolean carriesInputIntoRel(
+      Core.Exp exp, Core.NamedPat pat, Core.Exp body) {
+    if (!containsInput(exp)) {
+      return false;
+    }
+    final boolean[] found = {false};
+    body.accept(
+        new Visitor() {
+          @Override
+          protected void visitRel(Core.Rel rel) {
+            if (!found[0] && containsReference(rel, pat)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
+  }
+
+  /** Returns whether an expression reads an input of a relational tree. */
+  private static boolean containsInput(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Input input) {
+            found[0] = true;
+          }
+        });
+    return found[0];
+  }
+
+  /**
    * Returns whether a type contains type variables. Used to detect polymorphic
    * functions that require type unification.
    */
@@ -505,6 +552,17 @@ public class Inliner extends EnvShuttle {
 
   @Override
   protected Core.Exp visit(Core.Let let) {
+    if (let.decl instanceof Core.NonRecValDecl) {
+      final Core.NonRecValDecl decl = (Core.NonRecValDecl) let.decl;
+      if (carriesInputIntoRel(decl.exp, decl.pat, let.exp)) {
+        // Keep the declaration, and hide its value: `visit(Core.Id)` reads the
+        // value out of the environment and would make the same substitution
+        // this guard exists to stop.
+        final List<Binding> bindings = new ArrayList<>();
+        bindings.add(Binding.of(decl.pat));
+        return let.copy(let.decl.accept(this), let.exp.accept(bind(bindings)));
+      }
+    }
     final Analyzer.Use use =
         analysis == null
             ? Analyzer.Use.MULTI_UNSAFE
