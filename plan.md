@@ -39,74 +39,67 @@ Six goals, in order, each with the thing that says it is done.
 
 ### Start here
 
-**The flip is one line.** Everything it needs is committed and green;
-what is left is to change `Resolver.RelFromResolver.run` from
+**The flip is one line, and it answers every query correctly.** What is
+left is to change `Resolver.RelFromResolver.run` from
 
 ```java
       return RelLowerer.lower(
           typeMap.typeSystem, nameGenerator, b.build(), scanNames);
 ```
 
-to `return b.build();` and chase what is listed below. The nine changes
-the last recipe described are commits of their own, each inert while the
-resolver still lowers, so the branch stays green with the line as it is:
-the `visitRel` hooks on `Shuttle` and `Visitor`, the lowering pass in
-`Compiles`, `RelLowerer.lowerAll`, grounding from `SuchThatShuttle
-.visitRel`, `EnvVisitor.visit(Core.Group)`, the resolver's row binding
-and the `Inliner` guard that protects it.
+to `return b.build();`. Everything it needs is committed, and each piece
+is inert while the resolver still lowers, so the branch stays green with
+the line as it is: the `visitRel` hooks on `Shuttle` and `Visitor`, the
+lowering pass in `Compiles`, `RelLowerer.lowerAll`, grounding from
+`SuchThatShuttle.visitRel`, `EnvVisitor.visit(Core.Group)`, the
+resolver's row binding and the `Inliner` rules that protect it.
 
-**With the line flipped: 145 differing lines across 6 files, 61 hunks.**
-Fourteen are §11's message change, which is intended; 44 are plan text,
-which is goal 5; and **three are results**, of which only one is a
-failure:
+**With the line flipped: 142 differing lines across 6 files, 60 hunks.**
+Fourteen are §11's message change, which is intended. Forty-four are
+plan text, which is goal 5. **Two are row order, and none is a wrong
+answer.**
 
-* `such-that.smli:1411` -- `fun self_loop x = (exists y where edge (x,
-  y) andalso x = y)` then `from x where self_loop x` answers "pattern is
-  not grounded", at a position inside the function body. The
-  declarations compile on their own; it is the call that fails. Related:
-  with a narrower `Inliner` guard (see below) the same query trips
-  `RelShadow.groundingAgrees` with a name capture, `from w$282 : int
-  join ... where #nonEmpty Relational (from w$282 in [w$281] ...)` --
-  two scans a page apart with the same binder. Both are the same query,
-  and probably the same defect.
-* `such-that.smli:1834` and `:2133` are **row order**, not rows: every
-  row is there. Neither query says `order`, and the order they had came
-  from the labels of the group that grounding builds -- the query's own
-  names under the old path, generated ones now, and they sort
-  differently. Cheap to fix by carrying the query's names into the tree;
-  see the next paragraph.
+The two are `such-that.smli:1834` (the `cousin` query's `k k`) and
+`:2133` (`from loc, deptno, name where {deptno, loc, dname = name} elem
+scott.depts`). Every row is there; neither query says `order`. The order
+they had came from the labels of the group that grounding builds to
+deduplicate, and a group's key record sorts its fields by label: under
+the old path those labels were `deptno, loc, name`, and now they are
+`g$0, g$1, g$2` in leaf order.
 
-**What plan text loses, and why.** The resolver passed
-`RelLowerer.lower` a `scanNames` list, so a scan kept the name the user
-wrote. Returning the tree drops it, and the lowering invents `w$0`. Two
-consequences: the "not grounded" message no longer names the pattern
-(§11 decided that is right), and a group's labels are generated, which
-is what moves the two row orders above. Carrying leaf names on the tree
-is not in spec.md §3, so either the datatype gains them or the lowering
-derives them -- the final projection does name the output.
+**So the last thing before goal 5 is names.** The resolver passed
+`RelLowerer.lower` a `scanNames` list and a scan kept the name the user
+wrote; returning the tree drops it, and the lowering invents `w$0`.
+Three consequences, in order of how much they matter:
 
-**One inlining regression, deliberate.** `Inliner`'s guard declines to
-move a value that mentions a `Core.Input`. A function whose body is a
-tree -- `fn (emps, deptno) => from e in emps ...` -- mentions one, so it
-is no longer inlined; `relational.smli:3456` and `check.smli:3472` show
-the `let1` that results. The narrow fix is to stop the walk at a nested
-node, which is what `Visitor.RelBoundary` in `RelValidator` does; it was
-tried, and it made `such-that` far worse through the capture above. Fix
-the capture first.
+1. the two row orders above, which goal 5's rule says are bugs and not
+   a re-baseline;
+2. the "not grounded" message no longer names the pattern, which §11
+   decided is right;
+3. every scan in every plan is `w$0`, which is goal 5's churn.
 
-**Two things this session established, worth not re-deriving.**
+Carrying leaf names is not in spec.md §3, so either the datatype gains
+them or something derives them. The tree does hold them: the projection
+at the root of `from loc, deptno, name where ...` is `project [{deptno =
+#2 $0, loc = #1 $0, name = #3 $0}]`, which is exactly the map from leaf
+position to the name the user wrote. Deriving them there and passing
+them to `RelExpander.expand` as `leafPats` -- the argument the old path
+filled from the query's scans -- is the cheap route, and it is worth
+trying before the datatype grows a field.
+
+**Two things worth not re-deriving.**
 
 * *Build before you run.* `./morel` defaults to `--no-build`, so a
-  source edit does not reach it. The last session's traces "not firing"
-  was that, nothing more: with `./mvnw compile` first, a print beside
-  `checkExtentsFinite` fires for `val x = 1`.
+  source edit does not reach it. A previous session's traces "not
+  firing" was that, nothing more: with `./mvnw compile` first, a print
+  beside `checkExtentsFinite` fires for `val x = 1`.
 * *The step list's engine is still needed.* `SuchThatShuttle.visitRel`
   tries `RelExpander.expand` and falls back to lowering plus
   `Expander.expandFrom`, exactly as `Expander.expandFrom` falls back to
   `expandFromSteps`. Grounding entirely on the tree measured 1841 lines;
   lowering before grounding measured 1835; tree first with the fallback
-  measured 145. The fallback must lower *deeply*, because that engine
-  reads the constraints inside a nested query.
+  measured 142.
+
 
 1. ~~Decide how `$0` is told apart, and implement it.~~ **Done.** It
    is a node of its own, `Core.Input`, carrying the ordinal of the
@@ -194,12 +187,29 @@ the capture first.
      inside a `yield` lost the counter and `$ordinal ()` raised "occurs
      outside a yield". A bug of its own, with nothing to do with trees;
      fixed, and `relational.smli` has the query.
-   * *Names must be unique across expanders.* `RelExpander` numbered
-     its invented binders from zero with ordinal zero, so two expanders
-     named two things `g$0` and a record over both lost a field. They
-     come from the type system's generator now, and the printer
-     renumbers what it prints -- which the step list's printer did not
-     do until this session, and now does.
+   * *Names must be unique.* Two ways they were not. `RelExpander`
+     numbered its invented binders from zero with ordinal zero, so two
+     expanders named two things `g$0` and a record over both lost a
+     field. And `Session` and `TypeSystem` had a `NameGenerator` each,
+     both handing out `w$0`, so a binder from one captured a binder from
+     the other as soon as a pass with a type system and no session --
+     `Generators`, reading a function's body -- lowered something. One
+     generator per session now, and the printer renumbers what it
+     prints, which the step list's printer did not do until this session
+     and now does.
+   * *An input reference is atomic.* `$0` is a node and not a variable,
+     so `Inliner.getSub` left `case (x, $0) of (x, y) => (x, y) elem
+     edges` unreduced, and the grounding engine matches on `elem` over
+     the query's variables. And the guard that keeps `$0` out of a
+     nested tree must stop at a nested node, or a function whose body is
+     a query is never inlined and the same engine never sees the
+     constraint at all.
+   * *Fold a field only where the slot is in range.* `RelExpander
+     .simplify` folds `#y {x = a, y = b}`, which is what lets the engine
+     see a constraint a yield was substituted into, and it read past the
+     end of a record a substitution had made smaller. The shape that
+     survives the fold fails at run time instead, so `visitRel` asks
+     `misaddressed` of the lowered answer, as `expandViaTree` does.
    * *The step list's grounding engine is still needed.* See "Start
      here".
 
