@@ -54,10 +54,11 @@ import org.jspecify.annotations.Nullable;
  * atoms are represented as {@link String}.
  *
  * <p>A string value may be written as a raw string literal, {@code {|...|}} or
- * {@code {id|...|id}}, whose content is verbatim (no escape processing, and
- * newlines are real newlines). A raw literal is equivalent to the regular
- * literal with the same content. Raw literals are a feature of the script
- * format, not of the Morel language; {@link #toRawStrings} writes them.
+ * {@code {id|...|id}} where the tag {@code id} consists of lower-case letters
+ * {@code a} to {@code z} and underscores, whose content is verbatim (no escape
+ * processing, and newlines are real newlines). A raw literal is equivalent to
+ * the regular literal with the same content. Raw literals are a feature of the
+ * script format, not of the Morel language; {@link #toRawStrings} writes them.
  */
 public class OutputMatcher {
   /**
@@ -454,21 +455,30 @@ public class OutputMatcher {
 
   /**
    * Returns the length of the opening fence of a raw string literal starting at
-   * {@code pos} : 2 for "{|", or 2 + n for "{id|" where the identifier has n
-   * characters; or 0 if there is no raw literal there.
+   * {@code pos}: 2 for "{|", or 2 + n for "{id|" where the tag has n
+   * characters, each a lower-case letter or underscore; or 0 if there is no raw
+   * literal there.
    */
   static int rawFenceLength(String s, int pos) {
     if (pos >= s.length() || s.charAt(pos) != '{') {
       return 0;
     }
     int i = pos + 1;
-    while (i < s.length() && Character.isLetterOrDigit(s.charAt(i))) {
+    while (i < s.length() && isTagChar(s.charAt(i))) {
       i++;
     }
     if (i < s.length() && s.charAt(i) == '|') {
       return i + 1 - pos;
     }
     return 0;
+  }
+
+  /**
+   * Returns whether a character may appear in a raw literal's tag: a lower-case
+   * letter {@code a} to {@code z}, or an underscore.
+   */
+  static boolean isTagChar(char c) {
+    return c >= 'a' && c <= 'z' || c == '_';
   }
 
   /**

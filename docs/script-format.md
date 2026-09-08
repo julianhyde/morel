@@ -106,8 +106,9 @@ no escapes, a newline in the content is a newline in the script, and
 lines after the first start at column 0 (immediately after the `> `
 prefix). A trailing newline in the content leaves the closing fence
 alone on the last line. If the content contains `|}`, the fences
-carry a tag, `{a|...|a}`, the shortest identifier that does not occur
-in the content followed by `}`.
+carry a tag, `{a|...|a}`. A tag consists of lower-case letters `a` to
+`z` and underscores; the harness chooses the shortest (`a`, `b`, ...,
+`z`, `aa`, ...) such that `|tag}` does not occur in the content.
 
 Only a top-level string value is written this way. A string inside a
 list, record or other value keeps the regular escaped form, as does a
