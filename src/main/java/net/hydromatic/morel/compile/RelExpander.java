@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -41,6 +42,7 @@ import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.RecordLikeType;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -232,6 +234,92 @@ public class RelExpander {
     final Core.Exp expanded = expander.expand(tree, ImmutableList.of());
     leafNames.putAll(expander.collectionNames);
     return expanded;
+  }
+
+  /**
+   * Returns a pattern for each leaf of a tree, named as the query named it, or
+   * empty where the tree does not say.
+   *
+   * <p>A tree has no names -- a leaf is a bare expression, spec.md §3.1 -- but
+   * a query with several binders ends in a projection that names its element's
+   * components after them: {@code project [{deptno = #2 $0, loc = #1 $0, name =
+   * #3 $0}]}. A join concatenates its inputs' components (§15), so component
+   * <i>k</i> is leaf <i>k</i>, and the projection is the map from leaf to name.
+   *
+   * <p>It matters beyond plan text. Grounding names what it builds after the
+   * leaf it bounds, a group's key record sorts its fields by label, and a
+   * generated label sorts differently from the one the user wrote -- which puts
+   * a query's rows in a different order.
+   */
+  public static List<Core.Pat> leafPats(Core.Exp tree) {
+    if (!(tree instanceof Core.Project)) {
+      return ImmutableList.of();
+    }
+    final Core.Project project = (Core.Project) tree;
+    if (!(project.exp instanceof Core.Tuple)
+        || !(project.exp.type instanceof RecordType)) {
+      return ImmutableList.of();
+    }
+    // Which component each output field reads, and what it calls it.
+    final Map<Integer, String> names = new HashMap<>();
+    final boolean[] ok = {true};
+    ((Core.Tuple) project.exp)
+        .forEach(
+            (i, name, exp) -> {
+              if (!(exp instanceof Core.Apply)) {
+                ok[0] = false;
+                return;
+              }
+              final Core.Apply apply = (Core.Apply) exp;
+              if (!(apply.fn instanceof Core.RecordSelector)
+                  || !(apply.arg instanceof Core.Input)
+                  || ((Core.Input) apply.arg).i != 0) {
+                ok[0] = false;
+                return;
+              }
+              names.put(((Core.RecordSelector) apply.fn).slot, name);
+            });
+    if (!ok[0]) {
+      return ImmutableList.of();
+    }
+    final List<Core.Exp> leaves = new ArrayList<>();
+    if (!collectLeaves(project.input, leaves)
+        || leaves.size() != names.size()) {
+      return ImmutableList.of();
+    }
+    final ImmutableList.Builder<Core.Pat> pats = ImmutableList.builder();
+    for (int i = 0; i < leaves.size(); i++) {
+      final @Nullable String name = names.get(i);
+      if (name == null) {
+        return ImmutableList.of();
+      }
+      pats.add(core.idPat(leaves.get(i).type.elementType(), name, 0));
+    }
+    return pats.build();
+  }
+
+  /**
+   * Collects the leaves under a node, left to right, and returns whether every
+   * node on the way is one that leaves the components alone.
+   *
+   * <p>A filter and a join do; anything else -- a group, a projection, a set
+   * operator -- makes an element that is not the concatenation of the leaves,
+   * and then a component says nothing about a leaf.
+   */
+  private static boolean collectLeaves(Core.Exp node, List<Core.Exp> leaves) {
+    if (!(node instanceof Core.Rel)) {
+      leaves.add(node);
+      return true;
+    }
+    if (node instanceof Core.Filter) {
+      return collectLeaves(((Core.Filter) node).input, leaves);
+    }
+    if (node instanceof Core.Join) {
+      final Core.Join join = (Core.Join) node;
+      return collectLeaves(join.left, leaves)
+          && collectLeaves(join.right, leaves);
+    }
+    return false;
   }
 
   /**
