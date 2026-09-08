@@ -198,8 +198,22 @@ public class Core {
     public static final Ordering<NamedPat> ORDERING =
         Ordering.from(NamedPat::compare);
 
+    /** A binder that the compiler generated, such as {@code v$0}. */
+    private static final Pattern GENERATED = Pattern.compile("[a-z]+\\$[0-9]+");
+
     public final String name;
     public final int i;
+
+    /**
+     * Returns whether a name is one the compiler generated, such as {@code
+     * v$0}.
+     *
+     * <p>Such a name is nothing the user wrote, so a diagnostic leaves it out
+     * and a printer renumbers it.
+     */
+    public static boolean isGenerated(String name) {
+      return GENERATED.matcher(name).matches();
+    }
 
     NamedPat(Op op, Type type, String name, int i) {
       super(op, type);
@@ -2343,8 +2357,7 @@ public class Core {
    */
   public abstract static class Rel extends Exp {
     /** A binder that the compiler generated, such as {@code v$0}. */
-    private static final Pattern GENERATED_BINDER =
-        Pattern.compile("[a-z]+\\$[0-9]+");
+    private static final Pattern GENERATED_BINDER = NamedPat.GENERATED;
 
     Rel(Op op, Type type) {
       super(Pos.ZERO, op, type);
