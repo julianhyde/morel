@@ -69,6 +69,50 @@ final class RangePushdown {
   }
 
   /**
+   * Returns whether an expression is an infinite single-constructor range list.
+   *
+   * <p>The same test as {@link #isInfiniteRangeScan}, asked of a tree's leaf,
+   * which is a bare expression and has no pattern to go with it.
+   */
+  static boolean isInfiniteRange(Core.Exp exp) {
+    if (!(exp instanceof Core.Apply)) {
+      return false;
+    }
+    Core.Apply apply = (Core.Apply) exp;
+    if (apply.builtIn() == BuiltIn.BAG_FROM_LIST
+        && apply.arg instanceof Core.Apply) {
+      apply = (Core.Apply) apply.arg;
+    }
+    if (apply.builtIn() != BuiltIn.RANGE_FLATTEN
+        || !apply.arg.isCallTo(BuiltIn.Z_LIST)) {
+      return false;
+    }
+    final Core.Apply list = (Core.Apply) apply.arg;
+    if (list.args().size() != 1
+        || !(list.args().get(0) instanceof Core.Apply)) {
+      return false;
+    }
+    final Core.Apply ctor = (Core.Apply) list.args().get(0);
+    if (!(ctor.fn instanceof Core.Id)) {
+      return false;
+    }
+    final BuiltIn.Constructor ctorEnum =
+        BuiltIn.Constructor.forName(((Core.Id) ctor.fn).idPat.name);
+    if (ctorEnum == null) {
+      return false;
+    }
+    switch (ctorEnum) {
+      case RANGE_AT_LEAST:
+      case RANGE_AT_MOST:
+      case RANGE_GREATER_THAN:
+      case RANGE_LESS_THAN:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
    * If {@code scan.exp} is {@code Range.flatten [<single_infinite_ctor>]} or
    * {@code Bag.fromList (Range.flatten [<single_infinite_ctor>])}, returns a
    * {@link ScanInfo}; otherwise null. The bag wrapper is matched so that
