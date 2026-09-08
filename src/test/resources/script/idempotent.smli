@@ -78,11 +78,27 @@ val x = 10 - 1;
 
 (*) A string with newlines
 "root {\n  common {\n    plan_id: 0\n  }\n}";
-> val it = {|root {
+> val it = {_|
+> root {
 >   common {
 >     plan_id: 0
 >   }
-> }|} : string
+> }|_} : string
+
+(* If the second line starts with a space, the content starts on the line
+ * after the opening fence, whose tag is "_", so that the lines line up;
+ * the newline after the fence is not part of the content. *)
+"a\n  b\nc";
+> val it = {_|
+> a
+>   b
+> c|_} : string
+
+(*) Content that starts with a newline uses the same form
+"\na";
+> val it = {_|
+>
+> a|_} : string
 
 (*) A bound name
 val s = "one\ntwo";

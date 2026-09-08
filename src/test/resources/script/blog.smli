@@ -1189,7 +1189,8 @@ from d in scott.depts
 >   : {deptno:int, dname:string, loc:string} bag
 Sys.plan();
 > val it =
->   {|globalMarshal(globals [scott], body calcite(plan LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
+>   {_|
+> globalMarshal(globals [scott], body calcite(plan LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
 >   LogicalFilter(condition=[IS NULL($4)])
 >     LogicalJoin(condition=[=($0, $3)], joinType=[left])
 >       LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
@@ -1200,7 +1201,7 @@ Sys.plan();
 >             LogicalFilter(condition=[AND(=($5, 'CLERK'), IS NOT NULL($1))])
 >               LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >                 JdbcTableScan(table=[[scott, EMP]])
-> ))|} : string
+> ))|_} : string
 
 (*) Functional programming <=> relational programming
 fun squareList [] = []

@@ -193,6 +193,14 @@ public class MainTest {
                 + ">\n"
                 + "> b\n"
                 + "> |} : string\n"));
+    // If the second line starts with a space, the content starts on the
+    // line after the opening fence, which carries the tag "_".
+    assertThat(
+        runIdempotent("\"a\\n  b\";\n> x\n", false),
+        containsString(
+            "> val it = {_|\n" //
+                + "> a\n"
+                + ">   b|_} : string\n"));
     // Content containing "|}" gets a tagged fence.
     assertThat(
         runIdempotent("\"a|}\\nb\";\n> x\n", false),

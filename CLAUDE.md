@@ -294,8 +294,11 @@ Notes:
   no space before a newline, and is otherwise printable ASCII is written as a
   raw string literal, `{|...|}` (or `{id|...|id}` if the content contains
   `|}`, the tag being lower-case letters and underscores), with verbatim
-  content; the harness generates this form, and `OutputMatcher` treats it as
-  equivalent to the escaped literal.
+  content, except that a newline right after the opening fence is not
+  content; the `{_|` form, with the content starting on the next line, is
+  used when the second line starts with a space. The harness generates
+  these forms, and `OutputMatcher` treats them as equivalent to the escaped
+  literal.
 - Adding a structure adds one top-level binding, so regenerate the
   environment-count tests in `built-in/sys.smli` and `misc.smli`.
 
