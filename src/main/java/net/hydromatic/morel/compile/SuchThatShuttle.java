@@ -151,7 +151,17 @@ class SuchThatShuttle extends EnvShuttle {
     try {
       final Core.Exp expanded =
           RelExpander.expand(typeSystem, env, rel, rowsUsed);
-      if (!RelExpander.containsUnbounded(expanded)) {
+      // The same questions `Expander.expandViaTree` asks of its answer: every
+      // leaf bounded, and no expression reading a field its row does not have.
+      // Replacing a join with a projection makes the element one component
+      // where it was several (discussion.md §16), and what reads it above was
+      // written for the other shape; `rebuild` does not rebase them, and the
+      // failure is at run time, in a record selector, a long way from the pass
+      // that caused it. The reading happens in the lowered form, so that is
+      // what to ask; the lowering here is thrown away.
+      if (!RelExpander.containsUnbounded(expanded)
+          && !Expander.misaddressed(
+              RelLowerer.lowerAll(typeSystem, nameGenerator, expanded))) {
         // Descend into what came back, to ground the trees nested in it.
         return expanded.accept(this);
       }
