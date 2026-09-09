@@ -27,151 +27,85 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 
 ## Where this stands, and what the next session does
 
-Steps 0, 1 and 2 are done, and so are goals 1, 2 and 5. The resolver
-returns a relational tree; it is what the rewrite passes carry and what
+Steps 0, 1 and 2 are done, and so are goals 1 to 5. The resolver returns
+a relational tree; it is what the rewrite passes carry and what
 grounding works on; lowering is a pass of its own, after the rewrites
-and before the compiler. The AST-to-From path is deleted, and spec.md is
-frozen against what was built rather than what was first designed.
-`fullMake` is green and is the gate; there is one configuration to test.
+and before the compiler; and `Sys.planEx` prints the tree. The
+AST-to-From path is deleted, and spec.md is frozen against what was
+built rather than what was first designed. `fullMake` is green and is
+the gate; there is one configuration to test.
+
+Goal 6, the freeze, is what is left, and one decision stands beside it:
+whether to delete the step list's grounding engine, which nothing needs
+any more.
 
 The feature is finished when a tree is what executes and what prints.
-Six goals, in order, each with the thing that says it is done.
+A tree is what prints; what executes is still the step list the lowering
+makes, and closing that is beyond these six goals.
 
 ### Start here
 
-**The flip has landed. Goals 1, 2, 4 and 5 are done, and goal 3 all but
-its last piece.** The resolver returns the tree, the rewrite passes carry it,
-grounding works on it, lowering is a pass of its own in `Compiles`, and
-`Sys.planEx "0"` prints a tree. No query answers differently: the
-expectations moved for plan text and for eight §11 messages, and for
-nothing else. `fullMake` is the gate and it is green.
+Two things are left. The first is a decision, not a task.
 
-What is left, in the order it is worth doing:
+#### 1. Decide whether to delete the step list's grounding engine
 
-1. ~~**Goal 3's other half.**~~ **The fallback is gone.**
-   `SuchThatShuttle.visitRel` grounds the tree and nothing else: every
-   query the step list grounded, the tree engine grounds, and the ten it
-   cannot report the same message at the same position. No golden file
-   moved when the fallback came out, which is the evidence that the two
-   engines agree.
+It is dead. `Expander.expandFromSteps` can be made to return the query
+unchanged and every script still passes. To see that, put
 
-   Naming the pattern was the work, not the grounding. `RelExpander` has
-   `leafPats`, so `Expander.notGrounded` can name what `bounded` and
-   `project` fail on, and `ungrounded` finds the leaf where the answer
-   comes back unbounded rather than throwing. Two details: both
-   attempts of `expandJoinTree` failing reports the *first* one's
-   message, because the retry destructures and throws the query's names
-   away; and a one-binder query has no projection and so no name, which
-   is §11 and which the expected output already said.
+```java
+    if (Boolean.getBoolean("morel.noStepEngine")) {
+      return from;
+    }
+```
 
-   **What is left of the round trip is not the fallback, and the step
-   list's engine is already dead.** `visit(Core.From)` still grounds the
-   step lists that reach it, but `expandFromSteps` -- the engine that
-   was the other half of this from the start -- **never changes a query
-   anywhere in the suite**. Verified by comparing its result with its
-   input, as text, over every script: not one differs. Everything is
-   ground by `expandViaTree`, which translates to a tree and uses the
-   tree engine.
+above the fallback at the end of `Expander.expandFrom`, and run the
+scripts with `-Dmorel.noStepEngine=true`.
 
-   So the shape of the finish is: `expandFromSteps` goes, `expandFrom`
-   becomes `expandViaTree` or nothing, and `visit(Core.From)` is a
-   translate-ground-lower for the step lists that grounding itself
-   builds -- `Expander.ground`'s collections, and the
-   `Relational.iterate` a transitive closure becomes.
+Deleting is about 700 lines: `expandFromSteps`, `applyFbbt`,
+`stripConjunctsByIdentity`, `expandFrom2`, `checkAllGrounded`,
+`addGeneratorScan`, `expandSteps`, `StepAnalyzer`, `StepVarSet`, and
+`Expander`'s own `hasTakeOrSkip` and `containsExtent`. What must stay,
+because `RelExpander` uses it: `ground` and `Ground`, `renamePatterns`,
+`misaddressed`, `notGrounded`, and the instance side that `ground`
+needs. `RelShadow.groundingAgrees` loses its only caller, and most of
+`RelShadow` goes with it.
 
-   **And nothing stands in the way any more.** What did was that
-   deleting `expandFromSteps` broke one query -- not through anything it
-   returned, but because it draws names, and the engine's answer
-   depended on them. `Generators.Cache.generators` was a multimap with
-   hashed keys, and `improveGenerators` walks it and acts on what it
-   finds, each step changing what the next one sees; so the order was
-   the pats' hash codes, which is their names, which is whatever number
-   the counter had reached. It is a `PairList` now, in the order the
-   engine was given them, which is the query's own order. The `cousin`
-   query answering differently depending on what preceded it, and `d_14`
-   becoming `d_16`, were the same bug.
+*Against:* it is the only independent check on the tree's engine, which
+is what `groundingAgrees` was built to be, and the tree's engine is
+three sessions old. *For:* a check that nothing exercises is not a
+check, and two engines are two things to keep true.
 
-   With that fixed, `expandFromSteps` can be made to return the query
-   unchanged and **every script still passes**. Reproduce with a
-   one-line flag in `Expander.expandFrom`.
+#### 2. Goal 6, freeze
 
-   **So the deletion is available, and it is about 700 lines.**
-   `expandFromSteps`, `applyFbbt`, `stripConjunctsByIdentity`,
-   `expandFrom2`, `checkAllGrounded`, `addGeneratorScan`,
-   `expandSteps`, `StepAnalyzer`, `StepVarSet`, and `Expander`'s own
-   `hasTakeOrSkip` and `containsExtent`. What must stay, because
-   `RelExpander` uses it: `ground` and `Ground`, `renamePatterns`,
-   `misaddressed`, `notGrounded`, and the instance side that `ground`
-   needs. `RelShadow.groundingAgrees` loses its only caller, and most of
-   `RelShadow` with it.
+The text is stable: `Core.Rel.describe` builds it with one renumbering
+writer, so `#depts scott_1` prints as `#depts scott` and `let val d_16`
+as `let val d`, whatever was compiled before. Checked by printing the
+same query with and without two declarations ahead of it.
 
-   It is worth doing deliberately rather than at the end of a session,
-   and there is an argument for waiting: the step list's engine is the
-   only independent check on the tree's, which is what
-   `groundingAgrees` was built to be.
+What the freeze wants deciding: `Sys.plan` prints the executable code,
+and says `w$0` where the query said `e`, because a one-binder query has
+no projection to read a name off (below). Freezing that is defensible --
+it is a different contract from the tree's -- but which files are the
+cross-implementation contract and which are Morel's own is worth
+settling deliberately rather than by default.
 
-   **How the residue was closed**, from 37 declines of 240 grounding
-   attempts to none. Five changes, each measured:
+#### What the flip cost, and the one thing that would buy it back
 
-   * `Core.Input` in `Analyzer.isAtom`, so that `let val e = $0 in e
-     elem emps andalso #job e = "CLERK" end` is substituted however
-     often it is read and the engine sees the `elem`. 37 to 28.
-   * `Generators.maybeExists` lowers the argument of
-     `Relational.nonEmpty`, and `RelExpander.subst` drops the row
-     binding it has just made redundant, so a constraint inside a nested
-     query grounds the outer leaf. 28 to 16.
-   * `RangePushdown.tighten` on a leaf that stands alone: `filter [$0 <
-     5] (#flatten Range ([AT_LEAST 1]))`. 16 to 12.
-   * `RelExpander.tightenRanges` for a range leaf under a join, which
-     needs the range's own bound written down before FBBT has anything
-     to propagate from. 12 to 10.
-   * Naming the ungrounded pattern, which let the fallback go. The last
-     ten declined because the query cannot be grounded at all, and they
-     decline still; they just report it themselves now.
-
-   And one thing tried that did not work, so it is not tried again:
-   treating `#1 $0` as atomic in `Inliner.isAtomic`, so that a `case`
-   over a tree's components would reduce the way one over a step list's
-   variables does. It removed no declines and broke a script.
-
-   The pattern in the four that worked: a pass that reads a query's
-   shape was written against a step list, and the resolver now leaves a
-   tree where it looks -- or, in `RangePushdown`'s case, the pass asks
-   for a pattern where a tree has only `$0`. `fnBody`, `maybeExists`,
-   the `let` that binds the row and `findTightening`'s predicate are
-   four instances, and each was small. Expect the same shape in what is
-   left.
-2. **Goal 6, freeze.** The text is stable now: `describe` builds it with
-   one renumbering writer, so `#depts scott_1` is `#depts scott` and
-   `let val d_16` is `let val d`, whatever was compiled before. Checked
-   by printing the same query with and without two declarations ahead of
-   it.
-
-   What the freeze still wants deciding: `Sys.plan` prints the
-   executable code and says `w$0` where the query said `e`, because a
-   one-binder query has no projection to read a name off (see below).
-   Freezing that text is fine -- it is a different contract from the
-   tree's -- but it is worth being deliberate about which files are the
-   cross-implementation contract and which are Morel's own.
-
-**One thing the flip cost, which goal 4 mostly retires.** A leaf is a
-bare expression (spec.md §3.1), so a tree holds no names. A query with
-several binders ends in a projection that names its element's components
--- `project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}]` -- and
-`RelExpander.leafPats` reads them back, which is enough for grounding to
-name what it builds and for the "not grounded" message to name the
+A leaf is a bare expression (spec.md §3.1), so a tree holds no names. A
+query with several binders ends in a projection that names its element's
+components -- `project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}]` --
+and `RelExpander.leafPats` reads them back, which is enough for
+grounding to name what it builds and for "not grounded" to name the
 pattern. A query with **one** binder has no projection and no name
 anywhere, so `from e in emps` lowers to `from w$0 in emps` and eight
-messages say "pattern is not grounded" with no name.
+messages say "pattern is not grounded" with nothing to name.
 
-That is only visible where a *lowered* plan is printed, and goal 4 has
-taken most of those away: `Sys.planEx` prints the tree, where the
+Goal 4 took most of that away -- `Sys.planEx` prints the tree, where the
 element is `$0` and a name is neither present nor wanted. What is left
-is `Sys.plan`, which prints the executable code and still says `w$0`.
-If that grates, the answer is to give a leaf an optional binder, which
-is a change to spec.md §3.1 and worth its own argument.
+is `Sys.plan`. If it grates, the answer is to give a leaf an optional
+binder, which is a change to spec.md §3.1 and worth its own argument.
 
-**Three things worth not re-deriving.**
+#### Three things worth not re-deriving
 
 * *Build before you run.* `./morel` defaults to `--no-build`, so a
   source edit does not reach it.
@@ -183,6 +117,12 @@ is a change to spec.md §3.1 and worth its own argument.
   them.* A script that skipped pure additions hid seven wrong rows and
   cost a session's worth of wrong conclusions.
 
+#### The measurement that says where grounding stands
+
+Count the queries the tree engine declines by printing in the branch of
+`SuchThatShuttle.visitRel` that throws. It was 37 of 240 grounding
+attempts when this was first measured, and is 10 -- all of them queries
+whose expected output is an error.
 
 1. ~~Decide how `$0` is told apart, and implement it.~~ **Done.** It
    is a node of its own, `Core.Input`, carrying the ordinal of the
@@ -304,21 +244,68 @@ is a change to spec.md §3.1 and worth its own argument.
      here".
 
 
-3. **Grounding takes the tree directly.** `SuchThatShuttle` calls
+3. ~~**Grounding takes the tree directly.**~~ `SuchThatShuttle` calls
    `RelExpander.expand` instead of `Expander.expandFrom`, so a query
-   is no longer lowered, translated back and lowered again. This is
-   what makes step 2's "the lowering runs once" true. *Done when* no
-   query round-trips twice, and `RelShadow`'s translation shadow has
+   is no longer lowered, translated back and lowered again. *Done when*
+   no query round-trips twice, and `RelShadow`'s translation shadow has
    nothing left to check.
 
-   **All but its last piece.** `SuchThatShuttle.visitRel` grounds the
-   tree and nothing else; the fallback to `Expander.expandFrom` is gone,
-   and no golden file moved when it went. What remains is
-   `visit(Core.From)`, which grounds the step lists that grounding
-   itself builds -- `Expander.ground`'s collections, and the
-   `Relational.iterate` a transitive closure becomes. Seven queries in
-   `such-that.smli` need it. Until those are built as trees,
-   `RelTranslator` and `RelShadow` have something to do.
+   **Done.** `SuchThatShuttle.visitRel` grounds the tree and nothing
+   else; the fallback to the step list is gone, and no golden file moved
+   when it went, which is the evidence that the two engines agree. What
+   remains is `visit(Core.From)`, which grounds the step lists that
+   grounding itself builds -- `Expander.ground`'s collections, and the
+   `Relational.iterate` a transitive closure becomes. It grounds them
+   with the tree's engine, through `expandViaTree`; the step list's own
+   engine is dead, and deleting it is the decision under "Start here".
+
+   **How the residue closed**, from 37 declines of 240 grounding
+   attempts to 10 -- and the 10 are queries whose expected output is an
+   error. Five changes, each measured:
+
+   * `Core.Input` in `Analyzer.isAtom`, so that `let val e = $0 in e
+     elem emps andalso #job e = "CLERK" end` is substituted however
+     often it is read and the engine sees the `elem`. 37 to 28.
+   * `Generators.maybeExists` lowers the argument of
+     `Relational.nonEmpty`, and `RelExpander.subst` drops the row
+     binding it has just made redundant, so a constraint inside a nested
+     query grounds the outer leaf. 28 to 16.
+   * `RangePushdown.tighten` on a leaf that stands alone: `filter [$0 <
+     5] (#flatten Range ([AT_LEAST 1]))`. 16 to 12.
+   * `RelExpander.tightenRanges` for a range leaf under a join, which
+     needs the range's own bound written down before FBBT has anything
+     to propagate from. 12 to 10.
+   * Naming the ungrounded pattern, which let the fallback go.
+     `RelExpander` has `leafPats`, so `Expander.notGrounded` can name
+     what `bounded` and `project` fail on, and `ungrounded` names the
+     leaf where the answer comes back unbounded rather than throwing.
+     Both attempts of `expandJoinTree` failing reports the *first* one's
+     message, because the retry destructures and throws the query's
+     names away.
+
+   One thing tried that did not work, so it is not tried again: treating
+   `#1 $0` as atomic in `Inliner.isAtomic`, so that a `case` over a
+   tree's components would reduce the way one over a step list's
+   variables does. It removed no declines and broke a script.
+
+   The pattern in the four that worked: a pass that reads a query's
+   shape was written against a step list, and the resolver now leaves a
+   tree where it looks -- or, in `RangePushdown`'s case, the pass asks
+   for a pattern where a tree has only `$0`. `fnBody`, `maybeExists`,
+   the `let` that binds the row and `findTightening`'s predicate are
+   four instances, and each was small.
+
+   **And one bug that had nothing to do with trees.**
+   `Generators.Cache.generators` was a multimap with hashed keys, and
+   `improveGenerators` walks it and acts on what it finds, each step
+   changing what the next one sees -- so the engine's answer depended on
+   the pats' hash codes, which is their names, which is whatever number
+   the counter had reached. It is a `PairList` now, in the order the
+   engine was given them. Three symptoms were this: `from p where cousin
+   p` answering differently depending on what preceded it, a plan saying
+   `d_14` in one run and `d_16` in another, and `expandFromSteps`
+   mattering although it never changes a query.
+
 
    Two known members of the residue: a predicate written as a function
    that reads a global, which the inliner leaves alone, so the
@@ -359,6 +346,21 @@ is a change to spec.md §3.1 and worth its own argument.
 6. **Freeze the plan text.** Golden files become the
    cross-implementation contract, and morel-rust (#33) and the Go
    work can begin against them, in parallel with steps 4 and 5.
+
+   **The prerequisite is met.** Plan text depended on what had been
+   compiled before it -- `#depts scott_1`, `let val d_14` -- because
+   `Core.Rel.describe` built its text with a `StringBuilder` and
+   `toString()`, so an identifier kept the ordinal its generator gave
+   it. It builds with one renumbering writer now, and prints the same
+   text whatever precedes the query. A contract could not have been
+   frozen against the other.
+
+   **What is left is a decision**: `Sys.plan` prints the executable
+   code, not the tree, and says `w$0` where the query said `e`. Freezing
+   that is defensible -- it is Morel's own contract, not the
+   cross-implementation one -- but say which files are which, rather
+   than letting the answer fall out of what happens to be in the
+   directory.
 
 Three things not to re-derive, each of which cost a detour once:
 
