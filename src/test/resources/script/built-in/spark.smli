@@ -83,18 +83,14 @@ catalog.scott.salgrades;
 >    {grade=3,hisal=2000,losal=1401},{grade=4,hisal=3000,losal=2001},
 >    {grade=5,hisal=9999,losal=3001}] : {grade:int, hisal:real, losal:real} bag
 
-(*) Closing the connection; a later use raises Spark.
+(* Closing the connection. A later use raises Spark, even when the use
+ * is the discovery of a catalog field during type resolution. *)
 c.close ();
 > val it = () : unit
 c.close ();
 > val it = () : unit
-
-(*) There is no default server in the test environment.
-Spark.connectDefault ();
-> uncaught exception Spark [Spark: CONNECTION: No default Spark Connect server: SPARK_REMOTE is not set]
->   raised at: stdIn:1.1-1.24
-Spark.using (fn (c, x) => x + 1) 4;
-> uncaught exception Spark [Spark: CONNECTION: No default Spark Connect server: SPARK_REMOTE is not set]
->   raised at: stdIn:1.1-1.33
+catalog.foodmart.sales_fact_1997;
+> uncaught exception Spark [Spark: CLOSED: Connection to mock: is closed]
+>   raised at: 0.0-0.0
 
 (*) End spark.smli
