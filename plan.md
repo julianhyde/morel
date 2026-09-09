@@ -265,13 +265,32 @@ template), or unsupported, with a flag for known semantic divergence (integer
 division, overflow, collation, NaN ordering). Tests iterate the table through
 the triple format.
 
-**M5.** Sequenced after the core tree restructuring
-([#449](https://github.com/hydromatic/morel/issues/449), branch
+**M5.** The tests are delivered ahead of the translator, since the tree it
+will read is on the 449-tree branch: `spark.smli` runs the corpus locally
+(sixteen queries: the five seed queries plus skip and take, distinct, left
+join, union, arithmetic with the `div` and `mod` templates, string functions,
+`elem`, a correlated scalar subquery, a scalar result, except and intersect,
+and a two-key group); `spark/seed-plans.txt` holds their Spark plans,
+captured from the PySpark client and executed live to confirm that Spark
+gives Morel's results; `spark-plan.smli` (requires `spark-prepare`) prepares
+each query on the offline connection and expects the plan text; and
+`spark-exec.smli` (requires `spark` and `spark-prepare`) executes each on the
+container and expects the results, plus a parameterized plan and `remote`.
+The `spark-prepare` condition holds once the `Spark` structure has `prepare`,
+so the scripts turn on by themselves. Decisions the corpus pins beyond M1: a
+real literal is a float literal; `div` is `cast(floor($0 / $1) as int)` and
+`mod` is `(($0 % $1 + $1) % $1)`; `elem` is an EXISTS subquery with an
+equality, since Connect 4.0 has no IN subquery; a left join's absent side is
+a struct that is null when the join found nothing, decoded as an option;
+distinct is `deduplicate`; union, except and intersect keep all rows; a
+scalar result is an aggregate with one column, `it`. The translator itself is
+built on the 449-tree branch when it lands: Sequenced after the core tree
+restructuring ([#449](https://github.com/hydromatic/morel/issues/449), branch
 `449-tree`): Connect's Relation proto is a conventional operator tree, and
 translating from the balanced tree is near 1:1. The M1 expectations are
 substrate-independent and serve as this milestone's acceptance tests.
-Everything that depends on #449 (M5, and through it M8, M9 and M11) is
-done last; M0 through M4, M6 and M7 do not depend on it and come first.
+Everything that depends on #449 (M5, and through it M8, M9 and M11) is done
+last; M0 through M4, M6 and M7 do not depend on it and come first.
 
 **M6.** Done. The adapter is package `net.hydromatic.morel.spark`, compiled
 only under the `spark` Maven profile (JDK 17 and later), with protobuf
