@@ -28,7 +28,10 @@ import java.util.AbstractList;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.function.Supplier;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
@@ -66,11 +69,24 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
     this.connection = requireNonNull(connection, "connection");
   }
 
+  /**
+   * Calls the connection, converting an error into the Morel exception {@code
+   * Spark}. A catalog is browsed during type resolution as well as during
+   * evaluation, and the harness reports the Morel exception either way.
+   */
+  private static <T> T call(Supplier<T> supplier) {
+    try {
+      return supplier.get();
+    } catch (SparkBackend.SparkException e) {
+      throw Codes.sparkException(e, Pos.ZERO);
+    }
+  }
+
   private SortedMap<String, Database> databases() {
     SortedMap<String, Database> map = databases;
     if (map == null) {
       map = new TreeMap<>(RecordType.ORDERING);
-      for (String name : connection.databases()) {
+      for (String name : call(connection::databases)) {
         map.put(name, new Database(name));
       }
       databases = map;
@@ -140,7 +156,7 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
       SortedMap<String, Table> map = tables;
       if (map == null) {
         map = new TreeMap<>(RecordType.ORDERING);
-        for (String tableName : connection.tables(name)) {
+        for (String tableName : call(() -> connection.tables(name))) {
           map.put(tableName, new Table(this, tableName));
         }
         tables = map;
@@ -216,7 +232,7 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
     Type type(TypeSystem typeSystem) {
       Type t = type;
       if (t == null) {
-        t = connection.tableType(database.name, name);
+        t = call(() -> connection.tableType(database.name, name));
         type = t;
       }
       return t;
@@ -225,7 +241,9 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
     private List<Object> rows() {
       List<Object> list = rows;
       if (list == null) {
-        list = ImmutableList.copyOf(connection.rows(database.name, name));
+        list =
+            ImmutableList.copyOf(
+                call(() -> connection.rows(database.name, name)));
         rows = list;
       }
       return list;
