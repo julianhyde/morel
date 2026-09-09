@@ -402,7 +402,7 @@ table records the mapping for completeness):
 | Morel                              | Spark                         | Kind      |
 | ---------------------------------- | ----------------------------- | --------- |
 | `count`, `sum`, `min`, `max`       | `count(1)`, `sum`, `min`, `max` | aggregate |
-| `elem`, `notElem`                  | `in`, `not in` (subquery)     | subquery  |
+| `elem`, `notElem`                  | `exists`, `not exists` with an equality (Connect 4.0 has no `in` subquery) | subquery |
 | `nonEmpty`, `empty`, `List.null`   | `exists`, `not exists`        | subquery  |
 | `only`                             | scalar subquery               | subquery  |
 | `List.length`, `Bag.count` on a list-typed column | `size`         | direct    |
