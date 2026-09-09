@@ -21,7 +21,6 @@ package net.hydromatic.morel;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 import net.hydromatic.morel.compile.RelShadow;
 import org.junit.jupiter.api.Test;
@@ -30,10 +29,9 @@ import org.junit.jupiter.api.Test;
  * Tests that the shadows are running.
  *
  * <p>{@link RelShadow} translates every query the suite compiles and checks the
- * tree, and grounds every unbounded query both ways and compares. Both run
- * under {@code assert}, which is easy to disable by accident and impossible to
- * notice: a shadow that has stopped running looks exactly like one that finds
- * nothing.
+ * tree. It runs under {@code assert}, which is easy to disable by accident and
+ * impossible to notice: a shadow that has stopped running looks exactly like
+ * one that finds nothing.
  */
 public class GroundingShadowTest {
   /** Tests that assertions are enabled, without which neither shadow runs. */
@@ -59,32 +57,27 @@ public class GroundingShadowTest {
   }
 
   /**
-   * Tests that compiling an unbounded query grounds it both ways and compares
-   * the verdicts.
+   * Tests that compiling an unbounded query grounds it through its tree.
    *
-   * <p>The tree is now how a query is grounded, and the step list is the
-   * fallback, so the comparison runs on what the tree declines rather than on
-   * everything. What it once measured -- that the two ground the same query the
-   * same way -- the script suite's results now say, which is what step C of
-   * plan.md set out to reach.
+   * <p>There is one grounding engine now, and the counter is the only evidence
+   * that {@link net.hydromatic.morel.compile.Expander} ran: a query it declines
+   * is handed back unchanged and {@code SuchThatShuttle} grounds it later,
+   * which looks the same from here as a front end that was never called.
+   *
+   * <p>Hence the query. {@code from i where i elem [1, 2, 3]} does not do:
+   * making {@code Expander.expandFrom} return its argument leaves every script
+   * green except six lines of {@code such-that.smli}, all of them a {@code
+   * case} over a constructor, so those six are what the front end alone grounds
+   * and one of them is what this asserts on.
    */
   @Test
   void testGroundingShadowRuns() {
-    final int before =
-        RelShadow.groundedViaTreeCount() + RelShadow.groundingAgreedCount();
-    final int differedBefore = RelShadow.groundingDifferedCount();
-    Ml.ml("from i where i elem [1, 2, 3]").assertEval();
-    // Either the tree grounded the query, or -- with MOREL_GROUND_VIA_STEPS
-    // set -- the step list did and the shadow compared the two.
-    assertThat(
-        RelShadow.groundedViaTreeCount() + RelShadow.groundingAgreedCount(),
-        greaterThan(before));
-    // Where the comparison does run, the two must still decide alike. The
-    // counters are global and the tests run in parallel, so this says only
-    // that nothing this test compiled diverged.
-    assertThat(
-        RelShadow.groundingDifferedCount(),
-        greaterThanOrEqualTo(differedBefore));
+    final int before = RelShadow.groundedViaTreeCount();
+    Ml.ml(
+            "from e where (case e of INL n => n >= 5 andalso n <= 8"
+                + " | _ => false)")
+        .assertEval();
+    assertThat(RelShadow.groundedViaTreeCount(), greaterThan(before));
   }
 }
 

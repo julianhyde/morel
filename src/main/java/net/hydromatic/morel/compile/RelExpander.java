@@ -56,10 +56,10 @@ import org.jspecify.annotations.Nullable;
  * <p>The engine that inverts predicates is {@link Generators}, unchanged: it
  * keys on a variable, and on field accesses into that variable, which is
  * exactly the shape a tree gives it once the element of a leaf has a name. This
- * class is the front end that gives it one, alongside {@link Expander}, which
- * does the same for a step list. Both call {@link Expander#ground}.
+ * class is the front end that gives it one, by calling {@link Expander#ground},
+ * and since the step list's front end was deleted it is the only one.
  *
- * <p>Where a step list says "a scan of an infinite extent, and the {@code
+ * <p>Where a step list said "a scan of an infinite extent, and the {@code
  * where} steps that follow it", a tree says "a leaf that is an infinite extent,
  * and the filters above it". The filters' conditions are expressions over
  * {@code $0}, so naming the element and substituting that name for {@code $0}
@@ -191,7 +191,8 @@ public class RelExpander {
    * Replaces every infinite-extent leaf of a tree with a collection that bounds
    * it, and throws if there is none.
    *
-   * <p>This is what {@link Expander#expandFrom} does for a step list.
+   * <p>{@link Expander#expandFrom} is the caller that translates a query, calls
+   * this, and lowers the answer back to a step list.
    */
   public static Core.Exp expand(
       TypeSystem typeSystem, Environment env, Core.Exp tree) {
@@ -936,11 +937,11 @@ public class RelExpander {
         paths.put(name, path);
       }
       if (!join.condition.isBoolLiteral(true)) {
-        // A dependent join has a condition, so the node could carry this one;
-        // the step list cannot ground such a query, and `groundingAgrees`
-        // holds the two engines to the same verdict in both directions.
-        // Lifting this is a change to what compiles, like discussion.md §12,
-        // and belongs with that one rather than smuggled in here.
+        // A dependent join has a condition, so the node could carry this one.
+        // Lifting the restriction is a change to what compiles, like
+        // discussion.md §12, and belongs with that one rather than smuggled in
+        // here. It was held down by `groundingAgrees` until the step list's
+        // engine was deleted; now nothing holds it but this line.
         throw new CompileException("pattern is not grounded", false, right.pos);
       }
       paths.putAll(bound);
@@ -1435,8 +1436,7 @@ public class RelExpander {
   }
 
   /**
-   * Deduces tighter bounds for the leaves, as {@code expandFrom} does before
-   * grounding a step list.
+   * Deduces tighter bounds for the leaves, which grounding needs done first.
    *
    * <p>Without this, {@code from i : int where i > 0 andalso i < 10} does not
    * ground: the engine looks for a constraint that generates, and a pair of
