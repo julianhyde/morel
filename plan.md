@@ -202,18 +202,24 @@ A LocalRelation carries its schema as JSON with per-column nullability.
 Binders that shadow one another across nested queries will need renaming
 before emission, since the alias namespace is flat.
 
-**M2.** Drafted in spec.md §1: the type table, nullability at every level,
-dates and times, precision, the mapping function and its DDL and JSON inputs,
-and the reverse mapping. The mapping is new code. The Calcite `Converters`
-mapping is not reused: it represents `option` as a nullable column and
-coerces nulls back to zero values, which is lossy. Two halves. Pure: a
-function mapping Spark schema strings (DDL or JSON) to Morel types, tested in
-`.smli` with no cluster; includes tested rejections (`map`, intervals) and
-nullability at every nesting level. Live: browse the zoo table, print the
-inferred type, select and print the decoded values (needs M6). Decided
-(spec.md §1.2): a catalog column maps to the plain type and the decoder
-raises when a null arrives; nested array elements and struct fields keep
-`option`.
+**M2.** Done. The mapping is `spark.SparkTypes`, from the DataType proto that
+Connect sends (a schema string is not needed, since the AnalyzePlan RPC gives
+a table's schema as a proto); its pure test is `SparkTypesTest`, and the live
+half is `spark-live.smli` and `SparkConnectTest`, which read every column of
+`zoo` and see the map column rejected. The plan's idea of a `.smli` test
+through the offline connection lapsed: that connection's catalog is
+Calcite-typed, so it exercises the catalog, not the Spark mapping. Drafted in
+spec.md §1: the type table, nullability at every level, dates and times,
+precision, the mapping function and its DDL and JSON inputs, and the reverse
+mapping. The mapping is new code. The Calcite `Converters` mapping is not
+reused: it represents `option` as a nullable column and coerces nulls back to
+zero values, which is lossy. Two halves. Pure: a function mapping Spark
+schema strings (DDL or JSON) to Morel types, tested in `.smli` with no
+cluster; includes tested rejections (`map`, intervals) and nullability at
+every nesting level. Live: browse the zoo table, print the inferred type,
+select and print the decoded values (needs M6). Decided (spec.md §1.2): a
+catalog column maps to the plain type and the decoder raises when a null
+arrives; nested array elements and struct fields keep `option`.
 
 **M3.** Drafted in spec.md §2: the signature, what `prepare` accepts,
 lifecycle, errors, and an offline `mock:` URI for testing translation without
@@ -297,8 +303,11 @@ live against the container, where `scott.emps` has the same type and rows on
 both. The `Spark` structure (`lib/spark.sig`, `docs/lib/spark.md`) has
 `connection`, the `Spark` exception, `connect`, `connectDefault`, `catalog`,
 `close` and `using`; `built-in/spark.smli` browses and queries the offline
-catalog. Printing a catalog level shows a table as `<relation>` rather than
-fetching its rows; forcing the table fetches them once.
+catalog, and `spark-live.smli` (`requires: spark`) does the same against the
+container. A catalog error, even one raised while type resolution discovers a
+field, is reported as the `Spark` exception (its position is unknown, so it
+prints as 0.0-0.0). Printing a catalog level shows a table as `<relation>`
+rather than fetching its rows; forcing the table fetches them once.
 
 **M10.** Three categories: runtime errors (e.g. divide by zero) must raise
 the same Morel exception as local evaluation, testable in the triple
