@@ -5076,7 +5076,7 @@ public abstract class Codes {
   }
 
   /** Converts an error from Spark into the Morel exception {@code Spark}. */
-  static MorelRuntimeException sparkException(
+  public static MorelRuntimeException sparkException(
       SparkBackend.SparkException e, Pos pos) {
     return new MorelRuntimeException(
         BuiltInExn.SPARK, SparkConnections.payload(e), pos);
