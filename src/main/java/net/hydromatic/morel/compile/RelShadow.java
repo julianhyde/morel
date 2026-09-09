@@ -23,7 +23,6 @@ import static java.lang.String.format;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.RelBuilder;
-import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Simplification;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.TypeSystem;
@@ -32,15 +31,19 @@ import net.hydromatic.morel.type.TypeSystem;
  * Translates every {@code from} in a declaration into a relational tree and
  * checks the result, without changing what the declaration does.
  *
- * <p>This is the shadow of step 1 of {@code plan.md}: while {@link Core.From}
- * still does the work, every query that the test suite compiles is also
- * translated, validated, and checked to have the type it started with. It runs
- * under {@code assert}, so it is on when the tests run and costs nothing when
- * they do not.
+ * <p>This is the shadow of step 1 of {@code plan.md}: every query that the test
+ * suite compiles is translated, validated, and checked to have the type it
+ * started with. It runs under {@code assert}, so it is on when the tests run
+ * and costs nothing when they do not.
  *
  * <p>A query the translator declines -- an outer join, say -- is counted and
  * skipped. A query it translates *wrongly* is an error, because that is a bug
  * in the translation, not a gap in it.
+ *
+ * <p>What is left is the check. Routing execution through the translation was
+ * this class's other half, and the flip retired it: the resolver returns the
+ * tree, and {@code Compiles} lowers it, so the suite's results check the
+ * translation without a shadow having to arrange it.
  */
 public class RelShadow {
   // Counters, read by a test that checks the shadow is running; plan.md
@@ -94,86 +97,6 @@ public class RelShadow {
    */
   public static int translatedCount() {
     return TRANSLATED.get();
-  }
-
-  /**
-   * Replaces each query with the lowering of its tree, so that execution goes
-   * through the relational tree.
-   *
-   * <p>A query the translator declines is left as it was; a query it translates
-   * is executed as {@link RelLowerer} lowers it, and the script suite checks by
-   * its results that the two are the same query.
-   */
-  public static Core.Decl viaTree(TypeSystem typeSystem, Core.Decl decl) {
-    return decl.accept(
-        new Shuttle(typeSystem) {
-          @Override
-          protected Core.Exp visit(Core.From from) {
-            final Core.Exp from2 = super.visit(from);
-            if (!(from2 instanceof Core.From)) {
-              return from2;
-            }
-            if (containsExtent((Core.From) from2)
-                || hasFailablePattern((Core.From) from2)) {
-              // Two shapes that the round trip perturbs and that machinery
-              // reading step lists depends on: an unbounded scan, whose
-              // extent is fused with the conditions that bound it, and a
-              // scan whose pattern can fail, which the tree turns into a
-              // case and so erases. The grounding of `from b where cheap b`
-              // needs to see through both. They stay on the old path until
-              // `suchThat` is ported to the tree (plan.md step 5).
-              return from2;
-            }
-            final Core.Exp tree =
-                RelTranslator.toRel(typeSystem, (Core.From) from2);
-            if (tree == null) {
-              return from2;
-            }
-            return RelLowerer.lower(typeSystem, tree);
-          }
-        });
-  }
-
-  /**
-   * Returns whether any scan of a query has a pattern that can fail to match,
-   * which the translation turns into a case.
-   */
-  private static boolean hasFailablePattern(Core.From from) {
-    for (Core.FromStep step : from.steps) {
-      if (step instanceof Core.Scan && failable(((Core.Scan) step).pat)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private static boolean failable(Core.Pat pat) {
-    switch (pat.op) {
-      case ID_PAT:
-      case WILDCARD_PAT:
-        return false;
-      case TUPLE_PAT:
-        return ((Core.TuplePat) pat)
-            .args.stream().anyMatch(RelShadow::failable);
-      case RECORD_PAT:
-        return ((Core.RecordPat) pat)
-            .args.stream().anyMatch(RelShadow::failable);
-      default:
-        return true;
-    }
-  }
-
-  /**
-   * Returns whether any scan of a query is over an extent, which the
-   * unbounded-variable machinery bounds by reading step shapes.
-   */
-  private static boolean containsExtent(Core.From from) {
-    for (Core.FromStep step : from.steps) {
-      if (step instanceof Core.Scan && ((Core.Scan) step).exp.isExtent()) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /** Counts a query that the tree grounded, and so carried to a plan. */
