@@ -32,6 +32,8 @@ import re, sys
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import *
+from pyspark.sql.connect.column import Column
+from pyspark.sql.connect.expressions import LiteralExpression
 from google.protobuf import text_format
 
 import pyspark.errors.utils as _eu
@@ -112,5 +114,87 @@ show("q4", q4)
 inner = e.where((F.col("e.deptno") == F.col("d.deptno")) & (F.col("e.job") == "CLERK"))
 q5 = d.where(inner.exists()).select(F.col("d.dname"))
 show("q5", q5)
+
+# The remaining queries extend the corpus (spark-plan.smli, spark-exec.smli).
+# A Morel real literal is a float, so it is emitted as a float literal.
+def real(x):
+    return Column(LiteralExpression(x, FloatType()))
+
+# Query 6: order, skip, take, then project.
+q6 = (e.orderBy(F.col("e.empno")).offset(2).limit(3)
+      .select(F.col("e.empno"), F.col("e.ename")))
+show("q6", q6)
+
+# Query 7: distinct (a group with no aggregates).
+q7 = e.select(F.col("e.job")).dropDuplicates()
+show("q7", q7)
+
+# Query 8: left join. The absent side is null, and crosses to Morel as an
+# option of the record; so the right row is a struct that is null when the
+# join found nothing.
+emp_fields = ["comm", "deptno", "empno", "ename", "hiredate", "job", "mgr", "sal"]
+q8 = (d.join(e, F.col("d.deptno") == F.col("e.deptno"), "left")
+      .where(F.col("d.deptno") >= 30)
+      .select(
+          F.col("d.dname"),
+          F.when(F.col("e.empno").isNull(), F.lit(None))
+           .otherwise(F.struct(*[F.col("e." + f).alias(f) for f in emp_fields]))
+           .alias("e")))
+show("q8", q8)
+
+# Query 9: union (of bags, so all rows are kept).
+q9 = (e.where(F.col("e.deptno") == 10).select(F.col("e.empno").alias("n"))
+      .union(d.select(F.col("d.deptno").alias("n"))))
+show("q9", q9)
+
+# Query 10: arithmetic, including the templates for div and mod.
+q10 = (e.where(F.col("e.deptno") == 10)
+       .select(
+           F.col("e.empno"),
+           (-F.col("e.empno")).alias("w"),
+           (F.col("e.sal") * real(2.0)).alias("x"),
+           F.floor(F.col("e.empno") / F.lit(7)).cast("int").alias("y"),
+           ((F.col("e.empno") % F.lit(7) + F.lit(7)) % F.lit(7)).alias("z")))
+show("q10", q10)
+
+# Query 11: string functions.
+q11 = (e.where(F.col("e.ename").startswith("S"))
+       .select(
+           F.col("e.ename"),
+           F.length(F.col("e.ename")).alias("n"),
+           F.substring(F.col("e.ename"), F.lit(0) + F.lit(1), F.lit(2)).alias("s"),
+           F.concat(F.col("e.ename"), F.lit("!")).alias("t")))
+show("q11", q11)
+
+# Query 12: "elem". Spark Connect 4.0 has no IN subquery, so it is an
+# EXISTS subquery with an equality.
+q12 = (e.where(d.where((F.col("d.loc") == "CHICAGO")
+                       & (F.col("d.deptno") == F.col("e.deptno"))).exists())
+       .select(F.col("e.ename")))
+show("q12", q12)
+
+# Query 13: a correlated scalar subquery.
+q13 = d.select(
+    F.col("d.dname"),
+    e.where(F.col("e.deptno") == F.col("d.deptno"))
+     .agg(F.count(F.lit(1))).scalar().alias("n"))
+show("q13", q13)
+
+# Query 14: a non-collection result is a single-row, single-column relation.
+q14 = e.agg(F.count(F.lit(1)).alias("it"))
+show("q14", q14)
+
+# Query 15: except and intersect, of bags.
+right = d.where(F.col("d.deptno") > 20).select(F.col("d.deptno").alias("n"))
+q15a = e.select(F.col("e.deptno").alias("n")).exceptAll(right)
+show("q15a", q15a)
+q15b = e.select(F.col("e.deptno").alias("n")).intersectAll(right)
+show("q15b", q15b)
+
+# Query 16: group by two keys with two aggregates, then sort.
+q16 = (e.groupBy(F.col("e.deptno"), F.col("e.job"))
+       .agg(F.count(F.lit(1)).alias("n"), F.sum(F.col("e.sal")).alias("s"))
+       .orderBy(F.col("deptno"), F.col("job")))
+show("q16", q16)
 
 # End capture.py
