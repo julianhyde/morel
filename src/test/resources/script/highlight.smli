@@ -136,6 +136,20 @@ Test.highlight "\"abc\"";
 Test.highlight "\"a\\\"b\"";
 > val it = "s2{\"a\\\"b\"}" : string
 
+(* A string spans lines: a bare newline is part of it, and a backslash at
+ * the end of a line continues it on the next line (with the newline and
+ * the following spaces still inside the string). *)
+Test.highlight "\"ab\ncd\" 1";
+> val it = {|s2{"ab
+> cd"} mi{1}|} : string
+Test.highlight "\"ab\\\n  cd\" 1";
+> val it = {_|
+> s2{"ab\
+>   cd"} mi{1}|_} : string
+Test.highlight "\"ab\\\n";
+> val it = {|s2{"ab\
+> }|} : string
+
 (* --- Incomplete input ------------------------------------------- *)
 (*) Each of these is a prefix that the shell sees while the user types.
 Test.highlight "\"";
