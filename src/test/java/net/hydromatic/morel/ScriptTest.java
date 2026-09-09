@@ -25,6 +25,7 @@ import static net.hydromatic.morel.TestUtils.toCamelCase;
 import static net.hydromatic.morel.TestUtils.urlToFile;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.google.common.collect.ImmutableMap;
 import java.io.File;
@@ -36,6 +37,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -44,6 +47,7 @@ import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
+import net.hydromatic.morel.foreign.SparkBackend;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -81,6 +85,7 @@ public class ScriptTest {
   @MethodSource("data")
   @Timeout(60)
   void test(String path) throws Exception {
+    checkRequires(path);
     Method method = findMethod(path);
     if (method != null) {
       try {
@@ -97,6 +102,57 @@ public class ScriptTest {
       }
     } else {
       checkRun(path);
+    }
+  }
+
+  /**
+   * Skips the test if the script's header has a directive {@code (*) requires:
+   * <condition>} whose condition does not hold. The conditions:
+   *
+   * <ul>
+   *   <li>{@code spark-adapter}: the Spark adapter is on the class path (it
+   *       needs JDK 17 or later);
+   *   <li>{@code no-spark-adapter}: it is not;
+   *   <li>{@code spark}: a live Spark Connect server: system property {@code
+   *       morel.spark} is set, and {@code SPARK_REMOTE} names the server.
+   * </ul>
+   */
+  private static void checkRequires(String path) throws IOException {
+    final URL url =
+        requireNonNull(
+            ScriptTest.class
+                .getClassLoader()
+                .getResource(path.replace(File.separatorChar, '/')),
+            path);
+    final Pattern pattern = Pattern.compile("^\\(\\*\\) requires: (\\S+)");
+    try (Stream<String> lines =
+        Files.lines(requireNonNull(urlToFile(url)).toPath())) {
+      lines
+          .limit(40)
+          .forEach(
+              line -> {
+                final Matcher m = pattern.matcher(line);
+                if (m.find()) {
+                  final String condition = m.group(1);
+                  assumeTrue(holds(condition), path + " requires " + condition);
+                }
+              });
+    }
+  }
+
+  /** Returns whether a {@code requires:} condition holds. */
+  private static boolean holds(String condition) {
+    switch (condition) {
+      case "spark-adapter":
+        return SparkBackend.isAvailable();
+      case "no-spark-adapter":
+        return !SparkBackend.isAvailable();
+      case "spark":
+        return System.getProperty("morel.spark") != null
+            && System.getenv("SPARK_REMOTE") != null;
+      default:
+        throw new IllegalArgumentException(
+            "unknown condition '" + condition + "' in requires directive");
     }
   }
 
