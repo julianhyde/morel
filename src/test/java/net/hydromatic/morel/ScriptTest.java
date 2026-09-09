@@ -114,7 +114,9 @@ public class ScriptTest {
    *       needs JDK 17 or later);
    *   <li>{@code no-spark-adapter}: it is not;
    *   <li>{@code spark}: a live Spark Connect server: system property {@code
-   *       morel.spark} is set, and {@code SPARK_REMOTE} names the server.
+   *       morel.spark} is set, and {@code SPARK_REMOTE} names the server;
+   *   <li>{@code spark-prepare}: the Spark translator exists, that is, the
+   *       {@code Spark} structure has {@code prepare}.
    * </ul>
    */
   private static void checkRequires(String path) throws IOException {
@@ -124,7 +126,7 @@ public class ScriptTest {
                 .getClassLoader()
                 .getResource(path.replace(File.separatorChar, '/')),
             path);
-    final Pattern pattern = Pattern.compile("^\\(\\*\\) requires: (\\S+)");
+    final Pattern pattern = Pattern.compile("^\\(\\*\\) requires: (.*)");
     try (Stream<String> lines =
         Files.lines(requireNonNull(urlToFile(url)).toPath())) {
       lines
@@ -133,8 +135,11 @@ public class ScriptTest {
               line -> {
                 final Matcher m = pattern.matcher(line);
                 if (m.find()) {
-                  final String condition = m.group(1);
-                  assumeTrue(holds(condition), path + " requires " + condition);
+                  // Several conditions, separated by spaces, must all hold.
+                  for (String condition : m.group(1).trim().split("\\s+")) {
+                    assumeTrue(
+                        holds(condition), path + " requires " + condition);
+                  }
                 }
               });
     }
@@ -150,6 +155,10 @@ public class ScriptTest {
       case "spark":
         return System.getProperty("morel.spark") != null
             && System.getenv("SPARK_REMOTE") != null;
+      case "spark-prepare":
+        // The translator: true once the Spark structure has "prepare".
+        final BuiltIn.Structure spark = BuiltIn.BY_STRUCTURE.get("Spark");
+        return spark != null && spark.memberMap.containsKey("prepare");
       default:
         throw new IllegalArgumentException(
             "unknown condition '" + condition + "' in requires directive");
