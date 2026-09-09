@@ -25,12 +25,27 @@ form. This is the document morel-rust (hydromatic/morel-rust#33) and
 morel-go implement against; where it disagrees with an
 implementation, this document is right.
 
-Status: **draft for review**. It is frozen at the end of step 0, and
-after step 3 the printed form is a golden-file contract that costs a
-coordinated change across three implementations to alter. Sections
-marked *Review* are the ones where a decision was made here rather
-than transcribed from current behavior. Rationale for the design is
-in discussion.md; the sequence is in plan.md.
+Status: **frozen**. The datatype, the typing and scoping rules and
+the printed form are settled; changing any of them now costs a
+coordinated change across three implementations and every golden
+file. Every decision that was made here rather than transcribed from
+current behavior has since been built, and is now described in the
+indicative rather than marked *Review*; the single exception is the
+rename convention at a scope merge (§5), which no rule exercises yet
+and which the validator makes unreachable in the meantime. Rationale
+for the design is in discussion.md; the sequence is in plan.md.
+
+**What the contract covers is a command, not a file.** `Sys.planEx`
+prints the tree, and its text is what §6 specifies and what another
+implementation must reproduce. `Sys.plan` prints the *executable*
+code — the step list the lowering makes — and is Morel's own, outside
+this document; it says `w$0` where the query said `e`, because a
+one-binder query has no projection to read a name off (§3.1), and
+that is a fact about the lowering rather than about the tree. Drawing
+the line by command rather than by file is deliberate: the two appear
+in the same script files — `optimize.smli` and `built-in/sys.smli`
+each have both — and splitting the files would move tests to record
+something a rule states in a sentence.
 
 ## 1. What a node is
 
@@ -161,7 +176,7 @@ whatever encloses the tree, which inside the right input of a
 dependent join includes that join's binder.
 
 `compute` is `group` with no keys, plus the extraction of the single
-element that the enclosing expression performs — see §6, *Review*.
+element that the enclosing expression performs — see §6.
 
 ### 3.3 Correlation
 
@@ -348,15 +363,21 @@ Rewrites that merge scopes — decorrelation, subquery unnesting — can
 bring two identically-named binders together. The rename convention
 is deterministic and specified here rather than left to
 implementations, so that Java, Rust and Go print the same plan for
-the same rewrite: *Review* — the convention is written when the first
-scope-merging rule lands in step 5, and until then the validator
-rejects the collision.
+the same rewrite. **This is the one thing the freeze leaves open**,
+and deliberately: no rule that merges scopes has landed, so a
+convention written now would be a convention nothing exercises. Until
+one lands (plan.md step 5) the validator rejects the collision, so
+the contract is that it cannot arise — an implementation that also
+rejects it agrees with this one, and the convention is a coordinated
+change when the first such rule needs it.
 
 ## 6. Plan text
 
-*Review.* The grammar below is a proposal; §7 shows it working. Once
-step 3 flips `Sys.plan` to print it, changing it is a coordinated
-change across three implementations and every golden file.
+The grammar below is the contract; §7 shows it working. `Sys.planEx`
+prints it, and `Sys.plan` does not: `Sys.plan` prints the step list
+that executes, which is a different thing said in a different
+notation, and the day the tree is what executes is the day that
+question reopens.
 
 One node per line. A node's inputs are the lines below it, indented
 by two spaces. A line is an operator name followed by its arguments,
@@ -414,20 +435,33 @@ and numbers what it finds. Morel does the same for type variables —
 Each prefix is numbered in its own sequence, so a tree's `v$` and a
 lowering's `w$` do not interleave.
 
-*Review.* A tree nested inside another tree's expressions numbers its
-own binders from zero, which is unambiguous only because the two
-scopes do not overlap today: a nested query is still a step list, and
-becomes a tree in its own right. When the resolver builds trees
-natively (plan.md step 2), nested trees will share a scope with their
-enclosing lambda's parameter, and the rule needs an extension --
-numbering by position in the tree, or a prefix per nesting level.
+A tree nested inside another tree's expressions shares the enclosing
+text's numbering; it does not restart at zero. This was the one thing
+§6 left open, on the reasoning that a nested query was still a step
+list and would need a rule of its own — numbering by position, or a
+prefix per nesting level — once the resolver built trees natively.
+It needed neither. The rule as written already says "the printer
+numbers the generated binders *it finds*, from zero, in order of
+first occurrence", and a nested tree unparses onto the same writer as
+the tree that contains it, so one sequence spans the whole text:
 
-*Review.* `compute` has no line of its own: `from … compute` prints
-as its `group`, and the extraction of the single element belongs to
-the Core expression that wraps the tree. The alternative — a
-`compute` node whose type is a scalar — buys a shorter plan at the
-cost of a constructor that is not collection-valued, which every rule
-would then have to case on. Recommended as written.
+```
+filter [let val v$0 = $0 in nonEmpty (
+  filter [let val v$1 = $0 in #1 $0 = v$0 andalso nonEmpty (...)]
+    pairs)]
+  [1, 2, 3]
+```
+
+An implementation that builds the text by concatenating strings its
+children returned gets this wrong, and gets it wrong silently — each
+child restarts at `v$0`. Thread one writer through.
+
+`compute` has no line of its own: `from … compute` prints as its
+`group`, and the extraction of the single element belongs to the Core
+expression that wraps the tree. The alternative — a `compute` node
+whose type is a scalar — buys a shorter plan at the cost of a
+constructor that is not collection-valued, which every rule would
+then have to case on. Frozen as written.
 
 ## 7. Worked examples
 
