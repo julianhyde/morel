@@ -27,67 +27,63 @@ tests green. Plan text and rewrite ports are each paid exactly once.
 
 ## Where this stands, and what the next session does
 
-Steps 0, 1 and 2 are done, and so are goals 1 to 5. The resolver returns
-a relational tree; it is what the rewrite passes carry and what
-grounding works on; lowering is a pass of its own, after the rewrites
-and before the compiler; and `Sys.planEx` prints the tree. The
-AST-to-From path is deleted, and spec.md is frozen against what was
-built rather than what was first designed. `fullMake` is green and is
-the gate; there is one configuration to test.
+**Steps 0, 1 and 2 are done, and so are all six goals of step 3.** The
+resolver returns a relational tree; it is what the rewrite passes carry
+and what grounding works on; lowering is a pass of its own, after the
+rewrites and before the compiler; `Sys.planEx` prints the tree; the
+AST-to-From path is deleted; the step list's grounding engine is
+deleted; and spec.md is frozen. `fullMake` is green and is the gate.
 
-Goal 6, the freeze, is what is left, and one decision stands beside it:
-whether to delete the step list's grounding engine, which nothing needs
-any more.
-
-The feature is finished when a tree is what executes and what prints.
-A tree is what prints; what executes is still the step list the lowering
-makes, and closing that is beyond these six goals.
+The feature is finished when a tree is what executes and what prints. A
+tree is what prints. What executes is still the step list the lowering
+makes, and closing that is beyond these six goals -- it is what steps 4
+and 5 build toward.
 
 ### Start here
 
-Two things are left. The first is a decision, not a task.
+Step 4, the rule framework, is next, and nothing blocks it. What
+follows is what a session starting there should know that the code does
+not say.
 
-#### 1. Decide whether to delete the step list's grounding engine
+#### The tree is what the passes carry, and one engine grounds it
 
-It is dead. `Expander.expandFromSteps` can be made to return the query
-unchanged and every script still passes. To see that, put
+`Expander.expandFrom` translates, calls `RelExpander.expand`, and
+lowers the answer back. There is no second engine behind it: a query it
+declines is handed back unchanged, and `SuchThatShuttle` reports the
+pattern nothing bounds. The step list's engine -- `expandFromSteps` and
+its 700 lines -- is deleted, on the measurement that neutering it left
+578 of 579 tests green and the one failure was a counter.
 
-```java
-    if (Boolean.getBoolean("morel.noStepEngine")) {
-      return from;
-    }
-```
+`Expander` is now 390 lines, of which the part `RelExpander` calls is
+`ground`, `Ground`, `renamePatterns`, `misaddressed`, `notGrounded` and
+the instance side `ground` needs.
 
-above the fallback at the end of `Expander.expandFrom`, and run the
-scripts with `-Dmorel.noStepEngine=true`.
+**Where the grounding actually happens is worth knowing before you
+measure anything.** `expandFrom` is a *pre*-pass, not the whole story:
+making it return its argument leaves every script green except six
+lines of `such-that.smli`, all of them a `case` over a constructor.
+`from i where i elem [1, 2, 3]` grounds whether or not it runs, because
+`SuchThatShuttle` reaches it later. So a probe on `expandFrom` measures
+less than it looks like it measures, and
+`GroundingShadowTest.testGroundingShadowRuns` asserts on one of those
+six queries for exactly that reason.
 
-Deleting is about 700 lines: `expandFromSteps`, `applyFbbt`,
-`stripConjunctsByIdentity`, `expandFrom2`, `checkAllGrounded`,
-`addGeneratorScan`, `expandSteps`, `StepAnalyzer`, `StepVarSet`, and
-`Expander`'s own `hasTakeOrSkip` and `containsExtent`. What must stay,
-because `RelExpander` uses it: `ground` and `Ground`, `renamePatterns`,
-`misaddressed`, `notGrounded`, and the instance side that `ground`
-needs. `RelShadow.groundingAgrees` loses its only caller, and most of
-`RelShadow` goes with it.
+The residue: count the queries the tree engine declines by printing in
+the branch of `SuchThatShuttle.visitRel` that throws. It was 37 of 240
+grounding attempts when first measured, and is 10 -- all of them
+queries whose expected output is an error.
 
-*Against:* it is the only independent check on the tree's engine, which
-is what `groundingAgrees` was built to be, and the tree's engine is
-three sessions old. *For:* a check that nothing exercises is not a
-check, and two engines are two things to keep true.
+#### What the freeze covers, and the one thing it does not
 
-#### 2. Goal 6, freeze
+`Sys.planEx`'s text is the cross-implementation contract, specified in
+spec.md §6. `Sys.plan`'s is Morel's own and outside the spec. The line
+is drawn by command rather than by file because the two share script
+files; see goal 6 below.
 
-The text is stable: `Core.Rel.describe` builds it with one renumbering
-writer, so `#depts scott_1` prints as `#depts scott` and `let val d_16`
-as `let val d`, whatever was compiled before. Checked by printing the
-same query with and without two declarations ahead of it.
-
-What the freeze wants deciding: `Sys.plan` prints the executable code,
-and says `w$0` where the query said `e`, because a one-binder query has
-no projection to read a name off (below). Freezing that is defensible --
-it is a different contract from the tree's -- but which files are the
-cross-implementation contract and which are Morel's own is worth
-settling deliberately rather than by default.
+Left open on purpose: §5's rename convention at a scope merge. It
+belongs with the first rule that merges scopes (step 4 or 5), because a
+convention nothing exercises is not a convention. The validator rejects
+the collision meanwhile.
 
 #### What the flip cost, and the one thing that would buy it back
 
@@ -117,12 +113,10 @@ binder, which is a change to spec.md §3.1 and worth its own argument.
   them.* A script that skipped pure additions hid seven wrong rows and
   cost a session's worth of wrong conclusions.
 
-#### The measurement that says where grounding stands
+### The six goals of step 3, and what each turned out to need
 
-Count the queries the tree engine declines by printing in the branch of
-`SuchThatShuttle.visitRel` that throws. It was 37 of 240 grounding
-attempts when this was first measured, and is 10 -- all of them queries
-whose expected output is an error.
+All six are done. Kept because what a goal *needed* is the part that
+does not survive in the code, and steps 4 and 5 walk the same ground.
 
 1. ~~Decide how `$0` is told apart, and implement it.~~ **Done.** It
    is a node of its own, `Core.Input`, carrying the ordinal of the
@@ -328,10 +322,12 @@ whose expected output is an error.
 
    `Sys.plan` is untouched, deliberately. It prints the executable code
    -- the step list that `Compiler` compiles -- and a tree there would
-   say something that is not what runs. It flips when the tree executes,
-   which is what spec.md §6 means by "once step 3 flips `Sys.plan` to
-   print it"; the 196 `Sys.plan` sites re-baseline then, and whether
-   the code view survives under another name is a question for then.
+   say something that is not what runs. Goal 6 froze that split rather
+   than deferred it: spec.md §6 now says the contract is `planEx`'s
+   text and `Sys.plan` is Morel's own. It flips the day the tree is
+   what executes; the ~200 `Sys.plan` sites re-baseline then, and
+   whether the code view survives under another name is a question for
+   then.
 
 5. ~~**Script-convert the expectations, in one flip.**~~ **Done**, with
    goals 2 and 3, because the plan text moves the moment the resolver
@@ -343,24 +339,49 @@ whose expected output is an error.
    fixtures took the resolver's output as a `Core.From` and now take the
    tree.
 
-6. **Freeze the plan text.** Golden files become the
-   cross-implementation contract, and morel-rust (#33) and the Go
-   work can begin against them, in parallel with steps 4 and 5.
+6. ~~**Freeze the plan text.**~~ **Done.** spec.md's status is
+   *frozen*, and morel-rust (#33) and the Go work can begin against
+   it, in parallel with steps 4 and 5.
 
-   **The prerequisite is met.** Plan text depended on what had been
-   compiled before it -- `#depts scott_1`, `let val d_14` -- because
-   `Core.Rel.describe` built its text with a `StringBuilder` and
-   `toString()`, so an identifier kept the ordinal its generator gave
-   it. It builds with one renumbering writer now, and prints the same
-   text whatever precedes the query. A contract could not have been
-   frozen against the other.
+   **The prerequisite was met first.** Plan text depended on what had
+   been compiled before it -- `#depts scott_1`, `let val d_14` --
+   because `Core.Rel.describe` built its text with a `StringBuilder`
+   and `toString()`, so an identifier kept the ordinal its generator
+   gave it. It builds with one renumbering writer now, and prints the
+   same text whatever precedes the query. A contract could not have
+   been frozen against the other.
 
-   **What is left is a decision**: `Sys.plan` prints the executable
-   code, not the tree, and says `w$0` where the query said `e`. Freezing
-   that is defensible -- it is Morel's own contract, not the
-   cross-implementation one -- but say which files are which, rather
-   than letting the answer fall out of what happens to be in the
-   directory.
+   **The contract is a command, not a file.** `Sys.planEx` prints the
+   tree, and its text is what spec.md §6 specifies. `Sys.plan` prints
+   the executable code and is Morel's own, outside the spec; it says
+   `w$0` where the query said `e`, which is a fact about the lowering
+   rather than about the tree. Drawing the line by command was the
+   cheaper of the two answers and the truer one: the two commands
+   share script files -- `optimize.smli` has 16 `plan` and 38
+   `planEx`, `built-in/sys.smli` 6 and 7 -- so splitting the files
+   would have moved tests to record what a sentence records.
+
+   **§6 had three open notes, and the freeze is settling them.** The
+   grammar is the contract, as written. `compute` keeps no line of
+   its own, as recommended. The third was the real one: a nested tree
+   was to number its binders from zero, which §6 said would need an
+   extension -- numbering by position, or a prefix per nesting level
+   -- once the resolver built trees natively. It needed neither.
+   `Core.Rel.unparse` writes onto the caller's writer rather than
+   returning a string, so one sequence spans the whole text and a
+   nested tree continues it: `filter [let val v$0 = ... nonEmpty
+   (filter [let val v$1 = ... v$0 ...])]`. The rule as written --
+   "the printer numbers the generated binders it finds, in order of
+   first occurrence" -- already covered it; what needed saying is
+   that an implementation which concatenates strings its children
+   returned gets it wrong, and gets it wrong silently.
+
+   **One thing the freeze leaves open, deliberately**: §5's rename
+   convention at a scope merge. No rule that merges scopes has
+   landed, so a convention written now is a convention nothing
+   exercises -- the same reasoning that deleted the step list's
+   grounding engine. The validator rejects the collision, so the
+   contract until step 5 is that it cannot arise.
 
 Three things not to re-derive, each of which cost a detour once:
 
@@ -1816,8 +1837,11 @@ across a node boundary. Decide how `$0` is told apart (a distinct
 rule the free-variable walk honours) before the first pass sees a
 tree, not after.
 
-- [ ] Sys.plan and Sys.planEx print the tree.
-- [ ] Script-convert test expectations (one flip, final format).
+- [x] Sys.planEx prints the tree. `Sys.plan` does not, and that is
+      the decision rather than an omission: it prints the executable
+      code, and the tree is not what executes. spec.md draws the
+      contract line there.
+- [x] Script-convert test expectations (one flip, final format).
       These changes are benign by construction: only plan text moves,
       because execution changed in step 2 without changing results. A
       query with no scan gains a visible `[()]` leaf (spec.md §3.1)
@@ -1825,7 +1849,7 @@ tree, not after.
       branches; both return exactly what they returned before. A test
       whose *result* changes in this step is a bug, not a
       re-baseline.
-- [ ] Plan text is now frozen; golden files are the
+- [x] Plan text is now frozen; `Sys.planEx`'s output is the
       cross-implementation contract. Rust (morel-rust#33) and Go
       work can begin here, in parallel with steps 4–5.
 
