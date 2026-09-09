@@ -174,7 +174,8 @@ infrastructure:
   - These are Morel source files with expected output
   - Run via `MainTest` methods that check actual vs. expected output
   - The format, harness and output matching are described in
-    `docs/script-format.md`
+    `docs/script-format.md`; a script with a `(*) requires: <condition>`
+    header line runs only when the condition holds
 
 Key test files in `src/test/resources/script/`:
 - `built-in.smli`: Tests for built-in functions and operators
