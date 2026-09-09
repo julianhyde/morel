@@ -87,6 +87,12 @@ public interface SparkBackend {
     if (uri.equals(MockSparkConnection.URI)) {
       return new MockSparkConnection(typeSystem, foreignValues);
     }
+    if (!isAvailable()) {
+      throw new SparkException(
+          "CONNECTION",
+          "The Spark adapter is not available; it needs JDK 17 or later and"
+              + " the 'spark' Maven profile");
+    }
     return load().connect(typeSystem, uri);
   }
 

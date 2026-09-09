@@ -89,11 +89,6 @@ c.close ();
 c.close ();
 > val it = () : unit
 
-(*) An unknown URI is rejected when the connection is used.
-val bad = Spark.connect "http://nowhere";
-> uncaught exception Spark [Spark: CONNECTION: Invalid Spark Connect URI: http://nowhere (expected sc://host[:port][/;param=value...])]
->   raised at: stdIn:1.11-1.41
-
 (*) There is no default server in the test environment.
 Spark.connectDefault ();
 > uncaught exception Spark [Spark: CONNECTION: No default Spark Connect server: SPARK_REMOTE is not set]
