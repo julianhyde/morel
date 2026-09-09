@@ -253,9 +253,14 @@ leaks, a shutdown hook, and a harness check that scripts leave the registry
 empty. Use after close raises a closed-connection error, including when
 forcing a lazy remote value.
 
-**M4.** Drafted in spec.md §3: the table's format and first contents.
-Represent the mapping as data, ideally in Morel, shared by all ports: each
-entry classifies an operator as direct, renamed, rewritten (an expression
+**M4.** The table exists:
+`src/main/resources/net/hydromatic/morel/spark/functions.sml`, a Morel
+expression that `SparkFunctionsTest` evaluates and checks (every name is a
+built-in, every kind is known, templates use their arguments). The translator
+(M5) will load it; the tests that iterate it in the triple format come with
+M11. Drafted in spec.md §3: the table's format and first contents. Represent
+the mapping as data, ideally in Morel, shared by all ports: each entry
+classifies an operator as direct, renamed, rewritten (an expression
 template), or unsupported, with a flag for known semantic divergence (integer
 division, overflow, collation, NaN ordering). Tests iterate the table through
 the triple format.

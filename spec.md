@@ -346,10 +346,15 @@ An entry may carry a **divergence** note: the translation is the
 closest Spark offers, but differs in a stated way, and a triple test
 documents the difference.
 
-The table is a Morel value, a list of records, in a file the
-translator loads at startup. The columns are `morel` (the built-in's
-name), `spark` (the function name or template), `kind`, and
-`divergence`. Its first contents are below.
+The table is a Morel expression, a list of records, in the resource
+`net/hydromatic/morel/spark/functions.sml`, which the translator loads
+at startup and which every implementation of Morel can read. The
+fields are `morel` (the built-in's name: `op +` for a top-level
+operator, `String.size` for a structure member), `kind`, `spark` (the
+function name, or for a rewritten entry a template over the arguments
+`$0`, `$1`, ...), and `divergence`. `SparkFunctionsTest` checks that
+the file is well-formed and that every name is a built-in. Its first
+contents are below.
 
 ### 3.2 Contents
 
