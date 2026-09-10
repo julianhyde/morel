@@ -39,6 +39,7 @@ val <a id='file' href="#file-impl">file</a> : {}
 val <a id='parseTree' href="#parseTree-impl">parseTree</a> : string -> string
 val <a id='plan' href="#plan-impl">plan</a> : unit -> string
 val <a id='planEx' href="#planEx-impl">planEx</a> : string -> string
+val <a id='planOf' href="#planOf-impl">planOf</a> : 'a -> string
 val <a id='set' href="#set-impl">set</a> : string * 'a -> unit
 val <a id='show' href="#show-impl">show</a> : string -> string option
 val <a id='showAll' href="#showAll-impl">showAll</a> : unit -> (string * string option) list
@@ -95,6 +96,15 @@ from `.smli` scripts. Raises `Error` if the string does not parse.
 representation at the specified phase. The phase argument can be "0" (initial),
 "-1" (final), or a specific pass number. A query prints as a relational tree,
 one node per line, with the collection type of each node.
+
+<a id="planOf-impl"></a>
+<h3><code>planOf</code></h3>
+
+`planOf e` returns the plan of the expression `e`, which is not evaluated. Unlike
+`planEx`, which re-plans the previous statement, this takes the expression
+itself, so that a query and its plan are one statement rather than two. A
+query prints as a relational tree, one node per line, with the collection
+type of each node.
 
 <a id="set-impl"></a>
 <h3><code>set</code></h3>
