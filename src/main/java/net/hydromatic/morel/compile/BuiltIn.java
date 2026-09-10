@@ -4551,6 +4551,23 @@ public enum BuiltIn {
    */
   SYS_PLAN_EX("Sys", "planEx", ts -> ts.fnType(STRING, STRING)),
 
+  /**
+   * Function "Sys.planOf", of type "&alpha; &rarr; string".
+   *
+   * <p>"planOf e" returns the plan of the expression {@code e}, which is not
+   * evaluated. Unlike {@link #SYS_PLAN_EX}, which re-plans the previous
+   * statement, this takes the expression itself, so a plan and the query it is
+   * the plan of are one statement rather than two.
+   *
+   * <p>It is expanded where it is resolved, so the plan is the tree the
+   * resolver built, before the rewrite passes; see {@code
+   * Resolver.toCore(Ast.Apply)}.
+   */
+  SYS_PLAN_OF(
+      "Sys",
+      "planOf",
+      ts -> ts.forallType(1, h -> ts.fnType(h.get(0), STRING))),
+
   /** Function "Sys.set", aka "set", of type "string * &alpha; &rarr; unit". */
   SYS_SET(
       "Sys",

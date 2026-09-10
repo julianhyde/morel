@@ -18,6 +18,9 @@
  */
 package net.hydromatic.morel.eval;
 
+import net.hydromatic.morel.compile.BuiltIn;
+import org.jspecify.annotations.Nullable;
+
 /**
  * A compiled expression that can be evaluated by applying to an argument.
  *
@@ -33,6 +36,19 @@ public interface Applicable extends Describable {
    * push/pop local variables on {@link Stack#slots}.
    */
   Object apply(Stack stack, Object argValue);
+
+  /**
+   * Returns the built-in that this function implements, or null if it is not a
+   * built-in.
+   *
+   * <p>Lets a pass recognize a built-in by the value bound to it, which is the
+   * only way to recognize one reached through a structure: {@code Sys.planOf}
+   * resolves to {@code #planOf Sys}, an application of a record selector, and
+   * does not become a function literal until the inliner folds it.
+   */
+  default @Nullable BuiltIn builtIn() {
+    return null;
+  }
 
   /**
    * Calls this function with an environment and an argument value.
