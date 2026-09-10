@@ -65,6 +65,35 @@ public class AstWriter {
     return false;
   }
 
+  /**
+   * The longest type moniker that a plan prints in full. A longer one is
+   * replaced by a reference, {@code t[1]}, and printed once in the legend.
+   *
+   * <p>A character count rather than a rule about the type's shape, because
+   * three implementations must agree on it and they already agree on the
+   * moniker's text. It sits above {@code int option list} (15) and {@code
+   * {a:int, b:int} list} (19), and below a three-field record (41).
+   */
+  public static final int MAX_TYPE_LENGTH = 24;
+
+  /**
+   * Returns how a type is written where a plan line names it: the moniker
+   * itself if it is short, otherwise a reference such as {@code t[1]} that
+   * {@link #typeLegend} expands.
+   */
+  public String typeRef(String moniker) {
+    return moniker;
+  }
+
+  /**
+   * Returns the legend for the references {@link #typeRef} has handed out: one
+   * line per distinct type, in the order it was first encountered, or the empty
+   * string if there are none.
+   */
+  public String typeLegend() {
+    return "";
+  }
+
   /** Appends a string to the output. */
   public AstWriter append(String s) {
     b.append(s);

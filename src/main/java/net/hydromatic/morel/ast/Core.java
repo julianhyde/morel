@@ -2400,7 +2400,7 @@ public class Core {
     public String describe(boolean withTypes) {
       final AstWriter w = AstNode.renumberingWriter(withTypes);
       describe(w, 0, withTypes);
-      return w.toString();
+      return w + w.typeLegend();
     }
 
     protected void describe(AstWriter w, int indent, boolean withTypes) {
@@ -2415,7 +2415,7 @@ public class Core {
       w.append(opName());
       describeArgs(w);
       if (withTypes) {
-        w.append(" : ").append(type.moniker());
+        w.append(" : ").append(w.typeRef(type.moniker()));
       }
       w.append("\n");
     }
@@ -2433,7 +2433,7 @@ public class Core {
       indent(w, indent);
       w.append(input, 0, 0);
       if (withTypes) {
-        w.append(" : ").append(input.type.moniker());
+        w.append(" : ").append(w.typeRef(input.type.moniker()));
       }
       w.append("\n");
     }
