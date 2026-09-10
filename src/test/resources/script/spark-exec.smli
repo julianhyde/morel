@@ -17,11 +17,11 @@
  * License.
  *
  * The corpus of spark.smli, each query prepared and executed on a
- * live Spark Connect server, the test container at
- * sc://localhost:15002 (start-spark.sh), whose scott database holds
- * Morel's scott rows; so the results are those of spark.smli. Runs
- * once the translator exists (Spark.prepare) and a server is
- * available; see docs/script-format.md.
+ * live Spark Connect server, whose scott database holds Morel's scott
+ * rows (start-spark.sh seeds it); so the results are those of
+ * spark.smli. The harness binds "spark" to the connection, and closes
+ * it afterwards. Runs once the translator exists (Spark.prepare) and
+ * a server is available; see docs/script-format.md.
  *)
 (*) requires: spark spark-prepare
 
@@ -29,9 +29,6 @@ Sys.set ("printLength", 64);
 > val it = () : unit
 Sys.set ("output", "tabular");
 > val it = () : unit
-val spark = Spark.connect "sc://localhost:15002";
-> val spark = {catalog={},connection=<connection sc://localhost:15002>}
->   : {catalog:{...}, connection:connection, ...}
 
 (*) Query 1: filter and project over an inline relation.
 (spark.connection.prepare (fn () =>
@@ -300,8 +297,5 @@ byDept.execute 40;
 (spark.connection.remote (fn () =>
   from e in spark.catalog.scott.emps where e.job = "CLERK" yield e.ename)) ();
 > val it = ["SMITH","ADAMS","JAMES","MILLER"] : string bag
-
-spark.connection.close ();
-> val it = () : unit
 
 (*) End spark-exec.smli

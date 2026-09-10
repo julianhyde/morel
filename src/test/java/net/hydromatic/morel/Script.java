@@ -60,6 +60,7 @@ public class Script {
   private final boolean echo;
   private final boolean idempotent;
   private final boolean loadDictionary;
+  private final Map<String, ForeignValue> extraValues;
 
   /** Property overrides applied before running (e.g. {@code hybrid=true}). */
   private final Map<Prop, Object> propOverrides;
@@ -75,6 +76,7 @@ public class Script {
       boolean echo,
       boolean idempotent,
       boolean loadDictionary,
+      Map<String, ForeignValue> extraValues,
       Map<Prop, Object> propOverrides,
       Tracer tracer) {
     this.inFile = requireNonNull(inFile, "inFile");
@@ -83,6 +85,7 @@ public class Script {
     this.echo = echo;
     this.idempotent = idempotent;
     this.loadDictionary = loadDictionary;
+    this.extraValues = ImmutableMap.copyOf(extraValues);
     this.propOverrides = ImmutableMap.copyOf(propOverrides);
     this.tracer = requireNonNull(tracer, "tracer");
   }
@@ -94,6 +97,22 @@ public class Script {
    */
   public static Script create(String path) throws IOException {
     return create(path, null, false, ImmutableMap.of(), Tracers.empty());
+  }
+
+  /** Returns a copy of this script with more foreign values bound. */
+  public Script withValues(Map<String, ForeignValue> values) {
+    final Map<String, ForeignValue> map = new LinkedHashMap<>(extraValues);
+    map.putAll(values);
+    return new Script(
+        inFile,
+        outFile,
+        noInput,
+        echo,
+        idempotent,
+        loadDictionary,
+        map,
+        propOverrides,
+        tracer);
   }
 
   /** Creates a Script. */
@@ -149,6 +168,7 @@ public class Script {
         echo,
         idempotent,
         loadDictionary,
+        ImmutableMap.of(),
         propOverrides,
         tracer);
   }
@@ -223,10 +243,12 @@ public class Script {
       Prop.DIRECTORY.set(propMap, directory);
     }
     propMap.putAll(propOverrides);
-    final Map<String, ForeignValue> dictionary =
-        loadDictionary
-            ? Calcite.withDataSets(BuiltInDataSet.DICTIONARY).foreignValues()
-            : ImmutableMap.of();
+    final Map<String, ForeignValue> dictionary = new LinkedHashMap<>();
+    if (loadDictionary) {
+      dictionary.putAll(
+          Calcite.withDataSets(BuiltInDataSet.DICTIONARY).foreignValues());
+    }
+    dictionary.putAll(extraValues);
 
     try (Reader reader =
             noInput
