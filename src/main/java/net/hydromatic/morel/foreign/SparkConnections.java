@@ -57,8 +57,19 @@ public class SparkConnections {
   public static ConnectionRecord open(Session session, String uri) {
     final TypeSystem typeSystem =
         requireNonNull(session.typeSystem, "typeSystem");
+    return open(typeSystem, session.foreignValues, uri);
+  }
+
+  /**
+   * Opens a connection and returns the record {@code {catalog, connection}}; as
+   * {@link #open(Session, String)}, without a session.
+   */
+  public static ConnectionRecord open(
+      TypeSystem typeSystem,
+      Map<String, ForeignValue> foreignValues,
+      String uri) {
     final SparkBackend.Connection connection =
-        SparkBackend.open(typeSystem, session.foreignValues, uri);
+        SparkBackend.open(typeSystem, foreignValues, uri);
     return new ConnectionRecord(connection, catalog(connection));
   }
 

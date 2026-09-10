@@ -169,7 +169,9 @@ skipped. Several conditions, separated by spaces, must all hold. The
 conditions are `spark-adapter` (the Spark adapter is on
 the class path, which needs JDK 17 or later), `no-spark-adapter` (it
 is not), and `spark` (a live Spark Connect server: the system property
-`morel.spark` is set and `SPARK_REMOTE` names the server).
+`morel.spark` is set and `SPARK_REMOTE` names the server; the harness
+then binds `spark` to a connection to it, as `Spark.connect` would
+return, and closes it after the script).
 
 ## The harness
 
