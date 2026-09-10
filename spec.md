@@ -404,6 +404,42 @@ and a record construction as `{d = $1, e = $0}`.
 `Sys.planEx` prints the same tree with `: type` appended to every
 line, the type being the node's full collection type.
 
+A moniker of **24 characters or fewer** is printed in full. A longer
+one is replaced by a reference, `t[1]`, `t[2]`, ..., numbered from one
+in the order the references were first handed out; each is then
+printed once in a *legend*, one line per type, after a blank line at
+the end of the plan:
+
+```
+project [{comm = #comm (#3 $0), ...}] : t[1]
+  filter [#deptno (#2 $0) = #deptno (#1 $0)] : t[2]
+    join : t[2]
+      join : t[3]
+        #depts scott : t[4]
+        #emps scott : t[5]
+      #bonuses scott : t[6]
+
+t[1] {comm:real, dname:string, ename:string} bag
+t[2] ({deptno:int, dname:string, loc:string} * ...) bag
+...
+```
+
+A character count rather than a rule about the type's shape, because
+three implementations must agree on which types are abbreviated and
+they already agree on the moniker's text; a rule phrased over records
+and tuples would abbreviate `(int * int) list`, which is short and
+reads better in full. The threshold sits above `int option list` (15)
+and `{a:int, b:int} list` (19), and below a three-field record (41).
+
+Two types that print the same moniker share a reference, because the
+moniker is all the plan says about them. The numbering, like the
+numbering of generated binders, is a property of the *text*: a tree
+nested in another tree's expressions shares the enclosing text's
+references and legend, so one legend covers the whole plan. The
+implementation consequence is the same one, for the same reason --
+thread one writer through, rather than concatenating strings that
+children returned.
+
 Generated labels sort with user labels under one collation, pinned
 here so that three implementations agree: labels compare as Morel
 strings compare, which puts `$`-prefixed names before alphabetic
