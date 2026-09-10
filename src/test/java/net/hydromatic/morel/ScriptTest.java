@@ -36,7 +36,9 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -85,7 +87,17 @@ public class ScriptTest {
   @MethodSource("data")
   @Timeout(60)
   void test(String path) throws Exception {
-    checkRequires(path);
+    final Set<String> conditions = checkRequires(path);
+    if (conditions.contains("spark")) {
+      // The script assumes that "spark" is bound to a live connection, as
+      // Spark.connect would return it; bind it, and close it afterwards.
+      try (SparkConnectionValue spark =
+          new SparkConnectionValue(
+              requireNonNull(System.getenv("SPARK_REMOTE")))) {
+        Script.create(path).withValues(ImmutableMap.of("spark", spark)).run();
+      }
+      return;
+    }
     Method method = findMethod(path);
     if (method != null) {
       try {
@@ -114,12 +126,15 @@ public class ScriptTest {
    *       needs JDK 17 or later);
    *   <li>{@code no-spark-adapter}: it is not;
    *   <li>{@code spark}: a live Spark Connect server: system property {@code
-   *       morel.spark} is set, and {@code SPARK_REMOTE} names the server;
+   *       morel.spark} is set, and {@code SPARK_REMOTE} names the server. The
+   *       harness binds {@code spark} to a connection to it, as {@code
+   *       Spark.connect} would return, and closes it after the script;
    *   <li>{@code spark-prepare}: the Spark translator exists, that is, the
    *       {@code Spark} structure has {@code prepare}.
    * </ul>
    */
-  private static void checkRequires(String path) throws IOException {
+  private static Set<String> checkRequires(String path) throws IOException {
+    final Set<String> conditions = new LinkedHashSet<>();
     final URL url =
         requireNonNull(
             ScriptTest.class
@@ -139,10 +154,12 @@ public class ScriptTest {
                   for (String condition : m.group(1).trim().split("\\s+")) {
                     assumeTrue(
                         holds(condition), path + " requires " + condition);
+                    conditions.add(condition);
                   }
                 }
               });
     }
+    return conditions;
   }
 
   /** Returns whether a {@code requires:} condition holds. */

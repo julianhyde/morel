@@ -18,45 +18,41 @@
  *
  * The Spark structure against a live Spark Connect server, the one
  * that SPARK_REMOTE names; the test container (start-spark.sh) holds
- * the tables this script expects. Runs only when the server is
+ * the tables this script expects. The harness binds "spark" to the
+ * connection and closes it afterwards. Runs only when the server is
  * available; see docs/script-format.md.
  *)
 (*) requires: spark
 
-(* The catalog of the default server. (Its URI varies, so it is not
- * printed.) *)
-val catalog = #catalog (Spark.connectDefault ());
-> val catalog = {} : {...}
-
 (*) The scott database matches Morel's scott data set.
-catalog.scott;
+spark.catalog.scott;
 > val it =
 >   {bonuses=<relation>,depts=<relation>,emps=<relation>,salgrades=<relation>}
 >   : {bonuses:{...} bag, depts:{...} bag, emps:{...} bag, salgrades:{...} bag,
 >       ...}
-catalog.scott.depts;
+spark.catalog.scott.depts;
 > val it =
 >   [{deptno=10,dname="ACCOUNTING",loc="NEW YORK"},
 >    {deptno=40,dname="OPERATIONS",loc="BOSTON"},
 >    {deptno=20,dname="RESEARCH",loc="DALLAS"},
 >    {deptno=30,dname="SALES",loc="CHICAGO"}]
 >   : {deptno:int, dname:string, loc:string} bag
-from e in catalog.scott.emps
+from e in spark.catalog.scott.emps
   where e.sal > 2500.0
   yield {e.ename, e.sal};
 > val it =
 >   [{ename="BLAKE",sal=2850},{ename="KING",sal=5000},{ename="FORD",sal=3000},
 >    {ename="JONES",sal=2975},{ename="SCOTT",sal=3000}]
 >   : {ename:string, sal:real} bag
-from d in catalog.scott.depts
-  join e in catalog.scott.emps on d.deptno = e.deptno
+from d in spark.catalog.scott.depts
+  join e in spark.catalog.scott.emps on d.deptno = e.deptno
   group d.dname compute {c = count over ()}
   order dname;
 > val it = [{c=3,dname="ACCOUNTING"},{c=5,dname="RESEARCH"},{c=6,dname="SALES"}]
 >   : {c:int, dname:string} list
 
 (*) The zoo table has a map column, which has no Morel type.
-catalog.default.zoo;
+spark.catalog.default.zoo;
 > uncaught exception Spark [Spark: UNSUPPORTED_TYPE: Spark type map<string,integer> has no Morel equivalent]
 >   raised at: 0.0-0.0
 
