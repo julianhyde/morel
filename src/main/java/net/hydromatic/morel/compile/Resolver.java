@@ -70,6 +70,7 @@ import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Simplification;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.AliasType;
@@ -1272,7 +1273,7 @@ public class Resolver {
         core.tuple(typeMap.typeSystem, toCore(exp)));
   }
 
-  private Core.Apply toCore(Ast.Apply apply) {
+  private Core.Exp toCore(Ast.Apply apply) {
     final Core.Exp coreArg =
         enforcer.withConstructorCheck(apply.fn, toCore(apply.arg));
     Type type = typeMap.getType(apply);
@@ -1315,7 +1316,41 @@ public class Resolver {
       }
       coreFn = fn;
     }
+    if (isBuiltIn(coreFn, BuiltIn.SYS_PLAN_OF)) {
+      // `Sys.planOf e` is the plan of `e`, and `e` is not evaluated. Expanded
+      // here, where the argument's Core is to hand and is the tree the
+      // resolver built. A macro cannot do this -- `Macro.expand` is given the
+      // argument's *type* and is called at the `Id`, not the `Apply` -- and
+      // expanding later would be worse than inconvenient: the rewrite passes
+      // run to a fixed point, so the answer would depend on when the inliner
+      // reached the call, which is the non-determinism spec.md 6 exists to
+      // rule out.
+      return core.stringLiteral(coreArg.unparseRenumbered(true));
+    }
     return core.apply(apply.pos, type, coreFn, coreArg);
+  }
+
+  /** Returns whether an expression is the function literal of a built-in. */
+  private boolean isBuiltIn(Core.Exp exp, BuiltIn builtIn) {
+    if (exp.op == Op.FN_LITERAL && ((Core.Literal) exp).value == builtIn) {
+      return true;
+    }
+    // A built-in reached through a structure is not a function literal yet:
+    // `Sys.planOf` resolves to `#planOf Sys`, an application of a record
+    // selector, and the inliner folds it later. So ask the environment what
+    // the expression's value is, and let the value say what it implements.
+    //
+    // Ask only where the answer could be yes. `valueOf` walks into a record
+    // to read a field, and a query's binder has no value to read: `intFn.f 1`
+    // is a selector application too, and looking that one up walks off the
+    // end of a placeholder row. The result type is enough of a filter,
+    // because the built-ins reached this way return a string.
+    if (!(exp.type instanceof FnType)
+        || ((FnType) exp.type).resultType != PrimitiveType.STRING) {
+      return false;
+    }
+    final @Nullable Object o = valueOf(env, exp);
+    return o instanceof Applicable && ((Applicable) o).builtIn() == builtIn;
   }
 
   /**
@@ -1619,6 +1654,12 @@ public class Resolver {
         } else if (o instanceof List) {
           @SuppressWarnings("unchecked")
           List<Object> list = (List<Object>) o;
+          if (recordSelector.slot >= list.size()) {
+            // Not a record we can read: a query's binder stands for a row
+            // that does not exist yet, and its placeholder is shorter than
+            // the type says. Not constant, rather than an exception.
+            return null;
+          }
           return list.get(recordSelector.slot);
         }
       }

@@ -5812,6 +5812,22 @@ public abstract class Codes {
       };
 
   /**
+   * The resolver replaces {@code Sys.planOf e} with the plan of {@code e}, so
+   * this runs only where {@code Sys.planOf} is used as a value rather than
+   * applied to an expression -- passed to {@code map}, say -- which it cannot
+   * serve, because by then the expression is gone and only its value remains.
+   *
+   * @see BuiltIn#SYS_PLAN_OF
+   */
+  private static final Applicable SYS_PLAN_OF =
+      new ApplicableImpl(BuiltIn.SYS_PLAN_OF) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          return "Sys.planOf must be applied to an expression";
+        }
+      };
+
+  /**
    * Looks up a property by name, raising {@code Fail} if there is no such
    * property.
    *
@@ -7822,6 +7838,7 @@ public abstract class Codes {
     b.add(BuiltIn.SYS_PARSE_TREE, SYS_PARSE_TREE);
     b.add(BuiltIn.SYS_PLAN, SYS_PLAN);
     b.add(BuiltIn.SYS_PLAN_EX, SYS_PLAN_EX);
+    b.add(BuiltIn.SYS_PLAN_OF, SYS_PLAN_OF);
     b.add(BuiltIn.SYS_SET, SYS_SET);
     b.add(BuiltIn.SYS_SHOW, SYS_SHOW);
     b.add(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL);
