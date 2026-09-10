@@ -1,0 +1,357 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Conformance suite for the relational tree (spec.md).
+ *
+ * `Sys.planOf e` prints the tree that the resolver builds for the
+ * expression `e`, which is not evaluated. That text is the
+ * cross-implementation contract: morel-rust (#33) and morel-go must
+ * print the same text for the same query. spec.md is normative; this
+ * file is the executable form of it.
+ *
+ * Where the answer illustrates the rule -- the row an outer join
+ * keeps, the row a scan-less query iterates over -- the query is run
+ * too, so that a plan cannot be made to match by building a tree that
+ * says the right thing and computes the wrong one.
+ *)
+Sys.set ("output", "tabular");
+> val it = () : unit
+Sys.set ("stringDepth", ~1);
+> val it = () : unit
+useSilently "scott.smli";
+> [opening scott.smli]
+> val it = () : unit
+
+(* ---------------------------------------------------------------- *)
+(* Leaves (spec.md 3.1).
+ *
+ * A leaf is a bare expression and holds no name: the binder `i` is
+ * gone, and the filter reads the element as `$0`.
+ *)
+Sys.planOf (from i in [1, 2, 3] where i > 1);
+> val it = {_|
+> filter [$0 > 1] : int list
+>   [1, 2, 3] : int list
+> |_} : string
+
+(* A leaf whose element is a record. The element type is read off the
+ * expression, so it is the record type, and a field access prints as
+ * `#deptno $0`. The type is 41 characters, so it prints as `t[1]` and
+ * once in the legend.
+ *)
+Sys.planOf (from d in scott.depts where d.deptno > 20 yield d.dname);
+> val it =
+>   {_|
+> project [#dname $0] : string bag
+>   filter [#deptno $0 > 20] : t[1]
+>     #depts scott : t[1]
+>
+> t[1] {deptno:int, dname:string, loc:string} bag
+> |_} : string
+
+(* A query with no scan iterates over one unit row, which is a visible
+  * `[()]` leaf. Run it too: the leaf is the whole of why the answer
+  * has
+ * one row rather than none.
+ *)
+from where true yield 1;
+> val it = [1] : int list
+Sys.planOf (from where true yield 1);
+> val it =
+>   {_|
+> project [1] : int list
+>   filter [true] : unit list
+>     [()] : unit list
+> |_} : string
+
+(* ---------------------------------------------------------------- *)
+(* Joins (spec.md 3.4).
+ *
+  * A join concatenates its inputs' components and carries no yield;
+  * the
+ * projection above it is where the components are named.
+ *)
+Sys.planOf (
+  from d in scott.depts, e in scott.emps
+    where e.deptno = d.deptno andalso e.job = "PRESIDENT"
+    yield {dname = d.dname, ename = e.ename});
+> val it =
+>   {_|
+> project [{dname = #dname (#1 $0), ename = #ename (#2 $0)}] : t[1]
+>   filter [#deptno (#2 $0) = #deptno (#1 $0) andalso #job (#2 $0) = "PRESIDENT"] : t[2]
+>     join : t[2]
+>       #depts scott : t[3]
+>       #emps scott : t[4]
+>
+> t[1] {dname:string, ename:string} bag
+> t[2] ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) bag
+> t[3] {deptno:int, dname:string, loc:string} bag
+> t[4] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
+> |_} : string
+
+(* Three inputs. Joins nest to the left, and the components stay flat:
+ * `$0` has three of them, read as `#1`, `#2`, `#3`.
+ *)
+Sys.planOf (
+  from d in scott.depts, e in scott.emps, b in scott.bonuses
+    where e.deptno = d.deptno andalso b.ename = e.ename
+    yield {d.dname, e.ename, b.comm});
+> val it =
+>   {_|
+> project [{comm = #comm (#3 $0), dname = #dname (#1 $0), ename = #ename (#2 $0)}] : t[1]
+>   filter [#deptno (#2 $0) = #deptno (#1 $0) andalso #ename (#3 $0) = #ename (#2 $0)] : t[2]
+>     join : t[2]
+>       join : t[3]
+>         #depts scott : t[4]
+>         #emps scott : t[5]
+>       #bonuses scott : t[6]
+>
+> t[1] {comm:real, dname:string, ename:string} bag
+> t[2] ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} * {comm:real, ename:string, job:string, sal:real}) bag
+> t[3] ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) bag
+> t[4] {deptno:int, dname:string, loc:string} bag
+> t[5] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
+> t[6] {comm:real, ename:string, job:string, sal:real} bag
+> |_} : string
+
+(* A scan that reads an earlier binder is a join carrying a binder,
+ * which its right input reads (spec.md 3.3).
+ *)
+Sys.planOf (
+  from d in scott.depts,
+      e in (from e2 in scott.emps where e2.deptno = d.deptno)
+    yield {d.dname, e.ename});
+> val it =
+>   {_|
+> project [{dname = #dname (#1 $0), ename = #ename (#2 $0)}] : t[1]
+>   join [v$0] : t[2]
+>     #depts scott : t[3]
+>     filter [#deptno $0 = #deptno v$0] : t[4]
+>       #emps scott : t[4]
+>
+> t[1] {dname:string, ename:string} bag
+> t[2] ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) bag
+> t[3] {deptno:int, dname:string, loc:string} bag
+> t[4] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
+> |_} : string
+
+(* ---------------------------------------------------------------- *)
+(* Outer joins.
+ *
+ * The absent side's components are each wrapped in `option` on their
+ * own, not the row as a whole (discussion.md 15). Run it too: the
+ * OPERATIONS row, which has no employee, is what the wrapping is for.
+ *)
+from d in scott.depts
+  left join e in scott.emps on e.deptno = d.deptno
+  yield {d.dname, who = e?.ename};
+> dname      who
+> ---------- ------
+> ACCOUNTING CLARK
+> ACCOUNTING KING
+> ACCOUNTING MILLER
+> RESEARCH   SMITH
+> RESEARCH   JONES
+> RESEARCH   SCOTT
+> RESEARCH   ADAMS
+> RESEARCH   FORD
+> SALES      ALLEN
+> SALES      WARD
+> SALES      MARTIN
+> SALES      BLAKE
+> SALES      TURNER
+> SALES      JAMES
+> OPERATIONS
+>
+> val it : {dname:string, who:string option} bag
+Sys.planOf (
+  from d in scott.depts
+    left join e in scott.emps on e.deptno = d.deptno
+    yield {d.dname, who = e?.ename});
+> val it =
+>   {_|
+> project [{dname = #dname (#1 $0), who = #map Option #ename (#2 $0)}] : t[1]
+>   join [left] [#deptno $1 = #deptno $0] : t[2]
+>     #depts scott : t[3]
+>     #emps scott : t[4]
+>
+> t[1] {dname:string, who:string option} bag
+> t[2] ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} option) bag
+> t[3] {deptno:int, dname:string, loc:string} bag
+> t[4] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
+> |_} : string
+
+(* A right join makes the *left* side's components optional. *)
+Sys.planOf (
+  from e in (from x in scott.emps where x.job = "PRESIDENT")
+    right join d in scott.depts on e.deptno = d.deptno
+    yield {d.dname, who = e?.ename});
+> val it =
+>   {_|
+> project [{dname = #dname (#2 $0), who = #map Option #ename (#1 $0)}] : t[1]
+>   join [right] [#deptno $0 = #deptno $1] : t[2]
+>     filter [#job $0 = "PRESIDENT"] : t[3]
+>       #emps scott : t[3]
+>     #depts scott : t[4]
+>
+> t[1] {dname:string, who:string option} bag
+> t[2] ({comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} option * {deptno:int, dname:string, loc:string}) bag
+> t[3] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
+> t[4] {deptno:int, dname:string, loc:string} bag
+> |_} : string
+
+(* A full join makes both sides optional. *)
+from e in (from x in scott.emps where x.job = "PRESIDENT")
+  full join d in scott.depts on e.deptno = d.deptno
+  yield {dname = d?.dname, who = e?.ename};
+> dname      who
+> ---------- ----
+> ACCOUNTING KING
+> RESEARCH
+> SALES
+> OPERATIONS
+>
+> val it : {dname:string option, who:string option} bag
+Sys.planOf (
+  from e in (from x in scott.emps where x.job = "PRESIDENT")
+    full join d in scott.depts on e.deptno = d.deptno
+    yield {dname = d?.dname, who = e?.ename});
+> val it =
+>   {_|
+> project [{dname = #map Option #dname (#2 $0), who = #map Option #ename (#1 $0)}] : t[1]
+>   join [full] [#deptno $0 = #deptno $1] : t[2]
+>     filter [#job $0 = "PRESIDENT"] : t[3]
+>       #emps scott : t[3]
+>     #depts scott : t[4]
+>
+> t[1] {dname:string option, who:string option} bag
+> t[2] ({comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} option * {deptno:int, dname:string, loc:string} option) bag
+> t[3] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
+> t[4] {deptno:int, dname:string, loc:string} bag
+> |_} : string
+
+(* ---------------------------------------------------------------- *)
+(* Group, order, set operators.
+ *
+ * `group` builds a record of its keys and aggregates.
+ *)
+Sys.planOf (
+  from e in scott.emps
+    group {e.deptno}
+    compute {c = count over (), total = sum over e.sal});
+> val it =
+>   {_|
+> group [deptno = #deptno $0] [c = count over (), total = sum over #sal $0] : t[1]
+>   #emps scott : t[2]
+>
+> t[1] {c:int, deptno:int, total:real} bag
+> t[2] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
+> |_} : string
+
+(* `order` is a sort, and it changes the kind: its input is a `bag`
+ * and
+  * its output a `list` (spec.md 4). `skip` and `take` are nodes of
+  * their
+  * own, whose arguments are evaluated before the first row and so
+  * cannot
+ * mention `$0`.
+ *)
+Sys.planOf (
+  from e in scott.emps order e.sal skip 2 take 3 yield e.ename);
+> val it =
+>   {_|
+> project [#ename $0] : string list
+>   take [3] : t[1]
+>     skip [2] : t[1]
+>       sort [#sal $0] : t[1]
+>         #emps scott : t[2]
+>
+> t[1] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
+> t[2] {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
+> |_} : string
+
+(* A set operator carries whether it removes duplicates. *)
+Sys.planOf (from i in [1, 2] union [3]);
+> val it = {_|
+> union [all] : int list
+>   [1, 2] : int list
+>   [3] : int list
+> |_} : string
+Sys.planOf (from i in [1, 2] except [1]);
+> val it = {_|
+> except [all] : int list
+>   [1, 2] : int list
+>   [1] : int list
+> |_} : string
+
+(* ---------------------------------------------------------------- *)
+(* Generated binders (spec.md 6).
+ *
+ * Two nested trees side by side share the enclosing text's numbering:
+ * both say `v$0`, because both are bound by the same `let`. An
+ * implementation that numbered per tree would say `v$0` and `v$1`.
+ *)
+val pairs = [(1, 2), (2, 3)];
+> 1 2
+> - -
+> 1 2
+> 2 3
+>
+> val pairs : (int * int) list
+Sys.planOf (
+  from x in [1, 2, 3]
+    where Relational.nonEmpty (from (a, b) in pairs where a = x)
+      andalso Relational.nonEmpty (
+        from (c, d) in pairs where d = x + 1)
+    yield x);
+> val it =
+>   {_|
+> filter [let val v$0 = $0 in #nonEmpty Relational (project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
+>   filter [#1 $0 = v$0] : (int * int) list
+>     pairs : (int * int) list
+> ) andalso #nonEmpty Relational (project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
+>   filter [#2 $0 = v$0 + 1] : (int * int) list
+>     pairs : (int * int) list
+> ) end] : int list
+>   [1, 2, 3] : int list
+> |_} : string
+
+(* A tree nested *inside* another nested tree is what produces a
+ * second
+ * generated binder -- `v$0` outside, `v$1` inside -- and is the case
+  * spec.md 6 warns about, because an implementation that builds its
+  * text
+  * by concatenating strings its children returned restarts at `v$0`
+  * and
+ * gets it wrong silently.
+ *
+ * It cannot be written down yet. The query below answers [] and the
+ * answer is [1]; `git bisect` puts the regression at 48323b89, "The
+ * resolver returns the tree", where a nested tree first survived into
+ * the rewrite passes. Add the case here when that is fixed.
+ *
+ * from x in [1, 2, 3]
+ *   where Relational.nonEmpty (
+ *     from (a, b) in pairs
+ *       where a = x
+ *         andalso Relational.nonEmpty (
+ *           from (c, d) in pairs where c = b))
+ *   yield x;
+ *)
+
+(*) End rel-tree.smli
