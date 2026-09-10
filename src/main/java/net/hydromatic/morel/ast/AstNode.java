@@ -79,7 +79,12 @@ public abstract class AstNode {
    * prints the collection type of every line, as {@code Sys.planEx} prints it.
    */
   public final String unparseRenumbered(boolean withTypes) {
-    return unparse(renumberingWriter(withTypes));
+    final AstWriter w = renumberingWriter(withTypes);
+    final String s = unparse(w);
+    // The writer creates the legend, and whoever created the writer prints it:
+    // a nested tree writes onto the caller's writer (see Core.Rel.unparse), so
+    // one legend covers the whole text.
+    return s + w.typeLegend();
   }
 
   /**
@@ -121,6 +126,15 @@ public abstract class AstNode {
   private static class RenumberingAstWriter extends AstWriter {
     final Map<String, List<Integer>> nameIds = new HashMap<>();
     final Map<String, String> names = new LinkedHashMap<>();
+
+    /**
+     * The types a plan line was too narrow to name, in the order they were
+     * first encountered. A {@link LinkedHashMap} because that order is the
+     * contract: the reference {@code t[1]} means the first long type in the
+     * text, whatever else the plan contains.
+     */
+    final Map<String, Integer> typeRefs = new LinkedHashMap<>();
+
     final boolean withTypes;
 
     RenumberingAstWriter(boolean withTypes) {
@@ -172,6 +186,32 @@ public abstract class AstNode {
       final String replacement = prefix + n;
       names.put(name, replacement);
       return replacement;
+    }
+
+    @Override
+    public String typeRef(String moniker) {
+      if (moniker.length() <= MAX_TYPE_LENGTH) {
+        return moniker;
+      }
+      final Integer i =
+          typeRefs.computeIfAbsent(moniker, m -> typeRefs.size() + 1);
+      return "t[" + i + "]";
+    }
+
+    @Override
+    public String typeLegend() {
+      if (typeRefs.isEmpty()) {
+        return "";
+      }
+      final StringBuilder b = new StringBuilder("\n");
+      typeRefs.forEach(
+          (moniker, i) ->
+              b.append("t[")
+                  .append(i)
+                  .append("] ")
+                  .append(moniker)
+                  .append('\n'));
+      return b.toString();
     }
 
     @Override
