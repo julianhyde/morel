@@ -41,9 +41,13 @@ and 5 build toward.
 
 ### Start here
 
-Step 4, the rule framework, is next, and nothing blocks it. What
-follows is what a session starting there should know that the code does
-not say.
+Two things are open. Step 4, the rule framework, is next and nothing
+blocks it; and the branch's history wants reordering before it lands,
+which "Reorder and squash" below sets out while the reasons are still
+known.
+
+What follows is what a session starting at step 4 should know that the
+code does not say.
 
 #### The tree is what the passes carry, and one engine grounds it
 
@@ -1887,6 +1891,86 @@ tree, not after.
 - [ ] User-written Morel rules compiling into the step-4 framework.
 - [ ] Reactor / MEMO / guard-dependency machinery as the second
       engine beside Hep.
+
+## Reorder and squash, before the branch lands
+
+221 commits, written as the work was understood rather than as it
+should be read. The branch stays unsquashed until then, deliberately --
+a commit that records a wrong turn is worth having while the turn is
+still recent -- but what lands should be a sequence someone can
+bisect. This is the list of what to do, written while the reasons are
+still known.
+
+### Commits that must move, because a step is not green without them
+
+* **`ungroundedPats` belongs with the deletion.** Deleting the step
+  list's grounding engine took `Expander.ungroundedPats` with it, and
+  that was the only thing filling `Generators.Cache.ungrounded` --
+  main's #229 improvement. The tree engine fills it now, but the fix
+  came five commits later, so the deletion commit does not compile.
+  Fold "Carry main's bound deduction onto the tree engine" into
+  "Delete the step list's grounding engine".
+
+* **Two commits carry golden output that was never regenerated.** The
+  rebase onto main hit conflicts in `such-that.smli` and
+  `built-in/sys.smli`; both were resolved by taking our side and
+  regenerating at the tip, which is right for the tip and leaves the
+  intermediate commits stale. Either regenerate in place or fold them
+  forward.
+
+This is the cost of rebasing golden files across a main that changed
+the same outputs, and it is worth paying rather than merging: the
+alternative is a merge commit that hides which change moved which
+line.
+
+### Commits to combine, because they are one idea
+
+* **The plan-text notation**, four commits that are one decision about
+  how a plan reads: the type legend, breaking a relation out, the
+  `r$N`/`t$N` renaming, and the parameter lists. Each landed with the
+  spec change it implements, which was right while the notation was
+  still moving; what should land is the notation and its spec section
+  in one piece.
+
+* **The spec's own history.** Six commits touch spec.md -- the freeze,
+  then five amendments to §6 in three days. The freeze is worth keeping
+  separate, because it is a decision about what the contract *is*.
+  The amendments are drafts of one section and should be one commit
+  that writes §6 as it stands.
+
+### Commits to separate out, because they are not this issue
+
+* **The printer's move to Lindig**, with the `FreeFinder` move and
+  `Core.Exp.freePats` that precede it. None of it is about the
+  relational tree. `FreeFinder` moving to `ast` and becoming
+  `Core.Exp.freePats` is a plain refactor that any caller benefits
+  from; `EnvVisitor` becoming public with protected fields is a change
+  to the seam between `ast` and `compile`; and rebuilding `AstWriter`
+  on `Lindig` is the printer's business, not the tree's. Together they
+  are one commit, or an issue of their own, landing before the tree
+  work rather than inside it.
+
+  The order matters, because Lindig undoes something. The writer
+  decides to break a relation out by asking whether it is at the start
+  of a line, and a document has no current column until it is
+  rendered, so the decision becomes structural again: in place if it
+  is the root or an input of one that is. That test existed, in the
+  pre-pass that computed parameters eagerly, and was deleted when the
+  writer began working them out lazily. It comes back with Lindig, and
+  this time as the only statement of the rule.
+
+### What not to do
+
+Do not squash the whole branch. Six months of "why is it like this"
+is answered by "Ground on the tree alone", "The inline loop is what
+breaks the nested tree", "Do not trust the last grounding
+measurement". A single commit answers none of them, and the plan text
+is a contract three implementations follow -- the commit that moved a
+line is the cheapest explanation of why it moved.
+
+Do not reword a commit to hide a wrong turn. "One thing tried that did
+not work, so it is not tried again" is the most valuable sentence in
+several of them.
 
 ## Follow-ups (separate issues, clients of the sequence)
 
