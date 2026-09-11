@@ -321,14 +321,18 @@ Sys.planOf (
     yield x);
 > val it =
 >   {_|
-> filter [let val v$0 = $0 in #nonEmpty Relational (project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
->   filter [#1 $0 = v$0] : (int * int) list
->     pairs : (int * int) list
-> ) andalso #nonEmpty Relational (project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
->   filter [#2 $0 = v$0 + 1] : (int * int) list
->     pairs : (int * int) list
-> ) end] : int list
+> filter [let val v$0 = $0 in #nonEmpty Relational (r[1]) andalso #nonEmpty Relational (r[2]) end] : int list
 >   [1, 2, 3] : int list
+>
+> r[1] =
+>   project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
+>     filter [#1 $0 = v$0] : (int * int) list
+>       pairs : (int * int) list
+>
+> r[2] =
+>   project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
+>     filter [#2 $0 = v$0 + 1] : (int * int) list
+>       pairs : (int * int) list
 > |_} : string
 
 (* A tree nested *inside* another nested tree is what produces a
@@ -362,14 +366,18 @@ Sys.planOf (
     yield x);
 > val it =
 >   {_|
-> filter [let val v$0 = $0 in #nonEmpty Relational (project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
->   filter [let val v$1 = $0 in #1 $0 = v$0 andalso #nonEmpty Relational (project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
->   filter [#1 $0 = #2 v$1] : (int * int) list
->     pairs : (int * int) list
-> ) end] : (int * int) list
->     pairs : (int * int) list
-> ) end] : int list
+> filter [let val v$0 = $0 in #nonEmpty Relational (r[1]) end] : int list
 >   [1, 2, 3] : int list
+>
+> r[1] =
+>   project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
+>     filter [let val v$1 = $0 in #1 $0 = v$0 andalso #nonEmpty Relational (r[2]) end] : (int * int) list
+>       pairs : (int * int) list
+>
+> r[2] =
+>   project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
+>     filter [#1 $0 = #2 v$1] : (int * int) list
+>       pairs : (int * int) list
 > |_} : string
 
 (*) End rel-tree.smli

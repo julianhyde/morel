@@ -456,8 +456,9 @@ t[1] {i:int, ys:int list} list
 The reference carries no type of its own; the block's root line
 carries it, as any node does.
 
-A block is a tree like any other, so it starts at indent zero and
-§6.3 applies within it. That is the point: before this rule a nested
+A block is a tree like any other: its root sits at indent two, under
+the `r[N] =` that introduces it, and §6.3 applies within it from
+there. That is the point: before this rule a nested
 tree was spliced into the line that contained it, its own indentation
 started again from zero in the middle of the enclosing one, and two
 nodes at different depths could print at the same indent. The text
