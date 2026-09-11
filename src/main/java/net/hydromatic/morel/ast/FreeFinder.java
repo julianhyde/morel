@@ -16,14 +16,16 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.compile;
+package net.hydromatic.morel.ast;
 
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Set;
 import java.util.function.Consumer;
-import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.compile.EnvVisitor;
+import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.type.TypeSystem;
 
 /** Finds free variables in an expression. */
@@ -40,8 +42,7 @@ class FreeFinder extends EnvVisitor {
   }
 
   /** Finds the free variables in an expression. */
-  public static Set<Core.NamedPat> freePats(
-      TypeSystem typeSystem, Core.Exp exp) {
+  static Set<Core.NamedPat> freePats(TypeSystem typeSystem, Core.Exp exp) {
     final ImmutableSet.Builder<Core.NamedPat> set = ImmutableSet.builder();
     final Environment env = Environments.empty();
     exp.accept(new FreeFinder(typeSystem, env, new ArrayDeque<>(), set::add));

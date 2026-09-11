@@ -103,7 +103,7 @@ public class RelBuilderTest {
       if (rel instanceof Core.Rel) {
         assertThat(
             RelValidator.violations(typeSystem, (Core.Rel) rel), empty());
-        return ((Core.Rel) rel).describe();
+        return ((Core.Rel) rel).describe(typeSystem);
       }
       return rel + "\n";
     }

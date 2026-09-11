@@ -112,7 +112,7 @@ public class RelTest {
     assertThat(filter.type.moniker(), is("int list"));
     assertThat(project.type.moniker(), is("{a:int, b:int} list"));
     assertThat(
-        project.describe(),
+        project.describe(f.typeSystem),
         is(
             "project [{a = $0, b = 0}]\n" //
                 + "  filter [$0 > 1]\n"
@@ -129,7 +129,7 @@ public class RelTest {
     final Core.Rel filter =
         core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1)));
     assertThat(
-        filter.describe(true),
+        filter.describe(f.typeSystem, true),
         is(
             "filter [$0 > 1] : int list\n" //
                 + "  [1, 2] : int list\n"));
@@ -152,7 +152,7 @@ public class RelTest {
     // of names -- there are no names to give it.
     assertThat(join.type.moniker(), is("(int * int) list"));
     assertThat(
-        join.describe(),
+        join.describe(f.typeSystem),
         is(
             "join [$0 = $1]\n" //
                 + "  [1, 2]\n"
@@ -166,7 +166,7 @@ public class RelTest {
 
     // A condition that is 'true' and an inner join kind print nothing.
     assertThat(
-        join2.describe(),
+        join2.describe(f.typeSystem),
         is(
             "join\n" //
                 + "  [1, 2]\n"
@@ -182,7 +182,7 @@ public class RelTest {
             f.list34,
             core.boolLiteral(true));
     assertThat(
-        join3.describe(),
+        join3.describe(f.typeSystem),
         is(
             "join [left]\n" //
                 + "  [1, 2]\n"
@@ -214,7 +214,7 @@ public class RelTest {
     // of names -- there are no names to give it.
     assertThat(join.type.moniker(), is("(int * int) list"));
     assertThat(
-        join.describe(),
+        join.describe(f.typeSystem),
         is(
             "join [d]\n" //
                 + "  [1, 2]\n"
@@ -232,7 +232,7 @@ public class RelTest {
             core.boolLiteral(true));
     assertThat(join2.type.moniker(), is("(int * int) bag"));
     assertThat(
-        join2.describe(),
+        join2.describe(f.typeSystem),
         is(
             "join [d]\n" //
                 + "  [1, 2]\n"
@@ -257,7 +257,7 @@ public class RelTest {
     // element's shape depend on how many labels there are.
     assertThat(group1.type.moniker(), is("{j:int} list"));
     assertThat(
-        group1.describe(),
+        group1.describe(f.typeSystem),
         is(
             "group [j = $0]\n" //
                 + "  [1, 2]\n"));
@@ -293,7 +293,7 @@ public class RelTest {
     final Core.Rel skip = core.skip(f.list12, f.intLiteral(1));
     assertThat(skip.type.moniker(), is("int list"));
     assertThat(
-        core.take(skip, f.intLiteral(2)).describe(),
+        core.take(skip, f.intLiteral(2)).describe(f.typeSystem),
         is(
             "take [2]\n" //
                 + "  skip [1]\n"
@@ -309,7 +309,7 @@ public class RelTest {
         core.union(f.typeSystem, false, Arrays.asList(f.list12, f.bag56));
     assertThat(union.type.moniker(), is("int bag"));
     assertThat(
-        union.describe(),
+        union.describe(f.typeSystem),
         is(
             "union [all]\n" //
                 + "  [1, 2]\n"
