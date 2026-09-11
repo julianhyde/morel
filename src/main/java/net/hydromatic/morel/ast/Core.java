@@ -1299,6 +1299,15 @@ public class Core {
         ((Rel) exp).describe(w, 2, w.withTypes());
         return w;
       }
+      if (w.treeMode()) {
+        // The value may start on the next line, indented two, which is what a
+        // `let` wants: `let` belongs at the head of a line of its own, not
+        // trailing an `=`.
+        w.startGroup(2);
+        w.append("val ").append(pat, 0, 0).append(" =").softBreak();
+        w.append(exp, 0, right);
+        return w.endGroup();
+      }
       return w.append("val ")
           .append(pat, 0, 0)
           .append(" = ")
@@ -1703,10 +1712,27 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("case ")
-          .append(exp, 0, 0)
-          .append(" of ")
-          .appendAll(matchList, left, Op.BAR, right);
+      if (!w.treeMode()) {
+        return w.append("case ")
+            .append(exp, 0, 0)
+            .append(" of ")
+            .appendAll(matchList, left, Op.BAR, right);
+      }
+      // A `case` that does not fit puts each arm after the first on a line of
+      // its own, behind the `|` that introduces it. `if` reaches here too: it
+      // is a `case` over `true` and `false` by the time a plan sees it.
+      w.startGroup(2);
+      w.append("case ").append(exp, 0, 0).append(" of ");
+      for (int i = 0; i < matchList.size(); i++) {
+        if (i > 0) {
+          w.softBreak().append("| ");
+        }
+        w.append(
+            matchList.get(i),
+            i == 0 ? left : Op.BAR.left,
+            i == matchList.size() - 1 ? right : Op.BAR.right);
+      }
+      return w.endGroup();
     }
 
     @Override
