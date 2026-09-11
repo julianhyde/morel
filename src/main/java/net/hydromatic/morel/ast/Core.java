@@ -1437,21 +1437,31 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      // A record or tuple may break after a comma, one field to a line, which
+      // is the other place a plan's lines get long.
+      w.startGroup(0);
       if (type instanceof RecordType) {
         w.append("{");
         forEach(
-            (i, name, exp) ->
-                w.append(i > 0 ? ", " : "")
-                    .append(name)
-                    .append(" = ")
-                    .append(exp, 0, 0));
-        return w.append("}");
+            (i, name, exp) -> {
+              if (i > 0) {
+                w.append(",").softBreak();
+              }
+              w.append(name).append(" = ").append(exp, 0, 0);
+            });
+        w.append("}");
       } else {
         w.append("(");
         forEach(
-            (i, name, arg) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
-        return w.append(")");
+            (i, name, arg) -> {
+              if (i > 0) {
+                w.append(",").softBreak();
+              }
+              w.append(arg, 0, 0);
+            });
+        w.append(")");
       }
+      return w.endGroup();
     }
 
     /**
@@ -2408,16 +2418,22 @@ public class Core {
 
     /** Returns this node's plan text, as {@code Sys.plan} prints it. */
     public String describe(TypeSystem typeSystem) {
-      return describe(typeSystem, false);
+      return describe(typeSystem, AstWriter.DEFAULT_WIDTH, false);
+    }
+
+    /** Returns this node's plan text, laid out within the default width. */
+    public String describe(TypeSystem typeSystem, boolean withTypes) {
+      return describe(typeSystem, AstWriter.DEFAULT_WIDTH, withTypes);
     }
 
     /**
      * Returns this node's plan text; if {@code withTypes}, appends the
      * collection type of every node, as {@code Sys.planEx} prints it.
      */
-    public String describe(TypeSystem typeSystem, boolean withTypes) {
+    public String describe(
+        TypeSystem typeSystem, int width, boolean withTypes) {
       final AstWriter w =
-          AstNode.renumberingWriter(typeSystem, this, withTypes);
+          AstNode.renumberingWriter(typeSystem, this, width, withTypes);
       describe(w, 0, withTypes);
       return AstNode.finish(w);
     }
@@ -2431,10 +2447,24 @@ public class Core {
 
     protected void describeLine(AstWriter w, int indent, boolean withTypes) {
       indent(w, indent);
+      // The node's own line, which wraps four from the node where it does not
+      // fit. Its inputs are two, so a continuation cannot be mistaken for a
+      // child, and the run of continuations ends at the first line that is
+      // not four deeper.
+      //
+      // Only in tree mode. Elsewhere a nested node still prints in place, and
+      // its own line breaks would fall inside this one's indentation.
+      final boolean group = w.treeMode();
+      if (group) {
+        w.startGroup(indent + 4);
+      }
       w.append(opName());
       describeArgs(w);
       if (withTypes) {
         w.append(" : ").append(w.typeRef(type.moniker()));
+      }
+      if (group) {
+        w.endGroup();
       }
       w.append("\n");
     }
@@ -2450,9 +2480,18 @@ public class Core {
         return;
       }
       indent(w, indent);
+      // A leaf is a node line too, and wraps the same way: four from the leaf,
+      // never back to a column where it would read as a node of its own.
+      final boolean group = w.treeMode();
+      if (group) {
+        w.startGroup(indent + 4);
+      }
       w.append(input, 0, 0);
       if (withTypes) {
         w.append(" : ").append(w.typeRef(input.type.moniker()));
+      }
+      if (group) {
+        w.endGroup();
       }
       w.append("\n");
     }

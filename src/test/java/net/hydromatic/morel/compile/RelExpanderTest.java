@@ -222,7 +222,8 @@ public class RelExpanderTest {
         is(
             "project [{i = #1 $0, j = #2 $0}]\n" //
                 + "  project [(#g$0 $0, #g$1 $0)]\n"
-                + "    from (g$0, g$1) in [(1, \"a\"), (2, \"b\")] "
+                + "    from (g$0, g$1) in [(1, \"a\"), (2,\n"
+                + "        \"b\")] "
                 + "group {g$0 = g$0, g$1 = g$1} "
                 + "order {g$0 = g$0, g$1 = g$1}\n"));
   }
