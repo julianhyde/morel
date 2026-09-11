@@ -437,34 +437,77 @@ defn     ::= '\n' 'r' '[' int ']' ' ='  '\n' node
 ### 6.4 Relations reached from inside an expression
 
 A relation that §6.2 forbids printing in place is replaced by a
-reference, `r[1]`, `r[2]`, …, numbered from one in the order the
+reference, `r$0`, `r$1`, …, numbered from zero in the order the
 references were first handed out. Each is then printed as a block of
 its own, after the tree and before the type legend, introduced by
-`r[N] =` and indented two:
+`r$N =` and indented two:
 
 ```
-project [let val v$0 = $0 in {i = $0, ys = r[1]} end] : t[1]
+project [let val v$0 = $0 in {i = $0, ys = r$0[v$0]} end] : t$0
   [1, 2] : int list
 
-r[1] =
+r$0[v$0] =
   filter [$0 > v$0] : int list
     [3, 4] : int list
 
-t[1] {i:int, ys:int list} list
+t$0 {i:int, ys:int list} list
 ```
+
+A `$` marks a name the printer made, and cannot occur in an identifier
+(§6.7), so `r$0` and `t$0` cannot be read as anything the query wrote.
+Brackets would be worse than useless here: `r[0]` has the shape of an
+operator applied to an argument, which is what §6.2 says a line begins
+with.
 
 The reference carries no type of its own; the block's root line
 carries it, as any node does.
 
+**A fragment declares what it reads from outside itself.** The names
+in brackets after `r$N` are the variables the fragment uses that
+something outside it binds, and the same text stands at the reference
+and at the definition. A fragment with no such variables is written
+`r$N`, with no brackets, and is independent: nothing in it depends on
+the row above.
+
+The list is *transitive*, and that is the point of repeating it at the
+reference. A fragment can be free in a variable it never mentions,
+reaching it only through a fragment nested inside it:
+
+```
+filter [let val v$0 = $0 in nonEmpty (r$0[v$0]) end] : int list
+  [1, 2, 3] : int list
+
+r$0[v$0] =
+  project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
+    filter [#2 $0 > 0 andalso nonEmpty (r$1[v$0])] : (int * int) list
+      pairs : (int * int) list
+
+r$1[v$0] =
+  project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
+    filter [#1 $0 = v$0] : (int * int) list
+      pairs : (int * int) list
+```
+
+Nothing in `r$0`'s own lines names `v$0`. It is `r$1[v$0]`, written
+where `r$0` refers to `r$1`, that shows `v$0` passing through — and
+`r$0[v$0]` at the head declares it.
+
+A fragment may read more than one, and they are written in order:
+`r$1[v$0, v$1]`.
+
+An implementation must therefore compute the list before it writes
+anything, since the reference is printed before the block in which the
+dependency appears.
+
 A block is a tree like any other: its root sits at indent two, under
-the `r[N] =` that introduces it, and §6.3 applies within it from
+the `r$N` that introduces it, and §6.3 applies within it from
 there. That is the point: before this rule a nested
 tree was spliced into the line that contained it, its own indentation
 started again from zero in the middle of the enclosing one, and two
 nodes at different depths could print at the same indent. The text
 could not be parsed, and no implementation could have reproduced it.
 
-Scope is unaffected and becomes visible: `r[1]` above reads `v$0`,
+Scope is unaffected, and becomes visible: `r$0` above reads `v$0`,
 which the node that refers to it binds. A reference is a rendering of
 the tree that is there, not a rewrite of it.
 
@@ -477,7 +520,7 @@ be a second answer to the same question.
 
 What that exposes is bounded, and §6.1 is what bounds it. Tree mode
 breaks relations out whatever the width, so the nodes, their
-indentation, the `r[N]` blocks and every number in the text are the
+indentation, the `r$N` blocks and every number in the text are the
 same at any width; only a node's own line wraps differently. A plan
 read at another width is the same plan, folded differently. It cannot
 gain a node, lose one, or renumber one.
@@ -505,22 +548,22 @@ A continuation line carries no type; the type belongs to the node,
 and the node is the line it starts on.
 
 A moniker of **24 characters or fewer** is printed in full. A longer
-one is replaced by a reference, `t[1]`, `t[2]`, ..., numbered from one
+one is replaced by a reference, `t$0`, `t$1`, ..., numbered from zero
 in the order the references were first handed out; each is then
 printed once in a *legend*, one line per type, after a blank line at
 the end of the plan:
 
 ```
-project [{comm = #comm (#3 $0), ...}] : t[1]
-  filter [#deptno (#2 $0) = #deptno (#1 $0)] : t[2]
-    join : t[2]
-      join : t[3]
-        #depts scott : t[4]
-        #emps scott : t[5]
-      #bonuses scott : t[6]
+project [{comm = #comm (#3 $0), ...}] : t$0
+  filter [#deptno (#2 $0) = #deptno (#1 $0)] : t$1
+    join : t$1
+      join : t$2
+        #depts scott : t$3
+        #emps scott : t$4
+      #bonuses scott : t$5
 
-t[1] {comm:real, dname:string, ename:string} bag
-t[2] ({deptno:int, dname:string, loc:string} * ...) bag
+t$0 {comm:real, dname:string, ename:string} bag
+t$1 ({deptno:int, dname:string, loc:string} * ...) bag
 ...
 ```
 
@@ -582,34 +625,34 @@ It needed neither. The rule as written already says "the printer
 numbers the generated binders *it finds*, from zero, in order of
 first occurrence", and a nested tree is written by the same formatter
 onto the same writer as the tree that contains it, so one sequence
-spans the whole text — the `r[N]` blocks of §6.4 included:
+spans the whole text — the `r$N` blocks of §6.4 included:
 
 ```
-filter [let val v$0 = $0 in nonEmpty (r[1]) end] : int list
+filter [let val v$0 = $0 in nonEmpty (r$0[v$0]) end] : int list
   [1, 2, 3] : int list
 
-r[1] =
+r$0[v$0] =
   project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
-    filter [let val v$1 = $0
-        in #1 $0 = v$0 andalso nonEmpty (r[2]) end] : (int * int) list
+    filter [let val v$1 = $0 in #1 $0 = v$0
+        andalso nonEmpty (r$1[v$0, v$1]) end] : (int * int) list
       pairs : (int * int) list
 
-r[2] =
+r$1[v$0, v$1] =
   project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
-    filter [#1 $0 = #2 v$1] : (int * int) list
+    filter [#1 $0 = #2 v$1 andalso #2 $0 = v$0] : (int * int) list
       pairs : (int * int) list
 ```
 
 Three sequences run through that text and all three are properties of
 the text rather than of any node: `v$0` and `v$1` by first
-occurrence, `r[1]` and `r[2]` by first reference, and `t[N]` where a
+occurrence, `r$0` and `r$1` by first reference, and `t$N` where a
 type is too long to print. The middle `filter` also shows §6.3's
 continuation rule: its line does not fit, so it wraps at four from
 the node, two deeper than the `pairs` that is its input.
 
 An implementation that builds the text by concatenating strings its
 children returned gets all three wrong, and gets them wrong silently
-— each child restarts at `v$0`, `r[1]`, `t[1]`. Thread one writer
+— each child restarts at `v$0`, `r$0`, `t$0`. Thread one writer
 through.
 
 `compute` has no line of its own: `from … compute` prints as its

@@ -23,6 +23,7 @@ import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.parse.Parsers;
 
@@ -96,6 +97,19 @@ public class AstWriter {
   public String relRef(Core.Rel rel) {
     throw new UnsupportedOperationException("not in tree mode");
   }
+
+  /**
+   * Returns the reference for the {@code i}th broken-out relation, with the
+   * variables it reads from outside itself -- {@code r$0[v$0, v$1]}. The same
+   * text stands at the reference and at the definition, so that a fragment that
+   * carries a variable into a fragment nested inside it says so.
+   */
+  public String relHeader(int i) {
+    throw new UnsupportedOperationException("not in tree mode");
+  }
+
+  /** Sets what each broken-out relation reads from outside itself. */
+  public void setRelParams(Map<Core.Rel, List<Core.NamedPat>> relParams) {}
 
   /** Returns how many relations {@link #relRef} has broken out. */
   public int relDefCount() {
