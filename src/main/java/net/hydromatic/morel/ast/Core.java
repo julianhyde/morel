@@ -2416,8 +2416,8 @@ public class Core {
      * collection type of every node, as {@code Sys.planEx} prints it.
      */
     public String describe(TypeSystem typeSystem, boolean withTypes) {
-      final AstWriter w = AstNode.renumberingWriter(withTypes);
-      w.setScope(typeSystem, AstNode.boundPats(this));
+      final AstWriter w =
+          AstNode.renumberingWriter(typeSystem, this, withTypes);
       describe(w, 0, withTypes);
       return AstNode.finish(w);
     }
