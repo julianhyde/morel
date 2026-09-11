@@ -31,10 +31,9 @@ import net.hydromatic.morel.type.TypeSystem;
  * Translates every {@code from} in a declaration into a relational tree and
  * checks the result, without changing what the declaration does.
  *
- * <p>This is the shadow of step 1 of {@code plan.md}: every query that the test
- * suite compiles is translated, validated, and checked to have the type it
- * started with. It runs under {@code assert}, so it is on when the tests run
- * and costs nothing when they do not.
+ * <p>Every query that the test suite compiles is translated, validated, and
+ * checked to have the type it started with. It runs under {@code assert}, so it
+ * is on when the tests run and costs nothing when they do not.
  *
  * <p>A query the translator declines -- an outer join, say -- is counted and
  * skipped. A query it translates *wrongly* is an error, because that is a bug
@@ -46,8 +45,7 @@ import net.hydromatic.morel.type.TypeSystem;
  * translation without a shadow having to arrange it.
  */
 public class RelShadow {
-  // Counters, read by a test that checks the shadow is running; plan.md
-  // quotes their numbers.
+  // Counters, read by a test that checks the shadow is running.
   private static final AtomicInteger TRANSLATED = new AtomicInteger();
   private static final AtomicInteger DECLINED = new AtomicInteger();
   private static final AtomicInteger GROUNDED_VIA_TREE = new AtomicInteger();

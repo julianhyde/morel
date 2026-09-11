@@ -832,11 +832,10 @@ public class Core {
    * Reference to the element of a node's input: {@code $0} for a one-input node
    * and for a join's left input, {@code $1} for a join's right.
    *
-   * <p>Not an {@link Id}, and that is the point (discussion.md §17). It is
-   * bound by the node that encloses it, not by anything the query wrote, so a
-   * pass that reasons about variables must not see it as one: {@code $0} in two
-   * nodes is two different things, and an {@code IdPat} of the same name would
-   * make them one.
+   * <p>Not an {@link Id}, and that is the point. It is bound by the node that
+   * encloses it, not by anything the query wrote, so a pass that reasons about
+   * variables must not see it as one: {@code $0} in two nodes is two different
+   * things, and an {@code IdPat} of the same name would make them one.
    */
   public static class Input extends Exp {
     /** Which input: 0 for the only or left one, 1 for a join's right. */
@@ -1282,7 +1281,7 @@ public class Core {
     AstWriter unparse(AstWriter w, int left, int right) {
       if (w.treeMode() && exp instanceof Rel) {
         // Break after the '=' so that the plan's root operator is the first
-        // non-whitespace on its line (spec.md §6.2). Otherwise every plan of
+        // non-whitespace on its line. Otherwise every plan of
         // a query would begin `val it = r[1]`, and its one interesting line
         // would be an indirection.
         w.append("val ").append(pat, 0, 0).append(" =\n");
@@ -2345,9 +2344,8 @@ public class Core {
    * whose value is a collection of a definite type.
    *
    * <p>This is the balanced representation that replaces the step list of
-   * {@link From}; see {@code spec.md} for the normative description, and {@code
-   * plan.md} for the sequence in which it lands. In step 1 the tree is a
-   * shadow: it is built and printed, but {@code From} still does the work.
+   * {@link From}. The resolver builds it, the rewrite passes carry it, and a
+   * lowering turns it back into a step list for the compiler.
    *
    * <p>A node is an {@link Exp} whose type is a collection type. Therefore a
    * node's input is simply an expression: a nested node, or a leaf such as
@@ -2484,8 +2482,8 @@ public class Core {
       // binders a plan renumbers are numbered by first occurrence over the
       // whole text, so a tree nested in an expression must share the count.
       if (w.treeMode() && !w.atLineStart()) {
-        // spec.md §6.2: a relational operator is the first non-whitespace on
-        // its line. This one is not, so it prints as a reference and its
+        // A relational operator is the first non-whitespace on its line.
+        // This one is not, so it prints as a reference and its
         // lines go below, where they can be read. Splicing them in here is
         // what made a nested query's plan unparseable: its indentation began
         // again from zero inside the line that held it, so two nodes at
@@ -2640,7 +2638,7 @@ public class Core {
      * tree of its own and rebinds {@code $0}, so it cannot say {@code $0} and
      * mean the left element. The binder is in scope in {@link #right} only,
      * never in {@link #condition}, which says {@code $0} and {@code $1} as any
-     * join's does (spec.md §3.3).
+     * join's does.
      *
      * <p>It is a scoping device, not a mode: dependence is a free occurrence of
      * it, and decorrelation is dropping it.

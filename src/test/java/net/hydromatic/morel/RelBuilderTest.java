@@ -332,7 +332,7 @@ public class RelBuilderTest {
 
   /**
    * Tests that an outer join concatenates like any other, so a name from inside
-   * it keeps a position of its own (discussion.md §15).
+   * it keeps a position of its own.
    */
   @Test
   void testNamesAcrossAnOuterJoin() {

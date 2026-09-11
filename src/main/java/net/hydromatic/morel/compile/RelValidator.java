@@ -35,10 +35,9 @@ import net.hydromatic.morel.type.TypeSystem;
 /**
  * Checks the invariants of a relational tree ({@link Core.Rel}).
  *
- * <p>The rules are those in section 5 of {@code spec.md}: every node's type and
- * kind are the ones its inputs and expressions derive, every expression has the
- * type its position requires, and {@code $0} and {@code $1} occur only where a
- * node binds them.
+ * <p>Every node's type and kind are the ones its inputs and expressions derive,
+ * every expression has the type its position requires, and {@code $0} and
+ * {@code $1} occur only where a node binds them.
  *
  * <p>Run it after translation and after every rule firing. A rule that produces
  * a tree the validator rejects is wrong, and it is much cheaper to find that
@@ -107,7 +106,7 @@ public class RelValidator {
       if (join.binder != null) {
         // The binder names the left element inside the right input, and only
         // there. The condition and the yield say $0 and $1 like any join's
-        // (spec.md §3.3), so an occurrence here is a scope error, not a
+        // , so an occurrence here is a scope error, not a
         // second way of spelling $0.
         binderNotIn(join.condition, join.binder, "join condition");
       }
@@ -160,7 +159,7 @@ public class RelValidator {
       final Core.Skip skip = (Core.Skip) rel;
       input(skip.input);
       requireType(skip.count, PrimitiveType.INT, "skip count");
-      // Evaluated before the first element exists; see spec.md section 2.
+      // Evaluated before the first element exists.
       scope(skip.count, NONE, "skip count");
       requireDerivedType(rel, core.skip(skip.input, skip.count));
     } else if (rel instanceof Core.Take) {

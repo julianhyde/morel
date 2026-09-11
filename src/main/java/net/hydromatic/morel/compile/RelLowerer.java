@@ -57,10 +57,9 @@ import org.jspecify.annotations.Nullable;
  * that executes: a {@link Core.From} whose steps carry bindings, which {@link
  * Compiler} turns into {@code RowSink} code.
  *
- * <p>This is the reverse of {@link RelTranslator}, and it is what step 2 of
- * {@code plan.md} means by "the step list survives as an unprinted lowering
- * artifact". Where the translation eliminates variables, the lowering
- * reintroduces them.
+ * <p>This is the reverse of {@link RelTranslator}: the step list survives as an
+ * unprinted lowering artifact. Where the translation eliminates variables, the
+ * lowering reintroduces them.
  *
  * <p>It linearizes. The tree is left-deep after translation, so one step list
  * carries the whole left spine rather than each node nesting a {@code from} of
@@ -255,8 +254,7 @@ public class RelLowerer {
    * of its expressions.
    *
    * <p>The resolver binds the element where a nested tree reads it, because a
-   * tree's {@code $0} is its own and not the enclosing node's (spec.md §2 rule
-   * 3).
+   * tree's {@code $0} is its own and not the enclosing node's.
    */
   static Set<Core.NamedPat> rowBindings(Core.Exp exp) {
     final Set<Core.NamedPat> pats = new LinkedHashSet<>();
@@ -447,7 +445,7 @@ public class RelLowerer {
                         ? null
                         : subst(aggregate.argument, element, null))));
     // Never an atom: the tree's group builds a record whether it has one
-    // label or many (discussion.md §14), so the step list must carry the same
+    // label or many, so the step list must carry the same
     // record, or the lowered form has a different type from the tree.
     fromBuilder.group(false, groupExps, aggregates);
     return naturalElement(fromBuilder);
@@ -487,7 +485,7 @@ public class RelLowerer {
       // An outer join wraps a binding in 'option', so a left element of one
       // binding must be that binding and not an expression over it. Several
       // stay several: the scan wraps each of them, which is what gives one
-      // option per component (discussion.md §15), and collapsing them into
+      // option per component, and collapsing them into
       // one binding first would give one option over the lot.
       left = materialize(fromBuilder, left);
     }
@@ -521,7 +519,7 @@ public class RelLowerer {
       right = rename(right, join.binder, left);
     }
     fromBuilder.scan(op(join.joinType), w, right, condition);
-    // The element is the inputs' components in order (discussion.md §15). For
+    // The element is the inputs' components in order. For
     // an outer join the scan has re-typed the bindings it can leave absent, so
     // the components are read off those, not the pattern variables.
     final boolean inner = inner(join);
@@ -536,10 +534,7 @@ public class RelLowerer {
     return ((Core.Join) join).joinType == Core.Rel.JoinType.INNER;
   }
 
-  /**
-   * Returns a join's element: its inputs' components in order (discussion.md
-   * §15).
-   */
+  /** Returns a join's element: its inputs' components in order. */
   private Core.Exp element(
       Core.Join join, Core.Exp leftElement, Core.Exp rightElement) {
     final List<Core.Exp> exps =

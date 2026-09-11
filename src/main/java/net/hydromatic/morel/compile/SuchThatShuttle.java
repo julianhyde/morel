@@ -154,7 +154,7 @@ class SuchThatShuttle extends EnvShuttle {
     // The same questions `Expander.expandViaTree` used to ask of its answer:
     // every leaf bounded, and no expression reading a field its row does not
     // have. Replacing a join with a projection makes the element one component
-    // where it was several (discussion.md §16), and what reads it above was
+    // where it was several, and what reads it above was
     // written for the other shape; the failure is at run time, in a record
     // selector, a long way from the pass that caused it.
     if (RelExpander.containsUnbounded(expanded)

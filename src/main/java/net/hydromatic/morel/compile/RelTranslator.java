@@ -47,10 +47,10 @@ import org.jspecify.annotations.Nullable;
  * environment of bindings -- into a relational tree of {@link Core.Rel} nodes,
  * whose expressions name their input element {@code $0} and bind nothing.
  *
- * <p>This is the "variable elimination" of step 1 of {@code plan.md}: a binder
- * becomes an expression over {@code $0} -- the element itself, if the element
- * is that binder's value, otherwise a field of it -- and the binding list
- * disappears, because a node's element type says everything the bindings said.
+ * <p>This is variable elimination: a binder becomes an expression over {@code
+ * $0} -- the element itself, if the element is that binder's value, otherwise a
+ * field of it -- and the binding list disappears, because a node's element type
+ * says everything the bindings said.
  *
  * <p>The translation is a shadow: it does not change what a query does, and
  * exists so that trees can be built and printed for every query in the test
@@ -75,8 +75,8 @@ public class RelTranslator {
    * Counter for the binders this translation generates.
    *
    * <p>Per tree, so that a query's plan text does not depend on how many names
-   * were generated before it; see spec.md section 6. A `$` cannot occur in an
-   * identifier, so these cannot capture a name the query wrote.
+   * were generated before it. A `$` cannot occur in an identifier, so these
+   * cannot capture a name the query wrote.
    */
   private int nextName;
 
@@ -133,13 +133,13 @@ public class RelTranslator {
    * Whether the element is a join's components rather than the record the
    * bindings describe.
    *
-   * <p>A join's element is its inputs' components (discussion.md §15), which is
-   * not what the query's bindings describe, so normalizing after one would
-   * project -- and a projection between two joins is what stops them nesting,
-   * which is the whole point of concatenating. So the projection waits until
-   * something needs the row: a step that computes its own element, or the root.
-   * Until then the access map carries paths into the components, which is all
-   * any expression needs.
+   * <p>A join's element is its inputs' components, which is not what the
+   * query's bindings describe, so normalizing after one would project -- and a
+   * projection between two joins is what stops them nesting, which is the whole
+   * point of concatenating. So the projection waits until something needs the
+   * row: a step that computes its own element, or the root. Until then the
+   * access map carries paths into the components, which is all any expression
+   * needs.
    */
   private boolean deferred;
 

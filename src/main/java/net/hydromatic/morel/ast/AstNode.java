@@ -85,8 +85,7 @@ public abstract class AstNode {
   }
 
   /**
-   * Completes a plan: the relations that were broken out (spec.md §6.4), then
-   * the type legend (§6.6).
+   * Completes a plan: the relations that were broken out, then the type legend.
    *
    * <p>The writer collects both, and whoever created the writer prints them: a
    * nested tree writes onto the caller's writer, so one definitions region and
