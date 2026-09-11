@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.hydromatic.morel.type.TypeSystem;
 
 /** Abstract syntax tree node. */
 public abstract class AstNode {
@@ -75,18 +76,15 @@ public abstract class AstNode {
     return unparse(new AstWriter());
   }
 
-  /** Converts this node into a string with fewer id ordinals. */
-  public final String unparseRenumbered() {
-    return unparseRenumbered(false);
-  }
-
   /**
-   * As {@link #unparseRenumbered()}, and if {@code withTypes} a relational node
-   * prints the collection type of every line, as {@code Sys.planEx} prints it.
+   * Converts this node into a string with fewer id ordinals; if {@code
+   * withTypes}, a relational node prints the collection type of every line, as
+   * {@code Sys.planEx} prints it.
    */
-  public final String unparseRenumbered(boolean withTypes) {
+  public final String unparseRenumbered(
+      TypeSystem typeSystem, boolean withTypes) {
     final AstWriter w = renumberingWriter(withTypes);
-    w.setRelParams(relParams(this));
+    w.setRelParams(relParams(typeSystem, this));
     unparse(w);
     return finish(w);
   }
@@ -142,7 +140,8 @@ public abstract class AstNode {
    * rather than needing a closure, because a nested fragment is part of the
    * subtree even though it is printed elsewhere.
    */
-  static Map<Core.Rel, List<Core.NamedPat>> relParams(AstNode root) {
+  static Map<Core.Rel, List<Core.NamedPat>> relParams(
+      TypeSystem typeSystem, AstNode root) {
     // Every relation under the root, and the ones that will print in place:
     // the root itself, and whatever is reachable from it through inputs.
     final List<Core.Rel> all = new ArrayList<>();
@@ -185,26 +184,15 @@ public abstract class AstNode {
       if (inPlace.contains(rel)) {
         continue;
       }
-      // A use is a Core.Id; a binding occurrence is a Core.IdPat. The visitor
-      // draws that line already -- it does not descend into an Id's pattern --
-      // so the two walks below cannot be confused with each other.
-      final Set<Core.NamedPat> uses = new LinkedHashSet<>();
-      final Set<Core.NamedPat> binds = new LinkedHashSet<>();
-      rel.accept(
-          new Visitor() {
-            @Override
-            protected void visit(Core.Id id) {
-              uses.add(id.idPat);
-            }
-
-            @Override
-            protected void visit(Core.IdPat idPat) {
-              binds.add(idPat);
-            }
-          });
-      uses.retainAll(boundInRoot);
-      uses.removeAll(binds);
-      map.put(rel, ImmutableList.copyOf(uses));
+      // Free in the fragment, and bound by something the plan shows. The
+      // first half is the ordinary free-variable analysis, which knows how
+      // each construct binds; the second excludes what is bound outside the
+      // whole plan -- `scott`, say -- which a reader can already resolve and
+      // which every fragment would otherwise declare.
+      final Set<Core.NamedPat> free =
+          new LinkedHashSet<>(rel.freePats(typeSystem));
+      free.retainAll(boundInRoot);
+      map.put(rel, ImmutableList.copyOf(free));
     }
     return map;
   }

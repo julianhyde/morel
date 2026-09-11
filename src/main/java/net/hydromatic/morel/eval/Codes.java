@@ -5803,7 +5803,7 @@ public abstract class Codes {
                     session,
                     phase);
             // With types: planEx prints the collection type of every line.
-            return coreAtPhase.unparseRenumbered(true);
+            return coreAtPhase.unparseRenumbered(session.typeSystem, true);
           } catch (Exception e) {
             return "Error re-planning: " + e.getMessage();
           }

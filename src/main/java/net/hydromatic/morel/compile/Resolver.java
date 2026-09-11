@@ -1325,7 +1325,8 @@ public class Resolver {
       // run to a fixed point, so the answer would depend on when the inliner
       // reached the call. A plan's text must depend on the query and
       // nothing else.
-      return core.stringLiteral(coreArg.unparseRenumbered(true));
+      return core.stringLiteral(
+          coreArg.unparseRenumbered(typeMap.typeSystem, true));
     }
     return core.apply(apply.pos, type, coreFn, coreArg);
   }

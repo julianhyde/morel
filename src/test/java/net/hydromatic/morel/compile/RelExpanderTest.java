@@ -122,7 +122,7 @@ public class RelExpanderTest {
     final Fixture f = new Fixture(ml);
     final Core.Exp tree = RelExpander.expand(f.typeSystem, f.env, f.tree());
     return tree instanceof Core.Rel
-        ? ((Core.Rel) tree).describe()
+        ? ((Core.Rel) tree).describe(f.typeSystem)
         : tree + "\n";
   }
 
@@ -246,7 +246,7 @@ public class RelExpanderTest {
     // type here too -- `exists w, x where x = 3` becomes `from x in [3]`.
     assertThat(
         expanded instanceof Core.Rel
-            ? ((Core.Rel) expanded).describe()
+            ? ((Core.Rel) expanded).describe(f.typeSystem)
             : expanded + "\n",
         is("[3]\n"));
   }
