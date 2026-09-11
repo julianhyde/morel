@@ -104,19 +104,45 @@ public class AstWriter {
    * from where the region began.
    */
   public AstWriter startGroup(int indent) {
+    return start(indent, true);
+  }
+
+  /**
+   * Starts a region that is indented but not grouped.
+   *
+   * <p>A group decides for itself whether to break; a nest only says where a
+   * break lands. Use this where several breaks must be taken together but at
+   * different indents -- the `let`, `in` and `end` of a `let` are one decision,
+   * and the two parts they enclose are indented.
+   */
+  public AstWriter startNest(int indent) {
+    return start(indent, false);
+  }
+
+  private AstWriter start(int indent, boolean group) {
     flush();
-    stack.add(new Frame(docs.size(), indent));
+    stack.add(new Frame(docs.size(), indent, group));
     return this;
   }
 
   /** Ends the region that {@link #startGroup} began. */
   public AstWriter endGroup() {
+    return end();
+  }
+
+  /** Ends the region that {@link #startNest} began. */
+  public AstWriter endNest() {
+    return end();
+  }
+
+  private AstWriter end() {
     flush();
     final Frame frame = stack.remove(stack.size() - 1);
     final List<Doc> inner =
         new ArrayList<>(docs.subList(frame.start, docs.size()));
     docs.subList(frame.start, docs.size()).clear();
-    docs.add(Lindig.group(Lindig.nest(frame.indent, Lindig.hcat(inner))));
+    final Doc doc = Lindig.nest(frame.indent, Lindig.hcat(inner));
+    docs.add(frame.group ? Lindig.group(doc) : doc);
     return this;
   }
 
@@ -134,10 +160,12 @@ public class AstWriter {
   private static class Frame {
     final int start;
     final int indent;
+    final boolean group;
 
-    Frame(int start, int indent) {
+    Frame(int start, int indent, boolean group) {
       this.start = start;
       this.indent = indent;
+      this.group = group;
     }
   }
 
@@ -252,8 +280,8 @@ public class AstWriter {
    * </pre>
    *
    * <p>Choosing the set of common types that minimizes the total length of the
-   * {@link #typeLegend()} is the
-   * <a href="https://en.wikipedia.org/wiki/Smallest_grammar_problem">Smallest
+   * {@link #typeLegend()} is the <a
+   * href="https://en.wikipedia.org/wiki/Smallest_grammar_problem">Smallest
    * grammar problem</a>, which is NP-complete.
    */
   public String typeRef(String moniker) {
