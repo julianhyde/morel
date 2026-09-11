@@ -379,30 +379,113 @@ that executes, which is a different thing said in a different
 notation, and the day the tree is what executes is the day that
 question reopens.
 
+### 6.1 One formatter, two modes
+
+Core expressions have one formatter, and it lays out a relational
+node in one of two ways.
+
+*Inline* mode prints a relation as an ordinary expression, nested
+like any other application, and fits the text to the line width as it
+fits anything else. It is how Core reads when a plan is not what you
+are looking at — an error message, a trace.
+
+*Tree* mode is what `Sys.planEx` and `Sys.planOf` print, and what the
+rest of this section specifies. **In tree mode a relation is always
+broken out, whatever the width.** Layout is not a function of the
+width here; the width governs only how a node's own line wraps.
+
+### 6.2 The invariant
+
+**A relational operator is the first non-whitespace on its line.**
+Every other line is a leaf, a continuation, or part of the
+definitions region below.
+
+That single rule is what makes the text parseable, and the rest of
+the layout follows from it rather than being stipulated beside it. A
+relation that would otherwise print in the middle of a line — inside
+a `let`, a `case`, the argument of `nonEmpty`, a field of a record —
+cannot print there, and is broken out instead (§6.3).
+
+### 6.3 Nodes, inputs, continuations
+
 One node per line. A node's inputs are the lines below it, indented
-by two spaces. A line is an operator name followed by its arguments,
-each in brackets, in the order §3 lists them; arguments that are
-absent (an inner join's kind, a `true` condition, a `project`
-expression that is `$0`) are omitted.
+by **two** spaces. A line is an operator name followed by its
+arguments, each in brackets, in the order §3 lists them; arguments
+that are absent (an inner join's kind, a `true` condition, a
+`project` expression that is `$0`) are omitted.
+
+Where a node's own line does not fit the width it wraps, and the
+continuation is indented **four** from the node. Continuations follow
+the node line immediately, so a reader — and a parser — separates
+them from a grandchild by position: after a node at indent *d*, the
+run of lines at *d + 4* before the first line at *d + 2* belongs to
+that node; a line at *d + 4* after a line at *d + 2* is a grandchild.
 
 ```
-plan     ::= node
-node     ::= indent op arg* '\n' node*
+plan     ::= node defn* legend?
+node     ::= indent op arg* '\n' cont* node*
            | indent exp '\n'                    -- a leaf
+cont     ::= indent4 text '\n'        -- wrapped: 4 from the node
 op       ::= 'filter' | 'project' | 'ifEmpty'
            | 'join' | 'group' | 'sort' | 'unorder'
            | 'skip' | 'take' | 'union' | 'intersect' | 'except'
 arg      ::= '[' exp ']' | '[' label '=' exp (',' label '=' exp)* ']'
            | '[' word ']'
+defn     ::= '\n' 'r' '[' int ']' ' ='  '\n' node
 ```
 
-Expressions inside brackets are printed as Morel, by the same
-unparser that prints Core expressions elsewhere, so a field access
-appears as `#deptno $0` (Morel's `e.deptno` is sugar for `#deptno e`)
-and a record construction as `{d = $1, e = $0}`.
+### 6.4 Relations reached from inside an expression
 
-`Sys.planEx` prints the same tree with `: type` appended to every
-line, the type being the node's full collection type.
+A relation that §6.2 forbids printing in place is replaced by a
+reference, `r[1]`, `r[2]`, …, numbered from one in the order the
+references were first handed out. Each is then printed as a block of
+its own, after the tree and before the type legend, introduced by
+`r[N] =` and indented two:
+
+```
+project [let val v$0 = $0 in {i = $0, ys = r[1]} end] : t[1]
+  [1, 2] : int list
+
+r[1] =
+  filter [$0 > v$0] : int list
+    [3, 4] : int list
+
+t[1] {i:int, ys:int list} list
+```
+
+The reference carries no type of its own; the block's root line
+carries it, as any node does.
+
+A block is a tree like any other, so it starts at indent zero and
+§6.3 applies within it. That is the point: before this rule a nested
+tree was spliced into the line that contained it, its own indentation
+started again from zero in the middle of the enclosing one, and two
+nodes at different depths could print at the same indent. The text
+could not be parsed, and no implementation could have reproduced it.
+
+Scope is unaffected and becomes visible: `r[1]` above reads `v$0`,
+which the node that refers to it binds. A reference is a rendering of
+the tree that is there, not a rewrite of it.
+
+### 6.5 Width
+
+Node lines wrap at **79 columns**, and this is a property of the plan
+text rather than of the session: the `lineWidth` property governs how
+values print, and changing it must not move a golden file. An
+implementation that renders at another width produces different text
+and does not conform.
+
+### 6.6 Expressions and types
+
+Expressions inside brackets are printed as Morel, by the same
+formatter in its inline mode (§6.1), so a field access appears as
+`#deptno $0` (Morel's `e.deptno` is sugar for `#deptno e`) and a
+record construction as `{d = $1, e = $0}`.
+
+`Sys.planEx` and `Sys.planOf` print the tree with `: type` appended
+to every node line, the type being the node's full collection type.
+A continuation line carries no type; the type belongs to the node,
+and the node is the line it starts on.
 
 A moniker of **24 characters or fewer** is printed in full. A longer
 one is replaced by a reference, `t[1]`, `t[2]`, ..., numbered from one
@@ -439,6 +522,8 @@ references and legend, so one legend covers the whole plan. The
 implementation consequence is the same one, for the same reason --
 thread one writer through, rather than concatenating strings that
 children returned.
+
+### 6.7 Names
 
 Generated labels sort with user labels under one collation, pinned
 here so that three implementations agree: labels compare as Morel
@@ -478,19 +563,37 @@ list and would need a rule of its own — numbering by position, or a
 prefix per nesting level — once the resolver built trees natively.
 It needed neither. The rule as written already says "the printer
 numbers the generated binders *it finds*, from zero, in order of
-first occurrence", and a nested tree unparses onto the same writer as
-the tree that contains it, so one sequence spans the whole text:
+first occurrence", and a nested tree is written by the same formatter
+onto the same writer as the tree that contains it, so one sequence
+spans the whole text — the `r[N]` blocks of §6.4 included:
 
 ```
-filter [let val v$0 = $0 in nonEmpty (
-  filter [let val v$1 = $0 in #1 $0 = v$0 andalso nonEmpty (...)]
-    pairs)]
-  [1, 2, 3]
+filter [let val v$0 = $0 in nonEmpty (r[1]) end] : int list
+  [1, 2, 3] : int list
+
+r[1] =
+  project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
+    filter [let val v$1 = $0
+        in #1 $0 = v$0 andalso nonEmpty (r[2]) end] : (int * int) list
+      pairs : (int * int) list
+
+r[2] =
+  project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
+    filter [#1 $0 = #2 v$1] : (int * int) list
+      pairs : (int * int) list
 ```
+
+Three sequences run through that text and all three are properties of
+the text rather than of any node: `v$0` and `v$1` by first
+occurrence, `r[1]` and `r[2]` by first reference, and `t[N]` where a
+type is too long to print. The middle `filter` also shows §6.3's
+continuation rule: its line does not fit, so it wraps at four from
+the node, two deeper than the `pairs` that is its input.
 
 An implementation that builds the text by concatenating strings its
-children returned gets this wrong, and gets it wrong silently — each
-child restarts at `v$0`. Thread one writer through.
+children returned gets all three wrong, and gets them wrong silently
+— each child restarts at `v$0`, `r[1]`, `t[1]`. Thread one writer
+through.
 
 `compute` has no line of its own: `from … compute` prints as its
 `group`, and the extraction of the single element belongs to the Core
