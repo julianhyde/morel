@@ -77,6 +77,59 @@ public class AstWriter {
   public static final int MAX_TYPE_LENGTH = 24;
 
   /**
+   * Returns whether a relation is broken out onto lines of its own, as {@code
+   * Sys.planEx} prints it (spec.md §6.1), rather than nested in an expression
+   * like any other application.
+   */
+  public boolean treeMode() {
+    return false;
+  }
+
+  /**
+   * Registers a relation that cannot print where it stands, and returns the
+   * reference that prints instead -- {@code r[1]}, {@code r[2]}, and so on.
+   *
+   * <p>spec.md §6.2: a relational operator is the first non-whitespace on its
+   * line. A relation reached from inside an expression is not, so it is broken
+   * out and defined below the tree.
+   */
+  public String relRef(Core.Rel rel) {
+    throw new UnsupportedOperationException("not in tree mode");
+  }
+
+  /** Returns how many relations {@link #relRef} has broken out. */
+  public int relDefCount() {
+    return 0;
+  }
+
+  /** Returns the {@code i}th relation that {@link #relRef} broke out. */
+  public Core.Rel relDef(int i) {
+    throw new UnsupportedOperationException("not in tree mode");
+  }
+
+  /**
+   * Returns whether nothing but spaces has been written since the last line
+   * break, so that what comes next is the first non-whitespace on its line.
+   */
+  public boolean atLineStart() {
+    for (int i = b.length() - 1; i >= 0; i--) {
+      final char c = b.charAt(i);
+      if (c == '\n') {
+        return true;
+      }
+      if (c != ' ') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Returns the column the next character will be written at. */
+  public int column() {
+    return b.length() - (b.lastIndexOf("\n") + 1);
+  }
+
+  /**
    * Returns how a type is written where a plan line names it: the moniker
    * itself if it is short, otherwise a reference such as {@code t[1]} that
    * {@link #typeLegend} expands.

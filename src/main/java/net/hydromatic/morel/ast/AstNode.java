@@ -80,11 +80,34 @@ public abstract class AstNode {
    */
   public final String unparseRenumbered(boolean withTypes) {
     final AstWriter w = renumberingWriter(withTypes);
-    final String s = unparse(w);
-    // The writer creates the legend, and whoever created the writer prints it:
-    // a nested tree writes onto the caller's writer (see Core.Rel.unparse), so
-    // one legend covers the whole text.
-    return s + w.typeLegend();
+    unparse(w);
+    return finish(w);
+  }
+
+  /**
+   * Completes a plan: the relations that were broken out (spec.md §6.4), then
+   * the type legend (§6.6).
+   *
+   * <p>The writer collects both, and whoever created the writer prints them: a
+   * nested tree writes onto the caller's writer, so one definitions region and
+   * one legend cover the whole text, however deep it nests.
+   */
+  static String finish(AstWriter w) {
+    // A plan whose last line is a node ends with a newline; one that ends in
+    // the middle of an expression does not. Terminate it either way, so that
+    // the blank line before the first block is a blank line.
+    if ((w.relDefCount() > 0 || !w.typeLegend().isEmpty())
+        && !w.atLineStart()) {
+      w.append("\n");
+    }
+    // The list grows while it is walked, because a block may itself hold a
+    // relation that has to be broken out. Index, do not iterate.
+    for (int i = 0; i < w.relDefCount(); i++) {
+      final Core.Rel rel = w.relDef(i);
+      w.append("\nr[").append(String.valueOf(i + 1)).append("] =\n");
+      rel.describe(w, 2, w.withTypes());
+    }
+    return w + w.typeLegend();
   }
 
   /**
@@ -135,6 +158,14 @@ public abstract class AstNode {
      */
     final Map<String, Integer> typeRefs = new LinkedHashMap<>();
 
+    /**
+     * The relations broken out of the expressions they appeared in, in the
+     * order they were first referred to. A list compared by identity rather
+     * than a set: two structurally equal subqueries are two subqueries, and
+     * giving them one reference would say they are one.
+     */
+    final List<Core.Rel> relDefs = new ArrayList<>();
+
     final boolean withTypes;
 
     RenumberingAstWriter(boolean withTypes) {
@@ -144,6 +175,32 @@ public abstract class AstNode {
     @Override
     public boolean withTypes() {
       return withTypes;
+    }
+
+    @Override
+    public boolean treeMode() {
+      return true;
+    }
+
+    @Override
+    public String relRef(Core.Rel rel) {
+      for (int i = 0; i < relDefs.size(); i++) {
+        if (relDefs.get(i) == rel) {
+          return "r[" + (i + 1) + "]";
+        }
+      }
+      relDefs.add(rel);
+      return "r[" + relDefs.size() + "]";
+    }
+
+    @Override
+    public int relDefCount() {
+      return relDefs.size();
+    }
+
+    @Override
+    public Core.Rel relDef(int i) {
+      return relDefs.get(i);
     }
 
     private int register(String name, int i) {
