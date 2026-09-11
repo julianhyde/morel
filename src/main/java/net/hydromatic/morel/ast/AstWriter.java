@@ -231,6 +231,30 @@ public class AstWriter {
    * Returns how a type is written where a plan line names it: the moniker
    * itself if it is short, otherwise a reference such as {@code t[1]} that
    * {@link #typeLegend} expands.
+   *
+   * <p>Whether a type is converted into a reference is based on a simple
+   * heuristic: whether the moniker is longer than {@link #MAX_TYPE_LENGTH}.
+   *
+   * <p>A better rule would allow monikers to share components with other
+   * monikers. For example,
+   *
+   * <pre>
+   *   t[0] = {a:int, b:bool} list
+   *   t[1] = {a:int, b:bool} option bag
+   * </pre>
+   *
+   * <p>could be shortened by introducing an intermediate type {@code t[2]}:
+   *
+   * <pre>
+   *   t[0] = t[2] list
+   *   t[1] = t[2] option bag
+   *   t[2] = {a:int, b:bool}
+   * </pre>
+   *
+   * <p>Choosing the set of common types that minimizes the total length of the
+   * {@link #typeLegend()} is the
+   * <a href="https://en.wikipedia.org/wiki/Smallest_grammar_problem">Smallest
+   * grammar problem</a>, which is NP-complete.
    */
   public String typeRef(String moniker) {
     return moniker;
