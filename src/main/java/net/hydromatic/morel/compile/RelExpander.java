@@ -614,7 +614,8 @@ public class RelExpander {
           expand(join.right, ImmutableList.of()),
           join.condition);
     }
-    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
+    final Generators.Cache cache =
+        new Generators.Cache(typeSystem, env, ungroundedPats(extents));
     // Interleaved, in the order the walk reached them; the conjuncts that
     // strengthening added are not in that order, having no place in the tree,
     // so they go at the end.
@@ -1646,6 +1647,23 @@ public class RelExpander {
     }
   }
 
+  /**
+   * Returns the patterns that are still looking for a generator: the ones this
+   * call is about to ground.
+   *
+   * <p>{@code Generators.lowerBound} declines a bound that mentions one of
+   * them, because such a bound makes this generator wait on one that does not
+   * exist yet, and the wait may be a cycle. The step list's front end computed
+   * the same set by walking a query's scans; a tree has it already, because the
+   * leaves being grounded together are exactly {@code extents}.
+   */
+  private static Set<Core.NamedPat> ungroundedPats(
+      PairList<Core.Pat, Core.Exp> extents) {
+    final Set<Core.NamedPat> pats = new LinkedHashSet<>();
+    extents.forEach((pat, exp) -> pats.addAll(pat.expand()));
+    return pats;
+  }
+
   private Core.Exp bound(
       Core.Exp leaf, List<Core.Exp> conditions, boolean destructure) {
     this.destructure = destructure;
@@ -1661,7 +1679,8 @@ public class RelExpander {
         });
     final PairList<Core.Pat, Core.Exp> extents = PairList.of();
     extents.add(pat, leaf);
-    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
+    final Generators.Cache cache =
+        new Generators.Cache(typeSystem, env, ungroundedPats(extents));
     Expander.ground(cache, extents, strengthen(constraints, extents));
     recordSubsumed(pat, cache, originals);
     leafNames = ImmutableSet.copyOf(pat.expand());
@@ -1806,7 +1825,8 @@ public class RelExpander {
     conditions.forEach(condition -> constraints.add(subst(condition, element)));
     final PairList<Core.Pat, Core.Exp> extents = PairList.of();
     extents.add(pat, leaf);
-    final Generators.Cache cache = new Generators.Cache(typeSystem, env);
+    final Generators.Cache cache =
+        new Generators.Cache(typeSystem, env, ungroundedPats(extents));
     Expander.ground(cache, extents, strengthen(constraints, extents));
     return cache.bestGenerator(pat.expand().get(0));
   }
