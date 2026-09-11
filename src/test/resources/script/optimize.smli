@@ -150,8 +150,8 @@ end;
 > val it = "one:a" : string
 Sys.planEx "~1";
 > val it =
->   "val it = let val t = (1, \"a\") in case t of (0, _) => \"zero\" | (1, s) => \"one:\" ^ s | _ => \"other\" end"
->   : string
+>   {|val it = let val t = (1,
+> "a") in case t of (0, _) => "zero" | (1, s) => "one:" ^ s | _ => "other" end|} : string
 Sys.planEx "1";
 > val it = "val it = #^ String (\"one:\", \"a\")" : string
 
@@ -167,8 +167,8 @@ end;
 > val it = "one:a" : string
 Sys.planEx "~1";
 > val it =
->   "val it = let val t = {a = 1, b = \"a\"} in case t of {a = 0, b = _} => \"zero\" | {a = 1, b = s} => \"one:\" ^ s | _ => \"other\" end"
->   : string
+>   {|val it = let val t = {a = 1,
+> b = "a"} in case t of {a = 0, b = _} => "zero" | {a = 1, b = s} => "one:" ^ s | _ => "other" end|} : string
 Sys.planEx "1";
 > val it = "val it = #^ String (\"one:\", \"a\")" : string
 
@@ -246,8 +246,9 @@ end;
 > val it = "b" : string
 Sys.planEx "~1";
 > val it =
->   "val it = local datatype tree in let val v = NODE (NODE (EMPTY, 1, \"a\"), 2, \"b\") in case v of EMPTY => \"empty\" | NODE((t, i, s)) => s end end"
->   : string
+>   {|val it = local datatype tree in let val v = NODE (NODE (EMPTY, 1, "a"),
+> 2,
+> "b") in case v of EMPTY => "empty" | NODE((t, i, s)) => s end end|} : string
 Sys.planEx "1";
 > val it = "val it = local datatype tree in \"b\" end" : string
 
@@ -396,7 +397,8 @@ Sys.planEx "1";
 > val it =
 >   {_|
 > val it =
->   filter [$0 >= #"a" andalso $0 <= #"e" orelse $0 >= #"x" andalso $0 <= #"z"] : char list
+>   filter [$0 >= #"a" andalso $0 <= #"e"
+>       orelse $0 >= #"x" andalso $0 <= #"z"] : char list
 >     extent "char" : char list
 > |_} : string
 

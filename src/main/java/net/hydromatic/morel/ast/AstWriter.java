@@ -43,10 +43,18 @@ import net.hydromatic.morel.util.Lindig.Doc;
  * renders the same at every width.
  */
 public class AstWriter {
+  /**
+   * The width a plan is laid out within where the session does not say -- a
+   * test, an assertion message. Matches the default of the {@code lineWidth}
+   * property, which is what says it everywhere else.
+   */
+  public static final int DEFAULT_WIDTH = 79;
+
   /** Characters written since the last break. */
   private final StringBuilder pending = new StringBuilder();
 
   private final List<Doc> docs = new ArrayList<>();
+  private final List<Frame> stack = new ArrayList<>();
   private final boolean parenthesize;
 
   /**
@@ -76,9 +84,61 @@ public class AstWriter {
     }
   }
 
-  /** The width to lay the document out within. */
+  /**
+   * The width to lay the document out within.
+   *
+   * <p>Unbounded unless a subclass says otherwise, so that a plain writer --
+   * the one behind {@code toString}, an error message, a test matcher --
+   * produces the one layout a document with no break point has. Plan text is
+   * the thing with a width.
+   */
   protected int width() {
     return Integer.MAX_VALUE;
+  }
+
+  /**
+   * Starts a region that may be laid out on one line or broken.
+   *
+   * <p>Breaks offered inside it (by {@link #softBreak}) are taken only if what
+   * the region holds does not fit, and a broken line is indented {@code indent}
+   * from where the region began.
+   */
+  public AstWriter startGroup(int indent) {
+    flush();
+    stack.add(new Frame(docs.size(), indent));
+    return this;
+  }
+
+  /** Ends the region that {@link #startGroup} began. */
+  public AstWriter endGroup() {
+    flush();
+    final Frame frame = stack.remove(stack.size() - 1);
+    final List<Doc> inner =
+        new ArrayList<>(docs.subList(frame.start, docs.size()));
+    docs.subList(frame.start, docs.size()).clear();
+    docs.add(Lindig.group(Lindig.nest(frame.indent, Lindig.hcat(inner))));
+    return this;
+  }
+
+  /**
+   * Offers a break: a space if the enclosing group fits on one line, a line
+   * break and the group's indent if it does not.
+   */
+  public AstWriter softBreak() {
+    flush();
+    docs.add(Lindig.LINE);
+    return this;
+  }
+
+  /** An open {@link #startGroup} region. */
+  private static class Frame {
+    final int start;
+    final int indent;
+
+    Frame(int start, int indent) {
+      this.start = start;
+      this.indent = indent;
+    }
   }
 
   /**
@@ -285,9 +345,25 @@ public class AstWriter {
       raw("(");
       left = right = 0;
     }
+    // `andalso` and `orelse` chain, and a plan's conditions are mostly made
+    // of them, so they are where a long line is worth breaking. Each is a
+    // group of its own, so an outer one breaks before an inner one does, and
+    // a condition that fits stays on its line.
+    final boolean breakable = op == Op.ANDALSO || op == Op.ORELSE;
+    if (breakable) {
+      startGroup(0);
+    }
     append(a0, left, op.left);
-    append(op.padded);
+    if (breakable) {
+      softBreak();
+      append(op.padded.substring(1));
+    } else {
+      append(op.padded);
+    }
     append(a1, op.right, right);
+    if (breakable) {
+      endGroup();
+    }
     if (p) {
       raw(")");
     }

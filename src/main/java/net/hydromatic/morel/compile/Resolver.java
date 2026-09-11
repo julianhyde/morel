@@ -62,6 +62,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.AstWriter;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.CoreBuilder;
 import net.hydromatic.morel.ast.Op;
@@ -71,6 +72,7 @@ import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Simplification;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
+import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.AliasType;
@@ -1325,8 +1327,12 @@ public class Resolver {
       // run to a fixed point, so the answer would depend on when the inliner
       // reached the call. A plan's text must depend on the query and
       // nothing else.
+      final int width =
+          session == null
+              ? AstWriter.DEFAULT_WIDTH
+              : Prop.LINE_WIDTH.intValue(session.map);
       return core.stringLiteral(
-          coreArg.unparseRenumbered(typeMap.typeSystem, true));
+          coreArg.unparseRenumbered(typeMap.typeSystem, width, true));
     }
     return core.apply(apply.pos, type, coreFn, coreArg);
   }

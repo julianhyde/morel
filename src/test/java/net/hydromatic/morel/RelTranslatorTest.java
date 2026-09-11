@@ -377,9 +377,9 @@ public class RelTranslatorTest {
     assertThat(
         plan("from i in [1, 2] left join (j, k) in [(1, 2)] on i = j"),
         is(
-            "project [{i = #1 $0, "
-                + "j = #map Option (fn v$0 => #1 v$0) (#2 $0), "
-                + "k = #map Option (fn v$1 => #2 v$1) (#2 $0)}]\n"
+            "project [{i = #1 $0,\n"
+                + "    j = #map Option (fn v$0 => #1 v$0) (#2 $0),\n"
+                + "    k = #map Option (fn v$1 => #2 v$1) (#2 $0)}]\n"
                 + "  join [left] [$0 = #1 $1]\n"
                 + "    [1, 2]\n"
                 + "    [(1, 2)]\n"));

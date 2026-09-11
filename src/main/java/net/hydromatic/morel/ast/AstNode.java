@@ -81,8 +81,8 @@ public abstract class AstNode {
    * {@code Sys.planEx} prints it.
    */
   public final String unparseRenumbered(
-      TypeSystem typeSystem, boolean withTypes) {
-    final AstWriter w = renumberingWriter(typeSystem, this, withTypes);
+      TypeSystem typeSystem, int width, boolean withTypes) {
+    final AstWriter w = renumberingWriter(typeSystem, this, width, withTypes);
     if (this instanceof Core.Rel) {
       // The root prints in place; `unparse` would break it out.
       ((Core.Rel) this).describe(w, 0, withTypes);
@@ -125,8 +125,9 @@ public abstract class AstNode {
    * binder printed by one and read by the other reads as two.
    */
   public static AstWriter renumberingWriter(
-      TypeSystem typeSystem, AstNode root, boolean withTypes) {
-    return new RenumberingAstWriter(typeSystem, boundInPlan(root), withTypes);
+      TypeSystem typeSystem, AstNode root, int width, boolean withTypes) {
+    return new RenumberingAstWriter(
+        typeSystem, boundInPlan(root), width, withTypes);
   }
 
   /**
@@ -230,15 +231,23 @@ public abstract class AstNode {
      */
     final Set<Core.NamedPat> boundInPlan;
 
+    final int width;
     final boolean withTypes;
 
     RenumberingAstWriter(
         TypeSystem typeSystem,
         Set<Core.NamedPat> boundInPlan,
+        int width,
         boolean withTypes) {
       this.typeSystem = requireNonNull(typeSystem);
       this.boundInPlan = ImmutableSet.copyOf(boundInPlan);
+      this.width = width;
       this.withTypes = withTypes;
+    }
+
+    @Override
+    protected int width() {
+      return width;
     }
 
     @Override
