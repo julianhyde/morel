@@ -251,11 +251,11 @@ public class RelExpander {
    * Returns a pattern for each leaf of a tree, named as the query named it, or
    * empty where the tree does not say.
    *
-   * <p>A tree has no names -- a leaf is a bare expression, spec.md §3.1 -- but
-   * a query with several binders ends in a projection that names its element's
-   * components after them: {@code project [{deptno = #2 $0, loc = #1 $0, name =
-   * #3 $0}]}. A join concatenates its inputs' components (§15), so component
-   * <i>k</i> is leaf <i>k</i>, and the projection is the map from leaf to name.
+   * <p>A tree has no names -- a leaf is a bare expression -- but a query with
+   * several binders ends in a projection that names its element's components
+   * after them: {@code project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}]}.
+   * A join concatenates its inputs' components, so component <i>k</i> is leaf
+   * <i>k</i>, and the projection is the map from leaf to name.
    *
    * <p>It matters beyond plan text. Grounding names what it builds after the
    * leaf it bounds, a group's key record sorts its fields by label, and a
@@ -339,7 +339,7 @@ public class RelExpander {
    *
    * <p>The name a diagnostic wants. A tree holds no names, so this is
    * `leafPats` again -- the projection at the root, read back -- and a query
-   * with one binder has no projection and so no name; discussion.md §11.
+   * with one binder has no projection and so no name
    */
   public static Core.@Nullable NamedPat ungrounded(
       Core.Exp tree, List<Core.Pat> leafPats) {
@@ -463,7 +463,7 @@ public class RelExpander {
       // A projection changes what $0 means, and substituting the projection
       // into a condition says the same thing about the element below it. The
       // step list cannot do this -- it has no expression to substitute, only
-      // steps -- so a tree grounds strictly more; see discussion.md §12.
+      // steps -- so a tree grounds strictly more.
       final Core.Project project = (Core.Project) exp;
       final List<Core.Exp> pushed = new ArrayList<>();
       conditions.forEach(
@@ -939,9 +939,9 @@ public class RelExpander {
       }
       if (!join.condition.isBoolLiteral(true)) {
         // A dependent join has a condition, so the node could carry this one.
-        // Lifting the restriction is a change to what compiles, like
-        // discussion.md §12, and belongs with that one rather than smuggled in
-        // here. It was held down by `groundingAgrees` until the step list's
+        // Lifting the restriction is a change to what compiles, and belongs
+        // with the others of its kind rather than smuggled in here. It was
+        // held down by `groundingAgrees` until the step list's
         // engine was deleted; now nothing holds it but this line.
         throw new CompileException("pattern is not grounded", false, right.pos);
       }
@@ -985,7 +985,7 @@ public class RelExpander {
               ? right
               : bounded(right, rightPat, cache, bound);
       // The sides swap, so the yield commutes with them: what was `$0` is now
-      // `$1` and what was `$1` is now `$0` (spec.md §3.4).
+      // `$1` and what was `$1` is now `$0`.
       final Core.Join swapped =
           core.join(
               typeSystem,
@@ -996,7 +996,7 @@ public class RelExpander {
               join.condition);
       // Swapping the inputs moves the components, and with no yield to absorb
       // the swap a projection puts them back where the tree above expects
-      // them -- the re-path that discussion.md §15 records as commute's cost.
+      // them, which is what commuting a join costs.
       return permute(
           swapped,
           core.componentCount(boundedRight),
@@ -1989,11 +1989,11 @@ public class RelExpander {
    * Replaces {@code $0} and {@code $1} with expressions.
    *
    * <p>The walk stops at a nested node, whose {@code $0} is its own input's
-   * element (spec.md §2 rule 3). What the enclosing node's element is called
-   * inside a nested tree is a binder the resolver made for it, and once the
-   * element is an ordinary name that binder has nothing left to protect: the
-   * binding is dropped, so that the engine reads `Relational.nonEmpty (…)`
-   * where it would otherwise read a `let`.
+   * element. What the enclosing node's element is called inside a nested tree
+   * is a binder the resolver made for it, and once the element is an ordinary
+   * name that binder has nothing left to protect: the binding is dropped, so
+   * that the engine reads `Relational.nonEmpty (…)` where it would otherwise
+   * read a `let`.
    */
   private Core.Exp subst(Core.Exp exp, Core.Exp e0, Core.@Nullable Exp e1) {
     final Set<Core.NamedPat> rowPats = RelLowerer.rowBindings(exp);

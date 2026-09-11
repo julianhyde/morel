@@ -163,7 +163,7 @@ public class RelLowererTest {
    *
    * <p>The binders are {@code w$0} and {@code w$1} whatever was compiled before
    * this query, because the lowering numbers them per lowering rather than from
-   * the session-wide generator (spec.md §6).
+   * the session-wide generator.
    */
   @Test
   void testFieldOfJoinIsRead() {

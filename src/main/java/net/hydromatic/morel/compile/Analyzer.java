@@ -101,7 +101,7 @@ public class Analyzer extends EnvVisitor {
   private static boolean isAtom(Core.Exp exp) {
     switch (exp.op) {
       case ID:
-        // `$0` is a node and not a variable (discussion.md §17), and it is as
+        // `$0` is a node and not a variable, and it is as
         // cheap to duplicate as one. A binding whose value is the element --
         // what beta-reducing a call in a query leaves -- must be substituted
         // however often it is read, or the grounding engine cannot see the

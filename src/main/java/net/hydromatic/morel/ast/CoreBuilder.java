@@ -799,7 +799,7 @@ public enum CoreBuilder {
   }
 
   // Relational tree (Core.Rel) nodes. These will replace the step builders
-  // above when step 2 of plan.md lowers trees instead of building steps.
+  // above once a tree, rather than a step list, is what executes.
 
   /** Creates a reference to the element of a node's input, {@code $0}. */
   public Core.Input input0(Type elementType) {
@@ -887,7 +887,7 @@ public enum CoreBuilder {
   /**
    * Creates a join that may be dependent: if {@code binder} is not null, it
    * names the left element inside {@code right}, which is how a scan whose
-   * collection reads an earlier binder is expressed (spec.md §3.3).
+   * collection reads an earlier binder is expressed.
    */
   public Core.Join join(
       TypeSystem typeSystem,
@@ -910,8 +910,7 @@ public enum CoreBuilder {
 
   /**
    * Returns expressions for a node's components, read out of an expression for
-   * its element: a join contributes its own, anything else contributes one
-   * (discussion.md §15).
+   * its element: a join contributes its own, anything else contributes one .
    */
   public List<Core.Exp> components(
       TypeSystem typeSystem, Core.Exp node, Core.Exp exp) {
@@ -983,16 +982,15 @@ public enum CoreBuilder {
 
   /**
    * Returns whether a join's components are its inputs' components rather than
-   * one apiece. Every join's are (discussion.md §15).
+   * one apiece. Every join's are.
    *
    * <p>An outer join wraps each component of the absent side in {@code option},
    * one option per component, which is Morel's own rule: {@code left join (j,
    * k) in pairs} binds {@code j : int option} and {@code k : int option}, not
-   * {@code (int * int) option} (spec.md §3.4). A join above one wraps them
-   * again, and the step list says the same thing -- a scan with an outer join
-   * re-types each binding of the side it can leave absent, and wrapping is
-   * additive, which is where {@code int option option} comes from when two
-   * outer joins chain.
+   * {@code (int * int) option}. A join above one wraps them again, and the step
+   * list says the same thing -- a scan with an outer join re-types each binding
+   * of the side it can leave absent, and wrapping is additive, which is where
+   * {@code int option option} comes from when two outer joins chain.
    */
   private static boolean isFlat(Core.Join join) {
     return true;
@@ -1055,7 +1053,7 @@ public enum CoreBuilder {
     // element to its bare type would make the element's *shape* depend on how
     // many labels there are, so a rule that drops one of two labels would
     // change the shape and nothing above it would rewrite locally
-    // (discussion.md §14). Where the query wants the bare value, an ordinary
+    // . Where the query wants the bare value, an ordinary
     // projection of the field says so, and a projection is a node a rule can
     // see.
     final Type elementType =

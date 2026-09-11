@@ -196,7 +196,7 @@ public class RelTranslatorTest {
    * record whether it has one label or many, and this query's value is the bare
    * key, so an ordinary projection of the field says so. That projection is a
    * node a rule can see and move, where a group that collapsed its own element
-   * was not (discussion.md §14).
+   * was not.
    *
    * <p>There was a second, identity projection over it once -- the {@code yield
    * i} the resolver used to leave in the step list -- and there is not now,

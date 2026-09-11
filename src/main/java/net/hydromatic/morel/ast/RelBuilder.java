@@ -46,7 +46,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Builds a relational tree ({@link Core.Rel}).
  *
- * <p>It does three things, and deliberately no more (discussion.md §13).
+ * <p>It does three things, and deliberately no more.
  *
  * <p>It keeps a <b>stack</b> of relational expressions. A node takes its inputs
  * from the stack and leaves its result there, so an n-ary set operator or a
@@ -73,7 +73,7 @@ public class RelBuilder {
 
   /**
    * Counter for generated binders. Per builder, not per type system, so that
-   * plan text does not depend on what was compiled before it (spec.md §6).
+   * plan text does not depend on what was compiled before it.
    */
   private int nextName = 0;
 
@@ -849,7 +849,7 @@ public class RelBuilder {
    * path. Otherwise the path maps through the option, because Morel makes each
    * *binder* of the absent side an option and not the side as a whole: {@code
    * left join (j, k) in pairs} binds {@code j : int option} and {@code k : int
-   * option}, not {@code (int * int) option} (spec.md §3.4).
+   * option}, not {@code (int * int) option}.
    */
   private Core.Exp optionize(
       Core.Exp access, Core.Exp rawRef, Core.Exp component) {

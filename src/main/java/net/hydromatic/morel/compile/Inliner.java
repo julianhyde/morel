@@ -305,12 +305,12 @@ public class Inliner extends EnvShuttle {
   /**
    * Returns whether an expression can be inlined without expansion.
    *
-   * <p>{@code $0} counts. It is a node and not a variable (discussion.md §17),
-   * but it is as cheap to duplicate as an id, and a {@code case} over a tuple
-   * of the row's components is what beta-reducing a call in a query leaves:
-   * {@code case (x, $0) of (x, y) => (x, y) elem edges}. Leaving that unreduced
-   * hides the constraint from the grounding engine, which matches on {@code
-   * elem} over the query's variables.
+   * <p>{@code $0} counts. It is a node and not a variable, but it is as cheap
+   * to duplicate as an id, and a {@code case} over a tuple of the row's
+   * components is what beta-reducing a call in a query leaves: {@code case (x,
+   * $0) of (x, y) => (x, y) elem edges}. Leaving that unreduced hides the
+   * constraint from the grounding engine, which matches on {@code elem} over
+   * the query's variables.
    */
   static boolean isAtomic(Core.Exp exp) {
     return exp instanceof Core.Literal
@@ -370,8 +370,8 @@ public class Inliner extends EnvShuttle {
    * <p>{@code $0} means the element of whichever node encloses it, so
    * substituting a value that mentions one at a use inside a nested tree makes
    * it that tree's element instead. The resolver binds the element precisely so
-   * that a nested tree can read it by name (spec.md §2 rule 3), and inlining
-   * the binding would undo that.
+   * that a nested tree can read it by name, and inlining the binding would undo
+   * that.
    *
    * <p>Only a use that crosses into a tree is a problem. A binding whose value
    * is an input and whose uses are beside it -- what beta-reducing {@code from
