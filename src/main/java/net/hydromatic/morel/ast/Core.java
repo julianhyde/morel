@@ -1497,11 +1497,26 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("let ")
-          .append(decl, 0, 0)
-          .append(" in ")
-          .append(exp, 0, 0)
-          .append(" end");
+      // One decision, four breaks: a `let` that does not fit becomes `let`,
+      // its declaration, `in`, its body and `end`, each on a line, with the
+      // declaration and the body indented two. One group, so they are taken
+      // together; nests rather than groups inside it, so the two that are
+      // indented do not decide for themselves.
+      if (!w.treeMode()) {
+        // Outside a plan there is no width to fit, and a tree still prints in
+        // place here -- its line breaks would fall inside this indentation.
+        return w.append("let ")
+            .append(decl, 0, 0)
+            .append(" in ")
+            .append(exp, 0, 0)
+            .append(" end");
+      }
+      w.startGroup(0);
+      w.startNest(2).append("let").softBreak().append(decl, 0, 0).endNest();
+      w.softBreak().append("in");
+      w.startNest(2).softBreak().append(exp, 0, 0).endNest();
+      w.softBreak().append("end");
+      return w.endGroup();
     }
 
     @Override
