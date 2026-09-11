@@ -1199,7 +1199,11 @@ Sys.planEx "999";
 >   {_|
 > val it =
 >   sort [$0] : string list
->     filter [let val v$0 = $0 in #nonEmpty Relational (r$0[v$0]) end] : string list
+>     filter [let
+>           val v$0 = $0
+>         in
+>           #nonEmpty Relational (r$0[v$0])
+>         end] : string list
 >       from w$0 in ["abcd", "ant"] join g$0 in #tabulate Bag (#size String w$0 + 1,
 >           fn i => #substring String (w$0,
 >           0,
@@ -2389,9 +2393,12 @@ end;
 >   : string list
 Sys.planEx "0";
 > val it =
->   {|val it = let val isDept = fn d => op elem (d,
-> #depts scott) in let val isEmp = fn e => op elem (e,
-> #emps scott) in r$0[isDept, isEmp] end end
+>   {_|
+> val it = let
+>   val isDept = fn d => op elem (d, #depts scott)
+> in
+>   let val isEmp = fn e => op elem (e, #emps scott) in r$0[isDept, isEmp] end
+> end
 >
 > r$0[isDept, isEmp] =
 >   project [#dname (#1 $0)] : string list
@@ -2405,7 +2412,7 @@ Sys.planEx "0";
 > t$0 ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list
 > t$1 {deptno:int, dname:string, loc:string} list
 > t$2 {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
-> |} : string
+> |_} : string
 Sys.planEx "999";
 > val it =
 >   {_|
@@ -2437,13 +2444,17 @@ end;
 > val it = [1,2,3] : int list
 Sys.planEx "0";
 > val it =
->   {|val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x,
-> xs) in r$0[f] end end
+>   {_|
+> val it = let
+>   val xs = [1, 2, 3]
+> in
+>   let val f = fn x => op elem (x, xs) in r$0[f] end
+> end
 >
 > r$0[f] =
 >   filter [f $0] : int list
 >     extent "int" : int list
-> |} : string
+> |_} : string
 Sys.planEx "999";
 > val it = "val it = from g$0 in [1, 2, 3] group g$0 order g$0" : string
 
@@ -2459,13 +2470,17 @@ end;
 > val it = [2,3] : int list
 Sys.planEx "0";
 > val it =
->   {|val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x,
-> xs) in r$0[f] end end
+>   {_|
+> val it = let
+>   val xs = [1, 2, 3]
+> in
+>   let val f = fn x => op elem (x, xs) in r$0[f] end
+> end
 >
 > r$0[f] =
 >   filter [f $0 andalso $0 > 1] : int list
 >     extent "int" : int list
-> |} : string
+> |_} : string
 Sys.planEx "999";
 > val it =
 >   {_|
