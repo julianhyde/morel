@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.type.TypeSystem;
-import org.jspecify.annotations.Nullable;
 
 /** Abstract syntax tree node. */
 public abstract class AstNode {
@@ -83,8 +82,7 @@ public abstract class AstNode {
    */
   public final String unparseRenumbered(
       TypeSystem typeSystem, boolean withTypes) {
-    final AstWriter w = renumberingWriter(withTypes);
-    w.setScope(typeSystem, boundPats(this));
+    final AstWriter w = renumberingWriter(typeSystem, this, withTypes);
     unparse(w);
     return finish(w);
   }
@@ -121,8 +119,9 @@ public abstract class AstNode {
    * the whole text: two of them number the same binder differently, and a
    * binder printed by one and read by the other reads as two.
    */
-  public static AstWriter renumberingWriter(boolean withTypes) {
-    return new RenumberingAstWriter(withTypes);
+  public static AstWriter renumberingWriter(
+      TypeSystem typeSystem, AstNode root, boolean withTypes) {
+    return new RenumberingAstWriter(typeSystem, boundInPlan(root), withTypes);
   }
 
   /**
@@ -152,7 +151,7 @@ public abstract class AstNode {
    * pairs} are bound outside the whole plan, and every fragment would name
    * them.
    */
-  static Set<Core.NamedPat> boundPats(AstNode root) {
+  private static Set<Core.NamedPat> boundInPlan(AstNode root) {
     final Set<Core.NamedPat> pats = new LinkedHashSet<>();
     root.accept(
         new Visitor() {
@@ -216,12 +215,24 @@ public abstract class AstNode {
     final Map<Core.Rel, List<Core.NamedPat>> relParams =
         new IdentityHashMap<>();
 
-    @Nullable TypeSystem typeSystem;
-    Set<Core.NamedPat> boundPats = ImmutableSet.of();
+    final TypeSystem typeSystem;
+
+    /**
+     * What the plan binds. A fragment declares what it reads from outside
+     * itself, but only what a reader of the plan could not otherwise resolve:
+     * {@code scott} and {@code pairs} are bound outside the whole plan, and
+     * every fragment would name them.
+     */
+    final Set<Core.NamedPat> boundInPlan;
 
     final boolean withTypes;
 
-    RenumberingAstWriter(boolean withTypes) {
+    RenumberingAstWriter(
+        TypeSystem typeSystem,
+        Set<Core.NamedPat> boundInPlan,
+        boolean withTypes) {
+      this.typeSystem = requireNonNull(typeSystem);
+      this.boundInPlan = ImmutableSet.copyOf(boundInPlan);
       this.withTypes = withTypes;
     }
 
@@ -261,12 +272,6 @@ public abstract class AstNode {
       return "r$" + i + "[" + String.join(", ", names) + "]";
     }
 
-    @Override
-    public void setScope(TypeSystem typeSystem, Set<Core.NamedPat> boundPats) {
-      this.typeSystem = typeSystem;
-      this.boundPats = boundPats;
-    }
-
     /**
      * Returns what a relation reads from outside itself.
      *
@@ -279,12 +284,9 @@ public abstract class AstNode {
       return relParams.computeIfAbsent(
           rel,
           r -> {
-            if (typeSystem == null) {
-              return ImmutableList.of();
-            }
             final Set<Core.NamedPat> free =
                 new LinkedHashSet<>(r.freePats(typeSystem));
-            free.retainAll(boundPats);
+            free.retainAll(boundInPlan);
             return ImmutableList.copyOf(free);
           });
     }
