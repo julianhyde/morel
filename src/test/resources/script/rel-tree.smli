@@ -16,13 +16,12 @@
  * language governing permissions and limitations under the
  * License.
  *
- * Conformance suite for the relational tree (spec.md).
+ * Conformance suite for the relational tree.
  *
  * `Sys.planOf e` prints the tree that the resolver builds for the
  * expression `e`, which is not evaluated. That text is the
  * cross-implementation contract: morel-rust (#33) and morel-go must
- * print the same text for the same query. spec.md is normative; this
- * file is the executable form of it.
+ * print the same text for the same query.
  *
  * Where the answer illustrates the rule -- the row an outer join
  * keeps, the row a scan-less query iterates over -- the query is run
@@ -38,7 +37,7 @@ useSilently "scott.smli";
 > val it = () : unit
 
 (* ---------------------------------------------------------------- *)
-(* Leaves (spec.md 3.1).
+(* Leaves.
  *
  * A leaf is a bare expression and holds no name: the binder `i` is
  * gone, and the filter reads the element as `$0`.
@@ -64,10 +63,9 @@ Sys.planOf (from d in scott.depts where d.deptno > 20 yield d.dname);
 > t[1] {deptno:int, dname:string, loc:string} bag
 > |_} : string
 
-(* A query with no scan iterates over one unit row, which is a visible
-  * `[()]` leaf. Run it too: the leaf is the whole of why the answer
-  * has
- * one row rather than none.
+(* A query with no scan iterates over one unit row, which is a
+ * visible `[()]` leaf. Run it too: the leaf is the whole of why the
+ * answer has one row rather than none.
  *)
 from where true yield 1;
 > val it = [1] : int list
@@ -80,11 +78,10 @@ Sys.planOf (from where true yield 1);
 > |_} : string
 
 (* ---------------------------------------------------------------- *)
-(* Joins (spec.md 3.4).
+(* Joins.
  *
-  * A join concatenates its inputs' components and carries no yield;
-  * the
- * projection above it is where the components are named.
+ * A join concatenates its inputs' components and carries no yield;
+ * the projection above it is where the components are named.
  *)
 Sys.planOf (
   from d in scott.depts, e in scott.emps
@@ -130,7 +127,7 @@ Sys.planOf (
 > |_} : string
 
 (* A scan that reads an earlier binder is a join carrying a binder,
- * which its right input reads (spec.md 3.3).
+ * which its right input reads.
  *)
 Sys.planOf (
   from d in scott.depts,
@@ -154,7 +151,7 @@ Sys.planOf (
 (* Outer joins.
  *
  * The absent side's components are each wrapped in `option` on their
- * own, not the row as a whole (discussion.md 15). Run it too: the
+ * own, not the row as a whole. Run it too: the
  * OPERATIONS row, which has no employee, is what the wrapping is for.
  *)
 from d in scott.depts
@@ -264,11 +261,8 @@ Sys.planOf (
 > |_} : string
 
 (* `order` is a sort, and it changes the kind: its input is a `bag`
- * and
-  * its output a `list` (spec.md 4). `skip` and `take` are nodes of
-  * their
-  * own, whose arguments are evaluated before the first row and so
-  * cannot
+ * and its output a `list`. `skip` and `take` are nodes of their own,
+ * whose arguments are evaluated before the first row and so cannot
  * mention `$0`.
  *)
 Sys.planOf (
@@ -300,7 +294,7 @@ Sys.planOf (from i in [1, 2] except [1]);
 > |_} : string
 
 (* ---------------------------------------------------------------- *)
-(* Generated binders (spec.md 6).
+(* Generated binders.
  *
  * Two nested trees side by side share the enclosing text's numbering:
  * both say `v$0`, because both are bound by the same `let`. An
@@ -339,7 +333,7 @@ Sys.planOf (
  * second generated binder: `v$0` names the outer row, `v$1` the middle
  * one, and the innermost filter reads `v$1` to compare `c` with `b`.
  *
- * This is the case spec.md 6 warns hardest about. An implementation
+ * It is the case an implementation is most likely to get wrong. One
  * that builds its text by concatenating strings its children returned
  * restarts the numbering in each child, says `v$0` in both places, and
  * gets it wrong silently. It is also the case that was broken here

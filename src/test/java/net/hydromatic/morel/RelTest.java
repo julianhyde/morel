@@ -43,9 +43,8 @@ import org.junit.jupiter.api.Test;
  * {@link net.hydromatic.morel.ast.CoreBuilder} derives for each node, and the
  * plan text that a tree prints.
  *
- * <p>The derivations are those in {@code spec.md} sections 3 and 4, and the
- * plan text is the one in section 6; both are the contract that morel-rust and
- * morel-go implement, so a change here is a change to that contract.
+ * <p>The type derivations and the plan text are the contract that morel-rust
+ * and morel-go implement, so a change here is a change to that contract.
  */
 public class RelTest {
   /** Fixture with a type system and a few expressions to build trees from. */
@@ -150,7 +149,7 @@ public class RelTest {
             f.list34,
             core.equal(f.typeSystem, f.input0, f.input1));
     // The element is the inputs' components, a tuple, not a record
-    // of names -- there are no names to give it (discussion.md §15).
+    // of names -- there are no names to give it.
     assertThat(join.type.moniker(), is("(int * int) list"));
     assertThat(
         join.describe(),
@@ -212,7 +211,7 @@ public class RelTest {
             core.boolLiteral(true));
 
     // The element is the inputs' components, a tuple, not a record
-    // of names -- there are no names to give it (discussion.md §15).
+    // of names -- there are no names to give it.
     assertThat(join.type.moniker(), is("(int * int) list"));
     assertThat(
         join.describe(),
@@ -255,7 +254,7 @@ public class RelTest {
             ImmutableSortedMap.of("j", (Core.Exp) f.input0),
             ImmutableSortedMap.of());
     // A record, though there is only one key: collapsing it would make the
-    // element's shape depend on how many labels there are (discussion.md §14).
+    // element's shape depend on how many labels there are.
     assertThat(group1.type.moniker(), is("{j:int} list"));
     assertThat(
         group1.describe(),
@@ -391,8 +390,7 @@ public class RelTest {
   }
 
   /**
-   * Tests that {@code $0} is not a variable, however many nodes reference it
-   * (discussion.md §17).
+   * Tests that {@code $0} is not a variable, however many nodes reference it .
    *
    * <p>It is bound by the node that encloses it, so a pass that reasons about
    * variables -- and every one of them walks {@link Core.Id} -- must not see it

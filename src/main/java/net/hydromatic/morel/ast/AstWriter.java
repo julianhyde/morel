@@ -59,7 +59,7 @@ public class AstWriter {
 
   /**
    * Returns whether a relational node should print the collection type of every
-   * line, as {@code Sys.planEx} prints it (spec.md §6).
+   * line, as {@code Sys.planEx} prints it.
    */
   public boolean withTypes() {
     return false;
@@ -78,8 +78,8 @@ public class AstWriter {
 
   /**
    * Returns whether a relation is broken out onto lines of its own, as {@code
-   * Sys.planEx} prints it (spec.md §6.1), rather than nested in an expression
-   * like any other application.
+   * Sys.planEx} prints it, rather than nested in an expression like any other
+   * application.
    */
   public boolean treeMode() {
     return false;
@@ -89,9 +89,9 @@ public class AstWriter {
    * Registers a relation that cannot print where it stands, and returns the
    * reference that prints instead -- {@code r[1]}, {@code r[2]}, and so on.
    *
-   * <p>spec.md §6.2: a relational operator is the first non-whitespace on its
-   * line. A relation reached from inside an expression is not, so it is broken
-   * out and defined below the tree.
+   * <p>A relational operator is the first non-whitespace on its line. A
+   * relation reached from inside an expression is not, so it is broken out and
+   * defined below the tree.
    */
   public String relRef(Core.Rel rel) {
     throw new UnsupportedOperationException("not in tree mode");

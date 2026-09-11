@@ -268,7 +268,7 @@ public class AlgebraTest {
   void testCalciteFrom() {
     final String ml = "from";
     // A query with no scan is a tree whose only node is the leaf that holds
-    // its one row, `[()]` (spec.md §3.1), and a leaf is a bare expression, so
+    // its one row, `[()]`, and a leaf is a bare expression, so
     // nothing tells it from the expression the user could have written. It
     // reaches Calcite as the values it is, with a project over it. Same rows.
     String plan =

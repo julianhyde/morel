@@ -1323,8 +1323,8 @@ public class Resolver {
       // argument's *type* and is called at the `Id`, not the `Apply` -- and
       // expanding later would be worse than inconvenient: the rewrite passes
       // run to a fixed point, so the answer would depend on when the inliner
-      // reached the call, which is the non-determinism spec.md 6 exists to
-      // rule out.
+      // reached the call. A plan's text must depend on the query and
+      // nothing else.
       return core.stringLiteral(coreArg.unparseRenumbered(true));
     }
     return core.apply(apply.pos, type, coreFn, coreArg);
@@ -2268,7 +2268,7 @@ public class Resolver {
 
   /**
    * Builds a query as a relational tree and lowers it to the form that
-   * executes. Every query comes this way (plan.md step 2).
+   * executes. Every query comes this way.
    *
    * <p>It never shadowed the step-list path it replaced, and could not:
    * converting a step's expressions twice corrupts the first conversion,
@@ -2387,8 +2387,7 @@ public class Resolver {
      *
      * <p>One binder is the row itself, and the tree already has it. Several are
      * a record of them, which the tree does not have: a join leaves its inputs'
-     * components concatenated (discussion.md §15), and naming them is this
-     * projection's job.
+     * components concatenated, and naming them is this projection's job.
      */
     private void finish() {
       if (rowIsElement) {
@@ -2859,9 +2858,9 @@ public class Resolver {
      * those.
      *
      * <p>A dependent join and a projection, which is what the design says
-     * {@code yieldAll} is (discussion.md §8): the join's binder is how the
-     * right input names the current row of the left, and the projection drops
-     * the left again, since {@code yieldAll} yields only the elements.
+     * {@code yieldAll} is: the join's binder is how the right input names the
+     * current row of the left, and the projection drops the left again, since
+     * {@code yieldAll} yields only the elements.
      */
     private void yieldAll(Ast.YieldAll yieldAll) {
       final Core.IdPat joinBinder =
@@ -2940,12 +2939,12 @@ public class Resolver {
     /**
      * Groups, and then names what the group produced.
      *
-     * <p>A tree's group builds a record whether it has one label or many
-     * (discussion.md §14), so an atomizing group -- {@code group e.deptno},
-     * whose rows are bare ints -- is that record and a projection that reads
-     * its one field. A group with expressions over its labels ({@code compute
-     * {n = count() * 2}}) is the same record and a projection that computes
-     * them, which is the step list's trailing yield by another name.
+     * <p>A tree's group builds a record whether it has one label or many , so
+     * an atomizing group -- {@code group e.deptno}, whose rows are bare ints --
+     * is that record and a projection that reads its one field. A group with
+     * expressions over its labels ({@code compute {n = count() * 2}}) is the
+     * same record and a projection that computes them, which is the step list's
+     * trailing yield by another name.
      */
     private void group_(Ast.Group group) {
       final boolean groupIsAtom = group.isAtom();
@@ -3359,11 +3358,11 @@ public class Resolver {
        * Binder for each input that a nested tree reads, invented on demand.
        *
        * <p>A path reads the element as {@code $i}, and inside a tree nested in
-       * the expression that means the nested tree's own element, not this one
-       * (spec.md §2 rule 3). The remedy the spec names in the same breath is to
-       * bind the element first, so a path planted inside a nested tree reads
-       * the binder instead, and {@link #toCore} wraps the expression in the
-       * {@code let} that binds it.
+       * the expression that means the nested tree's own element, not this one .
+       * The remedy the spec names in the same breath is to bind the element
+       * first, so a path planted inside a nested tree reads the binder instead,
+       * and {@link #toCore} wraps the expression in the {@code let} that binds
+       * it.
        */
       private final Map<Integer, Core.IdPat> rowPats = new LinkedHashMap<>();
 

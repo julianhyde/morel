@@ -197,7 +197,7 @@ public class RelExpanderTest {
    *
    * <p>`from x yield {y = x} where y elem [2, 3]` errors today with "pattern
    * 'x' is not grounded"; a tree substitutes the projection into the condition
-   * and grounds it. See discussion.md section 12.
+   * and grounds it.
    */
   @Test
   void testThroughProjection() {

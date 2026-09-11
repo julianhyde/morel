@@ -344,7 +344,7 @@ public abstract class Compiles {
     }
 
     // Pass -1 or any pass beyond the last: the final result, which is a tree.
-    // Not lowered: `Sys.planEx` prints the tree (spec.md §6), and the lowering
+    // Not lowered: `Sys.planEx` prints the tree, and the lowering
     // is a pass of its own that runs after this.
     return coreDecl;
   }

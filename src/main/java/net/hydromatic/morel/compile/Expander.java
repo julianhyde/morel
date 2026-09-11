@@ -144,7 +144,7 @@ public class Expander {
     if (misaddressed(lowered)) {
       // A selector reading a field the row does not have. Replacing a join
       // with a projection makes the element one component where it was
-      // several (discussion.md §16), and what reads it above was written for
+      // several, and what reads it above was written for
       // the other shape; `rebuild` does not rebase them. Hand the query back
       // until it does.
       return null;
@@ -217,7 +217,7 @@ public class Expander {
    * <p>A binder the compiler generated names nothing the user wrote -- under a
    * tree the query's own names do not reach the lowering -- so the message
    * leaves it out. A diagnostic that confidently names the wrong variable is
-   * worse than one that names none; discussion.md §11.
+   * worse than one that names none
    */
   static String notGrounded(Core.NamedPat pat) {
     return Core.NamedPat.isGenerated(pat.name)
