@@ -22,9 +22,8 @@ import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -33,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.hydromatic.morel.type.TypeSystem;
+import org.jspecify.annotations.Nullable;
 
 /** Abstract syntax tree node. */
 public abstract class AstNode {
@@ -84,7 +84,7 @@ public abstract class AstNode {
   public final String unparseRenumbered(
       TypeSystem typeSystem, boolean withTypes) {
     final AstWriter w = renumberingWriter(withTypes);
-    w.setRelParams(relParams(typeSystem, this));
+    w.setScope(typeSystem, boundPats(this));
     unparse(w);
     return finish(w);
   }
@@ -126,78 +126,6 @@ public abstract class AstNode {
   }
 
   /**
-   * Returns, for each relation that will be broken out of the expression that
-   * holds it, the variables it reads that are bound outside it.
-   *
-   * <p>Those are what a reader needs to make sense of a block printed away from
-   * the reference to it, and what tells a correlated fragment from an
-   * independent one.
-   *
-   * <p>It must be known before any text is written, because the reference
-   * prints before the block, and the block is where the dependency shows. It is
-   * also transitive: a fragment can be free in a variable it never mentions,
-   * reaching it only through a fragment nested inside it. That falls out here
-   * rather than needing a closure, because a nested fragment is part of the
-   * subtree even though it is printed elsewhere.
-   */
-  static Map<Core.Rel, List<Core.NamedPat>> relParams(
-      TypeSystem typeSystem, AstNode root) {
-    // Every relation under the root, and the ones that will print in place:
-    // the root itself, and whatever is reachable from it through inputs.
-    final List<Core.Rel> all = new ArrayList<>();
-    root.accept(
-        new Visitor() {
-          @Override
-          protected void visitRel(Core.Rel rel) {
-            all.add(rel);
-          }
-        });
-    final Set<Core.Rel> inPlace =
-        Collections.newSetFromMap(new IdentityHashMap<>());
-    if (root instanceof Core.Rel) {
-      addInPlace((Core.Rel) root, inPlace);
-    } else {
-      // A declaration breaks after its '=', so its value prints in place too.
-      root.accept(
-          new Visitor() {
-            @Override
-            protected void visit(Core.NonRecValDecl valDecl) {
-              if (valDecl.exp instanceof Core.Rel) {
-                addInPlace((Core.Rel) valDecl.exp, inPlace);
-              }
-              super.visit(valDecl);
-            }
-          });
-    }
-
-    final Set<Core.NamedPat> boundInRoot = new LinkedHashSet<>();
-    root.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Core.IdPat idPat) {
-            boundInRoot.add(idPat);
-          }
-        });
-
-    final Map<Core.Rel, List<Core.NamedPat>> map = new IdentityHashMap<>();
-    for (Core.Rel rel : all) {
-      if (inPlace.contains(rel)) {
-        continue;
-      }
-      // Free in the fragment, and bound by something the plan shows. The
-      // first half is the ordinary free-variable analysis, which knows how
-      // each construct binds; the second excludes what is bound outside the
-      // whole plan -- `scott`, say -- which a reader can already resolve and
-      // which every fragment would otherwise declare.
-      final Set<Core.NamedPat> free =
-          new LinkedHashSet<>(rel.freePats(typeSystem));
-      free.retainAll(boundInRoot);
-      map.put(rel, ImmutableList.copyOf(free));
-    }
-    return map;
-  }
-
-  /**
    * Orders generated names by their number rather than as text, so that {@code
    * v$2} comes before {@code v$10}.
    */
@@ -216,14 +144,24 @@ public abstract class AstNode {
     }
   }
 
-  private static void addInPlace(Core.Rel rel, Set<Core.Rel> inPlace) {
-    if (inPlace.add(rel)) {
-      for (Core.Exp input : rel.inputs()) {
-        if (input instanceof Core.Rel) {
-          addInPlace((Core.Rel) input, inPlace);
-        }
-      }
-    }
+  /**
+   * Returns the variables the plan itself binds.
+   *
+   * <p>A fragment declares what it reads from outside itself, but only what a
+   * reader of the plan could not otherwise resolve: {@code scott} and {@code
+   * pairs} are bound outside the whole plan, and every fragment would name
+   * them.
+   */
+  static Set<Core.NamedPat> boundPats(AstNode root) {
+    final Set<Core.NamedPat> pats = new LinkedHashSet<>();
+    root.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.IdPat idPat) {
+            pats.add(idPat);
+          }
+        });
+    return pats;
   }
 
   /** Converts this node into an ML string, with a given writer. */
@@ -271,8 +209,15 @@ public abstract class AstNode {
      */
     final List<Core.Rel> relDefs = new ArrayList<>();
 
-    /** What each broken-out relation reads from outside itself. */
-    Map<Core.Rel, List<Core.NamedPat>> relParams = ImmutableMap.of();
+    /**
+     * What each broken-out relation reads from outside itself, worked out when
+     * the relation is first referred to.
+     */
+    final Map<Core.Rel, List<Core.NamedPat>> relParams =
+        new IdentityHashMap<>();
+
+    @Nullable TypeSystem typeSystem;
+    Set<Core.NamedPat> boundPats = ImmutableSet.of();
 
     final boolean withTypes;
 
@@ -303,8 +248,8 @@ public abstract class AstNode {
 
     @Override
     public String relHeader(int i) {
-      final List<Core.NamedPat> params = relParams.get(relDefs.get(i));
-      if (params == null || params.isEmpty()) {
+      final List<Core.NamedPat> params = params(relDefs.get(i));
+      if (params.isEmpty()) {
         return "r$" + i;
       }
       // Renaming here is safe, and not merely convenient: a parameter is bound
@@ -317,8 +262,31 @@ public abstract class AstNode {
     }
 
     @Override
-    public void setRelParams(Map<Core.Rel, List<Core.NamedPat>> relParams) {
-      this.relParams = relParams;
+    public void setScope(TypeSystem typeSystem, Set<Core.NamedPat> boundPats) {
+      this.typeSystem = typeSystem;
+      this.boundPats = boundPats;
+    }
+
+    /**
+     * Returns what a relation reads from outside itself.
+     *
+     * <p>Asked when the relation is first referred to, which is the only moment
+     * it needs to be known and the only moment the writer knows the relation is
+     * being broken out at all. Transitive without trying: a fragment nested
+     * inside this one is part of its subtree, however far away it is printed.
+     */
+    private List<Core.NamedPat> params(Core.Rel rel) {
+      return relParams.computeIfAbsent(
+          rel,
+          r -> {
+            if (typeSystem == null) {
+              return ImmutableList.of();
+            }
+            final Set<Core.NamedPat> free =
+                new LinkedHashSet<>(r.freePats(typeSystem));
+            free.retainAll(boundPats);
+            return ImmutableList.copyOf(free);
+          });
     }
 
     @Override
