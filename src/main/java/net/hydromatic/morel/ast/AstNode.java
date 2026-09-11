@@ -83,7 +83,12 @@ public abstract class AstNode {
   public final String unparseRenumbered(
       TypeSystem typeSystem, boolean withTypes) {
     final AstWriter w = renumberingWriter(typeSystem, this, withTypes);
-    unparse(w);
+    if (this instanceof Core.Rel) {
+      // The root prints in place; `unparse` would break it out.
+      ((Core.Rel) this).describe(w, 0, withTypes);
+    } else {
+      unparse(w);
+    }
     return finish(w);
   }
 

@@ -2493,21 +2493,21 @@ public class Core {
       // Onto the caller's writer, not as a string built by another: the
       // binders a plan renumbers are numbered by first occurrence over the
       // whole text, so a tree nested in an expression must share the count.
-      if (w.treeMode() && !w.atLineStart()) {
-        // A relational operator is the first non-whitespace on its line.
-        // This one is not, so it prints as a reference and its
-        // lines go below, where they can be read. Splicing them in here is
-        // what made a nested query's plan unparseable: its indentation began
-        // again from zero inside the line that held it, so two nodes at
-        // different depths could print at the same indent, and the line that
-        // closed the enclosing expression looked like a root of its own.
+      if (w.treeMode()) {
+        // Reached from inside an expression, which is the only way `unparse`
+        // is reached at all: a node's inputs go through `describe`, and a
+        // root through `describe` as well. A relational operator is the first
+        // non-whitespace on its line, and this one would not be, so it prints
+        // as a reference and its lines go below, where they can be read.
+        //
+        // Splicing them in here is what made a nested query's plan
+        // unparseable: its indentation began again from zero inside the line
+        // that held it, so two nodes at different depths could print at the
+        // same indent, and the line that closed the enclosing expression
+        // looked like a root of its own.
         return w.append(w.relRef(this));
       }
-      // At a line start the leading whitespace is the indent this tree hangs
-      // from -- a declaration that broke after its '=' puts us there. Mid-line
-      // is reachable only outside tree mode, where a tree still prints in
-      // place, and the indent it hangs from is zero, as it always was.
-      describe(w, w.atLineStart() ? w.column() : 0, w.withTypes());
+      describe(w, 0, w.withTypes());
       return w;
     }
 
