@@ -4271,7 +4271,6 @@ class Generators {
      */
     final Set<Core.NamedPat> ungrounded;
 
-    
     /**
      * Generators, in the order the engine was given them.
      *
