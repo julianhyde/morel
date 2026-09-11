@@ -2417,7 +2417,7 @@ public class Core {
      */
     public String describe(TypeSystem typeSystem, boolean withTypes) {
       final AstWriter w = AstNode.renumberingWriter(withTypes);
-      w.setRelParams(AstNode.relParams(typeSystem, this));
+      w.setScope(typeSystem, AstNode.boundPats(this));
       describe(w, 0, withTypes);
       return AstNode.finish(w);
     }

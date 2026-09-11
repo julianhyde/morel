@@ -23,9 +23,10 @@ import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Set;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.parse.Parsers;
+import net.hydromatic.morel.type.TypeSystem;
 
 /** Context for writing an AST out as a string. */
 public class AstWriter {
@@ -108,8 +109,12 @@ public class AstWriter {
     throw new UnsupportedOperationException("not in tree mode");
   }
 
-  /** Sets what each broken-out relation reads from outside itself. */
-  public void setRelParams(Map<Core.Rel, List<Core.NamedPat>> relParams) {}
+  /**
+   * Gives the writer what it needs to work out a broken-out relation's
+   * parameters: a type system to ask {@link Core.Exp#freePats} with, and the
+   * variables the plan binds.
+   */
+  public void setScope(TypeSystem typeSystem, Set<Core.NamedPat> boundPats) {}
 
   /** Returns how many relations {@link #relRef} has broken out. */
   public int relDefCount() {
