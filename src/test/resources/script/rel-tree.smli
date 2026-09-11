@@ -90,7 +90,8 @@ Sys.planOf (
 > val it =
 >   {_|
 > project [{dname = #dname (#1 $0), ename = #ename (#2 $0)}] : t$0
->   filter [#deptno (#2 $0) = #deptno (#1 $0) andalso #job (#2 $0) = "PRESIDENT"] : t$1
+>   filter [#deptno (#2 $0) = #deptno (#1 $0)
+>       andalso #job (#2 $0) = "PRESIDENT"] : t$1
 >     join : t$1
 >       #depts scott : t$2
 >       #emps scott : t$3
@@ -110,8 +111,11 @@ Sys.planOf (
     yield {d.dname, e.ename, b.comm});
 > val it =
 >   {_|
-> project [{comm = #comm (#3 $0), dname = #dname (#1 $0), ename = #ename (#2 $0)}] : t$0
->   filter [#deptno (#2 $0) = #deptno (#1 $0) andalso #ename (#3 $0) = #ename (#2 $0)] : t$1
+> project [{comm = #comm (#3 $0),
+>     dname = #dname (#1 $0),
+>     ename = #ename (#2 $0)}] : t$0
+>   filter [#deptno (#2 $0) = #deptno (#1 $0)
+>       andalso #ename (#3 $0) = #ename (#2 $0)] : t$1
 >     join : t$1
 >       join : t$2
 >         #depts scott : t$3
@@ -230,7 +234,8 @@ Sys.planOf (
     yield {dname = d?.dname, who = e?.ename});
 > val it =
 >   {_|
-> project [{dname = #map Option #dname (#2 $0), who = #map Option #ename (#1 $0)}] : t$0
+> project [{dname = #map Option #dname (#2 $0),
+>     who = #map Option #ename (#1 $0)}] : t$0
 >   join [full] [#deptno $0 = #deptno $1] : t$1
 >     filter [#job $0 = "PRESIDENT"] : t$2
 >       #emps scott : t$2
@@ -315,7 +320,8 @@ Sys.planOf (
     yield x);
 > val it =
 >   {_|
-> filter [let val v$0 = $0 in #nonEmpty Relational (r$0[v$0]) andalso #nonEmpty Relational (r$1[v$0]) end] : int list
+> filter [let val v$0 = $0 in #nonEmpty Relational (r$0[v$0])
+>     andalso #nonEmpty Relational (r$1[v$0]) end] : int list
 >   [1, 2, 3] : int list
 >
 > r$0[v$0] =
@@ -365,7 +371,8 @@ Sys.planOf (
 >
 > r$0[v$0] =
 >   project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
->     filter [let val v$1 = $0 in #1 $0 = v$0 andalso #nonEmpty Relational (r$1[v$1]) end] : (int * int) list
+>     filter [let val v$1 = $0 in #1 $0 = v$0
+>         andalso #nonEmpty Relational (r$1[v$1]) end] : (int * int) list
 >       pairs : (int * int) list
 >
 > r$1[v$1] =

@@ -93,8 +93,8 @@ from t where t = (1, true) orelse t = (3, false);
 > val it : (int * bool) list
 Sys.planEx "3";
 > val it =
->   "val it = #toList Range (#discreteSetOf Range ([POINT (1, true), POINT (3, false)]))"
->   : string
+>   {|val it = #toList Range (#discreteSetOf Range ([POINT (1, true), POINT (3,
+> false)]))|} : string
 
 (*) Ranges over bool * int: a point and a range.
 from t where t = (true, 1) orelse t >= (false, 3) andalso t <= (false, 5);
@@ -108,8 +108,9 @@ from t where t = (true, 1) orelse t >= (false, 3) andalso t <= (false, 5);
 > val it : (bool * int) list
 Sys.planEx "3";
 > val it =
->   "val it = #toList Range (#discreteSetOf Range ([POINT (true, 1), CLOSED ((false, 3), (false, 5))]))"
->   : string
+>   {|val it = #toList Range (#discreteSetOf Range ([POINT (true, 1), CLOSED ((false,
+> 3),
+> (false, 5))]))|} : string
 
 (*) Ranges over int * bool * int * bool (4-tuple): a single closed range.
 from t where t >= (1, false, 2, true) andalso t <= (1, false, 4, false);
@@ -1157,8 +1158,8 @@ from p where String.isPrefix p "abcd";
 > val it = ["","a","ab","abc","abcd"] : string list
 Sys.planEx "999";
 > val it =
->   "val it = #tabulate List (#size String \"abcd\" + 1, fn i => #substring String (\"abcd\", 0, i))"
->   : string
+>   {|val it = #tabulate List (#size String "abcd" + 1,
+> fn i => #substring String ("abcd", 0, i))|} : string
 
 from s in ["abcd", "ant"], p where String.isPrefix p s;
 > p    s
@@ -1181,7 +1182,8 @@ Sys.planEx "999";
 >   project [{p = #2 $0, s = #1 $0}] : t$0
 >     join [g$0] : (string * string) list
 >       ["abcd", "ant"] : string list
->       #tabulate List (#size String g$0 + 1, fn i => #substring String (g$0, 0, i)) : string list
+>       #tabulate List (#size String g$0 + 1,
+>           fn i => #substring String (g$0, 0, i)) : string list
 >
 > t$0 {p:string, s:string} list
 > |_} : string
@@ -1198,7 +1200,10 @@ Sys.planEx "999";
 > val it =
 >   sort [$0] : string list
 >     filter [let val v$0 = $0 in #nonEmpty Relational (r$0[v$0]) end] : string list
->       from w$0 in ["abcd", "ant"] join g$0 in #tabulate Bag (#size String w$0 + 1, fn i => #substring String (w$0, 0, i)) yield g$0 group g$0 order g$0 : string list
+>       from w$0 in ["abcd", "ant"] join g$0 in #tabulate Bag (#size String w$0 + 1,
+>           fn i => #substring String (w$0,
+>           0,
+>           i)) yield g$0 group g$0 order g$0 : string list
 >
 > r$0[v$0] =
 >   filter [#isPrefix String v$0 $0] : string list
@@ -2164,7 +2169,8 @@ Sys.planEx "0";
 >   {_|
 > val it =
 >   project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}] : t$0
->     filter [op elem ({deptno = #2 $0, dname = #3 $0, loc = #1 $0}, #depts scott)] : t$1
+>     filter [op elem ({deptno = #2 $0, dname = #3 $0, loc = #1 $0},
+>         #depts scott)] : t$1
 >       join : t$1
 >         join : (string * int) list
 >           extent "string" : string list
@@ -2181,7 +2187,9 @@ Sys.planEx "3";
 > val it =
 >   project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}] : t$0
 >     project [(#loc $0, #deptno $0, #name $0)] : t$1
->       from ({deptno = deptno, dname = name, loc = loc}) in #toList Bag (#depts scott) group {deptno = deptno, loc = loc, name = name} order {deptno = deptno, loc = loc, name = name} : t$0
+>       from ({deptno = deptno, dname = name, loc = loc}) in #toList Bag (#depts scott) group {deptno = deptno, loc = loc, name = name} order {deptno = deptno,
+>           loc = loc,
+>           name = name} : t$0
 >
 > t$0 {deptno:int, loc:string, name:string} list
 > t$1 (string * int * string) list
@@ -2203,7 +2211,9 @@ Sys.planEx "0";
 >   {_|
 > val it =
 >   project [{dno = #1 $0, name = #2 $0}] : t$0
->     filter [op elem ({deptno = #1 $0, dname = #2 $0, loc = "CHICAGO"}, #depts scott) andalso #1 $0 > 20] : (int * string) list
+>     filter [op elem ({deptno = #1 $0, dname = #2 $0, loc = "CHICAGO"},
+>         #depts scott)
+>         andalso #1 $0 > 20] : (int * string) list
 >       join : (int * string) list
 >         extent "int" : int list
 >         extent "string" : string list
@@ -2217,7 +2227,8 @@ Sys.planEx "3";
 >   project [{dno = #1 $0, name = #2 $0}] : t$0
 >     filter [#1 $0 > 20] : (int * string) list
 >       project [(#dno $0, #name $0)] : (int * string) list
->         from ({deptno = dno, dname = name, loc = "CHICAGO"}) in #toList Bag (#depts scott) group {dno = dno, name = name} order {dno = dno, name = name} : t$0
+>         from ({deptno = dno, dname = name, loc = "CHICAGO"}) in #toList Bag (#depts scott) group {dno = dno, name = name} order {dno = dno,
+>             name = name} : t$0
 >
 > t$0 {dno:int, name:string} list
 > |_} : string
@@ -2343,7 +2354,8 @@ Sys.planEx "0";
 >   {_|
 > val it =
 >   project [#dname $0] : string list
->     filter [(let val d = $0 in op elem (d, #depts scott) end) andalso #deptno $0 = 20] : t$0
+>     filter [(let val d = $0 in op elem (d, #depts scott) end)
+>         andalso #deptno $0 = 20] : t$0
 >       extent "{deptno:int, dname:string, loc:string}" : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} list
@@ -2377,11 +2389,15 @@ end;
 >   : string list
 Sys.planEx "0";
 > val it =
->   {|val it = let val isDept = fn d => op elem (d, #depts scott) in let val isEmp = fn e => op elem (e, #emps scott) in r$0[isDept, isEmp] end end
+>   {|val it = let val isDept = fn d => op elem (d,
+> #depts scott) in let val isEmp = fn e => op elem (e,
+> #emps scott) in r$0[isDept, isEmp] end end
 >
 > r$0[isDept, isEmp] =
 >   project [#dname (#1 $0)] : string list
->     filter [isDept (#1 $0) andalso isEmp (#2 $0) andalso #deptno (#1 $0) = #deptno (#2 $0) andalso #deptno (#1 $0) = 20] : t$0
+>     filter [isDept (#1 $0) andalso isEmp (#2 $0)
+>         andalso #deptno (#1 $0) = #deptno (#2 $0)
+>         andalso #deptno (#1 $0) = 20] : t$0
 >       join : t$0
 >         extent "{deptno:int, dname:string, loc:string}" : t$1
 >         extent "{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}" : t$2
@@ -2395,7 +2411,8 @@ Sys.planEx "999";
 >   {_|
 > val it =
 >   project [#dname (#1 $0)] : string list
->     filter [#deptno (#1 $0) = #deptno (#2 $0) andalso #deptno (#1 $0) = 20] : t$0
+>     filter [#deptno (#1 $0) = #deptno (#2 $0)
+>         andalso #deptno (#1 $0) = 20] : t$0
 >       join : t$0
 >         from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : t$1
 >         from g$1 in #toList Bag (#emps scott) group g$1 order g$1 : t$2
@@ -2420,7 +2437,8 @@ end;
 > val it = [1,2,3] : int list
 Sys.planEx "0";
 > val it =
->   {|val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in r$0[f] end end
+>   {|val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x,
+> xs) in r$0[f] end end
 >
 > r$0[f] =
 >   filter [f $0] : int list
@@ -2441,7 +2459,8 @@ end;
 > val it = [2,3] : int list
 Sys.planEx "0";
 > val it =
->   {|val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x, xs) in r$0[f] end end
+>   {|val it = let val xs = [1, 2, 3] in let val f = fn x => op elem (x,
+> xs) in r$0[f] end end
 >
 > r$0[f] =
 >   filter [f $0 andalso $0 > 1] : int list
