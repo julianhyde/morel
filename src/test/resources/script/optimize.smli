@@ -437,9 +437,9 @@ List.length (from x, y where x >= 1 andalso y >= 1 andalso x * (y + 3) < 30);
 > val it = 51 : int
 Sys.planEx "3";
 > val it =
->   {|val it = #length List (r[1])
+>   {|val it = #length List (r$0)
 >
-> r[1] =
+> r$0 =
 >   project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list
 >     filter [#* Int (#1 $0, #2 $0 + 3) < 30] : (int * int) list
 >       join : (int * int) list
@@ -458,9 +458,9 @@ List.length (from x in [1..], y in [1..] where x * (y + 3) < 30);
 > val it = 51 : int
 Sys.planEx "3";
 > val it =
->   {|val it = #length List (r[1])
+>   {|val it = #length List (r$0)
 >
-> r[1] =
+> r$0 =
 >   project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list
 >     filter [#* Int (#1 $0, #2 $0 + 3) < 30] : (int * int) list
 >       join : (int * int) list
@@ -487,9 +487,9 @@ List.length (from x, y where x > 0 andalso x < y andalso y < 10);
 > val it = 36 : int
 Sys.planEx "3";
 > val it =
->   {|val it = #length List (r[1])
+>   {|val it = #length List (r$0)
 >
-> r[1] =
+> r$0 =
 >   project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list
 >     filter [#1 $0 < #2 $0] : (int * int) list
 >       join : (int * int) list
