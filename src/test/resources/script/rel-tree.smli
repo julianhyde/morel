@@ -332,26 +332,44 @@ Sys.planOf (
 > |_} : string
 
 (* A tree nested *inside* another nested tree is what produces a
- * second
- * generated binder -- `v$0` outside, `v$1` inside -- and is the case
-  * spec.md 6 warns about, because an implementation that builds its
-  * text
-  * by concatenating strings its children returned restarts at `v$0`
-  * and
- * gets it wrong silently.
+ * second generated binder: `v$0` names the outer row, `v$1` the middle
+ * one, and the innermost filter reads `v$1` to compare `c` with `b`.
  *
- * It cannot be written down yet. The query below answers [] and the
- * answer is [1]; `git bisect` puts the regression at 48323b89, "The
- * resolver returns the tree", where a nested tree first survived into
- * the rewrite passes. Add the case here when that is fixed.
- *
- * from x in [1, 2, 3]
- *   where Relational.nonEmpty (
- *     from (a, b) in pairs
- *       where a = x
- *         andalso Relational.nonEmpty (
- *           from (c, d) in pairs where c = b))
- *   yield x;
+ * This is the case spec.md 6 warns hardest about. An implementation
+ * that builds its text by concatenating strings its children returned
+ * restarts the numbering in each child, says `v$0` in both places, and
+ * gets it wrong silently. It is also the case that was broken here
+ * until the lowering learned to leave a nested tree's row binding
+ * alone: substituting `v$1` while its value was still `$0` put that
+ * `$0` under a node that rebinds it, so `c = b` became `c = d` and the
+ * query answered [] instead of [1].
  *)
+from x in [1, 2, 3]
+  where Relational.nonEmpty (
+    from (a, b) in pairs
+      where a = x
+        andalso Relational.nonEmpty (
+          from (c, d) in pairs where c = b))
+  yield x;
+> val it = [1] : int list
+Sys.planOf (
+  from x in [1, 2, 3]
+    where Relational.nonEmpty (
+      from (a, b) in pairs
+        where a = x
+          andalso Relational.nonEmpty (
+            from (c, d) in pairs where c = b))
+    yield x);
+> val it =
+>   {_|
+> filter [let val v$0 = $0 in #nonEmpty Relational (project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
+>   filter [let val v$1 = $0 in #1 $0 = v$0 andalso #nonEmpty Relational (project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
+>   filter [#1 $0 = #2 v$1] : (int * int) list
+>     pairs : (int * int) list
+> ) end] : (int * int) list
+>     pairs : (int * int) list
+> ) end] : int list
+>   [1, 2, 3] : int list
+> |_} : string
 
 (*) End rel-tree.smli
