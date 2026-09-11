@@ -469,11 +469,27 @@ the tree that is there, not a rewrite of it.
 
 ### 6.5 Width
 
-Node lines wrap at **79 columns**, and this is a property of the plan
-text rather than of the session: the `lineWidth` property governs how
-values print, and changing it must not move a golden file. An
-implementation that renders at another width produces different text
-and does not conform.
+A node line wraps at the session's `lineWidth`, the property that
+also governs how values print. There is no separate plan width: a
+plan is Core, Core has one formatter (§6.1), and a second width would
+be a second answer to the same question.
+
+What that exposes is bounded, and §6.1 is what bounds it. Tree mode
+breaks relations out whatever the width, so the nodes, their
+indentation, the `r[N]` blocks and every number in the text are the
+same at any width; only a node's own line wraps differently. A plan
+read at another width is the same plan, folded differently. It cannot
+gain a node, lose one, or renumber one.
+
+It follows that `lineWidth` is the knob for reading a plan: widen it
+to see a long condition on one line, narrow it to keep a deep tree
+inside a terminal.
+
+What it asks of a script is that it not change `lineWidth` between
+the plans it prints. The suite already holds to that — forty of its
+fifty-two settings are the same value, 78, set at the head of a file,
+and the two scripts that vary it (`built-in/sys.smli`, `blog.smli`)
+vary it after their last plan — so the golden plans are all at 78.
 
 ### 6.6 Expressions and types
 
