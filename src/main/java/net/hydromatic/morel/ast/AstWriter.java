@@ -21,23 +21,64 @@ package net.hydromatic.morel.ast;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.parse.Parsers;
+import net.hydromatic.morel.util.Lindig;
+import net.hydromatic.morel.util.Lindig.Doc;
 
-/** Context for writing an AST out as a string. */
+/**
+ * Context for writing an AST out as a string.
+ *
+ * <p>Builds a {@link Doc} rather than a string, so that the layout can be
+ * chosen to fit a width. A run of characters with no break in it accumulates in
+ * {@code pending} and becomes one {@code text} when a break arrives, which
+ * keeps the document small and lets the hundred-odd {@code unparse} methods go
+ * on appending characters as they always did.
+ *
+ * <p>Until a break point is offered -- a {@link Lindig#group} around something
+ * that may be laid out either way -- the document is a flat concatenation, and
+ * renders the same at every width.
+ */
 public class AstWriter {
-  private final StringBuilder b;
+  /** Characters written since the last break. */
+  private final StringBuilder pending = new StringBuilder();
+
+  private final List<Doc> docs = new ArrayList<>();
   private final boolean parenthesize;
 
-  AstWriter(StringBuilder b, boolean parenthesize) {
-    this.b = b;
+  /**
+   * Whether nothing but spaces has been written since the last line break.
+   * Tracked as it is written, because a document does not have a column until
+   * it is rendered.
+   */
+  private boolean lineStart = true;
+
+  public AstWriter() {
+    this(false);
+  }
+
+  /**
+   * Creates a writer that wraps every operator application in parentheses,
+   * which makes an expression's structure explicit.
+   */
+  public AstWriter(boolean parenthesize) {
     this.parenthesize = parenthesize;
   }
 
-  public AstWriter() {
-    this(new StringBuilder(), false);
+  /** Moves the characters written so far into the document. */
+  private void flush() {
+    if (pending.length() > 0) {
+      docs.add(Lindig.text(pending.toString()));
+      pending.setLength(0);
+    }
+  }
+
+  /** The width to lay the document out within. */
+  protected int width() {
+    return Integer.MAX_VALUE;
   }
 
   /**
@@ -47,14 +88,8 @@ public class AstWriter {
    */
   @Override
   public String toString() {
-    return b.toString();
-  }
-
-  /** Returns a writer that wraps everything in parentheses. */
-  public AstWriter withParenthesize(boolean parenthesize) {
-    return parenthesize == this.parenthesize
-        ? this
-        : new AstWriter(this.b, parenthesize);
+    flush();
+    return Lindig.render(width(), Lindig.hcat(docs));
   }
 
   /**
@@ -122,21 +157,14 @@ public class AstWriter {
    * break, so that what comes next is the first non-whitespace on its line.
    */
   public boolean atLineStart() {
-    for (int i = b.length() - 1; i >= 0; i--) {
-      final char c = b.charAt(i);
-      if (c == '\n') {
-        return true;
-      }
-      if (c != ' ') {
-        return false;
-      }
-    }
-    return true;
+    return lineStart;
   }
 
-  /** Returns the column the next character will be written at. */
-  public int column() {
-    return b.length() - (b.lastIndexOf("\n") + 1);
+  /** Appends an identifier, quoting it if it needs quoting. */
+  private void appendQuoted(String name) {
+    final StringBuilder b = new StringBuilder();
+    Parsers.appendId(b, name);
+    raw(b.toString());
   }
 
   /**
@@ -159,8 +187,27 @@ public class AstWriter {
 
   /** Appends a string to the output. */
   public AstWriter append(String s) {
-    b.append(s);
+    int i;
+    while ((i = s.indexOf('\n')) >= 0) {
+      pending.append(s, 0, i);
+      flush();
+      docs.add(Lindig.HARD_LINE);
+      lineStart = true;
+      s = s.substring(i + 1);
+    }
+    raw(s);
     return this;
+  }
+
+  /** Appends characters that contain no line break. */
+  private void raw(String s) {
+    pending.append(s);
+    for (int i = 0; i < s.length(); i++) {
+      if (s.charAt(i) != ' ') {
+        lineStart = false;
+        break;
+      }
+    }
   }
 
   /**
@@ -170,7 +217,7 @@ public class AstWriter {
    * labels, which must be quoted if they are reserved words.
    */
   public AstWriter id(String name) {
-    b.append(name);
+    raw(name);
     return this;
   }
 
@@ -181,9 +228,9 @@ public class AstWriter {
    * forth.
    */
   public AstWriter id(String name, int i) {
-    b.append(name);
+    raw(name);
     if (i > 0) {
-      b.append('_').append(i);
+      raw("_" + i);
     }
     return this;
   }
@@ -194,17 +241,17 @@ public class AstWriter {
    * example, a variable named {@code left} round-trips.
    */
   public AstWriter idQuoted(String name) {
-    Parsers.appendId(b, name);
+    appendQuoted(name);
     return this;
   }
 
   /** Appends an ordinal-qualified variable identifier, quoting if necessary. */
   public AstWriter idQuoted(String name, int i) {
     if (i == 0) {
-      Parsers.appendId(b, name);
+      appendQuoted(name);
     } else {
       // "name_i" is never a reserved word, so it does not need quoting.
-      b.append(name).append('_').append(i);
+      raw(name + "_" + i);
     }
     return this;
   }
@@ -235,14 +282,14 @@ public class AstWriter {
     }
     final boolean p = parenthesize || left > op.left || op.right < right;
     if (p) {
-      b.append('(');
+      raw("(");
       left = right = 0;
     }
     append(a0, left, op.left);
     append(op.padded);
     append(a1, op.right, right);
     if (p) {
-      b.append(')');
+      raw(")");
     }
     return this;
   }
@@ -251,13 +298,13 @@ public class AstWriter {
   public AstWriter prefix(int left, Op op, AstNode a, int right) {
     final boolean p = parenthesize || left > op.left || op.right < right;
     if (p) {
-      b.append('(');
+      raw("(");
       right = 0;
     }
     append(op.padded);
     a.unparse(this, op.right, right);
     if (p) {
-      b.append(')');
+      raw(")");
     }
     return this;
   }
@@ -287,12 +334,12 @@ public class AstWriter {
   public AstWriter append(AstNode node, int left, int right) {
     final boolean p = parenthesize || node.op.wraps(left, right);
     if (p) {
-      b.append('(');
+      raw("(");
       left = right = 0;
     }
     node.unparse(this, left, right);
     if (p) {
-      b.append(')');
+      raw(")");
     }
     return this;
   }

@@ -3582,7 +3582,9 @@ public class Ast {
 
     /** Appends the match list with a custom prefix instead of {@code fn}. */
     public void appendMatchList(StringBuilder b, String prefix) {
-      new AstWriter(b, false).append(prefix).appendAll(matchList, 0, Op.BAR, 0);
+      final AstWriter w = new AstWriter();
+      w.append(prefix).appendAll(matchList, 0, Op.BAR, 0);
+      b.append(w);
     }
 
     /**
