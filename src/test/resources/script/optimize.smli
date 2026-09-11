@@ -394,8 +394,11 @@ from c where c >= #"a" andalso c <= #"e" orelse c >= #"x" andalso c <= #"z";
 > val it = [#"a",#"b",#"c",#"d",#"e",#"x",#"y",#"z"] : char list
 Sys.planEx "1";
 > val it =
->   "val it = filter [$0 >= #\"a\" andalso $0 <= #\"e\" orelse $0 >= #\"x\" andalso $0 <= #\"z\"] : char list\n  extent \"char\" : char list\n"
->   : string
+>   {_|
+> val it =
+>   filter [$0 >= #"a" andalso $0 <= #"e" orelse $0 >= #"x" andalso $0 <= #"z"] : char list
+>     extent "char" : char list
+> |_} : string
 
 (* --- FBBT (feasibility-based bound tightening) ---------------------
  * FBBT uses inequality conditions and tightens bounds to those that
@@ -408,8 +411,11 @@ from x where abs x < 5;
 > val it = [~4,~3,~2,~1,0,1,2,3,4] : int list
 Sys.planEx "3";
 > val it =
->   "val it = filter [#abs Int $0 < 5] : int list\n  #flatten Range ([OPEN (~5, 5)]) : int list\n"
->   : string
+>   {_|
+> val it =
+>   filter [#abs Int $0 < 5] : int list
+>     #flatten Range ([OPEN (~5, 5)]) : int list
+> |_} : string
 from x where abs x <= 3;
 > val it = [~3,~2,~1,0,1,2,3] : int list
 from x where 5 > abs x;
@@ -431,8 +437,15 @@ List.length (from x, y where x >= 1 andalso y >= 1 andalso x * (y + 3) < 30);
 > val it = 51 : int
 Sys.planEx "3";
 > val it =
->   "val it = #length List (project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list\n  filter [#* Int (#1 $0, #2 $0 + 3) < 30] : (int * int) list\n    join : (int * int) list\n      #flatten Range ([CLOSED (1, 7)]) : int list\n      #flatten Range ([CLOSED_OPEN (1, 27)]) : int list\n)"
->   : string
+>   {|val it = #length List (r[1])
+>
+> r[1] =
+>   project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list
+>     filter [#* Int (#1 $0, #2 $0 + 3) < 30] : (int * int) list
+>       join : (int * int) list
+>         #flatten Range ([CLOSED (1, 7)]) : int list
+>         #flatten Range ([CLOSED_OPEN (1, 27)]) : int list
+> |} : string
 
 (* Same strengthening via the literal range-list syntax. FBBT injects
  * the implied lower bounds from `[1..]`, propagates through the
@@ -445,8 +458,15 @@ List.length (from x in [1..], y in [1..] where x * (y + 3) < 30);
 > val it = 51 : int
 Sys.planEx "3";
 > val it =
->   "val it = #length List (project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list\n  filter [#* Int (#1 $0, #2 $0 + 3) < 30] : (int * int) list\n    join : (int * int) list\n      #flatten Range ([CLOSED (1, 7)]) : int list\n      #flatten Range ([CLOSED_OPEN (1, 27)]) : int list\n)"
->   : string
+>   {|val it = #length List (r[1])
+>
+> r[1] =
+>   project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list
+>     filter [#* Int (#1 $0, #2 $0 + 3) < 30] : (int * int) list
+>       join : (int * int) list
+>         #flatten Range ([CLOSED (1, 7)]) : int list
+>         #flatten Range ([CLOSED_OPEN (1, 27)]) : int list
+> |} : string
 
 (* RangePushdown also handles char-typed infinite range scans. *)
 from c in [#"a"..] where c < #"e";
@@ -467,8 +487,15 @@ List.length (from x, y where x > 0 andalso x < y andalso y < 10);
 > val it = 36 : int
 Sys.planEx "3";
 > val it =
->   "val it = #length List (project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list\n  filter [#1 $0 < #2 $0] : (int * int) list\n    join : (int * int) list\n      #flatten Range ([OPEN (0, 10)]) : int list\n      #flatten Range ([OPEN (0, 10)]) : int list\n)"
->   : string
+>   {|val it = #length List (r[1])
+>
+> r[1] =
+>   project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list
+>     filter [#1 $0 < #2 $0] : (int * int) list
+>       join : (int * int) list
+>         #flatten Range ([OPEN (0, 10)]) : int list
+>         #flatten Range ([OPEN (0, 10)]) : int list
+> |} : string
 List.length (from x, y where y > 0 andalso y < x andalso x < 10);
 > val it = 36 : int
 List.length (from x, y, z where x > 0 andalso x < y andalso y < z andalso z < 10);
@@ -562,55 +589,61 @@ from x in [1, 2, 3] where x > 1 yield x + 1;
 Sys.planEx "~1";
 > val it =
 >   {_|
-> val it = project [$0 + 1] : int list
->   filter [$0 > 1] : int list
->     [1, 2, 3] : int list
+> val it =
+>   project [$0 + 1] : int list
+>     filter [$0 > 1] : int list
+>       [1, 2, 3] : int list
 > |_} : string
 from x in [1, 2] join y in [3, 4] where x < y;
 > val it = [{x=1,y=3},{x=1,y=4},{x=2,y=3},{x=2,y=4}] : {x:int, y:int} list
 Sys.planEx "~1";
 > val it =
 >   {_|
-> val it = project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list
->   filter [#1 $0 < #2 $0] : (int * int) list
->     join : (int * int) list
->       [1, 2] : int list
->       [3, 4] : int list
+> val it =
+>   project [{x = #1 $0, y = #2 $0}] : {x:int, y:int} list
+>     filter [#1 $0 < #2 $0] : (int * int) list
+>       join : (int * int) list
+>         [1, 2] : int list
+>         [3, 4] : int list
 > |_} : string
 from x in [3, 1, 2] group x;
 > val it = [3,1,2] : int list
 Sys.planEx "~1";
 > val it =
 >   {_|
-> val it = project [#x $0] : int list
->   group [x = $0] : {x:int} list
->     [3, 1, 2] : int list
+> val it =
+>   project [#x $0] : int list
+>     group [x = $0] : {x:int} list
+>       [3, 1, 2] : int list
 > |_} : string
 from x in [1, 2, 3] order x skip 1 take 1;
 > val it = [2] : int list
 Sys.planEx "~1";
 > val it =
 >   {_|
-> val it = take [1] : int list
->   skip [1] : int list
->     sort [$0] : int list
->       [1, 2, 3] : int list
+> val it =
+>   take [1] : int list
+>     skip [1] : int list
+>       sort [$0] : int list
+>         [1, 2, 3] : int list
 > |_} : string
 from (x, y) in [(1, 2)] yield x + y;
 > val it = [3] : int list
 Sys.planEx "~1";
 > val it =
 >   {_|
-> val it = project [#1 $0 + #2 $0] : int list
->   [(1, 2)] : (int * int) list
+> val it =
+>   project [#1 $0 + #2 $0] : int list
+>     [(1, 2)] : (int * int) list
 > |_} : string
 from {a, b} in [{a = 1, b = 2}] yield a + b;
 > val it = [3] : int list
 Sys.planEx "~1";
 > val it =
 >   {_|
-> val it = project [#a $0 + #b $0] : int list
->   [{a = 1, b = 2}] : {a:int, b:int} list
+> val it =
+>   project [#a $0 + #b $0] : int list
+>     [{a = 1, b = 2}] : {a:int, b:int} list
 > |_} : string
 
 (* A selector is written by the field it selects: a record's label, a
@@ -622,8 +655,9 @@ from r in rs where #a r > 0;
 Sys.planEx "~1";
 > val it =
 >   {_|
-> val it = filter [#a $0 > 0] : {a:int, b:int} list
->   rs : {a:int, b:int} list
+> val it =
+>   filter [#a $0 > 0] : {a:int, b:int} list
+>     rs : {a:int, b:int} list
 > |_} : string
 val ps = [(1, 2)];
 > val ps = [(1,2)] : (int * int) list
@@ -632,8 +666,9 @@ from p in ps where #1 p > 0;
 Sys.planEx "~1";
 > val it =
 >   {_|
-> val it = filter [#1 $0 > 0] : (int * int) list
->   ps : (int * int) list
+> val it =
+>   filter [#1 $0 > 0] : (int * int) list
+>     ps : (int * int) list
 > |_} : string
 val xs = [1, 2, 3];
 > val xs = [1,2,3] : int list

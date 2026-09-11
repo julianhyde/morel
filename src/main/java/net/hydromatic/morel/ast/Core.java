@@ -1280,6 +1280,15 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      if (w.treeMode() && exp instanceof Rel) {
+        // Break after the '=' so that the plan's root operator is the first
+        // non-whitespace on its line (spec.md §6.2). Otherwise every plan of
+        // a query would begin `val it = r[1]`, and its one interesting line
+        // would be an indirection.
+        w.append("val ").append(pat, 0, 0).append(" =\n");
+        ((Rel) exp).describe(w, 2, w.withTypes());
+        return w;
+      }
       return w.append("val ")
           .append(pat, 0, 0)
           .append(" = ")
@@ -2400,7 +2409,7 @@ public class Core {
     public String describe(boolean withTypes) {
       final AstWriter w = AstNode.renumberingWriter(withTypes);
       describe(w, 0, withTypes);
-      return w + w.typeLegend();
+      return AstNode.finish(w);
     }
 
     protected void describe(AstWriter w, int indent, boolean withTypes) {
@@ -2474,7 +2483,21 @@ public class Core {
       // Onto the caller's writer, not as a string built by another: the
       // binders a plan renumbers are numbered by first occurrence over the
       // whole text, so a tree nested in an expression must share the count.
-      describe(w, 0, w.withTypes());
+      if (w.treeMode() && !w.atLineStart()) {
+        // spec.md §6.2: a relational operator is the first non-whitespace on
+        // its line. This one is not, so it prints as a reference and its
+        // lines go below, where they can be read. Splicing them in here is
+        // what made a nested query's plan unparseable: its indentation began
+        // again from zero inside the line that held it, so two nodes at
+        // different depths could print at the same indent, and the line that
+        // closed the enclosing expression looked like a root of its own.
+        return w.append(w.relRef(this));
+      }
+      // At a line start the leading whitespace is the indent this tree hangs
+      // from -- a declaration that broke after its '=' puts us there. Mid-line
+      // is reachable only outside tree mode, where a tree still prints in
+      // place, and the indent it hangs from is zero, as it always was.
+      describe(w, w.atLineStart() ? w.column() : 0, w.withTypes());
       return w;
     }
 
