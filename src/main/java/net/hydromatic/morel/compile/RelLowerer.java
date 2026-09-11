@@ -284,6 +284,14 @@ public class RelLowerer {
    * before the resolver stopped lowering, and it is what the step list's
    * grounding engine expects to see -- a {@code let} between a query and its
    * constraint is opaque to it.
+   *
+   * <p>A binding whose value <i>still</i> holds a {@code $0} is a different
+   * thing, and must be left alone: it belongs to a tree that has not been
+   * lowered yet, nested in this one's expressions. Substituting it would put
+   * that {@code $0} under a node that rebinds it, so a reference to the
+   * enclosing row would start reading the inner one -- `c = b` silently becomes
+   * `c = d`. It is unbound when its own node is lowered, one turn of {@code
+   * lowerAll}'s recursion later.
    */
   static Core.Exp unbindRow(
       TypeSystem typeSystem, Core.Exp exp, Set<Core.NamedPat> pats) {
@@ -298,7 +306,7 @@ public class RelLowerer {
           protected Core.Exp visit(Core.Let let) {
             if (let.decl instanceof Core.NonRecValDecl) {
               final Core.NonRecValDecl decl = (Core.NonRecValDecl) let.decl;
-              if (pats.contains(decl.pat)) {
+              if (pats.contains(decl.pat) && !containsInput(decl.exp)) {
                 values.put(decl.pat, decl.exp.accept(this));
                 return let.exp.accept(this);
               }

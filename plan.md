@@ -376,6 +376,17 @@ does not survive in the code, and steps 4 and 5 walk the same ground.
    that an implementation which concatenates strings its children
    returned gets it wrong, and gets it wrong silently.
 
+   That case now has a test, in `rel-tree.smli`, which it could not
+   have when this was written: the query that produces `v$1` answered
+   `[]` where the answer is `[1]`. `git bisect` put it at 48323b89,
+   the goal-2 flip, and the cause was one line of the lowering.
+   `unbindRow` substituted a nested tree's row binding while its value
+   was still `$0`, which put that `$0` under a node that rebinds it,
+   so `c = b` compiled to `c = d`. One nesting level was unaffected,
+   because by then the enclosing `$0` had already become `w$0`; the
+   leftover `$0` is exactly the signal that a node has not been
+   lowered yet, and the guard reads it.
+
    **One thing the freeze leaves open, deliberately**: §5's rename
    convention at a scope merge. No rule that merges scopes has
    landed, so a convention written now is a convention nothing
