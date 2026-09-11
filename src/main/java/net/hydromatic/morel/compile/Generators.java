@@ -21,7 +21,6 @@ package net.hydromatic.morel.compile;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.compile.FreeFinder.freePats;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -308,7 +307,7 @@ class Generators {
                       }
                       boolean referencesOtherExtent = false;
                       for (Core.Exp c : constraints2) {
-                        for (Core.NamedPat fp : freePats(cache.typeSystem, c)) {
+                        for (Core.NamedPat fp : c.freePats(cache.typeSystem)) {
                           // Skip patterns bound in environment (functions, etc)
                           if (cache.env.getOpt(fp) != null) {
                             continue;
@@ -419,7 +418,7 @@ class Generators {
     fromBuilder.order(core.recordOrAtom(typeSystem, yieldPats));
 
     final Core.From joinedFrom = fromBuilder.build();
-    final Set<Core.NamedPat> freePats2 = freePats(typeSystem, joinedFrom);
+    final Set<Core.NamedPat> freePats2 = joinedFrom.freePats(typeSystem);
 
     // Add the new joined generator. Use the FULL pattern so inner scan
     // variables are included in the generator's pattern. The Expander will
@@ -510,7 +509,7 @@ class Generators {
 
     for (Core.Exp constraint : effectiveConstraints) {
       final Set<Core.NamedPat> freeInConstraint =
-          freePats(typeSystem, constraint);
+          constraint.freePats(typeSystem);
       boolean needsExists = false;
       for (Core.NamedPat freePat : freeInConstraint) {
         if (!boundPats.contains(freePat)) {
@@ -541,7 +540,7 @@ class Generators {
       // Find which inner scans are needed for the exists constraints
       final Set<Core.NamedPat> neededPats = new HashSet<>();
       for (Core.Exp constraint : existsConstraints) {
-        neededPats.addAll(freePats(typeSystem, constraint));
+        neededPats.addAll(constraint.freePats(typeSystem));
       }
       neededPats.removeAll(boundPats);
 
@@ -593,7 +592,7 @@ class Generators {
     fromBuilder.order(yieldExp);
 
     final Core.From filteredFrom = fromBuilder.build();
-    final Set<Core.NamedPat> freePats2 = freePats(typeSystem, filteredFrom);
+    final Set<Core.NamedPat> freePats2 = filteredFrom.freePats(typeSystem);
 
     // Add the filtered generator. bestGenerator returns the last entry,
     // so this naturally supersedes any earlier generator for pat.
@@ -805,7 +804,7 @@ class Generators {
         if (iterateExp != null) {
           // Step 5a: Register the generator
           final Set<Core.NamedPat> freePats =
-              freePats(cache.typeSystem, iterateExp);
+              iterateExp.freePats(cache.typeSystem);
           cache.add(
               new BoundedIterateGenerator(
                   (Core.NamedPat) goalPat,
@@ -927,7 +926,7 @@ class Generators {
           generateTransitiveClosure(cache, tcPattern, goalPat, ordered);
       if (iterateExp != null) {
         final Set<Core.NamedPat> freePats =
-            freePats(cache.typeSystem, iterateExp);
+            iterateExp.freePats(cache.typeSystem);
         cache.add(
             new TransitiveClosureGenerator(
                 goalPat, iterateExp, freePats, apply));
@@ -982,7 +981,7 @@ class Generators {
           generateTransitiveClosure(cache, tcPattern, tuplePat, ordered);
       if (iterateExp != null) {
         final Set<Core.NamedPat> freePats =
-            freePats(cache.typeSystem, iterateExp);
+            iterateExp.freePats(cache.typeSystem);
         cache.add(
             new TransitiveClosureGenerator(
                 tuplePat, iterateExp, freePats, apply));
@@ -1095,7 +1094,7 @@ class Generators {
     }
     final Core.Exp wrappedExp = fb.build();
 
-    final Set<Core.NamedPat> freePats = freePats(ts, wrappedExp);
+    final Set<Core.NamedPat> freePats = wrappedExp.freePats(ts);
     cache.add(
         new TransitiveClosureGenerator(goalPat, wrappedExp, freePats, apply));
     return true;
@@ -1155,7 +1154,7 @@ class Generators {
     // so the scan destructures tuples and filters by the literal.
     final Core.Pat scanPat = requireNonNull(wholePat(fnArg));
 
-    final Set<Core.NamedPat> freePats = freePats(ts, iterateExp);
+    final Set<Core.NamedPat> freePats = iterateExp.freePats(ts);
     cache.add(
         new TransitiveClosureGenerator(scanPat, iterateExp, freePats, apply));
     return true;
@@ -2543,7 +2542,7 @@ class Generators {
             core.call(typeSystem, toListOrBag, type, Pos.ZERO, discreteSetExp);
       }
       final Core.Exp simplified = Simplifier.simplify(typeSystem, mergedExp);
-      final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
+      final Set<Core.NamedPat> freePats = simplified.freePats(typeSystem);
       final ImmutableSet<Core.Exp> mergedProvenance =
           constraint != null ? ImmutableSet.of(constraint) : ImmutableSet.of();
       return cache.add(
@@ -2565,7 +2564,7 @@ class Generators {
             collectionType.elementType(),
             transformEager(generators, g -> g.exp));
     final Core.Exp exp = core.apply(Pos.ZERO, collectionType, fn, arg);
-    final Set<Core.NamedPat> freePats = freePats(cache.typeSystem, exp);
+    final Set<Core.NamedPat> freePats = exp.freePats(cache.typeSystem);
     return cache.add(new UnionGenerator(exp, freePats, generators));
   }
 
@@ -3289,7 +3288,7 @@ class Generators {
             : core.call(
                 typeSystem, BuiltIn.BAG_FROM_LIST, type, Pos.ZERO, flattenExp);
     final Core.Exp simplified = Simplifier.simplify(typeSystem, exp);
-    final Set<Core.NamedPat> freePats = freePats(typeSystem, simplified);
+    final Set<Core.NamedPat> freePats = simplified.freePats(typeSystem);
     return cache.add(
         new RangeGenerator(
             pat,
@@ -3503,7 +3502,7 @@ class Generators {
     switch (preference) {
       case GROUNDED:
         return !bound.isConstant()
-            && Collections.disjoint(freePats(typeSystem, bound), ungrounded);
+            && Collections.disjoint(bound.freePats(typeSystem), ungrounded);
       case CONSTANT:
         return bound.isConstant();
       default:
@@ -3975,7 +3974,7 @@ class Generators {
           ordered
               ? core.list(cache.typeSystem, lower)
               : core.bag(cache.typeSystem, lower);
-      final Set<Core.NamedPat> freePats = freePats(cache.typeSystem, exp);
+      final Set<Core.NamedPat> freePats = exp.freePats(cache.typeSystem);
       return cache.add(
           new PointGenerator(pat, exp, freePats, lower, provenance));
     }
@@ -4068,7 +4067,7 @@ class Generators {
       final Core.Apply exp =
           core.call(ts, tabulate, PrimitiveType.STRING, Pos.ZERO, countExp, fn);
 
-      final Set<Core.NamedPat> freePats = freePats(ts, exp);
+      final Set<Core.NamedPat> freePats = exp.freePats(ts);
       return cache.add(
           new StringPrefixGenerator(pat, exp, freePats, strExp, provenance));
     }
@@ -4151,7 +4150,7 @@ class Generators {
           rangeExtent.iterable == null
               ? Cardinality.INFINITE
               : Cardinality.FINITE;
-      final Set<Core.NamedPat> freePats = freePats(cache.typeSystem, exp);
+      final Set<Core.NamedPat> freePats = exp.freePats(cache.typeSystem);
       return cache.add(new ExtentGenerator(pat, exp, freePats, cardinality));
     }
 
@@ -4203,7 +4202,7 @@ class Generators {
       final Core.Exp collection2 =
           core.withOrdered(ordered, collection, typeSystem);
       final Set<Core.NamedPat> freePats =
-          freePats(cache.typeSystem, collection2);
+          collection2.freePats(cache.typeSystem);
       return cache.add(
           new CollectionGenerator(pat, collection2, freePats, provenance));
     }

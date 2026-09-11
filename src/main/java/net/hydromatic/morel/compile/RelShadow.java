@@ -71,17 +71,19 @@ public class RelShadow {
     } catch (RuntimeException e) {
       throw new AssertionError("builder cannot express: " + tree, e);
     }
-    if (!describe(rebuilt).equals(describe(tree))) {
+    if (!describe(typeSystem, rebuilt).equals(describe(typeSystem, tree))) {
       throw new AssertionError(
           format(
               "builder rebuilt a different tree%nfrom: %s%n  to: %s",
-              describe(tree), describe(rebuilt)));
+              describe(typeSystem, tree), describe(typeSystem, rebuilt)));
     }
     REBUILT.incrementAndGet();
   }
 
-  private static String describe(Core.Exp exp) {
-    return exp instanceof Core.Rel ? ((Core.Rel) exp).describe() : exp + "\n";
+  private static String describe(TypeSystem typeSystem, Core.Exp exp) {
+    return exp instanceof Core.Rel
+        ? ((Core.Rel) exp).describe(typeSystem)
+        : exp + "\n";
   }
 
   /** Returns how many trees the builder was asked to express. */

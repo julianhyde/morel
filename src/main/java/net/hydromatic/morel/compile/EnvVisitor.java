@@ -30,10 +30,10 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 
 /** Shuttle that keeps an environment of what variables are in scope. */
-abstract class EnvVisitor extends Visitor {
-  final TypeSystem typeSystem;
-  final Environment env;
-  final Deque<FromContext> fromStack;
+public abstract class EnvVisitor extends Visitor {
+  protected final TypeSystem typeSystem;
+  protected final Environment env;
+  protected final Deque<FromContext> fromStack;
 
   /** Creates an EnvVisitor. */
   protected EnvVisitor(

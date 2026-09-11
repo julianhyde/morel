@@ -43,6 +43,7 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.ObjIntConsumer;
 import java.util.regex.Pattern;
@@ -720,6 +721,16 @@ public class Core {
     /** Returns the type. */
     public Type type() {
       return type;
+    }
+
+    /**
+     * Returns the variables this expression uses but does not bind.
+     *
+     * <p>Scope-aware: a name bound by a {@code let}, a {@code fn}, a match or a
+     * scan inside this expression is not free in it, however often it is read.
+     */
+    public Set<NamedPat> freePats(TypeSystem typeSystem) {
+      return FreeFinder.freePats(typeSystem, this);
     }
 
     @Override
@@ -2396,16 +2407,17 @@ public class Core {
     protected void describeArgs(AstWriter w) {}
 
     /** Returns this node's plan text, as {@code Sys.plan} prints it. */
-    public String describe() {
-      return describe(false);
+    public String describe(TypeSystem typeSystem) {
+      return describe(typeSystem, false);
     }
 
     /**
      * Returns this node's plan text; if {@code withTypes}, appends the
      * collection type of every node, as {@code Sys.planEx} prints it.
      */
-    public String describe(boolean withTypes) {
+    public String describe(TypeSystem typeSystem, boolean withTypes) {
       final AstWriter w = AstNode.renumberingWriter(withTypes);
+      w.setRelParams(AstNode.relParams(typeSystem, this));
       describe(w, 0, withTypes);
       return AstNode.finish(w);
     }
