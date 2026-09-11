@@ -94,7 +94,7 @@ public abstract class Matchers {
       }
 
       private String stringValue(T t) {
-        return t.unparse(new AstWriter().withParenthesize(parenthesize));
+        return t.unparse(new AstWriter(parenthesize));
       }
 
       @Override
