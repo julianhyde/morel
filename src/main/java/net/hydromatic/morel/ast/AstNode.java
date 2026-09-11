@@ -21,11 +21,17 @@ package net.hydromatic.morel.ast;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Abstract syntax tree node. */
 public abstract class AstNode {
@@ -80,6 +86,7 @@ public abstract class AstNode {
    */
   public final String unparseRenumbered(boolean withTypes) {
     final AstWriter w = renumberingWriter(withTypes);
+    w.setRelParams(relParams(this));
     unparse(w);
     return finish(w);
   }
@@ -103,7 +110,7 @@ public abstract class AstNode {
     // relation that has to be broken out. Index, do not iterate.
     for (int i = 0; i < w.relDefCount(); i++) {
       final Core.Rel rel = w.relDef(i);
-      w.append("\nr[").append(String.valueOf(i + 1)).append("] =\n");
+      w.append("\n").append(w.relHeader(i)).append(" =\n");
       rel.describe(w, 2, w.withTypes());
     }
     return w + w.typeLegend();
@@ -118,6 +125,117 @@ public abstract class AstNode {
    */
   public static AstWriter renumberingWriter(boolean withTypes) {
     return new RenumberingAstWriter(withTypes);
+  }
+
+  /**
+   * Returns, for each relation that will be broken out of the expression that
+   * holds it, the variables it reads that are bound outside it.
+   *
+   * <p>Those are what a reader needs to make sense of a block printed away from
+   * the reference to it, and what tells a correlated fragment from an
+   * independent one.
+   *
+   * <p>It must be known before any text is written, because the reference
+   * prints before the block, and the block is where the dependency shows. It is
+   * also transitive: a fragment can be free in a variable it never mentions,
+   * reaching it only through a fragment nested inside it. That falls out here
+   * rather than needing a closure, because a nested fragment is part of the
+   * subtree even though it is printed elsewhere.
+   */
+  static Map<Core.Rel, List<Core.NamedPat>> relParams(AstNode root) {
+    // Every relation under the root, and the ones that will print in place:
+    // the root itself, and whatever is reachable from it through inputs.
+    final List<Core.Rel> all = new ArrayList<>();
+    root.accept(
+        new Visitor() {
+          @Override
+          protected void visitRel(Core.Rel rel) {
+            all.add(rel);
+          }
+        });
+    final Set<Core.Rel> inPlace =
+        Collections.newSetFromMap(new IdentityHashMap<>());
+    if (root instanceof Core.Rel) {
+      addInPlace((Core.Rel) root, inPlace);
+    } else {
+      // A declaration breaks after its '=', so its value prints in place too.
+      root.accept(
+          new Visitor() {
+            @Override
+            protected void visit(Core.NonRecValDecl valDecl) {
+              if (valDecl.exp instanceof Core.Rel) {
+                addInPlace((Core.Rel) valDecl.exp, inPlace);
+              }
+              super.visit(valDecl);
+            }
+          });
+    }
+
+    final Set<Core.NamedPat> boundInRoot = new LinkedHashSet<>();
+    root.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.IdPat idPat) {
+            boundInRoot.add(idPat);
+          }
+        });
+
+    final Map<Core.Rel, List<Core.NamedPat>> map = new IdentityHashMap<>();
+    for (Core.Rel rel : all) {
+      if (inPlace.contains(rel)) {
+        continue;
+      }
+      // A use is a Core.Id; a binding occurrence is a Core.IdPat. The visitor
+      // draws that line already -- it does not descend into an Id's pattern --
+      // so the two walks below cannot be confused with each other.
+      final Set<Core.NamedPat> uses = new LinkedHashSet<>();
+      final Set<Core.NamedPat> binds = new LinkedHashSet<>();
+      rel.accept(
+          new Visitor() {
+            @Override
+            protected void visit(Core.Id id) {
+              uses.add(id.idPat);
+            }
+
+            @Override
+            protected void visit(Core.IdPat idPat) {
+              binds.add(idPat);
+            }
+          });
+      uses.retainAll(boundInRoot);
+      uses.removeAll(binds);
+      map.put(rel, ImmutableList.copyOf(uses));
+    }
+    return map;
+  }
+
+  /**
+   * Orders generated names by their number rather than as text, so that {@code
+   * v$2} comes before {@code v$10}.
+   */
+  static int compareGenerated(String a, String b) {
+    final int i = a.indexOf('$');
+    final int j = b.indexOf('$');
+    if (i < 0 || j < 0 || i != j || !a.startsWith(b.substring(0, j))) {
+      return a.compareTo(b);
+    }
+    try {
+      return Integer.compare(
+          Integer.parseInt(a.substring(i + 1)),
+          Integer.parseInt(b.substring(j + 1)));
+    } catch (NumberFormatException e) {
+      return a.compareTo(b);
+    }
+  }
+
+  private static void addInPlace(Core.Rel rel, Set<Core.Rel> inPlace) {
+    if (inPlace.add(rel)) {
+      for (Core.Exp input : rel.inputs()) {
+        if (input instanceof Core.Rel) {
+          addInPlace((Core.Rel) input, inPlace);
+        }
+      }
+    }
   }
 
   /** Converts this node into an ML string, with a given writer. */
@@ -165,6 +283,9 @@ public abstract class AstNode {
      */
     final List<Core.Rel> relDefs = new ArrayList<>();
 
+    /** What each broken-out relation reads from outside itself. */
+    Map<Core.Rel, List<Core.NamedPat>> relParams = ImmutableMap.of();
+
     final boolean withTypes;
 
     RenumberingAstWriter(boolean withTypes) {
@@ -185,11 +306,31 @@ public abstract class AstNode {
     public String relRef(Core.Rel rel) {
       for (int i = 0; i < relDefs.size(); i++) {
         if (relDefs.get(i) == rel) {
-          return "r[" + (i + 1) + "]";
+          return relHeader(i);
         }
       }
       relDefs.add(rel);
-      return "r[" + relDefs.size() + "]";
+      return relHeader(relDefs.size() - 1);
+    }
+
+    @Override
+    public String relHeader(int i) {
+      final List<Core.NamedPat> params = relParams.get(relDefs.get(i));
+      if (params == null || params.isEmpty()) {
+        return "r$" + i;
+      }
+      // Renaming here is safe, and not merely convenient: a parameter is bound
+      // by a `let` that encloses the reference, so it has been printed -- and
+      // therefore numbered -- before this runs.
+      final List<String> names = new ArrayList<>();
+      params.forEach(p -> names.add(rename(p.name)));
+      names.sort(AstNode::compareGenerated);
+      return "r$" + i + "[" + String.join(", ", names) + "]";
+    }
+
+    @Override
+    public void setRelParams(Map<Core.Rel, List<Core.NamedPat>> relParams) {
+      this.relParams = relParams;
     }
 
     @Override
@@ -249,9 +390,8 @@ public abstract class AstNode {
       if (moniker.length() <= MAX_TYPE_LENGTH) {
         return moniker;
       }
-      final Integer i =
-          typeRefs.computeIfAbsent(moniker, m -> typeRefs.size() + 1);
-      return "t[" + i + "]";
+      final Integer i = typeRefs.computeIfAbsent(moniker, m -> typeRefs.size());
+      return "t$" + i;
     }
 
     @Override
@@ -262,9 +402,9 @@ public abstract class AstNode {
       final StringBuilder b = new StringBuilder("\n");
       typeRefs.forEach(
           (moniker, i) ->
-              b.append("t[")
+              b.append("t$")
                   .append(i)
-                  .append("] ")
+                  .append(' ')
                   .append(moniker)
                   .append('\n'));
       return b.toString();
