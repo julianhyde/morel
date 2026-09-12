@@ -617,6 +617,33 @@ public class ShellTest {
   }
 
   /**
+   * Tests that {@code --maxUseDepth} takes {@code NONE}, which is how a
+   * property of option type says "no limit".
+   *
+   * <p>That there is then no limit cannot be tested: a file that uses itself
+   * would recurse until the stack was exhausted, which is the very thing the
+   * limit exists to prevent. This checks that the value is accepted and that a
+   * {@code use} within the limit still works.
+   */
+  @Test
+  void testUseMaxDepthNone() {
+    final String in = "use \"z.sml\";\n";
+    final String expected =
+        "- use \"z.sml\";\r\n"
+            + "[opening z.sml]\n"
+            + "val z = 7 : int\n"
+            + "val x = 1 : int\n"
+            + "val it = 8 : int\n"
+            + "val it = () : unit\n"
+            + "- \r\n";
+    fixture()
+        .withArgListPlusDirectory()
+        .withArgList(list -> plus(list, "--maxUseDepth=NONE"))
+        .withInputString(in)
+        .assertOutput(is(expected));
+  }
+
+  /**
    * Tests a script running in raw mode. It uses {@link Main} rather than {@link
    * Shell}.
    */

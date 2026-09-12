@@ -720,6 +720,7 @@ and unset using `Sys.unset name`.
 | lineWidth            | int option | 79  | When printing, the length at which lines are wrapped. Must not be negative; NONE means that lines are not wrapped. |
 | matchCoverageEnabled | bool   | true    | Whether to check whether patterns are exhaustive and/or redundant. |
 | matchStrict          | bool   | false   | Whether the script-test harness compares output verbatim, rather than modulo whitespace and bag-element order. |
+| maxUseDepth          | int option | 50  | How deeply the 'use' command may nest. Must not be negative; NONE means no limit. |
 | now                  | string option | NONE | Overrides the current time. Value is an ISO-8601 string (e.g. '2024-01-01T00:00:00Z'). If not set, the system clock is used. |
 | output               | enum   | classic | How values should be formatted. "classic" (the default) prints values in a compact nested format; "tabular" prints values in a table if their type is a list of records. |
 | printDepth           | int option | 5   | When printing, the depth of nesting of recursive data structure at which ellipsis begins. Must not be negative; NONE means that values are printed in full. |
