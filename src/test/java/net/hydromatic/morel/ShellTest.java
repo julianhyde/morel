@@ -150,6 +150,37 @@ public class ShellTest {
     assertThat(outString, is("val it = [4,5] : int list\n"));
   }
 
+  /**
+   * Tests that {@code use} raises {@code Interact.EvalOnly} in eval mode.
+   *
+   * <p>Eval mode has no shell to read a file into, which is a different thing
+   * from a file that cannot be opened, so it raises a different exception from
+   * {@code Interact.Error}. This cannot be tested from a script, because a
+   * script is not eval mode.
+   */
+  @Test
+  void testEvalUse() throws IOException {
+    final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    final ByteArrayInputStream bais = new ByteArrayInputStream(new byte[0]);
+    final Shell.Config config =
+        Shell.parse(
+            Shell.Config.DEFAULT,
+            ImmutableList.of(
+                "--system=false",
+                "--terminal=dumb",
+                "--banner=false",
+                "-e",
+                "use \"any.sml\""));
+    final Shell shell = Shell.create(config, bais, baos);
+    shell.run();
+    final String outString = baos.toString(UTF_8.name()).replace("\r\n", "\n");
+    assertThat(
+        outString,
+        is(
+            "uncaught exception EvalOnly "
+                + "[use is not available in this environment]\n"));
+  }
+
   /** Tests {@link Shell} with --eval= option. */
   @Test
   void testEvalEquals() throws IOException {

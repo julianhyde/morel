@@ -617,7 +617,7 @@ public class Main {
 
     @Override
     public void use(String fileName, boolean silent, Pos pos) {
-      throw new UnsupportedOperationException();
+      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.EVAL_ONLY, pos);
     }
 
     @Override
