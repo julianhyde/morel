@@ -716,16 +716,19 @@ public enum Prop {
    * option.
    */
   private @Nullable Object rawDefaultValue() {
-    switch (this) {
-      case BANNER:
-        return "Morel version ...";
-      case OUTPUT:
-        return requireNonNull((Output) defaultValue)
-            .name()
-            .toLowerCase(Locale.ROOT);
-      default:
-        return defaultValue;
+    // Do not switch on 'this'. In JDK 8, javac puts the switch maps of every
+    // enum switch in this file into one synthetic class, and so a switch here
+    // would make the switch in 'Kind.checks' -- which the constructor reaches,
+    // via 'isValid' -- call 'Prop.values()' before 'Prop' is initialized.
+    if (this == BANNER) {
+      return "Morel version ...";
     }
+    if (this == OUTPUT) {
+      return requireNonNull((Output) defaultValue)
+          .name()
+          .toLowerCase(Locale.ROOT);
+    }
+    return defaultValue;
   }
 
   /**
