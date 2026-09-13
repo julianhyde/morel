@@ -2159,6 +2159,19 @@ public class Resolver {
   }
 
   /**
+   * Creates a {@link FromBuilder} whose environment is this resolver's.
+   *
+   * <p>It belongs here, rather than in the {@link FromResolver} constructor
+   * that calls it, because a lambda among the arguments of an inner class's
+   * {@code this(...)} call captures the enclosing instance in a variable that
+   * JDK 8 names illegally, and JDK 8 then rejects the class as it loads.
+   */
+  private FromBuilder newFromBuilder() {
+    return core.fromBuilder(
+        typeMap.typeSystem, () -> env.bindAll(aggregateResolver.bindings()));
+  }
+
+  /**
    * Visitor that converts a {@link Ast.From}, {@link Ast.Exists} or {@link
    * Ast.Forall} to {@link Core.From} by handling each subtype of {@link
    * Ast.FromStep} calling {@link FromBuilder} appropriately.
@@ -2178,11 +2191,7 @@ public class Resolver {
     private final Core.@Nullable StepEnv stepPriorEnv;
 
     FromResolver() {
-      this(
-          core.fromBuilder(
-              typeMap.typeSystem,
-              () -> env.bindAll(aggregateResolver.bindings())),
-          null);
+      this(newFromBuilder(), null);
     }
 
     private FromResolver(
