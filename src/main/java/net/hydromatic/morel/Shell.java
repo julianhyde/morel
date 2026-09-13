@@ -376,13 +376,7 @@ public class Shell {
     Prop.DIRECTORY.set(map, config.directory);
     Prop.SCRIPT_DIRECTORY.set(map, config.directory);
     if (config.maxUseDepth != null) {
-      // The value is a non-negative numeral, or "NONE" for no limit; "set"
-      // rejects anything else.
-      Prop.MAX_USE_DEPTH.set(
-          map,
-          config.maxUseDepth.equals("NONE")
-              ? null
-              : Integer.valueOf(config.maxUseDepth));
+      Prop.MAX_USE_DEPTH.setFromString(map, config.maxUseDepth);
     }
     if (config.colorScheme != null) {
       Prop.COLOR_SCHEME.set(map, config.colorScheme);

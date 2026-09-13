@@ -1069,6 +1069,80 @@ public class UtilTest {
   }
 
   /**
+   * Tests {@link Prop#setFromString}, which reads a value out of a string
+   * because the command line has nothing else to give it.
+   */
+  @Test
+  void testPropSetFromString() {
+    final Map<Prop, Object> map = new LinkedHashMap<>();
+
+    // A numeral sets a property of option type to SOME of that value, and
+    // "NONE" sets it to NONE. Both are strings on the command line, and
+    // neither would be accepted by "set", which expects a typed value.
+    Prop.LINE_WIDTH.setFromString(map, "80");
+    assertThat(Prop.LINE_WIDTH.optionalIntValue(map), is(80));
+    assertThat(Prop.LINE_WIDTH.showValue(map), is("SOME 80"));
+    Prop.LINE_WIDTH.setFromString(map, "NONE");
+    assertThat(Prop.LINE_WIDTH.optionalIntValue(map), nullValue());
+    assertThat(Prop.LINE_WIDTH.showValue(map), is("NONE"));
+
+    // Every kind of property is read from a string: an int that is not an
+    // option, a bool, an enum, and an IntInf.int too large for an int.
+    Prop.INLINE_PASS_COUNT.setFromString(map, "3");
+    assertThat(Prop.INLINE_PASS_COUNT.intValue(map), is(3));
+    Prop.MATCH_COVERAGE_ENABLED.setFromString(map, "false");
+    assertThat(Prop.MATCH_COVERAGE_ENABLED.booleanValue(map), is(false));
+    Prop.OUTPUT.setFromString(map, "tabular");
+    assertThat(
+        Prop.OUTPUT.enumValue(map, Prop.Output.class), is(Prop.Output.TABULAR));
+    Prop.RANGE_MAX_LENGTH.setFromString(map, "4722366482869645213696");
+    assertThat(
+        Prop.RANGE_MAX_LENGTH.bigIntegerValue(map),
+        is(BigInteger.ONE.shiftLeft(72)));
+
+    // A string that is not a value of the property's type is refused, in the
+    // same terms as a value of the wrong type given to "set". Previously the
+    // caller parsed the numeral itself and a NumberFormatException escaped.
+    assertThat(
+        assertThrows(
+                RuntimeException.class,
+                () -> Prop.MAX_USE_DEPTH.setFromString(map, "abc"))
+            .getMessage(),
+        is(
+            "value for property 'maxUseDepth' must have type "
+                + "'(int check i => i >= 0) option'"));
+
+    // A condition the type checks is applied to a parsed value as to any
+    // other; "NONE" is how the command line asks for no limit, not "~1".
+    assertThat(
+        assertThrows(
+                RuntimeException.class,
+                () -> Prop.MAX_USE_DEPTH.setFromString(map, "-1"))
+            .getMessage(),
+        is(
+            "value for property 'maxUseDepth' must have type "
+                + "'(int check i => i >= 0) option'"));
+    assertThat(
+        assertThrows(
+                RuntimeException.class,
+                () -> Prop.OUTPUT.setFromString(map, "nosuch"))
+            .getMessage(),
+        is("value for property 'output' must be one of: 'CLASSIC', 'TABULAR'"));
+
+    // A property that is not an option has no NONE, and reads "NONE" as it
+    // reads any other string: here, as a numeral it cannot parse.
+    assertThat(
+        assertThrows(
+                RuntimeException.class,
+                () -> Prop.INLINE_PASS_COUNT.setFromString(map, "NONE"))
+            .getMessage(),
+        is("value for property 'inlinePassCount' must have type 'int'"));
+
+    // A refused value leaves the property as it was.
+    assertThat(Prop.INLINE_PASS_COUNT.intValue(map), is(3));
+  }
+
+  /**
    * Helps validate a comparator.
    *
    * @param <T> Type of value to be compared

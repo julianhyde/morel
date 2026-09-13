@@ -463,6 +463,43 @@ public enum Prop {
   }
 
   /**
+   * Reads a value of this property's type from a string, as the command line
+   * writes it; null if the string is not one.
+   *
+   * <p>This is a wider conversion than {@link #convert}, which serves {@code
+   * Sys.set}. A value from a Morel program already has a type, and a string
+   * there is a string; a value from the command line is only ever a string, and
+   * every type must be read out of one.
+   */
+  private @Nullable Object parse(String value) {
+    if (kind.javaType == String.class) {
+      return value;
+    }
+    if (kind.javaType == Boolean.class) {
+      switch (value) {
+        case "true":
+          return Boolean.TRUE;
+        case "false":
+          return Boolean.FALSE;
+        default:
+          return null;
+      }
+    }
+    if (kind.javaType == File.class) {
+      return new File(value);
+    }
+    if (kind.javaType == Integer.class) {
+      try {
+        return Integer.valueOf(value);
+      } catch (NumberFormatException e) {
+        return null;
+      }
+    }
+    // An enum and an IntInf.int are read from a string already.
+    return convert(value);
+  }
+
+  /**
    * Returns the message to give for a value this property cannot take.
    *
    * <p>The message names the property, and describes what it will take in
@@ -700,6 +737,32 @@ public enum Prop {
     if (message != null) {
       throw new RuntimeException(message);
     }
+  }
+
+  /**
+   * Sets the value of a property from a string, as the command line gives it:
+   * for a property of option type, {@code NONE} means no value, and any other
+   * string is read as a value of the property's type, so that {@code 50} sets a
+   * property of type {@code int option} to {@code SOME 50}.
+   *
+   * <p>Throws if the property will not take the value, as {@link #set} does.
+   * Use {@link #setLenient} where the value comes from a Morel program: there
+   * it already has a type, and {@code "NONE"} is the string.
+   *
+   * <p>A property of type {@code string option} therefore cannot be set to the
+   * string {@code "NONE"} from the command line. No such property needs to be.
+   */
+  public void setFromString(Map<Prop, Object> map, String value) {
+    if (kind.option && value.equals("NONE")) {
+      // NONE is a value in its own right; "setLenient" reads null as NONE.
+      set(map, null);
+      return;
+    }
+    final @Nullable Object parsed = parse(value);
+    if (parsed == null) {
+      throw new RuntimeException(invalidValueMessage());
+    }
+    set(map, parsed);
   }
 
   /**
