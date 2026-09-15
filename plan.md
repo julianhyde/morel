@@ -25,6 +25,87 @@ expressions over numbered inputs for scalar fields, self-describing
 element types), able to apply rewrite rules. Each step keeps all
 tests green. Plan text and rewrite ports are each paid exactly once.
 
+## The finish: plan as of 2026-09-15
+
+What follows supersedes the step list below where the two disagree.
+It was written after a design review of the Rust and Go ports (both
+reproduce `rel-tree.smli` byte for byte from spec.md alone), and after
+three decisions: a node binds patterns rather than positions
+(spec.md §2), a node may bind an ordinal pattern (spec.md §2, §5), and
+the feature is finished when the tree is what executes and
+`Core.From` is gone. Each step keeps `fullMake` green; the gate for a
+step is written with it.
+
+### F0 — Spec: patterns, ordinal, and the errors the ports found
+
+- [x] §1–§3, §5, §6.3: a node is a binding form; row and ordinal
+      patterns; the join's binder is its left pattern; the group row
+      builds a record; the `defn` grammar writes `r$N[...]`; §6.7's
+      first sentence no longer says "per tree".
+- [ ] §5: say which of its rules the validator checks and which are
+      properties of a pair of trees or need an environment.
+- [ ] §6: the text ends with a newline; fragment parameters are
+      ordered by number, not as text; a binder a *pass* mints prints
+      with the tree's prefix, `v$`; `Sys.planOf` decides "is a
+      query" from the argument's AST; what has happened to the query
+      when the plan is taken (resolved; overloads unresolved; nothing
+      inlined; where grounding sits, which F1 settles by reading
+      `Compiles`).
+- [ ] A contract changelog at the head of spec.md, since "frozen" has
+      meant "stable, versioned" since the `let` and `case` break
+      points landed.
+- [ ] File the Go port's ten findings against hydromatic/morel; the
+      Rust port's four are fixed.
+
+### F1 — The Java datatype binds patterns
+
+- [ ] `Core.Input` goes. Each of `filter`, `project`, `sort`, `group`
+      and `join` carries its row pattern(s) as `IdPat`s with fresh
+      ordinals; `join`'s `binder` becomes its left pattern, in scope
+      in the right input; the optional ordinal pattern is an `IdPat`
+      on the same five.
+- [ ] `Resolver` binds `ordinal` to the pattern instead of
+      materializing it through `Z_ORDINAL` and a generated field.
+- [ ] The printer prints a row pattern as `$0`/`$1`, an ordinal
+      pattern as `$ordinal`, a left pattern the right input reads as
+      the join's argument under `v$N`, and a row a nested tree reads
+      as `let val v$N = $0 in … end` (spec.md §6.3).
+- [ ] `RelValidator`: scope by ordinary binding; ordinal requires a
+      `list` input; an unread ordinal pattern is dropped by the
+      builder.
+- [ ] `CoreBuilder`, `RelBuilder`, `RelExpander`, `RelLowerer`,
+      `RelTranslator`, `Inliner`, `RangePushdown` and the walkers
+      move from `Core.Input` to the patterns. The 46 references are
+      the list.
+- Gate: every golden file byte-identical except the ordinal section
+  of `rel-tree.smli`, which loses a projection and a legend entry;
+  `RelTest` gains a test that two nodes' `$0` are different variables
+  and that a nested tree may read an outer row directly.
+
+### F2 — The tree executes, and the step list goes
+
+- [ ] `Compiler` compiles a `Core.Rel` to a `RowSink` per node, with
+      the ordinal counter on the node that binds the pattern.
+- [ ] `CalciteCompiler` reads the tree, not `Core.From`; this is also
+      the first half of coloring_design.md §12.7.
+- [ ] Delete `Core.From`, `FromStep` and its subclasses, `StepEnv`,
+      `FromBuilder`, `RelLowerer`, `RelTranslator`, `RelShadow`, and
+      the compiler's step-list code.
+- Gate: `fullMake`; only `Sys.plan` lines move, and they are outside
+  the contract. If a line that is not a `Sys.plan` line moves, stop.
+
+### F3 — Land
+
+- [ ] Reorder and squash (below), now including F1 and F2.
+- [ ] Merge to main. The ports port F1 with the rule framework, as
+      their plans already say.
+
+### F4 onward
+
+Step 4 (rule framework), step 5 (ports), step 6 (#359), then the
+coloring of coloring_design.md, whose boundary constructor is the
+first change the contract changelog records.
+
 ## Where this stands, and what the next session does
 
 **Steps 0, 1 and 2 are done, and so are all six goals of step 3.** The
