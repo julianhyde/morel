@@ -373,6 +373,9 @@ public class AstWriter {
     if (op == Op.APPLY && a0.op == Op.ID) {
       if (a0 instanceof Ast.Id) {
         final Op op2 = Op.BY_OP_NAME.get(((Ast.Id) a0).name);
+        if (op2 != null && op2.isPrefix()) {
+          return prefix(left, op2, a1, right);
+        }
         if (op2 != null && op2.left > 0) {
           final List<Ast.Exp> args = ((Ast.Tuple) a1).args;
           final Ast.InfixCall call =
@@ -386,6 +389,14 @@ public class AstWriter {
         // figure out which built-in operator it implements, and whether it
         // is infix (e.g. "+") or in a namespace (e.g. "#translate String")
         final Op op2 = Op.BY_OP_NAME.get(((Core.Id) a0).idPat.name);
+        // A prefix operator has one operand, written after it. Reading it as
+        // infix and splitting the operand into a pair threw
+        // ClassCastException: `~1` is safe only because it folds to a literal
+        // before anything prints it, so `Sys.planOf (from e in emps yield
+        // ~e.deptno)` was the first query to reach here.
+        if (op2 != null && op2.isPrefix()) {
+          return prefix(left, op2, a1, right);
+        }
         if (op2 != null && op2.left > 0) {
           final List<Core.Exp> args = ((Core.Tuple) a1).args;
           return infix(left, args.get(0), op2, args.get(1), right);

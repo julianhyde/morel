@@ -71,6 +71,7 @@ import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.MaskingCallback;
 import org.jline.reader.ParsedLine;
 import org.jline.reader.Parser;
+import org.jline.reader.SyntaxError;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Attributes;
@@ -281,6 +282,18 @@ public class Shell {
   }
 
   /**
+   * Returns whether the character at {@code pos} is preceded by an odd number
+   * of backslashes, and is therefore escaped.
+   */
+  private static boolean escaped(CharSequence buffer, int pos) {
+    int backslashes = 0;
+    for (int i = pos - 1; i >= 0 && buffer.charAt(i) == '\\'; i--) {
+      ++backslashes;
+    }
+    return backslashes % 2 == 1;
+  }
+
+  /**
    * Returns whether we can ignore a line. We can ignore a line if it consists
    * only of comments, spaces, and optionally semicolon, and if we are not on a
    * continuation line.
@@ -331,11 +344,13 @@ public class Shell {
             // an identifier or type variable (e.g. 'a), not a quote.
             setQuoteChars(new char[] {'"'});
             setEofOnUnclosedQuote(true);
-            // Backslash is not an escape character to the line reader. Morel's
-            // lexer owns escape handling, and were the reader to unescape
-            // first, an escape in a literal would be eaten before the lexer
-            // saw it: #"\n" would become #"n", and a literal ending in \\
-            // would look unclosed.
+            // Backslash is not an escape character to the line reader.
+            // Morel's lexer owns escape handling, and were the reader to
+            // unescape first, an escape in a literal would be eaten before
+            // the lexer saw it: #"\n" would become #"n", and a literal
+            // ending in \\ would look unclosed. `isEscaped` below tells
+            // the reader which quotes are escaped without unescaping
+            // anything.
             setEscapeChars(null);
             // Brackets do not decide where a statement ends; a semicolon
             // does, and the shell finds it (see SubShell.extracted). Were
@@ -352,6 +367,28 @@ public class Shell {
               line = line.replaceAll("\\(\\*\\).*$", "");
             }
             return super.parse(line, cursor, context);
+          }
+
+          /**
+           * Returns whether the character at {@code pos} is escaped, and so
+           * neither opens nor closes a literal.
+           *
+           * <p>Without this, {@code val b = "x\"y";} read as a literal {@code
+           * "x\"}, a {@code y}, and a literal that never closes; {@code
+           * eofOnUnclosedQuote} then made the reader ask for the rest of it,
+           * and swallow every line to the end of the input. The statement never
+           * ran, and neither did anything after it.
+           *
+           * <p>Once inside a literal {@code DefaultParser} asks this rather
+           * than {@code isQuoteChar}, and its own answer reads {@code
+           * escapeChars} -- null here, because the reader must not unescape
+           * what it hands back. Counting the backslashes here tells it which
+           * quotes are escaped and changes no text: {@code isEscapeChar} stays
+           * false, so nothing is dropped from a word.
+           */
+          @Override
+          public boolean isEscaped(CharSequence buffer, int pos) {
+            return escaped(buffer, pos);
           }
         };
 
@@ -1103,7 +1140,17 @@ public class Shell {
         return Pair.of(LineType.QUIT, "");
       }
 
-      final ParsedLine pl = lineReader.getParser().parse(line, 0);
+      // The parse is a peek: all it wants is the first word, to see
+      // whether the line is `help`. A line it cannot parse is not `help`,
+      // and its complaint is not this loop's business -- morel's own
+      // parser will report the error properly, with a position. Letting
+      // the complaint out killed the session.
+      final ParsedLine pl;
+      try {
+        pl = lineReader.getParser().parse(line, 0);
+      } catch (SyntaxError e) {
+        return Pair.of(LineType.REGULAR, line);
+      }
       if ("help".equals(pl.word()) || "?".equals(pl.word())) {
         return Pair.of(LineType.HELP, "");
       }

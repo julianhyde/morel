@@ -151,7 +151,9 @@ public enum Op {
   PLUS(" + ", 6),
   MINUS(" - ", 6),
   CARET(" ^ ", 6),
-  NEGATE("~ "),
+  // `~` binds more tightly than any binary operator, so that `~x + 1` needs
+  // no brackets and `~(x + 1)` keeps them.
+  NEGATE("~ ", 8, Assoc.PREFIX),
   CONS(" :: ", 5, Assoc.RIGHT),
   AT(" @ ", 5, Assoc.RIGHT),
   LE(" <= ", 4),
@@ -277,6 +279,11 @@ public enum Op {
     RIGHT,
     /** Non-associative binary infix, e.g. {@code *} as a type constructor. */
     NONE,
+    /**
+     * Unary prefix, e.g. {@code ~}. It has one operand, written after it, and
+     * so cannot be unparsed as if it were infix; see {@link #isPrefix()}.
+     */
+    PREFIX,
     /** Atomic; not an infix operator (e.g. literals, identifiers). */
     ATOM,
     /** Not an expression. */
@@ -299,6 +306,21 @@ public enum Op {
       return leftBound >= left || rightBound >= right;
     }
     return leftBound > left || rightBound > right;
+  }
+
+  /**
+   * Returns whether this operator is written before its single operand, as
+   * {@code ~} is.
+   *
+   * <p>{@link #BY_OP_NAME} holds every operator that has a name, and its
+   * callers ask {@code left > 0} to mean "is infix". That is a proxy, and a
+   * wrong one: {@link #Op(String, int, Assoc)} adds one to {@code left} for
+   * every associativity but {@link Assoc#LEFT}, so a prefix operator comes out
+   * with {@code left = 1} and reads as infix. Unparsing {@code ~x} then cast
+   * the single operand to a pair and threw {@link ClassCastException}.
+   */
+  public boolean isPrefix() {
+    return assoc == Assoc.PREFIX;
   }
 
   /**
