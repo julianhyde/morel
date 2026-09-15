@@ -151,7 +151,9 @@ public enum Op {
   PLUS(" + ", 6),
   MINUS(" - ", 6),
   CARET(" ^ ", 6),
-  NEGATE("~ "),
+  // `~` binds more tightly than any binary operator, so that `~x + 1` needs
+  // no brackets and `~(x + 1)` keeps them.
+  NEGATE("~ ", 8, Assoc.PREFIX),
   CONS(" :: ", 5, Assoc.RIGHT),
   AT(" @ ", 5, Assoc.RIGHT),
   LE(" <= ", 4),
@@ -220,7 +222,7 @@ public enum Op {
   /** Right precedence */
   public final int right;
   /** Associativity (LEFT, RIGHT, or NONE). */
-  private final Assoc assoc;
+  final Assoc assoc;
   /** Operator name. Sometimes null, sometimes something like "op +". */
   public final @Nullable String opName;
 
@@ -270,13 +272,15 @@ public enum Op {
   }
 
   /** Associativity of an operator. */
-  private enum Assoc {
+  enum Assoc {
     /** Left-associative binary infix, e.g. {@code +}. */
     LEFT,
     /** Right-associative binary infix, e.g. {@code ->}. */
     RIGHT,
     /** Non-associative binary infix, e.g. {@code *} as a type constructor. */
     NONE,
+    /** Unary prefix, e.g. {@code ~}. */
+    PREFIX,
     /** Atomic; not an infix operator (e.g. literals, identifiers). */
     ATOM,
     /** Not an expression. */

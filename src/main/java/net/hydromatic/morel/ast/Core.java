@@ -197,8 +197,13 @@ public class Core {
     public static final Ordering<NamedPat> ORDERING =
         Ordering.from(NamedPat::compare);
 
-    /** A binder that the compiler generated, such as {@code v$0}. */
-    private static final Pattern GENERATED = Pattern.compile("[a-z]+\\$[0-9]+");
+    /**
+     * A binder that the compiler generated, such as {@code v$0}.
+     *
+     * <p>Package-private because a plan's type legend has to find these inside
+     * a type's text; see {@code AstNode.RenumberingAstWriter}.
+     */
+    static final Pattern GENERATED = Pattern.compile("[a-z]+\\$[0-9]+");
 
     public final String name;
     public final int i;
@@ -711,6 +716,34 @@ public class Core {
 
     public void forEachArg(ObjIntConsumer<Exp> action) {
       // no args
+    }
+
+    /**
+     * Renders this expression as a query's plan: the tree the resolver built
+     * for it.
+     *
+     * <p>A tree with no node in it is still a tree. {@code spec.md} §1 has no
+     * leaf constructor, so a query that translates to a bare expression --
+     * {@code from}, whose tree is the unit leaf, or {@code from u: unit} -- has
+     * one, and it prints as a leaf line with its collection type, the way the
+     * leaf of any other tree does.
+     *
+     * <p>Printing the bare expression made a node-free tree and a *declined*
+     * translation the same text, so no reader of a plan could tell which had
+     * happened -- and {@link net.hydromatic.morel.compile.RelShadow}'s
+     * invariant that the translator declines nothing could not be checked from
+     * outside, because the one place a decline would show is the one place the
+     * plan said nothing.
+     */
+    public final String unparsePlan(TypeSystem typeSystem, int width) {
+      final AstWriter w =
+          AstNode.renumberingWriter(typeSystem, this, width, true);
+      if (this instanceof Rel) {
+        ((Rel) this).describe(w, 0, true);
+      } else {
+        Rel.describeInput(this, w, 0, true);
+      }
+      return AstNode.finish(w);
     }
 
     /** Returns the {@code i}<sup>th</sup> argument. */
@@ -3243,7 +3276,7 @@ public class Core {
             return w.infix(left, args().get(0), op, args().get(1), right);
           }
       }
-      return w.infix(left, fn, op, arg, right);
+      return w.apply(left, fn, arg, right);
     }
 
     public Apply copy(Exp fn, Exp arg) {

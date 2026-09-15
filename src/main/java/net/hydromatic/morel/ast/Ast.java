@@ -4459,7 +4459,7 @@ public class Ast {
             .append("?.")
             .append(((RecordSelector) fn).name);
       }
-      return w.infix(left, fn, op, arg, right);
+      return w.apply(left, fn, arg, right);
     }
 
     public Apply copy(Exp fn, Exp arg) {

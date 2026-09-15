@@ -22,6 +22,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.TestUtils.findDirectory;
 import static net.hydromatic.morel.TestUtils.plus;
+import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -396,6 +397,41 @@ public class ShellTest {
     fixture()
         .withInputString("Char.ord #\"\\n\";\n")
         .assertOutput(containsString("val it = 10 : int"));
+  }
+
+  /**
+   * Tests that a backslash-escaped quote does not end a string literal.
+   *
+   * <p>The line reader tracks quotes so that it knows whether a statement is
+   * complete, and {@code eofOnUnclosedQuote} makes it ask for more input while
+   * one is open. Reading the escaped quote as the closing one left a literal
+   * open to the end of the input: the statement never ran, and neither did
+   * anything after it. So the test asserts that the statement *after* the
+   * literal runs, which is what was lost.
+   */
+  @Test
+  void testEscapedQuoteInStringLiteral() {
+    fixture()
+        .withInputString(
+            "val a = \"x\\\"y\";\n" //
+                + "val b = 2;\n")
+        .assertOutput(
+            allOf(
+                containsString("val a = \"x\\\"y\" : string"),
+                containsString("val b = 2 : int")));
+  }
+
+  /** As {@link #testEscapedQuoteInStringLiteral()}, for a char literal. */
+  @Test
+  void testEscapedQuoteInCharLiteral() {
+    fixture()
+        .withInputString(
+            "val a = #\"\\\"\";\n" //
+                + "val b = 2;\n")
+        .assertOutput(
+            allOf(
+                containsString("val a = #\"\\\"\" : char"),
+                containsString("val b = 2 : int")));
   }
 
   /**
