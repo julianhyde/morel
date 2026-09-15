@@ -47,6 +47,17 @@ in the same script files — `optimize.smli` and `built-in/sys.smli`
 each have both — and splitting the files would move tests to record
 something a rule states in a sentence.
 
+**Revised 2026-09-15: a node binds patterns.** §2 now describes a
+node as a binding form, like `fn` and `case`: its row is a pattern of
+its own rather than a positional reference, a dependent join's binder
+is its left pattern read from the right input rather than a separate
+name, and a node may bind an optional ordinal pattern. The printed
+form is unchanged except for a query that reads `ordinal`, whose plan
+loses the projection the resolver used to insert (§2). The datatype
+is therefore stable rather than frozen: an implementation that built
+the earlier form ports this change with the rule framework
+(plan.md), and its golden files still hold.
+
 ## 1. What a node is
 
 A node denotes a collection. Its type is a *kind* — `list` or `bag` —
@@ -73,50 +84,75 @@ may appear anywhere an expression may, including inside the
 expressions of another tree (§3.3), and an input needs no wrapper: it
 is just an expression (§3.1).
 
+A node is also a binding form, like `fn` and `case`: it has patterns
+of its own, in scope in its expressions and not in its inputs (§2).
+That is the whole of what makes it more than an application, and it
+is not much: the one rule a node has that no function has is the
+join's, whose element is the flat concatenation of its inputs'
+components (§3.4).
+
 ## 2. Names
 
-An expression inside a node may refer to:
+A node binds names the way `fn` and `case` do: with patterns of its
+own, in scope in its expressions and not in its inputs. An input is
+evaluated in the environment enclosing the tree; an expression of the
+node is evaluated in that environment extended by the node's patterns.
 
-* the names of the environment enclosing the tree (globals, `let`
-  bindings, function parameters — anything the surrounding Core
-  expression has in scope);
-* `$0`, the element of the node's input;
-* `$1`, for `join` only, the element of the node's right input, `$0`
-  then being the element of its left input.
+* **The row pattern**, written `$0`, names the element of the node's
+  input. A `join` has two: `$0` for the element of its left input and
+  `$1` for the element of its right.
+* **The ordinal pattern**, written `$ordinal`, names the position of
+  that element in the node's input, counted from zero. It is
+  optional, and a node has one exactly when an expression of the node
+  reads it (§3.2).
+* **The enclosing environment**: globals, `let` bindings, function
+  parameters — anything the surrounding Core expression has in scope.
 
-It may not refer to anything else — in particular not to the elements
-of nodes further down the tree. `$0` is rebound by every node to its
-own input, and does not accumulate.
+Every pattern is an ordinary `IdPat`, distinct per node. `$0`, `$1`
+and `$ordinal` are the names the printer gives them (§6.3); a `$`
+cannot occur in an identifier, so they cannot be confused with a name
+the query wrote. Nothing about scope is therefore special: a pass
+that reasons about variables treats a node's patterns as it treats a
+`fn`'s, and a name used under a node that does not bind it is
+unbound, which the validator rejects (§5).
 
 Three rules complete the picture:
 
-1. **Before the first row.** The arguments of `skip` and `take` are
-   evaluated once, before any element exists. They see the enclosing
-   environment only; an occurrence of `$0` or `$1` in them is
-   ill-formed.
-2. **A dependent join names its left element.** A `join` may carry a
-   binder `v`. Inside its *right input* — and only there — `v`
-   denotes the current element of the left input. The right input is
-   the one argument that routinely contains a nested tree, which
-   would shadow `$0`; a bound name crosses that boundary by ordinary
-   lexical scoping. The condition sees `$0` and `$1` as any join's
-   does. See discussion.md §8.
-3. **Nested trees shadow.** Inside a tree that appears within an
-   expression, `$0` is that tree's own input element. To use the
-   outer element inside a nested tree, bind it first —
-   `let v = $0 in <tree mentioning v>` — which is the same device as
-   rule 2, written with `let` because the node's argument is not a
-   function.
+1. **Before the first row.** `skip`, `take` and `ifEmpty` evaluate
+   their argument once, before any element exists, and have no
+   patterns: there is nothing for the argument to name but the
+   enclosing environment. That is a fact of the datatype, not a rule
+   the validator has to check.
+2. **A dependent join's right input reads the left pattern.** A
+   `join`'s left pattern is in scope in its condition and in its
+   *right input*, because the right input is evaluated once per left
+   element; its right pattern is in scope in the condition only.
+   Dependence is a free occurrence of the left pattern in the right
+   input, and nothing else marks it. See discussion.md §8.
+3. **Nested trees.** A tree that appears within a node's expression
+   binds patterns of its own. In the datatype they are distinct from
+   the enclosing node's, so an inner expression may read the outer
+   row directly; in the text both print as `$0`, so the printer names
+   the outer one (§6.3).
 
-`$0` and `$1` are input references. They are never record labels,
-never appear in an element type, and are not an ordinal encoding of a
-field: fields are addressed by label, inputs by position.
+The ordinal is the position among the rows the node's input delivers,
+and means the same thing in every expression of the node. In a
+`group` it is the position in the group's input, in keys and
+aggregate arguments alike, and not a rank within the group; in a
+`sort` it is the position before sorting; in a `join` it is the
+position of the candidate pair in the nested-loop order §4 fixes. A
+node may bind an ordinal pattern only if its input's kind is `list`;
+a bag has no positions (§5).
+
+`$0`, `$1` and `$ordinal` are never record labels and never appear in
+an element type: fields are addressed by label, rows by pattern.
 
 ## 3. Constructors
 
 `r`, `r₀`, `r₁` are nodes; `e` is an expression; `τ` is the element
-type of `r`, `τ₀`/`τ₁` those of `r₀`/`r₁`. "Scope" says what the
-expressions of the node may name beyond the enclosing environment.
+type of `r`, `τ₀`/`τ₁` those of `r₀`/`r₁`. "Patterns" says what the
+node binds for its expressions, beyond the enclosing environment; an
+ordinal pattern is optional, and present exactly where read (§2).
 
 ### 3.1 Leaves
 
@@ -152,28 +188,31 @@ just an expression".
 
 ### 3.2 One input
 
-| Constructor | Arguments | Element type | Scope |
+| Constructor | Arguments | Element type | Patterns |
 | --- | --- | --- | --- |
-| `filter` | `cond : bool` | `τ` | `$0` |
-| `project` | `e` | type of `e` | `$0` |
-| `group` | keys `l₁ = e₁, …`, aggregates `m₁ = a₁, …` | record of the key and aggregate types, or the single field's type if there is exactly one | `$0` |
+| `filter` | `cond : bool` | `τ` | `$0`, `$ordinal` |
+| `project` | `e` | type of `e` | `$0`, `$ordinal` |
+| `group` | keys `l₁ = e₁, …`, aggregates `m₁ = a₁, …` | record of the key and aggregate types | `$0`, `$ordinal` |
 | `ifEmpty` | `e` of type `τ` | `τ` | — (§2 rule 1) |
-| `sort` | `e` | `τ` | `$0` |
+| `sort` | `e` | `τ` | `$0`, `$ordinal` |
 | `unorder` | — | `τ` | — |
 | `skip` | `n : int` | `τ` | — (§2 rule 1) |
 | `take` | `n : int` | `τ` | — (§2 rule 1) |
 
 `group` keys and aggregate arguments are expressions over `$0`;
 labels `l`, `m` are the output record's labels, and must be distinct.
-`distinct` is not a constructor: it is `group` whose keys are the
-whole element and whose aggregate list is empty.
+A `group` builds a record even when it has one field; the projection
+that turns a one-field record into the query's bare value sits above
+it (discussion.md §14). `distinct` is not a constructor: it is
+`group` whose keys are the whole element and whose aggregate list is
+empty.
 
 `ifEmpty` yields its expression as the single element where its input
 has none, and its input's elements where it has some. The expression
 is evaluated only in the first case, when there is no element, so
 like the count of a `skip` it cannot mention `$0`; it can mention
 whatever encloses the tree, which inside the right input of a
-dependent join includes that join's binder.
+dependent join includes that join's left pattern.
 
 `compute` is `group` with no keys, plus the extraction of the single
 element that the enclosing expression performs — see §6.
@@ -181,8 +220,8 @@ element that the enclosing expression performs — see §6.
 ### 3.3 Correlation
 
 A scan whose collection depends on an earlier binder — `from d in
-depts, e in d.emps` — is a **dependent join**: a `join` carrying a
-binder that its right input may read.
+depts, e in d.emps` — is a **dependent join**: a `join` whose right
+input reads its left pattern.
 
 ```sml
 from d in scott.depts, e in d.emps where e.sal > 1000 yield {d, e}
@@ -190,49 +229,38 @@ from d in scott.depts, e in d.emps where e.sal > 1000 yield {d, e}
 
 ```
 project [{d = #1 $0, e = #2 $0}]
-  join [d]
+  join [v$0]
     scott.depts
     filter [#sal $0 > 1000]
-      #emps d
+      #emps v$0
 ```
 
-The binder `d` names the left element inside the right input, where
-`$0` cannot reach because the right input is a tree of its own and
-rebinds `$0`. The condition is over `$0` and `$1`, as in any join.
+The right input is a tree of its own, whose `$0` is its own element,
+so the left element is reached through the join's left pattern, which
+the printer names `v$0` and shows as the join's first argument
+(§6.3). The condition is over `$0` and `$1`, as in any join.
 
-**Dependence is still not a mode of the node.** The binder is a
-scoping device, not a flag. Dependence is a free occurrence of the
-binder in the right input, which the validator sees and a rule can
-guard on. Decorrelation is therefore *dropping the binder* — when
-nothing in the right input mentions it, the join is an ordinary join
-and the name goes — rather than rewriting one constructor into
-another.
-
-**An independent join is preferable, so the binder does not survive
-being unread.** A dependent join must be executed as a nested loop,
-and cannot be commuted or reassociated freely; an independent one can
-be, and has an ordinary condition (`true` where the query wants a
-cross join). So a builder that is offered a binder the right input
-does not read drops it, and a caller may offer one without first
-knowing whether it will be used. The datatype still permits an unread
-binder, because a rewrite may transiently strip the last reference,
-but nothing that a builder produces has one — which makes `binder !=
-null` a reliable test for dependence, and keeps two trees that mean
-the same thing from printing differently.
+**Dependence is not a mode of the node.** Nothing records it: it is a
+free occurrence of the left pattern in the right input, which the
+validator sees and a rule can guard on. Decorrelation is a rewrite of
+the right input until it no longer reads the pattern, after which the
+join is an ordinary join — it can be commuted and reassociated, and
+prints without the argument. Two trees that mean the same thing
+therefore print the same, and there is nothing for a builder to drop.
 
 **A scan translates the same way whether or not anything reads both
 sides.** `yieldAll` is a dependent join followed by a projection that
-drops the left element:
+keeps the right element:
 
 ```sml
 from r in orders yieldAll r.items
 ```
 
 ```
-project [#i $0]
-  join [r] [{i = $1, r = $0}]
+project [#2 $0]
+  join [v$0]
     orders
-    #items r
+    #items v$0
 ```
 
 which is what the step list has always done — a scan over the
@@ -252,9 +280,9 @@ yields nothing the join still emits a row with `$1` absent.
 
 ### 3.4 Two inputs
 
-| Constructor | Arguments | Element type | Scope |
+| Constructor | Arguments | Element type | Patterns |
 | --- | --- | --- | --- |
-| `join` | kind ∈ {inner, left, right, full}, binder `v` (optional), `cond : bool` | the inputs' components concatenated, each component of a side the kind can leave absent wrapped in `option` | `$0` (left element), `$1` (right element); `v` names the left element in the right input (§3.3) |
+| `join` | kind ∈ {inner, left, right, full}, `cond : bool` | the inputs' components concatenated, each component of a side the kind can leave absent wrapped in `option` | `$0` (left element), `$1` (right element), `$ordinal`; the left pattern is in scope in the right input too (§3.3) |
 | `union`, `intersect`, `except` | `r₀ … rₙ`, `distinct : bool` | `τ₀` | — |
 
 **A join has no yield.** It concatenates, and a projection follows
@@ -346,18 +374,24 @@ place to look when a rule is wrong.
    inputs agree. `filter` and `join` conditions are `bool`; `skip`
    and `take` arguments are `int`.
 2. **Kinds.** Every node's kind is the kind §4 derives.
-3. **Scope.** No `$0` outside a node that binds it, no `$1` outside a
-   `join`, neither in a `skip` or `take` argument, and no free
-   variable other than those and the enclosing environment's. A
-   join's binder is in scope in its right input only: an occurrence
-   in its condition is ill-formed, and so is one in a join that has
-   no binder.
+3. **Scope.** Every name is bound: by a pattern of the node whose
+   expression it is in, by an enclosing node's pattern where §2
+   allows it — a join's left pattern in its right input, any node's
+   patterns inside a nested tree — or by the enclosing environment.
+   A join's right pattern occurs only in its condition. `skip`,
+   `take` and `ifEmpty` bind nothing, so their argument names only
+   the environment.
 4. **Labels.** Within one node, output labels are distinct: the
    fields of a `project`'s record, and the keys and aggregates of a
    `group`. A join has no labels; its components are positional.
 5. **Root type.** A rewrite preserves the type of the tree's root —
    both element type and kind. This is the cheap litmus that catches
    most rule bugs, including every rule that forgets a projection.
+6. **Ordinal.** A node that binds an ordinal pattern has an input of
+   kind `list`. An ordinal pattern that no expression reads is
+   permitted, because a rewrite may transiently strip the last
+   reference, but nothing a builder produces has one, so that two
+   trees that mean the same thing print the same.
 
 Rewrites that merge scopes — decorrelation, subquery unnesting — can
 bring two identically-named binders together. The rename convention
@@ -414,6 +448,18 @@ arguments, each in brackets, in the order §3 lists them; arguments
 that are absent (an inner join's kind, a `true` condition, a
 `project` expression that is `$0`) are omitted.
 
+**Patterns are not printed.** A node's expressions name its row
+pattern as `$0` — `$1` for a join's right — and its ordinal pattern
+as `$ordinal`, and that is all the text says of them: a node binds an
+ordinal pattern exactly where its expressions read one. A pattern
+that an expression *outside its own node* reads is named, with a
+generated name numbered by §6.7. A join whose right input reads its
+left pattern prints the name as its first argument, `join [v$0]`, and
+the right input uses it (§3.3). A node whose nested tree reads its
+row prints the expression as `let val v$N = $0 in … end`, and the
+nested tree uses `v$N` (§6.4); the text is the same whether the
+datatype holds that `let` or a direct reference.
+
 Where a node's own line does not fit the width it wraps, and the
 continuation is indented **four** from the node. Continuations follow
 the node line immediately, so a reader — and a parser — separates
@@ -431,7 +477,7 @@ op       ::= 'filter' | 'project' | 'ifEmpty'
            | 'skip' | 'take' | 'union' | 'intersect' | 'except'
 arg      ::= '[' exp ']' | '[' label '=' exp (',' label '=' exp)* ']'
            | '[' word ']'
-defn     ::= '\n' 'r' '[' int ']' ' ='  '\n' node
+defn     ::= '\n' 'r$' int ('[' name (',' name)* ']')? ' =' '\n' node
 ```
 
 ### 6.4 Relations reached from inside an expression
@@ -590,13 +636,12 @@ here so that three implementations agree: labels compare as Morel
 strings compare, which puts `$`-prefixed names before alphabetic
 ones.
 
-**Generated binders are numbered per tree**, from zero, in the order
-the translation creates them: `v$0`, `v$1`, and so on. The counter
-must not be shared with anything outside the tree, or the same query
-prints differently depending on what was compiled before it, and no
-other implementation could reproduce the text. A `$` cannot occur in
-an identifier, so a generated name cannot capture one the query
-wrote.
+**Generated binders are numbered by the printer**, from zero, in
+order of first occurrence in the text: `v$0`, `v$1`, and so on.
+Nothing about their allocation reaches the text, or the same query
+would print differently depending on what was compiled before it, and
+no other implementation could reproduce it. A `$` cannot occur in an
+identifier, so a generated name cannot capture one the query wrote.
 
 More precisely: **allocated freely, and renumbered when printed.** A
 binder takes whatever number its maker's counter gives it, because
@@ -692,14 +737,15 @@ from d in scott.depts, e in d.emps where e.sal > 1000 yield {d, e}
 
 ```
 project [{d = #1 $0, e = #2 $0}]
-  join [d]
+  join [v$0]
     scott.depts
     filter [#sal $0 > 1000]
-      #emps d
+      #emps v$0
 ```
 
-The binder prints as an argument, before the condition, and is
-omitted when the join has none. Its two inputs are its two
+The left pattern prints as an argument, under a generated name,
+before the condition, and is omitted when the right input does not
+read it. Its two inputs are its two
 children, as any join's are; there is no lambda header, because the
 right input is an ordinary input rather than the body of a function.
 
