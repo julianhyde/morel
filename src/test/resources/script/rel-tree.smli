@@ -387,4 +387,131 @@ Sys.planOf (
 >       pairs : (int * int) list
 > |_} : string
 
+(* A prefix operator is written before its one operand.
+ *
+ * `Op.BY_OP_NAME` holds every operator that has a name, and its callers
+ * ask `left > 0` to mean "is infix". That is a proxy, and a wrong one:
+ * the constructor adds one to `left` for every associativity but
+ * `LEFT`, so `~` came out with `left = 1` and read as infix, and
+ * unparsing it cast its single operand to a pair and threw
+ * ClassCastException. `~1` is safe only because it folds to a literal
+ * before anything prints it, so a plan was the first thing to reach it.
+ *
+ * `~` binds more tightly than any binary operator, so `~x + 1` needs no
+ * brackets and `~(x + 1)` keeps them. *)
+Sys.planOf (from i in [1, 2, 3] yield ~i);
+> val it = {_|
+> project [~ $0] : int list
+>   [1, 2, 3] : int list
+> |_} : string
+Sys.planOf (from i in [1, 2, 3] yield op ~ i);
+> val it = {_|
+> project [~ $0] : int list
+>   [1, 2, 3] : int list
+> |_} : string
+Sys.planOf (from i in [1, 2, 3] yield ~ (i + 1));
+> val it = {_|
+> project [~ ($0 + 1)] : int list
+>   [1, 2, 3] : int list
+> |_} : string
+Sys.planOf (from i in [1, 2, 3] yield ~i + 1);
+> val it = {_|
+> project [~ $0 + 1] : int list
+>   [1, 2, 3] : int list
+> |_} : string
+Sys.planOf (from i in [1, 2, 3] where ~i < 0);
+> val it = {_|
+> filter [~ $0 < 0] : int list
+>   [1, 2, 3] : int list
+> |_} : string
+from i in [1, 2, 3] yield ~i;
+> val it = [~1,~2,~3] : int list
+
+(* A binder inside a type is renumbered like one anywhere else.
+ *
+ * A type reaches the writer as text, so a binder in it never passed
+ * through the renumbering that every other name did: a projection names
+ * a component after the binder it came from, the component becomes a
+ * record field, and the field's name is a binder's. The tree then said
+ * `v$0` and the legend said `v$8`, and which second name you got
+ * depended on what had been compiled before.
+ *
+ * No test could see it from a cold counter, where the allocated name
+ * and the printed one coincide -- so this one moves the counter on
+ * first, and the two plans below must be the same text. *)
+val es = [{id = 100, name = "Fred", deptno = 10}];
+> deptno id  name
+> ------ --- ----
+>     10 100 Fred
+>
+> val es : {deptno:int, id:int, name:string} list
+Sys.planOf (from e in es order e.deptno where ordinal > 1);
+> val it =
+>   {_|
+> project [#e $0] : t$0
+>   filter [#v$0 $0 > 1] : t$1
+>     project [{e = $0, v$0 = $ordinal ()}] : t$1
+>       sort [#deptno $0] : t$0
+>         es : t$0
+>
+> t$0 {deptno:int, id:int, name:string} list
+> t$1 {e:{deptno:int, id:int, name:string}, v$0:int} list
+> |_} : string
+from e0 in es order e0.deptno where ordinal > 1 yield e0.name;
+> val it = [] : string list
+from e1 in es order e1.deptno where ordinal > 1 yield e1.name;
+> val it = [] : string list
+from e2 in es order e2.deptno where ordinal > 1 yield e2.name;
+> val it = [] : string list
+from e3 in es order e3.deptno where ordinal > 1 yield e3.name;
+> val it = [] : string list
+from e4 in es order e4.deptno where ordinal > 1 yield e4.name;
+> val it = [] : string list
+from e5 in es order e5.deptno where ordinal > 1 yield e5.name;
+> val it = [] : string list
+from e6 in es order e6.deptno where ordinal > 1 yield e6.name;
+> val it = [] : string list
+from e7 in es order e7.deptno where ordinal > 1 yield e7.name;
+> val it = [] : string list
+Sys.planOf (from e in es order e.deptno where ordinal > 1);
+> val it =
+>   {_|
+> project [#e $0] : t$0
+>   filter [#v$0 $0 > 1] : t$1
+>     project [{e = $0, v$0 = $ordinal ()}] : t$1
+>       sort [#deptno $0] : t$0
+>         es : t$0
+>
+> t$0 {deptno:int, id:int, name:string} list
+> t$1 {e:{deptno:int, id:int, name:string}, v$0:int} list
+> |_} : string
+
+(* A tree with no node in it is still a tree.
+ *
+ * Section 1 has no leaf constructor, so a query that translates to a
+ * bare expression has a tree, and it prints as a leaf line with its
+ * collection type -- the way the leaf of any other tree does.
+ *
+ * It used to print the bare expression, which is what a *declined*
+ * translation prints, so no reader of a plan could tell the two apart.
+ * `RelShadow` asserts that the translator declines nothing, and that
+ * was the one place a decline would have shown. *)
+Sys.planOf (from);
+> val it = {|[()] : unit list
+> |} : string
+from;
+> val it = [()] : unit list
+Sys.planOf (from i in [1, 2, 3]);
+> val it = {|[1, 2, 3] : int list
+> |} : string
+Sys.planOf (from u: unit);
+> val it = {|extent "unit" : unit list
+> |} : string
+
+(* An expression that is not a query has no tree, and prints as itself:
+ * no type, no trailing newline. That is the difference a reader needs,
+ * and `List.hd []` above shows the other side of it. *)
+Sys.planOf ([1, 2, 3]);
+> val it = "[1, 2, 3]" : string
+
 (*) End rel-tree.smli

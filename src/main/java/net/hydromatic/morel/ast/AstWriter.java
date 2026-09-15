@@ -401,36 +401,36 @@ public class AstWriter {
   }
 
   /** Appends a call to an infix operator. */
-  public AstWriter infix(int left, AstNode a0, Op op, AstNode a1, int right) {
-    final boolean p = parenthesize || left > op.left || op.right < right;
-    if (p) {
-      raw("(");
-      left = right = 0;
-    }
-    // `andalso` and `orelse` chain, and a plan's conditions are mostly made
-    // of them, so they are where a long line is worth breaking. Each is a
-    // group of its own, so an outer one breaks before an inner one does, and
-    // a condition that fits stays on its line.
-    final boolean breakable = op == Op.ANDALSO || op == Op.ORELSE;
-    if (breakable) {
-      startGroup(0);
-    }
-    append(a0, left, op.left);
-    if (breakable) {
-      softBreak();
-      append(op.padded.substring(1));
-    } else {
-      append(op.padded);
-    }
-    append(a1, op.right, right);
-    if (breakable) {
-      endGroup();
-    }
-    if (p) {
-      raw(")");
-    }
-    return this;
+public AstWriter infix(int left, AstNode a0, Op op, AstNode a1, int right) {
+  final boolean p = parenthesize || left > op.left || op.right < right;
+  if (p) {
+    raw("(");
+    left = right = 0;
   }
+  // `andalso` and `orelse` chain, and a plan's conditions are mostly made
+  // of them, so they are where a long line is worth breaking. Each is a
+  // group of its own, so an outer one breaks before an inner one does, and
+  // a condition that fits stays on its line.
+  final boolean breakable = op == Op.ANDALSO || op == Op.ORELSE;
+  if (breakable) {
+    startGroup(0);
+  }
+  append(a0, left, op.left);
+  if (breakable) {
+    softBreak();
+    append(op.padded.substring(1));
+  } else {
+    append(op.padded);
+  }
+  append(a1, op.right, right);
+  if (breakable) {
+    endGroup();
+  }
+  if (p) {
+    raw(")");
+  }
+  return this;
+}
 
   /** Appends a call to an prefix operator. */
   public AstWriter prefix(int left, Op op, AstNode a, int right) {

@@ -1331,8 +1331,15 @@ public class Resolver {
           session == null
               ? AstWriter.DEFAULT_WIDTH
               : Prop.LINE_WIDTH.intValue(session.map);
+      // A query's plan is a tree, and prints as one even when the tree has
+      // no node in it; anything else is just the expression. The argument's
+      // *AST* says which, because by the time it is Core a query has become
+      // the tree and a node-free tree is indistinguishable from an ordinary
+      // expression -- which was the whole trouble.
       return core.stringLiteral(
-          coreArg.unparseRenumbered(typeMap.typeSystem, width, true));
+          apply.arg.op == Op.FROM
+              ? coreArg.unparsePlan(typeMap.typeSystem, width)
+              : coreArg.unparseRenumbered(typeMap.typeSystem, width, true));
     }
     return core.apply(apply.pos, type, coreFn, coreArg);
   }

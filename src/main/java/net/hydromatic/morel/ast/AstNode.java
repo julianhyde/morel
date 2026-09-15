@@ -31,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import net.hydromatic.morel.type.TypeSystem;
 
 /** Abstract syntax tree node. */
@@ -359,11 +360,40 @@ public abstract class AstNode {
 
     @Override
     public String typeRef(String moniker) {
-      if (moniker.length() <= MAX_TYPE_LENGTH) {
+      final String renamed = renameWithin(moniker);
+      if (renamed.length() <= MAX_TYPE_LENGTH) {
+        return renamed;
+      }
+      final Integer i = typeRefs.computeIfAbsent(renamed, m -> typeRefs.size());
+      return "t$" + i;
+    }
+
+    /**
+     * Renumbers the generated binders inside a type's text.
+     *
+     * <p>A type arrives as text, so a binder in it never passes through {@link
+     * #rename}: a tree's projection names a component after the binder it came
+     * from, and the component becomes a record field, so the field's name is a
+     * binder's. The tree then said {@code v$0} and the legend said {@code v$8},
+     * and which second name you got depended on what had been compiled before.
+     *
+     * <p>Invisible to a test that starts from a cold counter, which is every
+     * test: there the allocated name and the printed one coincide. It is the
+     * same mistake as a record label printed as text rather than through the
+     * identifier path -- see {@link #append(String)} -- one level further out.
+     */
+    private String renameWithin(String moniker) {
+      final Matcher matcher = Core.NamedPat.GENERATED.matcher(moniker);
+      if (!matcher.find()) {
         return moniker;
       }
-      final Integer i = typeRefs.computeIfAbsent(moniker, m -> typeRefs.size());
-      return "t$" + i;
+      final StringBuilder b = new StringBuilder();
+      do {
+        matcher.appendReplacement(
+            b, Matcher.quoteReplacement(rename(matcher.group())));
+      } while (matcher.find());
+      matcher.appendTail(b);
+      return b.toString();
     }
 
     @Override
