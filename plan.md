@@ -162,9 +162,41 @@ Done. What it turned out to need, for the ports and for F2:
     `morelScalar` of text that names a pattern, which nothing can
     evaluate. It is reached only when the enclosing query is not
     itself pushed down, which the step list also could not survive.
+- [x] Every query is built as a tree. `FromBuilder` keeps its
+      step-by-step surface -- the generators and the grounder write
+      `scan(pat, exp)`, `where`, `yield_`, `distinct`, `order`,
+      `group` over the names the steps bind -- but is a front end to
+      `RelBuilder` now: it keeps the names in scope and rewrites each
+      expression over the tree's own patterns. A pattern that can
+      fail to match is scanned through a `case`, as the resolver
+      does. `RelLowerer` and `RelTranslator` are gone. What it
+      turned out to need:
+  - The generators read a nested query's shape -- "`exists z where
+    step andalso f (z, n - 1)`" is a scan of `z` and a condition --
+    and read it off a step list. `FlatQuery` reads it off a tree:
+    joins and filters flatten to scans and conditions, a root
+    projection is the yield, and every other node is scanned whole
+    as an opaque leaf. A projection *below* the root must be opaque
+    too: opening it gave the analysis `#1 w` where it expects a
+    variable, and the field pattern it minted for that, `f1`,
+    collided with the goal's own field `f1`, so two sibling
+    generators shared a pattern and the join lost its condition.
+    One reading per query object, memoized in the generator cache,
+    so that two generators derived from one existential see the
+    same scan variables and the chain can match a shared variable
+    by name.
+  - The such-that shuttle grounds a tree, then descends into what
+    came back before it asks whether every leaf is bounded: a
+    generator's collection may be a query of its own over an
+    extent that its own conditions bound. Asking first re-grounded
+    the root and reported the nested extent as ungrounded.
+  - The relationalizer turns `List.map`/`List.filter` into a
+    projection/filter node directly.
+  - `Sys.planEx` lines in `such-that.smli` moved: the queries that
+    grounding generates print as trees where they printed as step
+    lists nested in the tree.
 - [ ] Delete `Core.From`, `FromStep` and its subclasses, `StepEnv`,
-      `FromBuilder`, `RelLowerer`, `RelTranslator`, `RelShadow`, and
-      the compiler's step-list code.
+      and the compilers' step-list code.
 - Gate: `fullMake`; only `Sys.plan` lines move, and they are outside
   the contract. If a line that is not a `Sys.plan` line moves, stop.
 

@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -221,124 +222,91 @@ class Generators {
    */
   private static boolean maybeExists(
       Cache cache, Core.Pat pat, Context context) {
-    constraint_loop:
     for (int j = 0; j < context.constraints.size(); j++) {
       final Core.Exp constraint = context.constraints.get(j);
       if (constraint.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)) {
         final Core.Apply apply = (Core.Apply) constraint;
-        // A tree says the same thing as a step list, and this reads a step
-        // list: `Relational.nonEmpty (from ... where pat ...)`. Lower what the
-        // resolver left, as `fnBody` does for a function's body.
-        final Core.Exp arg =
-            apply.arg instanceof Core.Rel
-                ? RelLowerer.lowerAll(
-                    cache.typeSystem, cache.typeSystem.nameGenerator, apply.arg)
-                : apply.arg;
-        if (arg instanceof Core.From) {
-          final Core.From from = (Core.From) arg;
+        // Read the query as scans and conditions:
+        // `Relational.nonEmpty (from ... where pat ...)`.
+        final FlatQuery query = cache.flatten(apply.arg);
+        // Create a copy of constraints with this constraint removed.
+        // The query's conditions will add more constraints.
+        final List<Core.Exp> constraints2 =
+            new ArrayList<>(context.constraints);
+        //noinspection SuspiciousListRemoveInLoop
+        constraints2.remove(j);
+        // Collect inner scan patterns - these are available for generators
+        // within the exists scope
+        final List<FlatQuery.Scan> innerScans = query.scans;
+        final Core.@Nullable Exp where = query.condition(cache.typeSystem);
+        if (where != null) {
+          // Decompose "andalso" to allow each conjunct to be processed
+          // separately. E.g., "edge(x,y) andalso x = y" becomes
+          // ["edge(x,y)", "x = y"], allowing maybeFunction to process
+          // the edge function call.
+          core.flattenAnd(where, constraints2::add);
+          // First try to create a generator without inner dependencies
+          final Context innerContext = new Context(constraints2);
+          if (maybeGenerator(cache, pat, false, innerContext)) {
+            // Check if the created generator depends on inner scans
+            final Generator gen = cache.bestGenerator((Core.NamedPat) pat);
+            if (gen != null) {
+              // Check if any free variable of the generator expression
+              // comes from inner scans. If so, we need to join with those
+              // scans to bind those variables before using the generator.
+              boolean dependsOnInnerScan = false;
+              for (Core.NamedPat freePat : gen.freePats) {
+                for (FlatQuery.Scan innerScan : innerScans) {
+                  if (innerScan.pat.expand().contains(freePat)) {
+                    dependsOnInnerScan = true;
+                    break;
+                  }
+                }
+              }
 
-          // Create a copy of constraints with this constraint removed.
-          // When we encounter a "where" step, we will add more constraints.
-          final List<Core.Exp> constraints2 =
-              new ArrayList<>(context.constraints);
-          //noinspection SuspiciousListRemoveInLoop
-          constraints2.remove(j);
-
-          // Collect inner scan patterns - these are available for generators
-          // within the exists scope
-          final List<Core.Scan> innerScans = new ArrayList<>();
-          for (Core.FromStep step : from.steps) {
-            if (step.op == Op.SCAN) {
-              innerScans.add((Core.Scan) step);
-            }
-          }
-
-          for (Core.FromStep step : from.steps) {
-            switch (step.op) {
-              case SCAN:
-              case YIELD:
-              case GROUP:
-                // Skip these steps - they don't add constraints
-                break;
-              case WHERE:
-                // Decompose "andalso" to allow each conjunct to be processed
-                // separately. E.g., "edge(x,y) andalso x = y" becomes
-                // ["edge(x,y)", "x = y"], allowing maybeFunction to process
-                // the edge function call.
-                core.flattenAnd(((Core.Where) step).exp, constraints2::add);
-                // First try to create a generator without inner dependencies
-                final Context innerContext = new Context(constraints2);
-                if (maybeGenerator(cache, pat, false, innerContext)) {
-                  // Check if the created generator depends on inner scans
-                  final Generator gen =
-                      cache.bestGenerator((Core.NamedPat) pat);
-                  if (gen != null) {
-                    // Check if any free variable of the generator expression
-                    // comes from inner scans. If so, we need to join with those
-                    // scans to bind those variables before using the generator.
-                    boolean dependsOnInnerScan = false;
-                    for (Core.NamedPat freePat : gen.freePats) {
-                      for (Core.Scan innerScan : innerScans) {
-                        if (innerScan.pat.expand().contains(freePat)) {
-                          dependsOnInnerScan = true;
-                          break;
-                        }
-                      }
+              if (dependsOnInnerScan) {
+                // Replace the generator with one that includes inner
+                // scans
+                createJoinedGenerator(cache, pat, gen, innerScans);
+              } else {
+                // Check if remaining constraints only reference inner
+                // scans and bound patterns (by name, not identity). If
+                // they reference other extent patterns, skip
+                // createFilteredGenerator to avoid circular dependencies.
+                final Set<String> boundNames = new HashSet<>();
+                for (Core.NamedPat p : gen.pat.expand()) {
+                  boundNames.add(p.name);
+                }
+                final Set<String> innerNames = new HashSet<>();
+                for (FlatQuery.Scan innerScan : innerScans) {
+                  for (Core.NamedPat p : innerScan.pat.expand()) {
+                    innerNames.add(p.name);
+                  }
+                }
+                boolean referencesOtherExtent = false;
+                for (Core.Exp c : constraints2) {
+                  for (Core.NamedPat fp : c.freePats(cache.typeSystem)) {
+                    // Skip patterns bound in environment (functions, etc)
+                    if (cache.env.getOpt(fp) != null) {
+                      continue;
                     }
-
-                    if (dependsOnInnerScan) {
-                      // Replace the generator with one that includes inner
-                      // scans
-                      createJoinedGenerator(cache, pat, gen, innerScans);
-                    } else {
-                      // Check if remaining constraints only reference inner
-                      // scans and bound patterns (by name, not identity). If
-                      // they reference other extent patterns, skip
-                      // createFilteredGenerator to avoid circular dependencies.
-                      final Set<String> boundNames = new HashSet<>();
-                      for (Core.NamedPat p : gen.pat.expand()) {
-                        boundNames.add(p.name);
-                      }
-                      final Set<String> innerNames = new HashSet<>();
-                      for (Core.Scan innerScan : innerScans) {
-                        for (Core.NamedPat p : innerScan.pat.expand()) {
-                          innerNames.add(p.name);
-                        }
-                      }
-                      boolean referencesOtherExtent = false;
-                      for (Core.Exp c : constraints2) {
-                        for (Core.NamedPat fp : c.freePats(cache.typeSystem)) {
-                          // Skip patterns bound in environment (functions, etc)
-                          if (cache.env.getOpt(fp) != null) {
-                            continue;
-                          }
-                          if (!boundNames.contains(fp.name)
-                              && !innerNames.contains(fp.name)) {
-                            referencesOtherExtent = true;
-                            break;
-                          }
-                        }
-                        if (referencesOtherExtent) {
-                          break;
-                        }
-                      }
-                      if (!referencesOtherExtent) {
-                        createFilteredGenerator(
-                            cache,
-                            pat,
-                            gen,
-                            constraints2,
-                            innerScans,
-                            innerContext);
-                      }
+                    if (!boundNames.contains(fp.name)
+                        && !innerNames.contains(fp.name)) {
+                      referencesOtherExtent = true;
+                      break;
                     }
                   }
-                  return true;
+                  if (referencesOtherExtent) {
+                    break;
+                  }
                 }
-                break;
-              default:
-                continue constraint_loop;
+                if (!referencesOtherExtent) {
+                  createFilteredGenerator(
+                      cache, pat, gen, constraints2, innerScans, innerContext);
+                }
+              }
             }
+            return true;
           }
         }
       }
@@ -366,7 +334,7 @@ class Generators {
       Cache cache,
       Core.Pat pat,
       Generator dependentGen,
-      List<Core.Scan> innerScans) {
+      List<FlatQuery.Scan> innerScans) {
     final TypeSystem typeSystem = cache.typeSystem;
     final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
 
@@ -379,7 +347,7 @@ class Generators {
     // For multi-pattern scans (e.g., {bar, beer, price} in extent), we must
     // decompose and add separate extent scans only for uncovered patterns,
     // to avoid duplicating patterns that are already covered.
-    for (Core.Scan scan : innerScans) {
+    for (FlatQuery.Scan scan : innerScans) {
       final List<Core.NamedPat> scanPats = scan.pat.expand();
       if (scanPats.size() == 1) {
         // Single-pattern scan: add if not covered
@@ -417,7 +385,7 @@ class Generators {
     fromBuilder.distinct();
     fromBuilder.order(core.recordOrAtom(typeSystem, yieldPats));
 
-    final Core.From joinedFrom = fromBuilder.build();
+    final Core.Exp joinedFrom = fromBuilder.build();
     final Set<Core.NamedPat> freePats2 = joinedFrom.freePats(typeSystem);
 
     // Add the new joined generator. Use the FULL pattern so inner scan
@@ -480,7 +448,7 @@ class Generators {
       Core.Pat pat,
       Generator sourceGen,
       List<Core.Exp> remainingConstraints,
-      List<Core.Scan> innerScans,
+      List<FlatQuery.Scan> innerScans,
       Context context) {
     final TypeSystem typeSystem = cache.typeSystem;
     final FromBuilder fromBuilder = core.fromBuilder(typeSystem);
@@ -514,7 +482,7 @@ class Generators {
       for (Core.NamedPat freePat : freeInConstraint) {
         if (!boundPats.contains(freePat)) {
           // This constraint references a variable not bound by the generator
-          for (Core.Scan innerScan : innerScans) {
+          for (FlatQuery.Scan innerScan : innerScans) {
             if (innerScan.pat.expand().contains(freePat)) {
               needsExists = true;
               break;
@@ -547,7 +515,7 @@ class Generators {
       // Build the exists subquery using inner scans that provide needed
       // patterns
       final FromBuilder existsBuilder = core.fromBuilder(typeSystem);
-      for (Core.Scan innerScan : innerScans) {
+      for (FlatQuery.Scan innerScan : innerScans) {
         boolean scanNeeded = false;
         for (Core.NamedPat scanPat : innerScan.pat.expand()) {
           if (neededPats.contains(scanPat)) {
@@ -560,7 +528,7 @@ class Generators {
         }
       }
       existsBuilder.where(core.andAlso(typeSystem, existsConstraints));
-      final Core.From existsFrom = existsBuilder.build();
+      final Core.Exp existsFrom = existsBuilder.build();
 
       // Add the exists check as a WHERE condition
       final Core.Exp existsCheck =
@@ -591,7 +559,7 @@ class Generators {
     fromBuilder.distinct();
     fromBuilder.order(yieldExp);
 
-    final Core.From filteredFrom = fromBuilder.build();
+    final Core.Exp filteredFrom = fromBuilder.build();
     final Set<Core.NamedPat> freePats2 = filteredFrom.freePats(typeSystem);
 
     // Add the filtered generator. bestGenerator returns the last entry,
@@ -1170,7 +1138,7 @@ class Generators {
    * what is read. A body that is already a step list is returned unchanged.
    */
   private static Core.Exp fnBody(TypeSystem typeSystem, Core.Fn fn) {
-    return RelLowerer.lowerAll(typeSystem, typeSystem.nameGenerator, fn.exp);
+    return fn.exp;
   }
 
   /**
@@ -1272,21 +1240,15 @@ class Generators {
       return null;
     }
     final Core.Apply nonEmpty = (Core.Apply) recursiveCase;
-    if (nonEmpty.arg.op != Op.FROM) {
-      return null;
-    }
-    final Core.From existsFrom = (Core.From) nonEmpty.arg;
+    final FlatQuery existsQuery = cache.flatten(nonEmpty.arg);
 
     // Extract intermediate var and where clause.
     Core.Pat intermediateVar = null;
-    Core.Exp whereClause = null;
-    for (Core.FromStep step : existsFrom.steps) {
-      if (step.op == Op.SCAN) {
-        intermediateVar = ((Core.Scan) step).pat;
-      } else if (step.op == Op.WHERE) {
-        whereClause = ((Core.Where) step).exp;
-      }
+    for (FlatQuery.Scan scan : existsQuery.scans) {
+      intermediateVar = scan.pat;
     }
+    final Core.@Nullable Exp whereClause =
+        existsQuery.condition(cache.typeSystem);
 
     if (intermediateVar == null || whereClause == null) {
       return null;
@@ -1433,22 +1395,14 @@ class Generators {
       return null;
     }
     final Core.Apply nonEmpty = (Core.Apply) recursiveCase;
-    if (nonEmpty.arg.op != Op.FROM) {
-      return null;
-    }
-    final Core.From existsFrom = (Core.From) nonEmpty.arg;
+    final FlatQuery existsQuery = cache.flatten(nonEmpty.arg);
 
-    // Extract all intermediate vars (existential SCAN patterns) and the
-    // single WHERE clause from the existential's from-expression.
+    // Extract all intermediate vars (existential scan patterns) and the
+    // condition of the existential query.
     final List<Core.Pat> intermediateVars = new ArrayList<>();
-    Core.Exp whereClause = null;
-    for (Core.FromStep step : existsFrom.steps) {
-      if (step.op == Op.SCAN) {
-        intermediateVars.add(((Core.Scan) step).pat);
-      } else if (step.op == Op.WHERE) {
-        whereClause = ((Core.Where) step).exp;
-      }
-    }
+    existsQuery.scans.forEach(scan -> intermediateVars.add(scan.pat));
+    final Core.@Nullable Exp whereClause =
+        existsQuery.condition(cache.typeSystem);
 
     if (intermediateVars.isEmpty() || whereClause == null) {
       return null;
@@ -1612,7 +1566,7 @@ class Generators {
     final Environment env =
         cache.env.bindAll(
             ImmutableList.of(Binding.of(allPaths), Binding.of(newPaths)));
-    final FromBuilder fb = core.fromBuilder(ts, env);
+    final FromBuilder fb = core.fromBuilder(ts);
 
     // Scan base generator (e.g., edges) - the same collection used as the seed
     final Core.IdPat stepPat = core.idPat(baseElementType, "step", 0);
@@ -1637,7 +1591,7 @@ class Generators {
             (RecordLikeType) resultElementType,
             core.field(ts, prevId, 0),
             core.field(ts, stepId, 1)));
-    final Core.From stepBody = fb.build();
+    final Core.Exp stepBody = fb.build();
 
     // Create the step function: fn (all, new) => stepBody
     final Core.TuplePat stepArgPat =
@@ -1738,7 +1692,7 @@ class Generators {
     final Environment env =
         cache.env.bindAll(
             ImmutableList.of(Binding.of(allPaths), Binding.of(newPaths)));
-    final FromBuilder fb = core.fromBuilder(ts, env);
+    final FromBuilder fb = core.fromBuilder(ts);
 
     // Scan prev in newPaths
     final Core.IdPat prevPat = core.idPat(resultElementType, "prev", 0);
@@ -1842,7 +1796,7 @@ class Generators {
 
       // Wrap the inversion in its own from-expression so the surrounding
       // builder sees a single yield of the formal's value.
-      final FromBuilder invFb = core.fromBuilder(ts, stepEnv);
+      final FromBuilder invFb = core.fromBuilder(ts);
       invFb.scan(scanTuplePat, collection);
       for (Core.Exp eq : filterEqs) {
         invFb.where(eq);
@@ -1861,7 +1815,7 @@ class Generators {
     }
     fb.yield_(
         CoreBuilder.core.tuple((RecordLikeType) resultElementType, yieldExps));
-    final Core.From stepBody = fb.build();
+    final Core.Exp stepBody = fb.build();
 
     // Create the step function: fn (all, new) => stepBody
     final Core.TuplePat stepArgPat =
@@ -2016,7 +1970,7 @@ class Generators {
 
       // Build: from stepVar in stepGenerator, prevVar in prevIter
       //          where joinCondition yield outputTuple
-      final FromBuilder fb = core.fromBuilder(cache.typeSystem, cache.env);
+      final FromBuilder fb = core.fromBuilder(cache.typeSystem);
 
       // Scan step generator (e.g., edges for edge(x, z))
       final Core.IdPat stepPat =
@@ -4259,6 +4213,15 @@ class Generators {
   static class Cache {
     final TypeSystem typeSystem;
     final Environment env;
+
+    /**
+     * Queries read as scans and conditions, by identity. One reading per query,
+     * so that two generators derived from the same existential -- one for each
+     * variable it binds -- see the same scan variables, and the chain that
+     * joins them can match a shared variable by name.
+     */
+    private final Map<Core.Exp, FlatQuery> flatQueries =
+        new IdentityHashMap<>();
     /**
      * Patterns that are still looking for a generator.
      *
@@ -4510,18 +4473,22 @@ class Generators {
         // in Core, so deriving the type from the fields would give 'int * int'
         // where the pattern is '{i:int, j:int}'.
         final Core.Exp tupleExp = core.tuple(recordType, fieldExps);
-        final Core.IdPat resultPat = core.idPat(basePat.type, basePat.name, 0);
-        final ImmutableSortedMap<Core.IdPat, Core.Exp> groupExps =
-            ImmutableSortedMap.of(resultPat, tupleExp);
+        final ImmutableSortedMap<String, Core.Exp> groupExps =
+            ImmutableSortedMap.of(basePat.name, tupleExp);
         fromBuilder.group(true, groupExps, ImmutableSortedMap.of());
 
-        final Core.From derivedFrom = fromBuilder.build();
+        final Core.Exp derivedFrom = fromBuilder.build();
         // Convert the derived FROM to a list to prevent FromBuilder.scan
         // from inlining it (which would break variable scoping).
         final Core.Exp asList = core.withOrdered(true, derivedFrom, typeSystem);
         CollectionGenerator.create(
             this, ordered, basePat, asList, ImmutableSet.of());
       }
+    }
+
+    /** Reads a query as scans and conditions; see {@link #flatQueries}. */
+    FlatQuery flatten(Core.Exp exp) {
+      return flatQueries.computeIfAbsent(exp, e -> FlatQuery.of(typeSystem, e));
     }
 
     @Nullable

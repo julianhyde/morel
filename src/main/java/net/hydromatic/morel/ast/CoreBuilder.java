@@ -55,7 +55,6 @@ import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
-import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
 import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.eval.Unit;
@@ -600,28 +599,9 @@ public enum CoreBuilder {
     return steps.isEmpty() ? Core.StepEnv.EMPTY : last(steps).env;
   }
 
-  /** Creates a builder that will create a {@link Core.From}. */
-  public FromBuilder fromBuilder(
-      TypeSystem typeSystem, @Nullable Supplier<Environment> envSupplier) {
-    return new FromBuilder(typeSystem, envSupplier);
-  }
-
-  /**
-   * Creates a builder that will create a {@link Core.From} and validates if
-   * {@code env} is not null.
-   */
-  public FromBuilder fromBuilder(
-      TypeSystem typeSystem, @Nullable Environment env) {
-    final Supplier<Environment> envSupplier = env == null ? null : () -> env;
-    return fromBuilder(typeSystem, envSupplier);
-  }
-
-  /**
-   * Creates a builder that will create a {@link Core.From} but does not
-   * validate.
-   */
+  /** Creates a builder that builds a query, step by step, as a tree. */
   public FromBuilder fromBuilder(TypeSystem typeSystem) {
-    return fromBuilder(typeSystem, (Supplier<Environment>) null);
+    return new FromBuilder(typeSystem);
   }
 
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {

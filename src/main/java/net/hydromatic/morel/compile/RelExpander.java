@@ -193,8 +193,7 @@ public class RelExpander {
    * Replaces every infinite-extent leaf of a tree with a collection that bounds
    * it, and throws if there is none.
    *
-   * <p>{@link Expander#expandFrom} is the caller that translates a query, calls
-   * this, and lowers the answer back to a step list.
+   * <p>{@link SuchThatShuttle} is the caller, at the root of each tree.
    */
   public static Core.Exp expand(
       TypeSystem typeSystem, Environment env, Core.Exp tree) {
@@ -2010,7 +2009,7 @@ public class RelExpander {
    * read a `let`.
    */
   private Core.Exp subst(Core.Exp exp, Core.Exp e0, Core.@Nullable Exp e1) {
-    final Set<Core.NamedPat> rowPats = RelLowerer.rowBindings(exp);
+    final Set<Core.NamedPat> rowPats = rowBindings(exp);
     final Core.Exp exp2 =
         exp.accept(
             new Shuttle(typeSystem) {
@@ -2030,7 +2029,83 @@ public class RelExpander {
                 return id;
               }
             });
-    return simplify(RelLowerer.unbindRow(typeSystem, exp2, rowPats));
+    return simplify(unbindRow(exp2, rowPats));
+  }
+
+  /**
+   * Returns the binders that hold this node's element for a tree nested in one
+   * of its expressions.
+   *
+   * <p>The resolver binds the element where a nested tree reads it, because a
+   * tree's {@code $0} is its own and not the enclosing node's.
+   */
+  private static Set<Core.NamedPat> rowBindings(Core.Exp exp) {
+    final Set<Core.NamedPat> pats = new LinkedHashSet<>();
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.NonRecValDecl valDecl) {
+            super.visit(valDecl);
+            if (valDecl.pat instanceof Core.IdPat
+                && containsInput(valDecl.exp)) {
+              pats.add(valDecl.pat);
+            }
+          }
+        });
+    return pats;
+  }
+
+  /**
+   * Replaces each of {@code pats} with the value it is bound to, and drops the
+   * binding.
+   *
+   * <p>Once the node's element is an ordinary variable, the binding has nothing
+   * left to protect: what reads it is no longer inside a tree that rebinds
+   * {@code $0}. A binding whose value <i>still</i> holds a {@code $0} belongs
+   * to a tree nested in this one's expressions, and is left alone: substituting
+   * it would put that {@code $0} under a node that rebinds it.
+   */
+  private Core.Exp unbindRow(Core.Exp exp, Set<Core.NamedPat> pats) {
+    if (pats.isEmpty()) {
+      return exp;
+    }
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          final Map<Core.NamedPat, Core.Exp> values = new HashMap<>();
+
+          @Override
+          protected Core.Exp visit(Core.Let let) {
+            if (let.decl instanceof Core.NonRecValDecl) {
+              final Core.NonRecValDecl decl = (Core.NonRecValDecl) let.decl;
+              if (pats.contains(decl.pat) && !containsInput(decl.exp)) {
+                values.put(decl.pat, decl.exp.accept(this));
+                return let.exp.accept(this);
+              }
+            }
+            return super.visit(let);
+          }
+
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            final Core.@Nullable Exp value = values.get(id.idPat);
+            return value == null ? id : core.at(value, id.pos);
+          }
+        });
+  }
+
+  /** Returns whether an expression reads an input of a relational tree. */
+  private static boolean containsInput(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (id.idPat.name.charAt(0) == '$') {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
   }
 
   /**

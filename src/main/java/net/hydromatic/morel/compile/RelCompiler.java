@@ -177,7 +177,8 @@ class RelCompiler {
       Context base, Core.Exp collection, Core.IdPat target, Next next) {
     final Code code = compiler.compile(base, collection);
     final RowSinkFactory nf = next.sink(rowOf(base).push(target));
-    return () -> RowSinks.scan(Op.SCAN, target, 1, code, TRUE, null, nf.get());
+    return () ->
+        RowSinks.scan(Op.SCAN, target, 1, false, code, TRUE, null, nf.get());
   }
 
   private RowSinkFactory filter(
@@ -440,10 +441,15 @@ class RelCompiler {
       rightPat = join.rightRow;
       rightComponents = rightExps;
     }
-    // A build join reads its right input before any left element, with the
-    // stack at the base; a nested-loop join reads it once per left element.
+    // A right input that reads the left row is evaluated once per left row,
+    // with that row on the stack; one that does not is evaluated once, before
+    // any left row, with the stack at the base -- as a build join's is.
+    final boolean dependent =
+        join.isDependent()
+            || join.ordinal != null && Core.mentions(join.right, join.ordinal);
     final Code rightCode =
-        compiler.compile(build ? row.base : row.cx, row.resolve(join.right));
+        compiler.compile(
+            build || !dependent ? row.base : row.cx, row.resolve(join.right));
     Row rowScan = row;
     for (Core.NamedPat pat : rightPats) {
       rowScan = rowScan.push(pat);
@@ -494,6 +500,7 @@ class RelCompiler {
             op(join.joinType),
             rightPat,
             rightPats.size(),
+            dependent,
             rightCode,
             conditionCode2,
             liveSlots,

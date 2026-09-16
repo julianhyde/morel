@@ -25,9 +25,7 @@ import static net.hydromatic.morel.compile.Generators.maybeGenerator;
 import static net.hydromatic.morel.util.Static.append;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Core;
@@ -49,119 +47,6 @@ public class Expander {
   }
 
   /**
-   * Converts all unbounded variables in a query to bounded, introducing
-   * generators by inverting predicates.
-   *
-   * <p>Grounding is the tree's, and this is its front end: translate, expand,
-   * lower. Returns {@code from} unchanged where no expansion is required, and
-   * also where the tree declines -- an extent that survives is reported by a
-   * later pass, which is what {@link SuchThatShuttle} is for.
-   */
-  public static Core.From expandFrom(
-      TypeSystem typeSystem,
-      NameGenerator nameGenerator,
-      Environment env,
-      Core.From from,
-      boolean rowsUsed) {
-    final Core.@Nullable From from2 =
-        expandViaTree(typeSystem, nameGenerator, env, from, rowsUsed);
-    if (from2 == null) {
-      return from;
-    }
-    return from2;
-  }
-
-  /**
-   * Grounds a query by translating it to a relational tree, expanding that, and
-   * lowering it back.
-   *
-   * <p>Returns null where the translator declines, or where the expansion does
-   * not lower to a step list, so that the caller hands the query back
-   * unchanged.
-   */
-  private static Core.@Nullable From expandViaTree(
-      TypeSystem typeSystem,
-      NameGenerator nameGenerator,
-      Environment env,
-      Core.From from,
-      boolean rowsUsed) {
-    if (!containsExtent(from)) {
-      // Nothing to ground. A round trip through the tree would return an
-      // equal query that is not the same object -- which the fixed-point loop
-      // above reads as progress.
-      return null;
-    }
-    final Core.@Nullable Exp tree = RelTranslator.toRel(typeSystem, from);
-    if (tree == null) {
-      return null;
-    }
-    // The patterns the query was written with, in scan order, so that the
-    // leaves keep the names the user gave them.
-    final List<Core.Pat> leafPats = new ArrayList<>();
-    from.steps.forEach(
-        step -> {
-          if (step instanceof Core.Scan) {
-            leafPats.add(((Core.Scan) step).pat);
-          }
-        });
-    // The leaf that each collection grounding builds bounds, so that the
-    // lowering can name each scan after the variable it scans.
-    final Map<Core.Exp, String> leafNames = new IdentityHashMap<>();
-    final Core.Exp expanded;
-    try {
-      expanded =
-          RelExpander.expand(
-              typeSystem, env, tree, rowsUsed, leafPats, leafNames);
-    } catch (CompileException e) {
-      // Hand the query back unchanged rather than report here. The pattern is
-      // still unbounded, so `SuchThatShuttle` reaches it and says so, at the
-      // position the query was written with.
-      return null;
-    }
-    // The same names again, for the binders the lowering invents. Less
-    // reliable than naming the leaves was -- grounding may have reordered
-    // them, and the lowering takes them positionally -- but a name that ends
-    // up on the wrong scan is still unique, and the common case is that they
-    // are in the order they were written.
-    final List<String> scanNames = new ArrayList<>();
-    leafPats.forEach(
-        pat -> {
-          if (pat instanceof Core.IdPat) {
-            scanNames.add(((Core.IdPat) pat).name);
-          }
-        });
-    final Core.Exp lowered =
-        RelLowerer.lower(
-            typeSystem,
-            nameGenerator,
-            expanded,
-            scanNames.size() == leafPats.size()
-                ? Lists.transform(scanNames, ImmutableList::of)
-                : ImmutableList.of(),
-            true,
-            leafNames);
-    if (misaddressed(lowered)) {
-      // A selector reading a field the row does not have. Replacing a join
-      // with a projection makes the element one component where it was
-      // several, and what reads it above was written for
-      // the other shape; `rebuild` does not rebase them. Hand the query back
-      // until it does.
-      return null;
-    }
-    if (!(lowered instanceof Core.From) || containsExtent(lowered)) {
-      // An extent that survives is one the walk did not reach or could not
-      // bound -- including one inside a nested query, which this walk does not
-      // ground. Handing it back would put an infinite collection in a plan,
-      // which fails when the query runs rather than when it compiles.
-      return null;
-    }
-    if (System.getenv("MOREL_DEBUG") != null) {
-      System.err.println("VT " + lowered); // lint:skip
-    }
-    return (Core.From) lowered;
-  }
-
-  /**
    * Returns whether an expression reads a field that its row does not have.
    *
    * <p>Cheap, and it catches the shape exactly: a selector carries the slot it
@@ -180,29 +65,6 @@ public class Expander {
                     >= ((RecordLikeType) apply.arg.type)
                         .argNameTypes()
                         .size()) {
-              found[0] = true;
-            }
-          }
-        });
-    return found[0];
-  }
-
-  /**
-   * Returns whether a tree still has a leaf that cannot be enumerated.
-   *
-   * <p>Every scan counts, nested queries included: this asks whether the result
-   * is safe to hand back, and one infinite extent anywhere in it is not. The
-   * step list reaches a nested query later and grounds it then, so declining
-   * here costs only that this query takes the other path.
-   */
-  private static boolean containsExtent(Core.Exp exp) {
-    final boolean[] found = {false};
-    exp.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Core.Scan scan) {
-            super.visit(scan);
-            if (Extents.isInfinite(scan.exp)) {
               found[0] = true;
             }
           }
