@@ -378,19 +378,19 @@ from w in [0w1, 0wxFFFFFFFFFFFFFFFF] compute max over w;
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat w$15, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink collect(get(name max))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_134, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from p in [(1, 2), (2, 1), (1, 9)] compute max over p;
 > val it = (2,1) : int * int
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat w$16, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink collect(get(name max))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_143, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from ox in [SOME 1, NONE, SOME 3] compute min over ox;
 > val it = NONE : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat w$17, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink collect(get(name min)))))))"
+>   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_152, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
 >   : string
 Sys.set ("hybrid", false);
 > val it = () : unit

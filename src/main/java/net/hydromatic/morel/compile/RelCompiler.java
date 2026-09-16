@@ -596,7 +596,7 @@ class RelCompiler {
    * y)} becomes {@code y}. Only where the selector was made for this tuple's
    * type; a substitution can put a tuple of another arity under it.
    */
-  private static Core.Exp readField(Core.Exp exp) {
+  static Core.Exp readField(Core.Exp exp) {
     if (exp instanceof Core.Apply) {
       final Core.Apply apply = (Core.Apply) exp;
       if (apply.fn instanceof Core.RecordSelector

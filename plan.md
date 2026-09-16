@@ -133,9 +133,35 @@ Done. What it turned out to need, for the ports and for F2:
     move (`w$N` became `$0_N`), and one group plan gained a `yield`
     for the record that the tree's group builds where the step list
     read the outputs by name.
-- [ ] `CalciteCompiler` reads the tree, not `Core.From`; this is also
-      the first half of coloring_design.md §12.7. Until then
-      `Compiles` lowers when `hybrid` is on.
+- [x] `CalciteCompiler` reads the tree, not `Core.From`; this is also
+      the first half of coloring_design.md §12.7. `Compiles` no longer
+      lowers at all. What it turned out to need:
+  - The same shape as `RelCompiler`: a node hands its element up as
+    the whole row of the relational expression on top of the builder
+    (a leaf, a projection, a group, a set operator) or deferred as
+    an expression over the rows below (a filter its row, a join the
+    tuple of components). A `RelContext` registers a pattern's
+    columns under a key that includes the pattern's ordinal, because
+    every node's row is `$0` and a nested tree's must not shadow its
+    enclosing tree's.
+  - A join is a cross join with the condition as a filter above it,
+    because the translator addresses a field of the joined row by its
+    offset in that row, and that row does not exist until the join is
+    built. Calcite pushes the filter back into the join, so the
+    plans that were pushed down before are byte-identical. Outer and
+    dependent joins, ordinals and `ifEmpty` decline, and run locally.
+  - The binder device `let val v = $0 in e end`, by which a nested
+    tree reads the enclosing row, is substituted away before
+    translation; what read the binder then reads the row, and
+    correlates to it through the parent context as before.
+  - Records and tuples both occupy one column per field; a primitive
+    type is record-like in the type system but takes one column.
+  - Latent, and not new: a nested tree compiled as an ordinary
+    argument (`only (from ...)` in a projection) is offered to Calcite
+    on its own, and an enclosing row it reads becomes a
+    `morelScalar` of text that names a pattern, which nothing can
+    evaluate. It is reached only when the enclosing query is not
+    itself pushed down, which the step list also could not survive.
 - [ ] Delete `Core.From`, `FromStep` and its subclasses, `StepEnv`,
       `FromBuilder`, `RelLowerer`, `RelTranslator`, `RelShadow`, and
       the compiler's step-list code.
