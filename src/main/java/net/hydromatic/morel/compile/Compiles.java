@@ -226,7 +226,10 @@ public abstract class Compiles {
         tracer.onCore(i + 2, coreDecl);
       }
     }
-    coreDecl = lowerTrees(typeSystem, session.nameGenerator, coreDecl);
+    if (hybrid) {
+      // Calcite still reads the step list. The compiler reads the tree.
+      coreDecl = lowerTrees(typeSystem, session.nameGenerator, coreDecl);
+    }
     checkExtentsFinite(coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
@@ -347,7 +350,8 @@ public abstract class Compiles {
   }
 
   /**
-   * Lowers every relational tree into the step list that executes it.
+   * Lowers every relational tree into the step list that the Calcite compiler
+   * reads.
    *
    * <p>A pass of its own, after the rewrites and before the compiler. Not
    * inside {@link Compiler#compile}: the compiler lays out the stack from the
