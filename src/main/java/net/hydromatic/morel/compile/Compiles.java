@@ -226,10 +226,6 @@ public abstract class Compiles {
         tracer.onCore(i + 2, coreDecl);
       }
     }
-    if (hybrid) {
-      // Calcite still reads the step list. The compiler reads the tree.
-      coreDecl = lowerTrees(typeSystem, session.nameGenerator, coreDecl);
-    }
     checkExtentsFinite(coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
@@ -347,20 +343,6 @@ public abstract class Compiles {
     // Not lowered: `Sys.planEx` prints the tree, and the lowering
     // is a pass of its own that runs after this.
     return coreDecl;
-  }
-
-  /**
-   * Lowers every relational tree into the step list that the Calcite compiler
-   * reads.
-   *
-   * <p>A pass of its own, after the rewrites and before the compiler. Not
-   * inside {@link Compiler#compile}: the compiler lays out the stack from the
-   * Core it is given, so a binder minted while it compiles would have no slot,
-   * and what should have been in one is read from the name environment instead.
-   */
-  private static Core.Decl lowerTrees(
-      TypeSystem typeSystem, NameGenerator nameGenerator, Core.Decl decl) {
-    return RelLowerer.lowerAll(typeSystem, nameGenerator, decl);
   }
 
   /**

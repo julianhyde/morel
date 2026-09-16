@@ -29,6 +29,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
@@ -48,6 +49,7 @@ import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable2;
@@ -64,7 +66,9 @@ import net.hydromatic.morel.foreign.Converters;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
@@ -604,6 +608,406 @@ public class CalciteCompiler extends Compiler {
     };
   }
 
+  /**
+   * Returns whether a type is a record or a tuple, and therefore occupies one
+   * column per field. (A primitive type is record-like too, with no fields.)
+   */
+  static boolean isRecordLike(Type type) {
+    return type instanceof RecordType || type instanceof TupleType;
+  }
+
+  /**
+   * Key under which a pattern's columns are registered in a {@link RelContext}:
+   * its name, made unique by its ordinal. A tree's nodes all bind {@code $0},
+   * and a nested tree's row must not be mistaken for its enclosing tree's.
+   */
+  static String key(Core.NamedPat pat) {
+    return pat.i == 0 ? pat.name : pat.name + "_" + pat.i;
+  }
+
+  @Override
+  protected Code compileRel(Context cx, Core.Rel rel) {
+    final Code code = super.compileRel(cx, rel);
+    return new RelCode() {
+      @Override
+      public Describer describe(Describer describer) {
+        return code.describe(describer);
+      }
+
+      @Override
+      public Object eval(Stack stack) {
+        return code.eval(stack);
+      }
+
+      @Override
+      public boolean toRel(RelContext cx, boolean aggressive) {
+        final Core.IdPat target =
+            core.rowPat(rel.type.elementType(), typeSystem.nameGenerator::inc);
+        final TreeOut out = tree(cx, rel, target);
+        if (out == null) {
+          return false;
+        }
+        materialize(out, target);
+        return true;
+      }
+    };
+  }
+
+  /**
+   * A translated tree node: the context whose map names the columns of the
+   * relational expression on top of the builder, and the elements deferred as
+   * expressions over them.
+   *
+   * <p>As in {@link RelCompiler}, a node hands its element up either as the
+   * whole row of a relational expression (a leaf, a projection, a group, a set
+   * operator) or as an expression over the rows below (a filter its row, a join
+   * the tuple of its inputs' components), which the node above substitutes
+   * before it translates its own expressions.
+   */
+  private class TreeOut {
+    final RelContext cx;
+    final ImmutableMap<Core.NamedPat, Core.Exp> deferred;
+
+    TreeOut(RelContext cx, ImmutableMap<Core.NamedPat, Core.Exp> deferred) {
+      this.cx = cx;
+      this.deferred = deferred;
+    }
+
+    TreeOut defer(Core.NamedPat pat, Core.Exp exp) {
+      return new TreeOut(
+          cx,
+          ImmutableMap.<Core.NamedPat, Core.Exp>builder()
+              .putAll(deferred)
+              .put(pat, resolve(exp))
+              .buildOrThrow());
+    }
+
+    boolean isSlot(Core.NamedPat pat) {
+      return cx.map.containsKey(key(pat)) && !deferred.containsKey(pat);
+    }
+
+    Core.Exp resolve(Core.Exp exp) {
+      if (deferred.isEmpty()) {
+        return exp;
+      }
+      return exp.accept(
+          new Shuttle(typeSystem) {
+            @Override
+            protected Core.Exp visit(Core.Id id) {
+              final Core.@Nullable Exp e = deferred.get(id.idPat);
+              return e != null ? e : id;
+            }
+
+            @Override
+            protected Core.Exp visit(Core.Apply apply) {
+              return RelCompiler.readField(super.visit(apply));
+            }
+          });
+    }
+  }
+
+  /** Registers a pattern as the whole row of the expression on top. */
+  private TreeOut slot(RelContext parent, Core.IdPat pat) {
+    final RelDataType rowType = parent.relBuilder.peek().getRowType();
+    final ImmutableSortedMap<String, VarData> map =
+        ImmutableSortedMap.of(key(pat), new VarData(pat.type, 0, rowType));
+    final RelContext cx =
+        new RelContext(
+            parent.env.bindAll(ImmutableList.of(Binding.of(pat))),
+            parent,
+            parent.relBuilder,
+            map,
+            1);
+    return new TreeOut(cx, ImmutableMap.of());
+  }
+
+  /**
+   * Translates a node so that the expression on top of the builder computes it,
+   * and its element is bound to {@code target}; or returns null if the node
+   * cannot be translated.
+   */
+  private @Nullable TreeOut tree(
+      RelContext cx, Core.Exp node, Core.IdPat target) {
+    if (!(node instanceof Core.Rel) || node instanceof Core.IfEmpty) {
+      return toRel3(cx, node, true) ? slot(cx, target) : null;
+    }
+    final TreeOut out;
+    switch (node.op) {
+      case FILTER:
+        final Core.Filter filter = (Core.Filter) node;
+        if (filter.ordinal != null) {
+          return null;
+        }
+        out = tree(cx, filter.input, filter.row);
+        if (out == null) {
+          return null;
+        }
+        out.cx.relBuilder.filter(
+            out.cx.varList, translate(out.cx, out.resolve(filter.condition)));
+        return out.defer(target, core.id(filter.row));
+
+      case PROJECT:
+        final Core.Project project = (Core.Project) node;
+        if (project.ordinal != null) {
+          return null;
+        }
+        out = tree(cx, project.input, project.row);
+        if (out == null) {
+          return null;
+        }
+        projectElement(out.cx, out.resolve(project.exp));
+        return slot(cx, target);
+
+      case SORT:
+        final Core.Sort sort = (Core.Sort) node;
+        if (sort.ordinal != null) {
+          return null;
+        }
+        out = tree(cx, sort.input, sort.row);
+        if (out == null) {
+          return null;
+        }
+        final List<RexNode> exps = new ArrayList<>();
+        translateOrderItems(out.cx, exps::add, out.resolve(sort.exp), false);
+        out.cx.relBuilder.sort(exps);
+        return out.defer(target, core.id(sort.row));
+
+      case SKIP:
+        final Core.Skip skip = (Core.Skip) node;
+        if (skip.count.op != Op.INT_LITERAL) {
+          return null;
+        }
+        out = tree(cx, skip.input, target);
+        if (out == null) {
+          return null;
+        }
+        out.cx.relBuilder.limit(
+            ((Core.Literal) skip.count).unwrap(Integer.class), -1);
+        return out;
+
+      case TAKE:
+        final Core.Take take = (Core.Take) node;
+        if (take.count.op != Op.INT_LITERAL) {
+          return null;
+        }
+        out = tree(cx, take.input, target);
+        if (out == null) {
+          return null;
+        }
+        out.cx.relBuilder.limit(
+            0, ((Core.Literal) take.count).unwrap(Integer.class));
+        return out;
+
+      case UNORDER:
+        return tree(cx, ((Core.Unorder) node).input, target);
+
+      case GROUP:
+        return group(cx, (Core.Group) node, target);
+
+      case JOIN:
+        return join(cx, (Core.Join) node, target);
+
+      case UNION:
+      case INTERSECT:
+      case EXCEPT:
+        return setOp(cx, (Core.SetRel) node, target);
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Substitutes away a binder that names a row, {@code let val v = $0 in e
+   * end}, which is how a nested tree reads the enclosing row; what read the
+   * binder then reads the row, and correlates to it. Returns the expression
+   * unchanged if it is not such a {@code let}.
+   */
+  private Core.Exp unwrapLet(Core.Exp exp) {
+    while (exp instanceof Core.Let
+        && ((Core.Let) exp).decl instanceof Core.NonRecValDecl) {
+      final Core.Let let = (Core.Let) exp;
+      final Core.NonRecValDecl decl = (Core.NonRecValDecl) let.decl;
+      if (!(decl.pat instanceof Core.IdPat && decl.exp instanceof Core.Id)) {
+        break;
+      }
+      final Core.IdPat pat = (Core.IdPat) decl.pat;
+      exp =
+          let.exp.accept(
+              new Shuttle(typeSystem) {
+                @Override
+                protected Core.Exp visit(Core.Id id) {
+                  return id.idPat.equals(pat) ? decl.exp : id;
+                }
+              });
+    }
+    return exp;
+  }
+
+  /**
+   * Projects an element as the columns of the expression on top: a record's or
+   * tuple's fields, or a scalar as the one column.
+   */
+  private void projectElement(RelContext cx, Core.Exp exp) {
+    exp = unwrapLet(exp);
+    if (exp instanceof Core.Id) {
+      final Core.Tuple tuple = toRecord(cx, (Core.Id) exp);
+      if (tuple != null) {
+        exp = tuple;
+      }
+    }
+    if (exp instanceof Core.Tuple) {
+      final Core.Tuple tuple = (Core.Tuple) exp;
+      cx.relBuilder.project(
+          transform(tuple.args, e -> translate(cx, e)),
+          tuple.type().argNames());
+    } else {
+      cx.relBuilder.project(translate(cx, exp));
+    }
+  }
+
+  /** Makes the target the whole row of the expression on top. */
+  private TreeOut materialize(TreeOut out, Core.IdPat target) {
+    if (out.isSlot(target)) {
+      return out;
+    }
+    projectElement(out.cx, out.resolve(core.id(target)));
+    return slot(requireNonNull(out.cx.parent), target);
+  }
+
+  private @Nullable TreeOut group(
+      RelContext cx, Core.Group group, Core.IdPat target) {
+    if (group.ordinal != null) {
+      return null;
+    }
+    // See the note in the step-list translation: Calcite's MIN and MAX do
+    // not order every type the way Morel does.
+    for (Core.Aggregate aggregate : group.aggregates.values()) {
+      final SqlAggFunction op = aggOp(aggregate.aggregate);
+      if ((op == SqlStdOperatorTable.MIN || op == SqlStdOperatorTable.MAX)
+          && !calciteOrders(aggregate.type)) {
+        return null;
+      }
+    }
+    final TreeOut out = tree(cx, group.input, group.row);
+    if (out == null) {
+      return null;
+    }
+    final List<RexNode> nodes = new ArrayList<>();
+    final List<String> names = new ArrayList<>();
+    group.keys.forEach(
+        (name, exp) -> {
+          nodes.add(translate(out.cx, out.resolve(exp)));
+          names.add(name);
+        });
+    final RelBuilder.GroupKey groupKey = out.cx.relBuilder.groupKey(nodes);
+    final List<RelBuilder.AggCall> aggregateCalls = new ArrayList<>();
+    group.aggregates.forEach(
+        (name, aggregate) -> {
+          final SqlAggFunction op = aggOp(aggregate.aggregate);
+          final ImmutableList.Builder<RexNode> args = ImmutableList.builder();
+          if (aggregate.argument != null) {
+            args.add(translate(out.cx, out.resolve(aggregate.argument)));
+          }
+          aggregateCalls.add(
+              out.cx.relBuilder.aggregateCall(op, args.build()).as(name));
+          names.add(name);
+        });
+    out.cx.relBuilder.aggregate(groupKey, aggregateCalls);
+    // The element is the record of the outputs, whose fields are sorted.
+    final List<String> sortedNames = sort(names, Ordering.natural());
+    out.cx
+        .relBuilder
+        .rename(names)
+        .project(out.cx.relBuilder.fields(sortedNames));
+    return slot(cx, target);
+  }
+
+  private @Nullable TreeOut join(
+      RelContext cx, Core.Join join, Core.IdPat target) {
+    if (join.joinType != Core.Rel.JoinType.INNER || join.ordinal != null) {
+      return null;
+    }
+    final TreeOut left = tree(cx, join.left, join.leftRow);
+    if (left == null) {
+      return null;
+    }
+    // The right input's context is the left's, so that a right input that
+    // reads the left row correlates to it.
+    final TreeOut right = tree(left.cx, join.right, join.rightRow);
+    if (right == null) {
+      return null;
+    }
+    final RelBuilder relBuilder = cx.relBuilder;
+    final int leftCount = relBuilder.peek(1).getRowType().getFieldCount();
+    final SortedMap<String, VarData> map = new TreeMap<>(left.cx.map);
+    right.cx.map.forEach(
+        (k, v) ->
+            map.put(k, new VarData(v.type, v.offset + leftCount, v.rowType)));
+    // The condition goes in a filter above a cross join, because a field of
+    // the joined row is addressed by its offset in that row, which does not
+    // exist until the join is built. Calcite pushes it back into the join.
+    relBuilder.join(
+        JoinRelType.INNER,
+        relBuilder.literal(true),
+        ImmutableSet.copyOf(left.cx.varList));
+    final RelContext cxJoin =
+        new RelContext(
+            right.cx.env,
+            cx,
+            relBuilder,
+            ImmutableSortedMap.copyOfSorted(map),
+            1);
+    final TreeOut out =
+        new TreeOut(
+            cxJoin,
+            ImmutableMap.<Core.NamedPat, Core.Exp>builder()
+                .putAll(left.deferred)
+                .putAll(right.deferred)
+                .buildOrThrow());
+    if (!join.condition.isBoolLiteral(true)) {
+      relBuilder.filter(
+          cxJoin.varList, translate(cxJoin, out.resolve(join.condition)));
+    }
+    final List<Core.Exp> exps =
+        new ArrayList<>(
+            core.components(typeSystem, join.left, core.id(join.leftRow)));
+    exps.addAll(
+        core.components(typeSystem, join.right, core.id(join.rightRow)));
+    return out.defer(target, core.tuple(typeSystem, null, exps));
+  }
+
+  private @Nullable TreeOut setOp(
+      RelContext cx, Core.SetRel setRel, Core.IdPat target) {
+    final TreeOut first = tree(cx, setRel.inputs.get(0), target);
+    if (first == null) {
+      return null;
+    }
+    materialize(first, target);
+    int n = 1;
+    for (Core.Exp input : setRel.inputs.subList(1, setRel.inputs.size())) {
+      if (!toRel3(cx, input, true)) {
+        // One of the inputs could not be converted. Clean up the stack.
+        while (n-- > 0) {
+          cx.relBuilder.build();
+        }
+        return null;
+      }
+      ++n;
+    }
+    harmonizeRowTypes(cx.relBuilder, n);
+    switch (setRel.op) {
+      case EXCEPT:
+      case INTERSECT:
+        foldSetOp(cx.relBuilder, setRel.op, !setRel.distinct, n);
+        break;
+      default:
+        cx.relBuilder.union(!setRel.distinct, n);
+        break;
+    }
+    return slot(cx, target);
+  }
+
   private RelContext yield_(RelContext cx, Core.Yield yield) {
     return yield_(cx, yield.env, yield.exp);
   }
@@ -687,10 +1091,10 @@ public class CalciteCompiler extends Compiler {
         if (record != null) {
           return translate(cx, record);
         }
-        if (cx.map.containsKey(id.idPat.name)) {
+        if (cx.map.containsKey(key(id.idPat))) {
           // Not a record, so must be a scalar. It is represented in Calcite
           // as a record with one field.
-          final VarData fn = requireNonNull(cx.map.get(id.idPat.name));
+          final VarData fn = requireNonNull(cx.map.get(key(id.idPat)));
           return fn.apply(cx.relBuilder);
         }
         break;
@@ -750,7 +1154,7 @@ public class CalciteCompiler extends Compiler {
             && apply.arg instanceof Core.Id) {
           // Something like '#deptno e'
           final Core.NamedPat idPat = ((Core.Id) apply.arg).idPat;
-          final @Nullable RexNode range = cx.var(idPat.name);
+          final @Nullable RexNode range = cx.var(key(idPat));
           if (range != null) {
             final Core.RecordSelector selector = (Core.RecordSelector) apply.fn;
             return cx.relBuilder.field(range, selector.fieldName());
@@ -764,6 +1168,13 @@ public class CalciteCompiler extends Compiler {
         final RexNode fnRex = translate(cx, apply.fn);
         final RexNode argRex = translate(cx, apply.arg);
         return morelApply(cx, apply.type, apply.arg.type, fnRex, argRex);
+
+      case LET:
+        final Core.Exp exp2 = unwrapLet(exp);
+        if (exp2 != exp) {
+          return translate(cx, exp2);
+        }
+        break;
 
       case FROM:
         final Core.From from = (Core.From) exp;
@@ -806,8 +1217,8 @@ public class CalciteCompiler extends Compiler {
         new Visitor() {
           @Override
           protected void visit(Core.Id id) {
-            if (nameSet.contains(id.idPat.name)) {
-              varNames.add(id.idPat.name);
+            if (nameSet.contains(key(id.idPat))) {
+              varNames.add(key(id.idPat));
             }
           }
         });
@@ -850,17 +1261,19 @@ public class CalciteCompiler extends Compiler {
     final Binding binding = cx.env.getOpt(id.idPat);
     checkNotNull(binding, "not found", id);
     final Type type = binding.id.type;
-    if (type instanceof RecordType) {
-      final RecordType recordType = (RecordType) type;
+    if (isRecordLike(type)) {
+      final RecordLikeType recordType = (RecordLikeType) type;
       final List<Core.Exp> args = new ArrayList<>();
-      recordType.argNameTypes.forEach(
-          (field, fieldType) ->
-              args.add(
-                  core.apply(
-                      Pos.ZERO,
-                      fieldType,
-                      core.recordSelector(typeSystem, recordType, field),
-                      id)));
+      recordType
+          .argNameTypes()
+          .forEach(
+              (field, fieldType) ->
+                  args.add(
+                      core.apply(
+                          Pos.ZERO,
+                          fieldType,
+                          core.recordSelector(typeSystem, recordType, field),
+                          id)));
       return core.tuple(recordType, args);
     }
     return null;
@@ -885,7 +1298,7 @@ public class CalciteCompiler extends Compiler {
     if (pat instanceof Core.IdPat) {
       final Core.IdPat idPat = (Core.IdPat) pat;
       cx.relBuilder.as(idPat.name);
-      varOffsets.put(idPat.name, new VarData(pat.type, offset, r.getRowType()));
+      varOffsets.put(key(idPat), new VarData(pat.type, offset, r.getRowType()));
     }
     cx =
         new RelContext(
@@ -1223,7 +1636,7 @@ public class CalciteCompiler extends Compiler {
     }
 
     RexNode apply(RelBuilder relBuilder) {
-      if (type instanceof RecordType) {
+      if (isRecordLike(type)) {
         return relBuilder
             .getRexBuilder()
             .makeRangeReference(rowType, offset, false);
