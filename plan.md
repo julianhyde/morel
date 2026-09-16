@@ -50,8 +50,29 @@ step is written with it.
       query" from the argument's AST; §6.8 says what has happened to
       the query at each `Sys.planEx` phase.
 - [x] A contract changelog at the head of spec.md.
-- [ ] File the Go port's ten findings against hydromatic/morel; the
-      Rust port's four are fixed.
+- [x] The Go port's findings (its plan.md, "Found so far"), and
+      what became of each on this branch:
+  1. §3.2's group row stale, and no single-key group in the suite:
+     the row was corrected in `29d6cf9c`; the suite case is in
+     `rel-tree.smli` now ("Cases a second implementation asked for").
+  2. §5 overclaims what the validator checks: `07d6a39c`.
+  3. `RelTranslator`'s class javadoc described a phase that was
+     over, and 4. it had dead methods: moot, the file went in
+     `579b0a1c`.
+  5. Retracted by its author.
+  6. Nothing pinned a three-conjunct condition: the suite and §6.6
+     now say `andalso` nests to the right.
+  7. The two tree builders disagreed on a dependent join's binder:
+     one builder since `579b0a1c`, and one pattern printed as
+     `join [v$0]` since `29d6cf9c`.
+  8. §6 did not say the text ends with a newline: `07d6a39c`.
+  9. A leaf is printed by each implementation's own Core (a range;
+     `abs` before overload resolution): §3.1 says what §6 does not
+     reach, §6.8 says at which phase, and the suite has a range leaf
+     and an extent leaf.
+  10. §6.7 did not fix a pass-minted binder's prefix: `29d6cf9c`
+      prints every binder as `v$`, and `07d6a39c` says so.
+  11. Was the port's own.
 
 ### F1 — The Java datatype binds patterns
 
@@ -207,8 +228,37 @@ Done. What it turned out to need, for the ports and for F2:
 - [ ] Merge to main. The ports port F1 with the rule framework, as
       their plans already say.
 
-Measured on 2026-09-16, before starting, so that the reorder is done
-against facts rather than the memory of the rebase:
+Decided 2026-09-16: the branch is not rewritten now; the reorder and
+squash is done once, at the end. Until then two kinds of note keep
+the squash cheap, and each commit from here on carries them where
+they apply:
+
+- **Fixes of an earlier commit.** A commit that fixes a bug an
+  earlier commit introduced, or reverts one, says so by hash, so the
+  squash can fold it back. Known so far:
+  - `8a14fcd3` fixes the compile break that the rebase onto main
+    introduced at `aafe9aa9`: main's #229 gave `Generators.Cache` a
+    third constructor argument, and `RelExpander` passes it only from
+    `8a14fcd3`. The 190 commits from `aafe9aa9` to `400c76e7` do not
+    compile; the four-line `ungroundedPats(extents)` belongs at
+    `aafe9aa9`.
+  - `ae9f7549` fixes `Compiler.collectReferencedStackVarsRec`, whose
+    switch over expression kinds did not know the tree's nodes. Not
+    a branch bug until that commit: before it, every tree was lowered
+    before the compiler saw it.
+- **Orthogonal commits**, which could land on main before the rest:
+  - The printer's move to Lindig, with what precedes it: `d14c0ea1`
+    (`Core.Exp.freePats`), `0d7300c1` (the writer builds a document),
+    `87539ea7`, `d229b1ce`, `efb07f93` (wrapping rules), and
+    `3030d5e9` (the note on type legends). See "Commits to separate
+    out" below.
+  - Of `579b0a1c`: `RowSinks.scan` evaluating an independent
+    collection once per execution; `Codes.ifEmpty`. Of `ae9f7549`:
+    the visitor-based capture collector in `Compiler`. Each is a
+    change any caller benefits from, tangled into a branch commit.
+
+Measured the same day, so that the squash is done against facts
+rather than the memory of the rebase:
 
 - **The base has moved.** `julianhyde/main` was rewritten after the
   branch was rebased onto it: the branch carries copies of sixteen
@@ -217,24 +267,11 @@ against facts rather than the memory of the rebase:
   main has two more since. The first commit of the branch's own is
   `a4f51aa8`, "Spec for the relational tree". Landing starts with
   `git rebase --onto julianhyde/main 6a266677 449-tree`.
-- **190 commits do not compile**, from `aafe9aa9` ("Ground a tree's
-  leaves with the step list's engine", the 39th commit) to
-  `400c76e7` ("A conformance suite"), the commit before `8a14fcd3`.
-  All for one reason: main's #229 gave `Generators.Cache` a third
-  constructor argument, the rebase put that under these commits, and
-  `RelExpander` learned to pass it only in `8a14fcd3`. So the plan's
-  "fold `8a14fcd3` into the deletion" is not enough: the four-line
-  `ungroundedPats(extents)` must enter at `aafe9aa9`, where
-  `RelExpander` first builds a `Cache`, and each later commit that
-  touches those call sites must carry it. A rebase that replays the
-  branch will meet it as a conflict at each such commit.
 - **No stale golden output found.** Of the eighteen commits that
   touch `such-that.smli` or `built-in/sys.smli`, the twelve that
   compile print both files as they hold them; the six inside the
-  non-compiling span could not be checked, and are where the rebase's
-  conflict resolutions sit.
-- The backup of the branch as it stands is the tag
-  `449-tree-before-squash`.
+  non-compiling span could not be checked.
+- The tag `449-tree-before-squash` marks the branch as it stood.
 
 ### F4 onward
 
