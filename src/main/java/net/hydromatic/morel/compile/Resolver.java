@@ -2633,7 +2633,7 @@ public class Resolver {
      *
      * <p>The {@code case} yields a collection of nought or one row, and a
      * dependent join over it is the flat-map that keeps the rows that match --
-     * the same shape {@code RelTranslator} builds for such a scan. The join's
+     * the same shape {@code FromBuilder} builds for such a scan. The join's
      * left component is the value that was matched, which nothing above wants,
      * so a projection drops it.
      */

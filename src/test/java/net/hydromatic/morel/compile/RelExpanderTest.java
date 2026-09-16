@@ -163,7 +163,11 @@ public class RelExpanderTest {
   void testExpand() {
     assertThat(
         expanded("from x where x elem [1, 2, 3]"),
-        is("from g$0 in [1, 2, 3] group g$0 order g$0\n"));
+        is(
+            "sort [$0]\n" //
+                + "  project [#g$0 $0]\n"
+                + "    group [g$0 = $0]\n"
+                + "      [1, 2, 3]\n"));
   }
 
   /** Tests that a condition a generator does not subsume is kept. */
@@ -173,7 +177,10 @@ public class RelExpanderTest {
         expanded("from x where x elem [1, 2, 3] andalso x > 1"),
         is(
             "filter [$0 > 1]\n" //
-                + "  from g$0 in [1, 2, 3] group g$0 order g$0\n"));
+                + "  sort [$0]\n"
+                + "    project [#g$0 $0]\n"
+                + "      group [g$0 = $0]\n"
+                + "        [1, 2, 3]\n"));
   }
 
   /**
@@ -222,10 +229,9 @@ public class RelExpanderTest {
         is(
             "project [{i = #1 $0, j = #2 $0}]\n" //
                 + "  project [(#g$0 $0, #g$1 $0)]\n"
-                + "    from (g$0, g$1) in [(1, \"a\"), (2,\n"
-                + "        \"b\")] "
-                + "group {g$0 = g$0, g$1 = g$1} "
-                + "order {g$0 = g$0, g$1 = g$1}\n"));
+                + "    sort [$0]\n"
+                + "      group [g$0 = #1 $0, g$1 = #2 $0]\n"
+                + "        [(1, \"a\"), (2, \"b\")]\n"));
   }
 
   /**
@@ -276,9 +282,18 @@ public class RelExpanderTest {
             "project [{i = #1 $0, j = #2 $0, k = #3 $0}]\n" //
                 + "  join\n"
                 + "    join\n"
-                + "      from g$0 in [1, 2] group g$0 order g$0\n"
-                + "      from g$1 in [3, 4] group g$1 order g$1\n"
-                + "    from g$2 in [5, 6] group g$2 order g$2\n"));
+                + "      sort [$0]\n"
+                + "        project [#g$0 $0]\n"
+                + "          group [g$0 = $0]\n"
+                + "            [1, 2]\n"
+                + "      sort [$0]\n"
+                + "        project [#g$1 $0]\n"
+                + "          group [g$1 = $0]\n"
+                + "            [3, 4]\n"
+                + "    sort [$0]\n"
+                + "      project [#g$2 $0]\n"
+                + "        group [g$2 = $0]\n"
+                + "          [5, 6]\n"));
   }
 
   /**
@@ -322,8 +337,14 @@ public class RelExpanderTest {
             "project [{dno = #1 $0, v = #2 $0}]\n" //
                 + "  project [(#2 $0, #1 $0)]\n"
                 + "    join [v$0]\n"
-                + "      from g$0 in [[1], [2]] group g$0 order g$0\n"
-                + "      from g$1 in v$0 group g$1 order g$1\n"));
+                + "      sort [$0]\n"
+                + "        project [#g$0 $0]\n"
+                + "          group [g$0 = $0]\n"
+                + "            [[1], [2]]\n"
+                + "      sort [$0]\n"
+                + "        project [#g$1 $0]\n"
+                + "          group [g$1 = $0]\n"
+                + "            v$0\n"));
   }
 
   /** Tests that a query that cannot be bounded is an error. */

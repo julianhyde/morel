@@ -18,168 +18,60 @@
  */
 package net.hydromatic.morel.ast;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Pair.forEach;
-import static net.hydromatic.morel.util.Static.allMatch;
-import static net.hydromatic.morel.util.Static.append;
-import static net.hydromatic.morel.util.Static.last;
-import static net.hydromatic.morel.util.Static.only;
-import static net.hydromatic.morel.util.Static.skipLast;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.SortedMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
-import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.compile.Compiles;
-import net.hydromatic.morel.compile.Environment;
-import net.hydromatic.morel.compile.RefChecker;
-import net.hydromatic.morel.type.Binding;
-import net.hydromatic.morel.type.ListType;
+import java.util.TreeMap;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.Pair;
-import net.hydromatic.morel.util.PairList;
-import org.jspecify.annotations.Nullable;
 
 /**
- * Builds a {@link Core.From}.
+ * Builds a query, step by step, as a relational tree.
  *
- * <p>Simplifies the following patterns:
+ * <p>The steps are those of a {@code from} expression -- scan, where, yield,
+ * order, group, distinct, skip, take, and the set operators -- and their
+ * expressions are written over the variables that earlier steps bound, as a
+ * query is written: {@code scan(x, xs)} then {@code where(x > 1)}. The builder
+ * keeps the names in scope and rewrites each expression over the tree's own
+ * patterns before it hands it to a {@link RelBuilder}, which is where the tree
+ * is built.
  *
- * <ul>
- *   <li>Converts "from v in list" to "list" (only works in {@link
- *       #buildSimplify()}, not {@link #build()});
- *   <li>Removes "where true" steps;
- *   <li>Removes empty "order" steps;
- *   <li>Removes trivial {@code yield}, e.g. "from v in list where condition
- *       yield v" becomes "from v in list where condition";
- *   <li>Inlines {@code from} expressions, e.g. "from v in (from w in list)"
- *       becomes "from w in list yield {v = w}".
- * </ul>
+ * <p>A step's names are keyed by name, so a later step that binds a name again
+ * shadows the earlier binding, as it does in a query.
  */
 public class FromBuilder {
   private final TypeSystem typeSystem;
-  private final @Nullable Supplier<Environment> envSupplier;
-  private final List<Core.FromStep> steps = new ArrayList<>();
-  private final List<Binding> bindings = new ArrayList<>();
+  private final RelBuilder b;
+
+  /** Names in scope, in the order they were bound; the row's bindings. */
+  private final Set<String> bindings = new LinkedHashSet<>();
+
+  /**
+   * Whether the row is a single value bound to one name, as opposed to a record
+   * whose fields are the bindings.
+   */
   private boolean atom;
 
-  /**
-   * If non-negative, flags that particular step should be removed if it is not
-   * the last step. (For example, "yield {i = i}", which changes the result
-   * shape if the last step but is otherwise a no-op.)
-   */
-  private int removeIfNotLastIndex = Integer.MIN_VALUE;
-
-  /**
-   * If non-negative, flags that particular step should be removed if it is the
-   * last step. (For example, we flatten "from p in (from q in list)", to "from
-   * q in list yield {p = q}" but we want to remove "yield {p = q}" if it turns
-   * out to be the last step.)
-   */
-  private int removeIfLastIndex = Integer.MIN_VALUE;
-
-  /**
-   * If non-negative, flags that particular step - a {@code yield} of a
-   * one-field record, added when a subquery whose last step yielded a scalar
-   * was inlined - should yield {@link #scalarIfLastExp} instead if it is the
-   * last step. The record names the binding for the steps that follow; if none
-   * follow, the query's value is the scalar, and a record would be the wrong
-   * type.
-   */
-  private int scalarIfLastIndex = Integer.MIN_VALUE;
-
-  private Core.@Nullable Exp scalarIfLastExp;
-
   /** Use {@link net.hydromatic.morel.ast.CoreBuilder#fromBuilder}. */
-  FromBuilder(
-      TypeSystem typeSystem, @Nullable Supplier<Environment> envSupplier) {
+  FromBuilder(TypeSystem typeSystem) {
     this.typeSystem = typeSystem;
-    this.envSupplier = envSupplier;
-  }
-
-  /** Resets state as if this {@code FromBuilder} had just been created. */
-  public void clear() {
-    steps.clear();
-    bindings.clear();
-    removeIfNotLastIndex = Integer.MIN_VALUE;
-    removeIfLastIndex = Integer.MIN_VALUE;
-    scalarIfLastIndex = Integer.MIN_VALUE;
-    scalarIfLastExp = null;
+    this.b = RelBuilder.create(typeSystem);
   }
 
   @Override
   public String toString() {
-    return steps.toString();
-  }
-
-  /** Returns the environment available after the most recent step. */
-  public Core.StepEnv stepEnv() {
-    final boolean ordered = steps.isEmpty() || last(steps).env.ordered;
-    return Core.StepEnv.of(bindings, atom, ordered);
-  }
-
-  private FromBuilder addStep(Core.FromStep step) {
-    if (envSupplier != null) {
-      // Validate the step. (Not necessary, but helps find bugs.)
-      Core.StepEnv previousEnv =
-          steps.isEmpty() ? Core.StepEnv.EMPTY : last(steps).env;
-      final Environment env = envSupplier.get();
-      RefChecker.of(typeSystem, env).visitStep(step, previousEnv);
-    }
-    if (scalarIfLastIndex == steps.size() - 1) {
-      // A step follows, so the record does name a binding that is used.
-      scalarIfLastIndex = Integer.MIN_VALUE;
-      scalarIfLastExp = null;
-    }
-    if (removeIfNotLastIndex == steps.size() - 1) {
-      // A trivial record yield with a single yield, e.g. 'yield {i = i}', has
-      // a purpose only if it is the last step. (It forces the return to be a
-      // record, e.g. '{i: int}' rather than a scalar 'int'.)
-      // We've just about to add a new step, so this is no longer necessary.
-      removeIfNotLastIndex = Integer.MIN_VALUE;
-      removeIfLastIndex = Integer.MIN_VALUE;
-      final Core.FromStep lastStep = last(steps);
-      if (lastStep.op == Op.YIELD) {
-        final Core.Yield yield = (Core.Yield) lastStep;
-        if (yield.exp.op == Op.TUPLE) {
-          final Core.Tuple tuple = (Core.Tuple) yield.exp;
-          final Core.FromStep previousStep = steps.get(steps.size() - 2);
-          final Core.StepEnv previousEnv = previousStep.env;
-          if (tuple.args.size() == 1
-              && isTrivial(tuple, previousEnv, yield.env)) {
-            steps.remove(steps.size() - 1);
-          }
-        }
-      }
-    }
-    checkArgument(
-        step.env.ordered
-            == step.isOrdered(
-                steps.isEmpty() || step.isOrdered(last(steps).env.ordered)),
-        "step [%s] has wrong ordered [%s]",
-        step,
-        step.env.ordered);
-    steps.add(step);
-    // Refresh bindings if they differ, comparing types too for an atom step so
-    // that a row binder replaces a same-named input binding of a different
-    // type. (Binding equality alone ignores type.)
-    if (!Binding.listsEqual(bindings, step.env.bindings, step.env.atom)) {
-      bindings.clear();
-      bindings.addAll(step.env.bindings);
-    }
-    atom = step.env.atom;
-    return this;
+    return b.size() == 0 ? "[]" : b.peek().toString();
   }
 
   /** Creates an unbounded scan, "from pat". */
@@ -196,695 +88,286 @@ public class FromBuilder {
   }
 
   public FromBuilder scan(Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    return scan(Op.SCAN, pat, exp, condition);
+    return scan(Core.Rel.JoinType.INNER, pat, exp, condition);
   }
 
+  /**
+   * Scans a collection, joining it to the query so far if there is one.
+   *
+   * <p>The collection may read the names bound so far, in which case the join
+   * is dependent; the condition may read those and the names the pattern binds.
+   */
   public FromBuilder scan(
-      Op op, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    if (op == Op.SCAN
-        && exp.op == Op.FROM
-        && core.boolLiteral(true).equals(condition)
-        && isSimplePat(pat, (Core.From) exp)
-        && !containsOrdinal(exp)
-        && safeToInline((Core.From) exp)) {
-      final Core.From from = (Core.From) exp;
-      final Core.FromStep lastStep = last(from.steps);
-      final List<Core.FromStep> steps =
-          lastStep.op == Op.YIELD ? skipLast(from.steps) : from.steps;
-
-      // This is an atom only if this is the first step.
-      // Even if the previous step was empty, e.g.
-      // "from () in [()], i in [1,2]" has type "{i:int} list" not "int list".
-      final boolean atom1 = this.steps.isEmpty() && lastStep.env.atom;
-
-      final PairList<String, Core.Exp> nameExps = PairList.of();
-      boolean uselessIfLast = this.bindings.isEmpty();
-      final Core.StepEnv env;
-      if (pat instanceof Core.RecordPat) {
-        final Core.RecordPat recordPat = (Core.RecordPat) pat;
-        this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
-        forEach(
-            recordPat.type().argNameTypes.keySet(),
-            recordPat.args,
-            (name, arg) -> nameExps.add(name, core.id((Core.IdPat) arg)));
-        env = null;
-      } else if (pat instanceof Core.TuplePat) {
-        final Core.TuplePat tuplePat = (Core.TuplePat) pat;
-        forEach(
-            tuplePat.args,
-            lastStep.env.bindings,
-            (arg, binding) ->
-                nameExps.add(((Core.IdPat) arg).name, core.id(binding.id)));
-        env = null;
-      } else if (!this.bindings.isEmpty()) {
-        // With at least one binding, and one new variable, the output will be
-        // a record type.
-        final Core.IdPat idPat = (Core.IdPat) pat;
-        this.bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
-        lastStep.env.bindings.forEach(
-            b -> nameExps.add(idPat.name, core.id(b.id)));
-        env = null;
-      } else {
-        final Core.IdPat idPat = (Core.IdPat) pat;
-        if (lastStep instanceof Core.Yield
-            && ((Core.Yield) lastStep).exp.op != Op.RECORD) {
-          // The last step is a yield scalar, say 'yield x + 1'.
-          // Translate it to a yield singleton record, say 'yield {y = x + 1}'
-          final Core.Yield yieldStep = (Core.Yield) lastStep;
-          addAll(steps);
-          if (yieldStep.exp.op == Op.ID) {
-            if (this.bindings.size() == 1) {
-              // The last step is 'yield e'. Skip it.
-              return this;
-            }
-            if (((Core.Id) yieldStep.exp).idPat.equals(idPat)) {
-              // Multiple bindings exist (e.g., from inlining a subquery with a
-              // scan of multiple variables like (source, target)). The subquery
-              // yields exactly the variable we're binding to via 'yield
-              // target'. Add a scalar yield to project away the extra bindings.
-              return yield_(yieldStep.exp);
-            }
-          }
-          nameExps.add(idPat.name, yieldStep.exp);
-          final Core.StepEnv env2 =
-              Core.StepEnv.of(
-                  ImmutableList.of(Binding.of(idPat)),
-                  true,
-                  lastStep.env.ordered);
-          yield_(false, env2, core.record(typeSystem, nameExps), true);
-          // Note: 'steps' here is the subquery's list; the field is the one
-          // being built.
-          scalarIfLastIndex = this.steps.size() - 1;
-          scalarIfLastExp = yieldStep.exp;
-          return this;
-        }
-        final Binding binding = lastStep.env.bindings.get(0);
-        nameExps.add(idPat.name, core.id(binding.id));
-
-        env =
-            lastStep.env.withBindings(append(this.bindings, Binding.of(idPat)));
-      }
-      addAll(steps);
-      return yield_(
-          uselessIfLast, env, core.record(typeSystem, nameExps), atom1);
+      Core.Rel.JoinType joinType,
+      Core.Pat pat,
+      Core.Exp exp,
+      Core.Exp condition) {
+    final Core.Exp exp2 = resolve(exp);
+    final List<String> names = new ArrayList<>();
+    pat.expand().forEach(p -> names.add(p.name));
+    if (b.size() == 0) {
+      push(pat, exp2);
+      bind(names);
+      atom = bindings.size() == 1;
+      return where(condition);
     }
-    final int priorCount = bindings.size();
-    Compiles.acceptBinding(typeSystem, pat, bindings);
-    if (op != Op.SCAN) {
-      // An outer join makes the fields on one or both sides optional (so that
-      // an absent row can be represented as 'NONE'). A 'left'/'full' join wraps
-      // the newly scanned fields; a 'right'/'full' join wraps the fields of
-      // earlier steps. Wrapping is additive, so nested outer joins stack
-      // 'option' layers.
-      for (int i = 0; i < bindings.size(); i++) {
-        final boolean wrap =
-            i < priorCount ? op.optionalizesLeft() : op.optionalizesRight();
-        if (wrap) {
-          final Binding b = bindings.get(i);
-          bindings.set(
-              i, Binding.of(b.id.withType(typeSystem.option(b.id.type))));
-        }
-      }
-    }
-    atom = bindings.size() == 1;
-    return addStep(core.scan(op, stepEnv(), pat, exp, condition));
-  }
-
-  /** Returns whether a expression calls {@code ordinal}. */
-  private static boolean containsOrdinal(Core.Exp exp) {
-    final AtomicBoolean b = new AtomicBoolean();
-    exp.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Core.Apply apply) {
-            if (apply.isCallTo(BuiltIn.Z_ORDINAL)) {
-              b.set(true);
-            }
-            super.visit(apply);
-          }
-        });
-    return b.get();
-  }
-
-  /**
-   * Returns whether it is safe to inline the subquery {@code from} into the
-   * enclosing {@code from}, given the bindings already accumulated.
-   *
-   * <p>The inlining optimization in {@link #scan} drops the subquery's trailing
-   * {@code yield} (via {@code skipLast}) and rebuilds the projection from the
-   * subquery's surviving bindings. When this builder already has bindings (that
-   * is, the scan is a join rather than the first step) and the subquery ends in
-   * a {@code yield}, it would not be safe to inline, because the rebuilt
-   * projection would reference the dropped yield's binding, which is no longer
-   * in scope.
-   *
-   * <p>It is also unsafe to inline unless every step that would be merged (all
-   * but a trailing {@code yield}) is a {@code scan} or {@code where}. Those
-   * steps distribute over the enclosing loop, but steps such as {@code take},
-   * {@code skip}, {@code order} and {@code group} do not. For example, in
-   * {@code from i in [1,2,3], j in (from k in ["a","b","c"] take i)} the
-   * subquery's {@code take} must be applied per outer row; merging it into the
-   * enclosing {@code from} would turn it into a single {@code take} over the
-   * whole stream (and, being lateral, would read {@code i} before it is bound).
-   */
-  private boolean safeToInline(Core.From from) {
-    if (bindings.isEmpty()) {
-      // The subquery is the first source, so there is no enclosing loop to
-      // distribute over; inlining any steps preserves meaning.
-      return true;
-    }
-    if (last(from.steps).op == Op.YIELD) {
-      return false;
-    }
-    return from.steps.stream()
-        .allMatch(step -> step.op == Op.SCAN || step.op == Op.WHERE);
-  }
-
-  private static boolean isSimplePat(Core.Pat pat, Core.From exp) {
-    switch (pat.op) {
-      case ID_PAT:
-        return !exp.steps.isEmpty()
-            && last(exp.steps).env.bindings.size() == 1
-            && !yieldsRecord(exp);
-      case RECORD_PAT:
-        return allMatch(
-                ((Core.RecordPat) pat).args, a -> a instanceof Core.IdPat)
-            && endsWithBindings(exp);
-      case TUPLE_PAT:
-        return allMatch(
-                ((Core.TuplePat) pat).args, a -> a instanceof Core.IdPat)
-            && endsWithBindings(exp);
-      default:
-        return false;
-    }
-  }
-
-  /**
-   * Returns whether the last step of {@code from} is a {@code yield} of a
-   * record.
-   *
-   * <p>Inlining such a subquery under a scalar pattern would refer to the
-   * bindings of the {@code yield} that it drops. A {@code yield} of a scalar is
-   * different: inlining refers to the yielded expression, which survives.
-   */
-  private static boolean yieldsRecord(Core.From from) {
-    final Core.FromStep last = last(from.steps);
-    return last.op == Op.YIELD && ((Core.Yield) last).exp.op == Op.RECORD;
-  }
-
-  /**
-   * Returns whether the last step of {@code from} leaves behind the bindings
-   * that inlining will refer to.
-   *
-   * <p>Inlining a subquery drops its last step if that step is a {@code yield},
-   * and pairs the components of a tuple or record pattern with the bindings of
-   * that step. Those bindings are what the dropped {@code yield} produced, so
-   * nothing binds them afterwards, and the inlined query refers to a variable
-   * that does not exist. It makes no difference whether the {@code yield}
-   * produces a tuple, "{@code yield (k, k + 1)}", or a record, "{@code yield {a
-   * = k, b = k}}", whose bindings are the right number but the wrong ones.
-   */
-  private static boolean endsWithBindings(Core.From from) {
-    return !from.steps.isEmpty() && last(from.steps).op != Op.YIELD;
-  }
-
-  public FromBuilder addAll(Iterable<? extends Core.FromStep> steps) {
-    final StepHandler stepHandler = new StepHandler();
-    steps.forEach(stepHandler::accept);
+    push(pat, exp2);
+    b.pair();
+    // The condition sees both sides: a name the pattern binds is the right
+    // input's, and any other is the left's.
+    final Core.Exp condition2 = resolve(condition, names);
+    b.join(joinType, condition2);
+    bind(names);
+    atom = false;
     return this;
+  }
+
+  /**
+   * Pushes a collection under a pattern. A pattern that can fail to match -- a
+   * user datatype's constructor -- is scanned through a {@code case} that
+   * yields nought or one row, as the resolver does.
+   */
+  private void push(Core.Pat pat, Core.Exp exp) {
+    if (RelBuilder.destructurable(pat) || RelBuilder.testable(pat)) {
+      b.push(pat, exp);
+      return;
+    }
+    final List<Core.NamedPat> bound = pat.expand();
+    final Core.Exp element = core.recordOrAtom(typeSystem, bound);
+    final Type elementType = exp.type.elementType();
+    b.push(exp);
+    final Core.IdPat binder = b.binder();
+    final Core.Exp body =
+        core.caseOf(
+            Pos.ZERO,
+            typeSystem.listType(element.type),
+            core.id(binder),
+            ImmutableList.of(
+                core.match(
+                    Pos.ZERO,
+                    pat,
+                    core.list(
+                        typeSystem, element.type, ImmutableList.of(element))),
+                core.match(
+                    Pos.ZERO,
+                    core.wildcardPat(elementType),
+                    core.list(typeSystem, element.type, ImmutableList.of()))));
+    b.push(body);
+    b.pair();
+    b.join(Core.Rel.JoinType.INNER, core.boolLiteral(true));
+    final Core.Exp matched = core.field(typeSystem, b.input(0), 1);
+    if (bound.size() == 1) {
+      b.project(bound.get(0).name, matched);
+    } else {
+      b.project(matched);
+    }
+  }
+
+  /** Binds names, each shadowing an earlier binding of the same name. */
+  private void bind(List<String> names) {
+    bindings.removeAll(names);
+    bindings.addAll(names);
   }
 
   public FromBuilder where(Core.Exp condition) {
     if (condition.isBoolLiteral(true)) {
-      // skip "where true"
       return this;
     }
-    return addStep(core.where(stepEnv(), condition));
+    b.filter(resolve(condition));
+    return this;
   }
 
   public FromBuilder skip(Core.Exp count) {
     if (count.op == Op.INT_LITERAL
         && ((Core.Literal) count).value.equals(BigDecimal.ZERO)) {
-      // skip "skip 0"
       return this;
     }
-    return addStep(core.skip(stepEnv(), count));
+    b.skip(resolve(count));
+    return this;
   }
 
   public FromBuilder take(Core.Exp count) {
-    return addStep(core.take(stepEnv(), count));
+    b.take(resolve(count));
+    return this;
   }
 
   public FromBuilder except(boolean distinct, List<Core.Exp> args) {
-    final Core.StepEnv env = stepEnv();
-    final Core.StepEnv env2 =
-        env.withOrdered(
-            env.ordered && allMatch(args, arg -> arg.type instanceof ListType));
-    return addStep(core.except(env2, distinct, args));
+    args.forEach(b::push);
+    b.except(args.size() + 1, distinct);
+    return this;
   }
 
   public FromBuilder intersect(boolean distinct, List<Core.Exp> args) {
-    final Core.StepEnv env = stepEnv();
-    final Core.StepEnv env2 =
-        env.withOrdered(
-            env.ordered && allMatch(args, arg -> arg.type instanceof ListType));
-    return addStep(core.intersect(env2, distinct, args));
+    args.forEach(b::push);
+    b.intersect(args.size() + 1, distinct);
+    return this;
   }
 
   public FromBuilder union(boolean distinct, List<Core.Exp> args) {
-    final Core.StepEnv env = stepEnv();
-    final Core.StepEnv env2 =
-        env.withOrdered(
-            env.ordered && allMatch(args, arg -> arg.type instanceof ListType));
-    return addStep(core.union(env2, distinct, args));
+    args.forEach(b::push);
+    b.union(args.size() + 1, distinct);
+    return this;
   }
 
   /** Makes the query unordered. No-op if already unordered. */
   public FromBuilder unorder() {
-    final Core.StepEnv env = stepEnv();
-    if (!env.ordered) {
-      return this;
-    }
-    return addStep(core.unorder(env));
-  }
-
-  public FromBuilder distinct() {
-    if (bindings.size() == 1 && bindings.get(0).id.type == PrimitiveType.UNIT) {
-      // It is not valid to translate "from [(), ()] where <predicate> distinct"
-      // to "from [(), ()] where <predicate> group {}" because "group {}" always
-      // returns one row. Instead, translate to "from [(), ()] where <predicate>
-      // take 1", which correctly returns zero rows when input is empty.
-      return take(core.intLiteral(BigDecimal.ONE));
-    }
-    final ImmutableSortedMap.Builder<Core.IdPat, Core.Exp> groupExpsB =
-        ImmutableSortedMap.naturalOrder();
-    bindings.forEach(b -> groupExpsB.put((Core.IdPat) b.id, core.id(b.id)));
-    return group(stepEnv().atom, groupExpsB.build(), ImmutableSortedMap.of());
-  }
-
-  public FromBuilder group(
-      boolean atom,
-      SortedMap<Core.IdPat, Core.Exp> groupExps,
-      SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
-    final Core.StepEnv env = stepEnv();
-    return addStep(core.group(atom, env.ordered, groupExps, aggregates));
-  }
-
-  /**
-   * Adds a "yield" step that materializes {@code ordinal} as a field of the
-   * row, and returns the pattern that names it.
-   *
-   * <p>The step to be added next reads that field rather than calling {@code
-   * ordinal} itself. Only a "yield" evaluates an expression exactly once per
-   * input row, so only a "yield" can generate the value; a "where" condition is
-   * evaluated per row but yields no fields, and an aggregate argument is
-   * evaluated after the rows have been collected into their groups, by which
-   * time the input row's position is unrecoverable.
-   *
-   * @see #dropOrdinal(Core.IdPat, Core.StepEnv)
-   */
-  public Core.IdPat materializeOrdinal() {
-    final Core.StepEnv env = stepEnv();
-    final Core.IdPat ordinalPat =
-        core.idPat(PrimitiveType.INT, typeSystem.nameGenerator::get);
-    final PairList<String, Core.Exp> nameExps = PairList.of();
-    bindings.forEach(b -> nameExps.add(b.id.name, core.id(b.id)));
-    nameExps.add(ordinalPat.name, ordinalExp());
-    yield_(
-        false,
-        Core.StepEnv.of(
-            append(bindings, Binding.of(ordinalPat)), false, env.ordered),
-        core.record(typeSystem, nameExps),
-        false);
-    return ordinalPat;
-  }
-
-  /**
-   * Adds a "yield" step that projects away the field added by {@link
-   * #materializeOrdinal()}.
-   *
-   * <p>The field is an implementation detail, and must not reach the query's
-   * result. Does nothing unless the step just added passed its bindings
-   * through, as "where" and "order" do; a step that replaced them, such as
-   * "group" or "yield", has already removed the field. The test for that is
-   * that the field, and everything that was in scope before it, are still in
-   * scope: after "yield ordinal" the field's own pattern survives as the step's
-   * single binding, but the prior bindings do not.
-   */
-  public FromBuilder dropOrdinal(Core.IdPat ordinalPat, Core.StepEnv priorEnv) {
-    if (!containsBinding(ordinalPat)
-        || !allMatch(priorEnv.bindings, b -> containsBinding(b.id))) {
-      return this;
-    }
-    final List<Binding> remaining = new ArrayList<>();
-    bindings.forEach(
-        b -> {
-          if (!b.id.equals(ordinalPat)) {
-            remaining.add(b);
-          }
-        });
-    // The row is an atom only if it was an atom before, and the step added no
-    // bindings of its own (as a join would).
-    final boolean atom =
-        priorEnv.atom && Binding.listsEqual(remaining, priorEnv.bindings, true);
-    final Core.Exp exp;
-    if (atom) {
-      exp = core.id(remaining.get(0).id);
-    } else {
-      exp = core.record(typeSystem, remaining);
-    }
-    return yield_(
-        false, Core.StepEnv.of(remaining, atom, stepEnv().ordered), exp, atom);
-  }
-
-  /** Returns whether a pattern is currently in scope. */
-  private boolean containsBinding(Core.NamedPat pat) {
-    return containsBinding(bindings, pat);
-  }
-
-  /** Returns whether a pattern is one of {@code bindings}. */
-  private static boolean containsBinding(
-      List<Binding> bindings, Core.NamedPat pat) {
-    return bindings.stream().anyMatch(b -> b.id.equals(pat));
-  }
-
-  /** Creates the expression {@code ordinal}. */
-  public Core.Exp ordinalExp() {
-    return core.apply(
-        Pos.ZERO,
-        PrimitiveType.INT,
-        core.functionLiteral(typeSystem, BuiltIn.Z_ORDINAL),
-        core.tuple(typeSystem));
-  }
-
-  public FromBuilder order(Core.Exp exp) {
-    return addStep(core.order(stepEnv(), exp));
-  }
-
-  public FromBuilder yield_(Core.Exp exp) {
-    return yield_(null, exp);
-  }
-
-  /** Yields {@code exp} with optional binder. */
-  public FromBuilder yield_(@Nullable String binder, Core.Exp exp) {
-    return yield_(binder, exp, exp.op == Op.TUPLE);
-  }
-
-  /**
-   * Yields {@code exp} with optional binder.
-   *
-   * <p>{@code record} is whether the value of {@code exp} is a record whose
-   * fields become the step's bindings. It is usually the same as whether {@code
-   * exp} is a {@link Core.Tuple}, but not always: a record with modifiers is a
-   * record, yet {@code TypeResolver.desugarModifiers} has turned it into one
-   * {@code let} per modifier, and the {@code let}s are {@code case}s by the
-   * time they get here. Only the caller, which has the {@link Ast} node, can
-   * tell.
-   *
-   * <p>A record that is not a {@link Core.Tuple} becomes two steps -- one that
-   * binds the whole row, and one that projects its fields -- because the rest
-   * of the pipeline reads a step's fields off a {@code Tuple}. Splitting also
-   * keeps {@code exp} to one evaluation per row.
-   */
-  public FromBuilder yield_(
-      @Nullable String binder, Core.Exp exp, boolean record) {
-    if (binder == null
-        && record
-        && exp.op != Op.TUPLE
-        && exp.type.op() == Op.RECORD_TYPE) {
-      final String name = typeSystem.nameGenerator.get();
-      yield_(name, exp);
-      final Core.Id id = core.id(only(stepEnv().bindings).id);
-      final RecordLikeType recordType = (RecordLikeType) exp.type;
-      final List<Core.Exp> fields = new ArrayList<>();
-      for (int i = 0; i < recordType.argNameTypes().size(); i++) {
-        fields.add(core.field(typeSystem, id, i));
-      }
-      return yield_(null, core.tuple(recordType, fields), true);
-    }
-    final boolean atom;
-    final Core.StepEnv env;
-    if (binder == null) {
-      atom = !record || exp.type.op() != Op.RECORD_TYPE;
-      env = null;
-    } else {
-      final Core.IdPat binderId =
-          core.idPat(exp.type, binder, typeSystem.nameGenerator::inc);
-      atom = true;
-      env =
-          Core.StepEnv.of(
-              ImmutableList.of(Binding.of(binderId)), atom, stepEnv().ordered);
-    }
-    return yield_(false, env, exp, atom);
-  }
-
-  /**
-   * Creates a "yield" step.
-   *
-   * <p>When copying, the {@code env2} parameter is the {@link
-   * net.hydromatic.morel.ast.Core.Yield#env} value of the current Yield, so
-   * that we don't generate new variables (with different ordinals). Later steps
-   * are relying on the variables remaining the same. For example, in
-   *
-   * <pre>{@code
-   * from ... yield {a = b} where a > 5
-   * }</pre>
-   *
-   * <p>the {@code a} in {@code a > 5} references {@code IdPat('a', 0)} and we
-   * don't want yield to generate an {@code IdPat('a', 1)}.
-   *
-   * @param uselessIfLast Whether this Yield will be useless if it is the last
-   *     step. The expression {@code {x = y} } is an example of this
-   * @param env2 Desired step environment, or null
-   * @param exp Expression to yield
-   * @param atom Whether the expression is an atom (as opposed to a record); all
-   *     atoms have just one binding, but records may also have one binding
-   * @return This FromBuilder, with a Yield added to the list of steps
-   */
-  public FromBuilder yield_(
-      boolean uselessIfLast,
-      Core.@Nullable StepEnv env2,
-      Core.Exp exp,
-      boolean atom) {
-    checkArgument(env2 == null || env2.atom == atom);
-    final Core.StepEnv env = stepEnv();
-    boolean uselessIfNotLast = false;
-    switch (exp.op) {
-      case TUPLE:
-        final TupleType tupleType = tupleType((Core.Tuple) exp, env, env2);
-        switch (tupleType) {
-          case IDENTITY:
-            // A trivial record does not rename, so its only purpose is to
-            // change from a scalar to a record, and even then only when a
-            // singleton.
-            if (bindings.size() == 1) {
-              // Singleton record that does not rename, e.g. 'yield {x=x}'.
-              // It only has meaning as the last step.
-              if (env2 == null) {
-                env2 = Core.StepEnv.of(bindings, false, env.ordered);
-              }
-              uselessIfNotLast = true;
-              break;
-            } else {
-              // Non-singleton record that does not rename,
-              // e.g. 'yield {x=x,y=y}'. It is useless.
-              return this;
-            }
-          case RENAME:
-            if (bindings.size() == 1) {
-              // Singleton record that renames, e.g. 'yield {y=x}'.
-              // It is always useful.
-              break;
-            } else {
-              // Non-singleton record that renames, e.g. 'yield {y=x,z=y}'.
-              // It is always useful.
-              break;
-            }
-        }
-        break;
-
-      case ID:
-        if (bindings.size() == 1
-            && ((Core.Id) exp).idPat.equals(bindings.get(0).id)
-            // After 'yield {x = something}', 'yield x' may seem trivial, but
-            // it converts a singleton record to an atom, so don't remove it.
-            && (steps.isEmpty() || last(steps).env.atom)
-            // A binder ('yield r = i') renames the row via env2, so it is not
-            // the identity even though exp is the input binding; keep it.
-            && (env2 == null
-                || env2.bindings.size() == 1
-                    && env2.bindings.get(0).id.equals(bindings.get(0).id))) {
-          return this;
-        }
-    }
-    Core.Yield step =
-        env2 != null
-            ? core.yield_(env2.withOrdered(env.ordered), exp)
-            : core.yield_(typeSystem, exp, atom, env.ordered);
-    addStep(step);
-    removeIfNotLastIndex =
-        uselessIfNotLast ? steps.size() - 1 : Integer.MIN_VALUE;
-    removeIfLastIndex = uselessIfLast ? steps.size() - 1 : Integer.MIN_VALUE;
+    b.unorder();
     return this;
   }
 
-  /** Returns whether tuple is something like "{i = i, j = j}". */
-  private static boolean isTrivial(
-      Core.Tuple tuple, Core.StepEnv env, Core.@Nullable StepEnv env2) {
-    return tupleType(tuple, env, env2) == TupleType.IDENTITY;
+  /** Removes duplicate rows, keeping each binding. */
+  public FromBuilder distinct() {
+    if (bindings.size() == 1
+        && b.name(bindings.iterator().next()).type == PrimitiveType.UNIT) {
+      // "from [(), ()] where p distinct" is not "group {}", which always
+      // returns one row; "take 1" returns none when the input is empty.
+      return take(core.intLiteral(BigDecimal.ONE));
+    }
+    final SortedMap<String, Core.Exp> keys = new TreeMap<>();
+    bindings.forEach(name -> keys.put(name, b.name(name)));
+    return group(atom, keys, new TreeMap<>());
   }
 
-  /** Returns whether tuple is something like "{i = i, j = j}". */
-  private static TupleType tupleType(
-      Core.Tuple tuple, Core.StepEnv env, Core.@Nullable StepEnv env2) {
-    if (tuple.args.size() != env.bindings.size()) {
-      return TupleType.OTHER;
+  /**
+   * Groups the query so far. The keys and aggregates are labeled by name, and
+   * their expressions read the bindings so far.
+   *
+   * @param atom Whether the result is the single output's value rather than a
+   *     record of the outputs; meaningful only where there is one output
+   */
+  public FromBuilder group(
+      boolean atom,
+      SortedMap<String, Core.Exp> keys,
+      SortedMap<String, Core.Aggregate> aggregates) {
+    final SortedMap<String, Core.Exp> keys2 = new TreeMap<>();
+    keys.forEach((name, exp) -> keys2.put(name, resolve(exp)));
+    final SortedMap<String, Core.Aggregate> aggregates2 = new TreeMap<>();
+    aggregates.forEach(
+        (name, aggregate) ->
+            aggregates2.put(
+                name,
+                aggregate.copy(
+                    aggregate.type,
+                    resolve(aggregate.aggregate),
+                    aggregate.argument == null
+                        ? null
+                        : resolve(aggregate.argument))));
+    b.group(keys2, aggregates2);
+    bindings.clear();
+    bindings.addAll(keys2.keySet());
+    bindings.addAll(aggregates2.keySet());
+    this.atom = atom && bindings.size() == 1;
+    if (this.atom) {
+      // The tree's group builds a record; the atom is its one field.
+      final String name = bindings.iterator().next();
+      b.project(name, b.field(name));
     }
-    // The output bindings (env2) must match the tuple's fields by name and
-    // type. A row binder whose name equals the record's sole field name
-    // ('yield g = {g = ...}') has a binding named like the field but typed as
-    // the whole record; Binding equality ignores type, so without the type
-    // check the binder would look like the identity and be dropped.
-    boolean identity =
-        env2 == null
-            || env.bindings.equals(env2.bindings)
-                && Binding.matchesFields(env2.bindings, tuple.type());
-    for (Pair<Core.Exp, String> argName :
-        Pair.zip(tuple.args, tuple.type().argNames())) {
-      Core.Exp arg = argName.left;
-      String name = argName.right;
-      if (arg.op != Op.ID) {
-        return TupleType.OTHER;
+    return this;
+  }
+
+  public FromBuilder order(Core.Exp exp) {
+    b.sort(isRow(exp) ? b.input(0) : resolve(exp));
+    return this;
+  }
+
+  /**
+   * Returns whether an expression is the row itself, written as the record of
+   * the bindings: {@code {a = a, b = b}} where the row is a record with fields
+   * {@code a} and {@code b}. Yielding it is the identity, and sorting by it is
+   * sorting by the row.
+   */
+  private boolean isRow(Core.Exp exp) {
+    if (b.size() == 0
+        || atom
+        || exp.op != Op.TUPLE
+        || exp.type.op() != Op.RECORD_TYPE) {
+      return false;
+    }
+    final Core.Tuple tuple = (Core.Tuple) exp;
+    final List<String> names = tuple.type().argNames();
+    final Type elementType = b.peek().type.elementType();
+    if (!(elementType instanceof RecordLikeType)
+        || !((RecordLikeType) elementType).argNames().equals(names)
+        || !new HashSet<>(names).equals(bindings)) {
+      return false;
+    }
+    for (int i = 0; i < names.size(); i++) {
+      final Core.Exp arg = tuple.args.get(i);
+      if (arg.op != Op.ID || !((Core.Id) arg).idPat.name.equals(names.get(i))) {
+        return false;
       }
-      final Core.NamedPat idPat = ((Core.Id) arg).idPat;
-      if (!containsBinding(env.bindings, idPat)) {
-        // The field's value comes from outside the query, e.g. 'yield {h = h}'
-        // where 'h' is a variable in the enclosing environment. The step is
-        // neither the identity nor a rename of the current row -- it replaces
-        // the row -- so it must be kept.
-        return TupleType.OTHER;
-      }
-      if (!idPat.name.equals(name)) {
-        identity = false;
-      }
     }
-    return identity ? TupleType.IDENTITY : TupleType.RENAME;
+    return true;
   }
 
-  private Core.Exp build(boolean simplify) {
-    if (scalarIfLastIndex == steps.size() - 1) {
-      // No step followed the record, so nothing uses the name it gave the
-      // binding, and the query's value is the scalar.
-      final Core.Yield yield = (Core.Yield) last(steps);
-      final Core.Exp exp = requireNonNull(scalarIfLastExp);
-      scalarIfLastIndex = Integer.MIN_VALUE;
-      scalarIfLastExp = null;
-      steps.set(
-          steps.size() - 1,
-          core.yield_(typeSystem, exp, true, yield.env.ordered));
+  /**
+   * Yields an expression. A record's fields become the bindings; a value that
+   * is a binding keeps its name; any other value has no name.
+   */
+  public FromBuilder yield_(Core.Exp exp) {
+    if (isRow(exp)) {
+      return this;
     }
-    if (removeIfLastIndex == steps.size() - 1) {
-      removeIfLastIndex = Integer.MIN_VALUE;
-      final Core.Yield yield = (Core.Yield) last(steps);
-      if (yield.exp.op != Op.TUPLE
-          || ((Core.Tuple) yield.exp).args.size() != 1) {
-        throw new AssertionError(yield.exp);
-      }
-      steps.remove(steps.size() - 1);
+    final Core.Exp exp2 = resolve(exp);
+    if (exp.op == Op.TUPLE && exp.type.op() == Op.RECORD_TYPE) {
+      b.project(exp2);
+      bindings.clear();
+      bindings.addAll(((RecordLikeType) exp.type).argNames());
+      atom = false;
+      return this;
     }
-    if (simplify && steps.size() == 1 && steps.get(0).op == Op.SCAN) {
-      final Core.Scan scan = (Core.Scan) steps.get(0);
-      if (scan.pat.op == Op.ID_PAT) {
-        return scan.exp;
-      }
+    if (exp.op == Op.ID && bindings.contains(((Core.Id) exp).idPat.name)) {
+      final String name = ((Core.Id) exp).idPat.name;
+      b.project(name, exp2);
+      bindings.clear();
+      bindings.add(name);
+      atom = true;
+      return this;
     }
-    return core.from(typeSystem, steps);
+    b.project(exp2);
+    bindings.clear();
+    atom = true;
+    return this;
   }
 
-  public Core.From build() {
-    return (Core.From) build(false);
+  /** Returns the tree built so far. */
+  public Core.Exp build() {
+    if (b.size() == 0) {
+      // Bare 'from' iterates over a single element, which is unit.
+      return core.list(
+          typeSystem, PrimitiveType.UNIT, ImmutableList.of(core.unitLiteral()));
+    }
+    return b.build();
   }
 
-  /** As {@link #build}, but also simplifies "from x in list" to "list". */
-  public Core.Exp buildSimplify() {
-    return build(true);
+  /** Rewrites an expression over the bindings to be over the tree's row. */
+  private Core.Exp resolve(Core.Exp exp) {
+    return resolve(exp, ImmutableList.of());
   }
 
-  /** Calls the method to re-register a step. */
-  private class StepHandler extends Visitor {
-    @Override
-    protected void visit(Core.ExceptStep except) {
-      except(except.distinct, except.args);
+  /**
+   * Rewrites an expression over the bindings to be over the tree's inputs:
+   * {@code rightNames} are the right input's, and the rest the left's (or, for
+   * a one-input node, the only input's).
+   */
+  private Core.Exp resolve(Core.Exp exp, List<String> rightNames) {
+    if (b.size() == 0) {
+      return exp;
     }
-
-    @Override
-    protected void visit(Core.GroupStep group) {
-      group(group.env.atom, group.groupExps, group.aggregates);
-    }
-
-    @Override
-    protected void visit(Core.IntersectStep intersect) {
-      intersect(intersect.distinct, intersect.args);
-    }
-
-    @Override
-    protected void visit(Core.Order order) {
-      order(order.exp);
-    }
-
-    @Override
-    protected void visit(Core.Scan scan) {
-      scan(scan.op, scan.pat, scan.exp, scan.condition);
-    }
-
-    @Override
-    protected void visit(Core.Where where) {
-      where(where.exp);
-    }
-
-    @Override
-    protected void visit(Core.SkipStep skip) {
-      skip(skip.exp);
-    }
-
-    @Override
-    protected void visit(Core.TakeStep take) {
-      take(take.exp);
-    }
-
-    @Override
-    protected void visit(Core.UnionStep union) {
-      union(union.distinct, union.args);
-    }
-
-    @Override
-    protected void visit(Core.UnorderStep unorder) {
-      unorder();
-    }
-
-    @Override
-    protected void visit(Core.Yield yield) {
-      yield_(false, yield.env, yield.exp, yield.env.atom);
-    }
-  }
-
-  /** Category of expression passed to "yield". */
-  private enum TupleType {
-    /**
-     * Tuple whose right side are the current fields, e.g. "{a = deptno, b =
-     * dname}".
-     */
-    RENAME,
-    /**
-     * Tuple whose right side are the current fields and left side are the same
-     * as the right, e.g. "{deptno = deptno, dname = dname}".
-     */
-    IDENTITY,
-    /**
-     * Any other tuple, e.g. "{a = deptno + 1, dname = dname}", "{deptno =
-     * deptno}" (too few fields).
-     */
-    OTHER
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            final String name = id.idPat.name;
+            if (rightNames.contains(name)) {
+              return core.at(b.name(1, name), id.pos);
+            }
+            if (bindings.contains(name)) {
+              return core.at(b.name(0, name), id.pos);
+            }
+            return id;
+          }
+        });
   }
 }
 

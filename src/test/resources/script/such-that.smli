@@ -420,7 +420,14 @@ from n where isSmall n orelse isLarge n;
 from x where x elem [1, 2, 4];
 > val it = [1,2,4] : int list
 Sys.planEx "999";
-> val it = "val it = from g$0 in [1, 2, 4] group g$0 order g$0" : string
+> val it =
+>   {_|
+> val it =
+>   sort [$0] : int list
+>     project [#g$0 $0] : int list
+>       group [g$0 = $0] : {g$0:int} list
+>         [1, 2, 4] : int list
+> |_} : string
 
 (* In the following case, we solve for x given a value of y. This
  * requires predicate-inversion because it cannot be solved using
@@ -1208,10 +1215,14 @@ Sys.planEx "999";
 >         in
 >           #nonEmpty Relational (r$0[v$0])
 >         end] : string list
->       from w$0 in ["abcd", "ant"] join g$0 in #tabulate Bag (#size String w$0 + 1,
->           fn i => #substring String (w$0,
->           0,
->           i)) yield g$0 group g$0 order g$0 : string list
+>       sort [$0] : string list
+>         project [#g$0 $0] : string bag
+>           group [g$0 = $0] : {g$0:string} bag
+>             project [#2 $0] : string bag
+>               join [v$1] : (string * string) bag
+>                 ["abcd", "ant"] : string list
+>                 #tabulate Bag (#size String v$1 + 1,
+>                     fn i => #substring String (v$1, 0, i)) : string bag
 >
 > r$0[v$0] =
 >   filter [#isPrefix String v$0 $0] : string list
@@ -2158,8 +2169,17 @@ Sys.planEx "0";
 > t$0 {deptno:int, dname:string, loc:string} list
 > |_} : string
 Sys.planEx "3";
-> val it = "val it = from g$0 in #toList Bag (#depts scott) group g$0 order g$0"
->   : string
+> val it =
+>   {_|
+> val it =
+>   sort [$0] : t$0
+>     project [#g$0 $0] : t$0
+>       group [g$0 = $0] : t$1
+>         #toList Bag (#depts scott) : t$0
+>
+> t$0 {deptno:int, dname:string, loc:string} list
+> t$1 {g$0:{deptno:int, dname:string, loc:string}} list
+> |_} : string
 
 (* testFromSuchThat2c - Record pattern with field renaming *)
 from loc, deptno, name
@@ -2195,12 +2215,13 @@ Sys.planEx "3";
 > val it =
 >   project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}] : t$0
 >     project [(#loc $0, #deptno $0, #name $0)] : t$1
->       from ({deptno = deptno, dname = name, loc = loc}) in #toList Bag (#depts scott) group {deptno = deptno, loc = loc, name = name} order {deptno = deptno,
->           loc = loc,
->           name = name} : t$0
+>       sort [$0] : t$0
+>         group [deptno = #deptno $0, loc = #loc $0, name = #dname $0] : t$0
+>           #toList Bag (#depts scott) : t$2
 >
 > t$0 {deptno:int, loc:string, name:string} list
 > t$1 (string * int * string) list
+> t$2 {deptno:int, dname:string, loc:string} list
 > |_} : string
 
 (* testFromSuchThat2d - Record pattern with literal and additional
@@ -2235,10 +2256,13 @@ Sys.planEx "3";
 >   project [{dno = #1 $0, name = #2 $0}] : t$0
 >     filter [#1 $0 > 20] : (int * string) list
 >       project [(#dno $0, #name $0)] : (int * string) list
->         from ({deptno = dno, dname = name, loc = "CHICAGO"}) in #toList Bag (#depts scott) group {dno = dno, name = name} order {dno = dno,
->             name = name} : t$0
+>         sort [$0] : t$0
+>           group [dno = #deptno $0, name = #dname $0] : t$0
+>             filter [#loc $0 = "CHICAGO"] : t$1
+>               #toList Bag (#depts scott) : t$1
 >
 > t$0 {dno:int, name:string} list
+> t$1 {deptno:int, dname:string, loc:string} list
 > |_} : string
 
 (* testFromSuchThat2d3 - Forward references with equality constraint *)
@@ -2283,7 +2307,10 @@ Sys.planEx "3";
 >       filter [#loc (#3 $0) = "CHICAGO"] : t$1
 >         project [(#2 $0, #3 $0, #1 $0)] : t$1
 >           join [v$0] : t$2
->             from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : t$3
+>             sort [$0] : t$3
+>               project [#g$0 $0] : t$3
+>                 group [g$0 = $0] : t$4
+>                   #toList Bag (#depts scott) : t$3
 >             join : (int * string) list
 >               [#deptno v$0] : int list
 >               [#dname v$0] : string list
@@ -2292,6 +2319,7 @@ Sys.planEx "3";
 > t$1 (int * string * {deptno:int, dname:string, loc:string}) list
 > t$2 ({deptno:int, dname:string, loc:string} * int * string) list
 > t$3 {deptno:int, dname:string, loc:string} list
+> t$4 {g$0:{deptno:int, dname:string, loc:string}} list
 > |_} : string
 
 (* testFromSuchThat2d4 - Forward references with inequality constraint *)
@@ -2336,7 +2364,10 @@ Sys.planEx "3";
 >       filter [#loc (#3 $0) = "CHICAGO"] : t$1
 >         project [(#2 $0, #3 $0, #1 $0)] : t$1
 >           join [v$0] : t$2
->             from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : t$3
+>             sort [$0] : t$3
+>               project [#g$0 $0] : t$3
+>                 group [g$0 = $0] : t$4
+>                   #toList Bag (#depts scott) : t$3
 >             join : (int * string) list
 >               [#deptno v$0] : int list
 >               [#dname v$0] : string list
@@ -2345,6 +2376,7 @@ Sys.planEx "3";
 > t$1 (int * string * {deptno:int, dname:string, loc:string}) list
 > t$2 ({deptno:int, dname:string, loc:string} * int * string) list
 > t$3 {deptno:int, dname:string, loc:string} list
+> t$4 {g$0:{deptno:int, dname:string, loc:string}} list
 > |_} : string
 
 (* testFromSuchThat2e - Function inlining with elem predicate.
@@ -2374,9 +2406,13 @@ Sys.planEx "999";
 > val it =
 >   project [#dname $0] : string list
 >     filter [#deptno $0 = 20] : t$0
->       from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : t$0
+>       sort [$0] : t$0
+>         project [#g$0 $0] : t$0
+>           group [g$0 = $0] : t$1
+>             #toList Bag (#depts scott) : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} list
+> t$1 {g$0:{deptno:int, dname:string, loc:string}} list
 > |_} : string
 
 (* testFromSuchThat2f - Join via suchthat with two functions *)
@@ -2426,12 +2462,20 @@ Sys.planEx "999";
 >     filter [#deptno (#1 $0) = #deptno (#2 $0)
 >         andalso #deptno (#1 $0) = 20] : t$0
 >       join : t$0
->         from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : t$1
->         from g$1 in #toList Bag (#emps scott) group g$1 order g$1 : t$2
+>         sort [$0] : t$1
+>           project [#g$0 $0] : t$1
+>             group [g$0 = $0] : t$2
+>               #toList Bag (#depts scott) : t$1
+>         sort [$0] : t$3
+>           project [#g$1 $0] : t$3
+>             group [g$1 = $0] : t$4
+>               #toList Bag (#emps scott) : t$3
 >
 > t$0 ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list
 > t$1 {deptno:int, dname:string, loc:string} list
-> t$2 {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
+> t$2 {g$0:{deptno:int, dname:string, loc:string}} list
+> t$3 {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
+> t$4 {g$1:{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}} list
 > |_} : string
 
 (* testProvenanceThroughFunction - Provenance propagation through
@@ -2462,7 +2506,14 @@ Sys.planEx "0";
 >     extent "int" : int list
 > |_} : string
 Sys.planEx "999";
-> val it = "val it = from g$0 in [1, 2, 3] group g$0 order g$0" : string
+> val it =
+>   {_|
+> val it =
+>   sort [$0] : int list
+>     project [#g$0 $0] : int list
+>       group [g$0 = $0] : {g$0:int} list
+>         [1, 2, 3] : int list
+> |_} : string
 
 (* testProvenanceThroughFunctionWithFilter - Same as above but
  * with an additional filter. Provenance removes 'f x'
@@ -2493,7 +2544,10 @@ Sys.planEx "999";
 >   {_|
 > val it =
 >   filter [$0 > 1] : int list
->     from g$0 in [1, 2, 3] group g$0 order g$0 : int list
+>     sort [$0] : int list
+>       project [#g$0 $0] : int list
+>         group [g$0 = $0] : {g$0:int} list
+>           [1, 2, 3] : int list
 > |_} : string
 
 (* testFromSuchThat3 - Smaller version of testFromSuchThat *)

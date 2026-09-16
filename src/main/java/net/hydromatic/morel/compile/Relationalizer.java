@@ -19,26 +19,15 @@
 package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.collect.Iterables.getLast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Static.append;
-import static net.hydromatic.morel.util.Static.skip;
 
-import com.google.common.collect.ImmutableList;
-import java.util.ArrayList;
-import java.util.List;
 import net.hydromatic.morel.ast.Core;
-import net.hydromatic.morel.ast.Op;
-import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.FnType;
-import net.hydromatic.morel.type.RecordLikeType;
-import net.hydromatic.morel.type.RecordType;
-import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 
 /**
- * Shuttle that converts calls to {@link BuiltIn#LIST_FILTER} and {@link
- * BuiltIn#LIST_MAP} into {@link Core.From} expressions.
+ * Converts calls to higher-order functions such as {@link BuiltIn#LIST_MAP}
+ * into relational trees.
  */
 public class Relationalizer extends EnvShuttle {
   /** Private constructor. */
@@ -68,95 +57,48 @@ public class Relationalizer extends EnvShuttle {
                 || literal.value == BuiltIn.BAG_MAP) {
               // List.map f list
               //  =>
-              // from e in list yield (f e)
+              // project [f $0] list
               final Core.Exp f = apply2.arg;
               final FnType fnType = (FnType) f.type;
-              final Core.From from = toFrom(apply.arg);
-              // TODO: if the last step is a non-record yield, there is no
-              // "defaultYieldExp", and therefore we cannot add another yield
-              // step. We will have to inline the yield expression as a let.
-              final Core.Yield yieldStep =
-                  core.yield_(
-                      typeSystem,
-                      core.apply(
-                          apply.pos,
-                          fnType.resultType,
-                          f,
-                          core.implicitYieldExp(typeSystem, from.steps)),
-                      fnType.resultType.op() != Op.RECORD_TYPE,
-                      from.isOrdered());
-              return core.from(typeSystem, append(from.steps, yieldStep));
+              final Core.Exp list = collection(apply.arg);
+              final Core.IdPat row = rowPat(list);
+              return core.project(
+                  apply.pos,
+                  typeSystem,
+                  row,
+                  null,
+                  list,
+                  core.apply(apply.pos, fnType.resultType, f, core.id(row)));
             }
             if (literal.value == BuiltIn.LIST_FILTER
                 || literal.value == BuiltIn.BAG_FILTER) {
               // List.filter f list
               //  =>
-              // from e in list where (f e)
+              // filter [f $0] list
               final Core.Exp f = apply2.arg;
               final FnType fnType = (FnType) f.type;
-              final Core.From from = toFrom(apply.arg);
-              final Core.Where whereStep =
-                  core.where(
-                      core.lastEnv(from.steps),
-                      core.apply(
-                          apply.pos,
-                          fnType.resultType,
-                          f,
-                          core.implicitYieldExp(typeSystem, from.steps)));
-              return core.from(typeSystem, append(from.steps, whereStep));
+              final Core.Exp list = collection(apply.arg);
+              final Core.IdPat row = rowPat(list);
+              return core.filter(
+                  apply.pos,
+                  row,
+                  null,
+                  list,
+                  core.apply(apply.pos, fnType.resultType, f, core.id(row)));
             }
         }
     }
     return super.visit(apply);
   }
 
-  private Core.From toFrom(Core.Exp exp) {
-    if (exp instanceof Core.From) {
-      return (Core.From) exp;
-    } else {
-      checkArgument(
-          exp.type.isCollection(), "not a collection type: %s", exp.type);
-      final Type elementType = exp.type.elementType();
-      final String name = typeSystem.nameGenerator.get();
-      final Core.IdPat id =
-          core.idPat(elementType, name, typeSystem.nameGenerator::inc);
-      final List<Binding> bindings = new ArrayList<>();
-      Compiles.acceptBinding(id, bindings);
-      boolean atom = bindings.size() == 1;
-      final Core.StepEnv stepEnv = Core.StepEnv.of(bindings, atom, true);
-      final Core.Scan scan =
-          core.scan(stepEnv, id, exp, core.boolLiteral(true));
-      return core.from(typeSystem, ImmutableList.of(scan));
-    }
+  private Core.Exp collection(Core.Exp exp) {
+    checkArgument(
+        exp.type.isCollection(), "not a collection type: %s", exp.type);
+    return exp;
   }
 
-  @Override
-  protected Core.Exp visit(Core.From from) {
-    final Core.From from2 = (Core.From) super.visit(from);
-    if (!from2.steps.isEmpty()) {
-      final Core.FromStep step = from2.steps.get(0);
-      if (step instanceof Core.Scan
-          && ((Core.Scan) step).exp.op == Op.FROM
-          && ((Core.Scan) step).pat.op == Op.ID_PAT) {
-        final Core.From from3 = (Core.From) ((Core.Scan) step).exp;
-        final Core.IdPat idPat3 = (Core.IdPat) ((Core.Scan) step).pat;
-        final List<Core.FromStep> steps = new ArrayList<>(from3.steps);
-        final Core.Exp exp;
-        if (steps.isEmpty()) {
-          exp = core.unitLiteral();
-        } else if (getLast(steps) instanceof Core.Yield) {
-          exp = ((Core.Yield) steps.remove(steps.size() - 1)).exp;
-        } else {
-          exp = core.implicitYieldExp(typeSystem, from3.steps);
-        }
-        RecordLikeType recordType =
-            typeSystem.recordType(RecordType.map(idPat3.name, exp.type));
-        steps.add(core.yield_(step.env, core.tuple(recordType, exp)));
-        steps.addAll(skip(from2.steps));
-        return core.from(typeSystem, steps);
-      }
-    }
-    return from2;
+  private Core.IdPat rowPat(Core.Exp rel) {
+    return core.rowPat(rel.type.elementType(), typeSystem.nameGenerator::inc);
   }
 }
 

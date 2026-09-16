@@ -268,16 +268,12 @@ public class InlineTest {
             + "(#filter Bag (fn e => #deptno e = 30) "
             + "(#emps scott))";
     final String core1 =
-        "val it = "
-            + "from v$0 in "
-            + "#filter Bag (fn e => #deptno e = 30) (#emps scott) "
-            + "yield (fn e_1 => #empno e_1) v$0";
+        "val it = project [(fn e_1 => #empno e_1) $0]\n"
+            + "  #filter Bag (fn e => #deptno e = 30) (#emps scott)\n";
     final String core2 =
-        "val it = "
-            + "from v$2 in #emps scott "
-            + "where #deptno v$2 = 30 "
-            + "yield {v$0 = v$2} "
-            + "yield #empno v$0";
+        "val it = project [#empno $0]\n" //
+            + "  filter [#deptno $0 = 30]\n"
+            + "    #emps scott\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -307,22 +303,18 @@ public class InlineTest {
             + " (#map Bag (fn e_1 => {x = #empno e_1, y = #deptno e_1, z = 15})"
             + " (#filter Bag (fn e => #deptno e = 30) (#emps scott)))))";
     final String core1 =
-        "val it = "
-            + "from v$0 in #map Bag (fn r_1 => #x r_1 + #z r_1)"
+        "val it = project [(fn r_2 => r_2 + 100) $0]\n"
+            + "  #map Bag (fn r_1 => #x r_1 + #z r_1)"
             + " (#filter Bag (fn r => #y r > #z r)"
             + " (#map Bag (fn e_1 => {x = #empno e_1, y = #deptno e_1, z = 15})"
-            + " (#filter Bag (fn e => #deptno e = 30) (#emps scott)))) "
-            + "yield (fn r_2 => r_2 + 100) v$0";
+            + " (#filter Bag (fn e => #deptno e = 30) (#emps scott))))\n";
     final String core2 =
-        "val it = "
-            + "from v$6 in #emps scott "
-            + "where #deptno v$6 = 30 "
-            + "yield {v$5 = v$6} "
-            + "yield {v$4 = {x = #empno v$5, y = #deptno v$5, z = 15}} "
-            + "where #y v$4 > #z v$4 "
-            + "yield {v$2 = v$4} "
-            + "yield {v$0 = #x v$2 + #z v$2} "
-            + "yield v$0 + 100";
+        "val it = project [$0 + 100]\n" //
+            + "  project [#x $0 + #z $0]\n"
+            + "    filter [#y $0 > #z $0]\n"
+            + "      project [{x = #empno $0, y = #deptno $0, z = 15}]\n"
+            + "        filter [#deptno $0 = 30]\n"
+            + "          #emps scott\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(

@@ -19,7 +19,10 @@
 package net.hydromatic.morel.compile;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.Binding;
@@ -65,9 +68,22 @@ class SuchThatShuttle extends EnvShuttle {
    */
   private final NameGenerator nameGenerator;
 
+  /**
+   * Roots that have been grounded, so that the descent into a grounded tree,
+   * which grounds the trees nested in it, does not ground the root again.
+   * Shared by every shuttle this one pushes.
+   */
+  private final Set<Core.Exp> grounded;
+
   SuchThatShuttle(
       TypeSystem typeSystem, Environment env, NameGenerator nameGenerator) {
-    this(typeSystem, env, nameGenerator, false, false);
+    this(
+        typeSystem,
+        env,
+        nameGenerator,
+        false,
+        false,
+        Collections.newSetFromMap(new IdentityHashMap<>()));
   }
 
   private SuchThatShuttle(
@@ -75,17 +91,24 @@ class SuchThatShuttle extends EnvShuttle {
       Environment env,
       NameGenerator nameGenerator,
       boolean inRecursiveFunction,
-      boolean rowsUnused) {
+      boolean rowsUnused,
+      Set<Core.Exp> grounded) {
     super(typeSystem, env);
     this.nameGenerator = nameGenerator;
     this.inRecursiveFunction = inRecursiveFunction;
     this.rowsUnused = rowsUnused;
+    this.grounded = grounded;
   }
 
   @Override
   protected EnvShuttle push(Environment env) {
     return new SuchThatShuttle(
-        typeSystem, env, nameGenerator, inRecursiveFunction, rowsUnused);
+        typeSystem,
+        env,
+        nameGenerator,
+        inRecursiveFunction,
+        rowsUnused,
+        grounded);
   }
 
   @Override
@@ -94,7 +117,12 @@ class SuchThatShuttle extends EnvShuttle {
         || apply.isCallTo(BuiltIn.RELATIONAL_EMPTY)) {
       final SuchThatShuttle inner =
           new SuchThatShuttle(
-              typeSystem, env, nameGenerator, inRecursiveFunction, true);
+              typeSystem,
+              env,
+              nameGenerator,
+              inRecursiveFunction,
+              true,
+              grounded);
       return apply.copy(apply.fn.accept(inner), apply.arg.accept(inner));
     }
     return super.visit(apply);
@@ -109,7 +137,12 @@ class SuchThatShuttle extends EnvShuttle {
     Compiles.bindPattern(typeSystem, bindings, recValDecl);
     final SuchThatShuttle inner =
         new SuchThatShuttle(
-            typeSystem, env.bindAll(bindings), nameGenerator, true, rowsUnused);
+            typeSystem,
+            env.bindAll(bindings),
+            nameGenerator,
+            true,
+            rowsUnused,
+            grounded);
     return recValDecl.copy(inner.visitList(recValDecl.list));
   }
 
@@ -144,13 +177,22 @@ class SuchThatShuttle extends EnvShuttle {
     // Ground at the root of the tree, which is the one node a shuttle sees
     // before what is under it. A tree nested in an expression is a root of its
     // own, and is grounded when the walk reaches it.
-    if (inRecursiveFunction || !RelExpander.containsUnbounded(rel)) {
+    if (inRecursiveFunction
+        || grounded.contains(rel)
+        || !RelExpander.containsUnbounded(rel)) {
       return null;
     }
     final boolean rowsUsed = !rowsUnused;
     final List<Core.Pat> leafPats = RelExpander.leafPats(rel);
-    final Core.Exp expanded =
+    final Core.Exp expanded0 =
         RelExpander.expand(typeSystem, env, rel, rowsUsed, leafPats);
+    // Ground the trees nested in what came back before asking whether every
+    // leaf is bounded: a generator's collection may be a query of its own
+    // over an extent, which is bounded by its own conditions, not this
+    // tree's. The root is marked so that the descent does not ground it
+    // again.
+    grounded.add(expanded0);
+    final Core.Exp expanded = expanded0.accept(this);
     // The same questions `Expander.expandViaTree` used to ask of its answer:
     // every leaf bounded, and no expression reading a field its row does not
     // have. Replacing a join with a projection makes the element one component
@@ -158,32 +200,14 @@ class SuchThatShuttle extends EnvShuttle {
     // written for the other shape; the failure is at run time, in a record
     // selector, a long way from the pass that caused it.
     if (RelExpander.containsUnbounded(expanded)
-        || Expander.misaddressed(
-            RelLowerer.lowerAll(typeSystem, nameGenerator, expanded))) {
+        || Expander.misaddressed(expanded)) {
       final Core.@Nullable NamedPat pat = RelExpander.ungrounded(rel, leafPats);
       throw new CompileException(
           pat == null ? "pattern is not grounded" : Expander.notGrounded(pat),
           false,
           rel.pos);
     }
-    // Descend into what came back, to ground the trees nested in it.
-    return expanded.accept(this);
-  }
-
-  @Override
-  protected Core.Exp visit(Core.From from) {
-    // Skip expansion for "from" expressions inside recursive function
-    // definitions. These are part of the function's logic, not queries to
-    // execute. The outer query will handle transitive closure detection.
-    if (inRecursiveFunction) {
-      return super.visit(from);
-    }
-
-    final Core.From from2 =
-        Expander.expandFrom(typeSystem, nameGenerator, env, from, !rowsUnused);
-
-    // Expand subqueries.
-    return super.visit(from2);
+    return expanded;
   }
 }
 

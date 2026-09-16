@@ -31,6 +31,7 @@ import com.google.common.collect.MultimapBuilder;
 import com.google.common.collect.Multimaps;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -127,8 +128,33 @@ public abstract class RowSinks {
       Code conditionCode,
       int @Nullable [] ordinalSlots,
       RowSink rowSink) {
+    return scan(
+        op, pat, varCount, true, code, conditionCode, ordinalSlots, rowSink);
+  }
+
+  /**
+   * As {@link #scan(Op, Core.Pat, int, Code, Code, int[], RowSink)}, but {@code
+   * dependent} says whether the collection reads the current row. One that does
+   * not is evaluated once per execution rather than once per row.
+   */
+  public static RowSink scan(
+      Op op,
+      Core.Pat pat,
+      int varCount,
+      boolean dependent,
+      Code code,
+      Code conditionCode,
+      int @Nullable [] ordinalSlots,
+      RowSink rowSink) {
     return new ScanRowSink(
-        op, pat, varCount, code, conditionCode, ordinalSlots, rowSink);
+        op,
+        pat,
+        varCount,
+        dependent,
+        code,
+        conditionCode,
+        ordinalSlots,
+        rowSink);
   }
 
   /**
@@ -298,6 +324,12 @@ public abstract class RowSinks {
     /** Whether the newly scanned fields are optional downstream (left join). */
     final boolean optionalRight;
 
+    /**
+     * Whether the collection reads the current row. If not, it is evaluated
+     * once, in {@link #start}, and every row scans the same elements.
+     */
+    final boolean dependent;
+
     final Code code;
     final Code conditionCode;
     /**
@@ -306,10 +338,16 @@ public abstract class RowSinks {
      */
     final int @Nullable [] ordinalSlots;
 
+    /**
+     * The elements, if the collection is independent; set in {@link #start}.
+     */
+    @Nullable Iterable<Object> elements;
+
     ScanRowSink(
         Op op,
         Core.Pat pat,
         int varCount,
+        boolean dependent,
         Code code,
         Code conditionCode,
         int @Nullable [] ordinalSlots,
@@ -322,6 +360,7 @@ public abstract class RowSinks {
       this.op = op;
       this.pat = pat;
       this.varCount = varCount;
+      this.dependent = dependent;
       this.optionalRight = op.optionalizesRight();
       this.code = code;
       this.conditionCode = conditionCode;
@@ -335,7 +374,22 @@ public abstract class RowSinks {
         // reset here rather than in accept.
         ordinalSlots[0] = -1;
       }
+      if (!dependent) {
+        elements = elements(stack);
+      }
       super.start(stack);
+    }
+
+    /**
+     * Evaluates the collection, using the full stack so that outer variables
+     * resolve, as a collection that can be iterated more than once.
+     */
+    @SuppressWarnings("unchecked")
+    private Iterable<Object> elements(Stack stack) {
+      final Iterable<Object> iterable = (Iterable<Object>) code.eval(stack);
+      return iterable instanceof Collection
+          ? iterable
+          : ImmutableList.copyOf(iterable);
     }
 
     @Override
@@ -365,9 +419,8 @@ public abstract class RowSinks {
 
     @Override
     public void accept(Stack stack) {
-      // Evaluate the collection expression using the full stack so that outer
-      // variables (StackCode nodes) resolve correctly.
-      final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+      final Iterable<Object> elements =
+          dependent ? elements(stack) : requireNonNull(this.elements);
       // Grow slots if needed for scan variable slots.
       Stack s = stack.ensureSize(varCount);
       final int savedTop = s.save();

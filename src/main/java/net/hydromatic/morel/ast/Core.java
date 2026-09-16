@@ -1792,9 +1792,7 @@ public class Core {
         TypeSystem typeSystem,
         @Nullable Environment env,
         List<FromStep> steps) {
-      return steps.equals(this.steps)
-          ? this
-          : core.fromBuilder(typeSystem, env).addAll(steps).build();
+      return steps.equals(this.steps) ? this : core.from(typeSystem, steps);
     }
 
     /** Returns whether the collection of elements is ordered. */
