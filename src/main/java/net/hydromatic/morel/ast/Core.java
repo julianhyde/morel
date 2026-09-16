@@ -2428,8 +2428,8 @@ public class Core {
    * {@code $ordinal}. See {@link #patterns()}.
    */
   public abstract static class Rel extends Exp {
-    Rel(Op op, Type type) {
-      super(Pos.ZERO, op, type);
+    Rel(Pos pos, Op op, Type type) {
+      super(pos, op, type);
       if (!type.isCollection()) {
         throw new IllegalArgumentException("not a collection type: " + type);
       }
@@ -2640,8 +2640,8 @@ public class Core {
   public abstract static class SingleRel extends Rel {
     public final Exp input;
 
-    SingleRel(Op op, Type type, Exp input) {
-      super(op, type);
+    SingleRel(Pos pos, Op op, Type type, Exp input) {
+      super(pos, op, type);
       this.input = requireNonNull(input, "input");
     }
 
@@ -2659,8 +2659,14 @@ public class Core {
     public final IdPat row;
     public final @Nullable IdPat ordinal;
 
-    RowRel(Op op, Type type, IdPat row, @Nullable IdPat ordinal, Exp input) {
-      super(op, type, input);
+    RowRel(
+        Pos pos,
+        Op op,
+        Type type,
+        IdPat row,
+        @Nullable IdPat ordinal,
+        Exp input) {
+      super(pos, op, type, input);
       this.row = requireNonNull(row, "row");
       this.ordinal = ordinal;
       checkArgument(
@@ -2689,8 +2695,9 @@ public class Core {
   public static class Filter extends RowRel {
     public final Exp condition;
 
-    Filter(IdPat row, @Nullable IdPat ordinal, Exp input, Exp condition) {
-      super(Op.FILTER, input.type, row, ordinal, input);
+    Filter(
+        Pos pos, IdPat row, @Nullable IdPat ordinal, Exp input, Exp condition) {
+      super(pos, Op.FILTER, input.type, row, ordinal, input);
       this.condition = requireNonNull(condition, "condition");
     }
 
@@ -2717,7 +2724,7 @@ public class Core {
     public Filter copy(Exp input, Exp condition) {
       return input == this.input && condition == this.condition
           ? this
-          : core.filter(row, ordinal, input, condition);
+          : core.filter(pos, row, ordinal, input, condition);
     }
   }
 
@@ -2725,8 +2732,14 @@ public class Core {
   public static class Project extends RowRel {
     public final Exp exp;
 
-    Project(Type type, IdPat row, @Nullable IdPat ordinal, Exp input, Exp exp) {
-      super(Op.PROJECT, type, row, ordinal, input);
+    Project(
+        Pos pos,
+        Type type,
+        IdPat row,
+        @Nullable IdPat ordinal,
+        Exp input,
+        Exp exp) {
+      super(pos, Op.PROJECT, type, row, ordinal, input);
       this.exp = requireNonNull(exp, "exp");
     }
 
@@ -2753,7 +2766,7 @@ public class Core {
     public Project copy(TypeSystem typeSystem, Exp input, Exp exp) {
       return input == this.input && exp == this.exp
           ? this
-          : core.project(typeSystem, row, ordinal, input, exp);
+          : core.project(pos, typeSystem, row, ordinal, input, exp);
     }
   }
 
@@ -2789,6 +2802,7 @@ public class Core {
     public final Exp condition;
 
     Join(
+        Pos pos,
         Type type,
         Rel.JoinType joinType,
         IdPat leftRow,
@@ -2797,7 +2811,7 @@ public class Core {
         Exp left,
         Exp right,
         Exp condition) {
-      super(Op.JOIN, type);
+      super(pos, Op.JOIN, type);
       this.joinType = requireNonNull(joinType, "joinType");
       this.leftRow = requireNonNull(leftRow, "leftRow");
       this.rightRow = requireNonNull(rightRow, "rightRow");
@@ -2883,6 +2897,7 @@ public class Core {
               && condition == this.condition
           ? this
           : core.join(
+              pos,
               typeSystem,
               joinType,
               leftRow,
@@ -2906,13 +2921,14 @@ public class Core {
     public final ImmutableSortedMap<String, Aggregate> aggregates;
 
     Group(
+        Pos pos,
         Type type,
         IdPat row,
         @Nullable IdPat ordinal,
         Exp input,
         ImmutableSortedMap<String, Exp> keys,
         ImmutableSortedMap<String, Aggregate> aggregates) {
-      super(Op.GROUP, type, row, ordinal, input);
+      super(pos, Op.GROUP, type, row, ordinal, input);
       this.keys = requireNonNull(keys, "keys");
       this.aggregates = requireNonNull(aggregates, "aggregates");
     }
@@ -2949,7 +2965,7 @@ public class Core {
               && keys.equals(this.keys)
               && aggregates.equals(this.aggregates)
           ? this
-          : core.group(typeSystem, row, ordinal, input, keys, aggregates);
+          : core.group(pos, typeSystem, row, ordinal, input, keys, aggregates);
     }
   }
 
@@ -2969,8 +2985,8 @@ public class Core {
   public static class IfEmpty extends SingleRel {
     public final Exp exp;
 
-    IfEmpty(Exp input, Exp exp) {
-      super(Op.IF_EMPTY, input.type, input);
+    IfEmpty(Pos pos, Exp input, Exp exp) {
+      super(pos, Op.IF_EMPTY, input.type, input);
       this.exp = requireNonNull(exp, "exp");
     }
 
@@ -2997,7 +3013,7 @@ public class Core {
     public IfEmpty copy(Exp input, Exp exp) {
       return input == this.input && exp == this.exp
           ? this
-          : core.ifEmpty(input, exp);
+          : core.ifEmpty(pos, input, exp);
     }
   }
 
@@ -3008,8 +3024,14 @@ public class Core {
   public static class Sort extends RowRel {
     public final Exp exp;
 
-    Sort(Type type, IdPat row, @Nullable IdPat ordinal, Exp input, Exp exp) {
-      super(Op.SORT, type, row, ordinal, input);
+    Sort(
+        Pos pos,
+        Type type,
+        IdPat row,
+        @Nullable IdPat ordinal,
+        Exp input,
+        Exp exp) {
+      super(pos, Op.SORT, type, row, ordinal, input);
       this.exp = requireNonNull(exp, "exp");
     }
 
@@ -3036,14 +3058,14 @@ public class Core {
     public Sort copy(TypeSystem typeSystem, Exp input, Exp exp) {
       return input == this.input && exp == this.exp
           ? this
-          : core.sort(typeSystem, row, ordinal, input, exp);
+          : core.sort(pos, typeSystem, row, ordinal, input, exp);
     }
   }
 
   /** Discards order; always yields a {@code bag}. */
   public static class Unorder extends SingleRel {
-    Unorder(Type type, Exp input) {
-      super(Op.UNORDER, type, input);
+    Unorder(Pos pos, Type type, Exp input) {
+      super(pos, Op.UNORDER, type, input);
     }
 
     @Override
@@ -3062,7 +3084,7 @@ public class Core {
     }
 
     public Unorder copy(TypeSystem typeSystem, Exp input) {
-      return input == this.input ? this : core.unorder(typeSystem, input);
+      return input == this.input ? this : core.unorder(pos, typeSystem, input);
     }
   }
 
@@ -3075,8 +3097,8 @@ public class Core {
   public static class Skip extends SingleRel {
     public final Exp count;
 
-    Skip(Exp input, Exp count) {
-      super(Op.SKIP, input.type, input);
+    Skip(Pos pos, Exp input, Exp count) {
+      super(pos, Op.SKIP, input.type, input);
       this.count = requireNonNull(count, "count");
     }
 
@@ -3103,7 +3125,7 @@ public class Core {
     public Skip copy(Exp input, Exp count) {
       return input == this.input && count == this.count
           ? this
-          : core.skip(input, count);
+          : core.skip(pos, input, count);
     }
   }
 
@@ -3116,8 +3138,8 @@ public class Core {
   public static class Take extends SingleRel {
     public final Exp count;
 
-    Take(Exp input, Exp count) {
-      super(Op.TAKE, input.type, input);
+    Take(Pos pos, Exp input, Exp count) {
+      super(pos, Op.TAKE, input.type, input);
       this.count = requireNonNull(count, "count");
     }
 
@@ -3144,7 +3166,7 @@ public class Core {
     public Take copy(Exp input, Exp count) {
       return input == this.input && count == this.count
           ? this
-          : core.take(input, count);
+          : core.take(pos, input, count);
     }
   }
 
@@ -3156,8 +3178,13 @@ public class Core {
     public final boolean distinct;
     public final ImmutableList<Exp> inputs;
 
-    SetRel(Op op, Type type, boolean distinct, ImmutableList<Exp> inputs) {
-      super(op, type);
+    SetRel(
+        Pos pos,
+        Op op,
+        Type type,
+        boolean distinct,
+        ImmutableList<Exp> inputs) {
+      super(pos, op, type);
       this.distinct = distinct;
       this.inputs = requireNonNull(inputs, "inputs");
       if (inputs.size() < 2) {
@@ -3184,8 +3211,8 @@ public class Core {
 
   /** Combines the elements of its inputs. */
   public static class Union extends SetRel {
-    Union(Type type, boolean distinct, ImmutableList<Exp> inputs) {
-      super(Op.UNION, type, distinct, inputs);
+    Union(Pos pos, Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(pos, Op.UNION, type, distinct, inputs);
     }
 
     @Override
@@ -3208,14 +3235,14 @@ public class Core {
         TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
       return distinct == this.distinct && inputs.equals(this.inputs)
           ? this
-          : core.union(typeSystem, distinct, inputs);
+          : core.union(pos, typeSystem, distinct, inputs);
     }
   }
 
   /** Keeps the elements that occur in every input. */
   public static class Intersect extends SetRel {
-    Intersect(Type type, boolean distinct, ImmutableList<Exp> inputs) {
-      super(Op.INTERSECT, type, distinct, inputs);
+    Intersect(Pos pos, Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(pos, Op.INTERSECT, type, distinct, inputs);
     }
 
     @Override
@@ -3238,14 +3265,14 @@ public class Core {
         TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
       return distinct == this.distinct && inputs.equals(this.inputs)
           ? this
-          : core.intersect(typeSystem, distinct, inputs);
+          : core.intersect(pos, typeSystem, distinct, inputs);
     }
   }
 
   /** Keeps the elements of the first input that occur in no other input. */
   public static class Except extends SetRel {
-    Except(Type type, boolean distinct, ImmutableList<Exp> inputs) {
-      super(Op.EXCEPT, type, distinct, inputs);
+    Except(Pos pos, Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(pos, Op.EXCEPT, type, distinct, inputs);
     }
 
     @Override
@@ -3268,7 +3295,7 @@ public class Core {
         TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
       return distinct == this.distinct && inputs.equals(this.inputs)
           ? this
-          : core.except(typeSystem, distinct, inputs);
+          : core.except(pos, typeSystem, distinct, inputs);
     }
   }
 

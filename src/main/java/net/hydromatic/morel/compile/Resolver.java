@@ -2422,6 +2422,7 @@ public class Resolver {
     }
 
     private void step(Ast.FromStep step) {
+      b.at(step.pos);
       if (step instanceof Ast.Scan) {
         scan((Ast.Scan) step);
       } else if (step instanceof Ast.Where) {
