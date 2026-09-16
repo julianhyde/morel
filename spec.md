@@ -189,6 +189,18 @@ node.
 A leaf binds nothing: its element flows out as a value, and the node
 above it names that value `$0`.
 
+What a leaf's *text* is, §6 does not reach. A leaf is printed by the
+implementation's own Core, as §6.6 says, so two implementations agree
+on it only where their Core agrees on the expression. Morel writes the
+range `[#"a" ..]` as the call `#flatten Range ([AT_LEAST #"a"])`, and
+an extent as `extent "int"`; an implementation whose Core keeps a
+range node prints the range. §7's suite shows both leaves, so that a
+difference is met in a test rather than in a sweep. The same holds of
+an expression inside a node: `abs` prints as `abs` at the phase the
+contract is written over (§6.8), because overloads are resolved after
+it, and an implementation that resolves them earlier prints
+`#abs Int`.
+
 A query with no scan — `from where p`, `from yield e`, or bare
 `from` — iterates over a single element, which is unit, so its leaf
 is `[()]`. Morel's own semantics are already this: `from where false`
@@ -632,7 +644,10 @@ vary it after their last plan — so the golden plans are all at 78.
 Expressions inside brackets are printed as Morel, by the same
 formatter in its inline mode (§6.1), so a field access appears as
 `#deptno $0` (Morel's `e.deptno` is sugar for `#deptno e`) and a
-record construction as `{d = $1, e = $0}`.
+record construction as `{d = $1, e = $0}`. `andalso` and `orelse`
+associate to the right, so a condition of three conjuncts is
+`a andalso (b andalso c)`, which prints without parentheses; a tree
+that nested them the other way would print `(a andalso b) andalso c`.
 
 `Sys.planEx` and `Sys.planOf` print the tree with `: type` appended
 to every node line, the type being the node's full collection type.
