@@ -843,9 +843,18 @@ public enum CoreBuilder {
       Core.@Nullable IdPat ordinal,
       Core.Exp input,
       Core.Exp condition) {
+    return filter(Pos.ZERO, row, ordinal, input, condition);
+  }
+
+  public Core.Filter filter(
+      Pos pos,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp condition) {
     checkCollection(input);
     checkBoolType(condition, "filter condition");
-    return new Core.Filter(row, ordinal, input, condition);
+    return new Core.Filter(pos, row, ordinal, input, condition);
   }
 
   /**
@@ -858,9 +867,19 @@ public enum CoreBuilder {
       Core.@Nullable IdPat ordinal,
       Core.Exp input,
       Core.Exp exp) {
+    return project(Pos.ZERO, typeSystem, row, ordinal, input, exp);
+  }
+
+  public Core.Project project(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp exp) {
     checkCollection(input);
     final Type type = collectionType(typeSystem, isOrdered(input), exp.type);
-    return new Core.Project(type, row, ordinal, input, exp);
+    return new Core.Project(pos, type, row, ordinal, input, exp);
   }
 
   /**
@@ -868,6 +887,10 @@ public enum CoreBuilder {
    * none. It is what makes an apply outer.
    */
   public Core.IfEmpty ifEmpty(Core.Exp input, Core.Exp exp) {
+    return ifEmpty(Pos.ZERO, input, exp);
+  }
+
+  public Core.IfEmpty ifEmpty(Pos pos, Core.Exp input, Core.Exp exp) {
     checkCollection(input);
     if (!exp.type.equals(input.type.elementType())) {
       throw new IllegalArgumentException(
@@ -875,7 +898,7 @@ public enum CoreBuilder {
               "ifEmpty expression must have the element type %s: %s",
               input.type.elementType(), exp.type));
     }
-    return new Core.IfEmpty(input, exp);
+    return new Core.IfEmpty(pos, input, exp);
   }
 
   /** Creates an inner join. */
@@ -887,6 +910,19 @@ public enum CoreBuilder {
       Core.Exp right,
       Core.Exp condition) {
     return join(
+        Pos.ZERO, typeSystem, leftRow, rightRow, left, right, condition);
+  }
+
+  public Core.Join join(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.IdPat leftRow,
+      Core.IdPat rightRow,
+      Core.Exp left,
+      Core.Exp right,
+      Core.Exp condition) {
+    return join(
+        pos,
         typeSystem,
         Core.Rel.JoinType.INNER,
         leftRow,
@@ -911,6 +947,28 @@ public enum CoreBuilder {
       Core.Exp left,
       Core.Exp right,
       Core.Exp condition) {
+    return join(
+        Pos.ZERO,
+        typeSystem,
+        joinType,
+        leftRow,
+        rightRow,
+        ordinal,
+        left,
+        right,
+        condition);
+  }
+
+  public Core.Join join(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.Rel.JoinType joinType,
+      Core.IdPat leftRow,
+      Core.IdPat rightRow,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp left,
+      Core.Exp right,
+      Core.Exp condition) {
     checkCollection(left);
     checkCollection(right);
     checkBoolType(condition, "join condition");
@@ -921,7 +979,8 @@ public enum CoreBuilder {
             ordered,
             joinElementType(typeSystem, joinType, left, right));
     return new Core.Join(
-        type, joinType, leftRow, rightRow, ordinal, left, right, condition);
+        pos, type, joinType, leftRow, rightRow, ordinal, left, right,
+        condition);
   }
 
   /**
@@ -1057,6 +1116,17 @@ public enum CoreBuilder {
       Core.Exp input,
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
+    return group(Pos.ZERO, typeSystem, row, ordinal, input, keys, aggregates);
+  }
+
+  public Core.Group group(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      SortedMap<String, Core.Exp> keys,
+      SortedMap<String, Core.Aggregate> aggregates) {
     checkCollection(input);
     final Map<String, Type> nameTypes = new LinkedHashMap<>();
     keys.forEach((name, exp) -> nameTypes.put(name, exp.type));
@@ -1078,6 +1148,7 @@ public enum CoreBuilder {
         typeSystem.recordType(ImmutableSortedMap.copyOf(nameTypes, ORDERING));
     final Type type = collectionType(typeSystem, isOrdered(input), elementType);
     return new Core.Group(
+        pos,
         type,
         row,
         ordinal,
@@ -1093,16 +1164,30 @@ public enum CoreBuilder {
       Core.@Nullable IdPat ordinal,
       Core.Exp input,
       Core.Exp exp) {
+    return sort(Pos.ZERO, typeSystem, row, ordinal, input, exp);
+  }
+
+  public Core.Sort sort(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp exp) {
     checkCollection(input);
     final Type type = typeSystem.listType(input.type.elementType());
-    return new Core.Sort(type, row, ordinal, input, exp);
+    return new Core.Sort(pos, type, row, ordinal, input, exp);
   }
 
   /** Creates an {@code unorder}; the output is always a {@code bag}. */
   public Core.Unorder unorder(TypeSystem typeSystem, Core.Exp input) {
+    return unorder(Pos.ZERO, typeSystem, input);
+  }
+
+  public Core.Unorder unorder(Pos pos, TypeSystem typeSystem, Core.Exp input) {
     checkCollection(input);
     final Type type = typeSystem.bagType(input.type.elementType());
-    return new Core.Unorder(type, input);
+    return new Core.Unorder(pos, type, input);
   }
 
   /**
@@ -1110,8 +1195,12 @@ public enum CoreBuilder {
    * exists, and therefore cannot mention {@code $0}.
    */
   public Core.Skip skip(Core.Exp input, Core.Exp count) {
+    return skip(Pos.ZERO, input, count);
+  }
+
+  public Core.Skip skip(Pos pos, Core.Exp input, Core.Exp count) {
     checkCollection(input);
-    return new Core.Skip(input, count);
+    return new Core.Skip(pos, input, count);
   }
 
   /**
@@ -1119,8 +1208,12 @@ public enum CoreBuilder {
    * exists, and therefore cannot mention {@code $0}.
    */
   public Core.Take take(Core.Exp input, Core.Exp count) {
+    return take(Pos.ZERO, input, count);
+  }
+
+  public Core.Take take(Pos pos, Core.Exp input, Core.Exp count) {
     checkCollection(input);
-    return new Core.Take(input, count);
+    return new Core.Take(pos, input, count);
   }
 
   /** Creates a {@code union}. */
@@ -1128,9 +1221,17 @@ public enum CoreBuilder {
       TypeSystem typeSystem,
       boolean distinct,
       Iterable<? extends Core.Exp> inputs) {
+    return union(Pos.ZERO, typeSystem, distinct, inputs);
+  }
+
+  public Core.Union union(
+      Pos pos,
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
     final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
     return new Core.Union(
-        setRelType(typeSystem, inputList), distinct, inputList);
+        pos, setRelType(typeSystem, inputList), distinct, inputList);
   }
 
   /** Creates an {@code intersect}. */
@@ -1138,9 +1239,17 @@ public enum CoreBuilder {
       TypeSystem typeSystem,
       boolean distinct,
       Iterable<? extends Core.Exp> inputs) {
+    return intersect(Pos.ZERO, typeSystem, distinct, inputs);
+  }
+
+  public Core.Intersect intersect(
+      Pos pos,
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
     final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
     return new Core.Intersect(
-        setRelType(typeSystem, inputList), distinct, inputList);
+        pos, setRelType(typeSystem, inputList), distinct, inputList);
   }
 
   /** Creates an {@code except}. */
@@ -1148,9 +1257,17 @@ public enum CoreBuilder {
       TypeSystem typeSystem,
       boolean distinct,
       Iterable<? extends Core.Exp> inputs) {
+    return except(Pos.ZERO, typeSystem, distinct, inputs);
+  }
+
+  public Core.Except except(
+      Pos pos,
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
     final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
     return new Core.Except(
-        setRelType(typeSystem, inputList), distinct, inputList);
+        pos, setRelType(typeSystem, inputList), distinct, inputList);
   }
 
   /**

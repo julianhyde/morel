@@ -59,8 +59,7 @@ step is written with it.
 
 ### F1 — The Java datatype binds patterns
 
-Done, except the position, which is a step of its own below. What it
-turned out to need, for the ports and for F2:
+Done. What it turned out to need, for the ports and for F2:
 
 - [x] `Core.Input` is gone. `filter`, `project`, `sort` and `group`
       extend `Core.RowRel`, which carries the row pattern and the
@@ -92,13 +91,12 @@ turned out to need, for the ports and for F2:
       runs over: the condition sees the candidate pair's position, the
       right input the left element's (spec.md §2), which is what the
       corpus already pinned.
-- [ ] A node has a position, like every other expression: `Rel`'s
-      constructor stops hard-coding `Pos.ZERO`, the resolver supplies
-      the step's position, `copy` keeps it, and the printer ignores
-      it. Today an exception inside a node blames the expression that
-      raised it, which has a position, but a message about the node
-      itself -- a validator violation, a leaf grounding cannot bound
-      -- has nothing to point at.
+- [x] A node has a position, like every other expression: every
+      node constructor takes one, `RelBuilder.at` is the cursor the
+      resolver sets to each step's position before building from it,
+      `copy` and `rebuild` keep a node's own, and the printer ignores
+      it. Nothing reads it yet; F2's executor does, to blame a node
+      whose operation raises.
 - Gate, met: every golden file byte-identical except the ordinal
   section of `rel-tree.smli`, which lost a projection and a legend
   entry, plus `Sys.plan` lines whose `w$` numbers moved when the shadow

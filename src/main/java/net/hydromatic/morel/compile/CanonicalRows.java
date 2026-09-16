@@ -21,12 +21,13 @@ package net.hydromatic.morel.compile;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import java.util.SortedMap;
+import java.util.TreeMap;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Canonical patterns for a pass that writes a node's expressions before it has
@@ -176,11 +177,10 @@ class CanonicalRows {
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
     final Core.IdPat row = rowPat(input);
-    final java.util.TreeMap<String, Core.Exp> keys2 =
-        new java.util.TreeMap<>(keys.comparator());
+    final TreeMap<String, Core.Exp> keys2 = new TreeMap<>(keys.comparator());
     keys.forEach((name, key) -> keys2.put(name, real(key, row, null, null)));
-    final java.util.TreeMap<String, Core.Aggregate> aggregates2 =
-        new java.util.TreeMap<>(aggregates.comparator());
+    final TreeMap<String, Core.Aggregate> aggregates2 =
+        new TreeMap<>(aggregates.comparator());
     aggregates.forEach(
         (name, agg) ->
             aggregates2.put(

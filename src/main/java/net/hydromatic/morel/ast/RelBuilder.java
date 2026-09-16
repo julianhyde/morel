@@ -79,6 +79,9 @@ public class RelBuilder {
    */
   private int nextName = 0;
 
+  /** Position given to the nodes built next; see {@link #at}. */
+  private Pos pos = Pos.ZERO;
+
   private RelBuilder(TypeSystem typeSystem, Set<Simplification> simps) {
     this.typeSystem = requireNonNull(typeSystem);
     this.simps = ImmutableSet.copyOf(simps);
@@ -114,7 +117,15 @@ public class RelBuilder {
   private void rebuild(Core.Exp exp) {
     if (!(exp instanceof Core.Rel)) {
       push(exp);
-    } else if (exp instanceof Core.Filter) {
+      return;
+    }
+    rebuildRel((Core.Rel) exp);
+    at(exp.pos);
+  }
+
+  /** Rebuilds a node; the node's own position is set afterwards. */
+  private void rebuildRel(Core.Rel exp) {
+    if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
       rebuild(filter.input);
       filter(repattern(filter, filter.condition));
@@ -210,6 +221,15 @@ public class RelBuilder {
     return simps.contains(simp);
   }
 
+  /**
+   * Sets the position that the nodes built from now on carry: the position of
+   * the step the caller is converting.
+   */
+  public RelBuilder at(Pos pos) {
+    this.pos = requireNonNull(pos);
+    return this;
+  }
+
   // Stack
 
   /** Pushes a relational expression, whose element has no name of its own. */
@@ -259,7 +279,7 @@ public class RelBuilder {
       stack.push(new Frame(rel, row, elementNames(rel, row, names)));
       return this;
     }
-    final Core.Exp rel2 = core.filter(row, null, rel, test);
+    final Core.Exp rel2 = core.filter(pos, row, null, rel, test);
     // The filter binds the row the names were written over; the node above
     // the filter binds a row of its own, so the names move onto it.
     final Core.IdPat row2 = rowPat(rel2);
@@ -767,13 +787,15 @@ public class RelBuilder {
           above(
               frame,
               core.filter(
+                  pos,
                   filter.row,
                   filter.ordinal,
                   filter.input,
                   core.andAlso(typeSystem, filter.condition, condition2))));
     }
     return push(
-        above(frame, core.filter(frame.row, ordinal, frame.rel, condition)));
+        above(
+            frame, core.filter(pos, frame.row, ordinal, frame.rel, condition)));
   }
 
   /** Projects the top of the stack; {@code exp} is over {@code $0}. */
@@ -800,6 +822,7 @@ public class RelBuilder {
       }
       return push(
           core.project(
+              pos,
               typeSystem,
               project.row,
               ordinal,
@@ -807,7 +830,7 @@ public class RelBuilder {
               merge(exp2, frame.row, project.exp)));
     }
     return push(
-        core.project(typeSystem, frame.row, frameOrdinal, frame.rel, exp));
+        core.project(pos, typeSystem, frame.row, frameOrdinal, frame.rel, exp));
   }
 
   /**
@@ -816,7 +839,7 @@ public class RelBuilder {
    */
   public RelBuilder ifEmpty(Core.Exp exp) {
     final Frame frame = pop();
-    return push(above(frame, core.ifEmpty(frame.rel, exp)));
+    return push(above(frame, core.ifEmpty(pos, frame.rel, exp)));
   }
 
   /** Sorts the top of the stack; the result is a list. */
@@ -826,6 +849,7 @@ public class RelBuilder {
         above(
             frame,
             core.sort(
+                pos,
                 typeSystem,
                 frame.row,
                 ordinalIfRead(frame, exp),
@@ -839,7 +863,7 @@ public class RelBuilder {
     if (on(Simplification.UNORDER_UNORDERED) && !isOrdered(frame.rel)) {
       return push(frame);
     }
-    return push(above(frame, core.unorder(typeSystem, frame.rel)));
+    return push(above(frame, core.unorder(pos, typeSystem, frame.rel)));
   }
 
   /** Skips rows of the top of the stack. */
@@ -848,13 +872,13 @@ public class RelBuilder {
     if (on(Simplification.SKIP_ZERO) && isIntLiteral(count, 0)) {
       return push(frame);
     }
-    return push(above(frame, core.skip(frame.rel, count)));
+    return push(above(frame, core.skip(pos, frame.rel, count)));
   }
 
   /** Takes rows of the top of the stack. */
   public RelBuilder take(Core.Exp count) {
     final Frame frame = pop();
-    return push(above(frame, core.take(frame.rel, count)));
+    return push(above(frame, core.take(pos, frame.rel, count)));
   }
 
   /** Groups the top of the stack. */
@@ -874,6 +898,7 @@ public class RelBuilder {
             });
     final Core.Exp rel =
         core.group(
+            pos,
             typeSystem,
             frame.row,
             ordinalIfRead(frame, exps.toArray(new Core.Exp[0])),
@@ -915,6 +940,7 @@ public class RelBuilder {
     arity = 1;
     final Core.Exp rel =
         core.join(
+            pos,
             typeSystem,
             joinType,
             left.row,
@@ -1041,17 +1067,18 @@ public class RelBuilder {
 
   /** Combines the top {@code n} of the stack with a set operator. */
   public RelBuilder union(int n, boolean distinct) {
-    return setRel(n, inputs -> core.union(typeSystem, distinct, inputs));
+    return setRel(n, inputs -> core.union(pos, typeSystem, distinct, inputs));
   }
 
   /** Intersects the top {@code n} of the stack. */
   public RelBuilder intersect(int n, boolean distinct) {
-    return setRel(n, inputs -> core.intersect(typeSystem, distinct, inputs));
+    return setRel(
+        n, inputs -> core.intersect(pos, typeSystem, distinct, inputs));
   }
 
   /** Subtracts the top {@code n - 1} of the stack from the one below them. */
   public RelBuilder except(int n, boolean distinct) {
-    return setRel(n, inputs -> core.except(typeSystem, distinct, inputs));
+    return setRel(n, inputs -> core.except(pos, typeSystem, distinct, inputs));
   }
 
   private RelBuilder setRel(int n, Function<List<Core.Exp>, Core.Exp> f) {
