@@ -469,42 +469,6 @@ public class Visitor {
     match.exp.accept(this);
   }
 
-  protected void visit(Core.From from) {
-    from.steps.forEach(step -> step.accept(this));
-  }
-
-  protected void visit(Core.Scan scan) {
-    scan.pat.accept(this);
-    scan.exp.accept(this);
-    if (scan.condition != null) {
-      scan.condition.accept(this);
-    }
-  }
-
-  protected void visit(Core.Where where) {
-    where.exp.accept(this);
-  }
-
-  protected void visit(Core.SkipStep skip) {
-    skip.exp.accept(this);
-  }
-
-  protected void visit(Core.TakeStep take) {
-    take.exp.accept(this);
-  }
-
-  protected void visit(Core.ExceptStep except) {
-    except.args.forEach(this::accept);
-  }
-
-  protected void visit(Core.IntersectStep intersect) {
-    intersect.args.forEach(this::accept);
-  }
-
-  protected void visit(Core.UnionStep union) {
-    union.args.forEach(this::accept);
-  }
-
   protected void visit(Core.NonRecValDecl valDecl) {
     valDecl.pat.accept(this);
     valDecl.exp.accept(this);
@@ -514,27 +478,12 @@ public class Visitor {
     recValDecl.list.forEach(this::accept);
   }
 
-  protected void visit(Core.GroupStep group) {
-    group.groupExps.values().forEach(this::accept);
-    group.aggregates.values().forEach(this::accept);
-  }
-
   protected void visit(Core.Aggregate aggregate) {
     aggregate.aggregate.accept(this);
     if (aggregate.argument != null) {
       aggregate.argument.accept(this);
     }
   }
-
-  protected void visit(Core.Order order) {
-    order.exp.accept(this);
-  }
-
-  protected void visit(Core.Yield yield) {
-    yield.exp.accept(this);
-  }
-
-  protected void visit(Core.UnorderStep unorder) {}
 
   // Relational tree (Core.Rel) nodes.
 

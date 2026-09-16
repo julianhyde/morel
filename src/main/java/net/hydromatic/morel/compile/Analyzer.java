@@ -21,9 +21,7 @@ package net.hydromatic.morel.compile;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
-import java.util.ArrayDeque;
 import java.util.Collection;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import net.hydromatic.morel.ast.AstNode;
@@ -36,16 +34,15 @@ public class Analyzer extends EnvVisitor {
 
   /** Creates an Analyzer. */
   private static Analyzer of(TypeSystem typeSystem, Environment env) {
-    return new Analyzer(typeSystem, env, new HashMap<>(), new ArrayDeque<>());
+    return new Analyzer(typeSystem, env, new HashMap<>());
   }
 
   /** Private constructor. */
   private Analyzer(
       TypeSystem typeSystem,
       Environment env,
-      Map<Core.NamedPat, MutableUse> map,
-      Deque<FromContext> fromStack) {
-    super(typeSystem, env, fromStack);
+      Map<Core.NamedPat, MutableUse> map) {
+    super(typeSystem, env);
     this.map = map;
   }
 
@@ -71,7 +68,7 @@ public class Analyzer extends EnvVisitor {
 
   @Override
   protected Analyzer push(Environment env) {
-    return new Analyzer(typeSystem, env, map, fromStack);
+    return new Analyzer(typeSystem, env, map);
   }
 
   @Override
@@ -140,8 +137,7 @@ public class Analyzer extends EnvVisitor {
       final Multimap<Core.NamedPat, MutableUse> multimap =
           HashMultimap.create();
       final Map<Core.NamedPat, MutableUse> subMap = new HashMap<>();
-      final Analyzer analyzer =
-          new Analyzer(typeSystem, env, subMap, new ArrayDeque<>());
+      final Analyzer analyzer = new Analyzer(typeSystem, env, subMap);
       case_.matchList.forEach(
           e -> {
             subMap.clear();

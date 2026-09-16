@@ -268,11 +268,10 @@ In the order the answers unblock each other:
 
 Two facts, read off the code, underlie most of what follows.
 
-*Coloring today happens after lowering.* `Compiles` lowers every tree
-to a `Core.From` step list and only then hands the declaration to
-`CalciteCompiler`, so the translator never sees a tree. Coloring the
-tree therefore runs before `lowerTrees`, on the thing the rewrite
-passes carry, and lowering learns one new node.
+*Coloring runs on the tree.* `Compiles` hands the tree to the
+compiler, and `CalciteCompiler` reads the tree; there is no lowering.
+Coloring the tree therefore runs on the thing the rewrite passes
+carry, and each compiler learns one new node.
 
 *There are two colorings today, not one.* `CalciteCompiler` decides
 what reaches Calcite; Calcite's own planner then decides what reaches
@@ -677,7 +676,7 @@ it.
 is a dataflow: the inputs produce elements, the node's expressions
 run once per element, and the arguments of `skip`, `take` and
 `ifEmpty` run before any element exists (spec.md §2, rule 1).
-Lowering turns that into a step list and a row sink. An ordinary
+The compiler turns that into row sinks. An ordinary
 expression is evaluated once for its value, and its subexpressions
 are evaluated because it needs them.
 

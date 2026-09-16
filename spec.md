@@ -38,10 +38,11 @@ for the design is in discussion.md; the sequence is in plan.md.
 **What the contract covers is a command, not a file.** `Sys.planEx`
 prints the tree, and its text is what §6 specifies and what another
 implementation must reproduce. `Sys.plan` prints the *executable*
-code — the step list the lowering makes — and is Morel's own, outside
-this document; it says `w$0` where the query said `e`, because a
-one-binder query has no projection to read a name off (§3.1), and
-that is a fact about the lowering rather than about the tree. Drawing
+code — the row sinks the compiler makes from the tree — and is
+Morel's own, outside this document; it names a slot by the pattern
+that binds it, `$0`, because a one-binder query has no projection to
+read a name off (§3.1), and that is a fact about the compiler rather
+than about the tree. Drawing
 the line by command rather than by file is deliberate: the two appear
 in the same script files — `optimize.smli` and `built-in/sys.smli`
 each have both — and splitting the files would move tests to record
@@ -65,12 +66,12 @@ applied to an *element type*, which may be any Morel type at any
 depth: a record, a tuple, an `int`, a function, another collection.
 There is no row/scalar distinction and no flat-row assumption.
 
-Two things that `Core.From` carries today do not exist here:
+Two things that the step list carried do not exist here:
 
 * **No binding list.** A node's element type is derived from the node
   and its inputs (§4), and is exactly the type of the value flowing
-  out of it. `Core.StepEnv` — bindings, `atom`, `ordered` — has no
-  counterpart.
+  out of it. The step list's environment — bindings, `atom`,
+  `ordered` — has no counterpart.
 * **No `atom` flag.** Atomization was the rule that a single binding
   yields its bare type rather than a one-field record. In the tree it
   is not a rule at all: an element's type is the type of the
@@ -266,9 +267,9 @@ project [#2 $0]
     #items v$0
 ```
 
-which is what the step list has always done — a scan over the
-collection-valued expression, then a `yield` of the freshly bound
-element — said with nodes. Fusing the two, so that one constructor
+which is what the step list did — a scan over the collection-valued
+expression, then a `yield` of the freshly bound element — said with
+nodes. Fusing the two, so that one constructor
 both correlated and dropped, is what an earlier draft of this
 document did under the name `projectMany`; the cost was a node that
 did two things, that alone among the nodes did not bind `$0`, and
@@ -411,10 +412,9 @@ change when the first such rule needs it.
 ## 6. Plan text
 
 The grammar below is the contract; §7 shows it working. `Sys.planEx`
-prints it, and `Sys.plan` does not: `Sys.plan` prints the step list
-that executes, which is a different thing said in a different
-notation, and the day the tree is what executes is the day that
-question reopens.
+prints it, and `Sys.plan` does not: `Sys.plan` prints the row sinks
+that execute, which is a different thing said in a different
+notation.
 
 ### 6.1 One formatter, two modes
 
@@ -767,8 +767,7 @@ group [deptno = #deptno $0] [total = sum over #sal $0]
 ## 8. What this replaces
 
 `Core.From`'s step list, `Core.FromStep` and its subclasses, and
-`Core.StepEnv` stop being the logical representation. They survive as
-the lowering target: the tree linearizes left-deep, `$0` and `$1` and
-the field accesses on them become `EvalEnv` slots, and `RowSink`
-execution is unchanged. That form is no longer printed, and step 2
-may dissolve it into the lowerer entirely.
+`Core.StepEnv` are gone. The compiler compiles the tree to row sinks
+directly: a node's patterns become stack slots, or expressions over
+them, and `RowSink` execution is unchanged. The Calcite compiler
+reads the tree too.

@@ -92,22 +92,6 @@ abstract class EnvShuttle extends Shuttle {
     //    Compiles.bindPattern(typeSystem, bindings, recValDecl);
     return recValDecl.copy(bind(bindings).visitList(recValDecl.list));
   }
-
-  @Override
-  protected Core.Exp visit(Core.From from) {
-    Core.StepEnv env = Core.StepEnv.EMPTY;
-    final List<Core.FromStep> steps = new ArrayList<>();
-    for (Core.FromStep step : from.steps) {
-      final Core.FromStep step2 = step.accept(bind(env.bindings));
-      steps.add(step2);
-      env = step2.env;
-    }
-
-    // Don't pass outer env for validation. Steps reference patterns
-    // defined within the FROM itself, which may not be in the outer env.
-    // The step traversal above already validates with appropriate bindings.
-    return from.copy(typeSystem, null, steps);
-  }
 }
 
 // End EnvShuttle.java

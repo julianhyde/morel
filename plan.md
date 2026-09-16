@@ -195,8 +195,14 @@ Done. What it turned out to need, for the ports and for F2:
   - `Sys.planEx` lines in `such-that.smli` moved: the queries that
     grounding generates print as trees where they printed as step
     lists nested in the tree.
-- [ ] Delete `Core.From`, `FromStep` and its subclasses, `StepEnv`,
-      and the compilers' step-list code.
+- [x] `Core.From`, `FromStep` and its subclasses, `StepEnv`, the
+      compilers' step-list code, the step visits of `Shuttle`,
+      `Visitor`, `EnvVisitor` and `EnvShuttle`, `RangePushdown`'s
+      step-list pass and the `rematerialize` sink are deleted. Left
+      standing: `Z_ORDINAL` and the compiler's ordinal counter, which
+      the resolver still reaches for an `ordinal` outside a node, and
+      the `ordinalSlots` field the tree compiler threads through its
+      contexts; a follow-up.
 - Gate: `fullMake`; only `Sys.plan` lines move, and they are outside
   the contract. If a line that is not a `Sys.plan` line moves, stop.
 

@@ -82,9 +82,8 @@ abstract class VariableCollector extends EnvVisitor {
   private VariableCollector(
       TypeSystem typeSystem,
       Environment env,
-      Deque<FromContext> fromStack,
       Deque<Environment> lambdaEnvStack) {
-    super(typeSystem, env, fromStack);
+    super(typeSystem, env);
     this.lambdaEnvStack = lambdaEnvStack;
   }
 
@@ -168,7 +167,7 @@ abstract class VariableCollector extends EnvVisitor {
         TypeSystem typeSystem,
         Environment env,
         BiConsumer<Core.Id, Scope> consumer) {
-      super(typeSystem, env, new ArrayDeque<>(), new ArrayDeque<>());
+      super(typeSystem, env, new ArrayDeque<>());
       this.consumer = consumer;
     }
 
@@ -212,7 +211,7 @@ abstract class VariableCollector extends EnvVisitor {
     final VariableCollector parent;
 
     SubVariableCollector(Environment env, VariableCollector parent) {
-      super(parent.typeSystem, env, parent.fromStack, parent.lambdaEnvStack);
+      super(parent.typeSystem, env, parent.lambdaEnvStack);
       this.parent = parent;
     }
 

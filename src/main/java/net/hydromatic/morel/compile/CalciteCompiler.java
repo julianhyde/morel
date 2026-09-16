@@ -22,7 +22,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
-import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.sort;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
@@ -72,7 +71,6 @@ import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
-import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
 import net.hydromatic.morel.util.ThreadLocals;
 import org.apache.calcite.plan.RelOptCluster;
@@ -344,7 +342,7 @@ public class CalciteCompiler extends Compiler {
                 } else {
                   for (Core.Exp arg : args) {
                     cx.relBuilder.values(new String[] {"T"}, true);
-                    yield_(cx, Core.StepEnv.EMPTY, arg);
+                    projectElement(cx, arg);
                   }
                   cx.relBuilder.union(true, args.size());
                 }
@@ -537,75 +535,6 @@ public class CalciteCompiler extends Compiler {
           throw new AssertionError();
       }
     }
-  }
-
-  @Override
-  protected Code compileFrom(Context cx, Core.From from) {
-    final Code code = super.compileFrom(cx, from);
-    return new RelCode() {
-      @Override
-      public Describer describe(Describer describer) {
-        return code.describe(describer);
-      }
-
-      @Override
-      public Object eval(Stack stack) {
-        return code.eval(stack);
-      }
-
-      @Override
-      public boolean toRel(RelContext cx, boolean aggressive) {
-        if (from.steps.isEmpty() || !(from.steps.get(0) instanceof Core.Scan)) {
-          // One row, zero columns
-          cx.relBuilder.values(
-              ImmutableList.of(ImmutableList.of()),
-              cx.relBuilder.getTypeFactory().builder().build());
-        }
-        cx =
-            new RelContext(
-                cx.env, cx, cx.relBuilder, ImmutableSortedMap.of(), 1);
-        for (Ord<Core.FromStep> fromStep : Ord.zip(from.steps)) {
-          cx = step(cx, fromStep.i, fromStep.e);
-          if (cx == null) {
-            return false;
-          }
-        }
-        if (from.steps.isEmpty() || last(from.steps).op != Op.YIELD) {
-          final Core.Exp implicitYieldExp =
-              core.implicitYieldExp(typeSystem, from.steps);
-          cx = yield_(cx, Core.StepEnv.EMPTY, implicitYieldExp);
-        }
-        return true;
-      }
-
-      private @Nullable RelContext step(
-          RelContext cx, int i, Core.FromStep fromStep) {
-        switch (fromStep.op) {
-          case EXCEPT:
-            return setStep(cx, (Core.ExceptStep) fromStep);
-          case GROUP:
-            return group(cx, (Core.GroupStep) fromStep);
-          case INTERSECT:
-            return setStep(cx, (Core.IntersectStep) fromStep);
-          case ORDER:
-            return order(cx, (Core.Order) fromStep);
-          case SCAN:
-            return join(cx, i, (Core.Scan) fromStep);
-          case SKIP:
-            return skip(cx, (Core.SkipStep) fromStep);
-          case TAKE:
-            return take(cx, (Core.TakeStep) fromStep);
-          case UNION:
-            return setStep(cx, (Core.UnionStep) fromStep);
-          case WHERE:
-            return where(cx, (Core.Where) fromStep);
-          case YIELD:
-            return yield_(cx, (Core.Yield) fromStep);
-          default:
-            throw new AssertionError(fromStep);
-        }
-      }
-    };
   }
 
   /**
@@ -1008,53 +937,6 @@ public class CalciteCompiler extends Compiler {
     return slot(cx, target);
   }
 
-  private RelContext yield_(RelContext cx, Core.Yield yield) {
-    return yield_(cx, yield.env, yield.exp);
-  }
-
-  private RelContext yield_(RelContext cx, Core.StepEnv env, Core.Exp exp) {
-    final Core.Tuple tuple;
-    switch (exp.op) {
-      case ID:
-        final Core.Id id = (Core.Id) exp;
-        tuple = toRecord(cx, id);
-        if (tuple != null) {
-          return yield_(cx, env, tuple);
-        }
-        break;
-
-      case TUPLE:
-        tuple = (Core.Tuple) exp;
-        final List<String> names = tuple.type().argNames();
-        cx.relBuilder.project(
-            transform(tuple.args, e -> translate(cx, e)), names);
-        return getRelContext(cx, cx.env.bindAll(env.bindings), names);
-    }
-    RexNode rex = translate(cx, exp);
-    cx.relBuilder.project(rex);
-    if (env.atom && !(env.bindings.get(0).id.type instanceof RecordType)) {
-      // An atomizing yield binds one name to the row itself, and Calcite
-      // represents a scalar variable as a one-field row -- which is what this
-      // projection is. So bind it, as the record branch does; otherwise a
-      // later step that reads the name, such as the 'group x' after a union
-      // of scalars, looks it up and finds nothing.
-      //
-      // The column keeps whatever name Calcite gave it. Only Morel looks the
-      // variable up, and by then it is the sole field; renaming the column
-      // after the binder would put a generated name such as 'v$3' into every
-      // plan that ends in a yield of an anonymous value.
-      final Binding binding = env.bindings.get(0);
-      final ImmutableSortedMap<String, VarData> map =
-          ImmutableSortedMap.of(
-              binding.id.name,
-              new VarData(
-                  binding.id.type, 0, cx.relBuilder.peek().getRowType()));
-      return new RelContext(
-          cx.env.bindAll(env.bindings), cx, cx.relBuilder, map, 1);
-    }
-    return cx;
-  }
-
   private RexNode translate(RelContext cx, Core.Exp exp) {
     final Core.Tuple record;
     final RelDataTypeFactory.Builder builder;
@@ -1176,16 +1058,6 @@ public class CalciteCompiler extends Compiler {
         }
         break;
 
-      case FROM:
-        final Core.From from = (Core.From) exp;
-        final RelNode r = toRel2(cx, from);
-        if (r != null && 1 != 2) {
-          // TODO: add RexSubQuery.array and RexSubQuery.multiset methods
-          return cx.relBuilder.call(
-              SqlStdOperatorTable.ARRAY_QUERY, RexSubQuery.scalar(r));
-        }
-        break;
-
       case TUPLE:
         final Core.Tuple tuple = (Core.Tuple) exp;
         builder = cx.relBuilder.getTypeFactory().builder();
@@ -1283,106 +1155,6 @@ public class CalciteCompiler extends Compiler {
     return transformEager(exps, exp -> translate(cx, exp));
   }
 
-  private @Nullable RelContext join(RelContext cx, int i, Core.Scan scan) {
-    if (!toRel3(cx, scan.exp, true)) {
-      return null;
-    }
-
-    final SortedMap<String, VarData> varOffsets = new TreeMap<>(cx.map);
-    int offset = 0;
-    for (VarData varData : cx.map.values()) {
-      offset += varData.rowType.getFieldCount();
-    }
-    final Core.Pat pat = scan.pat;
-    final RelNode r = cx.relBuilder.peek();
-    if (pat instanceof Core.IdPat) {
-      final Core.IdPat idPat = (Core.IdPat) pat;
-      cx.relBuilder.as(idPat.name);
-      varOffsets.put(key(idPat), new VarData(pat.type, offset, r.getRowType()));
-    }
-    cx =
-        new RelContext(
-            cx.env.bindAll(scan.env.bindings),
-            cx,
-            cx.relBuilder,
-            ImmutableSortedMap.copyOfSorted(varOffsets),
-            cx.inputCount + 1);
-
-    if (i > 0) {
-      final JoinRelType joinRelType = joinRelType(scan.op);
-      cx.relBuilder.join(joinRelType, translate(cx, scan.condition));
-    }
-    return cx;
-  }
-
-  private static JoinRelType joinRelType(Op op) {
-    switch (op) {
-      case SCAN:
-        return JoinRelType.INNER;
-      default:
-        throw new AssertionError(op);
-    }
-  }
-
-  private RelContext where(RelContext cx, Core.Where where) {
-    cx.relBuilder.filter(cx.varList, translate(cx, where.exp));
-    return cx;
-  }
-
-  private RelContext skip(RelContext cx, Core.SkipStep skip) {
-    if (skip.exp.op != Op.INT_LITERAL) {
-      throw new AssertionError("skip requires literal: " + skip.exp);
-    }
-    int offset = ((Core.Literal) skip.exp).unwrap(Integer.class);
-    int fetch = -1; // per Calcite: "negative means no limit"
-    cx.relBuilder.limit(offset, fetch);
-    return cx;
-  }
-
-  private RelContext take(RelContext cx, Core.TakeStep take) {
-    if (take.exp.op != Op.INT_LITERAL) {
-      throw new AssertionError("take requires literal: " + take.exp);
-    }
-    int offset = 0;
-    int fetch = ((Core.Literal) take.exp).unwrap(Integer.class);
-    cx.relBuilder.limit(offset, fetch);
-    return cx;
-  }
-
-  private @Nullable RelContext setStep(RelContext cx, Core.SetStep setStep) {
-    int n = 1;
-    for (Core.Exp arg : setStep.args) {
-      if (!toRel3(cx, arg, true)) {
-        // One of the args could not be converted. Clean up the stack.
-        while (n-- > 1) {
-          cx.relBuilder.build();
-        }
-        return null;
-      }
-      ++n;
-    }
-    harmonizeRowTypes(cx.relBuilder, n);
-    switch (setStep.op) {
-      case EXCEPT:
-      case INTERSECT:
-        foldSetOp(cx.relBuilder, setStep.op, !setStep.distinct, n);
-        break;
-      case UNION:
-        cx.relBuilder.union(!setStep.distinct, n);
-        break;
-      default:
-        throw new AssertionError(setStep);
-    }
-    return cx;
-  }
-
-  private RelContext order(RelContext cx, Core.Order order) {
-    final List<RexNode> exps = new ArrayList<>();
-    translateOrderItems(cx, exps::add, order.exp, false);
-    cx.relBuilder.sort(exps);
-    return cx;
-  }
-
   private void translateOrderItems(
       RelContext cx, Consumer<RexNode> consumer, Core.Exp exp, boolean desc) {
     if (exp.isCallTo(BuiltIn.Constructor.DESCENDING_DESC)) {
@@ -1406,65 +1178,6 @@ public class CalciteCompiler extends Compiler {
         }
         consumer.accept(rex);
     }
-  }
-
-  private @Nullable RelContext group(RelContext cx, Core.GroupStep group) {
-    // Calcite's native MIN and MAX order values differently from Morel for some
-    // types ('word', which it compares as a signed BIGINT) or not at all
-    // (tuples, records, lists, and datatypes such as 'option'). If a 'max' or
-    // 'min' is over such a type, decline to translate the query to Calcite, so
-    // that it runs locally. (See the Calcite adapter limitations in the docs.)
-    for (Core.Aggregate aggregate : group.aggregates.values()) {
-      final SqlAggFunction op = aggOp(aggregate.aggregate);
-      if ((op == SqlStdOperatorTable.MIN || op == SqlStdOperatorTable.MAX)
-          && !calciteOrders(aggregate.type)) {
-        return null;
-      }
-    }
-    final List<Binding> bindings = new ArrayList<>();
-    final List<RexNode> nodes = new ArrayList<>();
-    final List<String> names = new ArrayList<>();
-    group.groupExps.forEach(
-        (idPat, exp) -> {
-          bindings.add(Binding.of(idPat));
-          nodes.add(translate(cx, exp));
-          names.add(idPat.name);
-        });
-    final RelBuilder.GroupKey groupKey = cx.relBuilder.groupKey(nodes);
-    final List<RelBuilder.AggCall> aggregateCalls = new ArrayList<>();
-    group.aggregates.forEach(
-        (idPat, aggregate) -> {
-          bindings.add(Binding.of(idPat));
-          final SqlAggFunction op = aggOp(aggregate.aggregate);
-          final ImmutableList.Builder<RexNode> args = ImmutableList.builder();
-          if (aggregate.argument != null) {
-            args.add(translate(cx, aggregate.argument));
-          }
-          aggregateCalls.add(
-              cx.relBuilder.aggregateCall(op, args.build()).as(idPat.name));
-          names.add(idPat.name);
-        });
-
-    // Create an Aggregate operator.
-    cx.relBuilder.aggregate(groupKey, aggregateCalls);
-    return getRelContext(cx, cx.env.bindAll(bindings), names);
-  }
-
-  private static RelContext getRelContext(
-      RelContext cx, Environment env, List<String> names) {
-    // Permute the fields so that they are sorted by name, per Morel records.
-    final List<String> sortedNames = sort(names, Ordering.natural());
-    cx.relBuilder.rename(names).project(cx.relBuilder.fields(sortedNames));
-    final RelDataType rowType = cx.relBuilder.peek().getRowType();
-    final SortedMap<String, VarData> map = new TreeMap<>();
-    sortedNames.forEach(
-        name ->
-            map.put(
-                name, new VarData(PrimitiveType.UNIT, map.size(), rowType)));
-
-    // Return a context containing a variable for each output field.
-    return new RelContext(
-        env, cx, cx.relBuilder, ImmutableSortedMap.copyOfSorted(map), 1);
   }
 
   /**
