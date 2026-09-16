@@ -21,11 +21,10 @@ package net.hydromatic.morel;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -187,45 +186,42 @@ public class RelBuilderTest {
   }
 
   /**
-   * Tests a dependent join: the binder names the left element inside the right
-   * input, which is a tree of its own and so cannot say {@code $0} and mean the
-   * left.
+   * Tests a dependent join: the right input reads the left row, which the
+   * printer names, because the right input is a tree of its own whose {@code
+   * $0} is its own row.
    */
   @Test
   void testDependentJoin() {
     final Fixture f = new Fixture();
     final RelBuilder b = f.builder();
     b.push("e", f.emps);
-    final Core.IdPat binder = b.binder("e");
-    // The right input reads the left element through the binder.
-    b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
+    final Core.IdPat leftRow = b.binder();
+    // The right input reads the left element through the left row.
+    b.push(core.list(f.typeSystem, b.field(core.id(leftRow), "deptno")));
     b.pair();
-    final PairList<String, Core.Exp> nameExps = PairList.of();
-    nameExps.add("d", b.input(1));
-    nameExps.add("e", b.input(0));
     final Core.Exp rel =
-        b.join(Core.Rel.JoinType.INNER, binder, core.boolLiteral(true)).build();
+        b.join(Core.Rel.JoinType.INNER, core.boolLiteral(true)).build();
+    assertThat(((Core.Join) rel).isDependent(), is(true));
     assertThat(
         f.plan(rel),
         is(
-            "join [e]\n" //
+            "join [v$0]\n" //
                 + "  [{deptno = 10}, {deptno = 20}]\n"
-                + "  [#deptno e]\n"));
+                + "  [#deptno v$0]\n"));
   }
 
   /**
-   * Tests {@link Simplification#JOIN_INDEPENDENT}: a binder the right input
-   * does not read makes no join dependent, so it goes, and what is left is an
-   * independent join with a condition.
+   * Tests that a join whose right input does not read the left row is
+   * independent, and prints without an argument for it, whatever the caller
+   * asked the builder for.
    */
   @Test
   void testJoinIndependent() {
     final Fixture f = new Fixture();
-    // The right input reads nothing of the left, though a binder is offered.
     assertThat(
         f.plan(offeredBinder(f)),
         is(
-            "join [i] [$0 = $1]\n" //
+            "join [$0 = $1]\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"));
     assertThat(
@@ -239,64 +235,45 @@ public class RelBuilderTest {
   private static Core.Exp offeredBinder(Fixture f, Simplification... simps) {
     final RelBuilder b = f.builder(simps);
     b.push("i", f.list12);
-    final Core.IdPat binder = b.binder("i");
+    // The left row is offered, and the right input reads nothing of it.
+    final Core.IdPat unused = b.binder();
+    assertThat(unused, notNullValue());
     b.push(f.list12).pair();
-    return b.join(
-            Core.Rel.JoinType.INNER,
-            binder,
-            core.equal(f.typeSystem, b.input(0), b.input(1)))
-        .build();
-  }
-
-  /**
-   * Tests that a binder the right input <em>does</em> read is kept, so the join
-   * stays dependent.
-   */
-  @Test
-  void testJoinStaysDependentWhenRead() {
-    final Fixture f = new Fixture();
-    final RelBuilder b = f.builder(Simplification.values());
-    b.push("e", f.emps);
-    final Core.IdPat binder = b.binder("e");
-    b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
-    b.pair();
-    final Core.Exp rel =
-        b.join(Core.Rel.JoinType.INNER, binder, core.boolLiteral(true)).build();
-    assertThat(
-        f.plan(rel),
-        is(
-            "join [e]\n" //
-                + "  [{deptno = 10}, {deptno = 20}]\n"
-                + "  [#deptno e]\n"));
-  }
-
-  /**
-   * Tests that the validator rejects a binder read from the condition, where
-   * {@code $0} and {@code $1} are what a join says.
-   */
-  @Test
-  void testBinderOutOfScope() {
-    final Fixture f = new Fixture();
-    final RelBuilder b = f.builder();
-    b.push("e", f.emps);
-    final Core.IdPat binder = b.binder("e");
-    b.push(core.list(f.typeSystem, b.field(core.id(binder), "deptno")));
-    b.pair();
-    // Illegal: the condition reads the binder rather than $0.
     final Core.Exp rel =
         b.join(
                 Core.Rel.JoinType.INNER,
-                binder,
+                core.equal(f.typeSystem, b.input(0), b.input(1)))
+            .build();
+    assertThat(((Core.Join) rel).isDependent(), is(false));
+    return rel;
+  }
+
+  /**
+   * Tests that the left row may be read from the condition, where it is {@code
+   * $0}, as well as from the right input.
+   */
+  @Test
+  void testLeftRowInCondition() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder();
+    b.push("e", f.emps);
+    final Core.IdPat leftRow = b.binder();
+    b.push(core.list(f.typeSystem, b.field(core.id(leftRow), "deptno")));
+    b.pair();
+    final Core.Exp rel =
+        b.join(
+                Core.Rel.JoinType.INNER,
                 core.equal(
                     f.typeSystem,
-                    core.field(f.typeSystem, core.id(binder), 0),
+                    core.field(f.typeSystem, core.id(leftRow), 0),
                     f.intLiteral(10)))
             .build();
     assertThat(
-        RelValidator.violations(f.typeSystem, (Core.Rel) rel),
-        hasItem(
-            containsString(
-                "join condition cannot reference the join's binder")));
+        f.plan(rel),
+        is(
+            "join [v$0] [#deptno $0 = 10]\n" //
+                + "  [{deptno = 10}, {deptno = 20}]\n"
+                + "  [#deptno v$0]\n"));
   }
 
   /**

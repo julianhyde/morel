@@ -68,7 +68,6 @@ public class Expander {
     if (from2 == null) {
       return from;
     }
-    RelShadow.groundedViaTree();
     return from2;
   }
 

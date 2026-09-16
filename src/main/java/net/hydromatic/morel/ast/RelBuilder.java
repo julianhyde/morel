@@ -21,6 +21,7 @@ package net.hydromatic.morel.ast;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.type.RecordType.ORDERING;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.function.Function;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.ListType;
@@ -115,11 +117,11 @@ public class RelBuilder {
     } else if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
       rebuild(filter.input);
-      filter(filter.condition);
+      filter(repattern(filter, filter.condition));
     } else if (exp instanceof Core.Project) {
       final Core.Project project = (Core.Project) exp;
       rebuild(project.input);
-      project(project.exp);
+      project(repattern(project, project.exp));
     } else if (exp instanceof Core.IfEmpty) {
       final Core.IfEmpty ifEmpty = (Core.IfEmpty) exp;
       rebuild(ifEmpty.input);
@@ -127,16 +129,41 @@ public class RelBuilder {
     } else if (exp instanceof Core.Join) {
       final Core.Join join = (Core.Join) exp;
       rebuild(join.left);
-      rebuild(join.right);
-      join(join.joinType, join.binder, join.condition);
+      // The right input may read the left row; it reads the new one.
+      final Core.IdPat leftRow = frame(0).row;
+      rebuild(substitute(join.right, join.leftRow, core.id(leftRow)));
+      pair();
+      final Core.IdPat rightRow = rightRow(frame(1));
+      Core.Exp condition =
+          substitute(join.condition, join.leftRow, core.id(leftRow));
+      condition = substitute(condition, join.rightRow, core.id(rightRow));
+      if (join.ordinal != null) {
+        condition = substitute(condition, join.ordinal, ordinal());
+      }
+      join(join.joinType, condition);
     } else if (exp instanceof Core.Group) {
       final Core.Group group = (Core.Group) exp;
       rebuild(group.input);
-      group(group.keys, group.aggregates);
+      final SortedMap<String, Core.Exp> keys = new TreeMap<>(ORDERING);
+      group.keys.forEach((name, key) -> keys.put(name, repattern(group, key)));
+      final SortedMap<String, Core.Aggregate> aggregates =
+          new TreeMap<>(ORDERING);
+      group.aggregates.forEach(
+          (name, agg) ->
+              aggregates.put(
+                  name,
+                  core.aggregate(
+                      agg.pos,
+                      agg.type,
+                      agg.aggregate,
+                      agg.argument == null
+                          ? null
+                          : repattern(group, agg.argument))));
+      group(keys, aggregates);
     } else if (exp instanceof Core.Sort) {
       final Core.Sort sort = (Core.Sort) exp;
       rebuild(sort.input);
-      sort(sort.exp);
+      sort(repattern(sort, sort.exp));
     } else if (exp instanceof Core.Unorder) {
       rebuild(((Core.Unorder) exp).input);
       unorder();
@@ -148,24 +175,34 @@ public class RelBuilder {
       final Core.Take take = (Core.Take) exp;
       rebuild(take.input);
       take(take.count);
-    } else if (exp instanceof Core.SetRel) {
-      final Core.SetRel setRel = (Core.SetRel) exp;
-      setRel.inputs.forEach(this::rebuild);
-      final int n = setRel.inputs.size();
-      switch (setRel.op) {
-        case UNION:
-          union(n, setRel.distinct);
-          break;
-        case INTERSECT:
-          intersect(n, setRel.distinct);
-          break;
-        default:
-          except(n, setRel.distinct);
-          break;
-      }
+    } else if (exp instanceof Core.Union) {
+      final Core.Union union = (Core.Union) exp;
+      union.inputs.forEach(this::rebuild);
+      union(union.inputs.size(), union.distinct);
+    } else if (exp instanceof Core.Intersect) {
+      final Core.Intersect intersect = (Core.Intersect) exp;
+      intersect.inputs.forEach(this::rebuild);
+      intersect(intersect.inputs.size(), intersect.distinct);
+    } else if (exp instanceof Core.Except) {
+      final Core.Except except = (Core.Except) exp;
+      except.inputs.forEach(this::rebuild);
+      except(except.inputs.size(), except.distinct);
     } else {
-      throw new AssertionError("cannot rebuild " + exp.op);
+      throw new AssertionError("unknown node " + exp.op);
     }
+  }
+
+  /**
+   * Rewrites an expression of a one-input node to be over the patterns of the
+   * frame on top of the stack, which the node built next will bind.
+   */
+  private Core.Exp repattern(Core.RowRel rel, Core.Exp exp) {
+    final Frame frame = frame(0);
+    Core.Exp exp2 = substitute(exp, rel.row, core.id(frame.row));
+    if (rel.ordinal != null) {
+      exp2 = substitute(exp2, rel.ordinal, ordinal());
+    }
+    return exp2;
   }
 
   /** Returns whether a simplification is enabled. */
@@ -177,7 +214,8 @@ public class RelBuilder {
 
   /** Pushes a relational expression, whose element has no name of its own. */
   public RelBuilder push(Core.Exp rel) {
-    stack.push(new Frame(rel, elementNames(rel, ImmutableMap.of())));
+    final Core.IdPat row = rowPat(rel);
+    stack.push(new Frame(rel, row, elementNames(rel, row, ImmutableMap.of())));
     return this;
   }
 
@@ -186,9 +224,12 @@ public class RelBuilder {
    * emps} names the element {@code e}.
    */
   public RelBuilder push(String name, Core.Exp rel) {
-    final Core.Exp element = core.input0(rel.type.elementType());
+    final Core.IdPat row = rowPat(rel);
     stack.push(
-        new Frame(rel, elementNames(rel, ImmutableMap.of(name, element))));
+        new Frame(
+            rel,
+            row,
+            elementNames(rel, row, ImmutableMap.of(name, core.id(row)))));
     return this;
   }
 
@@ -204,7 +245,8 @@ public class RelBuilder {
    */
   public RelBuilder push(Core.Pat pat, Core.Exp rel) {
     final Map<String, Core.Exp> names = new LinkedHashMap<>();
-    final Core.Exp element = core.input0(rel.type.elementType());
+    final Core.IdPat row = rowPat(rel);
+    final Core.Exp element = core.id(row);
     if (!destructure(pat, element, names)) {
       throw new IllegalArgumentException(
           "pattern cannot be destructured, because it can fail to match: "
@@ -213,8 +255,18 @@ public class RelBuilder {
     // A pattern that can fail to match filters as well as binds, and the two
     // halves are separate nodes: the filter here, the binding in the names.
     final Core.@Nullable Exp test = test(typeSystem, pat, element);
-    final Core.Exp rel2 = test == null ? rel : core.filter(rel, test);
-    stack.push(new Frame(rel2, elementNames(rel2, names)));
+    if (test == null) {
+      stack.push(new Frame(rel, row, elementNames(rel, row, names)));
+      return this;
+    }
+    final Core.Exp rel2 = core.filter(row, null, rel, test);
+    // The filter binds the row the names were written over; the node above
+    // the filter binds a row of its own, so the names move onto it.
+    final Core.IdPat row2 = rowPat(rel2);
+    final Map<String, Core.Exp> names2 = new LinkedHashMap<>();
+    names.forEach(
+        (name, exp) -> names2.put(name, substitute(exp, row, core.id(row2))));
+    stack.push(new Frame(rel2, row2, elementNames(rel2, row2, names2)));
     return this;
   }
 
@@ -549,7 +601,20 @@ public class RelBuilder {
 
   /** Returns a reference to the element of the {@code i}th input. */
   public Core.Exp input(int i) {
-    return rebase(core.input0(frame(i).rel.type.elementType()), i);
+    final Frame frame = frame(i);
+    return core.id(i == 0 ? frame.row : rightRow(frame));
+  }
+
+  /**
+   * Returns a reference to the ordinal of the top input's element, which the
+   * node built next will bind.
+   */
+  public Core.Exp ordinal() {
+    final Frame frame = frame(0);
+    if (frame.ordinal == null) {
+      frame.ordinal = core.ordinalPat(typeSystem.nameGenerator::inc);
+    }
+    return core.id(frame.ordinal);
   }
 
   /** Returns a field of an expression, by name. */
@@ -570,14 +635,52 @@ public class RelBuilder {
     if (i == 0) {
       return exp;
     }
-    final Core.Input input = core.input(frame(i).rel.type.elementType(), i);
-    return exp.accept(
-        new Shuttle(typeSystem) {
-          @Override
-          protected Core.Exp visit(Core.Input input0) {
-            return input0.i == 0 ? input : input0;
-          }
-        });
+    final Frame frame = frame(i);
+    return substitute(exp, frame.row, core.id(rightRow(frame)));
+  }
+
+  /** Returns the pattern that names a frame's element as a right input. */
+  private Core.IdPat rightRow(Frame frame) {
+    if (frame.rightRow == null) {
+      frame.rightRow =
+          core.rightRowPat(
+              frame.rel.type.elementType(), typeSystem.nameGenerator::inc);
+    }
+    return frame.rightRow;
+  }
+
+  /**
+   * Returns the frame's ordinal pattern if any of the expressions reads it,
+   * otherwise null: a node binds an ordinal exactly where its expressions read
+   * one, so that two trees that mean the same thing print the same.
+   */
+  private static Core.@Nullable IdPat ordinalIfRead(
+      Frame frame, Core.Exp... exps) {
+    if (frame.ordinal != null) {
+      for (Core.Exp exp : exps) {
+        if (Core.mentions(exp, frame.ordinal)) {
+          return frame.ordinal;
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Mints the pattern that names an expression's element. */
+  private Core.IdPat rowPat(Core.Exp rel) {
+    return core.rowPat(rel.type.elementType(), typeSystem.nameGenerator::inc);
+  }
+
+  /**
+   * Returns the frame for a node built on another frame whose element is the
+   * same, so that it offers the same names, over a row of its own.
+   */
+  private Frame above(Frame frame, Core.Exp rel) {
+    final Core.IdPat row = rowPat(rel);
+    final ImmutableMap.Builder<String, Core.Exp> b = ImmutableMap.builder();
+    frame.names.forEach(
+        (name, exp) -> b.put(name, substitute(exp, frame.row, core.id(row))));
+    return new Frame(rel, row, b.build());
   }
 
   /**
@@ -585,13 +688,13 @@ public class RelBuilder {
    * record, plus any the caller supplied for the element itself.
    */
   private ImmutableMap<String, Core.Exp> elementNames(
-      Core.Exp rel, Map<String, Core.Exp> extra) {
+      Core.Exp rel, Core.IdPat row, Map<String, Core.Exp> extra) {
     final ImmutableMap.Builder<String, Core.Exp> b = ImmutableMap.builder();
     b.putAll(extra);
     final Type elementType = rel.type.elementType();
     if (elementType instanceof RecordLikeType) {
       final RecordLikeType recordType = (RecordLikeType) elementType;
-      final Core.Exp element = core.input0(elementType);
+      final Core.Exp element = core.id(row);
       int slot = 0;
       for (String fieldName : recordType.argNameTypes().keySet()) {
         if (!extra.containsKey(fieldName)) {
@@ -650,32 +753,61 @@ public class RelBuilder {
     if (on(Simplification.FILTER_TRUE) && condition.isBoolLiteral(true)) {
       return push(frame);
     }
-    if (on(Simplification.FILTER_MERGE) && frame.rel instanceof Core.Filter) {
+    final Core.@Nullable IdPat ordinal = ordinalIfRead(frame, condition);
+    if (on(Simplification.FILTER_MERGE)
+        && frame.rel instanceof Core.Filter
+        && ordinal == null) {
+      // A condition that reads the ordinal counts the rows the inner filter
+      // let through, which the merged filter does not have, so it stays a
+      // filter of its own.
       final Core.Filter filter = (Core.Filter) frame.rel;
+      final Core.Exp condition2 =
+          substitute(condition, frame.row, core.id(filter.row));
       return push(
-          frame.withRel(
+          above(
+              frame,
               core.filter(
+                  filter.row,
+                  filter.ordinal,
                   filter.input,
-                  core.andAlso(typeSystem, filter.condition, condition))));
+                  core.andAlso(typeSystem, filter.condition, condition2))));
     }
-    return push(frame.withRel(core.filter(frame.rel, condition)));
+    return push(
+        above(frame, core.filter(frame.row, ordinal, frame.rel, condition)));
   }
 
   /** Projects the top of the stack; {@code exp} is over {@code $0}. */
   public RelBuilder project(Core.Exp exp) {
     final Frame frame = pop();
-    if (on(Simplification.PROJECT_IDENTITY) && isInput0(exp)) {
+    final Core.@Nullable IdPat frameOrdinal = ordinalIfRead(frame, exp);
+    if (on(Simplification.PROJECT_IDENTITY)
+        && isRow(exp, frame.row)
+        && frameOrdinal == null) {
       return push(frame);
     }
     if (on(Simplification.PROJECT_MERGE) && frame.rel instanceof Core.Project) {
       final Core.Project project = (Core.Project) frame.rel;
-      return project(project.input, merge(exp, project.exp));
+      // A projection keeps its input's positions, so an ordinal the outer
+      // expression reads is the inner projection's input's.
+      Core.@Nullable IdPat ordinal = project.ordinal;
+      Core.Exp exp2 = exp;
+      if (frameOrdinal != null) {
+        if (ordinal == null) {
+          ordinal = frameOrdinal;
+        } else {
+          exp2 = substitute(exp2, frameOrdinal, core.id(ordinal));
+        }
+      }
+      return push(
+          core.project(
+              typeSystem,
+              project.row,
+              ordinal,
+              project.input,
+              merge(exp2, frame.row, project.exp)));
     }
-    return project(frame.rel, exp);
-  }
-
-  private RelBuilder project(Core.Exp input, Core.Exp exp) {
-    return push(core.project(typeSystem, input, exp));
+    return push(
+        core.project(typeSystem, frame.row, frameOrdinal, frame.rel, exp));
   }
 
   /**
@@ -684,13 +816,21 @@ public class RelBuilder {
    */
   public RelBuilder ifEmpty(Core.Exp exp) {
     final Frame frame = pop();
-    return push(frame.withRel(core.ifEmpty(frame.rel, exp)));
+    return push(above(frame, core.ifEmpty(frame.rel, exp)));
   }
 
   /** Sorts the top of the stack; the result is a list. */
   public RelBuilder sort(Core.Exp exp) {
     final Frame frame = pop();
-    return push(frame.withRel(core.sort(typeSystem, frame.rel, exp)));
+    return push(
+        above(
+            frame,
+            core.sort(
+                typeSystem,
+                frame.row,
+                ordinalIfRead(frame, exp),
+                frame.rel,
+                exp)));
   }
 
   /** Discards the ordering of the top of the stack; the result is a bag. */
@@ -699,7 +839,7 @@ public class RelBuilder {
     if (on(Simplification.UNORDER_UNORDERED) && !isOrdered(frame.rel)) {
       return push(frame);
     }
-    return push(frame.withRel(core.unorder(typeSystem, frame.rel)));
+    return push(above(frame, core.unorder(typeSystem, frame.rel)));
   }
 
   /** Skips rows of the top of the stack. */
@@ -708,13 +848,13 @@ public class RelBuilder {
     if (on(Simplification.SKIP_ZERO) && isIntLiteral(count, 0)) {
       return push(frame);
     }
-    return push(frame.withRel(core.skip(frame.rel, count)));
+    return push(above(frame, core.skip(frame.rel, count)));
   }
 
   /** Takes rows of the top of the stack. */
   public RelBuilder take(Core.Exp count) {
     final Frame frame = pop();
-    return push(frame.withRel(core.take(frame.rel, count)));
+    return push(above(frame, core.take(frame.rel, count)));
   }
 
   /** Groups the top of the stack. */
@@ -722,7 +862,24 @@ public class RelBuilder {
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
     final Frame frame = pop();
-    final Core.Exp rel = core.group(typeSystem, frame.rel, keys, aggregates);
+    final List<Core.Exp> exps = new ArrayList<>(keys.values());
+    aggregates
+        .values()
+        .forEach(
+            agg -> {
+              exps.add(agg.aggregate);
+              if (agg.argument != null) {
+                exps.add(agg.argument);
+              }
+            });
+    final Core.Exp rel =
+        core.group(
+            typeSystem,
+            frame.row,
+            ordinalIfRead(frame, exps.toArray(new Core.Exp[0])),
+            frame.rel,
+            keys,
+            aggregates);
     // A group's element is a record of its labels, whether there is one label
     // or many, so the names come off its fields like any other node's.
     return push(rel);
@@ -741,10 +898,11 @@ public class RelBuilder {
     return push(
         new Frame(
             frame.rel,
+            frame.row,
             elementNames(
                 frame.rel,
-                ImmutableMap.of(
-                    name, core.input0(frame.rel.type.elementType())))));
+                frame.row,
+                ImmutableMap.of(name, core.id(frame.row)))));
   }
 
   /**
@@ -752,40 +910,21 @@ public class RelBuilder {
    * and the yield are over {@code $0} and {@code $1}.
    */
   public RelBuilder join(Core.Rel.JoinType joinType, Core.Exp condition) {
-    return join(joinType, null, condition);
-  }
-
-  /**
-   * Joins the top two of the stack, with a binder that names the left element
-   * inside the right input.
-   *
-   * <p>This is what a scan whose collection reads an earlier binder becomes.
-   * The right input is a tree of its own, so it cannot say {@code $0} and mean
-   * the left element; the binder crosses that boundary by ordinary lexical
-   * scoping. Pass null where the right input reads nothing of the left.
-   */
-  public RelBuilder join(
-      Core.Rel.JoinType joinType,
-      Core.@Nullable IdPat binder,
-      Core.Exp condition) {
     final Frame right = pop();
     final Frame left = pop();
     arity = 1;
-    if (on(Simplification.JOIN_INDEPENDENT)
-        && binder != null
-        && !references(right.rel, binder)) {
-      // An independent join is far preferable to a dependent one -- it can be
-      // commuted, reassociated, and executed by something other than a nested
-      // loop -- and a binder nothing reads is what makes the difference
-      // between them, so it goes. This is the decorrelation rule, applied
-      // where the tree is built rather than waiting for a pass to notice: a
-      // caller can offer a binder without first knowing whether the right
-      // input will use it.
-      binder = null;
-    }
     final Core.Exp rel =
-        core.join(typeSystem, joinType, binder, left.rel, right.rel, condition);
-    return push(new Frame(rel, joinNames(rel, left, right)));
+        core.join(
+            typeSystem,
+            joinType,
+            left.row,
+            rightRow(right),
+            ordinalIfRead(left, condition, right.rel),
+            left.rel,
+            right.rel,
+            condition);
+    final Core.IdPat row = rowPat(rel);
+    return push(new Frame(rel, row, joinNames(rel, row, left, right)));
   }
 
   /**
@@ -799,9 +938,9 @@ public class RelBuilder {
    * {@code 3} -- true, and useless to anything that started from a query.
    */
   private ImmutableMap<String, Core.Exp> joinNames(
-      Core.Exp rel, Frame left, Frame right) {
+      Core.Exp rel, Core.IdPat row, Frame left, Frame right) {
     final Core.Rel.JoinType joinType = ((Core.Join) rel).joinType;
-    final Core.Exp element = core.input0(rel.type.elementType());
+    final Core.Exp element = core.id(row);
     final Map<String, Core.Exp> names = new LinkedHashMap<>();
     rebaseInto(names, left, 0, element, joinType.leftIsOption());
     rebaseInto(
@@ -828,16 +967,15 @@ public class RelBuilder {
     frame.names.forEach(
         (name, a) -> {
           if (n != 1) {
-            names.put(name, shift(a, offset, element));
+            names.put(name, shift(a, frame.row, offset, element));
             return;
           }
           final Core.Exp component = core.field(typeSystem, element, offset);
           names.put(
               name,
               absent
-                  ? optionize(
-                      a, core.input0(frame.rel.type.elementType()), component)
-                  : substitute(a, component));
+                  ? optionize(a, frame.row, component)
+                  : substitute(a, frame.row, component));
         });
   }
 
@@ -852,15 +990,15 @@ public class RelBuilder {
    * option}, not {@code (int * int) option}.
    */
   private Core.Exp optionize(
-      Core.Exp access, Core.Exp rawRef, Core.Exp component) {
-    if (access.op == Op.INPUT) {
+      Core.Exp access, Core.IdPat row, Core.Exp component) {
+    if (isRow(access, row)) {
       return component;
     }
     final Core.IdPat param =
-        core.idPat(rawRef.type, typeSystem.nameGenerator::get);
-    final Core.Exp body = substitute(access, core.id(param));
+        core.idPat(row.type, typeSystem.nameGenerator::get);
+    final Core.Exp body = substitute(access, row, core.id(param));
     final Core.Fn fn =
-        core.fn(typeSystem.fnType(rawRef.type, body.type), param, body);
+        core.fn(typeSystem.fnType(row.type, body.type), param, body);
     final Type optionType = typeSystem.option(body.type);
     return core.apply(
         Pos.ZERO,
@@ -874,13 +1012,14 @@ public class RelBuilder {
   }
 
   /** Rewrites {@code #j $0} to {@code #(offset + j) $0}. */
-  private Core.Exp shift(Core.Exp exp, int offset, Core.Exp element) {
+  private Core.Exp shift(
+      Core.Exp exp, Core.IdPat row, int offset, Core.Exp element) {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
           protected Core.Exp visit(Core.Apply apply) {
             if (apply.fn instanceof Core.RecordSelector
-                && isInput0(apply.arg)) {
+                && isRow(apply.arg, row)) {
               return core.field(
                   typeSystem,
                   element,
@@ -892,32 +1031,12 @@ public class RelBuilder {
   }
 
   /**
-   * Returns whether an expression has a free occurrence of a binder.
-   *
-   * <p>The walk does not stop at a nested node: the binder is an ordinary name,
-   * and a nested tree rebinds {@code $0} but does not shield a name.
-   */
-  private static boolean references(Core.Exp exp, Core.IdPat binder) {
-    final boolean[] found = {false};
-    exp.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Core.Id id) {
-            if (id.idPat.equals(binder)) {
-              found[0] = true;
-            }
-          }
-        });
-    return found[0];
-  }
-
-  /**
    * Returns a binder that names the top input's element, for the right input of
    * a dependent join. The right input is built after this, and reads the binder
    * where it needs the left element.
    */
-  public Core.IdPat binder(String name) {
-    return core.idPat(frame(0).rel.type.elementType(), name, 0);
+  public Core.IdPat binder() {
+    return frame(0).row;
   }
 
   /** Combines the top {@code n} of the stack with a set operator. */
@@ -944,7 +1063,7 @@ public class RelBuilder {
       inputs.add(0, frame.rel);
       first = frame;
     }
-    return push(requireNonNull(first).withRel(f.apply(inputs)));
+    return push(above(requireNonNull(first), f.apply(inputs)));
   }
 
   // Helpers
@@ -964,8 +1083,8 @@ public class RelBuilder {
     return rel.type instanceof ListType;
   }
 
-  private static boolean isInput0(Core.Exp exp) {
-    return exp.op == Op.INPUT && ((Core.Input) exp).i == 0;
+  private static boolean isRow(Core.Exp exp, Core.IdPat row) {
+    return exp instanceof Core.Id && ((Core.Id) exp).idPat.equals(row);
   }
 
   private static boolean isIntLiteral(Core.Exp exp, int value) {
@@ -986,24 +1105,24 @@ public class RelBuilder {
    * one evaluation that the two nodes had, so the merge is a simplification of
    * the plan and never a pessimization of it.
    */
-  private Core.Exp merge(Core.Exp outer, Core.Exp inner) {
-    if (count(outer) <= 1) {
-      return substitute(outer, inner);
+  private Core.Exp merge(Core.Exp outer, Core.IdPat row, Core.Exp inner) {
+    if (count(outer, row) <= 1) {
+      return substitute(outer, row, inner);
     }
     final Core.IdPat pat = core.idPat(inner.type, "v$" + nextName++, 0);
     return core.let(
         core.nonRecValDecl(inner.pos, pat, null, inner),
-        substitute(outer, core.id(pat)));
+        substitute(outer, row, core.id(pat)));
   }
 
   /** Returns how many times an expression reads {@code $0}. */
-  private static int count(Core.Exp exp) {
+  private static int count(Core.Exp exp, Core.IdPat row) {
     final int[] n = {0};
     exp.accept(
         new Visitor() {
           @Override
           protected void visit(Core.Id id) {
-            if (isInput0(id)) {
+            if (id.idPat.equals(row)) {
               ++n[0];
             }
           }
@@ -1012,12 +1131,12 @@ public class RelBuilder {
   }
 
   /** Replaces {@code $0} in an expression with another expression. */
-  private Core.Exp substitute(Core.Exp exp, Core.Exp e0) {
+  private Core.Exp substitute(Core.Exp exp, Core.IdPat pat, Core.Exp e0) {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.Exp visit(Core.Input input) {
-            return input.i == 0 ? core.at(e0, input.pos) : input;
+          protected Core.Exp visit(Core.Id id) {
+            return id.idPat.equals(pat) ? core.at(e0, id.pos) : id;
           }
         });
   }
@@ -1025,19 +1144,19 @@ public class RelBuilder {
   /** An expression on the stack, and the names its element offers. */
   private static class Frame {
     final Core.Exp rel;
+    /** Pattern that the node built on this frame binds for its element. */
+    final Core.IdPat row;
+
     final ImmutableMap<String, Core.Exp> names;
+    /** Pattern for the element as a join's right input; minted when asked. */
+    Core.@Nullable IdPat rightRow;
+    /** Pattern for the element's ordinal; minted when asked. */
+    Core.@Nullable IdPat ordinal;
 
-    Frame(Core.Exp rel, ImmutableMap<String, Core.Exp> names) {
+    Frame(Core.Exp rel, Core.IdPat row, ImmutableMap<String, Core.Exp> names) {
       this.rel = requireNonNull(rel);
+      this.row = requireNonNull(row);
       this.names = requireNonNull(names);
-    }
-
-    /**
-     * Returns a frame for an expression whose element is the same as this
-     * one's, and which therefore offers the same names.
-     */
-    Frame withRel(Core.Exp rel) {
-      return new Frame(rel, names);
     }
 
     @Override

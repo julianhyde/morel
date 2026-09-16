@@ -186,9 +186,9 @@ public class RelExpanderTest {
         expanded("from x in [1, 2], y where y elem [x, x + 1]"),
         is(
             "project [{x = #1 $0, y = #2 $0}]\n" //
-                + "  join [g$0]\n"
+                + "  join [v$0]\n"
                 + "    [1, 2]\n"
-                + "    [g$0, g$0 + 1]\n"));
+                + "    [v$0, v$0 + 1]\n"));
   }
 
   /**
@@ -296,11 +296,11 @@ public class RelExpanderTest {
                 + "join z where z elem [y, y + 1]"),
         is(
             "project [{x = #1 $0, y = #2 $0, z = #3 $0}]\n" //
-                + "  join [g$0]\n"
-                + "    join [g$1]\n"
+                + "  join [v$0]\n"
+                + "    join [v$1]\n"
                 + "      [1, 2]\n"
-                + "      [g$1]\n"
-                + "    [#2 g$0, #2 g$0 + 1]\n"));
+                + "      [v$1]\n"
+                + "    [#2 v$0, #2 v$0 + 1]\n"));
   }
 
   /**
@@ -321,9 +321,9 @@ public class RelExpanderTest {
         is(
             "project [{dno = #1 $0, v = #2 $0}]\n" //
                 + "  project [(#2 $0, #1 $0)]\n"
-                + "    join [g$0]\n"
-                + "      from g$1 in [[1], [2]] group g$1 order g$1\n"
-                + "      from g$2 in g$0 group g$2 order g$2\n"));
+                + "    join [v$0]\n"
+                + "      from g$0 in [[1], [2]] group g$0 order g$0\n"
+                + "      from g$1 in v$0 group g$1 order g$1\n"));
   }
 
   /** Tests that a query that cannot be bounded is an error. */

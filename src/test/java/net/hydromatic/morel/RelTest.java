@@ -22,12 +22,16 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.not;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -40,8 +44,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests the relational tree, {@link Core.Rel}: the element type and kind that
- * {@link net.hydromatic.morel.ast.CoreBuilder} derives for each node, and the
- * plan text that a tree prints.
+ * {@link net.hydromatic.morel.ast.CoreBuilder} derives for each node, the
+ * patterns a node binds, and the plan text that a tree prints.
  *
  * <p>The type derivations and the plan text are the contract that morel-rust
  * and morel-go implement, so a change here is a change to that contract.
@@ -58,18 +62,68 @@ public class RelTest {
 
     final PrimitiveType intType = PrimitiveType.INT;
 
-    /** {@code $0}, the element of a node's input, of type {@code int}. */
-    final Core.Input input0 = core.input0(intType);
-
-    /** {@code $1}, the element of a join's right input. */
-    final Core.Input input1 = core.input1(intType);
-
     final Core.Exp list12 = core.list(typeSystem, intLiteral(1), intLiteral(2));
     final Core.Exp list34 = core.list(typeSystem, intLiteral(3), intLiteral(4));
     final Core.Exp bag56 = core.bag(typeSystem, intLiteral(5), intLiteral(6));
 
+    /** Ordinal of the next pattern; each node's patterns are distinct. */
+    int nextOrdinal = 0;
+
     Core.Literal intLiteral(int i) {
       return core.literal(intType, i);
+    }
+
+    /** Mints the row pattern, {@code $0}, for a node over an input. */
+    Core.IdPat row(Core.Exp input) {
+      return core.idPat(input.type.elementType(), "$0", nextOrdinal++);
+    }
+
+    /** Mints the right row pattern, {@code $1}, for a join over an input. */
+    Core.IdPat rightRow(Core.Exp input) {
+      return core.idPat(input.type.elementType(), "$1", nextOrdinal++);
+    }
+
+    /** Mints an ordinal pattern, {@code $ordinal}. */
+    Core.IdPat ordinal() {
+      return core.idPat(intType, "$ordinal", nextOrdinal++);
+    }
+
+    /** Builds a filter whose condition is given the row. */
+    Core.Filter filter(Core.Exp input, Function<Core.Id, Core.Exp> condition) {
+      final Core.IdPat row = row(input);
+      return core.filter(row, null, input, condition.apply(core.id(row)));
+    }
+
+    /** Builds a projection whose expression is given the row. */
+    Core.Project project(Core.Exp input, Function<Core.Id, Core.Exp> exp) {
+      final Core.IdPat row = row(input);
+      return core.project(
+          typeSystem, row, null, input, exp.apply(core.id(row)));
+    }
+
+    /** Builds a sort whose key is given the row. */
+    Core.Sort sort(Core.Exp input, Function<Core.Id, Core.Exp> exp) {
+      final Core.IdPat row = row(input);
+      return core.sort(typeSystem, row, null, input, exp.apply(core.id(row)));
+    }
+
+    /** Builds a join whose condition is given the left and right rows. */
+    Core.Join join(
+        Core.Rel.JoinType joinType,
+        Core.Exp left,
+        Core.Exp right,
+        BiFunction<Core.Id, Core.Id, Core.Exp> condition) {
+      final Core.IdPat leftRow = row(left);
+      final Core.IdPat rightRow = rightRow(right);
+      return core.join(
+          typeSystem,
+          joinType,
+          leftRow,
+          rightRow,
+          null,
+          left,
+          right,
+          condition.apply(core.id(leftRow), core.id(rightRow)));
     }
 
     /**
@@ -105,9 +159,9 @@ public class RelTest {
   void testFilterProject() {
     final Fixture f = new Fixture();
     final Core.Rel filter =
-        core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1)));
+        f.filter(f.list12, r -> f.greaterThan(r, f.intLiteral(1)));
     final Core.Rel project =
-        core.project(f.typeSystem, filter, f.record(f.input0, f.intLiteral(0)));
+        f.project(filter, r -> f.record(r, f.intLiteral(0)));
 
     assertThat(filter.type.moniker(), is("int list"));
     assertThat(project.type.moniker(), is("{a:int, b:int} list"));
@@ -127,7 +181,7 @@ public class RelTest {
   void testDescribeWithTypes() {
     final Fixture f = new Fixture();
     final Core.Rel filter =
-        core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1)));
+        f.filter(f.list12, r -> f.greaterThan(r, f.intLiteral(1)));
     assertThat(
         filter.describe(f.typeSystem, true),
         is(
@@ -136,18 +190,18 @@ public class RelTest {
   }
 
   /**
-   * Tests that a join's element type is the type of its yield expression, and
-   * that it is ordered only if both inputs are ordered.
+   * Tests that a join's element is its inputs' components, and that it is
+   * ordered only if both inputs are ordered.
    */
   @Test
   void testJoin() {
     final Fixture f = new Fixture();
     final Core.Rel join =
-        core.join(
-            f.typeSystem,
+        f.join(
+            Core.Rel.JoinType.INNER,
             f.list12,
             f.list34,
-            core.equal(f.typeSystem, f.input0, f.input1));
+            (l, r) -> core.equal(f.typeSystem, l, r));
     // The element is the inputs' components, a tuple, not a record
     // of names -- there are no names to give it.
     assertThat(join.type.moniker(), is("(int * int) list"));
@@ -161,7 +215,11 @@ public class RelTest {
     // A join with a bag input is a bag; a nested loop over a bag has no
     // order to preserve.
     final Core.Rel join2 =
-        core.join(f.typeSystem, f.list12, f.bag56, core.boolLiteral(true));
+        f.join(
+            Core.Rel.JoinType.INNER,
+            f.list12,
+            f.bag56,
+            (l, r) -> core.boolLiteral(true));
     assertThat(join2.type.moniker(), is("(int * int) bag"));
 
     // A condition that is 'true' and an inner join kind print nothing.
@@ -174,13 +232,11 @@ public class RelTest {
 
     // An outer join prints its kind.
     final Core.Rel join3 =
-        core.join(
-            f.typeSystem,
+        f.join(
             Core.Rel.JoinType.LEFT,
-            null,
             f.list12,
             f.list34,
-            core.boolLiteral(true));
+            (l, r) -> core.boolLiteral(true));
     assertThat(
         join3.describe(f.typeSystem),
         is(
@@ -190,25 +246,29 @@ public class RelTest {
   }
 
   /**
-   * Tests a dependent join: its binder names the left element inside the right
-   * input, its element type is that of its yield, and it is ordered only if
-   * both inputs are.
+   * Tests a dependent join: its right input reads its left row, which the
+   * printer names and shows as the join's argument; its element is its inputs'
+   * components; and it is ordered only if both inputs are.
    */
   @Test
   void testDependentJoin() {
     final Fixture f = new Fixture();
-    final Core.IdPat dPat = core.idPat(f.intType, "d", 0);
-    final Core.Id dId = core.id(dPat);
+    final Core.IdPat leftRow = f.row(f.list12);
 
-    // The right input mentions d, so the join is dependent.
-    final Core.Rel join =
+    // The right input mentions the left row, so the join is dependent.
+    final Core.Exp right =
+        core.list(f.typeSystem, core.id(leftRow), f.intLiteral(4));
+    final Core.Join join =
         core.join(
             f.typeSystem,
             Core.Rel.JoinType.INNER,
-            dPat,
+            leftRow,
+            f.rightRow(right),
+            null,
             f.list12,
-            core.list(f.typeSystem, dId, f.intLiteral(4)),
+            right,
             core.boolLiteral(true));
+    assertThat(join.isDependent(), is(true));
 
     // The element is the inputs' components, a tuple, not a record
     // of names -- there are no names to give it.
@@ -216,42 +276,49 @@ public class RelTest {
     assertThat(
         join.describe(f.typeSystem),
         is(
-            "join [d]\n" //
+            "join [v$0]\n" //
                 + "  [1, 2]\n"
-                + "  [d, 4]\n"));
+                + "  [v$0, 4]\n"));
 
     // A bag on either side makes the output a bag, as a dependent scan over a
     // bag does today.
-    final Core.Rel join2 =
+    final Core.IdPat leftRow2 = f.row(f.list12);
+    final Core.Join join2 =
         core.join(
             f.typeSystem,
             Core.Rel.JoinType.INNER,
-            dPat,
+            leftRow2,
+            f.rightRow(f.bag56),
+            null,
             f.list12,
             f.bag56,
             core.boolLiteral(true));
+    assertThat(join2.isDependent(), is(false));
     assertThat(join2.type.moniker(), is("(int * int) bag"));
     assertThat(
         join2.describe(f.typeSystem),
         is(
-            "join [d]\n" //
+            "join\n" //
                 + "  [1, 2]\n"
                 + "  #fromList Bag ([5, 6])\n"));
   }
 
   /**
-   * Tests that {@code group} derives a record element type, and atomizes to a
-   * bare type when there is exactly one key or aggregate.
+   * Tests that {@code group} derives a record element type, whether it has one
+   * label or many.
    */
   @Test
   void testGroup() {
     final Fixture f = new Fixture();
 
+    final Core.IdPat row1 = f.row(f.list12);
     final Core.Rel group1 =
         core.group(
             f.typeSystem,
+            row1,
+            null,
             f.list12,
-            ImmutableSortedMap.of("j", (Core.Exp) f.input0),
+            ImmutableSortedMap.of("j", (Core.Exp) core.id(row1)),
             ImmutableSortedMap.of());
     // A record, though there is only one key: collapsing it would make the
     // element's shape depend on how many labels there are.
@@ -262,13 +329,16 @@ public class RelTest {
             "group [j = $0]\n" //
                 + "  [1, 2]\n"));
 
+    final Core.IdPat row2 = f.row(f.list12);
     final Core.Rel group2 =
         core.group(
             f.typeSystem,
+            row2,
+            null,
             f.list12,
             ImmutableSortedMap.<String, Core.Exp>orderedBy(RecordType.ORDERING)
-                .put("i", f.input0)
-                .put("j", f.input0)
+                .put("i", core.id(row2))
+                .put("j", core.id(row2))
                 .build(),
             ImmutableSortedMap.of());
     assertThat(group2.type.moniker(), is("{i:int, j:int} list"));
@@ -283,9 +353,7 @@ public class RelTest {
     final Fixture f = new Fixture();
 
     // sort : coll -> list; unorder : coll -> bag
-    assertThat(
-        core.sort(f.typeSystem, f.bag56, f.input0).type.moniker(),
-        is("int list"));
+    assertThat(f.sort(f.bag56, r -> r).type.moniker(), is("int list"));
     assertThat(
         core.unorder(f.typeSystem, f.list12).type.moniker(), is("int bag"));
 
@@ -317,6 +385,44 @@ public class RelTest {
   }
 
   /**
+   * Tests the ordinal pattern: a node that reads its input's positions binds
+   * {@code $ordinal}, which prints by name inside the node; and the input must
+   * be a list, because a bag has no positions.
+   */
+  @Test
+  void testOrdinal() {
+    final Fixture f = new Fixture();
+    final Core.IdPat row = f.row(f.list12);
+    final Core.IdPat ordinal = f.ordinal();
+    final Core.Rel filter =
+        core.filter(
+            row,
+            ordinal,
+            f.list12,
+            f.greaterThan(core.id(ordinal), f.intLiteral(0)));
+    assertThat(
+        filter.describe(f.typeSystem),
+        is(
+            "filter [$ordinal > 0]\n" //
+                + "  [1, 2]\n"));
+    assertThat(f.violations(filter), empty());
+
+    final Core.IdPat row2 = f.row(f.bag56);
+    final Core.IdPat ordinal2 = f.ordinal();
+    final Core.Rel overBag =
+        core.filter(
+            row2,
+            ordinal2,
+            f.bag56,
+            f.greaterThan(core.id(ordinal2), f.intLiteral(0)));
+    assertThat(
+        f.violations(overBag),
+        is(
+            Arrays.asList(
+                "filter binds an ordinal but its input is a bag: int bag")));
+  }
+
+  /**
    * Tests that the validator accepts trees the builder produces, and finds the
    * ways in which a hand-built tree can go wrong.
    */
@@ -326,105 +432,124 @@ public class RelTest {
 
     // A tree built by the builder is valid.
     final Core.Rel filter =
-        core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1)));
+        f.filter(f.list12, r -> f.greaterThan(r, f.intLiteral(1)));
     final Core.Rel project =
-        core.project(f.typeSystem, filter, f.record(f.input0, f.intLiteral(0)));
+        f.project(filter, r -> f.record(r, f.intLiteral(0)));
     assertThat(f.violations(project), empty());
 
     final Core.Rel join =
-        core.join(
-            f.typeSystem,
+        f.join(
+            Core.Rel.JoinType.INNER,
             f.list12,
             f.list34,
-            core.equal(f.typeSystem, f.input0, f.input1));
+            (l, r) -> core.equal(f.typeSystem, l, r));
     assertThat(f.violations(join), empty());
 
-    // $1 belongs to a join; a filter does not bind it.
+    // A filter binds one row; a reference to another node's pattern is an
+    // unbound name.
+    final Core.IdPat stray = f.rightRow(f.list34);
     final Core.Rel badFilter =
-        core.filter(f.list12, core.equal(f.typeSystem, f.input0, f.input1));
+        f.filter(f.list12, r -> core.equal(f.typeSystem, r, core.id(stray)));
     assertThat(
         f.violations(badFilter),
         is(Arrays.asList("filter condition cannot reference $1")));
 
-    // 'skip' and 'take' counts are evaluated before the first element exists.
+    // 'skip' and 'take' counts are evaluated before the first element exists,
+    // and the nodes bind nothing.
+    final Core.IdPat row = f.row(f.list12);
     assertThat(
-        f.violations(core.take(f.list12, f.input0)),
+        f.violations(core.take(f.list12, core.id(row))),
         is(Arrays.asList("take count cannot reference $0")));
     assertThat(
-        f.violations(core.skip(f.list12, f.input0)),
+        f.violations(core.skip(f.list12, core.id(row))),
         is(Arrays.asList("skip count cannot reference $0")));
 
-    // A leaf cannot see the element of the node above it.
+    // A leaf cannot see the row of the node above it.
+    final Core.IdPat row2 = f.row(f.list12);
     final Core.Rel badLeaf =
         core.filter(
-            core.list(f.typeSystem, f.input0),
-            core.greaterThan(f.typeSystem, f.input0, f.intLiteral(1)));
+            row2,
+            null,
+            core.list(f.typeSystem, core.id(row2)),
+            f.greaterThan(core.id(row2), f.intLiteral(1)));
     assertThat(
         f.violations(badLeaf), is(Arrays.asList("leaf cannot reference $0")));
 
-    // But a nested tree may use $0, because it binds its own.
+    // A nested node binds a row of its own.
     final Core.Rel nested =
-        core.filter(
-            core.filter(f.list12, f.greaterThan(f.input0, f.intLiteral(1))),
-            f.greaterThan(f.input0, f.intLiteral(0)));
+        f.filter(
+            f.filter(f.list12, r -> f.greaterThan(r, f.intLiteral(1))),
+            r -> f.greaterThan(r, f.intLiteral(0)));
     assertThat(f.violations(nested), empty());
 
-    // A dependent join's right input binds $0 in its own right, and may
-    // mention the binder.
-    final Core.IdPat dPat = core.idPat(f.intType, "d", 0);
+    // A dependent join's right input binds its own row, and may read the
+    // join's left row.
+    final Core.IdPat leftRow = f.row(f.list12);
+    final Core.Exp right =
+        f.project(
+            core.list(f.typeSystem, core.id(leftRow)),
+            r -> f.record(core.id(leftRow), r));
     final Core.Rel dependent =
         core.join(
             f.typeSystem,
             Core.Rel.JoinType.INNER,
-            dPat,
+            leftRow,
+            f.rightRow(right),
+            null,
             f.list12,
-            core.project(
-                f.typeSystem,
-                core.list(f.typeSystem, core.id(dPat)),
-                f.record(core.id(dPat), f.input0)),
+            right,
             core.boolLiteral(true));
     assertThat(f.violations(dependent), empty());
 
-    // There is no yield to misuse the binder in; the condition is the only
-    // expression a join carries, and `binderNotIn` guards that.
+    // The right row is in scope in the condition only; the right input
+    // cannot read it.
+    final Core.IdPat leftRow2 = f.row(f.list12);
+    final Core.IdPat rightRow2 = f.rightRow(f.list34);
+    final Core.Rel badRight =
+        core.join(
+            f.typeSystem,
+            Core.Rel.JoinType.INNER,
+            leftRow2,
+            rightRow2,
+            null,
+            f.list12,
+            core.list(f.typeSystem, core.id(rightRow2)),
+            core.boolLiteral(true));
+    assertThat(
+        f.violations(badRight), is(Arrays.asList("leaf cannot reference $1")));
   }
 
   /**
-   * Tests that {@code $0} is not a variable, however many nodes reference it .
-   *
-   * <p>It is bound by the node that encloses it, so a pass that reasons about
-   * variables -- and every one of them walks {@link Core.Id} -- must not see it
-   * as one. When {@code $0} was an {@code Id} over an {@code IdPat} named
-   * {@code "$0"} this found two, and thought they were the same variable,
-   * because {@code IdPat} equality compares the name and the ordinal and not
-   * the type.
+   * Tests that a node's row is a variable bound by the node, so that a pass
+   * that reasons about variables treats it as it treats a {@code fn}'s
+   * parameter: two nodes' rows are two variables, neither is free, and a name
+   * the query wrote still is.
    */
   @Test
-  void testInputIsNotAVariable() {
+  void testRowIsBound() {
     final Fixture f = new Fixture();
 
     // filter [#1 $0 = 1] over project [{...}] over a leaf: two nodes, each
-    // reading its own input, and the two `$0` are of different types.
-    final Core.Exp project =
-        core.project(f.typeSystem, f.list12, f.record(f.input0, f.input0));
-    final Core.Exp filter =
-        core.filter(
+    // reading its own row, and the two rows are of different types.
+    final Core.Project project = f.project(f.list12, r -> f.record(r, r));
+    final Core.Filter filter =
+        f.filter(
             project,
-            core.equal(
-                f.typeSystem,
-                core.field(
-                    f.typeSystem, core.input0(project.type.elementType()), 0),
-                f.intLiteral(1)));
+            r ->
+                core.equal(
+                    f.typeSystem,
+                    core.field(f.typeSystem, r, 0),
+                    f.intLiteral(1)));
+    assertThat(filter.row, not(is(project.row)));
+    assertThat(filter.freePats(f.typeSystem), empty());
+    assertThat(ids(filter), is(ImmutableList.of("$0", "$0", "$0")));
 
-    assertThat(ids(filter), empty());
-
-    // A name the query wrote is one, so the walk is not simply blind.
+    // A name the query wrote is free.
     final Core.IdPat e = core.idPat(f.intType, "e", 0);
-    assertThat(
-        ids(
-            core.filter(
-                f.list12, core.equal(f.typeSystem, core.id(e), core.id(e)))),
-        is(ImmutableList.of("e", "e")));
+    final Core.Rel free =
+        f.filter(
+            f.list12, r -> core.equal(f.typeSystem, core.id(e), core.id(e)));
+    assertThat(free.freePats(f.typeSystem), is(ImmutableSet.of(e)));
   }
 
   /** Returns the names of every {@link Core.Id} in an expression. */

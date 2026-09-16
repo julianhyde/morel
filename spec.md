@@ -135,14 +135,17 @@ Three rules complete the picture:
    row directly; in the text both print as `$0`, so the printer names
    the outer one (§6.3).
 
-The ordinal is the position among the rows the node's input delivers,
-and means the same thing in every expression of the node. In a
-`group` it is the position in the group's input, in keys and
-aggregate arguments alike, and not a rank within the group; in a
-`sort` it is the position before sorting; in a `join` it is the
-position of the candidate pair in the nested-loop order §4 fixes. A
-node may bind an ordinal pattern only if its input's kind is `list`;
-a bag has no positions (§5).
+The ordinal is the position among the rows the expression runs over.
+In a `filter`, `project` or `sort` that is the input, so a sort key
+sees the position before sorting. In a `group` it is the position in
+the group's input, in keys and aggregate arguments alike, and not a
+rank within the group. In a `join` the condition runs once per
+candidate pair and sees the pair's position, counted in the nested-
+loop order §4 fixes, while the right input runs once per left element
+and sees the left element's position; that is one pattern read from
+two places, and each reads what it runs over. A node may bind an
+ordinal pattern only if its input's kind is `list`; a bag has no
+positions (§5).
 
 `$0`, `$1` and `$ordinal` are never record labels and never appear in
 an element type: fields are addressed by label, rows by pattern.

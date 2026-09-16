@@ -59,28 +59,50 @@ step is written with it.
 
 ### F1 — The Java datatype binds patterns
 
-- [ ] `Core.Input` goes. Each of `filter`, `project`, `sort`, `group`
-      and `join` carries its row pattern(s) as `IdPat`s with fresh
-      ordinals; `join`'s `binder` becomes its left pattern, in scope
-      in the right input; the optional ordinal pattern is an `IdPat`
-      on the same five.
-- [ ] `Resolver` binds `ordinal` to the pattern instead of
-      materializing it through `Z_ORDINAL` and a generated field.
-- [ ] The printer prints a row pattern as `$0`/`$1`, an ordinal
-      pattern as `$ordinal`, a left pattern the right input reads as
-      the join's argument under `v$N`, and a row a nested tree reads
-      as `let val v$N = $0 in … end` (spec.md §6.3).
-- [ ] `RelValidator`: scope by ordinary binding; ordinal requires a
-      `list` input; an unread ordinal pattern is dropped by the
-      builder.
-- [ ] `CoreBuilder`, `RelBuilder`, `RelExpander`, `RelLowerer`,
-      `RelTranslator`, `Inliner`, `RangePushdown` and the walkers
-      move from `Core.Input` to the patterns. The 46 references are
-      the list.
-- Gate: every golden file byte-identical except the ordinal section
-  of `rel-tree.smli`, which loses a projection and a legend entry;
-  `RelTest` gains a test that two nodes' `$0` are different variables
-  and that a nested tree may read an outer row directly.
+Done, except the position, which is a step of its own below. What it
+turned out to need, for the ports and for F2:
+
+- [x] `Core.Input` is gone. `filter`, `project`, `sort` and `group`
+      extend `Core.RowRel`, which carries the row pattern and the
+      optional ordinal pattern; `join` carries `leftRow`, `rightRow`
+      and `ordinal`, and its old `binder` is the left row. Patterns
+      are `IdPat`s named `$0`, `$1` and `$ordinal`, with ordinals from
+      the `v$` counter, so that the printer can name one outside its
+      node as `v$`-ordinal without naming a binder.
+- [x] `RelBuilder`'s frames carry the pattern the next node binds; a
+      node's ordinal pattern is attached only if its expressions read
+      it (spec.md §5 rule 6), which is what keeps every plan that does
+      not read `ordinal` identical to before.
+- [x] `Resolver` resolves `ordinal` to the pattern and no longer
+      materializes it; `Z_ORDINAL` survives only in `RelLowerer`,
+      which still lowers to the step list, and goes with F2.
+- [x] The printer prints a pattern by name inside its node and under a
+      generated `v$N` outside it, appended raw because the writer
+      renumbers what it appends. A pass-minted binder therefore prints
+      `v$`, which settles the F0 question about prefixes: `g$0` in the
+      plans became `v$0`.
+- [x] `RelValidator` scopes by binding; the ordinal requires a `list`
+      input.
+- [x] The grounder and the translator work over one canonical row, as
+      they always did, and convert at their boundaries:
+      `CanonicalRows`. `RelShadow` and its tests are deleted;
+      `RelTranslator` stays, because the generators still build
+      step-list subqueries that grounding must translate.
+- [x] A join's ordinal is read from two places and each reads what it
+      runs over: the condition sees the candidate pair's position, the
+      right input the left element's (spec.md §2), which is what the
+      corpus already pinned.
+- [ ] A node has a position, like every other expression: `Rel`'s
+      constructor stops hard-coding `Pos.ZERO`, the resolver supplies
+      the step's position, `copy` keeps it, and the printer ignores
+      it. Today an exception inside a node blames the expression that
+      raised it, which has a position, but a message about the node
+      itself -- a validator violation, a leaf grounding cannot bound
+      -- has nothing to point at.
+- Gate, met: every golden file byte-identical except the ordinal
+  section of `rel-tree.smli`, which lost a projection and a legend
+  entry, plus `Sys.plan` lines whose `w$` numbers moved when the shadow
+  stopped consuming names.
 
 ### F2 — The tree executes, and the step list goes
 

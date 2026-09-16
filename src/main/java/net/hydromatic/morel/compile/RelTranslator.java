@@ -61,6 +61,7 @@ import org.jspecify.annotations.Nullable;
 public class RelTranslator {
 
   private final TypeSystem typeSystem;
+  private final CanonicalRows rows;
 
   /**
    * Expression, over the current tree's element, for each binder in scope.
@@ -92,6 +93,7 @@ public class RelTranslator {
 
   private RelTranslator(TypeSystem typeSystem) {
     this.typeSystem = typeSystem;
+    this.rows = new CanonicalRows(typeSystem);
   }
 
   /**
@@ -165,15 +167,13 @@ public class RelTranslator {
         return scan((Core.Scan) step, Core.Rel.JoinType.FULL);
 
       case WHERE:
-        exp = core.filter(requireExp(), rewrite(((Core.Where) step).exp));
+        exp = rows.filter(requireExp(), rewrite(((Core.Where) step).exp));
         return true;
 
       case YIELD:
         // A step that computes its own element ends the deferral: the element
         // is what it built, not a join's components.
-        exp =
-            core.project(
-                typeSystem, requireExp(), rewrite(((Core.Yield) step).exp));
+        exp = rows.project(requireExp(), rewrite(((Core.Yield) step).exp));
         deferred = false;
         return true;
 
@@ -182,9 +182,7 @@ public class RelTranslator {
         return group((Core.GroupStep) step);
 
       case ORDER:
-        exp =
-            core.sort(
-                typeSystem, requireExp(), rewrite(((Core.Order) step).exp));
+        exp = rows.sort(requireExp(), rewrite(((Core.Order) step).exp));
         return true;
 
       case UNORDER:
@@ -244,15 +242,14 @@ public class RelTranslator {
         // The pattern filters and binds, and the two halves are separate
         // nodes: a filter for the condition, and -- where the bindings do not
         // describe the element -- the projection that `normalize` adds.
-        final Core.Exp element = core.input0(rightElementType);
+        final Core.Exp element = rows.row0(rightElementType);
         destructure(scan.pat, element, access);
         final Core.@Nullable Exp test =
             RelBuilder.test(typeSystem, scan.pat, element);
         if (test != null) {
-          exp = core.filter(exp, test);
+          exp = rows.filter(exp, test);
         }
-      } else if (!destructure(
-          scan.pat, core.input0(rightElementType), access)) {
+      } else if (!destructure(scan.pat, rows.row0(rightElementType), access)) {
         // The pattern can fail to match, so the scan filters as well as
         // binds. `matchMany` builds the element, so the binders read it as
         // any later step would -- including this scan's own condition, which
@@ -266,7 +263,7 @@ public class RelTranslator {
         setUniformAccess(scan.env);
       }
       if (!scan.condition.isBoolLiteral(true)) {
-        exp = core.filter(exp, rewrite(scan.condition));
+        exp = rows.filter(exp, rewrite(scan.condition));
       }
       return true;
     }
@@ -292,19 +289,18 @@ public class RelTranslator {
         binder == null ? scan.exp : substitute(scan.exp, over(access, binder));
 
     final Map<Core.NamedPat, Core.Exp> rightAccess = new LinkedHashMap<>();
-    if (!destructure(scan.pat, core.input1(rightElementType), rightAccess)) {
+    if (!destructure(scan.pat, rows.row1(rightElementType), rightAccess)) {
       return false;
     }
     // The condition sees both elements as they are, because it is evaluated
     // on candidate pairs.
     final Map<Core.NamedPat, Core.Exp> condAccess = both(access, rightAccess);
     final Core.Join join =
-        core.join(
-            typeSystem,
+        rows.dependentJoin(
             joinType,
-            binder,
             left,
             right,
+            binder,
             substitute(scan.condition, condAccess));
 
     // The element is the inputs' components in order, so each binder's access
@@ -353,10 +349,9 @@ public class RelTranslator {
       int offset,
       boolean option,
       Core.Join join) {
-    final Core.Input element = core.input0(join.type.elementType());
+    final Core.Exp element = rows.row0(join.type.elementType());
     final int n = core.componentCount(input);
-    final Core.Input rawRef =
-        core.input(input.type.elementType(), inputOrdinal);
+    final Core.Exp rawRef = rows.row(input.type.elementType(), inputOrdinal);
     for (Map.Entry<Core.NamedPat, Core.Exp> entry : source.entrySet()) {
       final Core.Exp a = entry.getValue();
       final Core.Exp rebased;
@@ -364,7 +359,12 @@ public class RelTranslator {
         final Core.Exp component = core.field(typeSystem, element, offset);
         rebased =
             option
-                ? optionize(a, rawRef, component, typeSystem.option(a.type))
+                ? optionize(
+                    a,
+                    rawRef,
+                    inputOrdinal,
+                    component,
+                    typeSystem.option(a.type))
                 : subst1(a, inputOrdinal, component);
       } else if (option && !isComponentRef(a, inputOrdinal)) {
         // Each component of an absent side is option-typed in its own right,
@@ -387,8 +387,7 @@ public class RelTranslator {
     }
     final Core.Apply apply = (Core.Apply) exp;
     return apply.fn instanceof Core.RecordSelector
-        && apply.arg.op == Op.INPUT
-        && ((Core.Input) apply.arg).i == inputOrdinal;
+        && CanonicalRows.isRow(apply.arg, inputOrdinal);
   }
 
   /** Replaces {@code $i} in an expression with another expression. */
@@ -396,8 +395,8 @@ public class RelTranslator {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.Exp visit(Core.Input input) {
-            return input.i == i ? core.at(e, input.pos) : input;
+          protected Core.Exp visit(Core.Id id) {
+            return CanonicalRows.isRow(id, i) ? core.at(e, id.pos) : id;
           }
         });
   }
@@ -409,14 +408,13 @@ public class RelTranslator {
    * and then its own field.
    */
   private Core.Exp shift(
-      Core.Exp exp, int inputOrdinal, int offset, Core.Input element) {
+      Core.Exp exp, int inputOrdinal, int offset, Core.Exp element) {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
           protected Core.Exp visit(Core.Apply apply) {
             if (apply.fn instanceof Core.RecordSelector
-                && apply.arg.op == Op.INPUT
-                && ((Core.Input) apply.arg).i == inputOrdinal) {
+                && CanonicalRows.isRow(apply.arg, inputOrdinal)) {
               final int j = ((Core.RecordSelector) apply.fn).slot;
               return core.field(typeSystem, element, offset + j);
             }
@@ -460,19 +458,16 @@ public class RelTranslator {
                     core.wildcardPat(elementType),
                     core.list(typeSystem, element.type, ImmutableList.of()))));
     final Core.Join join =
-        core.join(
-            typeSystem,
+        rows.dependentJoin(
             Core.Rel.JoinType.INNER,
-            param,
             collection,
             body,
+            param,
             core.boolLiteral(true));
     // The element is (the collection's element, the matched element); only
     // the second is wanted, so a projection takes it.
-    return core.project(
-        typeSystem,
-        join,
-        core.field(typeSystem, core.input0(join.type.elementType()), 1));
+    return rows.project(
+        join, core.field(typeSystem, rows.row0(join.type.elementType()), 1));
   }
 
   /**
@@ -495,9 +490,8 @@ public class RelTranslator {
       yieldAccess.putAll(sideAccess);
       return true;
     }
-    final Core.Input rawRef = core.input(rawElementType, i);
-    final Core.Input optionRef =
-        core.input(typeSystem.option(rawElementType), i);
+    final Core.Exp rawRef = rows.row(rawElementType, i);
+    final Core.Exp optionRef = rows.row(typeSystem.option(rawElementType), i);
     for (Map.Entry<Core.NamedPat, Core.Exp> entry : sideAccess.entrySet()) {
       final Core.@Nullable NamedPat binding = binding(env, entry.getKey().name);
       if (binding == null) {
@@ -505,7 +499,7 @@ public class RelTranslator {
       }
       yieldAccess.put(
           entry.getKey(),
-          optionize(entry.getValue(), rawRef, optionRef, binding.type));
+          optionize(entry.getValue(), rawRef, i, optionRef, binding.type));
     }
     return true;
   }
@@ -521,8 +515,12 @@ public class RelTranslator {
    * {@code k : int option}, not {@code (int * int) option}.
    */
   private Core.Exp optionize(
-      Core.Exp access, Core.Input rawRef, Core.Exp optionRef, Type optionType) {
-    if (access.op == Op.INPUT) {
+      Core.Exp access,
+      Core.Exp rawRef,
+      int i,
+      Core.Exp optionRef,
+      Type optionType) {
+    if (CanonicalRows.isRow(access)) {
       return optionRef;
     }
     final Core.IdPat param = freshPat(rawRef.type);
@@ -530,8 +528,8 @@ public class RelTranslator {
         access.accept(
             new Shuttle(typeSystem) {
               @Override
-              protected Core.Exp visit(Core.Input input) {
-                return input.i == rawRef.i ? core.id(param) : input;
+              protected Core.Exp visit(Core.Id id) {
+                return CanonicalRows.isRow(id, i) ? core.id(param) : id;
               }
             });
     final Core.Fn fn =
@@ -616,9 +614,8 @@ public class RelTranslator {
           && nameTypes.values().iterator().next().equals(elementType)) {
         final PairList<String, Core.Exp> nameExps = PairList.of();
         nameExps.add(
-            nameTypes.keySet().iterator().next(), core.input0(elementType));
-        return core.project(
-            typeSystem, input, core.record(typeSystem, nameExps));
+            nameTypes.keySet().iterator().next(), rows.row0(elementType));
+        return rows.project(input, core.record(typeSystem, nameExps));
       }
     }
     if (elementType instanceof RecordLikeType) {
@@ -627,10 +624,8 @@ public class RelTranslator {
           ((RecordLikeType) elementType).argNameTypes();
       if (nameTypes.size() == 1
           && nameTypes.values().iterator().next().equals(wanted)) {
-        return core.project(
-            typeSystem,
-            input,
-            core.field(typeSystem, core.input0(elementType), 0));
+        return rows.project(
+            input, core.field(typeSystem, rows.row0(elementType), 0));
       }
     }
     return null;
@@ -651,7 +646,7 @@ public class RelTranslator {
                     aggregate.argument == null
                         ? null
                         : rewrite(aggregate.argument))));
-    exp = core.group(typeSystem, requireExp(), keys, aggregates);
+    exp = rows.group(requireExp(), keys, aggregates);
     return true;
   }
 
@@ -679,12 +674,12 @@ public class RelTranslator {
       exp =
           aligned != null
               ? aligned
-              : core.project(typeSystem, requireExp(), element(access, wanted));
+              : rows.project(requireExp(), element(access, wanted));
     } else if (patternAccess && !isUniform(env, wanted)) {
       // The element has the right type but the binders read the wrong fields
       // of it, which a pattern that permutes them does: `from {b = a, a = b}
       // in rs` binds a to field b.
-      exp = core.project(typeSystem, requireExp(), element(access, wanted));
+      exp = rows.project(requireExp(), element(access, wanted));
     }
     setUniformAccess(env);
   }
@@ -694,7 +689,7 @@ public class RelTranslator {
    * element itself if the step atomizes, otherwise the field of the same name.
    */
   private void setUniformAccess(Core.StepEnv env) {
-    final Core.Exp element = core.input0(elementType(env));
+    final Core.Exp element = rows.row0(elementType(env));
     patternAccess = false;
     access.clear();
     if (env.atom) {
@@ -740,7 +735,7 @@ public class RelTranslator {
   }
 
   private static boolean isInput0(Core.Exp exp) {
-    return exp.op == Op.INPUT && ((Core.Input) exp).i == 0;
+    return CanonicalRows.isRow(exp, 0);
   }
 
   /** Returns the ordinal of a field in a record type, or -1. */
@@ -882,8 +877,8 @@ public class RelTranslator {
                 exp.accept(
                     new Shuttle(typeSystem) {
                       @Override
-                      protected Core.Exp visit(Core.Input input) {
-                        return input.i == 0 ? paramId : input;
+                      protected Core.Exp visit(Core.Id id) {
+                        return CanonicalRows.isRow(id, 0) ? paramId : id;
                       }
                     })));
     return map;

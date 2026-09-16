@@ -209,6 +209,31 @@ public class AstWriter {
   }
 
   /**
+   * Appends a reference to a node's pattern: {@code $0}, {@code $1} or {@code
+   * $ordinal}. In tree mode, a pattern read outside the node that binds it -- a
+   * join's left row read from its right input -- prints under a generated name
+   * instead; see {@link #generatedName}.
+   */
+  public AstWriter rowRef(Core.IdPat pat) {
+    return append(pat.name);
+  }
+
+  /**
+   * Returns the generated name under which a node's pattern prints where the
+   * pattern's own name would be ambiguous: as a dependent join's argument, and
+   * in its right input.
+   */
+  public String generatedName(Core.IdPat pat) {
+    return "v$" + pat.i;
+  }
+
+  /** Notes that a node's arguments are about to print. */
+  public void pushNode(Core.Rel rel) {}
+
+  /** Notes that a node's arguments have printed. */
+  public void popNode() {}
+
+  /**
    * Registers a relation that cannot print where it stands, and returns the
    * reference that prints instead -- {@code r[1]}, {@code r[2]}, and so on.
    *
@@ -307,6 +332,15 @@ public class AstWriter {
       lineStart = true;
       s = s.substring(i + 1);
     }
+    raw(s);
+    return this;
+  }
+
+  /**
+   * Appends a name as it is, with no renaming. For a name the writer has
+   * already renumbered, which {@link #append(String)} would renumber again.
+   */
+  public AstWriter appendRaw(String s) {
     raw(s);
     return this;
   }
