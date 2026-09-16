@@ -6536,17 +6536,16 @@ public class TypeResolver {
    */
   static class FieldExpander extends EnvVisitor {
     static FieldExpander create(TypeSystem typeSystem, Environment env) {
-      return new FieldExpander(typeSystem, env, new ArrayDeque<>());
+      return new FieldExpander(typeSystem, env);
     }
 
-    private FieldExpander(
-        TypeSystem typeSystem, Environment env, Deque<FromContext> fromStack) {
-      super(typeSystem, env, fromStack);
+    private FieldExpander(TypeSystem typeSystem, Environment env) {
+      super(typeSystem, env);
     }
 
     @Override
     protected EnvVisitor push(Environment env) {
-      return new FieldExpander(typeSystem, env, fromStack);
+      return new FieldExpander(typeSystem, env);
     }
 
     @Override

@@ -52,15 +52,13 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>It keeps a <b>stack</b> of relational expressions. A node takes its inputs
  * from the stack and leaves its result there, so an n-ary set operator or a
- * two-input join is ordinary rather than special. {@link FromBuilder} kept a
- * linear list of steps because a step list is linear.
+ * two-input join is ordinary rather than special.
  *
  * <p>It keeps a <b>name map</b> per stack entry, so that a caller can say
  * {@code e} for an input's element and {@code deptno} for a field of it,
  * without writing {@code $0} or a record selector itself. The names of a node
  * are the field names of its element, plus whatever a leaf was pushed under; so
- * the map is derived rather than threaded, which is what makes it unlike a
- * {@link Core.StepEnv}.
+ * the map is derived rather than threaded.
  *
  * <p>It <b>simplifies</b>, under a set of {@link Simplification}. Each
  * simplification is named and can be switched off. With {@link

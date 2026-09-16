@@ -19,10 +19,8 @@
 package net.hydromatic.morel.compile;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Static.transform;
 
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
@@ -33,14 +31,11 @@ import net.hydromatic.morel.type.TypeSystem;
 public abstract class EnvVisitor extends Visitor {
   protected final TypeSystem typeSystem;
   protected final Environment env;
-  protected final Deque<FromContext> fromStack;
 
   /** Creates an EnvVisitor. */
-  protected EnvVisitor(
-      TypeSystem typeSystem, Environment env, Deque<FromContext> fromStack) {
+  protected EnvVisitor(TypeSystem typeSystem, Environment env) {
     this.typeSystem = typeSystem;
     this.env = env;
-    this.fromStack = fromStack;
   }
 
   /** Creates a visitor the same as this but with a new environment. */
@@ -97,31 +92,6 @@ public abstract class EnvVisitor extends Visitor {
     recValDecl.list.forEach(decl -> Compiles.acceptBinding(decl.pat, bindings));
     final EnvVisitor v2 = bind(bindings);
     recValDecl.list.forEach(v2::accept);
-  }
-
-  @Override
-  protected void visit(Core.From from) {
-    Core.StepEnv env = Core.StepEnv.EMPTY;
-    for (Core.FromStep step : from.steps) {
-      visitStep(step, env);
-      env = step.env;
-    }
-  }
-
-  public void visitStep(Core.FromStep step, Core.StepEnv stepEnv) {
-    try {
-      fromStack.push(new FromContext(this, step, stepEnv));
-      step.accept(bind(stepEnv.bindings));
-    } finally {
-      fromStack.pop();
-    }
-  }
-
-  @Override
-  protected void visit(Core.Scan scan) {
-    scan.pat.accept(this);
-    scan.exp.accept(this);
-    scan.condition.accept(bind(scan.env.bindings));
   }
 
   /** Returns the bindings of a node's patterns. */
@@ -187,54 +157,6 @@ public abstract class EnvVisitor extends Visitor {
                 aggregate.argument.accept(rowV);
               }
             });
-  }
-
-  @Override
-  protected void visit(Core.Aggregate aggregate) {
-    // Aggregates need an environment that includes the group keys.
-    // For example,
-    //   from (i, j) in [(1, 2), (2, 3)]
-    //     group {k = i + 2}
-    //     compute {x = (fn list => List.size list + k) over i + j + k}
-    // the aggregate "fn list => List.size list + k" needs an environment [k];
-    // the argument "i + j + k" needs an environment [k, i, j].
-    aggregate.aggregate.accept(push(aggEnv(false)));
-    if (aggregate.argument != null) {
-      aggregate.argument.accept(push(aggEnv(true)));
-    }
-  }
-
-  /**
-   * Returns an environment for aggregate function or its argument.
-   *
-   * @param includeInput Whether to include input variables
-   */
-  private Environment aggEnv(boolean includeInput) {
-    final FromContext fromContext = fromStack.element();
-    final Core.GroupStep group = (Core.GroupStep) fromContext.step;
-    Environment env = fromContext.visitor.env;
-    if (includeInput) {
-      env = env.bindAll(fromContext.stepEnv.bindings);
-    }
-    return env.bindAll(transform(group.groupExps.keySet(), Binding::of));
-  }
-
-  /**
-   * Where we are in an iteration through the steps of a {@code from}. Allows
-   * the step handlers to retrieve the original environment and make a custom
-   * environment for each step (or part of a step).
-   */
-  public static class FromContext {
-    final EnvVisitor visitor;
-    final Core.FromStep step;
-    /** Environment produced by previous step. */
-    final Core.StepEnv stepEnv;
-
-    FromContext(EnvVisitor visitor, Core.FromStep step, Core.StepEnv stepEnv) {
-      this.visitor = visitor;
-      this.step = step;
-      this.stepEnv = stepEnv;
-    }
   }
 }
 

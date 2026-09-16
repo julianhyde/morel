@@ -41,10 +41,8 @@ import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -276,8 +274,8 @@ public class Resolver {
    *   <li>{@code 1 + a0} is the post-expression, and becomes {@code e0}
    * </ul>
    *
-   * <p>If the pre- and post-expressions are non-trivial we end up with a {@link
-   * Core.Yield} on a {@link Core.GroupStep} on a {@link Core.Yield}.
+   * <p>If the pre- and post-expressions are non-trivial we end up with a
+   * projection on a group on a projection.
    *
    * <p>What is the environment? If the query is "{@code from e in emps group
    * e.deptno compute sum over e.salary * 2.0}", then this resolver (used for
@@ -288,12 +286,13 @@ public class Resolver {
    */
   Resolver withAggregateResolver(
       Environment baseEnv,
-      Core.StepEnv stepEnv,
+      List<Binding> bindings,
+      boolean ordered,
       Collection<? extends Core.IdPat> groupKeys,
       PairList<Core.IdPat, Core.Aggregate> aggregates) {
     final Environment outerEnv =
         Environments.bind(baseEnv, transform(groupKeys, Binding::of));
-    final Environment innerEnv = Environments.bind(outerEnv, stepEnv.bindings);
+    final Environment innerEnv = Environments.bind(outerEnv, bindings);
     final Resolver innerResolver =
         new Resolver(
             typeMap,
@@ -308,7 +307,7 @@ public class Resolver {
             AggregateResolver.UNSUPPORTED);
     final AggregateResolver aggregateResolver =
         new AggregateResolverImpl(
-            groupKeys, stepEnv.ordered, innerResolver, aggregates);
+            groupKeys, ordered, innerResolver, aggregates);
     return new Resolver(
         typeMap,
         nameGenerator,
@@ -760,11 +759,7 @@ public class Resolver {
   private boolean references(List<PatExp> patExps) {
     final Set<Core.NamedPat> refSet = new HashSet<>();
     final ReferenceFinder finder =
-        new ReferenceFinder(
-            typeMap.typeSystem,
-            Environments.empty(),
-            refSet,
-            new ArrayDeque<>());
+        new ReferenceFinder(typeMap.typeSystem, Environments.empty(), refSet);
     patExps.forEach(x -> x.exp.accept(finder));
 
     final Set<Core.NamedPat> defSet = new HashSet<>();
@@ -814,17 +809,14 @@ public class Resolver {
     final Set<Core.NamedPat> set;
 
     protected ReferenceFinder(
-        TypeSystem typeSystem,
-        Environment env,
-        Set<Core.NamedPat> set,
-        Deque<FromContext> fromStack) {
-      super(typeSystem, env, fromStack);
+        TypeSystem typeSystem, Environment env, Set<Core.NamedPat> set) {
+      super(typeSystem, env);
       this.set = set;
     }
 
     @Override
     protected ReferenceFinder push(Environment env) {
-      return new ReferenceFinder(typeSystem, env, set, fromStack);
+      return new ReferenceFinder(typeSystem, env, set);
     }
 
     @Override
@@ -2275,9 +2267,8 @@ public class Resolver {
    * because {@link Resolver#toCore} is not pure. So the flip was made a slice
    * of query at a time, and the oracle was the script suite's results.
    *
-   * <p>Names come from {@link RelBuilder}'s map, which is what {@code StepEnv}
-   * was for: it stores the path to each name rather than a flag saying whether
-   * the name is the whole element.
+   * <p>Names come from {@link RelBuilder}'s map, which stores the path to each
+   * name rather than a flag saying whether the name is the whole element.
    */
   private class RelFromResolver {
     /** The enclosing query's resolver; asked about `ordinal`. */
@@ -2310,9 +2301,9 @@ public class Resolver {
      * Whether the row is the one thing a single binder names, rather than a
      * record of what the binders name.
      *
-     * <p>{@code Core.StepEnv.atom} by another name, and the distinction is not
-     * the number of binders: {@code yield {j = i + 1}} binds one name and the
-     * row is still a record, so {@code current} is a record too.
+     * <p>The distinction is not the number of binders: {@code yield {j = i +
+     * 1}} binds one name and the row is still a record, so {@code current} is a
+     * record too.
      */
     boolean atom = true;
 
@@ -2892,12 +2883,7 @@ public class Resolver {
       }
       final Scope scope =
           new Scope(paths, natural(paths, b.input(0)), ordinalPath());
-      // `withAggregateResolver` reads only the bindings and the ordering; the
-      // atom flag would have to lie anyway, since these bindings include the
-      // tree's inputs and an atom env holds exactly one.
-      final Core.StepEnv stepEnv =
-          Core.StepEnv.of(
-              scope.bindings, false, b.peek().type instanceof ListType);
+      final boolean ordered = b.peek().type instanceof ListType;
 
       // Following the step list: group keys and aggregate arguments read the
       // row before the group, and the expressions that name the result read
@@ -2910,7 +2896,11 @@ public class Resolver {
             scope
                 .resolver()
                 .withAggregateResolver(
-                    env, stepEnv, ImmutableList.of(), aggregates);
+                    env,
+                    scope.bindings,
+                    ordered,
+                    ImmutableList.of(),
+                    aggregates);
         final boolean emptyKey =
             group.group instanceof Ast.Record
                 && ((Ast.Record) group.group).args.isEmpty();
@@ -2949,7 +2939,11 @@ public class Resolver {
             scope
                 .resolver()
                 .withAggregateResolver(
-                    env, stepEnv, groupExps.leftList(), aggregates);
+                    env,
+                    scope.bindings,
+                    ordered,
+                    groupExps.leftList(),
+                    aggregates);
         groupExps.forEach((id, exp) -> postExps.add(id.name, core.id(id)));
         group
             .compute()
@@ -3138,8 +3132,7 @@ public class Resolver {
      *
      * <p>The resolver gives a name as a reference to its binder; the builder
      * says where that binder lives in the element, and the two are joined by
-     * substitution. That is the whole of what {@code withStepEnv} did, minus
-     * the step list.
+     * substitution.
      */
     private Core.Exp toCore(Ast.Exp exp) {
       return toCore(exp, b.size() == 0 ? null : b.input(0));
@@ -3226,7 +3219,6 @@ public class Resolver {
      *
      * <p>The resolver gives a name as a reference to its binder; the builder
      * says where that binder lives; and the two are joined by substitution.
-     * That is the whole of what {@code withStepEnv} did, minus the step list.
      */
     private class Scope {
       final Core.Exp current;

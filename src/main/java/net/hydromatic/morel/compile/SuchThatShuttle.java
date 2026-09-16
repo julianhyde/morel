@@ -151,15 +151,6 @@ class SuchThatShuttle extends EnvShuttle {
     decl.accept(
         new Visitor() {
           @Override
-          protected void visit(Core.Scan scan) {
-            super.visit(scan);
-            if (Extents.isInfinite(scan.exp)
-                || RangePushdown.isInfiniteRangeScan(scan)) {
-              found.set(true);
-            }
-          }
-
-          @Override
           protected void visitRel(Core.Rel rel) {
             // A tree has no scans: its leaves are the inputs that are not
             // themselves nodes. The latch in Compiles stops running this

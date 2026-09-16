@@ -210,29 +210,6 @@ public abstract class RowSinks {
   }
 
   /**
-   * Creates a {@link RowSink} that pushes the current row's variables onto the
-   * stack before passing it downstream.
-   *
-   * <p>It adapts a row produced "in the environment" (by name, after a {@code
-   * group}/{@code distinct}) to a downstream sink that expects it on the stack
-   * (positionally). The compiler inserts it when the two disagree; see {@link
-   * net.hydromatic.morel.compile.Compiler#compileSetSink}.
-   */
-  public static RowSink rematerialize(
-      ImmutablePairList<String, Code> slots, RowSink rowSink) {
-    return new RematerializeRowSink(slots, rowSink);
-  }
-
-  /** Creates a {@link RowSink} for a non-terminal {@code yield} step. */
-  public static RowSink yield(
-      Map<String, Code> yieldCodes,
-      int @Nullable [] ordinalSlots,
-      RowSink rowSink) {
-    return new YieldRowSink(
-        ImmutableList.copyOf(yieldCodes.values()), 0, ordinalSlots, rowSink);
-  }
-
-  /**
    * Creates a {@link RowSink} that evaluates {@code codes} against the current
    * row, pops the top {@code popCount} slots, and pushes the values in their
    * place.
@@ -668,51 +645,6 @@ public abstract class RowSinks {
     }
   }
 
-  /**
-   * Implementation of {@link RowSink} that pushes the current row's variables
-   * onto the stack before delegating, adapting an environment-based row to a
-   * stack-based downstream sink.
-   */
-  private static class RematerializeRowSink extends BaseRowSink {
-    /**
-     * (Name, code) slots that read the row's variables from the environment.
-     */
-    final ImmutablePairList<String, Code> slots;
-
-    RematerializeRowSink(
-        ImmutablePairList<String, Code> slots, RowSink rowSink) {
-      super(rowSink);
-      this.slots = slots;
-    }
-
-    @Override
-    public Describer describe(Describer describer) {
-      return describer.start("rematerialize", d -> d.arg("sink", rowSink));
-    }
-
-    @Override
-    public int maxSlots() {
-      return slots.size() + rowSink.maxSlots();
-    }
-
-    @Override
-    public void accept(Stack stack) {
-      // Evaluate all values from the input stack/env before pushing any, so
-      // that StackCode offsets stay valid throughout (mirrors YieldRowSink).
-      final Object[] values = new Object[slots.size()];
-      for (int i = 0; i < slots.size(); i++) {
-        values[i] = slots.right(i).eval(stack);
-      }
-      final Stack s = stack.ensureSize(slots.size());
-      final int savedTop = s.top;
-      for (Object value : values) {
-        s.push(value);
-      }
-      rowSink.accept(s);
-      s.restore(savedTop);
-    }
-  }
-
   /** Implementation of {@link RowSink} for a {@code skip} step. */
   private static class SkipRowSink extends BaseRowSink {
     final Code skipCode;
@@ -1032,9 +964,8 @@ public abstract class RowSinks {
           map.remove(value);
         }
       } else {
-        // The row's variables are live on the stack (a 'rematerialize' adapter
-        // is inserted upstream when they would otherwise be in the env); pass
-        // the stack through directly.
+        // The row is on the stack, in the one slot the compiler materialized
+        // it into; pass the stack through directly.
         rowSink.accept(stack);
       }
     }
