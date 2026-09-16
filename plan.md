@@ -42,18 +42,14 @@ step is written with it.
       patterns; the join's binder is its left pattern; the group row
       builds a record; the `defn` grammar writes `r$N[...]`; §6.7's
       first sentence no longer says "per tree".
-- [ ] §5: say which of its rules the validator checks and which are
+- [x] §5: says which of its rules the validator checks and which are
       properties of a pair of trees or need an environment.
-- [ ] §6: the text ends with a newline; fragment parameters are
+- [x] §6: the text ends with a newline; fragment parameters are
       ordered by number, not as text; a binder a *pass* mints prints
       with the tree's prefix, `v$`; `Sys.planOf` decides "is a
-      query" from the argument's AST; what has happened to the query
-      when the plan is taken (resolved; overloads unresolved; nothing
-      inlined; where grounding sits, which F1 settles by reading
-      `Compiles`).
-- [ ] A contract changelog at the head of spec.md, since "frozen" has
-      meant "stable, versioned" since the `let` and `case` break
-      points landed.
+      query" from the argument's AST; §6.8 says what has happened to
+      the query at each `Sys.planEx` phase.
+- [x] A contract changelog at the head of spec.md.
 - [ ] File the Go port's ten findings against hydromatic/morel; the
       Rust port's four are fixed.
 
@@ -199,10 +195,9 @@ Done. What it turned out to need, for the ports and for F2:
       compilers' step-list code, the step visits of `Shuttle`,
       `Visitor`, `EnvVisitor` and `EnvShuttle`, `RangePushdown`'s
       step-list pass and the `rematerialize` sink are deleted. Left
-      standing: `Z_ORDINAL` and the compiler's ordinal counter, which
-      the resolver still reaches for an `ordinal` outside a node, and
-      the `ordinalSlots` field the tree compiler threads through its
-      contexts; a follow-up.
+      standing: `BuiltIn.Z_ORDINAL`, which the type checker still
+      uses to type `ordinal`; the resolver's fallback that built a
+      call to it, and the compiler's ordinal counter, are gone.
 - Gate: `fullMake`; only `Sys.plan` lines move, and they are outside
   the contract. If a line that is not a `Sys.plan` line moves, stop.
 

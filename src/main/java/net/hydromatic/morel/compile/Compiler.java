@@ -227,23 +227,13 @@ public class Compiler {
      */
     final ImmutableList<Core.NamedPat> recPeers;
 
-    /** Row-ordinal counter, or null if enclosing step is not "yield". */
-    final int @Nullable [] ordinalSlots;
-
     /** Creates a context with no stack layout; used by {@code RelContext}. */
     Context(Environment env) {
-      this(
-          env,
-          StackLayout.EMPTY,
-          0,
-          ImmutableMap.of(),
-          ImmutableList.of(),
-          null);
+      this(env, StackLayout.EMPTY, 0, ImmutableMap.of(), ImmutableList.of());
     }
 
     Context(Environment env, StackLayout layout, int localDepth) {
-      this(
-          env, layout, localDepth, ImmutableMap.of(), ImmutableList.of(), null);
+      this(env, layout, localDepth, ImmutableMap.of(), ImmutableList.of());
     }
 
     Context(
@@ -251,7 +241,7 @@ public class Compiler {
         StackLayout layout,
         int localDepth,
         Map<String, Integer> globalSlotMap) {
-      this(env, layout, localDepth, globalSlotMap, ImmutableList.of(), null);
+      this(env, layout, localDepth, globalSlotMap, ImmutableList.of());
     }
 
     Context(
@@ -259,23 +249,12 @@ public class Compiler {
         StackLayout layout,
         int localDepth,
         Map<String, Integer> globalSlotMap,
-        List<Core.NamedPat> recPeers,
-        int @Nullable [] ordinalSlots) {
+        List<Core.NamedPat> recPeers) {
       this.env = env;
       this.layout = layout;
       this.localDepth = localDepth;
       this.globalSlotMap = ImmutableMap.copyOf(globalSlotMap);
       this.recPeers = ImmutableList.copyOf(recPeers);
-      this.ordinalSlots = ordinalSlots;
-    }
-
-    /** Returns a copy of this context with a given row-ordinal counter. */
-    Context withOrdinalSlots(int @Nullable [] ordinalSlots) {
-      if (ordinalSlots == this.ordinalSlots) {
-        return this;
-      }
-      return new Context(
-          env, layout, localDepth, globalSlotMap, recPeers, ordinalSlots);
     }
 
     static Context of(Environment env) {
@@ -284,14 +263,12 @@ public class Compiler {
 
     Context bindAll(Iterable<Binding> bindings) {
       final Environment env1 = env.bindAll(bindings);
-      return new Context(
-          env1, layout, localDepth, globalSlotMap, recPeers, ordinalSlots);
+      return new Context(env1, layout, localDepth, globalSlotMap, recPeers);
     }
 
     /** Returns a copy of this context with the given rec-group peers. */
     Context withRecPeers(List<Core.NamedPat> recPeers) {
-      return new Context(
-          env, layout, localDepth, globalSlotMap, recPeers, ordinalSlots);
+      return new Context(env, layout, localDepth, globalSlotMap, recPeers);
     }
 
     /**
@@ -619,15 +596,6 @@ public class Compiler {
                 ((Core.Literal) checkArgs.get(3)).unwrap(String.class),
                 builtIn,
                 apply.pos);
-          case Z_ORDINAL:
-            if (cx.ordinalSlots == null) {
-              // Nothing is counting rows here. Only a 'yield' installs a
-              // counter, so a call anywhere else has nothing to read.
-              throw new AssertionError(
-                  "'ordinal' occurs outside a yield: " + apply);
-            }
-            cx.ordinalSlots[0]++; // signal that we are using an ordinal
-            return Codes.ordinalGet(cx.ordinalSlots);
           default:
             if (true) {
               break;
@@ -958,8 +926,7 @@ public class Compiler {
             newLayout,
             cx.localDepth + 1,
             cx.globalSlotMap,
-            cx.recPeers,
-            cx.ordinalSlots);
+            cx.recPeers);
     final Code bodyCode = compile(cx2, bodyExp);
     return Codes.stackLet1(
         expCode, postProcessLetBody(cx2, bodyCode, bodyExp.type));
@@ -1003,8 +970,7 @@ public class Compiler {
             newLayout,
             cx.localDepth + 1,
             cx.globalSlotMap,
-            cx.recPeers,
-            cx.ordinalSlots);
+            cx.recPeers);
     final Code bodyCode = compileTail(cx2, bodyExp);
     return Codes.stackLet1(
         expCode, postProcessLetBody(cx2, bodyCode, bodyExp.type));
@@ -1071,8 +1037,7 @@ public class Compiler {
         newLayout,
         depth,
         cx.globalSlotMap,
-        cx.recPeers,
-        cx.ordinalSlots);
+        cx.recPeers);
   }
 
   protected Code finishCompileLet(
@@ -1310,13 +1275,9 @@ public class Compiler {
       final List<Binding> bindings = new ArrayList<>();
       Compiles.acceptBinding(typeSystem, match.pat, bindings);
       // Fresh context: no globalSlotMap, no recPeers (nested closures start
-      // a new scope). The row-ordinal counter is inherited: a match list in
-      // the expression of a "yield" - an "if", for instance - is evaluated
-      // while that row is current, so a call to 'ordinal' in an arm reads the
-      // yield's counter.
+      // a new scope).
       final Context innerCx =
-          new Context(cx.env.bindAll(bindings), innerLayout, depth)
-              .withOrdinalSlots(cx.ordinalSlots);
+          new Context(cx.env.bindAll(bindings), innerLayout, depth);
 
       final Code bodyCode =
           tailPos
