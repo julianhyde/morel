@@ -207,6 +207,35 @@ Done. What it turned out to need, for the ports and for F2:
 - [ ] Merge to main. The ports port F1 with the rule framework, as
       their plans already say.
 
+Measured on 2026-09-16, before starting, so that the reorder is done
+against facts rather than the memory of the rebase:
+
+- **The base has moved.** `julianhyde/main` was rewritten after the
+  branch was rebased onto it: the branch carries copies of sixteen
+  of main's commits under other hashes (`cee6d041` is main's
+  `a939395c`, "Checked types"), from `cee6d041` to `6a266677`, and
+  main has two more since. The first commit of the branch's own is
+  `a4f51aa8`, "Spec for the relational tree". Landing starts with
+  `git rebase --onto julianhyde/main 6a266677 449-tree`.
+- **190 commits do not compile**, from `aafe9aa9` ("Ground a tree's
+  leaves with the step list's engine", the 39th commit) to
+  `400c76e7` ("A conformance suite"), the commit before `8a14fcd3`.
+  All for one reason: main's #229 gave `Generators.Cache` a third
+  constructor argument, the rebase put that under these commits, and
+  `RelExpander` learned to pass it only in `8a14fcd3`. So the plan's
+  "fold `8a14fcd3` into the deletion" is not enough: the four-line
+  `ungroundedPats(extents)` must enter at `aafe9aa9`, where
+  `RelExpander` first builds a `Cache`, and each later commit that
+  touches those call sites must carry it. A rebase that replays the
+  branch will meet it as a conflict at each such commit.
+- **No stale golden output found.** Of the eighteen commits that
+  touch `such-that.smli` or `built-in/sys.smli`, the twelve that
+  compile print both files as they hold them; the six inside the
+  non-compiling span could not be checked, and are where the rebase's
+  conflict resolutions sit.
+- The backup of the branch as it stands is the tag
+  `449-tree-before-squash`.
+
 ### F4 onward
 
 Step 4 (rule framework), step 5 (ports), step 6 (#359), then the
