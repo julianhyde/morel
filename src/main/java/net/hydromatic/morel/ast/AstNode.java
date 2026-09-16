@@ -23,7 +23,9 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -166,6 +168,13 @@ public abstract class AstNode {
           protected void visit(Core.IdPat idPat) {
             pats.add(idPat);
           }
+
+          @Override
+          protected void visitRel(Core.Rel rel) {
+            // A node's patterns are bound in the plan too, and a fragment
+            // that reads one names it in its header.
+            pats.addAll(rel.patterns());
+          }
         });
     return pats;
   }
@@ -198,6 +207,8 @@ public abstract class AstNode {
   private static class RenumberingAstWriter extends AstWriter {
     final Map<String, List<Integer>> nameIds = new HashMap<>();
     final Map<String, String> names = new LinkedHashMap<>();
+    /** The nodes whose arguments are printing, innermost first. */
+    final Deque<Core.Rel> nodes = new ArrayDeque<>();
 
     /**
      * The types a plan line was too narrow to name, in the order they were
@@ -282,7 +293,12 @@ public abstract class AstNode {
       // by a `let` that encloses the reference, so it has been printed -- and
       // therefore numbered -- before this runs.
       final List<String> names = new ArrayList<>();
-      params.forEach(p -> names.add(rename(p.name)));
+      params.forEach(
+          p ->
+              names.add(
+                  p.name.charAt(0) == '$'
+                      ? generatedName((Core.IdPat) p)
+                      : rename(p.name)));
       names.sort(AstNode::compareGenerated);
       return "r$" + i + "[" + String.join(", ", names) + "]";
     }
@@ -356,6 +372,36 @@ public abstract class AstNode {
       final String replacement = prefix + n;
       names.put(name, replacement);
       return replacement;
+    }
+
+    @Override
+    public AstWriter rowRef(Core.IdPat pat) {
+      // Inside the node that binds it, a pattern prints as its own name. Read
+      // from outside -- a join's left row from its right input, a row from a
+      // tree nested in an expression -- it prints under a generated name, the
+      // same one the node prints as its argument.
+      if (!nodes.isEmpty() && nodes.peek().patterns().contains(pat)) {
+        return appendRaw(pat.name);
+      }
+      return appendRaw(generatedName(pat));
+    }
+
+    @Override
+    public String generatedName(Core.IdPat pat) {
+      // A node's pattern takes its ordinal from the same counter as generated
+      // binders, so `v$` with that ordinal names no binder, and the renaming
+      // numbers it with the rest.
+      return rename("v$" + pat.i);
+    }
+
+    @Override
+    public void pushNode(Core.Rel rel) {
+      nodes.push(rel);
+    }
+
+    @Override
+    public void popNode() {
+      nodes.pop();
     }
 
     @Override

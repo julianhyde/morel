@@ -313,9 +313,7 @@ public class Inliner extends EnvShuttle {
    * the query's variables.
    */
   static boolean isAtomic(Core.Exp exp) {
-    return exp instanceof Core.Literal
-        || exp instanceof Core.Id
-        || exp instanceof Core.Input;
+    return exp instanceof Core.Literal || exp instanceof Core.Id;
   }
 
   /**
@@ -411,8 +409,11 @@ public class Inliner extends EnvShuttle {
     exp.accept(
         new Visitor.RelBoundary() {
           @Override
-          protected void visit(Core.Input input) {
-            found[0] = true;
+          protected void visit(Core.Id id) {
+            if (id.idPat.name.charAt(0) == '$') {
+              // A node's pattern: `$0`, `$1` or `$ordinal`.
+              found[0] = true;
+            }
           }
         });
     return found[0];

@@ -730,10 +730,9 @@ public class Core {
      *
      * <p>Printing the bare expression made a node-free tree and a *declined*
      * translation the same text, so no reader of a plan could tell which had
-     * happened -- and {@link net.hydromatic.morel.compile.RelShadow}'s
-     * invariant that the translator declines nothing could not be checked from
-     * outside, because the one place a decline would show is the one place the
-     * plan said nothing.
+     * happened -- and the invariant that the translator declines nothing could
+     * not be checked from outside, because the one place a decline would show
+     * is the one place the plan said nothing.
      */
     public final String unparsePlan(TypeSystem typeSystem, int width) {
       final AstWriter w =
@@ -868,55 +867,13 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      if (idPat.name.charAt(0) == '$') {
+        // A node's pattern: `$0`, `$1` or `$ordinal`. The writer decides
+        // whether to print the name or, outside the node that binds it, a
+        // generated one.
+        return w.rowRef((IdPat) idPat);
+      }
       return w.idQuoted(idPat.name, idPat.i);
-    }
-  }
-
-  /**
-   * Reference to the element of a node's input: {@code $0} for a one-input node
-   * and for a join's left input, {@code $1} for a join's right.
-   *
-   * <p>Not an {@link Id}, and that is the point. It is bound by the node that
-   * encloses it, not by anything the query wrote, so a pass that reasons about
-   * variables must not see it as one: {@code $0} in two nodes is two different
-   * things, and an {@code IdPat} of the same name would make them one.
-   */
-  public static class Input extends Exp {
-    /** Which input: 0 for the only or left one, 1 for a join's right. */
-    public final int i;
-
-    Input(Pos pos, Type type, int i) {
-      super(pos, Op.INPUT, type);
-      checkArgument(i == 0 || i == 1, "input %s", i);
-      this.i = i;
-    }
-
-    @Override
-    public int hashCode() {
-      return i;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      // Not the type: an expression that reads `$0` is the same expression
-      // wherever it is written, and a rule that moves one between nodes of
-      // different element types is caught by the validator, not here.
-      return o == this || o instanceof Input && ((Input) o).i == i;
-    }
-
-    @Override
-    public Exp accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
-
-    @Override
-    public void accept(Visitor visitor) {
-      visitor.visit(this);
-    }
-
-    @Override
-    AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("$" + i);
     }
   }
 
@@ -2434,6 +2391,21 @@ public class Core {
     }
   }
 
+  /** Returns whether an expression mentions a pattern. */
+  public static boolean mentions(Exp exp, NamedPat pat) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Id id) {
+            if (id.idPat.equals(pat)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
+  }
+
   /**
    * Node in a relational tree: an operator whose inputs are collections and
    * whose value is a collection of a definite type.
@@ -2450,10 +2422,10 @@ public class Core {
    *
    * <p>Unlike a {@link FromStep}, a node carries no bindings. Its element type
    * is derived from its inputs and its expressions, and is exactly the type of
-   * the value that flows out of it. Expressions inside a node name the input
-   * element {@code $0} (and, in a {@link Join}, the right input element {@code
-   * $1}); a dependent {@link Join} also has a binder that names the input
-   * element, because its body may contain a tree that would shadow {@code $0}.
+   * the value that flows out of it. A node binds patterns for its expressions,
+   * as {@code fn} and {@code case} do: the row, {@code $0} (and, in a {@link
+   * Join}, the right input's row {@code $1}), and optionally the row's ordinal,
+   * {@code $ordinal}. See {@link #patterns()}.
    */
   public abstract static class Rel extends Exp {
     Rel(Op op, Type type) {
@@ -2461,6 +2433,14 @@ public class Core {
       if (!type.isCollection()) {
         throw new IllegalArgumentException("not a collection type: " + type);
       }
+    }
+
+    /**
+     * Returns the patterns this node binds for its expressions: the row, and
+     * the ordinal if it has one. Empty for a node with no per-row expressions.
+     */
+    public List<IdPat> patterns() {
+      return ImmutableList.of();
     }
 
     /** Returns the type of the elements of this node's output. */
@@ -2533,7 +2513,9 @@ public class Core {
         w.startGroup(indent + 4);
       }
       w.append(opName());
+      w.pushNode(this);
       describeArgs(w);
+      w.popNode();
       if (withTypes) {
         w.append(" : ").append(w.typeRef(type.moniker()));
       }
@@ -2670,14 +2652,45 @@ public class Core {
   }
 
   /**
+   * A one-input node whose expressions run once per element of its input, and
+   * that binds patterns for them: the row, and optionally its ordinal.
+   */
+  public abstract static class RowRel extends SingleRel {
+    public final IdPat row;
+    public final @Nullable IdPat ordinal;
+
+    RowRel(Op op, Type type, IdPat row, @Nullable IdPat ordinal, Exp input) {
+      super(op, type, input);
+      this.row = requireNonNull(row, "row");
+      this.ordinal = ordinal;
+      checkArgument(
+          row.type.equals(input.type.elementType()),
+          "row %s must have the element type %s",
+          row,
+          input.type.elementType());
+      checkArgument(
+          ordinal == null || ordinal.type == PrimitiveType.INT,
+          "ordinal %s must be int",
+          ordinal);
+    }
+
+    @Override
+    public List<IdPat> patterns() {
+      return ordinal == null
+          ? ImmutableList.of(row)
+          : ImmutableList.of(row, ordinal);
+    }
+  }
+
+  /**
    * Removes the elements for which a condition, an expression over {@code $0},
    * is false.
    */
-  public static class Filter extends SingleRel {
+  public static class Filter extends RowRel {
     public final Exp condition;
 
-    Filter(Exp input, Exp condition) {
-      super(Op.FILTER, input.type, input);
+    Filter(IdPat row, @Nullable IdPat ordinal, Exp input, Exp condition) {
+      super(Op.FILTER, input.type, row, ordinal, input);
       this.condition = requireNonNull(condition, "condition");
     }
 
@@ -2704,16 +2717,16 @@ public class Core {
     public Filter copy(Exp input, Exp condition) {
       return input == this.input && condition == this.condition
           ? this
-          : core.filter(input, condition);
+          : core.filter(row, ordinal, input, condition);
     }
   }
 
   /** Maps each element to one element, via an expression over {@code $0}. */
-  public static class Project extends SingleRel {
+  public static class Project extends RowRel {
     public final Exp exp;
 
-    Project(Type type, Exp input, Exp exp) {
-      super(Op.PROJECT, type, input);
+    Project(Type type, IdPat row, @Nullable IdPat ordinal, Exp input, Exp exp) {
+      super(Op.PROJECT, type, row, ordinal, input);
       this.exp = requireNonNull(exp, "exp");
     }
 
@@ -2740,7 +2753,7 @@ public class Core {
     public Project copy(TypeSystem typeSystem, Exp input, Exp exp) {
       return input == this.input && exp == this.exp
           ? this
-          : core.project(typeSystem, input, exp);
+          : core.project(typeSystem, row, ordinal, input, exp);
     }
   }
 
@@ -2756,20 +2769,21 @@ public class Core {
     public final Rel.JoinType joinType;
 
     /**
-     * Names the left element inside {@link #right}, or null if the right input
-     * does not read it.
-     *
-     * <p>This is what makes a join <em>dependent</em>: the right input is a
-     * tree of its own and rebinds {@code $0}, so it cannot say {@code $0} and
-     * mean the left element. The binder is in scope in {@link #right} only,
-     * never in {@link #condition}, which says {@code $0} and {@code $1} as any
-     * join's does.
-     *
-     * <p>It is a scoping device, not a mode: dependence is a free occurrence of
-     * it, and decorrelation is dropping it.
+     * Pattern that names the left input's element, {@code $0}. It is in scope
+     * in the condition and in {@link #right}: the right input is evaluated once
+     * per left element, and a right input that reads it makes the join
+     * <em>dependent</em>. Dependence is a free occurrence, not a mode, and
+     * decorrelation is rewriting the right input until it no longer reads it.
      */
-    public final @Nullable IdPat binder;
+    public final IdPat leftRow;
 
+    /**
+     * Pattern that names the right input's element, {@code $1}, in scope in the
+     * condition only.
+     */
+    public final IdPat rightRow;
+
+    public final @Nullable IdPat ordinal;
     public final Exp left;
     public final Exp right;
     public final Exp condition;
@@ -2777,16 +2791,49 @@ public class Core {
     Join(
         Type type,
         Rel.JoinType joinType,
-        @Nullable IdPat binder,
+        IdPat leftRow,
+        IdPat rightRow,
+        @Nullable IdPat ordinal,
         Exp left,
         Exp right,
         Exp condition) {
       super(Op.JOIN, type);
       this.joinType = requireNonNull(joinType, "joinType");
-      this.binder = binder;
+      this.leftRow = requireNonNull(leftRow, "leftRow");
+      this.rightRow = requireNonNull(rightRow, "rightRow");
+      this.ordinal = ordinal;
       this.left = requireNonNull(left, "left");
       this.right = requireNonNull(right, "right");
       this.condition = requireNonNull(condition, "condition");
+      checkArgument(
+          leftRow.type.equals(left.type.elementType()),
+          "left row %s must have the element type %s",
+          leftRow,
+          left.type.elementType());
+      checkArgument(
+          rightRow.type.equals(right.type.elementType()),
+          "right row %s must have the element type %s",
+          rightRow,
+          right.type.elementType());
+      checkArgument(
+          ordinal == null || ordinal.type == PrimitiveType.INT,
+          "ordinal %s must be int",
+          ordinal);
+    }
+
+    @Override
+    public List<IdPat> patterns() {
+      return ordinal == null
+          ? ImmutableList.of(leftRow, rightRow)
+          : ImmutableList.of(leftRow, rightRow, ordinal);
+    }
+
+    /**
+     * Returns whether the right input reads the left row, which makes this a
+     * dependent join.
+     */
+    public boolean isDependent() {
+      return mentions(right, leftRow);
     }
 
     @Override
@@ -2804,8 +2851,10 @@ public class Core {
       if (joinType != Rel.JoinType.INNER) {
         arg(w, joinType.opName());
       }
-      if (binder != null) {
-        arg(w, binder.name);
+      if (isDependent()) {
+        // Raw, because the name is renumbered already, and the writer
+        // renumbers what it is asked to append.
+        w.append(" [").appendRaw(w.generatedName(leftRow)).append("]");
       }
       if (!condition.isBoolLiteral(true)) {
         arg(w, condition);
@@ -2825,17 +2874,23 @@ public class Core {
     public Join copy(
         TypeSystem typeSystem,
         Rel.JoinType joinType,
-        @Nullable IdPat binder,
         Exp left,
         Exp right,
         Exp condition) {
       return joinType == this.joinType
-              && binder == this.binder
               && left == this.left
               && right == this.right
               && condition == this.condition
           ? this
-          : core.join(typeSystem, joinType, binder, left, right, condition);
+          : core.join(
+              typeSystem,
+              joinType,
+              leftRow,
+              rightRow,
+              ordinal,
+              left,
+              right,
+              condition);
     }
   }
 
@@ -2846,16 +2901,18 @@ public class Core {
    * are the output record's labels. {@code distinct} is this node with the
    * whole element as its only key and no aggregates.
    */
-  public static class Group extends SingleRel {
+  public static class Group extends RowRel {
     public final ImmutableSortedMap<String, Exp> keys;
     public final ImmutableSortedMap<String, Aggregate> aggregates;
 
     Group(
         Type type,
+        IdPat row,
+        @Nullable IdPat ordinal,
         Exp input,
         ImmutableSortedMap<String, Exp> keys,
         ImmutableSortedMap<String, Aggregate> aggregates) {
-      super(Op.GROUP, type, input);
+      super(Op.GROUP, type, row, ordinal, input);
       this.keys = requireNonNull(keys, "keys");
       this.aggregates = requireNonNull(aggregates, "aggregates");
     }
@@ -2892,7 +2949,7 @@ public class Core {
               && keys.equals(this.keys)
               && aggregates.equals(this.aggregates)
           ? this
-          : core.group(typeSystem, input, keys, aggregates);
+          : core.group(typeSystem, row, ordinal, input, keys, aggregates);
     }
   }
 
@@ -2906,8 +2963,8 @@ public class Core {
    *
    * <p>The expression is evaluated only when there is no element, so, like the
    * count of a {@link Skip}, it cannot mention {@code $0}. It can mention
-   * whatever the tree's enclosing environment binds, which inside the body of a
-   * the right input of a dependent {@link Join} includes its binder.
+   * whatever the tree's enclosing environment binds, which inside the right
+   * input of a dependent {@link Join} includes the join's left row.
    */
   public static class IfEmpty extends SingleRel {
     public final Exp exp;
@@ -2948,11 +3005,11 @@ public class Core {
    * Sorts elements by an expression over {@code $0}; always yields a {@code
    * list}.
    */
-  public static class Sort extends SingleRel {
+  public static class Sort extends RowRel {
     public final Exp exp;
 
-    Sort(Type type, Exp input, Exp exp) {
-      super(Op.SORT, type, input);
+    Sort(Type type, IdPat row, @Nullable IdPat ordinal, Exp input, Exp exp) {
+      super(Op.SORT, type, row, ordinal, input);
       this.exp = requireNonNull(exp, "exp");
     }
 
@@ -2979,7 +3036,7 @@ public class Core {
     public Sort copy(TypeSystem typeSystem, Exp input, Exp exp) {
       return input == this.input && exp == this.exp
           ? this
-          : core.sort(typeSystem, input, exp);
+          : core.sort(typeSystem, row, ordinal, input, exp);
     }
   }
 

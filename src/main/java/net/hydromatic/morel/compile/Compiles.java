@@ -228,9 +228,6 @@ public abstract class Compiles {
     }
     coreDecl = lowerTrees(typeSystem, session.nameGenerator, coreDecl);
     checkExtentsFinite(coreDecl);
-    // Shadow: translate every query into a relational tree and check it. Runs
-    // only when assertions are enabled, that is, when the tests run.
-    assert RelShadow.check(typeSystem, coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
     if (hybrid) {

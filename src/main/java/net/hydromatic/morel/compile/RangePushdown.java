@@ -124,17 +124,21 @@ final class RangePushdown {
    * do. The condition is on {@code $0}, because a leaf has no pattern.
    */
   static @Nullable Tightening tighten(
-      TypeSystem typeSystem, Core.Exp leaf, List<Core.Exp> conditions) {
+      TypeSystem typeSystem,
+      Core.Exp leaf,
+      Core.IdPat row,
+      List<Core.Exp> conditions) {
     return tighten(
         typeSystem,
         leaf,
         conditions,
-        e -> e instanceof Core.Input && ((Core.Input) e).i == 0);
+        e -> e instanceof Core.Id && ((Core.Id) e).idPat.equals(row));
   }
 
   /**
-   * As {@link #tighten(TypeSystem, Core.Exp, List)}, where the leaf is one of a
-   * join's and the conditions name it rather than saying {@code $0}.
+   * As {@link #tighten(TypeSystem, Core.Exp, Core.IdPat, List)}, where the leaf
+   * is one of a join's and the conditions name it rather than saying {@code
+   * $0}.
    */
   static @Nullable Tightening tighten(
       TypeSystem typeSystem,

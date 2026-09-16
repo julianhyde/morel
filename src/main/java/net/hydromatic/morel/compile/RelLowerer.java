@@ -326,8 +326,10 @@ public class RelLowerer {
     exp.accept(
         new Visitor() {
           @Override
-          protected void visit(Core.Input input) {
-            found[0] = true;
+          protected void visit(Core.Id id) {
+            if (id.idPat.name.charAt(0) == '$') {
+              found[0] = true;
+            }
           }
         });
     return found[0];
@@ -359,8 +361,15 @@ public class RelLowerer {
     }
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
-      final Core.Exp element = lowerInto(fromBuilder, filter.input);
-      fromBuilder.where(subst(filter.condition, element, null));
+      Core.Exp element = lowerInto(fromBuilder, filter.input);
+      Core.@Nullable Exp ordinal = null;
+      if (filter.ordinal != null) {
+        final Core.Exp[] pair = withOrdinal(fromBuilder, element);
+        element = pair[0];
+        ordinal = pair[1];
+      }
+      fromBuilder.where(
+          subst(filter.condition, filter, element, null, ordinal));
       return element;
     }
     if (exp instanceof Core.Project) {
@@ -368,7 +377,8 @@ public class RelLowerer {
       // unless a later step needs the row.
       final Core.Project project = (Core.Project) exp;
       final Core.Exp element = lowerInto(fromBuilder, project.input);
-      final Core.Exp element2 = subst(project.exp, element, null);
+      final Core.Exp element2 =
+          subst(project.exp, project, element, null, null);
       if (containsOrdinal(element2)) {
         // Except for an ordinal, which counts rows: only a step evaluates its
         // expression exactly once per row, so deferring one would change what
@@ -394,9 +404,15 @@ public class RelLowerer {
       // evaluate the projection twice for every expression the sort key
       // shares with it.
       final Core.Sort sort = (Core.Sort) exp;
-      final Core.Exp element =
+      Core.Exp element =
           materialize(fromBuilder, lowerInto(fromBuilder, sort.input));
-      fromBuilder.order(subst(sort.exp, element, null));
+      Core.@Nullable Exp ordinal = null;
+      if (sort.ordinal != null) {
+        final Core.Exp[] pair = withOrdinal(fromBuilder, element);
+        element = pair[0];
+        ordinal = pair[1];
+      }
+      fromBuilder.order(subst(sort.exp, sort, element, null, ordinal));
       return element;
     }
     if (exp instanceof Core.Unorder) {
@@ -424,12 +440,20 @@ public class RelLowerer {
   }
 
   private Core.Exp lowerGroup(FromBuilder fromBuilder, Core.Group group) {
-    final Core.Exp element = lowerInto(fromBuilder, group.input);
+    Core.Exp element0 = lowerInto(fromBuilder, group.input);
+    Core.@Nullable Exp ordinal0 = null;
+    if (group.ordinal != null) {
+      final Core.Exp[] pair = withOrdinal(fromBuilder, element0);
+      element0 = pair[0];
+      ordinal0 = pair[1];
+    }
+    final Core.Exp element = element0;
+    final Core.@Nullable Exp ordinal = ordinal0;
     final SortedMap<Core.IdPat, Core.Exp> groupExps =
         new TreeMap<>(Core.NamedPat.ORDERING);
     group.keys.forEach(
         (label, keyExp) -> {
-          final Core.Exp e = subst(keyExp, element, null);
+          final Core.Exp e = subst(keyExp, group, element, null, ordinal);
           groupExps.put(core.idPat(e.type, label, 0), e);
         });
     final SortedMap<Core.IdPat, Core.Aggregate> aggregates =
@@ -440,10 +464,15 @@ public class RelLowerer {
                 core.idPat(aggregate.type, label, 0),
                 aggregate.copy(
                     aggregate.type,
-                    subst(aggregate.aggregate, element, null),
+                    subst(aggregate.aggregate, group, element, null, ordinal),
                     aggregate.argument == null
                         ? null
-                        : subst(aggregate.argument, element, null))));
+                        : subst(
+                            aggregate.argument,
+                            group,
+                            element,
+                            null,
+                            ordinal))));
     // Never an atom: the tree's group builds a record whether it has one
     // label or many, so the step list must carry the same
     // record, or the lowered form has a different type from the tree.
@@ -480,6 +509,16 @@ public class RelLowerer {
    */
   private Core.Exp lowerJoin(FromBuilder fromBuilder, Core.Join join) {
     Core.Exp left = lowerInto(fromBuilder, join.left);
+    // A join's ordinal is the position among the rows an expression runs
+    // over. The right input runs once per left element and sees its position,
+    // which the step list counts before the scan; the condition runs once per
+    // candidate pair and sees the pair's, which the scan counts itself.
+    Core.@Nullable Exp leftOrdinal = null;
+    if (join.ordinal != null && Core.mentions(join.right, join.ordinal)) {
+      final Core.Exp[] pair = withOrdinal(fromBuilder, left);
+      left = pair[0];
+      leftOrdinal = pair[1];
+    }
     if (join.joinType != Core.Rel.JoinType.INNER
         && fromBuilder.stepEnv().bindings.size() <= 1) {
       // An outer join wraps a binding in 'option', so a left element of one
@@ -489,17 +528,20 @@ public class RelLowerer {
       // one binding first would give one option over the lot.
       left = materialize(fromBuilder, left);
     }
-    if (inner(join) && join.right instanceof Core.Join && inner(join.right)) {
+    if (inner(join)
+        && join.right instanceof Core.Join
+        && inner(join.right)
+        && join.ordinal == null) {
       // Two inner joins nest to the right, but a step list has no nesting: it
       // has a scan per leaf. Lowering the right input into this same builder
       // gives that -- one scan each -- where scanning it as a subquery would
       // give a scan of a collection that the plan then reads back apart.
       Core.Rel right = (Core.Join) join.right;
-      if (join.binder != null) {
-        right = (Core.Rel) rename(right, join.binder, left);
+      if (join.isDependent()) {
+        right = (Core.Rel) rename(right, join.leftRow, left);
       }
       final Core.Exp rightElement = lowerInto(fromBuilder, right);
-      fromBuilder.where(subst(join.condition, left, rightElement));
+      fromBuilder.where(subst(join.condition, join, left, rightElement, null));
       return element(join, left, rightElement);
     }
     // A leaf right input is scanned here rather than by `scan`, so this is
@@ -509,14 +551,18 @@ public class RelLowerer {
         join.right instanceof Core.Rel
             ? freshPat(join.right.type.elementType())
             : scanPat(join.right);
-    final Core.Exp condition = subst(join.condition, left, core.id(w));
+    final Core.Exp condition =
+        subst(join.condition, join, left, core.id(w), null);
     // A dependent join's right input reads the left element through the
     // binder. The step list has the left bindings in scope at the scan, so
     // the binder becomes the expression that denotes the left element -- the
     // step-list way of saying the same thing.
     Core.Exp right = lowerRel(join.right);
-    if (join.binder != null) {
-      right = rename(right, join.binder, left);
+    if (join.isDependent()) {
+      right = rename(right, join.leftRow, left);
+    }
+    if (leftOrdinal != null) {
+      right = rename(right, requireNonNull(join.ordinal), leftOrdinal);
     }
     fromBuilder.scan(op(join.joinType), w, right, condition);
     // The element is the inputs' components in order. For
@@ -626,6 +672,38 @@ public class RelLowerer {
     final List<Core.NamedPat> pats = new ArrayList<>();
     last(steps).env.bindings.forEach(binding -> pats.add(binding.id));
     return pats;
+  }
+
+  /** The call that reads the current row's ordinal, in a {@code yield}. */
+  private Core.Exp ordinalCall(Pos pos) {
+    return core.apply(
+        pos,
+        PrimitiveType.INT,
+        core.functionLiteral(typeSystem, BuiltIn.Z_ORDINAL),
+        core.tuple(typeSystem));
+  }
+
+  /**
+   * Materializes an element beside its ordinal, as a yield of a record of the
+   * two, and returns the element and the ordinal as the step list's bindings
+   * then denote them. A node that binds an ordinal pattern lowers its
+   * expressions over these.
+   */
+  private Core.Exp[] withOrdinal(FromBuilder fromBuilder, Core.Exp element) {
+    final String rowName = nameGenerator.getPrefixed("w");
+    final String ordinalName = nameGenerator.getPrefixed("w");
+    final PairList<String, Core.Exp> nameExps = PairList.of();
+    nameExps.add(rowName, element);
+    nameExps.add(ordinalName, ordinalCall(Pos.ZERO));
+    final Core.Exp record =
+        materialize(fromBuilder, core.record(typeSystem, nameExps));
+    final RecordLikeType recordType = (RecordLikeType) record.type;
+    final List<String> names =
+        new ArrayList<>(recordType.argNameTypes().keySet());
+    return new Core.Exp[] {
+      readField(core.field(typeSystem, record, names.indexOf(rowName))),
+      readField(core.field(typeSystem, record, names.indexOf(ordinalName)))
+    };
   }
 
   /**
@@ -864,31 +942,50 @@ public class RelLowerer {
   }
 
   /**
-   * Replaces {@code $0} and {@code $1} with expressions.
-   *
-   * <p>The walk stops at a nested node: its own {@code $0} is its own input's
-   * element, and the spec forbids it from reading this node's. To use this
-   * node's element inside a nested tree the resolver binds it first, and the
-   * binding is an ordinary name that substitution leaves alone.
+   * Replaces a node's patterns -- its row, a join's right row, its ordinal --
+   * with the expressions the step list denotes them by.
    */
   private Core.Exp subst(
-      Core.Exp exp, Core.@Nullable Exp e0, Core.@Nullable Exp e1) {
+      Core.Exp exp,
+      Core.Rel rel,
+      Core.@Nullable Exp e0,
+      Core.@Nullable Exp e1,
+      Core.@Nullable Exp ordinalExp) {
+    final Core.IdPat p0;
+    final Core.@Nullable IdPat p1;
+    final Core.@Nullable IdPat ordinal;
+    if (rel instanceof Core.Join) {
+      final Core.Join join = (Core.Join) rel;
+      p0 = join.leftRow;
+      p1 = join.rightRow;
+      ordinal = join.ordinal;
+    } else {
+      final Core.RowRel rowRel = (Core.RowRel) rel;
+      p0 = rowRel.row;
+      p1 = null;
+      ordinal = rowRel.ordinal;
+    }
+    // The walk descends into a nested tree: its patterns are its own, so a
+    // reference to this node's can only be a reference to this node's.
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
-          protected Core.@Nullable Exp visitRel(Core.Rel rel) {
-            return rel;
-          }
-
-          @Override
-          protected Core.Exp visit(Core.Input input) {
-            if (e0 != null && input.i == 0) {
-              return core.at(e0, input.pos);
+          protected Core.Exp visit(Core.Id id) {
+            if (e0 != null && id.idPat.equals(p0)) {
+              return core.at(e0, id.pos);
             }
-            if (e1 != null && input.i == 1) {
-              return core.at(e1, input.pos);
+            if (e1 != null && p1 != null && id.idPat.equals(p1)) {
+              return core.at(e1, id.pos);
             }
-            return input;
+            if (ordinal != null && id.idPat.equals(ordinal)) {
+              // The step list counts rows in a `yield`: either the caller
+              // materialized the count beside the element, or this
+              // expression is the yield and the call counts here.
+              return ordinalExp != null
+                  ? core.at(ordinalExp, id.pos)
+                  : ordinalCall(id.pos);
+            }
+            return id;
           }
 
           @Override

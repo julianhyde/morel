@@ -28,7 +28,6 @@ import org.jspecify.annotations.Nullable;
 public enum Op {
   // identifiers
   ID(Assoc.ATOM),
-  INPUT(Assoc.ATOM),
   OP_SECTION(Assoc.ATOM),
   CURRENT(" current ", Assoc.ATOM),
   ELEMENTS(" elements ", Assoc.ATOM),

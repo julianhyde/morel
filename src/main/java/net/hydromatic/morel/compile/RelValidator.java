@@ -24,10 +24,12 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -63,7 +65,7 @@ public class RelValidator {
    */
   public static List<String> violations(TypeSystem typeSystem, Core.Rel rel) {
     final RelValidator validator = new RelValidator(typeSystem);
-    validator.node(rel);
+    validator.node(rel, ImmutableSet.of());
     return ImmutableList.copyOf(validator.violations);
   }
 
@@ -81,64 +83,94 @@ public class RelValidator {
   }
 
   /**
-   * Validates a node: its inputs, the types of its expressions, the scope in
-   * which each expression is evaluated, and its own type.
+   * Checks a node, given the patterns of enclosing nodes that its expressions
+   * may read: a join's left row inside its right input, and every enclosing
+   * node's patterns inside a nested tree.
    */
-  private void node(Core.Rel rel) {
+  private void node(Core.Rel rel, Set<Core.IdPat> outer) {
+    final Set<Core.IdPat> inner = union(outer, rel.patterns());
+    if (rel instanceof Core.RowRel) {
+      final Core.RowRel rowRel = (Core.RowRel) rel;
+      input(rowRel.input, outer);
+      if (rowRel.ordinal != null && !(rowRel.input.type instanceof ListType)) {
+        violation(
+            "%s binds an ordinal but its input is a bag: %s",
+            rel.opName(), rowRel.input.type.moniker());
+      }
+    }
     if (rel instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) rel;
-      input(filter.input);
       requireType(filter.condition, PrimitiveType.BOOL, "filter condition");
-      scope(filter.condition, ZERO, "filter condition");
-      requireDerivedType(rel, core.filter(filter.input, filter.condition));
+      scope(filter.condition, inner, "filter condition");
+      requireDerivedType(
+          rel,
+          core.filter(
+              filter.row, filter.ordinal, filter.input, filter.condition));
     } else if (rel instanceof Core.Project) {
       final Core.Project project = (Core.Project) rel;
-      input(project.input);
-      scope(project.exp, ZERO, "project expression");
+      scope(project.exp, inner, "project expression");
       requireDerivedType(
-          rel, core.project(typeSystem, project.input, project.exp));
+          rel,
+          core.project(
+              typeSystem,
+              project.row,
+              project.ordinal,
+              project.input,
+              project.exp));
     } else if (rel instanceof Core.Join) {
       final Core.Join join = (Core.Join) rel;
-      input(join.left);
-      input(join.right);
+      input(join.left, outer);
+      // The right input is evaluated once per left element, and may read it.
+      input(
+          join.right,
+          union(
+              outer,
+              join.ordinal == null
+                  ? ImmutableList.of(join.leftRow)
+                  : ImmutableList.of(join.leftRow, join.ordinal)));
       requireType(join.condition, PrimitiveType.BOOL, "join condition");
-      scope(join.condition, ZERO_ONE, "join condition");
-      if (join.binder != null) {
-        // The binder names the left element inside the right input, and only
-        // there. The condition and the yield say $0 and $1 like any join's
-        // , so an occurrence here is a scope error, not a
-        // second way of spelling $0.
-        binderNotIn(join.condition, join.binder, "join condition");
+      scope(join.condition, inner, "join condition");
+      if (join.ordinal != null
+          && !(join.left.type instanceof ListType
+              && join.right.type instanceof ListType)) {
+        violation("join binds an ordinal but an input is a bag");
       }
       requireDerivedType(
           rel,
           core.join(
               typeSystem,
               join.joinType,
-              join.binder,
+              join.leftRow,
+              join.rightRow,
+              join.ordinal,
               join.left,
               join.right,
               join.condition));
     } else if (rel instanceof Core.Group) {
       final Core.Group group = (Core.Group) rel;
-      input(group.input);
-      group.keys.forEach((label, exp) -> scope(exp, ZERO, "group key"));
+      group.keys.forEach((label, exp) -> scope(exp, inner, "group key"));
       group.aggregates.forEach(
           (label, aggregate) -> {
-            scope(aggregate.aggregate, ZERO, "aggregate function");
+            scope(aggregate.aggregate, inner, "aggregate function");
             if (aggregate.argument != null) {
-              scope(aggregate.argument, ZERO, "aggregate argument");
+              scope(aggregate.argument, inner, "aggregate argument");
             }
           });
       requireDerivedType(
           rel,
-          core.group(typeSystem, group.input, group.keys, group.aggregates));
+          core.group(
+              typeSystem,
+              group.row,
+              group.ordinal,
+              group.input,
+              group.keys,
+              group.aggregates));
     } else if (rel instanceof Core.IfEmpty) {
       final Core.IfEmpty ifEmpty = (Core.IfEmpty) rel;
-      input(ifEmpty.input);
+      input(ifEmpty.input, outer);
       // Evaluated only when there is no element, so, like a skip count, it
-      // cannot mention $0.
-      scope(ifEmpty.exp, NONE, "ifEmpty expression");
+      // cannot read the row; the node binds none.
+      scope(ifEmpty.exp, outer, "ifEmpty expression");
       if (!ifEmpty.exp.type.equals(ifEmpty.input.type.elementType())) {
         violation(
             "ifEmpty expression must have the element type %s: %s",
@@ -148,29 +180,30 @@ public class RelValidator {
       requireDerivedType(rel, core.ifEmpty(ifEmpty.input, ifEmpty.exp));
     } else if (rel instanceof Core.Sort) {
       final Core.Sort sort = (Core.Sort) rel;
-      input(sort.input);
-      scope(sort.exp, ZERO, "sort key");
-      requireDerivedType(rel, core.sort(typeSystem, sort.input, sort.exp));
+      scope(sort.exp, inner, "sort key");
+      requireDerivedType(
+          rel,
+          core.sort(typeSystem, sort.row, sort.ordinal, sort.input, sort.exp));
     } else if (rel instanceof Core.Unorder) {
       final Core.Unorder unorder = (Core.Unorder) rel;
-      input(unorder.input);
+      input(unorder.input, outer);
       requireDerivedType(rel, core.unorder(typeSystem, unorder.input));
     } else if (rel instanceof Core.Skip) {
       final Core.Skip skip = (Core.Skip) rel;
-      input(skip.input);
+      input(skip.input, outer);
       requireType(skip.count, PrimitiveType.INT, "skip count");
       // Evaluated before the first element exists.
-      scope(skip.count, NONE, "skip count");
+      scope(skip.count, outer, "skip count");
       requireDerivedType(rel, core.skip(skip.input, skip.count));
     } else if (rel instanceof Core.Take) {
       final Core.Take take = (Core.Take) rel;
-      input(take.input);
+      input(take.input, outer);
       requireType(take.count, PrimitiveType.INT, "take count");
-      scope(take.count, NONE, "take count");
+      scope(take.count, outer, "take count");
       requireDerivedType(rel, core.take(take.input, take.count));
     } else if (rel instanceof Core.SetRel) {
       final Core.SetRel setRel = (Core.SetRel) rel;
-      setRel.inputs.forEach(this::input);
+      setRel.inputs.forEach(input -> input(input, outer));
       final Type elementType = setRel.inputs.get(0).type.elementType();
       setRel.inputs.forEach(
           input -> {
@@ -187,19 +220,29 @@ public class RelValidator {
     }
   }
 
+  private static Set<Core.IdPat> union(
+      Set<Core.IdPat> set, List<Core.IdPat> pats) {
+    if (pats.isEmpty()) {
+      return set;
+    }
+    final Set<Core.IdPat> set2 = new LinkedHashSet<>(set);
+    set2.addAll(pats);
+    return set2;
+  }
+
   /**
    * Validates an input: a nested node, or a leaf, which must be a collection
    * and cannot see the element of the node above it.
    */
-  private void input(Core.Exp input) {
+  private void input(Core.Exp input, Set<Core.IdPat> outer) {
     if (input instanceof Core.Rel) {
-      node((Core.Rel) input);
+      node((Core.Rel) input, outer);
       return;
     }
     if (!input.type.isCollection()) {
       violation("input must be list or bag: %s", input.type);
     }
-    scope(input, NONE, "leaf");
+    scope(input, outer, "leaf");
   }
 
   /**
@@ -221,46 +264,24 @@ public class RelValidator {
   }
 
   /**
-   * Checks that an expression does not mention a join's binder.
-   *
-   * <p>Unlike {@link #scope}, this walk does not stop at a nested node: the
-   * binder is an ordinary name, so a nested tree does not shield an occurrence
-   * of it the way it rebinds {@code $0}.
+   * Checks that an expression reads only the node patterns in scope: a
+   * reference to a pattern whose name says it is a node's -- {@code $0}, {@code
+   * $1}, {@code $ordinal} -- must be one the node or an enclosing node binds. A
+   * nested tree is checked with the same scope, extended by its own patterns.
    */
-  private void binderNotIn(Core.Exp exp, Core.IdPat binder, String what) {
-    exp.accept(
-        new Visitor() {
-          @Override
-          protected void visit(Core.Id id) {
-            if (id.idPat.equals(binder)) {
-              violation(
-                  "%s cannot reference the join's binder %s",
-                  what, binder.name);
-            }
-          }
-        });
-  }
-
-  /**
-   * Checks that an expression mentions no input reference beyond those the node
-   * binds.
-   *
-   * <p>The walk stops at a nested node, whose expressions are in that node's
-   * scope, not this one; the nested node is validated in its own right.
-   */
-  private void scope(Core.Exp exp, Set<Integer> allowed, String what) {
+  private void scope(Core.Exp exp, Set<Core.IdPat> allowed, String what) {
     exp.accept(
         new RelBoundaryVisitor() {
           @Override
-          protected void visit(Core.Input input) {
-            if (!allowed.contains(input.i)) {
-              violation("%s cannot reference $%s", what, input.i);
+          protected void visit(Core.Id id) {
+            if (id.idPat.name.charAt(0) == '$' && !allowed.contains(id.idPat)) {
+              violation("%s cannot reference %s", what, id.idPat.name);
             }
           }
 
           @Override
           protected void rel(Core.Rel rel) {
-            node(rel);
+            node(rel, allowed);
           }
         });
   }

@@ -451,9 +451,9 @@ Sys.planEx "3";
 >   {_|
 > val it =
 >   project [#2 $0] : int list
->     join [g$0] : (int * int) list
+>     join [v$0] : (int * int) list
 >       [3, 5, 7] : int list
->       #flatten Range ([OPEN (#- Int (g$0, 5), g$0)]) : int list
+>       #flatten Range ([OPEN (#- Int (v$0, 5), v$0)]) : int list
 > |_} : string
 
 from x in [3, 5, 7], y
@@ -1184,10 +1184,10 @@ Sys.planEx "999";
 >   {_|
 > val it =
 >   project [{p = #2 $0, s = #1 $0}] : t$0
->     join [g$0] : (string * string) list
+>     join [v$0] : (string * string) list
 >       ["abcd", "ant"] : string list
->       #tabulate List (#size String g$0 + 1,
->           fn i => #substring String (g$0, 0, i)) : string list
+>       #tabulate List (#size String v$0 + 1,
+>           fn i => #substring String (v$0, 0, i)) : string list
 >
 > t$0 {p:string, s:string} list
 > |_} : string
@@ -2282,11 +2282,11 @@ Sys.planEx "3";
 >     filter [#1 $0 = 30] : t$1
 >       filter [#loc (#3 $0) = "CHICAGO"] : t$1
 >         project [(#2 $0, #3 $0, #1 $0)] : t$1
->           join [g$0] : t$2
->             from g$1 in #toList Bag (#depts scott) group g$1 order g$1 : t$3
+>           join [v$0] : t$2
+>             from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : t$3
 >             join : (int * string) list
->               [#deptno g$0] : int list
->               [#dname g$0] : string list
+>               [#deptno v$0] : int list
+>               [#dname v$0] : string list
 >
 > t$0 {dno:int, name:string} list
 > t$1 (int * string * {deptno:int, dname:string, loc:string}) list
@@ -2335,11 +2335,11 @@ Sys.planEx "3";
 >     filter [#1 $0 > 25] : t$1
 >       filter [#loc (#3 $0) = "CHICAGO"] : t$1
 >         project [(#2 $0, #3 $0, #1 $0)] : t$1
->           join [g$0] : t$2
->             from g$1 in #toList Bag (#depts scott) group g$1 order g$1 : t$3
+>           join [v$0] : t$2
+>             from g$0 in #toList Bag (#depts scott) group g$0 order g$0 : t$3
 >             join : (int * string) list
->               [#deptno g$0] : int list
->               [#dname g$0] : string list
+>               [#deptno v$0] : int list
+>               [#dname v$0] : string list
 >
 > t$0 {dno:int, name:string} list
 > t$1 (int * string * {deptno:int, dname:string, loc:string}) list

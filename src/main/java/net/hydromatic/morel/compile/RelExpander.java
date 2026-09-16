@@ -67,6 +67,7 @@ import org.jspecify.annotations.Nullable;
  */
 public class RelExpander {
   private final TypeSystem typeSystem;
+  private final CanonicalRows rows;
   private final Environment env;
 
   /**
@@ -183,6 +184,7 @@ public class RelExpander {
   private RelExpander(
       TypeSystem typeSystem, Environment env, boolean rowsUsed) {
     this.typeSystem = typeSystem;
+    this.rows = new CanonicalRows(typeSystem);
     this.env = env;
     this.rowsUsed = rowsUsed;
   }
@@ -283,8 +285,8 @@ public class RelExpander {
               }
               final Core.Apply apply = (Core.Apply) exp;
               if (!(apply.fn instanceof Core.RecordSelector)
-                  || !(apply.arg instanceof Core.Input)
-                  || ((Core.Input) apply.arg).i != 0) {
+                  || !(apply.arg instanceof Core.Id)
+                  || !((Core.Id) apply.arg).idPat.equals(project.row)) {
                 ok[0] = false;
                 return;
               }
@@ -422,7 +424,7 @@ public class RelExpander {
       // after FBBT has deduced what bounds it can; a tree has no FBBT yet, so
       // this reaches only the bounds the query wrote.
       final RangePushdown.@Nullable Tightening tightening =
-          RangePushdown.tighten(typeSystem, exp, conditions);
+          RangePushdown.tighten(typeSystem, exp, CanonicalRows.ROW, conditions);
       if (tightening != null) {
         // The range now enforces the conjunct, so the filter can drop it.
         subsumed.add(tightening.consumedConjunct);
@@ -432,7 +434,8 @@ public class RelExpander {
     }
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
-      final List<Core.Exp> conjuncts = core.decomposeAnd(filter.condition);
+      final List<Core.Exp> conjuncts =
+          core.decomposeAnd(rows.canonical(filter, filter.condition));
       // This filter's conjuncts go before the ones already carried, which are
       // from filters above it and so were written later. Order counts: where
       // two constraints could each generate a name, the engine keeps the
@@ -457,7 +460,8 @@ public class RelExpander {
       if (remaining.isEmpty()) {
         return input;
       }
-      return filter.copy(input, core.andAlso(typeSystem, remaining));
+      return rows.filter(
+          input, rows.canonical(filter, core.andAlso(typeSystem, remaining)));
     }
     if (exp instanceof Core.Project) {
       // A projection changes what $0 means, and substituting the projection
@@ -467,7 +471,9 @@ public class RelExpander {
       final Core.Project project = (Core.Project) exp;
       final List<Core.Exp> pushed = new ArrayList<>();
       conditions.forEach(
-          condition -> pushed.add(subst(condition, project.exp)));
+          condition ->
+              pushed.add(
+                  subst(condition, rows.canonical(project, project.exp))));
       final Core.Exp input = expand(project.input, pushed);
       if (!rowsUsed) {
         // Nothing reads the rows, so a projection is unobservable: it maps
@@ -609,7 +615,6 @@ public class RelExpander {
       return join.copy(
           typeSystem,
           join.joinType,
-          join.binder,
           expand(join.left, ImmutableList.of()),
           expand(join.right, ImmutableList.of()),
           join.condition);
@@ -780,7 +785,7 @@ public class RelExpander {
 
     // The tree above wants the join's element, which is written in terms of
     // the leaves' names; read each out of the row the chain yields.
-    final Core.Exp row = core.input0(collection.type.elementType());
+    final Core.Exp row = rows.row0(collection.type.elementType());
     final Map<Core.NamedPat, Core.Exp> paths = new LinkedHashMap<>();
     if (names.size() == 1) {
       paths.put(names.get(0), row);
@@ -806,7 +811,7 @@ public class RelExpander {
                     return path != null ? path : id;
                   }
                 });
-    return core.project(typeSystem, collection, element);
+    return rows.project(collection, element);
   }
 
   /** Collects the extent leaves under a node, left to right. */
@@ -831,7 +836,7 @@ public class RelExpander {
     if (node instanceof Core.Join) {
       final Core.Join join = (Core.Join) node;
       return join.joinType == Core.Rel.JoinType.INNER
-          && join.binder == null
+          && !join.isDependent()
           && join.condition.isBoolLiteral(true)
           && joinsAndExtents(join.left, frame)
           && joinsAndExtents(join.right, frame);
@@ -871,7 +876,8 @@ public class RelExpander {
       if (remaining.isEmpty()) {
         return input;
       }
-      return filter.copy(input, core.andAlso(typeSystem, remaining));
+      return rows.filter(
+          input, rows.canonical(filter, core.andAlso(typeSystem, remaining)));
     }
     if (!(node instanceof Core.Join)) {
       if (!node.isExtent()) {
@@ -949,13 +955,12 @@ public class RelExpander {
       final Core.Exp collection = replace(rightGenerator.exp, paths);
       // The yield needs no substitution: a dependent join's yield is over
       // `$0` and `$1` exactly as this join's already was.
-      return core.join(
-          typeSystem,
+      return rows.dependentJoin(
           join.joinType,
-          param,
           rebuild(join.left, frame, cache, bound),
           collection,
-          join.condition);
+          param,
+          rows.canonical(join, join.condition));
     }
     if ((rightGenerator != null || bounded(right, frame))
         && join.condition.isBoolLiteral(true)
@@ -987,13 +992,12 @@ public class RelExpander {
       // The sides swap, so the yield commutes with them: what was `$0` is now
       // `$1` and what was `$1` is now `$0`.
       final Core.Join swapped =
-          core.join(
-              typeSystem,
+          rows.dependentJoin(
               join.joinType,
-              param,
               boundedRight,
               left,
-              join.condition);
+              param,
+              rows.canonical(join, join.condition));
       // Swapping the inputs moves the components, and with no yield to absorb
       // the swap a projection puts them back where the tree above expects
       // them, which is what commuting a join costs.
@@ -1005,7 +1009,6 @@ public class RelExpander {
     return join.copy(
         typeSystem,
         join.joinType,
-        join.binder,
         rebuild(join.left, frame, cache, bound),
         rebuild(right, frame, cache, bound),
         join.condition);
@@ -1045,9 +1048,9 @@ public class RelExpander {
       final Core.Exp element =
           rename(
               requireNonNull(frame.elements.get(join)),
-              core.input0(deduped.type.elementType()),
+              rows.row0(deduped.type.elementType()),
               core.recordOrAtomPat(typeSystem, vars));
-      return core.project(typeSystem, deduped, element);
+      return rows.project(deduped, element);
     }
     if (!RelBuilder.destructurable(common.pat)) {
       // The pattern can fail -- `{deptno = dno, dname = name, loc =
@@ -1063,9 +1066,9 @@ public class RelExpander {
     final Core.Exp element =
         rename(
             requireNonNull(frame.elements.get(join)),
-            core.input0(collection.type.elementType()),
+            rows.row0(collection.type.elementType()),
             common.pat);
-    return core.project(typeSystem, collection, element);
+    return rows.project(collection, element);
   }
 
   /**
@@ -1073,7 +1076,7 @@ public class RelExpander {
    * tree above expects: the last {@code k} first, then the first {@code m}.
    */
   private Core.Exp permute(Core.Exp join, int m, int k) {
-    final Core.Input element = core.input0(join.type.elementType());
+    final Core.Exp element = rows.row0(join.type.elementType());
     final List<Core.Exp> exps = new ArrayList<>();
     for (int i = 0; i < k; i++) {
       exps.add(core.field(typeSystem, element, m + i));
@@ -1081,7 +1084,7 @@ public class RelExpander {
     for (int i = 0; i < m; i++) {
       exps.add(core.field(typeSystem, element, i));
     }
-    return core.project(typeSystem, join, core.tuple(typeSystem, null, exps));
+    return rows.project(join, core.tuple(typeSystem, null, exps));
   }
 
   /**
@@ -1099,13 +1102,12 @@ public class RelExpander {
           @Override
           protected Core.Exp visit(Core.Apply apply) {
             if (apply.fn instanceof Core.RecordSelector
-                && apply.arg.op == Op.INPUT
-                && ((Core.Input) apply.arg).i == 0) {
+                && CanonicalRows.isRow(apply.arg, 0)) {
               final int slot = ((Core.RecordSelector) apply.fn).slot;
               if (slot >= drop[0]) {
-                final Core.Exp element = core.input0(apply.arg.type);
+                final Core.Exp element = rows.row0(apply.arg.type);
                 return drop[1] == 1
-                    ? core.input0(apply.type)
+                    ? rows.row0(apply.type)
                     : core.field(typeSystem, element, slot - drop[0]);
               }
             }
@@ -1373,12 +1375,16 @@ public class RelExpander {
       if (product == null) {
         product = component;
         access = new ArrayList<>();
-        access.add(core.input0(component.type.elementType()));
+        access.add(rows.row0(component.type.elementType()));
         continue;
       }
       product =
-          core.join(typeSystem, product, component, core.boolLiteral(true));
-      final Core.Exp element = core.input0(product.type.elementType());
+          rows.join(
+              Core.Rel.JoinType.INNER,
+              product,
+              component,
+              core.boolLiteral(true));
+      final Core.Exp element = rows.row0(product.type.elementType());
       final int n = core.componentCount(product);
       access = new ArrayList<>();
       for (int i = 0; i < n; i++) {
@@ -1472,7 +1478,7 @@ public class RelExpander {
       return dedup(generator, (Core.IdPat) generator.pat, exp);
     }
     final Core.@Nullable Exp element =
-        path(generator.pat, core.input0(exp.type.elementType()), pat);
+        path(generator.pat, rows.row0(exp.type.elementType()), pat);
     if (element == null) {
       throw new CompileException(Expander.notGrounded(pat), false, pos);
     }
@@ -1525,7 +1531,7 @@ public class RelExpander {
         && RelBuilder.destructurable(generator.pat)) {
       // Nothing to test and nothing to drop, and the pattern cannot fail, so
       // reading the name out of each row says it all.
-      return core.project(typeSystem, exp, element);
+      return rows.project(exp, element);
     }
     // Otherwise scan the pattern, which also filters where it can fail --
     // `(x, 20) elem [(1, 10), (2, 20)]` grounds `x` by a pattern holding a
@@ -1785,7 +1791,8 @@ public class RelExpander {
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
       final List<Core.Exp> conditions2 =
-          new ArrayList<>(core.decomposeAnd(filter.condition));
+          new ArrayList<>(
+              core.decomposeAnd(rows.canonical(filter, filter.condition)));
       conditions2.addAll(conditions);
       ground(filter.input, conditions2, generators);
       return;
@@ -1794,7 +1801,9 @@ public class RelExpander {
       final Core.Project project = (Core.Project) exp;
       final List<Core.Exp> pushed = new ArrayList<>();
       conditions.forEach(
-          condition -> pushed.add(subst(condition, project.exp)));
+          condition ->
+              pushed.add(
+                  subst(condition, rows.canonical(project, project.exp))));
       ground(project.input, pushed, generators);
       return;
     }
@@ -1898,7 +1907,8 @@ public class RelExpander {
       core.decomposeAnd(filter.condition)
           .forEach(
               conjunct -> {
-                final Core.Exp constraint = subst(conjunct, input.element);
+                final Core.Exp constraint =
+                    subst(rows.canonical(filter, conjunct), input.element);
                 input.originals.put(constraint, conjunct);
                 input.constraints.add(constraint);
                 input.order.add(new Expander.Ground(null, constraint));
@@ -1925,7 +1935,11 @@ public class RelExpander {
     final List<Core.Exp> constraints = new ArrayList<>(left.constraints);
     constraints.addAll(right.constraints);
     if (!join.condition.isBoolLiteral(true)) {
-      constraints.add(subst(join.condition, left.element, right.element));
+      constraints.add(
+          subst(
+              rows.canonical(join, join.condition),
+              left.element,
+              right.element));
     }
     final List<Core.Exp> componentExps =
         new ArrayList<>(core.components(typeSystem, join.left, left.element));
@@ -2006,14 +2020,14 @@ public class RelExpander {
               }
 
               @Override
-              protected Core.Exp visit(Core.Input input) {
-                if (input.i == 0) {
-                  return core.at(e0, input.pos);
+              protected Core.Exp visit(Core.Id id) {
+                if (id.idPat.equals(CanonicalRows.ROW)) {
+                  return core.at(e0, id.pos);
                 }
-                if (e1 != null && input.i == 1) {
-                  return core.at(e1, input.pos);
+                if (e1 != null && id.idPat.equals(CanonicalRows.RIGHT_ROW)) {
+                  return core.at(e1, id.pos);
                 }
-                return input;
+                return id;
               }
             });
     return simplify(RelLowerer.unbindRow(typeSystem, exp2, rowPats));

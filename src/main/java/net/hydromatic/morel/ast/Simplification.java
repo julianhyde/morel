@@ -40,12 +40,6 @@ public enum Simplification {
   /** Drops {@code filter true}. */
   FILTER_TRUE,
 
-  /**
-   * Drops a join's binder when its right input does not read it, making a
-   * dependent join independent.
-   */
-  JOIN_INDEPENDENT,
-
   /** Drops a projection whose expression is its input's element. */
   PROJECT_IDENTITY,
 

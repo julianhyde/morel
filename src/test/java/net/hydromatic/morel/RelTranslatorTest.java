@@ -34,7 +34,6 @@ import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.RelLowerer;
-import net.hydromatic.morel.compile.RelShadow;
 import net.hydromatic.morel.compile.RelTranslator;
 import net.hydromatic.morel.compile.RelValidator;
 import net.hydromatic.morel.compile.Resolver;
@@ -55,9 +54,8 @@ import org.junit.jupiter.api.Test;
  * down is that the translation preserves the element type and eliminates the
  * binders in favour of {@code $0}.
  *
- * <p>Breadth comes from elsewhere: {@link
- * net.hydromatic.morel.compile.RelShadow} translates and checks every query
- * that the suite compiles, so the scripts exercise paths -- set-operator branch
+ * <p>Breadth comes from elsewhere: grounding translates every step-list query
+ * that a generator builds, so the scripts exercise paths -- set-operator branch
  * alignment, for one -- that are awkward to write by hand.
  */
 public class RelTranslatorTest {
@@ -81,7 +79,7 @@ public class RelTranslatorTest {
 
     // The resolver returns a tree, and this tests the translator, whose input
     // is a step list. Lower the tree to get one, as the pipeline does before
-    // the compiler and as `RelShadow` does before it translates.
+    // the compiler does.
     final Core.Decl decl2 =
         RelLowerer.lowerAll(typeSystem, typeSystem.nameGenerator, valDecl2);
     final Core.From[] froms = {null};
@@ -99,10 +97,6 @@ public class RelTranslatorTest {
       // The resolver simplified the query away; there is nothing to translate.
       return null;
     }
-
-    // The shadow does the same for every query the test suite compiles; check
-    // that it is happy with this one too.
-    assertThat(RelShadow.check(typeSystem, decl2), is(true));
 
     final Core.Exp rel = RelTranslator.toRel(typeSystem, froms[0]);
     if (rel == null) {
@@ -158,9 +152,9 @@ public class RelTranslatorTest {
         plan("from i in [1, 2], j in [i, i + 1] yield {i, j}"),
         is(
             "project [{i = #1 $0, j = #2 $0}]\n" //
-                + "  join [i]\n"
+                + "  join [v$0]\n"
                 + "    [1, 2]\n"
-                + "    [i, i + 1]\n"));
+                + "    [v$0, v$0 + 1]\n"));
   }
 
   /**
@@ -184,9 +178,9 @@ public class RelTranslatorTest {
         plan("from (SOME i) in [SOME 1, NONE] yield i"),
         is(
             "project [#2 $0]\n" //
-                + "  join [w$0]\n"
+                + "  join [v$0]\n"
                 + "    [SOME 1, NONE]\n"
-                + "    case w$0 of SOME(i) => [i] | _ => []\n"));
+                + "    case v$0 of SOME(i) => [i] | _ => []\n"));
   }
 
   /**
@@ -317,9 +311,9 @@ public class RelTranslatorTest {
                 + "left join i in r.items on i > 2"),
         is(
             "project [{i = #2 $0, r = #1 $0}]\n" //
-                + "  join [left] [r] [$1 > 2]\n"
+                + "  join [left] [v$0] [$1 > 2]\n"
                 + "    [{id = 1, items = [2]}]\n"
-                + "    #items r\n"));
+                + "    #items v$0\n"));
   }
 
   /**

@@ -387,18 +387,10 @@ Sys.planOf (
 >       pairs : (int * int) list
 > |_} : string
 
-(* A prefix operator is written before its one operand.
- *
- * `Op.BY_OP_NAME` holds every operator that has a name, and its callers
- * ask `left > 0` to mean "is infix". That is a proxy, and a wrong one:
- * the constructor adds one to `left` for every associativity but
- * `LEFT`, so `~` came out with `left = 1` and read as infix, and
- * unparsing it cast its single operand to a pair and threw
- * ClassCastException. `~1` is safe only because it folds to a literal
- * before anything prints it, so a plan was the first thing to reach it.
- *
- * `~` binds more tightly than any binary operator, so `~x + 1` needs no
- * brackets and `~(x + 1)` keeps them. *)
+(* A prefix operator is written before its one operand, and `~` binds
+ * more tightly than any binary operator, so `~x + 1` needs no
+ * parentheses and `~(x + 1)` keeps them. A negation of a literal folds
+ * before anything prints it, so these negate a variable. *)
 Sys.planOf (from i in [1, 2, 3] yield ~i);
 > val it = {_|
 > project [~ $0] : int list
@@ -427,18 +419,15 @@ Sys.planOf (from i in [1, 2, 3] where ~i < 0);
 from i in [1, 2, 3] yield ~i;
 > val it = [~1,~2,~3] : int list
 
-(* A binder inside a type is renumbered like one anywhere else.
+(* The text depends on the query and nothing else.
  *
- * A type reaches the writer as text, so a binder in it never passed
- * through the renumbering that every other name did: a projection names
- * a component after the binder it came from, the component becomes a
- * record field, and the field's name is a binder's. The tree then said
- * `v$0` and the legend said `v$8`, and which second name you got
- * depended on what had been compiled before.
- *
- * No test could see it from a cold counter, where the allocated name
+ * A node's patterns take their ordinals from a counter that runs across
+ * everything compiled before, and a binder inside a type reaches the
+ * writer as text; both are numbered by the printer, by first occurrence.
+ * No test can see a slip from a cold counter, where the allocated name
  * and the printed one coincide -- so this one moves the counter on
- * first, and the two plans below must be the same text. *)
+ * first, and the two plans below must be the same text. The query reads
+ * `ordinal`, which the filter binds as a pattern of its own. *)
 val es = [{id = 100, name = "Fred", deptno = 10}];
 > deptno id  name
 > ------ --- ----
@@ -448,14 +437,11 @@ val es = [{id = 100, name = "Fred", deptno = 10}];
 Sys.planOf (from e in es order e.deptno where ordinal > 1);
 > val it =
 >   {_|
-> project [#e $0] : t$0
->   filter [#v$0 $0 > 1] : t$1
->     project [{e = $0, v$0 = $ordinal ()}] : t$1
->       sort [#deptno $0] : t$0
->         es : t$0
+> filter [$ordinal > 1] : t$0
+>   sort [#deptno $0] : t$0
+>     es : t$0
 >
 > t$0 {deptno:int, id:int, name:string} list
-> t$1 {e:{deptno:int, id:int, name:string}, v$0:int} list
 > |_} : string
 from e0 in es order e0.deptno where ordinal > 1 yield e0.name;
 > val it = [] : string list
@@ -476,14 +462,11 @@ from e7 in es order e7.deptno where ordinal > 1 yield e7.name;
 Sys.planOf (from e in es order e.deptno where ordinal > 1);
 > val it =
 >   {_|
-> project [#e $0] : t$0
->   filter [#v$0 $0 > 1] : t$1
->     project [{e = $0, v$0 = $ordinal ()}] : t$1
->       sort [#deptno $0] : t$0
->         es : t$0
+> filter [$ordinal > 1] : t$0
+>   sort [#deptno $0] : t$0
+>     es : t$0
 >
 > t$0 {deptno:int, id:int, name:string} list
-> t$1 {e:{deptno:int, id:int, name:string}, v$0:int} list
 > |_} : string
 
 (* A tree with no node in it is still a tree.

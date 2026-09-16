@@ -715,10 +715,6 @@ public class Shuttle {
     return null;
   }
 
-  protected Core.Exp visit(Core.Input input) {
-    return input;
-  }
-
   protected Core.Exp visit(Core.Filter filter) {
     final Core.@Nullable Exp exp = visitRel(filter);
     if (exp != null) {
@@ -745,7 +741,6 @@ public class Shuttle {
     return join.copy(
         typeSystem,
         join.joinType,
-        join.binder,
         join.left.accept(this),
         join.right.accept(this),
         join.condition.accept(this));

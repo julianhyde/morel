@@ -275,9 +275,6 @@ public enum CoreBuilder {
     switch (exp.op) {
       case ID:
         return id(pos, ((Core.Id) exp).idPat);
-      case INPUT:
-        final Core.Input input = (Core.Input) exp;
-        return input(pos, input.type, input.i);
       case APPLY:
         final Core.Apply apply = (Core.Apply) exp;
         return apply(pos, apply.type, apply.fn, apply.arg);
@@ -801,30 +798,29 @@ public enum CoreBuilder {
   // Relational tree (Core.Rel) nodes. These will replace the step builders
   // above once a tree, rather than a step list, is what executes.
 
-  /** Creates a reference to the element of a node's input, {@code $0}. */
-  public Core.Input input0(Type elementType) {
-    return input(elementType, 0);
-  }
-
-  /** Creates a reference to the element of a join's right input, {@code $1}. */
-  public Core.Input input1(Type elementType) {
-    return input(elementType, 1);
-  }
-
-  /** Creates a reference to the element of input {@code i}. */
-  public Core.Input input(Type elementType, int i) {
-    return input(Pos.ZERO, elementType, i);
+  /**
+   * Creates the pattern that names a node's input element, {@code $0}. The
+   * ordinal makes it distinct from every other node's, and comes from the
+   * counter that numbers generated binders, so that the printer can name the
+   * pattern {@code v$}-ordinal outside its node without naming a binder.
+   */
+  public Core.IdPat rowPat(Type elementType, ToIntFunction<String> gen) {
+    return idPat(elementType, "$0", gen.applyAsInt("v$"));
   }
 
   /**
-   * Creates a reference to the element of input {@code i}, at a position.
-   *
-   * <p>An expression substituted for one is blamed where the reference was --
-   * {@code order i} is the {@code i} the user wrote -- so the reference has to
-   * carry a position for {@link #at} to move onto it.
+   * Creates the pattern that names a join's right input element, {@code $1}.
    */
-  public Core.Input input(Pos pos, Type elementType, int i) {
-    return new Core.Input(pos, elementType, i);
+  public Core.IdPat rightRowPat(Type elementType, ToIntFunction<String> gen) {
+    return idPat(elementType, "$1", gen.applyAsInt("v$"));
+  }
+
+  /**
+   * Creates the pattern that names the position of a node's input element,
+   * {@code $ordinal}.
+   */
+  public Core.IdPat ordinalPat(ToIntFunction<String> gen) {
+    return idPat(PrimitiveType.INT, "$ordinal", gen.applyAsInt("v$"));
   }
 
   /**
@@ -842,10 +838,14 @@ public enum CoreBuilder {
    * Creates a filter; its condition is a {@code bool} expression over {@code
    * $0}.
    */
-  public Core.Filter filter(Core.Exp input, Core.Exp condition) {
+  public Core.Filter filter(
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp condition) {
     checkCollection(input);
     checkBoolType(condition, "filter condition");
-    return new Core.Filter(input, condition);
+    return new Core.Filter(row, ordinal, input, condition);
   }
 
   /**
@@ -853,10 +853,14 @@ public enum CoreBuilder {
    * expression over {@code $0}, and the kind is that of the input.
    */
   public Core.Project project(
-      TypeSystem typeSystem, Core.Exp input, Core.Exp exp) {
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp exp) {
     checkCollection(input);
     final Type type = collectionType(typeSystem, isOrdered(input), exp.type);
-    return new Core.Project(type, input, exp);
+    return new Core.Project(type, row, ordinal, input, exp);
   }
 
   /**
@@ -877,11 +881,20 @@ public enum CoreBuilder {
   /** Creates an inner join. */
   public Core.Join join(
       TypeSystem typeSystem,
+      Core.IdPat leftRow,
+      Core.IdPat rightRow,
       Core.Exp left,
       Core.Exp right,
       Core.Exp condition) {
     return join(
-        typeSystem, Core.Rel.JoinType.INNER, null, left, right, condition);
+        typeSystem,
+        Core.Rel.JoinType.INNER,
+        leftRow,
+        rightRow,
+        null,
+        left,
+        right,
+        condition);
   }
 
   /**
@@ -892,7 +905,9 @@ public enum CoreBuilder {
   public Core.Join join(
       TypeSystem typeSystem,
       Core.Rel.JoinType joinType,
-      Core.@Nullable IdPat binder,
+      Core.IdPat leftRow,
+      Core.IdPat rightRow,
+      Core.@Nullable IdPat ordinal,
       Core.Exp left,
       Core.Exp right,
       Core.Exp condition) {
@@ -905,7 +920,8 @@ public enum CoreBuilder {
             typeSystem,
             ordered,
             joinElementType(typeSystem, joinType, left, right));
-    return new Core.Join(type, joinType, binder, left, right, condition);
+    return new Core.Join(
+        type, joinType, leftRow, rightRow, ordinal, left, right, condition);
   }
 
   /**
@@ -1036,6 +1052,8 @@ public enum CoreBuilder {
    */
   public Core.Group group(
       TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
       Core.Exp input,
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
@@ -1061,16 +1079,23 @@ public enum CoreBuilder {
     final Type type = collectionType(typeSystem, isOrdered(input), elementType);
     return new Core.Group(
         type,
+        row,
+        ordinal,
         input,
         ImmutableSortedMap.copyOf(keys, ORDERING),
         ImmutableSortedMap.copyOf(aggregates, ORDERING));
   }
 
   /** Creates a {@code sort}; the output is always a {@code list}. */
-  public Core.Sort sort(TypeSystem typeSystem, Core.Exp input, Core.Exp exp) {
+  public Core.Sort sort(
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp exp) {
     checkCollection(input);
     final Type type = typeSystem.listType(input.type.elementType());
-    return new Core.Sort(type, input, exp);
+    return new Core.Sort(type, row, ordinal, input, exp);
   }
 
   /** Creates an {@code unorder}; the output is always a {@code bag}. */

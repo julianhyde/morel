@@ -548,8 +548,6 @@ public class Visitor {
    */
   protected void visitRel(Core.Rel rel) {}
 
-  protected void visit(Core.Input input) {}
-
   protected void visit(Core.Filter filter) {
     visitRel(filter);
     filter.input.accept(this);
