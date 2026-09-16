@@ -203,10 +203,26 @@ public abstract class RowSinks {
       int @Nullable [] ordinalSlots,
       RowSink rowSink) {
     return new YieldRowSink(
-        ImmutableList.copyOf(yieldCodes.keySet()),
-        ImmutableList.copyOf(yieldCodes.values()),
-        ordinalSlots,
-        rowSink);
+        ImmutableList.copyOf(yieldCodes.values()), 0, ordinalSlots, rowSink);
+  }
+
+  /**
+   * Creates a {@link RowSink} that evaluates {@code codes} against the current
+   * row, pops the top {@code popCount} slots, and pushes the values in their
+   * place.
+   *
+   * <p>A relational tree's node hands its element to the node above as one
+   * slot, and this is how it folds the slots it pushed while computing that
+   * element back into one. The popped slots are restored before returning, so
+   * the sink upstream sees them as it left them.
+   */
+  public static RowSink yield(
+      List<Code> codes,
+      int popCount,
+      int @Nullable [] ordinalSlots,
+      RowSink rowSink) {
+    return new YieldRowSink(
+        ImmutableList.copyOf(codes), popCount, ordinalSlots, rowSink);
   }
 
   /**
@@ -1414,20 +1430,26 @@ public abstract class RowSinks {
    * therefore the value cannot be passed via the {@link EvalEnv}.
    */
   private static class YieldRowSink extends BaseRowSink {
-    final ImmutableList<String> names;
     final ImmutableList<Code> codes;
     final Object @Nullable [] values;
+    /** Number of slots to pop before pushing the values. */
+    final int popCount;
+
+    /** Holds the popped slots' values while the downstream sink runs. */
+    final Object[] popped;
+
     final int @Nullable [] ordinalSlots;
 
     YieldRowSink(
-        ImmutableList<String> names,
         ImmutableList<Code> codes,
+        int popCount,
         int @Nullable [] ordinalSlots,
         RowSink rowSink) {
       super(rowSink);
-      this.names = names;
       this.codes = codes;
-      this.values = names.size() == 1 ? null : new Object[names.size()];
+      this.values = codes.size() == 1 ? null : new Object[codes.size()];
+      this.popCount = popCount;
+      this.popped = new Object[popCount];
       this.ordinalSlots = ordinalSlots;
     }
 
@@ -1462,17 +1484,33 @@ public abstract class RowSinks {
       // affecting another yield's expression, and keeps StackCode offsets
       // valid throughout.
       if (values == null) {
-        s.push(codes.get(0).eval(stack));
+        final Object value = codes.get(0).eval(stack);
+        pop(s, savedTop);
+        s.push(value);
       } else {
         for (int i = 0; i < codes.size(); i++) {
           values[i] = codes.get(i).eval(stack);
         }
+        pop(s, savedTop);
         for (Object v : values) {
           s.push(v);
         }
       }
       rowSink.accept(s);
       s.restore(savedTop);
+      if (popCount > 0) {
+        // The pushes overwrote the popped slots, and the sink upstream still
+        // reads them: a scan reads its left row for every element it
+        // iterates.
+        System.arraycopy(popped, 0, s.slots, savedTop - popCount, popCount);
+      }
+    }
+
+    private void pop(Stack s, int savedTop) {
+      if (popCount > 0) {
+        System.arraycopy(s.slots, savedTop - popCount, popped, 0, popCount);
+        s.restore(savedTop - popCount);
+      }
     }
   }
 

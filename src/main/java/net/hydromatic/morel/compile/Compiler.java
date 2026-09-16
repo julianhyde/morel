@@ -48,6 +48,7 @@ import java.util.function.Supplier;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Applicable2;
@@ -617,6 +618,9 @@ public class Compiler {
         return Codes.tuple(codes);
 
       default:
+        if (expression instanceof Core.Rel) {
+          return compileRel(cx, (Core.Rel) expression);
+        }
         throw new AssertionError("op not handled: " + expression.op);
     }
   }
@@ -950,6 +954,11 @@ public class Compiler {
   protected Code finishCompileApply2(
       Context cx, Applicable2 applicable2, PairList<Code, Type> argCodes) {
     return Codes.apply2(applicable2, argCodes.left(0), argCodes.left(1));
+  }
+
+  /** Compiles a relational tree to code that evaluates it to a collection. */
+  protected Code compileRel(Context cx, Core.Rel rel) {
+    return new RelCompiler(this, typeSystem).compile(cx, rel);
   }
 
   protected Code compileFrom(Context cx, Core.From from) {
@@ -1505,8 +1514,8 @@ public class Compiler {
    * Compiles a function value to an {@link Applicable}, if possible, or returns
    * null.
    */
-  private @Nullable Applicable compileApplicable(
-      Context cx, Core.Exp fn, Type argType, Pos pos) {
+  @Nullable
+  Applicable compileApplicable(Context cx, Core.Exp fn, Type argType, Pos pos) {
     final Core.Literal literal;
     switch (fn.op) {
       case FN_LITERAL:
@@ -2068,117 +2077,15 @@ public class Compiler {
       Core.Exp exp,
       Set<Core.NamedPat> excludePats,
       LinkedHashMap<Core.NamedPat, Integer> captureMap) {
-    switch (exp.op) {
-      case ID:
-        final Core.Id id = (Core.Id) exp;
-        if (layout.get(id.idPat) >= 0 && !excludePats.contains(id.idPat)) {
-          captureMap.computeIfAbsent(id.idPat, k -> captureMap.size());
-        }
-        break;
-      case LET:
-        final Core.Let let = (Core.Let) exp;
-        // Visit the decl's expressions
-        let.decl.forEachBinding(
-            (pat, e, overloadPat, pos) ->
-                collectReferencedStackVarsRec(
-                    layout, e, excludePats, captureMap));
-        collectReferencedStackVarsRec(layout, let.exp, excludePats, captureMap);
-        break;
-      case FN:
-        final Core.Fn fn = (Core.Fn) exp;
-        // The fn body uses a new scope; we still need to check references in it
-        // that point to the outer layout.
-        collectReferencedStackVarsRec(layout, fn.exp, excludePats, captureMap);
-        break;
-      case APPLY:
-        final Core.Apply apply = (Core.Apply) exp;
-        collectReferencedStackVarsRec(
-            layout, apply.fn, excludePats, captureMap);
-        collectReferencedStackVarsRec(
-            layout, apply.arg, excludePats, captureMap);
-        break;
-      case TUPLE:
-        final Core.Tuple tuple = (Core.Tuple) exp;
-        tuple.args.forEach(
-            e ->
-                collectReferencedStackVarsRec(
-                    layout, e, excludePats, captureMap));
-        break;
-      case CASE:
-        final Core.Case case_ = (Core.Case) exp;
-        collectReferencedStackVarsRec(
-            layout, case_.exp, excludePats, captureMap);
-        case_.matchList.forEach(
-            m ->
-                collectReferencedStackVarsRec(
-                    layout, m.exp, excludePats, captureMap));
-        break;
-      case LOCAL:
-        final Core.Local local = (Core.Local) exp;
-        collectReferencedStackVarsRec(
-            layout, local.exp, excludePats, captureMap);
-        break;
-      case FROM:
-        final Core.From from = (Core.From) exp;
-        for (Core.FromStep step : from.steps) {
-          if (step instanceof Core.Scan) {
-            final Core.Scan scan = (Core.Scan) step;
-            collectReferencedStackVarsRec(
-                layout, scan.exp, excludePats, captureMap);
-            collectReferencedStackVarsRec(
-                layout, scan.condition, excludePats, captureMap);
-          } else if (step instanceof Core.Where) {
-            collectReferencedStackVarsRec(
-                layout, ((Core.Where) step).exp, excludePats, captureMap);
-          } else if (step instanceof Core.SkipStep) {
-            collectReferencedStackVarsRec(
-                layout, ((Core.SkipStep) step).exp, excludePats, captureMap);
-          } else if (step instanceof Core.TakeStep) {
-            collectReferencedStackVarsRec(
-                layout, ((Core.TakeStep) step).exp, excludePats, captureMap);
-          } else if (step instanceof Core.Order) {
-            collectReferencedStackVarsRec(
-                layout, ((Core.Order) step).exp, excludePats, captureMap);
-          } else if (step instanceof Core.GroupStep) {
-            final Core.GroupStep group = (Core.GroupStep) step;
-            group
-                .groupExps
-                .values()
-                .forEach(
-                    e ->
-                        collectReferencedStackVarsRec(
-                            layout, e, excludePats, captureMap));
-            group
-                .aggregates
-                .values()
-                .forEach(
-                    agg -> {
-                      collectReferencedStackVarsRec(
-                          layout, agg.aggregate, excludePats, captureMap);
-                      if (agg.argument != null) {
-                        collectReferencedStackVarsRec(
-                            layout, agg.argument, excludePats, captureMap);
-                      }
-                    });
-          } else if (step instanceof Core.Yield) {
-            collectReferencedStackVarsRec(
-                layout, ((Core.Yield) step).exp, excludePats, captureMap);
-          } else if (step instanceof Core.SetStep) {
-            // Handles Core.UnionStep, Core.IntersectStep, Core.ExceptStep
-            ((Core.SetStep) step)
-                .args.forEach(
-                    arg ->
-                        collectReferencedStackVarsRec(
-                            layout, arg, excludePats, captureMap));
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (layout.get(id.idPat) >= 0 && !excludePats.contains(id.idPat)) {
+              captureMap.computeIfAbsent(id.idPat, k -> captureMap.size());
+            }
           }
-          // Unorder has no sub-expressions.
-        }
-        break;
-
-      default:
-        // Literals and other leaf nodes: no ID references.
-        break;
-    }
+        });
   }
 
   private void compileValDecl(

@@ -51,6 +51,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -7095,6 +7096,14 @@ public abstract class Codes {
   }
 
   /**
+   * Returns a Code that evaluates a collection, and returns it if it is not
+   * empty, otherwise a collection of one default value.
+   */
+  public static Code ifEmpty(Code collectionCode, Code defaultCode) {
+    return new IfEmptyCode(collectionCode, defaultCode);
+  }
+
+  /**
    * Returns a Code that returns the value of variable "name" in the current
    * environment.
    */
@@ -9342,6 +9351,39 @@ public abstract class Codes {
     @Override
     public Describer describe(Describer describer) {
       return describer.start("ordinal", d -> {});
+    }
+  }
+
+  /** Implementation of {@code Code} for {@link #ifEmpty(Code, Code)}. */
+  private static class IfEmptyCode implements Code {
+    private final Code collectionCode;
+    private final Code defaultCode;
+
+    IfEmptyCode(Code collectionCode, Code defaultCode) {
+      this.collectionCode = requireNonNull(collectionCode);
+      this.defaultCode = requireNonNull(defaultCode);
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      final Object collection = collectionCode.eval(stack);
+      final boolean empty =
+          collection instanceof Collection
+              ? ((Collection<?>) collection).isEmpty()
+              : !((Iterable<?>) collection).iterator().hasNext();
+      return empty ? ImmutableList.of(defaultCode.eval(stack)) : collection;
+    }
+
+    @Override
+    public int maxSlots() {
+      return Math.max(collectionCode.maxSlots(), defaultCode.maxSlots());
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "ifEmpty",
+          d -> d.arg("", collectionCode).arg("default", defaultCode));
     }
   }
 

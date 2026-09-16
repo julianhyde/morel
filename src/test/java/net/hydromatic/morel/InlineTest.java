@@ -202,11 +202,11 @@ public class InlineTest {
         "val it = project [#deptno $0]\n" //
             + "  filter [let val n = #empno $0 in #mod Int (n, 2) = 0 end]\n"
             + "    #emps scott\n";
-    // The third is the lowered step list, which is what executes.
+    // The third is the final tree, which is what executes.
     final String core2 =
-        "val it = from w$0 in #emps scott "
-            + "where #mod Int (#empno w$0, 2) = 0 "
-            + "yield #deptno w$0";
+        "val it = project [#deptno $0]\n" //
+            + "  filter [#mod Int (#empno $0, 2) = 0]\n"
+            + "    #emps scott\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -240,12 +240,12 @@ public class InlineTest {
             + "    let val x = 1 in filter [#mod Int (#empno $0, 2) = 0]\n"
             + "  #emps scott\n"
             + " end\n";
-    // The third is the lowered step list, which is what executes.
+    // The third is the final tree, which is what executes.
     final String core2 =
-        "val it = from w$0 in #emps scott "
-            + "where #mod Int (#empno w$0, 2) = 0 "
-            + "where #deptno w$0 = 10 "
-            + "yield #ename w$0";
+        "val it = project [#ename $0]\n" //
+            + "  filter [#deptno $0 = 10]\n"
+            + "    filter [#mod Int (#empno $0, 2) = 0]\n"
+            + "      #emps scott\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -348,11 +348,12 @@ public class InlineTest {
             + "  filter [$0 > 10]\n"
             + "    project [#deptno $0]\n"
             + "      #emps scott\n";
-    // The third is the lowered step list, which is what executes.
+    // The third is the final tree, which is what executes.
     final String core2 =
-        "val it = from w$0 in #emps scott "
-            + "where #deptno w$0 > 10 "
-            + "yield #div Int (#deptno w$0, 10)";
+        "val it = project [#div Int ($0, 10)]\n" //
+            + "  filter [$0 > 10]\n"
+            + "    project [#deptno $0]\n"
+            + "      #emps scott\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -371,8 +372,8 @@ public class InlineTest {
             + "  filter [3 < 4]\n"
             + "    [()]\n";
     final String core1 = core0;
-    // The third is the lowered step list, which is what executes.
-    final String core2 = "val it = from where 3 < 4 yield {u = (), v = 10}";
+    // The third is the final tree, which is what executes.
+    final String core2 = core0;
     ml(ml)
         .assertCoreString(
             hasToString(core0), hasToString(core1), hasToString(core2))

@@ -104,10 +104,38 @@ Done. What it turned out to need, for the ports and for F2:
 
 ### F2 — The tree executes, and the step list goes
 
-- [ ] `Compiler` compiles a `Core.Rel` to a `RowSink` per node, with
-      the ordinal counter on the node that binds the pattern.
+- [x] `Compiler` compiles a `Core.Rel` to a `RowSink` per node, with
+      the ordinal counter on the node that binds the pattern. Done as
+      `RelCompiler`; the lowering runs only when `hybrid` is on, for
+      Calcite. What it turned out to need:
+  - A node hands its element up as a deferred expression over the
+    slots below (a filter its row, a projection its expression, a
+    join the tuple of components), and the node above substitutes
+    before it compiles, reading `#2 (x, y)` as `y`. This is what the
+    lowering did with `readField`, and it is what keeps a filter over
+    a join reading the joined slots rather than a tuple built per
+    candidate pair. Only a scan, an ordinal, and a group's record
+    take a slot; a set operator and a build-side outer join
+    materialize, with a `yield` that pops the slots it replaces and
+    restores them afterwards, because the scan upstream still reads
+    its left row for every element it iterates.
+  - A join's condition reads the pair count through a fresh pattern
+    bound to the counter's `Code`, so `Z_ORDINAL` is not needed; it
+    survives only in the lowering.
+  - `Codes.ifEmpty`: the tree's `ifEmpty` is an expression, not a
+    sink, and the lowering's `if nonEmpty x then x else [d]`
+    evaluated its input twice.
+  - The closure-capture collector was a hand-written switch over the
+    expression kinds that did not know the tree, so a query in a
+    function body read the function's parameter from the environment
+    and got null. It is a `Visitor` now.
+  - Every plan keeps the step list's shape; only the binder names
+    move (`w$N` became `$0_N`), and one group plan gained a `yield`
+    for the record that the tree's group builds where the step list
+    read the outputs by name.
 - [ ] `CalciteCompiler` reads the tree, not `Core.From`; this is also
-      the first half of coloring_design.md §12.7.
+      the first half of coloring_design.md §12.7. Until then
+      `Compiles` lowers when `hybrid` is on.
 - [ ] Delete `Core.From`, `FromStep` and its subclasses, `StepEnv`,
       `FromBuilder`, `RelLowerer`, `RelTranslator`, `RelShadow`, and
       the compiler's step-list code.
