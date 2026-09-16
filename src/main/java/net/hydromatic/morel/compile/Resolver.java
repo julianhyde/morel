@@ -997,16 +997,10 @@ public class Resolver {
   }
 
   private Core.Exp toCore(Ast.Ordinal ordinal) {
-    if (ordinalPat != null) {
-      // The step is preceded by a "yield" that materialized the ordinal as a
-      // field; read that field.
-      return core.id(ordinalPat);
-    }
-    // The step is itself a "yield", and can hold the call.
-    Core.Literal fn =
-        core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_ORDINAL);
-    Core.Tuple arg = core.tuple(typeMap.typeSystem);
-    return core.apply(ordinal.pos, PrimitiveType.INT, fn, arg);
+    // The type checker admits `ordinal` only in a query, and the query's node
+    // binds the pattern that names it.
+    return core.id(
+        requireNonNull(ordinalPat, () -> "ordinal outside a node: " + ordinal));
   }
 
   /** Converts an id in a declaration to Core. */

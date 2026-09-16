@@ -35,6 +35,24 @@ rename convention at a scope merge (§5), which no rule exercises yet
 and which the validator makes unreachable in the meantime. Rationale
 for the design is in discussion.md; the sequence is in plan.md.
 
+**Changes.** Frozen has meant stable and versioned since the first
+amendments landed. What a port has to re-check, newest first:
+
+* 2026-09-16 — §8: the step list is deleted. Both compilers read the
+  tree; nothing prints changed.
+* 2026-09-15 — §1–§3, §5, §6.3: a node binds patterns for its
+  expressions, `$0`, `$1` and `$ordinal`; a join whose right input
+  reads its left row prints `join [v$0]`; a group builds a record.
+  The `ordinal` primitive is gone.
+* 2026-09-11 — §6.4, §6.5, §6.7: a relation inside an expression is
+  broken out as `r$N`, with the variables it reads from outside in
+  brackets; a plan wraps at the session's `lineWidth`; generated
+  binders are numbered by the printer over the whole text, nested
+  trees included.
+* 2026-09-10 — §6.6: a type moniker longer than 24 characters is
+  abbreviated to `t$N` and listed in a legend.
+* 2026-09-08 — §6 frozen; 2026-09-06 — the datatype frozen.
+
 **What the contract covers is a command, not a file.** `Sys.planEx`
 prints the tree, and its text is what §6 specifies and what another
 implementation must reproduce. `Sys.plan` prints the *executable*
@@ -397,6 +415,19 @@ place to look when a rule is wrong.
    reference, but nothing a builder produces has one, so that two
    trees that mean the same thing print the same.
 
+**What the validator checks.** Rules 1, 3, 4 and 6 are properties of
+one tree, and the validator checks them: every node's type is the
+one rebuilding it derives, which covers the element type and the kind
+(rules 1 and 2 together); a name that says it is a node's pattern —
+it begins with `$` — is bound by the node or by an enclosing node
+that §2 allows; the labels within a node are distinct; a node that
+binds an ordinal has a `list` input. Two things it cannot check.
+Rule 5 is a property of a *pair* of trees, before and after a
+rewrite, and is checked by whatever applies the rule. And a name that
+is not a pattern is taken to be bound by the enclosing environment,
+because the validator is given a tree and no environment; the type
+checker settled those names before the tree was built.
+
 Rewrites that merge scopes — decorrelation, subquery unnesting — can
 bring two identically-named binders together. The rename convention
 is deterministic and specified here rather than left to
@@ -431,6 +462,13 @@ rest of this section specifies. **In tree mode a relation is always
 broken out, whatever the width.** Layout is not a function of the
 width here; the width governs only how a node's own line wraps.
 
+`Sys.planOf e` prints `e` as a tree when `e` is a query in the
+source — a `from`, an `exists`, a `forall` — and as an expression
+otherwise, and it decides which from the argument's *AST*: by the
+time `e` is Core, a query with no node in it (`from e in emps` is
+`emps`) is indistinguishable from an ordinary expression, and a
+query must print as a tree even then.
+
 ### 6.2 The invariant
 
 **A relational operator is the first non-whitespace on its line.**
@@ -450,6 +488,9 @@ by **two** spaces. A line is an operator name followed by its
 arguments, each in brackets, in the order §3 lists them; arguments
 that are absent (an inner join's kind, a `true` condition, a
 `project` expression that is `$0`) are omitted.
+
+**The text ends with a newline**, after the last line of the legend if
+there is one, or of the last block, or of the tree.
 
 **Patterns are not printed.** A node's expressions name its row
 pattern as `$0` — `$1` for a join's right — and its ordinal pattern
@@ -541,8 +582,10 @@ Nothing in `r$0`'s own lines names `v$0`. It is `r$1[v$0]`, written
 where `r$0` refers to `r$1`, that shows `v$0` passing through — and
 `r$0[v$0]` at the head declares it.
 
-A fragment may read more than one, and they are written in order:
-`r$1[v$0, v$1]`.
+A fragment may read more than one, and they are written in the order
+of the binders' numbers — `r$1[v$0, v$1]` — the numbers §6.7 gives
+them, not the order the text of their names would sort in, which
+puts `v$10` before `v$2`.
 
 An implementation must therefore compute the list before it writes
 anything, since the reference is printed before the block in which the
@@ -661,8 +704,11 @@ and numbers what it finds. Morel does the same for type variables —
 `TypeSystem.unqualified` prints `('b * 'a * 'b)` as `('a * 'b *
 'a)` — so an implementation has the pattern already.
 
-Each prefix is numbered in its own sequence, so a tree's `v$` and a
-lowering's `w$` do not interleave.
+Every binder a node or a pass mints prints with the one prefix, `v$`,
+whatever its maker called it: there is one tree and one sequence.
+A variable that grounding invents for a scan it bounds, `g$0`,
+survives as a *label* — the field of a record, the key of a group —
+and a label prints as it is, because a label is part of a type.
 
 A tree nested inside another tree's expressions shares the enclosing
 text's numbering; it does not restart at zero. This was the one thing
@@ -709,6 +755,27 @@ expression that wraps the tree. The alternative — a `compute` node
 whose type is a scalar — buys a shorter plan at the cost of a
 constructor that is not collection-valued, which every rule would
 then have to case on. Frozen as written.
+
+### 6.8 When the plan is taken
+
+A plan is a rendering of the query at one point in the pipeline, and
+`Sys.planEx phase` says which point. The pipeline is: resolve names
+and build the tree; resolve overloads and inline what the resolver
+left, in passes, to a fixed point; ground the unbounded leaves;
+compile. The phases are:
+
+* `"resolved"` (any argument that is not a number): the tree as the
+  resolver built it. Names are resolved, overloads are not, nothing
+  is inlined, nothing is grounded. This is the phase §7 shows.
+* `"0"`: after overload resolution, with the inliner otherwise held
+  back.
+* `"N"`: after `N` passes of inlining.
+* `"-1"`: the final tree, after every pass and after grounding; what
+  the compiler is given.
+
+`Sys.planOf e` is the resolved tree of `e`, and `e` is not evaluated;
+`Sys.plan ()` is the executable code of the last statement, and is
+not the tree (§6).
 
 ## 7. Worked examples
 

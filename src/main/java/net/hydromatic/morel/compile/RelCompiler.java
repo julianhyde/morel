@@ -645,8 +645,7 @@ class RelCompiler {
               cx.layout.with(pat, cx.localDepth),
               cx.localDepth + 1,
               cx.globalSlotMap,
-              cx.recPeers,
-              cx.ordinalSlots);
+              cx.recPeers);
       return new Row(
           base,
           cx2,
