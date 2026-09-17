@@ -2322,7 +2322,20 @@ filter pushdown over a join, the issue's own example, as the first
 user-written rule, with the plan before and after in a script.
 (4) The reactor as the second engine, when wanted.
 
-- [ ] (1) Closures retain Core; `Plan.bodyOf`.
+- [x] (1) Closures retain Core; `Plan.bodyOf`. A `StackMatchCode`
+      compiled from a `Core.Fn` keeps the `Fn`, and a `StackClosure`
+      reaches it through its match code; a `case` keeps none. What
+      it keeps is the tree the compiler was given, after every pass
+      and rule, so `Plan.bodyOf above` prints the merged filter that
+      `Sys.planEx "-1"` shows, and a `let`-bound constant the
+      inliner substituted is gone from the body. `Plan.bodyOf` is
+      typed `('a -> 'b) -> string` here, the tree printed as
+      `Sys.planOf` prints one; (2) retypes it to `Core.exp` and
+      moves the printing to `Core.print`, a change the squash hides.
+      A built-in has no body and `bodyOf` raises `Fail` at the call.
+      `lib/plan.sig`, `docs/lib/plan.md`, `built-in/plan.smli`; the
+      environment gains one binding, `Plan`, and `misc.smli`'s count
+      moves with it.
 - [ ] (2) `Core.exp` and `Core.pat` as a view; conversions both
       ways; round-trip test over `rel-tree.smli`.
 - [ ] (3) `Plan.program`, `Plan.wholeTree`; a Morel rule compiling
