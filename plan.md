@@ -2124,12 +2124,29 @@ tree, not after.
 
 ## Step 4 — Rule framework
 
-- [ ] Pattern + guard rules over the tree; deterministic Hep-style
-      driver.
-- [ ] Validator runs after every rule firing; root-type preservation
-      asserted.
-- [ ] FromBuilder builds trees natively; begin RelBuilder-style
-      conveniences as rules need them.
+- [x] Pattern + guard rules over the tree; deterministic Hep-style
+      driver. `RelRule` is a function from a node to its replacement
+      or null; the pattern and the guard are the rule's own tests.
+      `RelRules` is the driver: bottom-up, inputs and nested trees
+      before the node, the rules tried in order at each node, the
+      first that fires applied and the node re-tried until none does;
+      a firing limit catches a set that loops. It runs last, after
+      grounding, in both pipelines, so `Sys.planEx "-1"` shows its
+      work and `Sys.planOf` does not.
+- [x] Validator runs after every rule firing; root-type preservation
+      asserted. The type check is unconditional and the validator
+      runs under `assert`, which the tests enable.
+- [x] FromBuilder builds trees natively (F2).
+- [x] The first clients, `RelRules.STANDARD`: `UNORDER_PUSHDOWN`,
+      the motivating rewrite (through filter, project, group, join,
+      ifEmpty and the set operators; not skip, take, or a node that
+      reads the ordinal; gone at a sort or a bag), and
+      `FILTER_TRUE`. `rel-rule.smli` shows each case before and
+      after; `RelRulesTest` shows the driver refusing a rule that
+      changes a kind.
+- [ ] RelBuilder-style conveniences as rules need them: a rule
+      builds with `core` today, which is enough for rules that
+      replace one node with one or two.
 
 ## Step 5 — Port rewrites as rules
 
