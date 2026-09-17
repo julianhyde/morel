@@ -3009,6 +3009,21 @@ public enum BuiltIn {
       true,
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
+  /**
+   * Function "Plan.bodyOf", of type "(&alpha; &rarr; &beta;) &rarr; string".
+   *
+   * <p>"bodyOf f" returns the body of the function {@code f} as the compiler
+   * holds it, after every pass and rule; a query prints as a relational tree.
+   * Raises {@code Fail} if {@code f} is not a function the compiler compiled,
+   * such as a built-in.
+   */
+  PLAN_BODY_OF(
+      "Plan",
+      "bodyOf",
+      ts ->
+          ts.forallType(
+              2, h -> ts.fnType(ts.fnType(h.get(0), h.get(1)), STRING))),
+
   /** Function "PP.align", of type "doc &rarr; doc". */
   PP_ALIGN(
       "PP",

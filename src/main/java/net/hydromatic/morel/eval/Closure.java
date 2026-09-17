@@ -31,6 +31,7 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.util.ImmutablePairList;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Value that is sufficient for a function to bind its argument and evaluate its
@@ -329,6 +330,11 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
     @Override
     public String toString() {
       return "StackClosure(captured=" + captured.length + ")";
+    }
+
+    /** Returns the function this closure was compiled from, if known. */
+    public Core.@Nullable Fn fn() {
+      return matchCode.fn;
     }
 
     /**
