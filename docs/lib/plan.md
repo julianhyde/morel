@@ -30,6 +30,7 @@ License.
 
 <pre>
 val <a id='bodyOf' href="#bodyOf-impl">bodyOf</a> : ('a -> 'b) -> exp
+val <a id='program' href="#program-impl">program</a> : (exp -> exp option) list -> ('a -> 'b) -> 'a -> 'b
 </pre>
 
 <a id="bodyOf-impl"></a>
@@ -41,5 +42,24 @@ every pass and rule; the function's parameter is a free name in it.
 
 Raises `Fail` if `f` is not a function the compiler compiled, such as
 a built-in.
+
+<a id="program-impl"></a>
+<h3><code>program</code></h3>
+
+`program rules f` returns a function that computes what `f` computes, whose body is `f`'s
+rewritten by `rules`.
+
+Each rule is given a node of the body, after the nodes below it have
+been rewritten, and returns what replaces it, or `NONE` if it does not
+apply there. The rules are tried in the order given, the first that
+fires is applied, and the node is tried again until none fires. The
+compiler's own rules run before them at each node, so what a rule
+leaves is simplified as the compiler would simplify it.
+
+A rule must not change what a node means, and its replacement must have
+the node's type; that much is checked, and a rule that breaks it raises.
+
+Raises `Fail` if `f` is not a function the compiler compiled, such as a
+built-in.
 
 [//]: # (end:lib/plan)

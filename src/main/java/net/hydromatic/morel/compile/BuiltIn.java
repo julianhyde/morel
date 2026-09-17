@@ -3060,6 +3060,34 @@ public enum BuiltIn {
                       ts.fnType(h.get(0), h.get(1)),
                       ts.lookup(Datatype.CORE_EXP)))),
 
+  /**
+   * Function "Plan.program", of type "(exp &rarr; exp option) list &rarr;
+   * (&alpha; &rarr; &beta;) &rarr; (&alpha; &rarr; &beta;)".
+   *
+   * <p>"program rules f" is a function of the same type as {@code f}, and of
+   * the same value, whose body is {@code f}'s rewritten by {@code rules}. Each
+   * rule is given a node and returns what replaces it, or {@code NONE} if it
+   * does not apply there.
+   *
+   * <p>Raises {@code Fail} if {@code f} is not a function the compiler
+   * compiled, such as a built-in.
+   */
+  PLAN_PROGRAM(
+      "Plan",
+      "program",
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.listType(
+                          ts.fnType(
+                              ts.lookup(Datatype.CORE_EXP),
+                              ts.option(ts.lookup(Datatype.CORE_EXP)))),
+                      ts.fnType(
+                          ts.fnType(h.get(0), h.get(1)),
+                          ts.fnType(h.get(0), h.get(1)))))),
+
   /** Function "PP.align", of type "doc &rarr; doc". */
   PP_ALIGN(
       "PP",
