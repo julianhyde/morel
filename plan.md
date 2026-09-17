@@ -2358,9 +2358,29 @@ user-written rule, with the plan before and after in a script.
       `b` to the first field -- which a rule would meet at once in
       `FILTER {condition, ...}`; the resolver now pads from the
       enclosing type's component. Both are orthogonal fixes.
-      Remaining: `val {b, ...} = e` and `fn {b, ...} => b` still
-      match positionally, and the latter is typed `'a -> 'b`; that
-      is the type resolver's, not the view's, and is left noted.
+      The rest of the ellipsis is fixed in the commit after: a
+      pattern is converted against the type of the *value* it is
+      matched against, not its own. A declaration's value type comes
+      from its expression (`val {b, ...} = e` bound the first
+      field), a branch's from the function's parameter or the
+      scrutinee (an immediately applied `fn` bound the first field).
+      A `case` was right already, because the type resolver passes
+      it the scrutinee's field names.
+- [ ] **A decision to make: leniency and the ellipsis.** What is
+      left is `fn {b, ...} => b` bound to a name and applied later.
+      Morel types it `'a -> 'b` on purpose -- `MainTest` pins that,
+      and `testRecordCase` says in a comment that flex records
+      resolve more leniently in `case` than in `fun` -- and a
+      parameter type of `'a` cannot say which slots the fields are
+      in, so the pattern still binds by position, which is wrong.
+      Standard ML rejects the function instead ("unresolved flex
+      record"), which Morel already says for `#f` applied to a value
+      of unknown fields. Making it an error is a one-line check in
+      the type resolver (a set of ellipsis patterns whose fields
+      never became known, cleared per attempt, like
+      `unresolvedRecords`) and it fails three `MainTest` cases that
+      assert the lenient type. That is a language decision, not a
+      bug fix, so it is left here rather than taken.
       Field names that are keywords -- `ordinal`, `left`, `right`,
       `distinct` -- became `ordinalPat`, `leftInput`, `rightInput`,
       `unique`; `default` became `otherwise`.
