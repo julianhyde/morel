@@ -384,8 +384,11 @@ public class Compiler {
 
       case FN:
         final Core.Fn fn = (Core.Fn) expression;
-        return compileMatchListTail(
-            cx, ImmutableList.of(core.match(fn.pos, fn.idPat, fn.exp)));
+        return compileMatchListImpl(
+            cx,
+            ImmutableList.of(core.match(fn.pos, fn.idPat, fn.exp)),
+            true,
+            fn);
 
       case CASE:
         final Core.Case case_ = (Core.Case) expression;
@@ -1153,7 +1156,7 @@ public class Compiler {
    * @return Code for match
    */
   private Code compileMatchList(Context cx, List<Core.Match> matchList) {
-    return compileMatchListImpl(cx, matchList, false);
+    return compileMatchListImpl(cx, matchList, false, null);
   }
 
   /**
@@ -1207,7 +1210,7 @@ public class Compiler {
 
   /** Compiles a match list where each arm is in tail position. */
   private Code compileMatchListTail(Context cx, List<Core.Match> matchList) {
-    return compileMatchListImpl(cx, matchList, true);
+    return compileMatchListImpl(cx, matchList, true, null);
   }
 
   /**
@@ -1221,7 +1224,10 @@ public class Compiler {
    * @param tailPos Whether the arm bodies are in tail position
    */
   private Code compileMatchListImpl(
-      Context cx, List<Core.Match> matchList, boolean tailPos) {
+      Context cx,
+      List<Core.Match> matchList,
+      boolean tailPos,
+      Core.@Nullable Fn fn) {
     // Stack-mode: collect variables currently live in the outer stack layout.
     // These become the captured variables in the new StackClosure.
     // We use a LinkedHashMap to maintain a stable insertion order.
@@ -1298,7 +1304,8 @@ public class Compiler {
         cx.recPeers.size(),
         patCodes.immutable(),
         capacity,
-        last(matchList).pos);
+        last(matchList).pos,
+        fn);
   }
 
   /**

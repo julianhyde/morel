@@ -3775,6 +3775,41 @@ public abstract class Codes {
     return ORDER_EQUAL;
   }
 
+  /** @see BuiltIn#PLAN_BODY_OF */
+  private static final Applicable PLAN_BODY_OF = new PlanBodyOf(Pos.ZERO);
+
+  /** Implements {@link #PLAN_BODY_OF}. */
+  private static class PlanBodyOf extends BasePositionedApplicable {
+    PlanBodyOf(Pos pos) {
+      super(BuiltIn.PLAN_BODY_OF, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new PlanBodyOf(pos);
+    }
+
+    @Override
+    public Object apply(Stack stack, Object arg) {
+      if (arg instanceof Closure.StackClosure) {
+        final Core.@Nullable Fn fn = ((Closure.StackClosure) arg).fn();
+        if (fn != null) {
+          final Session session = stack.session;
+          final TypeSystem typeSystem =
+              requireNonNull(session.typeSystem, "typeSystem");
+          final int width = Prop.LINE_WIDTH.intValue(session.map);
+          // A body that is a tree prints as one, with the collection type
+          // of every node, as Sys.planOf prints a query.
+          return fn.exp instanceof Core.Rel
+              ? fn.exp.unparsePlan(typeSystem, width)
+              : fn.exp.unparseRenumbered(typeSystem, width, true);
+        }
+      }
+      throw new MorelRuntimeException(
+          BuiltInExn.FAIL, "not a compiled function", pos);
+    }
+  }
+
   /** @see BuiltIn#PP_ALIGN */
   private static final Applicable PP_ALIGN =
       new BaseApplicable1<Lindig.Doc, Lindig.Doc>(BuiltIn.PP_ALIGN) {
@@ -7699,6 +7734,7 @@ public abstract class Codes {
     b.add(BuiltIn.OPTION_MAP, OPTION_MAP);
     b.add(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL);
     b.add(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF);
+    b.add(BuiltIn.PLAN_BODY_OF, PLAN_BODY_OF);
     b.add(BuiltIn.PP_ALIGN, PP_ALIGN);
     b.add(BuiltIn.PP_BESIDE, PP_BESIDE);
     b.add(BuiltIn.PP_BRACES, PP_BRACES);
@@ -8678,17 +8714,27 @@ public abstract class Codes {
 
     final Pos pos;
 
+    /**
+     * The function this was compiled from, or null if it was compiled from a
+     * {@code case}. A closure keeps it so that {@code Plan.bodyOf} can say what
+     * the closure computes; it is the tree the compiler was given, after every
+     * pass and rule.
+     */
+    final Core.@Nullable Fn fn;
+
     public StackMatchCode(
         int[] captureOffsets,
         int recPeerCount,
         ImmutablePairList<Core.Pat, Code> patCodes,
         int capacity,
-        Pos pos) {
+        Pos pos,
+        Core.@Nullable Fn fn) {
       this.captureOffsets = captureOffsets;
       this.recPeerCount = recPeerCount;
       this.patCodes = patCodes;
       this.capacity = capacity;
       this.pos = pos;
+      this.fn = fn;
     }
 
     @Override
