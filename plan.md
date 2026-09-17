@@ -2227,17 +2227,108 @@ tree, not after.
       constraint, and where both would succeed the generators could
       differ; the plans are pinned and the change is for when a
       case wants it.
-- [ ] Inliner interactions: none found that are tree-shaped. The
-      inliner has a boundary (`carriesInputIntoRel`) and a record
-      selector fold of its own for expressions; neither is a rule.
+- [x] Inliner interactions: none are tree-shaped. The inliner has a
+      boundary (`carriesInputIntoRel`) and a record selector fold of
+      its own for expressions; neither is a rule, and neither moves.
+      Step 5 is done: every rewrite of a tree that the pipeline
+      performs is a rule in `RelRules.STANDARD`, seven of them, and
+      the builder's simplifications stay where the building is.
 
 ## Step 6 — The #359 layer
 
-- [ ] Plan.core reification as a view of the same datatype;
-      Plan.bodyOf; closures retaining Core.
-- [ ] User-written Morel rules compiling into the step-4 framework.
-- [ ] Reactor / MEMO / guard-dependency machinery as the second
-      engine beside Hep.
+Issue #359 asks for `Plan.optimize`: a user writes a function whose
+body is a query, hands it to a program of rewrite rules, and gets
+back a function of the same type with a better body. Everything it
+needs is now built except the parts that face Morel: the tree is one
+datatype (steps 0-3), the rules have a driver and a contract (step
+4), and the driver's clients are real optimizations (step 5). What
+remains is to let a Morel program see the tree, write a rule, and
+run one. The design, written before the code:
+
+**The datatype a Morel program sees.** A structure `Core` declares
+`datatype exp` with one constructor per node kind and per expression
+kind the tree contains -- `FILTER of {input: exp, condition: exp}`,
+`JOIN of {...}`, and `ID`, `LITERAL`, `APPLY`, `FN`, `LET`, `CASE`,
+`TUPLE`, `RECORD`, `SELECTOR` for what a condition is made of -- and
+`datatype pat` for what a node binds, `$0`, `$1`, `$ordinal` and
+user names alike, as `IdPat of string * int`. It is declared the way
+`variant` is (`BuiltIn.Datatype`), and its values have the runtime
+form every datatype value has, a list of tag and argument. "A view of
+the same datatype" means there is one tree: a `Core.exp` value is a
+rendering of a `Core.Exp` node, and a `Core.Exp` node is recovered
+from it, by two conversions that round-trip (the test is every tree
+in `rel-tree.smli`, both ways). Nothing is copied that is not asked
+for: a value is rendered when a Morel function is called with it,
+and recovered when the function returns one.
+
+**Types are opaque, and derived.** A node's type is a fact about its
+inputs and expressions, never stated; that is what makes a local
+rewrite type-preserving (spec §4). So `Core.exp` values carry no
+type a Morel program can write, only `Core.typeOf : exp -> string`,
+the moniker, for a rule that must ask. A rule builds nodes through
+constructors that derive the type -- the Morel constructor `FILTER
+{input, condition}` recovers to `core.filter`, which computes it --
+and a rule cannot build an ill-typed node, only an ill-scoped one,
+which the validator catches at the firing.
+
+**Binders.** The tree binds positions. In the Morel view a node's
+pattern is a value, `IdPat ("$0", 7)`, and its expressions read it
+by `ID (IdPat ("$0", 7))`; a rule that moves an expression to
+another node substitutes the pattern, as `PROJECT_MERGE` does in
+Java. Coloring_design.md §15 reads a node as an application whose
+function arguments are lambdas, `filter (r, fn $0 => c)`, under
+which reification is the identity; that reading changes the contract
+(a rel becomes a normal form of Core, and morel-rust's datatype with
+it), and is decided before the datatype below is built, not after,
+because it decides whether `FILTER` is a constructor or a spelling
+of `APPLY`. Until it is decided, `Core.exp` has the constructors and
+the reading is a printer's and a converter's concern.
+
+**`Plan.bodyOf : ('a -> 'b) -> Core.exp`.** A closure keeps the
+`Core.Fn` it was compiled from (`Closure` holds an environment,
+pattern codes and a position today, and nothing of the Core), and
+`bodyOf` renders it. A built-in function has no Core, and `bodyOf`
+raises. This is the smallest piece and the first: it is testable
+against `Sys.planOf` from the day it exists.
+
+**`Plan.program : (Core.exp -> Core.exp option) list -> ('a -> 'b)
+-> ('a -> 'b)`.** Each Morel rule becomes a `RelRule` whose `apply`
+renders the node, calls the closure, and recovers the result or
+declines on `NONE`; the driver's checks apply to it as to any rule,
+and a rule that changes a type is refused at the firing with the
+same message. A rule is a node rule; `Plan.wholeTree rule` marks
+one that wants the root. `Plan.program` renders the function's
+body, runs the driver with the program's rules after the standard
+ones, recovers the result, and compiles it in the closure's own
+environment -- the captured values are what the body's free names
+mean, so the new closure sees `scott` as the old one did. The
+function type and the binding to a variable that #359 requires are
+what make this possible: `bodyOf` needs a closure, and a closure is
+what a bound function value is.
+
+**The reactor.** Issue #359's reactor is the driver: rules applied
+until none fires. What it does not have is a cost model, a memo of
+equivalent trees, or a guard-dependency scheme that re-fires a rule
+only when what its guard read has changed; those are the second
+engine, MEMO groups keyed on (semantics, element type) as
+discussion.md §9 says, and they are last, separate, and built only
+when a rule set wants a choice rather than a rewrite.
+
+**Sequence.** (1) Closures retain Core; `Plan.bodyOf`, printing
+through the tree printer, checked against `Sys.planOf`. (2) `Core`
+datatype and the two conversions, round-tripped over the suite;
+`Plan.bodyOf` returns it. (3) `Plan.program` and a rule in Morel:
+filter pushdown over a join, the issue's own example, as the first
+user-written rule, with the plan before and after in a script.
+(4) The reactor as the second engine, when wanted.
+
+- [ ] (1) Closures retain Core; `Plan.bodyOf`.
+- [ ] (2) `Core.exp` and `Core.pat` as a view; conversions both
+      ways; round-trip test over `rel-tree.smli`.
+- [ ] (3) `Plan.program`, `Plan.wholeTree`; a Morel rule compiling
+      into the step-4 framework; the issue's example as a script.
+- [ ] (4) Reactor / MEMO / guard-dependency machinery as the second
+      engine beside the driver.
 
 ## Reorder and squash, before the branch lands
 
