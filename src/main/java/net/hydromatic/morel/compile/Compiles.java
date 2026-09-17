@@ -227,6 +227,9 @@ public abstract class Compiles {
       }
     }
     checkExtentsFinite(coreDecl);
+    // The rules, last: every leaf is bounded by now, and a rule that pushed
+    // an operator below an extent would move it out of grounding's reach.
+    coreDecl = RelRules.rewrite(typeSystem, RelRules.STANDARD, coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
     if (hybrid) {
@@ -339,10 +342,8 @@ public abstract class Compiles {
       }
     }
 
-    // Pass -1 or any pass beyond the last: the final result, which is a tree.
-    // Not lowered: `Sys.planEx` prints the tree, and the lowering
-    // is a pass of its own that runs after this.
-    return coreDecl;
+    // Pass -1 or any pass beyond the last: the final tree, after the rules.
+    return RelRules.rewrite(typeSystem, RelRules.STANDARD, coreDecl);
   }
 
   /**

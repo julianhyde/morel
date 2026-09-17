@@ -1,0 +1,159 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Rules over the relational tree.
+ *
+ * `Sys.planOf` prints the tree the resolver built, before any rule;
+ * `Sys.planEx "-1"` prints the tree the compiler is given, after the
+ * rules have run. Each case shows both, and runs the query.
+ *)
+Sys.set ("lineWidth", 78);
+> val it = () : unit
+Sys.set ("stringDepth", ~1);
+> val it = () : unit
+
+(* ---------------------------------------------------------------- *)
+(* Unorder pushdown.
+ *
+ * `unorder` discards its input's order. Pushed down through the nodes
+ * that do not depend on order, it meets a `sort` -- whose order it
+ * discards, so both go -- or a bag, which has no order to discard.
+ *)
+val es = [{id = 3, name = "c"}, {id = 1, name = "a"}, {id = 2, name = "b"}];
+> val es = [{id=3,name="c"},{id=1,name="a"},{id=2,name="b"}]
+>   : {id:int, name:string} list
+
+(*) A sort under an unorder goes.
+from e in es order e.id unorder;
+> val it = [{id=3,name="c"},{id=1,name="a"},{id=2,name="b"}]
+>   : {id:int, name:string} bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   unorder : t$0
+>     es : t$1
+>
+> t$0 {id:int, name:string} bag
+> t$1 {id:int, name:string} list
+> |_} : string
+Sys.planOf (from e in es order e.id unorder);
+> val it =
+>   {_|
+> unorder : t$0
+>   sort [#id $0] : t$1
+>     es : t$1
+>
+> t$0 {id:int, name:string} bag
+> t$1 {id:int, name:string} list
+> |_} : string
+
+(*) Through a filter and a projection; the list at the bottom keeps it.
+from e in es where e.id > 1 order e.id yield e.name unorder;
+> val it = ["c","b"] : string bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project [#name $0] : string bag
+>     filter [#id $0 > 1] : t$0
+>       unorder : t$0
+>         es : t$1
+>
+> t$0 {id:int, name:string} bag
+> t$1 {id:int, name:string} list
+> |_} : string
+Sys.planOf (from e in es where e.id > 1 order e.id yield e.name unorder);
+> val it =
+>   {_|
+> unorder : string bag
+>   project [#name $0] : string list
+>     sort [#id $0] : t$0
+>       filter [#id $0 > 1] : t$0
+>         es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+
+(*) Not through a skip or a take, which depend on order.
+from e in es order e.id skip 1 unorder;
+> val it = [{id=2,name="b"},{id=3,name="c"}] : {id:int, name:string} bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   unorder : t$0
+>     skip [1] : t$1
+>       sort [#id $0] : t$1
+>         es : t$1
+>
+> t$0 {id:int, name:string} bag
+> t$1 {id:int, name:string} list
+> |_} : string
+Sys.planOf (from e in es order e.id skip 1 unorder);
+> val it =
+>   {_|
+> unorder : t$0
+>   skip [1] : t$1
+>     sort [#id $0] : t$1
+>       es : t$1
+>
+> t$0 {id:int, name:string} bag
+> t$1 {id:int, name:string} list
+> |_} : string
+
+(*) Not through a node that reads the ordinal.
+from e in es order e.id where ordinal > 0 unorder;
+> val it = [{id=2,name="b"},{id=3,name="c"}] : {id:int, name:string} bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   unorder : t$0
+>     filter [$ordinal > 0] : t$1
+>       sort [#id $0] : t$1
+>         es : t$1
+>
+> t$0 {id:int, name:string} bag
+> t$1 {id:int, name:string} list
+> |_} : string
+Sys.planOf (from e in es order e.id where ordinal > 0 unorder);
+> val it =
+>   {_|
+> unorder : t$0
+>   filter [$ordinal > 0] : t$1
+>     sort [#id $0] : t$1
+>       es : t$1
+>
+> t$0 {id:int, name:string} bag
+> t$1 {id:int, name:string} list
+> |_} : string
+
+(*) An unorder over a bag is nothing at all; the resolver drops it.
+from e in bag es unorder;
+> val it = [{id=3,name="c"},{id=1,name="a"},{id=2,name="b"}]
+>   : {id:int, name:string} bag
+Sys.planEx "-1";
+> val it = "val it = #fromList Bag es" : string
+Sys.planOf (from e in bag es unorder);
+> val it = {|bag es : t$0
+>
+> t$0 {id:int, name:string} bag
+> |} : string
+
+(*) End rel-rule.smli
