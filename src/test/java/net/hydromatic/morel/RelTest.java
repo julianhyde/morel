@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.RelValidator;
@@ -550,6 +551,45 @@ public class RelTest {
         f.filter(
             f.list12, r -> core.equal(f.typeSystem, core.id(e), core.id(e)));
     assertThat(free.freePats(f.typeSystem), is(ImmutableSet.of(e)));
+  }
+
+  /**
+   * A tree nested in a node's expression may read the node's row; on its own it
+   * may not, unless the node's patterns are given as the outer scope. A name
+   * the expression binds itself is its own to read, whatever it is called.
+   */
+  @Test
+  void testValidatorScope() {
+    final Fixture f = new Fixture();
+    final Core.IdPat outerRow = f.row(f.list12);
+    final Core.Rel nested =
+        f.filter(f.list34, r -> core.equal(f.typeSystem, r, core.id(outerRow)));
+    final Core.Rel outer =
+        core.filter(
+            outerRow,
+            null,
+            f.list12,
+            core.nonEmpty(f.typeSystem, Pos.ZERO, nested));
+    assertThat(f.violations(outer), empty());
+    assertThat(
+        f.violations(nested),
+        is(Arrays.asList("filter condition cannot reference $0")));
+    assertThat(
+        RelValidator.violations(
+            f.typeSystem, nested, ImmutableSet.of(outerRow)),
+        empty());
+
+    // The resolver names a composed aggregate's parameter '$col'.
+    final Core.IdPat col = core.idPat(PrimitiveType.BOOL, "$col", 0);
+    final Core.Rel let =
+        f.filter(
+            f.list12,
+            r ->
+                core.let(
+                    core.nonRecValDecl(
+                        Pos.ZERO, col, null, core.boolLiteral(true)),
+                    core.id(col)));
+    assertThat(f.violations(let), empty());
   }
 
   /** Returns the names of every {@link Core.Id} in an expression. */

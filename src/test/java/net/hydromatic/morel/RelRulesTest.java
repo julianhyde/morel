@@ -30,6 +30,7 @@ import com.google.common.collect.ImmutableList;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Simplification;
@@ -92,12 +93,41 @@ public class RelRulesTest {
         }
 
         @Override
-        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
           return rel instanceof Core.Unorder
               ? ((Core.Unorder) rel).input
               : null;
         }
       };
+
+  /**
+   * A whole-tree rule that fires once, at the root, and records what it was
+   * given; and a node rule that fires at every node, likewise.
+   */
+  private static class Recorder implements RelRule {
+    final boolean wholeTree;
+    final List<String> seen = new ArrayList<>();
+
+    Recorder(boolean wholeTree) {
+      this.wholeTree = wholeTree;
+    }
+
+    @Override
+    public String name() {
+      return wholeTree ? "WholeTree" : "Node";
+    }
+
+    @Override
+    public boolean wholeTree() {
+      return wholeTree;
+    }
+
+    @Override
+    public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+      seen.add(rel.opName() + (cx.rowsUsed() ? "" : " (rows unused)"));
+      return null;
+    }
+  }
 
   @Test
   void testUnorderPushdown() {
@@ -233,6 +263,32 @@ public class RelRulesTest {
             "skip [0]\n" //
                 + "  [3, 1, 2]\n"));
     assertThat(f.rewrite(tree), hasToString("[3, 1, 2]"));
+  }
+
+  /**
+   * A whole-tree rule sees the root before the node rules have rewritten
+   * anything below it; a node rule sees each node, inputs first.
+   */
+  @Test
+  void testWholeTreeRuleSeesTheTreeFirst() {
+    final Fixture f = new Fixture();
+    final Core.Exp tree = f.unorderSort();
+    final Recorder whole = new Recorder(true);
+    final Recorder node = new Recorder(false);
+    final Core.Exp tree2 =
+        RelRules.rewrite(
+            f.typeSystem,
+            ImmutableList.of(node, whole, RelRules.UNORDER_PUSHDOWN),
+            tree);
+    assertThat(
+        tree2,
+        hasToString(
+            "unorder\n" //
+                + "  [3, 1, 2]\n"));
+    // The whole-tree rule was given the unorder over the sort; by the time
+    // the node rule reached the root, the sort was gone.
+    assertThat(whole.seen, hasToString("[unorder]"));
+    assertThat(node.seen, hasToString("[sort, unorder, unorder]"));
   }
 
   /** With no rules, a tree is returned as it is. */

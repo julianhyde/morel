@@ -178,10 +178,6 @@ public abstract class Compiles {
       checkPatternCoverage(typeSystem, coreDecl0, warningConsumer);
     }
 
-    // Ensures that once we discover that there are no unbounded variables,
-    // we stop looking; makes things a bit more efficient.
-    boolean mayContainUnbounded = true;
-
     Core.Decl coreDecl;
     tracer.onCore(1, coreDecl0);
     if (inlinePassCount == 0) {
@@ -208,28 +204,11 @@ public abstract class Compiles {
         }
         tracer.onCore(i + 2, coreDecl);
       }
-      for (int i = 0; i < inlinePassCount; i++) {
-        final Core.Decl coreDecl2 = coreDecl;
-        if (mayContainUnbounded) {
-          if (SuchThatShuttle.containsUnbounded(coreDecl)) {
-            coreDecl =
-                coreDecl.accept(
-                    new SuchThatShuttle(
-                        typeSystem, env, session.nameGenerator));
-          } else {
-            mayContainUnbounded = false;
-          }
-        }
-        if (coreDecl == coreDecl2) {
-          break;
-        }
-        tracer.onCore(i + 2, coreDecl);
-      }
     }
-    checkExtentsFinite(coreDecl);
-    // The rules, last: every leaf is bounded by now, and a rule that pushed
-    // an operator below an extent would move it out of grounding's reach.
-    coreDecl = RelRules.rewrite(typeSystem, RelRules.STANDARD, coreDecl);
+    // The rules, last. Grounding is the first of them, and sees each tree
+    // before the others reshape it.
+    coreDecl = RelRules.rewrite(typeSystem, env, RelRules.STANDARD, coreDecl);
+    checkGrounded(coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
     if (hybrid) {
@@ -301,7 +280,6 @@ public abstract class Compiles {
 
     // Run inlining passes
     Core.Decl coreDecl = coreDecl0;
-    boolean mayContainUnbounded = true;
 
     for (int i = 0; i < inlinePassCount; i++) {
       final Analyzer.Analysis analysis =
@@ -321,44 +299,24 @@ public abstract class Compiles {
       }
     }
 
-    // Run SuchThat and Extents passes
-    for (int i = 0; i < inlinePassCount; i++) {
-      final Core.Decl coreDecl2 = coreDecl;
-      if (mayContainUnbounded) {
-        if (SuchThatShuttle.containsUnbounded(coreDecl)) {
-          coreDecl =
-              coreDecl.accept(
-                  new SuchThatShuttle(typeSystem, env, session.nameGenerator));
-        } else {
-          mayContainUnbounded = false;
-        }
-      }
-      if (coreDecl == coreDecl2) {
-        break;
-      }
-      final int currentPass = i + 2;
-      if (currentPass == targetPass) {
-        return coreDecl;
-      }
-    }
-
-    // Pass -1 or any pass beyond the last: the final tree, after the rules.
-    return RelRules.rewrite(typeSystem, RelRules.STANDARD, coreDecl);
+    // Pass -1 or any pass beyond the last: the final tree, after the rules,
+    // grounding among them.
+    return RelRules.rewrite(typeSystem, env, RelRules.STANDARD, coreDecl);
   }
 
   /**
-   * Throws if an infinite extent survived generator expansion.
+   * Throws if a tree still has an unbounded leaf after the rules have run.
    *
    * <p>"{@code from i}" asks for every value of {@code i}'s type, and unless
    * some step bounds it, as "{@code from i where i elem [1, 2]}" does, there is
-   * no way to produce them. {@link Expander} reports "pattern 'i' is not
-   * grounded" where it can see the pattern, but a query whose only step is the
-   * scan simplifies to the extent alone, so no scan remains for the expander to
-   * look at. Such an extent used to reach the evaluator and fail an assertion
-   * at run time; catch it here instead, at the position of the pattern that
-   * asked for it.
+   * no way to produce them. Grounding declines such a tree rather than half
+   * doing it, and the tree that reaches here is the one it was given, so the
+   * diagnostic can name the pattern that asked. A query whose only step is the
+   * scan is the extent alone, with no tree around it; that is reported by type,
+   * at the extent's position. Such an extent used to reach the evaluator and
+   * fail an assertion at run time.
    */
-  private static void checkExtentsFinite(Core.Decl decl) {
+  private static void checkGrounded(Core.Decl decl) {
     decl.accept(
         new Visitor() {
           @Override
@@ -367,6 +325,20 @@ public abstract class Compiles {
             // and an unbounded query in it is expanded when the function is
             // called, or is recognized as a transitive closure; either way it
             // is not this pass's business.
+          }
+
+          @Override
+          protected void visitRel(Core.Rel rel) {
+            if (RelExpander.containsUnbounded(rel)) {
+              final Core.@Nullable NamedPat pat =
+                  RelExpander.ungrounded(rel, RelExpander.leafPats(rel));
+              throw new CompileException(
+                  pat == null
+                      ? "pattern is not grounded"
+                      : Expander.notGrounded(pat),
+                  false,
+                  rel.pos);
+            }
           }
 
           @Override
@@ -383,13 +355,6 @@ public abstract class Compiles {
         });
   }
 
-  /**
-   * Returns true if the Core.Decl is a call to Sys.planEx or Sys.plan.
-   *
-   * <p>We don't want to update the stored coreDecl when the user calls planEx
-   * or plan, because these should operate on the previous command, not
-   * themselves.
-   */
   private static boolean isPlanExCall(Core.Decl decl) {
     if (!(decl instanceof Core.NonRecValDecl)) {
       return false;

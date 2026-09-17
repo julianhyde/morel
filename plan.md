@@ -2175,10 +2175,58 @@ tree, not after.
       which `PROJECT_MERGE` applies after substitution -- so `yield
       x.id` over `yield {id = e.id}` merges to `project [#id $0]`,
       not `#id {id = #id $0}` -- and the grounder calls.
-- [ ] The such-that grounding (`SuchThatShuttle` + `RelExpander`) as
-      a rule. Large: it is a whole-tree analysis, not a node
-      rewrite, and today runs before the rules, whose driver it
-      would have to join as a root-level rule or a separate phase.
+- [x] Grounding as a rule: `RelRules.GROUND`, first in `STANDARD`.
+      It is not a node rule -- the constraints that bound a leaf are
+      wherever the query put them, and it has to see the tree as it
+      was built, before a node rule pushes an operator between a
+      constraint and its leaf -- so the framework gained the second
+      kind: a *whole-tree rule* (`RelRule.wholeTree()`), which the
+      driver applies at a tree's root, top-down, until none fires,
+      before the bottom-up walk and the node rules. It also needs
+      what a node rule did not: the environment (the generator reads
+      function bodies and asks which patterns are the enclosing
+      scope's), whether the rows are read (`exists`/`empty` count
+      them, and grounding then drops projections and changes the
+      element), and whether the walk is inside a recursive function
+      (left alone: expanded at the call, or a transitive closure). So
+      `RelRule.apply` takes a `Context`, the driver's walker is an
+      `EnvShuttle` that tracks the three, and the type check relaxes
+      to "still a collection of the same kind" where the rows are
+      unused. `SuchThatShuttle` is deleted: its context tracking is
+      the walker, its root-of-each-tree firing is the whole-tree
+      kind, its grounding of a generator's nested query is the rule's
+      own recursion over the leaves that are trees, and its
+      diagnostic is `Compiles.checkGrounded`, which runs after the
+      rules and names the pattern that asked (the rule *declines*
+      when the result still has an unbounded leaf or reads a field
+      its row lost, so the tree it is asked about is the one the
+      resolver built). `checkExtentsFinite` folds into it. Every
+      script regenerates byte-identical, `such-that.smli`'s twelve
+      "not grounded" diagnostics included. Two behavior changes, both
+      deliberate: grounding now runs when inlining is off
+      (`inlinePassCount` 0 skipped it before; nothing in the corpus
+      noticed), and the numbered `Sys.planEx` phases are inlining
+      passes only, where the grounding passes used to reuse their
+      numbers; `"-1"` is unchanged.
+      Two things the validator found the first time it saw grounded
+      trees, both its own faults: it took every `$`-name for a node
+      pattern, and the resolver names a composed aggregate's
+      parameter `$col` (a name the expression binds itself is its
+      own to read, whatever it is called); and the driver validated
+      a rule's result as a root, when a tree nested in a node's
+      expression may read the enclosing nodes' patterns -- a
+      generator's `exists` reads the row of the filter it sits in --
+      so the walker now carries those patterns down and the
+      validator takes them as the outer scope. The driver's
+      assertion prints the tree it rejects, which is how the second
+      was found.
+- [ ] Grounding at the lowest node that can be grounded, rather than
+      the root, would let a subtree's constraints ground it before
+      the nodes above are rewritten, and is what a bottom-up node
+      rule would do. Not done: the root grounding sees every
+      constraint, and where both would succeed the generators could
+      differ; the plans are pinned and the change is for when a
+      case wants it.
 - [ ] Inliner interactions: none found that are tree-shaped. The
       inliner has a boundary (`carriesInputIntoRel`) and a record
       selector fold of its own for expressions; neither is a rule.
