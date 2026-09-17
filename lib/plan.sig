@@ -24,14 +24,13 @@ signature PLAN =
 sig
   (**
    * returns the body of the function `f` as the compiler holds it, after
-   * every pass and rule. A query prints as a relational tree, one node per
-   * line, with the collection type of each node, as `Sys.planOf` prints
-   * one; the function's parameter is a free name in it.
+   * every pass and rule; the function's parameter is a free name in it.
+   * `Core.print` prints it as `Sys.planOf` prints a query.
    *
    * Raises `Fail` if `f` is not a function the compiler compiled, such as
    * a built-in.
    *)
-  val bodyOf : ('a -> 'b) -> string [@@prototype "bodyOf f"]
+  val bodyOf : ('a -> 'b) -> exp [@@prototype "bodyOf f"]
 end
 [@@description "What the compiler made of a function."]
 [@@specified "morel"]
