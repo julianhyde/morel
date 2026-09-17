@@ -29,16 +29,15 @@ License.
 ## Synopsis
 
 <pre>
-val <a id='bodyOf' href="#bodyOf-impl">bodyOf</a> : ('a -> 'b) -> string
+val <a id='bodyOf' href="#bodyOf-impl">bodyOf</a> : ('a -> 'b) -> exp
 </pre>
 
 <a id="bodyOf-impl"></a>
 <h3><code>bodyOf</code></h3>
 
 `bodyOf f` returns the body of the function `f` as the compiler holds it, after
-every pass and rule. A query prints as a relational tree, one node per
-line, with the collection type of each node, as `Sys.planOf` prints
-one; the function's parameter is a free name in it.
+every pass and rule; the function's parameter is a free name in it.
+`Core.print` prints it as `Sys.planOf` prints a query.
 
 Raises `Fail` if `f` is not a function the compiler compiled, such as
 a built-in.

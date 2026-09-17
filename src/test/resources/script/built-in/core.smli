@@ -1,0 +1,205 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Unit tests for the built-in `Core` structure.
+ *)
+Sys.set ("lineWidth", 78);
+> val it = () : unit
+Sys.set ("printLength", 999);
+> val it = () : unit
+Sys.set ("stringDepth", ~1);
+> val it = () : unit
+
+Core;
+> val it = {print=fn,printType=fn,typeOf=fn}
+>   : {print:exp -> string, printType:ty -> string, typeOf:exp -> ty}
+
+val es = [{id = 3, name = "c"}, {id = 1, name = "a"}, {id = 2, name = "b"}];
+> val es = [{id=3,name="c"},{id=1,name="a"},{id=2,name="b"}]
+>   : {id:int, name:string} list
+fun above n = from e in es where e.id > n where e.name <> "b" yield e.name;
+> val above = fn : int -> string list
+
+(*) The body of a function is a value of the datatype exp.
+val body = Plan.bodyOf above;
+> val body =
+>   PROJECT {exp=APPLY (SELECTOR #,ID (#)),
+>            input=FILTER {condition=APPLY #,input=OPAQUE,ordinalPat=NONE,
+>                          row=ID_PAT #},ordinalPat=NONE,
+>            row=ID_PAT {i=4,name="$0",ty={id:int, name:string}}} : exp
+Core.print body;
+> val it =
+>   {_|
+> project [#name $0] : string list
+>   filter [#id $0 > n andalso #name $0 <> "b"] : t$0
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+Core.printType (Core.typeOf body);
+> val it = "string list" : string
+
+(*) Matching a constructor renders one level of the tree.
+case body of
+    PROJECT {input = FILTER {condition, ...}, ...} => Core.print condition
+  | _ => "?";
+> val it = "#id v$0 > n andalso #name v$0 <> \"b\"" : string
+
+(*) A constructor builds a node; its type is derived from its parts.
+case body of
+    PROJECT {input = FILTER {input, row, ...}, ...} =>
+      Core.print (FILTER {condition = LITERAL (BOOL true), input = input,
+                          ordinalPat = NONE, row = row})
+  | _ => "?";
+> val it =
+>   {_|
+> filter [true] : t$0
+>   es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+
+(* Expressions, from literals and built-ins up. A built-in carries the type
+ * it is used at, which a polymorphic one needs. *)
+val plus = case Plan.bodyOf (fn x => x + 1) of APPLY (f, _) => f | _ => OPAQUE;
+> val plus = BUILTIN ("Int.+",int * int -> int) : exp
+Core.print (APPLY (plus, TUPLE [LITERAL (INT 1), LITERAL (INT 2)]));
+> val it = "1 + 2" : string
+Core.printType (Core.typeOf (APPLY (plus, TUPLE [LITERAL (INT 1), LITERAL (INT 2)])));
+> val it = "int" : string
+case plus of BUILTIN (name, t) => name ^ " : " ^ Core.printType t | _ => "?";
+> val it = "Int.+ : int * int -> int" : string
+
+(* An exp value is what the compiler holds, not a copy: the same value
+ * comes back, and is equal to itself. *)
+body = Plan.bodyOf above;
+> val it = true : bool
+
+(* Round trip. A function that takes a tree apart to its leaves and builds
+ * it again from its constructors, over every kind of node; what it builds
+ * prints as what it was given. *)
+fun rtp p = case p of
+    ID_PAT r => ID_PAT r
+  | WILDCARD t => WILDCARD t
+  | TUPLE_PAT ps => TUPLE_PAT (List.map rtp ps)
+  | RECORD_PAT nps => RECORD_PAT (List.map (fn (n, q) => (n, rtp q)) nps)
+  | CON0_PAT x => CON0_PAT x
+  | CON_PAT (n, q, t) => CON_PAT (n, rtp q, t)
+  | OPAQUE_PAT => p;
+> val rtp = fn : pat -> pat
+fun rto NONE = NONE | rto (SOME p) = SOME (rtp p);
+> val rto = fn : pat option -> pat option
+fun rt e = case e of
+    FILTER {condition, input, ordinalPat, row} =>
+      FILTER {condition = rt condition, input = rt input,
+              ordinalPat = rto ordinalPat, row = rtp row}
+  | PROJECT {exp, input, ordinalPat, row} =>
+      PROJECT {exp = rt exp, input = rt input, ordinalPat = rto ordinalPat,
+               row = rtp row}
+  | JOIN {condition, kind, leftInput, leftRow, ordinalPat, rightInput,
+          rightRow} =>
+      JOIN {condition = rt condition, kind = kind, leftInput = rt leftInput,
+            leftRow = rtp leftRow, ordinalPat = rto ordinalPat,
+            rightInput = rt rightInput, rightRow = rtp rightRow}
+  | GROUP {aggregates, input, keys, ordinalPat, row} =>
+      GROUP {aggregates = List.map (fn (n, f, a, t) =>
+                                       (n, rt f, Option.map rt a, t))
+                            aggregates,
+             input = rt input, keys = List.map (fn (n, k) => (n, rt k)) keys,
+             ordinalPat = rto ordinalPat, row = rtp row}
+  | SORT {input, key, ordinalPat, row} =>
+      SORT {input = rt input, key = rt key, ordinalPat = rto ordinalPat,
+            row = rtp row}
+  | UNORDER i => UNORDER (rt i)
+  | SKIP {count, input} => SKIP {count = rt count, input = rt input}
+  | TAKE {count, input} => TAKE {count = rt count, input = rt input}
+  | IF_EMPTY {input, otherwise} =>
+      IF_EMPTY {input = rt input, otherwise = rt otherwise}
+  | UNION {inputs, unique} => UNION {inputs = List.map rt inputs, unique = unique}
+  | INTERSECT {inputs, unique} =>
+      INTERSECT {inputs = List.map rt inputs, unique = unique}
+  | EXCEPT {inputs, unique} =>
+      EXCEPT {inputs = List.map rt inputs, unique = unique}
+  | ID p => ID (rtp p)
+  | LITERAL v => LITERAL v
+  | BUILTIN n => BUILTIN n
+  | SELECTOR (n, t) => SELECTOR (n, t)
+  | APPLY (f, a) => APPLY (rt f, rt a)
+  | TUPLE es => TUPLE (List.map rt es)
+  | RECORD_EXP nes => RECORD_EXP (List.map (fn (n, x) => (n, rt x)) nes)
+  | FN (p, b) => FN (rtp p, rt b)
+  | LET {body, pat, value} => LET {body = rt body, pat = rtp pat, value = rt value}
+  | CASE (x, arms) => CASE (rt x, List.map (fn (p, b) => (rtp p, rt b)) arms)
+  | OPAQUE => e;
+> val rt = fn : exp -> exp
+fun same f = Core.print (rt (Plan.bodyOf f)) = Core.print (Plan.bodyOf f);
+> val same = fn : ('a -> 'b) -> bool
+same above;
+> val it = true : bool
+val ds = [{id = 1, dname = "x"}, {id = 2, dname = "y"}];
+> val ds = [{dname="x",id=1},{dname="y",id=2}] : {dname:string, id:int} list
+fun joined n =
+  from e in es join d in ds on e.id = d.id
+    where e.id > n
+    yield {e.name, d.dname};
+> val joined = fn : int -> {dname:string, name:string} list
+same joined;
+> val it = true : bool
+Core.print (rt (Plan.bodyOf joined));
+> val it =
+>   {_|
+> project [{dname = #dname (#2 $0), name = #name (#1 $0)}] : t$0
+>   filter [#id (#1 $0) > n] : t$1
+>     join [#id $0 = #id $1] : t$1
+>       es : t$2
+>       ds : t$3
+>
+> t$0 {dname:string, name:string} list
+> t$1 ({id:int, name:string} * {dname:string, id:int}) list
+> t$2 {id:int, name:string} list
+> t$3 {dname:string, id:int} list
+> |_} : string
+fun grouped n =
+  from e in es
+    group {e.id} compute {c = count over (), s = sum over e.id}
+    order DESC c
+    skip n take 2;
+> val grouped = fn : int -> {c:int, id:int, s:int} list
+same grouped;
+> val it = true : bool
+fun nested n =
+  from e in es
+    where (exists d in ds where d.id = e.id)
+    yield (e.id, if e.id > n then e.name else "-");
+> val nested = fn : int -> (int * string) list
+same nested;
+> val it = true : bool
+fun sets n = from e in (from e in es where e.id > n) union (from e in es) yield e.id;
+> val sets = fn : int -> int list
+same sets;
+> val it = true : bool
+fun bagged n = from e in bag es where e.id > n yield e.name unorder;
+> val bagged = fn : int -> string bag
+same bagged;
+> val it = true : bool
+fun scalar (x, y) = let val z = x + y in z * z end;
+> val scalar = fn : int * int -> int
+same scalar;
+> val it = true : bool
+
+(*) End core.smli

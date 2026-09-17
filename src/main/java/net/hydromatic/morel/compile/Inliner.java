@@ -39,6 +39,7 @@ import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.CoreValues;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
@@ -538,9 +539,13 @@ public class Inliner extends EnvShuttle {
     }
   }
 
-  /** Converts a runtime value to constant expression (usually a literal). */
+  /**
+   * Converts a value to an expression of a type: a literal, a constructor
+   * application, a tuple; anything else -- a type, a view of the compiler's
+   * tree, a collection -- to a value literal, which is the value itself.
+   */
   @SuppressWarnings("unchecked")
-  private static Core.Exp valueToExp(
+  public static Core.Exp valueToExp(
       TypeSystem typeSystem, Type type, Object value) {
     final List<Object> list;
     switch (type.op()) {
@@ -548,6 +553,11 @@ public class Inliner extends EnvShuttle {
         return core.literal((PrimitiveType) type, value);
 
       case DATA_TYPE:
+        if (!(value instanceof List) || value instanceof CoreValues.View) {
+          // An opaque value -- a type, or a view of the compiler's tree --
+          // has no expression but itself.
+          return core.valueLiteral(core.id(core.idPat(type, "v$", 0)), value);
+        }
         list = (List<Object>) value;
         String name = (String) list.get(0);
         final Core.IdPat idPat = core.idPat(type, name, 0);
@@ -572,10 +582,7 @@ public class Inliner extends EnvShuttle {
         return core.tuple(tupleType, args.build());
 
       default:
-        throw new AssertionError(
-            format(
-                "cannot convert value [%s] of type [%s] to expression",
-                value, type));
+        return core.valueLiteral(core.id(core.idPat(type, "v$", 0)), value);
     }
   }
 

@@ -874,7 +874,7 @@ public class TypeSystem {
   }
 
   /** Returns whether a type contains a {@link TypeVar}. */
-  private static boolean hasTypeVar(Type type) {
+  public static boolean hasTypeVar(Type type) {
     final VariableCollector collector = new VariableCollector();
     type.accept(collector);
     return !collector.vars.isEmpty();

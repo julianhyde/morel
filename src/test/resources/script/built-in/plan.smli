@@ -24,11 +24,11 @@ Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
 Plan;
-> val it = {bodyOf=fn} : {bodyOf:('a -> 'b) -> string}
+> val it = {bodyOf=fn} : {bodyOf:('a -> 'b) -> exp}
 
 (*) val bodyOf : ('a -> 'b) -> string
 Plan.bodyOf;
-> val it = fn : ('a -> 'b) -> string
+> val it = fn : ('a -> 'b) -> exp
 
 (* The body of a function whose body is a query is the query's tree, after
  * every pass and rule; the parameter is a free name in it. *)
@@ -49,7 +49,7 @@ Sys.planEx "-1";
 >
 > t$0 {id:int, name:string} list
 > |} : string
-Plan.bodyOf above;
+Core.print (Plan.bodyOf above);
 > val it =
 >   {_|
 > project [#name $0] : string list
@@ -64,13 +64,13 @@ above 1;
 (*) A body that is not a query prints as an expression.
 fun twice x = x + x;
 > val twice = fn : int -> int
-Plan.bodyOf twice;
+Core.print (Plan.bodyOf twice);
 > val it = "x + x" : string
 
 (*) A closure's body is what the compiler made of it: a constant is inlined.
 val f = let val k = 2 in fn x => x * k end;
 > val f = fn : int -> int
-Plan.bodyOf f;
+Core.print (Plan.bodyOf f);
 > val it = "#* Int (x, 2)" : string
 f 21;
 > val it = 42 : int
