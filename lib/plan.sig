@@ -31,6 +31,26 @@ sig
    * a built-in.
    *)
   val bodyOf : ('a -> 'b) -> exp [@@prototype "bodyOf f"]
+
+  (**
+   * returns a function that computes what `f` computes, whose body is `f`'s
+   * rewritten by `rules`.
+   *
+   * Each rule is given a node of the body, after the nodes below it have
+   * been rewritten, and returns what replaces it, or `NONE` if it does not
+   * apply there. The rules are tried in the order given, the first that
+   * fires is applied, and the node is tried again until none fires. The
+   * compiler's own rules run before them at each node, so what a rule
+   * leaves is simplified as the compiler would simplify it.
+   *
+   * A rule must not change what a node means, and its replacement must have
+   * the node's type; that much is checked, and a rule that breaks it raises.
+   *
+   * Raises `Fail` if `f` is not a function the compiler compiled, such as a
+   * built-in.
+   *)
+  val program : (exp -> exp option) list -> ('a -> 'b) -> ('a -> 'b)
+      [@@prototype "program rules f"]
 end
 [@@description "What the compiler made of a function."]
 [@@specified "morel"]

@@ -310,6 +310,38 @@ public class Compiler {
     return compile(Context.of(env), expression);
   }
 
+  /**
+   * Compiles a function for a closure that exists already: a new body, over the
+   * values that closure captured.
+   *
+   * <p>The captured values are not compiled again -- the closure holds them,
+   * and the new code reads them from the slots they are in -- so the layout the
+   * body is compiled against is the one they were captured into, and the
+   * offsets that fill those slots are the ones the closure was made with.
+   */
+  public Codes.StackMatchCode recompile(
+      Environment env, Core.Fn fn, Codes.StackMatchCode matchCode) {
+    StackLayout layout = StackLayout.EMPTY;
+    int depth = 0;
+    for (Core.NamedPat pat : matchCode.capturedPats) {
+      layout = layout.with(pat, depth++);
+    }
+    for (Core.NamedPat pat : matchCode.recPeerPats) {
+      layout = layout.with(pat, depth++);
+    }
+    for (Core.NamedPat pat : fn.idPat.expand()) {
+      layout = layout.with(pat, depth++);
+    }
+    final List<Binding> bindings = new ArrayList<>();
+    Compiles.acceptBinding(typeSystem, fn.idPat, bindings);
+    final Context cx = new Context(env.bindAll(bindings), layout, depth);
+    final Code bodyCode = compileTail(cx, fn.exp);
+    final PairList<Core.Pat, Code> patCodes = PairList.of();
+    patCodes.add(fn.idPat, bodyCode);
+    return matchCode.withBody(
+        patCodes.immutable(), depth + bodyCode.maxSlots(), fn);
+  }
+
   /** Compiles the argument to "apply". */
   public Code compileArg(Context cx, Core.Exp expression) {
     return compile(cx, expression);
@@ -1301,7 +1333,8 @@ public class Compiler {
 
     return new Codes.StackMatchCode(
         captureOffsets,
-        cx.recPeers.size(),
+        ImmutableList.copyOf(captureMap.keySet()),
+        cx.recPeers,
         patCodes.immutable(),
         capacity,
         last(matchList).pos,

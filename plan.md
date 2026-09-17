@@ -2412,8 +2412,32 @@ user-written rule, with the plan before and after in a script.
       whose value still holds the node, so a rule passes it along
       and `typeOf` still answers. A built-in function is `BUILTIN
       "Int.+"`, by its qualified name.
-- [ ] (3) `Plan.program`, `Plan.wholeTree`; a Morel rule compiling
-      into the step-4 framework; the issue's example as a script.
+- [x] (3) `Plan.program`; a Morel rule compiling into the step-4
+      framework. `Plan.program rules f` wraps each Morel rule as a
+      `RelRule` -- render the node, call the closure, recover what
+      comes back or decline on `NONE` -- appends them to
+      `RelRules.STANDARD`, rewrites the closure's `Core.Fn`, and
+      compiles the new body. The compiling is the piece that had to
+      be built: a closure's captured values are in slots, so
+      `StackMatchCode` now keeps the *names* of what it captured
+      (`capturedPats`, `recPeerPats`; the redundant `recPeerCount`
+      went), and `Compiler.recompile` compiles a new body against
+      exactly that layout, so the new closure reuses the old
+      captured array. No environment is reconstructed and no value
+      is substituted -- which matters, because a captured value can
+      be a closure, and a closure is not a thing a value literal may
+      hold.
+      `built-in/plan.smli` has the first rule written in Morel: a
+      filter above a projection pushed below it, with `samePat` and
+      `subst` written over the datatype. It fires, the plan changes,
+      and both functions give the same answers. The script says
+      plainly that the rule duplicates the projection's expression
+      and is a demonstration rather than a rule to keep.
+- [ ] `Plan.wholeTree` is not exposed. A whole-tree rule is a
+      second kind, and the only way to mark one from Morel is a
+      second entry point or a wrapper datatype; nothing outside the
+      compiler wants one yet (grounding is the only whole-tree rule
+      and it is the compiler's), so the choice waits for a case.
 - [ ] (4) Reactor / MEMO / guard-dependency machinery as the second
       engine beside the driver.
 

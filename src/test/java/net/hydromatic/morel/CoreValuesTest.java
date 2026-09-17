@@ -19,6 +19,7 @@
 package net.hydromatic.morel;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.Static.transformEager;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.Matchers.is;
@@ -38,7 +39,6 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.Static;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -97,7 +97,7 @@ public class CoreValuesTest {
       }
       if (value instanceof List && !(value instanceof Variant)) {
         // A record, a tuple, a list, an option: rebuild each element.
-        return Static.transformEager((List<?>) value, this::roundTrip);
+        return transformEager((List<?>) value, this::roundTrip);
       }
       return value; // a literal, a name, a type
     }
@@ -105,7 +105,7 @@ public class CoreValuesTest {
     void checkRoundTrip(Core.Exp exp) {
       final Object value = CoreValues.of(exp);
       final Object value2 = roundTrip(value);
-      assertThat(CoreValues.toExp(value2).toString(), is(exp.toString()));
+      assertThat(CoreValues.toExp(value2), hasToString(exp.toString()));
       assertThat(
           CoreValues.toExp(value2).type.moniker(), is(exp.type.moniker()));
     }

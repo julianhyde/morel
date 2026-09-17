@@ -24,7 +24,9 @@ Sys.set ("stringDepth", ~1);
 > val it = () : unit
 
 Plan;
-> val it = {bodyOf=fn} : {bodyOf:('a -> 'b) -> exp}
+> val it = {bodyOf=fn,program=fn}
+>   : {bodyOf:('a -> 'b) -> exp,
+>       program:(exp -> exp option) list -> ('c -> 'd) -> 'c -> 'd}
 
 (*) val bodyOf : ('a -> 'b) -> string
 Plan.bodyOf;
@@ -79,5 +81,100 @@ f 21;
 Plan.bodyOf String.size;
 > uncaught exception Fail [Fail: not a compiled function]
 >   raised at: stdIn:1.1-1.24
+
+(* ---------------------------------------------------------------- *)
+(* A rule written in Morel.
+ *
+ * A filter above a projection asks something of what the projection makes
+ * of a row; the same question can be asked of the row itself, below the
+ * projection. The rule substitutes the projection's expression for the
+ * filter's element, and puts the filter underneath.
+ *
+ * It is a demonstration, not a rule to keep: substituting duplicates the
+ * projection's expression into the condition, so the rows that pass are
+ * computed twice. A rule worth keeping would ask what it costs first.
+ *)
+
+(*) Two patterns are the same binder if they have the same name and number.
+fun samePat (ID_PAT {i = i1, name = n1, ty = _},
+             ID_PAT {i = i2, name = n2, ty = _}) = i1 = i2 andalso n1 = n2
+  | samePat _ = false;
+> val samePat = fn : pat * pat -> bool
+
+(*) Replaces the reads of a binder in an expression.
+fun subst (target, value) e =
+  case e of
+      ID p => if samePat (p, target) then value else e
+    | APPLY (f, a) => APPLY (subst (target, value) f, subst (target, value) a)
+    | TUPLE es => TUPLE (List.map (subst (target, value)) es)
+    | RECORD_EXP nes =>
+        RECORD_EXP (List.map (fn (n, x) => (n, subst (target, value) x)) nes)
+    | _ => e;
+> val subst = fn : pat * exp -> exp -> exp
+
+(*) The rule itself.
+fun pushFilterOverProject e =
+  case e of
+      FILTER {condition = c, ordinalPat = NONE, row = fr,
+              input = PROJECT {exp = p, input = i, ordinalPat = NONE,
+                               row = pr}} =>
+        SOME (PROJECT {exp = p, ordinalPat = NONE, row = pr,
+                       input = FILTER {condition = subst (fr, p) c, input = i,
+                                       ordinalPat = NONE, row = pr}})
+    | _ => NONE;
+> val pushFilterOverProject = fn : exp -> exp option
+val optimize = Plan.program [pushFilterOverProject];
+> val optimize = fn : ('a -> 'b) -> 'a -> 'b
+
+(*) A query whose filter reads what the projection made.
+val names = ["ann", "bo", "cassandra"];
+> val names = ["ann","bo","cassandra"] : string list
+fun longNames n = from s in (from x in names yield x ^ "!")
+  where String.size s > n;
+> val longNames = fn : int -> string list
+Core.print (Plan.bodyOf longNames);
+> val it =
+>   {_|
+> filter [#size String $0 > n] : string list
+>   project [#^ String ($0, "!")] : string list
+>     names : string list
+> |_} : string
+
+(*) The same function, with the filter below the projection.
+val longNames2 = optimize longNames;
+> val longNames2 = fn : int -> string list
+Core.print (Plan.bodyOf longNames2);
+> val it =
+>   {_|
+> project [#^ String ($0, "!")] : string list
+>   filter [#size String (#^ String ($0, "!")) > n] : string list
+>     names : string list
+> |_} : string
+
+(*) Both compute the same answers.
+longNames 0;
+> val it = ["ann!","bo!","cassandra!"] : string list
+longNames2 0;
+> val it = ["ann!","bo!","cassandra!"] : string list
+longNames 3;
+> val it = ["ann!","cassandra!"] : string list
+longNames2 3;
+> val it = ["ann!","cassandra!"] : string list
+
+(*) A rule that never fires leaves the function as it was.
+val unchanged = Plan.program [fn _ => NONE] longNames;
+> val unchanged = fn : int -> string list
+Core.print (Plan.bodyOf unchanged);
+> val it =
+>   {_|
+> filter [#size String $0 > n] : string list
+>   project [#^ String ($0, "!")] : string list
+>     names : string list
+> |_} : string
+
+(*) A built-in has no body to rewrite.
+Plan.program [pushFilterOverProject] String.size;
+> uncaught exception Fail [Fail: not a compiled function]
+>   raised at: stdIn:1.1-1.37
 
 (*) End plan.smli

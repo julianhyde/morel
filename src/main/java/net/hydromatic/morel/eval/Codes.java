@@ -73,9 +73,13 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
+import net.hydromatic.morel.compile.Compiler;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
+import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.Macro;
+import net.hydromatic.morel.compile.RelRule;
+import net.hydromatic.morel.compile.RelRules;
 import net.hydromatic.morel.datalog.DatalogEvaluator;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.MorelParserImpl;
@@ -3830,6 +3834,100 @@ public abstract class Codes {
       }
       throw new MorelRuntimeException(
           BuiltInExn.FAIL, "not a compiled function", pos);
+    }
+  }
+
+  /** @see BuiltIn#PLAN_PROGRAM */
+  private static final Applicable PLAN_PROGRAM = new PlanProgram(Pos.ZERO);
+
+  /** Implements {@link #PLAN_PROGRAM}. */
+  private static class PlanProgram extends BasePositionedApplicable {
+    PlanProgram(Pos pos) {
+      super(BuiltIn.PLAN_PROGRAM, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new PlanProgram(pos);
+    }
+
+    @Override
+    public Object apply(Stack stack, Object rules) {
+      final List<?> ruleValues = (List<?>) rules;
+      // The rules are given; the function comes next.
+      return new ApplicableImpl(BuiltIn.PLAN_PROGRAM) {
+        @Override
+        public Object apply(Stack stack2, Object fnValue) {
+          return program(stack2, pos, ruleValues, fnValue);
+        }
+      };
+    }
+  }
+
+  /**
+   * Rewrites a closure's body by rules written in Morel, and returns a closure
+   * of the same type over the same captured values.
+   *
+   * @see BuiltIn#PLAN_PROGRAM
+   */
+  private static Object program(
+      Stack stack, Pos pos, List<?> ruleValues, Object fnValue) {
+    final Core.@Nullable Fn fn =
+        fnValue instanceof Closure.StackClosure
+            ? ((Closure.StackClosure) fnValue).fn()
+            : null;
+    if (fn == null) {
+      throw new MorelRuntimeException(
+          BuiltInExn.FAIL, "not a compiled function", pos);
+    }
+    final Closure.StackClosure closure = (Closure.StackClosure) fnValue;
+    final Session session = stack.session;
+    final TypeSystem typeSystem =
+        requireNonNull(session.typeSystem, "typeSystem");
+    final Environment env =
+        session.environment == null
+            ? Environments.empty()
+            : session.environment;
+    // The standard rules first, so that what a rule leaves is simplified as
+    // the compiler would have simplified it.
+    final List<RelRule> rules = new ArrayList<>(RelRules.STANDARD);
+    for (int i = 0; i < ruleValues.size(); i++) {
+      rules.add(new MorelRule((Applicable) ruleValues.get(i), stack, i));
+    }
+    final Core.Exp exp = RelRules.rewrite(typeSystem, env, rules, fn);
+    if (!(exp instanceof Core.Fn)) {
+      throw new MorelRuntimeException(
+          BuiltInExn.FAIL, "rules did not leave a function", pos);
+    }
+    final StackMatchCode matchCode =
+        new Compiler(typeSystem)
+            .recompile(env, (Core.Fn) exp, closure.matchCode);
+    return new Closure.StackClosure(session, closure.captured, matchCode);
+  }
+
+  /** A rule written in Morel, as a rule the driver can apply. */
+  private static class MorelRule implements RelRule {
+    private final Applicable fn;
+    private final Stack stack;
+    private final int i;
+
+    MorelRule(Applicable fn, Stack stack, int i) {
+      this.fn = fn;
+      this.stack = stack;
+      this.i = i;
+    }
+
+    @Override
+    public String name() {
+      // Nothing names a function value; a rule is known by where it stands
+      // in the program, which is what a diagnostic can point at.
+      return "rule " + i;
+    }
+
+    @Override
+    public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+      final List<?> option = (List<?>) fn.apply(stack, CoreValues.of(rel));
+      return option.size() == 1 ? null : CoreValues.toExp(option.get(1));
     }
   }
 
@@ -7790,6 +7888,7 @@ public abstract class Codes {
     b.add(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL);
     b.add(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF);
     b.add(BuiltIn.PLAN_BODY_OF, PLAN_BODY_OF);
+    b.add(BuiltIn.PLAN_PROGRAM, PLAN_PROGRAM);
     b.add(BuiltIn.PP_ALIGN, PP_ALIGN);
     b.add(BuiltIn.PP_BESIDE, PP_BESIDE);
     b.add(BuiltIn.PP_BRACES, PP_BRACES);
@@ -8756,12 +8855,13 @@ public abstract class Codes {
   public static class StackMatchCode implements Code {
     /** Stack offsets of outer variables to be copied on closure creation. */
     final int[] captureOffsets;
+
     /**
-     * Number of mutual-recursion peers in this closure's rec group; 0 for
-     * non-recursive closures. Determines the pre-allocated tail of {@code
-     * captured[]} that {@link Closure.StackClosure#extendWithRecPeers} fills.
+     * The peers of this closure's mutual-recursion group; empty if it is not
+     * recursive. They are the pre-allocated tail of {@code captured[]} that
+     * {@link Closure.StackClosure#extendWithRecPeers} fills.
      */
-    private final int recPeerCount;
+    public final ImmutableList<Core.NamedPat> recPeerPats;
 
     final ImmutablePairList<Core.Pat, Code> patCodes;
     /** Minimum slots needed for a fresh {@link Closure.StackClosure} call. */
@@ -8777,19 +8877,45 @@ public abstract class Codes {
      */
     final Core.@Nullable Fn fn;
 
+    /**
+     * The variables the closure captures, in the slots they sit in.
+     *
+     * <p>The offsets say where the values were read from; these say what they
+     * are called, which is what compiling a new body over the same values
+     * needs. See {@code Plan.program}.
+     */
+    public final ImmutableList<Core.NamedPat> capturedPats;
+
     public StackMatchCode(
         int[] captureOffsets,
-        int recPeerCount,
+        List<Core.NamedPat> capturedPats,
+        List<Core.NamedPat> recPeerPats,
         ImmutablePairList<Core.Pat, Code> patCodes,
         int capacity,
         Pos pos,
         Core.@Nullable Fn fn) {
       this.captureOffsets = captureOffsets;
-      this.recPeerCount = recPeerCount;
+      this.capturedPats = ImmutableList.copyOf(capturedPats);
+      this.recPeerPats = ImmutableList.copyOf(recPeerPats);
       this.patCodes = patCodes;
       this.capacity = capacity;
       this.pos = pos;
       this.fn = fn;
+    }
+
+    /**
+     * Returns a copy of this with a new body, over the same captured values.
+     */
+    public StackMatchCode withBody(
+        ImmutablePairList<Core.Pat, Code> patCodes, int capacity, Core.Fn fn) {
+      return new StackMatchCode(
+          captureOffsets,
+          capturedPats,
+          recPeerPats,
+          patCodes,
+          capacity,
+          pos,
+          fn);
     }
 
     @Override
@@ -8807,7 +8933,7 @@ public abstract class Codes {
       // Pre-allocate with room for rec-group peers (filled later by
       // extendWithRecPeers); for non-recursive closures numRecPeers == 0.
       final Object[] captured =
-          new Object[captureOffsets.length + recPeerCount];
+          new Object[captureOffsets.length + recPeerPats.size()];
       for (int i = 0; i < captureOffsets.length; i++) {
         captured[i] = stack.slots[stack.top - captureOffsets[i]];
       }
