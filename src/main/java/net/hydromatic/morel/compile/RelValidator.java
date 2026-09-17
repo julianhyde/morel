@@ -24,6 +24,7 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -64,8 +65,21 @@ public class RelValidator {
    * it is valid.
    */
   public static List<String> violations(TypeSystem typeSystem, Core.Rel rel) {
+    return violations(typeSystem, rel, ImmutableSet.of());
+  }
+
+  /**
+   * Returns the ways in which a tree violates the invariants, given the
+   * patterns of the enclosing nodes; empty if it is valid.
+   *
+   * <p>A tree nested in a node's expression may read that node's patterns and
+   * those of the nodes enclosing it; checked on its own, such a read would look
+   * unbound.
+   */
+  public static List<String> violations(
+      TypeSystem typeSystem, Core.Rel rel, Set<Core.IdPat> outer) {
     final RelValidator validator = new RelValidator(typeSystem);
-    validator.node(rel, ImmutableSet.of());
+    validator.node(rel, outer);
     return ImmutableList.copyOf(validator.violations);
   }
 
@@ -268,13 +282,30 @@ public class RelValidator {
    * reference to a pattern whose name says it is a node's -- {@code $0}, {@code
    * $1}, {@code $ordinal} -- must be one the node or an enclosing node binds. A
    * nested tree is checked with the same scope, extended by its own patterns.
+   *
+   * <p>A pattern the expression binds itself -- a function's parameter, a
+   * {@code let}, a {@code case} -- is its own to read, whatever its name; the
+   * resolver names the parameter of a composed aggregate function {@code $col}.
    */
   private void scope(Core.Exp exp, Set<Core.IdPat> allowed, String what) {
+    final Set<Core.IdPat> bound = new HashSet<>();
+    exp.accept(
+        new RelBoundaryVisitor() {
+          @Override
+          protected void visit(Core.IdPat idPat) {
+            bound.add(idPat);
+          }
+
+          @Override
+          protected void rel(Core.Rel rel) {}
+        });
     exp.accept(
         new RelBoundaryVisitor() {
           @Override
           protected void visit(Core.Id id) {
-            if (id.idPat.name.charAt(0) == '$' && !allowed.contains(id.idPat)) {
+            if (id.idPat.name.charAt(0) == '$'
+                && !allowed.contains(id.idPat)
+                && !bound.contains(id.idPat)) {
               violation("%s cannot reference %s", what, id.idPat.name);
             }
           }

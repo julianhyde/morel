@@ -38,6 +38,8 @@ for the design is in discussion.md; the sequence is in plan.md.
 **Changes.** Frozen has meant stable and versioned since the first
 amendments landed. What a port has to re-check, newest first:
 
+* 2026-09-17 — §6.8: grounding is a rule, and runs with the rules;
+  the numbered phases are inlining passes only. `"-1"` is unchanged.
 * 2026-09-16 — §8: the step list is deleted. Both compilers read the
   tree; nothing prints changed.
 * 2026-09-15 — §1–§3, §5, §6.3: a node binds patterns for its
@@ -776,8 +778,8 @@ then have to case on. Frozen as written.
 A plan is a rendering of the query at one point in the pipeline, and
 `Sys.planEx phase` says which point. The pipeline is: resolve names
 and build the tree; resolve overloads and inline what the resolver
-left, in passes, to a fixed point; ground the unbounded leaves;
-compile. The phases are:
+left, in passes, to a fixed point; rewrite by the rules, grounding
+the unbounded leaves first among them; compile. The phases are:
 
 * `"resolved"` (any argument that is not a number): the tree as the
   resolver built it. Names are resolved, overloads are not, nothing
@@ -785,8 +787,8 @@ compile. The phases are:
 * `"0"`: after overload resolution, with the inliner otherwise held
   back.
 * `"N"`: after `N` passes of inlining.
-* `"-1"`: the final tree, after every pass and after grounding; what
-  the compiler is given.
+* `"-1"`: the final tree, after every pass and after the rules,
+  grounding among them; what the compiler is given.
 
 `Sys.planOf e` is the resolved tree of `e`, and `e` is not evaluated;
 `Sys.plan ()` is the executable code of the last statement, and is

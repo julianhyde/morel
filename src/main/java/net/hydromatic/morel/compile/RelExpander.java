@@ -193,7 +193,7 @@ public class RelExpander {
    * Replaces every infinite-extent leaf of a tree with a collection that bounds
    * it, and throws if there is none.
    *
-   * <p>{@link SuchThatShuttle} is the caller, at the root of each tree.
+   * <p>{@link RelRules#GROUND} is the caller, at the root of each tree.
    */
   public static Core.Exp expand(
       TypeSystem typeSystem, Environment env, Core.Exp tree) {

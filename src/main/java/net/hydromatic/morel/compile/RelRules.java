@@ -22,8 +22,10 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
@@ -39,13 +41,15 @@ import org.jspecify.annotations.Nullable;
  * Applies {@link RelRule}s to the relational trees in an expression, and holds
  * the standard rules.
  *
- * <p>The driver is deterministic. It rewrites a tree bottom-up: a node's inputs
- * first, and the trees nested in its expressions, then the node, where it tries
- * the rules in the order given and applies the first that fires. A firing may
- * put new nodes under the replacement, so the replacement is rewritten in turn,
- * and the rules are tried again at it until none fires. The order of the rules
- * and of the walk being fixed, the result depends on the tree and the rules and
- * nothing else.
+ * <p>The driver is deterministic. At a tree's root it first applies the
+ * whole-tree rules, in the order given, until none fires. Then it rewrites the
+ * tree bottom-up: a node's inputs first, and the trees nested in its
+ * expressions, then the node, where it tries the node rules in the order given
+ * and applies the first that fires. A firing may put new nodes under the
+ * replacement, so the replacement is rewritten in turn, and the rules are tried
+ * again at it until none fires. The order of the rules and of the walk being
+ * fixed, the result depends on the tree, the rules and the context -- the
+ * environment, and whether the rows are read -- and nothing else.
  *
  * <p>With assertions on, every firing is checked: the replacement has the type
  * of the node it replaces, and is a well-formed tree by {@link RelValidator}.
@@ -72,7 +76,8 @@ public class RelRules {
         }
 
         @Override
-        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          final TypeSystem typeSystem = cx.typeSystem();
           if (!(rel instanceof Core.Unorder)) {
             return null;
           }
@@ -171,7 +176,8 @@ public class RelRules {
         }
 
         @Override
-        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          final TypeSystem typeSystem = cx.typeSystem();
           if (rel instanceof Core.Filter
               && ((Core.Filter) rel).condition.isBoolLiteral(true)) {
             return ((Core.Filter) rel).input;
@@ -198,7 +204,8 @@ public class RelRules {
         }
 
         @Override
-        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          final TypeSystem typeSystem = cx.typeSystem();
           if (!(rel instanceof Core.Filter)) {
             return null;
           }
@@ -231,7 +238,8 @@ public class RelRules {
         }
 
         @Override
-        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          final TypeSystem typeSystem = cx.typeSystem();
           if (rel instanceof Core.Project) {
             final Core.Project project = (Core.Project) rel;
             if (project.ordinal == null && isRow(project.exp, project.row)) {
@@ -269,7 +277,8 @@ public class RelRules {
         }
 
         @Override
-        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          final TypeSystem typeSystem = cx.typeSystem();
           if (!(rel instanceof Core.Project)) {
             return null;
           }
@@ -319,7 +328,8 @@ public class RelRules {
         }
 
         @Override
-        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          final TypeSystem typeSystem = cx.typeSystem();
           if (rel instanceof Core.Skip) {
             final Core.Skip skip = (Core.Skip) rel;
             if (skip.count.op == Op.INT_LITERAL
@@ -332,7 +342,80 @@ public class RelRules {
       };
 
   /**
+   * Grounds a tree: replaces the extents among its leaves -- "every value of
+   * the type" -- with generators derived from the tree's constraints.
+   *
+   * <p>A whole-tree rule: the constraints are wherever the query put them, and
+   * it reads the tree as it was built. Under {@code exists} or {@code empty}
+   * the rows are only counted, and the grounding may then simplify what a row
+   * is. A tree in a recursive function's body is left alone: it is expanded
+   * when the function is called, or recognized as a transitive closure.
+   *
+   * <p>A generator's collection may be a query of its own over an extent that
+   * its own conditions bound, so the leaves that are trees are grounded in turn
+   * before the result is judged. A result with an unbounded leaf, or one that
+   * reads a field its row no longer has, is not a grounding, and the rule
+   * declines; the tree stays as it was, and the diagnostic is the caller's,
+   * which asks for it after every rule has had its chance.
+   */
+  public static final RelRule GROUND =
+      new RelRule() {
+        @Override
+        public String name() {
+          return "Ground";
+        }
+
+        @Override
+        public boolean wholeTree() {
+          return true;
+        }
+
+        @Override
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          if (cx.inRecursiveFunction() || !RelExpander.containsUnbounded(rel)) {
+            return null;
+          }
+          final Core.Exp expanded0 =
+              RelExpander.expand(
+                  cx.typeSystem(),
+                  cx.env(),
+                  rel,
+                  cx.rowsUsed(),
+                  RelExpander.leafPats(rel));
+          final Core.Exp expanded = groundLeaves(cx, expanded0);
+          if (RelExpander.containsUnbounded(expanded)
+              || Expander.misaddressed(expanded)) {
+            return null;
+          }
+          return expanded;
+        }
+
+        /** Grounds the leaves of a tree that are trees over extents. */
+        private Core.Exp groundLeaves(RelRule.Context cx, Core.Exp exp) {
+          if (!(exp instanceof Core.Rel)) {
+            return exp;
+          }
+          return copy(
+              cx.typeSystem(),
+              (Core.Rel) exp,
+              input -> {
+                if (input instanceof Core.Rel
+                    && RelExpander.containsUnbounded(input)) {
+                  final Core.@Nullable Exp grounded =
+                      apply(cx, (Core.Rel) input);
+                  return grounded != null ? grounded : input;
+                }
+                return groundLeaves(cx, input);
+              },
+              Function.identity());
+        }
+      };
+
+  /**
    * The rules that every query is rewritten with, in order.
+   *
+   * <p>Grounding comes first, and is the one whole-tree rule: it sees each tree
+   * before the node rules reshape it.
    *
    * <p>The builder applies most of these as it builds -- what is cheaper not to
    * build than to build and remove -- and they are rules as well for the trees
@@ -342,6 +425,7 @@ public class RelRules {
    */
   public static final ImmutableList<RelRule> STANDARD =
       ImmutableList.of(
+          GROUND,
           UNORDER_PUSHDOWN,
           FILTER_TRUE,
           FILTER_MERGE,
@@ -443,60 +527,149 @@ public class RelRules {
 
   /** Rewrites every tree in a declaration. */
   public static Core.Decl rewrite(
-      TypeSystem typeSystem, List<RelRule> rules, Core.Decl decl) {
-    return decl.accept(new Driver(typeSystem, rules).shuttle);
+      TypeSystem typeSystem,
+      Environment env,
+      List<RelRule> rules,
+      Core.Decl decl) {
+    return decl.accept(new Driver(typeSystem, rules).walker(env));
   }
 
   /** Rewrites every tree in an expression. */
   public static Core.Exp rewrite(
-      TypeSystem typeSystem, List<RelRule> rules, Core.Exp exp) {
-    return new Driver(typeSystem, rules).rewrite(exp);
+      TypeSystem typeSystem,
+      Environment env,
+      List<RelRule> rules,
+      Core.Exp exp) {
+    return new Driver(typeSystem, rules).walker(env).rewrite(exp);
   }
 
-  /** One rewrite of one expression. */
+  /** Rewrites every tree in an expression that has no free names. */
+  public static Core.Exp rewrite(
+      TypeSystem typeSystem, List<RelRule> rules, Core.Exp exp) {
+    return rewrite(typeSystem, Environments.empty(), rules, exp);
+  }
+
+  /**
+   * Copies a node with its inputs and its expressions passed through the given
+   * functions; returns the node itself if nothing changed.
+   */
+  private static Core.Exp copy(
+      TypeSystem typeSystem,
+      Core.Rel rel,
+      Function<Core.Exp, Core.Exp> inputFn,
+      Function<Core.Exp, Core.Exp> expFn) {
+    if (rel instanceof Core.Filter) {
+      final Core.Filter filter = (Core.Filter) rel;
+      return filter.copy(
+          inputFn.apply(filter.input), expFn.apply(filter.condition));
+    }
+    if (rel instanceof Core.Project) {
+      final Core.Project project = (Core.Project) rel;
+      return project.copy(
+          typeSystem, inputFn.apply(project.input), expFn.apply(project.exp));
+    }
+    if (rel instanceof Core.Join) {
+      final Core.Join join = (Core.Join) rel;
+      return join.copy(
+          typeSystem,
+          join.joinType,
+          inputFn.apply(join.left),
+          inputFn.apply(join.right),
+          expFn.apply(join.condition));
+    }
+    if (rel instanceof Core.Group) {
+      final Core.Group group = (Core.Group) rel;
+      return group.copy(
+          typeSystem,
+          inputFn.apply(group.input),
+          transformValues(group.keys, expFn),
+          transformValues(
+              group.aggregates,
+              a ->
+                  a.copy(
+                      a.type,
+                      expFn.apply(a.aggregate),
+                      a.argument == null ? null : expFn.apply(a.argument))));
+    }
+    if (rel instanceof Core.Sort) {
+      final Core.Sort sort = (Core.Sort) rel;
+      return sort.copy(
+          typeSystem, inputFn.apply(sort.input), expFn.apply(sort.exp));
+    }
+    if (rel instanceof Core.Unorder) {
+      final Core.Unorder unorder = (Core.Unorder) rel;
+      return unorder.copy(typeSystem, inputFn.apply(unorder.input));
+    }
+    if (rel instanceof Core.Skip) {
+      final Core.Skip skip = (Core.Skip) rel;
+      return skip.copy(inputFn.apply(skip.input), expFn.apply(skip.count));
+    }
+    if (rel instanceof Core.Take) {
+      final Core.Take take = (Core.Take) rel;
+      return take.copy(inputFn.apply(take.input), expFn.apply(take.count));
+    }
+    if (rel instanceof Core.IfEmpty) {
+      final Core.IfEmpty ifEmpty = (Core.IfEmpty) rel;
+      return ifEmpty.copy(
+          inputFn.apply(ifEmpty.input), expFn.apply(ifEmpty.exp));
+    }
+    if (rel instanceof Core.SetRel) {
+      final Core.SetRel setRel = (Core.SetRel) rel;
+      return setRel.copy(
+          typeSystem,
+          setRel.distinct,
+          transformEager(setRel.inputs, inputFn::apply));
+    }
+    throw new AssertionError("unknown node " + rel.op);
+  }
+
+  private static <V> SortedMap<String, V> transformValues(
+      SortedMap<String, V> map, Function<V, V> fn) {
+    final SortedMap<String, V> map2 = new TreeMap<>(map.comparator());
+    map.forEach((k, v) -> map2.put(k, fn.apply(v)));
+    return map2;
+  }
+
+  /** One rewrite of one expression: the rules, and the count of firings. */
   private static class Driver {
     final TypeSystem typeSystem;
-    final List<RelRule> rules;
+    final List<RelRule> wholeTreeRules;
+    final List<RelRule> nodeRules;
     int firings;
-
-    /**
-     * Walks an expression, and rewrites each tree it meets; a tree's own walk
-     * is {@link #rewrite}, so the shuttle does not descend into one.
-     */
-    final Shuttle shuttle;
 
     Driver(TypeSystem typeSystem, List<RelRule> rules) {
       this.typeSystem = typeSystem;
-      this.rules = ImmutableList.copyOf(rules);
-      this.shuttle =
-          new Shuttle(typeSystem) {
-            @Override
-            protected Core.@Nullable Exp visitRel(Core.Rel rel) {
-              return rewrite(rel);
-            }
-          };
+      final ImmutableList.Builder<RelRule> whole = ImmutableList.builder();
+      final ImmutableList.Builder<RelRule> node = ImmutableList.builder();
+      rules.forEach(rule -> (rule.wholeTree() ? whole : node).add(rule));
+      this.wholeTreeRules = whole.build();
+      this.nodeRules = node.build();
     }
 
-    /** Rewrites an expression: a tree bottom-up, anything else by walk. */
-    Core.Exp rewrite(Core.Exp exp) {
-      if (!(exp instanceof Core.Rel)) {
-        return exp.accept(shuttle);
-      }
-      return fire(copy((Core.Rel) exp, this::rewrite, e -> e.accept(shuttle)));
+    Walker walker(Environment env) {
+      return new Walker(env, true, false, ImmutableSet.of());
     }
 
     /**
-     * Applies the rules at a node whose inputs are rewritten, until none fires,
-     * and returns the result.
+     * Applies rules at a node until none fires, and returns the result.
+     *
+     * <p>{@code below} is how a firing's replacement is completed: a node rule
+     * may put new nodes under its replacement, which are rewritten in turn; a
+     * whole-tree rule's replacement is rewritten below afterwards, as a whole.
      */
-    private Core.Exp fire(Core.Exp node) {
+    private Core.Exp fire(
+        List<RelRule> rules,
+        RelRule.Context cx,
+        Set<Core.IdPat> patterns,
+        Core.Exp node,
+        Function<Core.Exp, Core.Exp> below) {
       while (node instanceof Core.Rel) {
         final Core.Rel rel = (Core.Rel) node;
         Core.@Nullable Exp next = null;
         for (RelRule rule : rules) {
-          final Core.@Nullable Exp result = rule.apply(typeSystem, rel);
+          final Core.@Nullable Exp result = rule.apply(cx, rel);
           if (result != null && result != rel) {
-            check(rule, rel, result);
+            check(rule, cx, rel, result, patterns);
             next = result;
             break;
           }
@@ -508,19 +681,26 @@ public class RelRules {
           throw new IllegalStateException(
               "rules did not converge after " + LIMIT + " firings");
         }
-        // The firing may have put new nodes below; rewrite those, but not
-        // the expressions, which the walk has been through already.
-        node =
-            next instanceof Core.Rel
-                ? copy((Core.Rel) next, this::rewrite, Function.identity())
-                : next;
+        node = below.apply(next);
       }
       return node;
     }
 
     /** Checks the two properties every rule must preserve. */
-    private void check(RelRule rule, Core.Rel before, Core.Exp after) {
-      if (!after.type.equals(before.type)) {
+    private void check(
+        RelRule rule,
+        RelRule.Context cx,
+        Core.Rel before,
+        Core.Exp after,
+        Set<Core.IdPat> patterns) {
+      final boolean ok =
+          cx.rowsUsed()
+              ? after.type.equals(before.type)
+              // Nothing reads the rows, so the element may change; the kind
+              // may not.
+              : after.type.isCollection()
+                  && after.type.getClass() == before.type.getClass();
+      if (!ok) {
         throw new AssertionError(
             String.format(
                 "rule %s changed the type of %s from %s to %s",
@@ -529,99 +709,185 @@ public class RelRules {
                 before.type.moniker(),
                 after.type.moniker()));
       }
-      assert valid(rule, after);
+      assert valid(rule, after, patterns);
     }
 
-    private boolean valid(RelRule rule, Core.Exp after) {
+    private boolean valid(
+        RelRule rule, Core.Exp after, Set<Core.IdPat> patterns) {
       if (after instanceof Core.Rel) {
         final List<String> violations =
-            RelValidator.violations(typeSystem, (Core.Rel) after);
+            RelValidator.violations(typeSystem, (Core.Rel) after, patterns);
         if (!violations.isEmpty()) {
           throw new AssertionError(
-              "rule " + rule.name() + " built an invalid tree: " + violations);
+              "rule "
+                  + rule.name()
+                  + " built an invalid tree: "
+                  + violations
+                  + "\n"
+                  + after);
         }
       }
       return true;
     }
 
     /**
-     * Copies a node with its inputs and its expressions passed through the
-     * given functions; returns the node itself if nothing changed.
+     * Walks an expression in its context, and rewrites each tree it meets; a
+     * tree's own walk is {@link #rewrite}, so the shuttle does not descend into
+     * one.
+     *
+     * <p>The context is the environment, whether the rows are read, and whether
+     * the walk is in a recursive function's body, and each is what it was where
+     * the tree stands. The walker also carries the patterns of the enclosing
+     * nodes, which a tree nested in a node's expression may read; they are for
+     * the validator, which would otherwise see such a read as unbound.
      */
-    private Core.Exp copy(
-        Core.Rel rel,
-        Function<Core.Exp, Core.Exp> inputFn,
-        Function<Core.Exp, Core.Exp> expFn) {
-      if (rel instanceof Core.Filter) {
-        final Core.Filter filter = (Core.Filter) rel;
-        return filter.copy(
-            inputFn.apply(filter.input), expFn.apply(filter.condition));
-      }
-      if (rel instanceof Core.Project) {
-        final Core.Project project = (Core.Project) rel;
-        return project.copy(
-            typeSystem, inputFn.apply(project.input), expFn.apply(project.exp));
-      }
-      if (rel instanceof Core.Join) {
-        final Core.Join join = (Core.Join) rel;
-        return join.copy(
-            typeSystem,
-            join.joinType,
-            inputFn.apply(join.left),
-            inputFn.apply(join.right),
-            expFn.apply(join.condition));
-      }
-      if (rel instanceof Core.Group) {
-        final Core.Group group = (Core.Group) rel;
-        return group.copy(
-            typeSystem,
-            inputFn.apply(group.input),
-            transformValues(group.keys, expFn),
-            transformValues(
-                group.aggregates,
-                a ->
-                    a.copy(
-                        a.type,
-                        expFn.apply(a.aggregate),
-                        a.argument == null ? null : expFn.apply(a.argument))));
-      }
-      if (rel instanceof Core.Sort) {
-        final Core.Sort sort = (Core.Sort) rel;
-        return sort.copy(
-            typeSystem, inputFn.apply(sort.input), expFn.apply(sort.exp));
-      }
-      if (rel instanceof Core.Unorder) {
-        final Core.Unorder unorder = (Core.Unorder) rel;
-        return unorder.copy(typeSystem, inputFn.apply(unorder.input));
-      }
-      if (rel instanceof Core.Skip) {
-        final Core.Skip skip = (Core.Skip) rel;
-        return skip.copy(inputFn.apply(skip.input), expFn.apply(skip.count));
-      }
-      if (rel instanceof Core.Take) {
-        final Core.Take take = (Core.Take) rel;
-        return take.copy(inputFn.apply(take.input), expFn.apply(take.count));
-      }
-      if (rel instanceof Core.IfEmpty) {
-        final Core.IfEmpty ifEmpty = (Core.IfEmpty) rel;
-        return ifEmpty.copy(
-            inputFn.apply(ifEmpty.input), expFn.apply(ifEmpty.exp));
-      }
-      if (rel instanceof Core.SetRel) {
-        final Core.SetRel setRel = (Core.SetRel) rel;
-        return setRel.copy(
-            typeSystem,
-            setRel.distinct,
-            transformEager(setRel.inputs, inputFn::apply));
-      }
-      throw new AssertionError("unknown node " + rel.op);
-    }
+    private class Walker extends EnvShuttle implements RelRule.Context {
+      private final boolean rowsUsed;
+      private final boolean inRecursiveFunction;
+      private final Set<Core.IdPat> patterns;
 
-    private static <V> SortedMap<String, V> transformValues(
-        SortedMap<String, V> map, Function<V, V> fn) {
-      final SortedMap<String, V> map2 = new TreeMap<>(map.comparator());
-      map.forEach((k, v) -> map2.put(k, fn.apply(v)));
-      return map2;
+      Walker(
+          Environment env,
+          boolean rowsUsed,
+          boolean inRecursiveFunction,
+          Set<Core.IdPat> patterns) {
+        super(Driver.this.typeSystem, env);
+        this.rowsUsed = rowsUsed;
+        this.inRecursiveFunction = inRecursiveFunction;
+        this.patterns = patterns;
+      }
+
+      @Override
+      protected EnvShuttle push(Environment env) {
+        return new Walker(env, rowsUsed, inRecursiveFunction, patterns);
+      }
+
+      /** Returns a walker for what is under a node, which binds patterns. */
+      private Walker under(Iterable<Core.IdPat> pats) {
+        return new Walker(
+            env,
+            rowsUsed,
+            inRecursiveFunction,
+            ImmutableSet.<Core.IdPat>builder()
+                .addAll(patterns)
+                .addAll(pats)
+                .build());
+      }
+
+      @Override
+      public TypeSystem typeSystem() {
+        return typeSystem;
+      }
+
+      @Override
+      public Environment env() {
+        return env;
+      }
+
+      @Override
+      public boolean rowsUsed() {
+        return rowsUsed;
+      }
+
+      @Override
+      public boolean inRecursiveFunction() {
+        return inRecursiveFunction;
+      }
+
+      @Override
+      protected Core.Exp visit(Core.Apply apply) {
+        if (rowsUsed
+            && (apply.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)
+                || apply.isCallTo(BuiltIn.RELATIONAL_EMPTY))) {
+          // The argument's rows are counted, not read.
+          final Walker inner =
+              new Walker(env, false, inRecursiveFunction, patterns);
+          return apply.copy(apply.fn.accept(inner), apply.arg.accept(inner));
+        }
+        return super.visit(apply);
+      }
+
+      @Override
+      protected Core.RecValDecl visit(Core.RecValDecl recValDecl) {
+        if (inRecursiveFunction) {
+          return super.visit(recValDecl);
+        }
+        return new Walker(env, rowsUsed, true, patterns)
+            .visitRecursive(recValDecl);
+      }
+
+      private Core.RecValDecl visitRecursive(Core.RecValDecl recValDecl) {
+        return super.visit(recValDecl);
+      }
+
+      @Override
+      protected Core.@Nullable Exp visitRel(Core.Rel rel) {
+        return rewrite(rel);
+      }
+
+      /**
+       * Rewrites an expression: a tree from its root, anything else by walk.
+       */
+      Core.Exp rewrite(Core.Exp exp) {
+        if (!(exp instanceof Core.Rel)) {
+          return exp.accept(this);
+        }
+        // The whole-tree rules first, at the root, on the tree as it was
+        // built; then the tree below, and the node rules.
+        final Core.Exp tree =
+            fire(wholeTreeRules, this, patterns, exp, Function.identity());
+        return tree instanceof Core.Rel
+            ? rewriteNodes((Core.Rel) tree)
+            : tree.accept(this);
+      }
+
+      /**
+       * Rewrites a tree bottom-up: its inputs, and the trees nested in its
+       * expressions, then the node rules at the node.
+       */
+      private Core.Exp rewriteNodes(Core.Rel rel) {
+        // The node's expressions may read its patterns; a join's right input
+        // may read its left row, and its ordinal.
+        final Walker inner = under(rel.patterns());
+        final Walker right =
+            rel instanceof Core.Join
+                ? under(
+                    ((Core.Join) rel).ordinal == null
+                        ? ImmutableList.of(((Core.Join) rel).leftRow)
+                        : ImmutableList.of(
+                            ((Core.Join) rel).leftRow,
+                            ((Core.Join) rel).ordinal))
+                : this;
+        final Function<Core.Exp, Core.Exp> inputFn =
+            input ->
+                (rel instanceof Core.Join && input == ((Core.Join) rel).right
+                        ? right
+                        : this)
+                    .rewriteInput(input);
+        final Core.Exp node = copy(typeSystem, rel, inputFn, inner::rewrite);
+        // A firing may put new nodes below its replacement; rewrite those,
+        // but not the expressions, which the walk has been through already.
+        return fire(
+            nodeRules,
+            this,
+            patterns,
+            node,
+            next ->
+                next instanceof Core.Rel
+                    ? copy(
+                        typeSystem,
+                        (Core.Rel) next,
+                        this::rewriteInput,
+                        Function.identity())
+                    : next);
+      }
+
+      /** Rewrites an input: a node by the node rules, a leaf by walk. */
+      private Core.Exp rewriteInput(Core.Exp input) {
+        return input instanceof Core.Rel
+            ? rewriteNodes((Core.Rel) input)
+            : input.accept(this);
+      }
     }
   }
 }
