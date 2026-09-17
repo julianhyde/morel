@@ -22,12 +22,15 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.TypeSystem;
 import org.jspecify.annotations.Nullable;
@@ -177,11 +180,266 @@ public class RelRules {
         }
       };
 
-  /** The rules that every query is rewritten with, in order. */
+  /**
+   * Merges a {@code filter} over a {@code filter} into one whose condition is
+   * the conjunction of the two, the inner's first.
+   *
+   * <p>The resolver leaves the {@code where} steps as the user wrote them, so
+   * that a plan reads as the query does; it is here that they become one
+   * condition. A condition that reads the ordinal counts the rows the inner
+   * filter let through, which the merged filter would not have, so such a
+   * filter stays one of its own.
+   */
+  public static final RelRule FILTER_MERGE =
+      new RelRule() {
+        @Override
+        public String name() {
+          return "FilterMerge";
+        }
+
+        @Override
+        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+          if (!(rel instanceof Core.Filter)) {
+            return null;
+          }
+          final Core.Filter outer = (Core.Filter) rel;
+          if (outer.ordinal != null || !(outer.input instanceof Core.Filter)) {
+            return null;
+          }
+          final Core.Filter inner = (Core.Filter) outer.input;
+          final Core.Exp condition =
+              substitute(
+                  typeSystem, outer.condition, outer.row, core.id(inner.row));
+          return core.filter(
+              outer.pos,
+              inner.row,
+              inner.ordinal,
+              inner.input,
+              core.andAlso(typeSystem, inner.condition, condition));
+        }
+      };
+
+  /**
+   * Drops a {@code project} whose expression is its input's element and that
+   * binds no ordinal.
+   */
+  public static final RelRule PROJECT_IDENTITY =
+      new RelRule() {
+        @Override
+        public String name() {
+          return "ProjectIdentity";
+        }
+
+        @Override
+        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+          if (rel instanceof Core.Project) {
+            final Core.Project project = (Core.Project) rel;
+            if (project.ordinal == null && isRow(project.exp, project.row)) {
+              return project.input;
+            }
+          }
+          return null;
+        }
+      };
+
+  /**
+   * Merges a {@code project} over a {@code project} into one, by substituting
+   * the inner's expression into the outer's.
+   *
+   * <p>Substitution duplicates: {@code project [$0 + $0]} over {@code project
+   * [f $0]} would call {@code f} twice per row where the two nodes called it
+   * once. Where the outer reads its element more than once, the inner's
+   * expression is bound by a {@code let} first, which keeps the one evaluation
+   * the two nodes had. An expression that only reads -- a variable, a literal,
+   * a field, a record of those -- costs nothing to duplicate, and is
+   * substituted however often it is read, so that the fold below can reach it.
+   *
+   * <p>A projection keeps its input's positions, so an ordinal the outer reads
+   * is the inner's input's, and the merged node binds it.
+   *
+   * <p>Where the inner builds a record and the outer reads a field of it, the
+   * substitution leaves {@code #id {id = #id $0}}, and that is folded to {@code
+   * #id $0}.
+   */
+  public static final RelRule PROJECT_MERGE =
+      new RelRule() {
+        @Override
+        public String name() {
+          return "ProjectMerge";
+        }
+
+        @Override
+        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+          if (!(rel instanceof Core.Project)) {
+            return null;
+          }
+          final Core.Project outer = (Core.Project) rel;
+          if (!(outer.input instanceof Core.Project)) {
+            return null;
+          }
+          final Core.Project inner = (Core.Project) outer.input;
+          Core.@Nullable IdPat ordinal = inner.ordinal;
+          Core.Exp exp = outer.exp;
+          if (outer.ordinal != null) {
+            if (ordinal == null) {
+              ordinal = outer.ordinal;
+            } else {
+              exp =
+                  substitute(typeSystem, exp, outer.ordinal, core.id(ordinal));
+            }
+          }
+          final Core.Exp exp2;
+          if (count(exp, outer.row) <= 1 || isCheap(inner.exp)) {
+            exp2 =
+                foldSelectors(
+                    typeSystem,
+                    substitute(typeSystem, exp, outer.row, inner.exp));
+          } else {
+            final Core.IdPat pat =
+                core.idPat(
+                    inner.exp.type,
+                    "v$" + typeSystem.nameGenerator.inc("v$"),
+                    0);
+            exp2 =
+                core.let(
+                    core.nonRecValDecl(inner.exp.pos, pat, null, inner.exp),
+                    substitute(typeSystem, exp, outer.row, core.id(pat)));
+          }
+          return core.project(
+              outer.pos, typeSystem, inner.row, ordinal, inner.input, exp2);
+        }
+      };
+
+  /** Drops a {@code skip} whose count is {@code 0}. */
+  public static final RelRule SKIP_ZERO =
+      new RelRule() {
+        @Override
+        public String name() {
+          return "SkipZero";
+        }
+
+        @Override
+        public Core.@Nullable Exp apply(TypeSystem typeSystem, Core.Rel rel) {
+          if (rel instanceof Core.Skip) {
+            final Core.Skip skip = (Core.Skip) rel;
+            if (skip.count.op == Op.INT_LITERAL
+                && ((Core.Literal) skip.count).value.equals(BigDecimal.ZERO)) {
+              return skip.input;
+            }
+          }
+          return null;
+        }
+      };
+
+  /**
+   * The rules that every query is rewritten with, in order.
+   *
+   * <p>The builder applies most of these as it builds -- what is cheaper not to
+   * build than to build and remove -- and they are rules as well for the trees
+   * that a pass leaves: a filter under a filter after inlining, say. The
+   * resolver builds without the filter merge on purpose, so that the plan of a
+   * query reads as the query does.
+   */
   public static final ImmutableList<RelRule> STANDARD =
-      ImmutableList.of(UNORDER_PUSHDOWN, FILTER_TRUE);
+      ImmutableList.of(
+          UNORDER_PUSHDOWN,
+          FILTER_TRUE,
+          FILTER_MERGE,
+          PROJECT_IDENTITY,
+          PROJECT_MERGE,
+          SKIP_ZERO);
 
   private RelRules() {}
+
+  /**
+   * Returns whether an expression only reads: a variable, a literal, a field of
+   * such, or a record of such. Duplicating one evaluates nothing twice.
+   */
+  private static boolean isCheap(Core.Exp exp) {
+    switch (exp.op) {
+      case ID:
+      case BOOL_LITERAL:
+      case CHAR_LITERAL:
+      case INT_LITERAL:
+      case REAL_LITERAL:
+      case STRING_LITERAL:
+      case UNIT_LITERAL:
+        return true;
+      case TUPLE:
+        return ((Core.Tuple) exp).args.stream().allMatch(RelRules::isCheap);
+      case APPLY:
+        final Core.Apply apply = (Core.Apply) exp;
+        return apply.fn.op == Op.RECORD_SELECTOR && isCheap(apply.arg);
+      default:
+        return false;
+    }
+  }
+
+  private static boolean isRow(Core.Exp exp, Core.IdPat row) {
+    return exp instanceof Core.Id && ((Core.Id) exp).idPat.equals(row);
+  }
+
+  /** Returns how many times an expression reads a pattern. */
+  private static int count(Core.Exp exp, Core.IdPat pat) {
+    final int[] n = {0};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (id.idPat.equals(pat)) {
+              ++n[0];
+            }
+          }
+        });
+    return n[0];
+  }
+
+  /**
+   * Folds a field access applied to a record that is built right there.
+   *
+   * <p>Substitution produces {@code #y {x = a, y = b}}: a projection merged
+   * into the one above it, or a join's yield put into a condition. The engine
+   * looks for a reference to a variable, not for a record it could have taken
+   * apart, so folding it to {@code b} is what lets the engine see the
+   * constraint.
+   */
+  static Core.Exp foldSelectors(TypeSystem typeSystem, Core.Exp exp) {
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Apply apply) {
+            final Core.Exp exp2 = super.visit(apply);
+            if (exp2 instanceof Core.Apply) {
+              final Core.Apply apply2 = (Core.Apply) exp2;
+              if (apply2.fn.op == Op.RECORD_SELECTOR
+                  && apply2.arg.op == Op.TUPLE
+                  // The selector reads a slot of the record it was made for,
+                  // and a substitution can put a tuple under a selector built
+                  // for another, of a different arity, where the slot is not
+                  // even in range. Fold only what is; folding is what lets the
+                  // engine see a constraint, so decline no more than this.
+                  && ((Core.RecordSelector) apply2.fn).slot
+                      < ((Core.Tuple) apply2.arg).args.size()) {
+                return ((Core.Tuple) apply2.arg)
+                    .args.get(((Core.RecordSelector) apply2.fn).slot);
+              }
+            }
+            return exp2;
+          }
+        });
+  }
+
+  /** Replaces the reads of a pattern in an expression with an expression. */
+  private static Core.Exp substitute(
+      TypeSystem typeSystem, Core.Exp exp, Core.IdPat pat, Core.Exp e0) {
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            return id.idPat.equals(pat) ? core.at(e0, id.pos) : id;
+          }
+        });
+  }
 
   /** Rewrites every tree in a declaration. */
   public static Core.Decl rewrite(

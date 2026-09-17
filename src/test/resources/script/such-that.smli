@@ -2213,15 +2213,13 @@ Sys.planEx "3";
 > val it =
 >   {_|
 > val it =
->   project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}] : t$0
->     project [(#loc $0, #deptno $0, #name $0)] : t$1
->       sort [$0] : t$0
->         group [deptno = #deptno $0, loc = #loc $0, name = #dname $0] : t$0
->           #toList Bag (#depts scott) : t$2
+>   project [{deptno = #deptno $0, loc = #loc $0, name = #name $0}] : t$0
+>     sort [$0] : t$0
+>       group [deptno = #deptno $0, loc = #loc $0, name = #dname $0] : t$0
+>         #toList Bag (#depts scott) : t$1
 >
 > t$0 {deptno:int, loc:string, name:string} list
-> t$1 (string * int * string) list
-> t$2 {deptno:int, dname:string, loc:string} list
+> t$1 {deptno:int, dname:string, loc:string} list
 > |_} : string
 
 (* testFromSuchThat2d - Record pattern with literal and additional
@@ -2303,17 +2301,16 @@ Sys.planEx "3";
 >   {_|
 > val it =
 >   project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : t$0
->     filter [#1 $0 = 30] : t$1
->       filter [#loc (#3 $0) = "CHICAGO"] : t$1
->         project [(#2 $0, #3 $0, #1 $0)] : t$1
->           join [v$0] : t$2
->             sort [$0] : t$3
->               project [#g$0 $0] : t$3
->                 group [g$0 = $0] : t$4
->                   #toList Bag (#depts scott) : t$3
->             join : (int * string) list
->               [#deptno v$0] : int list
->               [#dname v$0] : string list
+>     filter [#loc (#3 $0) = "CHICAGO" andalso #1 $0 = 30] : t$1
+>       project [(#2 $0, #3 $0, #1 $0)] : t$1
+>         join [v$0] : t$2
+>           sort [$0] : t$3
+>             project [#g$0 $0] : t$3
+>               group [g$0 = $0] : t$4
+>                 #toList Bag (#depts scott) : t$3
+>           join : (int * string) list
+>             [#deptno v$0] : int list
+>             [#dname v$0] : string list
 >
 > t$0 {dno:int, name:string} list
 > t$1 (int * string * {deptno:int, dname:string, loc:string}) list
@@ -2360,17 +2357,16 @@ Sys.planEx "3";
 >   {_|
 > val it =
 >   project [{dno = #deptno (#3 $0), name = #dname (#3 $0)}] : t$0
->     filter [#1 $0 > 25] : t$1
->       filter [#loc (#3 $0) = "CHICAGO"] : t$1
->         project [(#2 $0, #3 $0, #1 $0)] : t$1
->           join [v$0] : t$2
->             sort [$0] : t$3
->               project [#g$0 $0] : t$3
->                 group [g$0 = $0] : t$4
->                   #toList Bag (#depts scott) : t$3
->             join : (int * string) list
->               [#deptno v$0] : int list
->               [#dname v$0] : string list
+>     filter [#loc (#3 $0) = "CHICAGO" andalso #1 $0 > 25] : t$1
+>       project [(#2 $0, #3 $0, #1 $0)] : t$1
+>         join [v$0] : t$2
+>           sort [$0] : t$3
+>             project [#g$0 $0] : t$3
+>               group [g$0 = $0] : t$4
+>                 #toList Bag (#depts scott) : t$3
+>           join : (int * string) list
+>             [#deptno v$0] : int list
+>             [#dname v$0] : string list
 >
 > t$0 {dno:int, name:string} list
 > t$1 (int * string * {deptno:int, dname:string, loc:string}) list

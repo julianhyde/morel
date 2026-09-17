@@ -243,9 +243,8 @@ public class InlineTest {
     // The third is the final tree, which is what executes.
     final String core2 =
         "val it = project [#ename $0]\n" //
-            + "  filter [#deptno $0 = 10]\n"
-            + "    filter [#mod Int (#empno $0, 2) = 0]\n"
-            + "      #emps scott\n";
+            + "  filter [#mod Int (#empno $0, 2) = 0 andalso #deptno $0 = 10]\n"
+            + "    #emps scott\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -309,12 +308,11 @@ public class InlineTest {
             + " (#map Bag (fn e_1 => {x = #empno e_1, y = #deptno e_1, z = 15})"
             + " (#filter Bag (fn e => #deptno e = 30) (#emps scott))))\n";
     final String core2 =
-        "val it = project [$0 + 100]\n" //
-            + "  project [#x $0 + #z $0]\n"
-            + "    filter [#y $0 > #z $0]\n"
-            + "      project [{x = #empno $0, y = #deptno $0, z = 15}]\n"
-            + "        filter [#deptno $0 = 30]\n"
-            + "          #emps scott\n";
+        "val it = project [#x $0 + #z $0 + 100]\n" //
+            + "  filter [#y $0 > #z $0]\n"
+            + "    project [{x = #empno $0, y = #deptno $0, z = 15}]\n"
+            + "      filter [#deptno $0 = 30]\n"
+            + "        #emps scott\n";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(

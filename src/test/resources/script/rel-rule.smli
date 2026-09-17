@@ -156,4 +156,133 @@ Sys.planOf (from e in bag es unorder);
 > t$0 {id:int, name:string} bag
 > |} : string
 
+(* ---------------------------------------------------------------- *)
+(* Merges.
+ *
+ * The resolver leaves the `where` steps the user wrote as they were
+ * written, so that the plan of a query reads as the query does; and a
+ * query nested in a query, or bound to a name and read by a query, is a
+ * leaf until inlining puts one tree under the other. The rules merge
+ * what those leave: a filter under a filter, a projection under a
+ * projection, and a skip of nought.
+ *)
+
+(*) Two where steps become one condition.
+from e in es where e.id > 1 where e.name <> "b";
+> val it = [{id=3,name="c"}] : {id:int, name:string} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   filter [#id $0 > 1 andalso #name $0 <> "b"] : t$0
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+Sys.planOf (from e in es where e.id > 1 where e.name <> "b");
+> val it =
+>   {_|
+> filter [#name $0 <> "b"] : t$0
+>   filter [#id $0 > 1] : t$0
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+
+(* Not where the outer reads the ordinal, which counts the rows the
+ * inner let through. *)
+from e in es where e.id > 1 where ordinal > 0;
+> val it = [{id=2,name="b"}] : {id:int, name:string} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   filter [$ordinal > 0] : t$0
+>     filter [#id $0 > 1] : t$0
+>       es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+
+(*) A nested query's filter and its enclosing query's filter.
+from x in (from e in es where e.id > 1) where x.id < 3;
+> val it = [{id=2,name="b"}] : {id:int, name:string} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   filter [#id $0 > 1 andalso #id $0 < 3] : t$0
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+Sys.planOf (from x in (from e in es where e.id > 1) where x.id < 3);
+> val it =
+>   {_|
+> filter [#id $0 < 3] : t$0
+>   filter [#id $0 > 1] : t$0
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+
+(* A query bound to a name is inlined into the query that reads it,
+ * and the two projections become one. A field read costs nothing to
+ * repeat, and is substituted as often as the outer reads its element;
+ * an expression that computes is bound once. *)
+let val q = from e in es yield e.name in from n in q yield String.size n end;
+> val it = [1,1,1] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project [#size String (#name $0)] : int list
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+let val q = from e in es yield e.name in from n in q yield n ^ n end;
+> val it = ["cc","aa","bb"] : string list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project [#^ String (#name $0, #name $0)] : string list
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+let val q = from e in es yield String.size e.name
+  in from n in q yield n + n end;
+> val it = [2,2,2] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project [let val v$0 = #size String (#name $0) in v$0 + v$0 end] : int list
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+
+(*) A field of a record the inner projection builds is folded away.
+let val q = from e in es yield {id = e.id} in from x in q yield x.id end;
+> val it = [3,1,2] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project [#id $0] : int list
+>     es : t$0
+>
+> t$0 {id:int, name:string} list
+> |_} : string
+
+(*) A skip whose count is inlined to nought goes.
+let val n = 0 in from e in es skip n end;
+> val it = [{id=3,name="c"},{id=1,name="a"},{id=2,name="b"}]
+>   : {id:int, name:string} list
+Sys.planEx "-1";
+> val it = "val it = es" : string
+
 (*) End rel-rule.smli
