@@ -36,6 +36,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.BiConsumer;
@@ -1073,6 +1074,38 @@ public enum BuiltIn {
    * {@code c} is a letter (a to z or A to Z); otherwise returns {@code c}.
    */
   CHAR_TO_UPPER("Char", "toUpper", true, ts -> ts.fnType(CHAR, CHAR)),
+
+  /**
+   * Function "Core.print", of type "exp &rarr; string".
+   *
+   * <p>"print e" prints an expression as a plan: a tree one node per line, with
+   * the collection type of each node, as "Sys.planOf" prints a query; anything
+   * else as an expression.
+   */
+  CORE_PRINT(
+      "Core",
+      "print",
+      true,
+      ts -> ts.fnType(ts.lookup(Datatype.CORE_EXP), STRING)),
+
+  /**
+   * Function "Core.printType", of type "ty &rarr; string".
+   *
+   * <p>"printType t" prints a type.
+   */
+  CORE_PRINT_TYPE(
+      "Core", "printType", ts -> ts.fnType(ts.lookup(Eqtype.TY), STRING)),
+
+  /**
+   * Function "Core.typeOf", of type "exp &rarr; ty".
+   *
+   * <p>"typeOf e" returns the type of an expression.
+   */
+  CORE_TYPE_OF(
+      "Core",
+      "typeOf",
+      true,
+      ts -> ts.fnType(ts.lookup(Datatype.CORE_EXP), ts.lookup(Eqtype.TY))),
 
   /**
    * Function "Datalog.execute", of type "string &rarr; variant".
@@ -3010,19 +3043,22 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.option(0), h.get(0)))),
 
   /**
-   * Function "Plan.bodyOf", of type "(&alpha; &rarr; &beta;) &rarr; string".
+   * Function "Plan.bodyOf", of type "(&alpha; &rarr; &beta;) &rarr; exp".
    *
    * <p>"bodyOf f" returns the body of the function {@code f} as the compiler
-   * holds it, after every pass and rule; a query prints as a relational tree.
-   * Raises {@code Fail} if {@code f} is not a function the compiler compiled,
-   * such as a built-in.
+   * holds it, after every pass and rule. Raises {@code Fail} if {@code f} is
+   * not a function the compiler compiled, such as a built-in.
    */
   PLAN_BODY_OF(
       "Plan",
       "bodyOf",
       ts ->
           ts.forallType(
-              2, h -> ts.fnType(ts.fnType(h.get(0), h.get(1)), STRING))),
+              2,
+              h ->
+                  ts.fnType(
+                      ts.fnType(h.get(0), h.get(1)),
+                      ts.lookup(Datatype.CORE_EXP)))),
 
   /** Function "PP.align", of type "doc &rarr; doc". */
   PP_ALIGN(
@@ -5695,13 +5731,28 @@ public enum BuiltIn {
     // their constructors reference the range type. Pre-register it here so the
     // dependency is satisfied regardless of alphabetical enum order.
     defineType(typeSystem, bindings, Datatype.RANGE);
+    // An "exp" is made of "ty", "pat", "join_kind", "option" and "variant"
+    // values, so those come first too.
+    final List<BuiltInType> early =
+        ImmutableList.of(
+            Datatype.RANGE,
+            Eqtype.TY,
+            Datatype.OPTION,
+            Datatype.CORE_PAT,
+            Datatype.CORE_JOIN_KIND,
+            Datatype.VARIANT);
+    early
+        .subList(1, early.size())
+        .forEach(t -> defineType(typeSystem, bindings, t));
     for (Datatype datatype : Datatype.values()) {
-      if (datatype != Datatype.RANGE) {
+      if (!early.contains(datatype)) {
         defineType(typeSystem, bindings, datatype);
       }
     }
     for (Eqtype eqtype : Eqtype.values()) {
-      defineType(typeSystem, bindings, eqtype);
+      if (!early.contains(eqtype)) {
+        defineType(typeSystem, bindings, eqtype);
+      }
     }
   }
 
@@ -5873,6 +5924,64 @@ public enum BuiltIn {
         "continuous_set",
         1,
         h -> h.tyCon(Constructor.CONTINUOUS_SET_CONTINUOUS_SET)),
+
+    /**
+     * The datatype "exp", the compiler's expression, of which a relational tree
+     * is made; see {@code lib/core.sig}.
+     */
+    CORE_EXP(
+        "Core",
+        "exp",
+        0,
+        h ->
+            h.tyCon(Constructor.CORE_EXP_FILTER)
+                .tyCon(Constructor.CORE_EXP_PROJECT)
+                .tyCon(Constructor.CORE_EXP_JOIN)
+                .tyCon(Constructor.CORE_EXP_GROUP)
+                .tyCon(Constructor.CORE_EXP_SORT)
+                .tyCon(Constructor.CORE_EXP_UNORDER)
+                .tyCon(Constructor.CORE_EXP_SKIP)
+                .tyCon(Constructor.CORE_EXP_TAKE)
+                .tyCon(Constructor.CORE_EXP_IF_EMPTY)
+                .tyCon(Constructor.CORE_EXP_UNION)
+                .tyCon(Constructor.CORE_EXP_INTERSECT)
+                .tyCon(Constructor.CORE_EXP_EXCEPT)
+                .tyCon(Constructor.CORE_EXP_ID)
+                .tyCon(Constructor.CORE_EXP_LITERAL)
+                .tyCon(Constructor.CORE_EXP_BUILTIN)
+                .tyCon(Constructor.CORE_EXP_SELECTOR)
+                .tyCon(Constructor.CORE_EXP_APPLY)
+                .tyCon(Constructor.CORE_EXP_TUPLE)
+                .tyCon(Constructor.CORE_EXP_RECORD_EXP)
+                .tyCon(Constructor.CORE_EXP_FN)
+                .tyCon(Constructor.CORE_EXP_LET)
+                .tyCon(Constructor.CORE_EXP_CASE)
+                .tyCon(Constructor.CORE_EXP_OPAQUE)),
+
+    /** The datatype "join_kind", the kind of a join. */
+    CORE_JOIN_KIND(
+        "Core",
+        "join_kind",
+        0,
+        h ->
+            h.tyCon(Constructor.CORE_JOIN_KIND_INNER)
+                .tyCon(Constructor.CORE_JOIN_KIND_LEFT)
+                .tyCon(Constructor.CORE_JOIN_KIND_RIGHT)
+                .tyCon(Constructor.CORE_JOIN_KIND_FULL)),
+
+    /** The datatype "pat", the compiler's pattern. */
+    CORE_PAT(
+        "Core",
+        "pat",
+        0,
+        h ->
+            h.tyCon(Constructor.CORE_PAT_ID_PAT)
+                .tyCon(Constructor.CORE_PAT_WILDCARD)
+                .tyCon(Constructor.CORE_PAT_TUPLE_PAT)
+                .tyCon(Constructor.CORE_PAT_RECORD_PAT)
+                .tyCon(Constructor.CORE_PAT_CON0_PAT)
+                .tyCon(Constructor.CORE_PAT_CON_PAT)
+                .tyCon(Constructor.CORE_PAT_OPAQUE_PAT)),
 
     DATE_MONTH(
         "Date",
@@ -6127,6 +6236,8 @@ public enum BuiltIn {
     DATE("date", 0),
     LIST("list", 1),
     TIME("time", 0),
+    /** A type as the compiler holds it; a value of {@code ty} is a Type. */
+    TY("ty", 0),
     VECTOR("vector", 1);
 
     private final String mlName;
@@ -6159,6 +6270,225 @@ public enum BuiltIn {
         h ->
             Keys.list(
                 Keys.apply(Keys.name("range"), ImmutableList.of(h.get(0))))),
+    CORE_EXP_APPLY(
+        Datatype.CORE_EXP,
+        "APPLY",
+        h -> Keys.tuple(ImmutableList.of(Keys.name("exp"), Keys.name("exp")))),
+    CORE_EXP_BUILTIN(
+        Datatype.CORE_EXP,
+        "BUILTIN",
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("ty")))),
+    CORE_EXP_CASE(
+        Datatype.CORE_EXP,
+        "CASE",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    Keys.name("exp"),
+                    Keys.list(
+                        Keys.tuple(
+                            ImmutableList.of(
+                                Keys.name("pat"), Keys.name("exp"))))))),
+    CORE_EXP_EXCEPT(
+        Datatype.CORE_EXP,
+        "EXCEPT",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("inputs", Keys.list(Keys.name("exp"))),
+                    Map.entry("unique", BOOL.key())))),
+    CORE_EXP_FILTER(
+        Datatype.CORE_EXP,
+        "FILTER",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("condition", Keys.name("exp")),
+                    Map.entry("input", Keys.name("exp")),
+                    Map.entry(
+                        "ordinalPat",
+                        Keys.apply(
+                            Keys.name("option"),
+                            ImmutableList.of(Keys.name("pat")))),
+                    Map.entry("row", Keys.name("pat"))))),
+    CORE_EXP_FN(
+        Datatype.CORE_EXP,
+        "FN",
+        h -> Keys.tuple(ImmutableList.of(Keys.name("pat"), Keys.name("exp")))),
+    CORE_EXP_GROUP(
+        Datatype.CORE_EXP,
+        "GROUP",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry(
+                        "aggregates",
+                        Keys.list(
+                            Keys.tuple(
+                                ImmutableList.of(
+                                    STRING.key(),
+                                    Keys.name("exp"),
+                                    Keys.apply(
+                                        Keys.name("option"),
+                                        ImmutableList.of(Keys.name("exp"))),
+                                    Keys.name("ty"))))),
+                    Map.entry("input", Keys.name("exp")),
+                    Map.entry(
+                        "keys",
+                        Keys.list(
+                            Keys.tuple(
+                                ImmutableList.of(
+                                    STRING.key(), Keys.name("exp"))))),
+                    Map.entry(
+                        "ordinalPat",
+                        Keys.apply(
+                            Keys.name("option"),
+                            ImmutableList.of(Keys.name("pat")))),
+                    Map.entry("row", Keys.name("pat"))))),
+    CORE_EXP_ID(Datatype.CORE_EXP, "ID", h -> Keys.name("pat")),
+    CORE_EXP_IF_EMPTY(
+        Datatype.CORE_EXP,
+        "IF_EMPTY",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("input", Keys.name("exp")),
+                    Map.entry("otherwise", Keys.name("exp"))))),
+    CORE_EXP_INTERSECT(
+        Datatype.CORE_EXP,
+        "INTERSECT",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("inputs", Keys.list(Keys.name("exp"))),
+                    Map.entry("unique", BOOL.key())))),
+    CORE_EXP_JOIN(
+        Datatype.CORE_EXP,
+        "JOIN",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("condition", Keys.name("exp")),
+                    Map.entry("kind", Keys.name("join_kind")),
+                    Map.entry("leftInput", Keys.name("exp")),
+                    Map.entry("leftRow", Keys.name("pat")),
+                    Map.entry(
+                        "ordinalPat",
+                        Keys.apply(
+                            Keys.name("option"),
+                            ImmutableList.of(Keys.name("pat")))),
+                    Map.entry("rightInput", Keys.name("exp")),
+                    Map.entry("rightRow", Keys.name("pat"))))),
+    CORE_EXP_LET(
+        Datatype.CORE_EXP,
+        "LET",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("body", Keys.name("exp")),
+                    Map.entry("pat", Keys.name("pat")),
+                    Map.entry("value", Keys.name("exp"))))),
+    CORE_EXP_LITERAL(Datatype.CORE_EXP, "LITERAL", h -> Keys.name("variant")),
+    CORE_EXP_OPAQUE(Datatype.CORE_EXP, "OPAQUE"),
+    CORE_EXP_PROJECT(
+        Datatype.CORE_EXP,
+        "PROJECT",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("exp", Keys.name("exp")),
+                    Map.entry("input", Keys.name("exp")),
+                    Map.entry(
+                        "ordinalPat",
+                        Keys.apply(
+                            Keys.name("option"),
+                            ImmutableList.of(Keys.name("pat")))),
+                    Map.entry("row", Keys.name("pat"))))),
+    CORE_EXP_RECORD_EXP(
+        Datatype.CORE_EXP,
+        "RECORD_EXP",
+        h ->
+            Keys.list(
+                Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("exp"))))),
+    CORE_EXP_SELECTOR(
+        Datatype.CORE_EXP,
+        "SELECTOR",
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("ty")))),
+    CORE_EXP_SKIP(
+        Datatype.CORE_EXP,
+        "SKIP",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("count", Keys.name("exp")),
+                    Map.entry("input", Keys.name("exp"))))),
+    CORE_EXP_SORT(
+        Datatype.CORE_EXP,
+        "SORT",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("input", Keys.name("exp")),
+                    Map.entry("key", Keys.name("exp")),
+                    Map.entry(
+                        "ordinalPat",
+                        Keys.apply(
+                            Keys.name("option"),
+                            ImmutableList.of(Keys.name("pat")))),
+                    Map.entry("row", Keys.name("pat"))))),
+    CORE_EXP_TAKE(
+        Datatype.CORE_EXP,
+        "TAKE",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("count", Keys.name("exp")),
+                    Map.entry("input", Keys.name("exp"))))),
+    CORE_EXP_TUPLE(
+        Datatype.CORE_EXP, "TUPLE", h -> Keys.list(Keys.name("exp"))),
+    CORE_EXP_UNION(
+        Datatype.CORE_EXP,
+        "UNION",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("inputs", Keys.list(Keys.name("exp"))),
+                    Map.entry("unique", BOOL.key())))),
+    CORE_EXP_UNORDER(Datatype.CORE_EXP, "UNORDER", h -> Keys.name("exp")),
+    CORE_JOIN_KIND_FULL(Datatype.CORE_JOIN_KIND, "FULL"),
+    CORE_JOIN_KIND_INNER(Datatype.CORE_JOIN_KIND, "INNER"),
+    CORE_JOIN_KIND_LEFT(Datatype.CORE_JOIN_KIND, "LEFT"),
+    CORE_JOIN_KIND_RIGHT(Datatype.CORE_JOIN_KIND, "RIGHT"),
+    CORE_PAT_CON_PAT(
+        Datatype.CORE_PAT,
+        "CON_PAT",
+        h ->
+            Keys.tuple(
+                ImmutableList.of(
+                    STRING.key(), Keys.name("pat"), Keys.name("ty")))),
+    CORE_PAT_CON0_PAT(
+        Datatype.CORE_PAT,
+        "CON0_PAT",
+        h -> Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("ty")))),
+    CORE_PAT_ID_PAT(
+        Datatype.CORE_PAT,
+        "ID_PAT",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("i", INT.key()),
+                    Map.entry("name", STRING.key()),
+                    Map.entry("ty", Keys.name("ty"))))),
+    CORE_PAT_OPAQUE_PAT(Datatype.CORE_PAT, "OPAQUE_PAT"),
+    CORE_PAT_RECORD_PAT(
+        Datatype.CORE_PAT,
+        "RECORD_PAT",
+        h ->
+            Keys.list(
+                Keys.tuple(ImmutableList.of(STRING.key(), Keys.name("pat"))))),
+    CORE_PAT_TUPLE_PAT(
+        Datatype.CORE_PAT, "TUPLE_PAT", h -> Keys.list(Keys.name("pat"))),
+    CORE_PAT_WILDCARD(Datatype.CORE_PAT, "WILDCARD", h -> Keys.name("ty")),
     DATE_MONTH_APR(Datatype.DATE_MONTH, "Apr"),
     DATE_MONTH_AUG(Datatype.DATE_MONTH, "Aug"),
     DATE_MONTH_DEC(Datatype.DATE_MONTH, "Dec"),

@@ -376,4 +376,19 @@ val {r: bool, s} = {r=1, s=2};
 > stdIn:1.1-1.30 Error: Cannot deduce type: conflict: int vs bool
 >   raised at: stdIn:1.1-1.30
 
+(* An ellipsis under a constructor, in a tuple or in a list stands for the
+ * fields of the value's type that the pattern does not name. *)
+datatype t = T of {a: int, b: string, c: bool};
+> datatype t = T of {a:int, b:string, c:bool}
+case T {a=1,b="x",c=true} of T {b, ...} => b;
+> val it = "x" : string
+case SOME {a=1,b="x",c=true} of SOME {c, ...} => c | NONE => false;
+> val it = true : bool
+case (1, {a=1,b="x",c=true}) of (_, {b, ...}) => b;
+> val it = "x" : string
+case [{a=1,b="x",c=true}] of [{b, ...}] => b | _ => "";
+> val it = "x" : string
+case {a=1,b="x",c=true} of {b, ...} => b;
+> val it = "x" : string
+
 (*) End match.smli

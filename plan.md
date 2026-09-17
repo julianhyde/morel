@@ -2336,8 +2336,82 @@ user-written rule, with the plan before and after in a script.
       `lib/plan.sig`, `docs/lib/plan.md`, `built-in/plan.smli`; the
       environment gains one binding, `Plan`, and `misc.smli`'s count
       moves with it.
-- [ ] (2) `Core.exp` and `Core.pat` as a view; conversions both
-      ways; round-trip test over `rel-tree.smli`.
+- [x] (2) `Core.exp` and `Core.pat` as a view; conversions both
+      ways; round trip. `CoreValues` is the view: `ExpValue` and
+      `PatValue` are lists of the form every datatype value has,
+      rendered one level on demand; `fromConstructor` recovers a
+      node, hooked into `Codes.tyCon` as `variant`'s constructors
+      are. `Plan.bodyOf` returns the value; `Core.print`,
+      `Core.typeOf`, `Core.printType` read it. `built-in/core.smli`
+      has a round trip written in Morel, `rt`, one arm per
+      constructor, applied to queries with joins, groups with
+      aggregates, sorts, skip and take, a nested `exists`, a set
+      operator, a bag, and a scalar function; what it builds prints
+      as what it was given. `CoreValuesTest` does the same in Java
+      over builder-made trees and checks the view is the node, not
+      a copy. Two things had to give way. The inliner turns a bound
+      datatype value back into constructor applications when it
+      folds a `case`, and walked the whole view to a `ty` it could
+      not spell; an opaque value now stays a value literal. And a
+      record pattern with an ellipsis under a constructor, in a
+      tuple or in a list matched positionally -- `T {b, ...}` bound
+      `b` to the first field -- which a rule would meet at once in
+      `FILTER {condition, ...}`; the resolver now pads from the
+      enclosing type's component. Both are orthogonal fixes.
+      Remaining: `val {b, ...} = e` and `fn {b, ...} => b` still
+      match positionally, and the latter is typed `'a -> 'b`; that
+      is the type resolver's, not the view's, and is left noted.
+      Field names that are keywords -- `ordinal`, `left`, `right`,
+      `distinct` -- became `ordinalPat`, `leftInput`, `rightInput`,
+      `unique`; `default` became `otherwise`.
+      Four more decisions the round trip forced. A `BUILTIN` carries
+      its type, `BUILTIN ("Int.+", int * int -> int)`: a polymorphic
+      built-in's literal has the type it was instantiated at, which
+      the name alone loses. An aggregate carries its result type as
+      a fourth component, since its function may be polymorphic and
+      the group's type derives from it. A value literal -- the
+      collection a name was inlined to, which prints as the name --
+      is `OPAQUE`, because no rendering keeps what it prints as;
+      `LITERAL` is for the literal kinds, and a rule that builds
+      `LITERAL (LIST ...)` gets a value literal spelled out by the
+      inliner's converter. And applying a function derives the
+      result type as the resolver would: a built-in literal's own
+      type is not always its function type (`list`'s is `unit`), so
+      `APPLY` recovery takes the built-in's declared type,
+      instantiates a `forall` by matching its parameter against the
+      argument, and picks an overload by what the argument is.
+      **Decided first: constructors, not applications.** A rule
+      matches `FILTER {input, condition, ...}`, not an `APPLY` of a
+      built-in to a lambda. The application reading
+      (coloring_design.md §15) makes reification the identity, but
+      identity is not what a rule author needs; a constructor per
+      node is, and it is what spec.md's constructor set already
+      says. The reading stays a printer's and a converter's concern.
+      **The view is `variant`'s mechanism.** A `variant` is a Java
+      value that presents the list form every datatype value has,
+      `[tag, arg]`, so a `case` matches it without knowing; its
+      constructors are hooked in `Codes.tyCon` to build the Java
+      value rather than a list. An `exp` value is the same over a
+      `Core.Exp`: `get(0)` is the constructor for the node's kind
+      and `get(1)` renders the node's fields one level down, each
+      child wrapped and nothing copied; applying a constructor
+      recovers a node through `CoreBuilder`, which derives its type.
+      So `Plan.bodyOf` hands the tree over with no conversion, a
+      rule that returns what it was given returns the same node, and
+      only what a rule looks at is rendered. **Types are a value a
+      rule cannot write:** `eqtype ty` is the Java `Type`, from
+      `Core.typeOf`, and `ID_PAT`, `WILDCARD`, `SELECTOR` and the
+      constructor patterns carry one because building them needs it.
+      **Literals are `variant`s**, `LITERAL (INT 1)`, which covers
+      every literal kind and a constant collection alike, and keeps
+      the constructor names apart: `variant` already owns `INT`,
+      `BOOL`, `STRING`, `RECORD`; a record expression is
+      `RECORD_EXP`. **The edge of the view is `OPAQUE`:** a
+      `local`, a `raise`, a recursive `let`, a bare selector, any
+      kind the view does not spell renders as a nullary constructor
+      whose value still holds the node, so a rule passes it along
+      and `typeOf` still answers. A built-in function is `BUILTIN
+      "Int.+"`, by its qualified name.
 - [ ] (3) `Plan.program`, `Plan.wholeTree`; a Morel rule compiling
       into the step-4 framework; the issue's example as a script.
 - [ ] (4) Reactor / MEMO / guard-dependency machinery as the second

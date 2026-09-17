@@ -1011,6 +1011,37 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#CORE_PRINT */
+  private static final Applicable CORE_PRINT =
+      new ApplicableImpl(BuiltIn.CORE_PRINT) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          final Session session = stack.session;
+          return CoreValues.print(
+              CoreValues.toExp(arg),
+              requireNonNull(session.typeSystem, "typeSystem"),
+              Prop.LINE_WIDTH.intValue(session.map));
+        }
+      };
+
+  /** @see BuiltIn#CORE_PRINT_TYPE */
+  private static final Applicable1 CORE_PRINT_TYPE =
+      new BaseApplicable1<String, Type>(BuiltIn.CORE_PRINT_TYPE) {
+        @Override
+        public String apply(Type type) {
+          return type.moniker();
+        }
+      };
+
+  /** @see BuiltIn#CORE_TYPE_OF */
+  private static final Applicable1 CORE_TYPE_OF =
+      new BaseApplicable1<Type, Object>(BuiltIn.CORE_TYPE_OF) {
+        @Override
+        public Type apply(Object exp) {
+          return CoreValues.toExp(exp).type;
+        }
+      };
+
   /** @see BuiltIn#DATALOG_EXECUTE */
   private static final Applicable DATALOG_EXECUTE =
       new BaseApplicable(BuiltIn.DATALOG_EXECUTE) {
@@ -3794,15 +3825,7 @@ public abstract class Codes {
       if (arg instanceof Closure.StackClosure) {
         final Core.@Nullable Fn fn = ((Closure.StackClosure) arg).fn();
         if (fn != null) {
-          final Session session = stack.session;
-          final TypeSystem typeSystem =
-              requireNonNull(session.typeSystem, "typeSystem");
-          final int width = Prop.LINE_WIDTH.intValue(session.map);
-          // A body that is a tree prints as one, with the collection type
-          // of every node, as Sys.planOf prints a query.
-          return fn.exp instanceof Core.Rel
-              ? fn.exp.unparsePlan(typeSystem, width)
-              : fn.exp.unparseRenumbered(typeSystem, width, true);
+          return CoreValues.of(fn.exp);
         }
       }
       throw new MorelRuntimeException(
@@ -7263,6 +7286,12 @@ public abstract class Codes {
         && ((DataType) dataType).name.equals("variant")) {
       return new ValueTyCon(name);
     }
+    // A constructor of "exp" or "pat" builds the compiler's own node.
+    if (dataType instanceof DataType
+        && (((DataType) dataType).name.equals("exp")
+            || ((DataType) dataType).name.equals("pat"))) {
+      return new CoreTyCon(name);
+    }
     // Standard datatype constructor - return List
     return new BaseApplicable1(BuiltIn.Z_TY_CON) {
       @Override
@@ -7307,6 +7336,29 @@ public abstract class Codes {
       }
       // Create Value instance based on constructor name
       return Variants.fromConstructor(tyConName, arg, typeSystem);
+    }
+  }
+
+  /** Constructor of {@code exp} or {@code pat}; see {@link CoreValues}. */
+  static class CoreTyCon extends ApplicableImpl {
+    private final String tyConName;
+
+    CoreTyCon(String tyConName) {
+      super(BuiltIn.Z_TY_CON);
+      this.tyConName = tyConName;
+    }
+
+    @Override
+    protected String name() {
+      return "tyCon";
+    }
+
+    @Override
+    public Object apply(Stack stack, Object arg) {
+      return CoreValues.fromConstructor(
+          tyConName,
+          arg,
+          requireNonNull(stack.session.typeSystem, "typeSystem"));
     }
   }
 
@@ -7567,6 +7619,9 @@ public abstract class Codes {
     b.add(BuiltIn.CHAR_TO_LOWER, CHAR_TO_LOWER);
     b.add(BuiltIn.CHAR_TO_STRING, CHAR_TO_STRING);
     b.add(BuiltIn.CHAR_TO_UPPER, CHAR_TO_UPPER);
+    b.add(BuiltIn.CORE_PRINT, CORE_PRINT);
+    b.add(BuiltIn.CORE_PRINT_TYPE, CORE_PRINT_TYPE);
+    b.add(BuiltIn.CORE_TYPE_OF, CORE_TYPE_OF);
     b.add(BuiltIn.DATALOG_EXECUTE, DATALOG_EXECUTE);
     b.add(BuiltIn.DATALOG_TRANSLATE, DATALOG_TRANSLATE);
     b.add(BuiltIn.DATALOG_VALIDATE, DATALOG_VALIDATE);
