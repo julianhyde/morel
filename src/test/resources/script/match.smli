@@ -391,4 +391,17 @@ case [{a=1,b="x",c=true}] of [{b, ...}] => b | _ => "";
 case {a=1,b="x",c=true} of {b, ...} => b;
 > val it = "x" : string
 
+(* A declaration's pattern is matched against the value, so the value's type
+ * says which fields the pattern leaves out. *)
+val {b, ...} = {a=1,b="x",c=true};
+> val b = "x" : string
+val r = {a=1,b="x",c=true};
+> val r = {a=1,b="x",c=true} : {a:int, b:string, c:bool}
+val {b, ...} = r;
+> val b = "x" : string
+let val {b, ...} = {a=1,b="x",c=true} in b end;
+> val it = "x" : string
+(fn {b, ...} => b) {a=1,b="x",c=true};
+> val it = "x" : string
+
 (*) End match.smli
