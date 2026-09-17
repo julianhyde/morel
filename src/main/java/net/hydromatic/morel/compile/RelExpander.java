@@ -2029,7 +2029,7 @@ public class RelExpander {
                 return id;
               }
             });
-    return simplify(unbindRow(exp2, rowPats));
+    return RelRules.foldSelectors(typeSystem, unbindRow(exp2, rowPats));
   }
 
   /**
@@ -2106,40 +2106,6 @@ public class RelExpander {
           }
         });
     return found[0];
-  }
-
-  /**
-   * Folds a field access applied to a record that is built right there.
-   *
-   * <p>Substituting a join's yield into a condition produces {@code #y {x = a,
-   * y = b}}, and the engine looks for a reference to a variable, not for a
-   * record it could have taken apart. Folding it to {@code b} is what lets the
-   * engine see the constraint.
-   */
-  private Core.Exp simplify(Core.Exp exp) {
-    return exp.accept(
-        new Shuttle(typeSystem) {
-          @Override
-          protected Core.Exp visit(Core.Apply apply) {
-            final Core.Exp exp2 = super.visit(apply);
-            if (exp2 instanceof Core.Apply) {
-              final Core.Apply apply2 = (Core.Apply) exp2;
-              if (apply2.fn.op == Op.RECORD_SELECTOR
-                  && apply2.arg.op == Op.TUPLE
-                  // The selector reads a slot of the record it was made for,
-                  // and a substitution can put a tuple under a selector built
-                  // for another, of a different arity, where the slot is not
-                  // even in range. Fold only what is; folding is what lets the
-                  // engine see a constraint, so decline no more than this.
-                  && ((Core.RecordSelector) apply2.fn).slot
-                      < ((Core.Tuple) apply2.arg).args.size()) {
-                return ((Core.Tuple) apply2.arg)
-                    .args.get(((Core.RecordSelector) apply2.fn).slot);
-              }
-            }
-            return exp2;
-          }
-        });
   }
 }
 

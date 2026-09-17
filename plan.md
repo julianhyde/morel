@@ -2150,10 +2150,38 @@ tree, not after.
 
 ## Step 5 — Port rewrites as rules
 
-- [ ] Existing Core optimizations (inliner interactions, suchThat,
-      step-list pattern matches) re-expressed as rules — the
-      framework's first clients.
-- [ ] Retire the old rewrite code in the same motion.
+- [x] The builder's simplifications as rules: `FILTER_MERGE`,
+      `PROJECT_IDENTITY`, `PROJECT_MERGE` (with the `let` where the
+      outer reads its element twice -- unless the inner only reads,
+      a field or a record of fields, which is substituted however
+      often, so that `such-that.smli`'s `{deptno = #2 $0, ...}` over
+      `(#loc $0, #deptno $0, #name $0)` folds to one projection of
+      three fields rather than a `let` of a tuple) and `SKIP_ZERO` join
+      `RelRules.STANDARD`; `UNORDER_UNORDERED` was the bag case of
+      `UNORDER_PUSHDOWN` already. The builder keeps its own copies:
+      they define what `Sys.planOf` prints, which the ports match,
+      and what is cheaper not to build than to build and remove
+      stays where the building is. The rules are for what the
+      builder never sees. The resolver builds without the filter
+      merge on purpose, so that a plan reads as the query does, and
+      every `where ... where` is the rule's; a nested query, or a
+      query bound by `let` and inlined, is a leaf until inlining puts
+      one tree under the other, and those merges are the rule's too.
+      `rel-rule.smli` "Merges" shows each. Not a script-visible case
+      for `PROJECT_IDENTITY`: nothing the resolver or the inliner
+      leaves is `project [$0]`; the unit test has it.
+- [x] Retired in the same motion: `RelExpander`'s private selector
+      fold (`#y {x = a, y = b}` to `b`) is `RelRules.foldSelectors`,
+      which `PROJECT_MERGE` applies after substitution -- so `yield
+      x.id` over `yield {id = e.id}` merges to `project [#id $0]`,
+      not `#id {id = #id $0}` -- and the grounder calls.
+- [ ] The such-that grounding (`SuchThatShuttle` + `RelExpander`) as
+      a rule. Large: it is a whole-tree analysis, not a node
+      rewrite, and today runs before the rules, whose driver it
+      would have to join as a root-level rule or a separate phase.
+- [ ] Inliner interactions: none found that are tree-shaped. The
+      inliner has a boundary (`carriesInputIntoRel`) and a record
+      selector fold of its own for expressions; neither is a rule.
 
 ## Step 6 — The #359 layer
 
