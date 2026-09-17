@@ -475,7 +475,10 @@ public class Resolver {
     if (valDecl.rec) {
       final List<Core.Pat> pats = new ArrayList<>();
       matches.forEach(
-          (pat, exp) -> pats.add(withDisplayType(toCore(pat, inst), pat)));
+          (pat, exp) ->
+              pats.add(
+                  withDisplayType(
+                      toCore(pat, inst, typeMap.getType(exp)), pat)));
       pats.forEach(
           p -> Compiles.acceptBinding(typeMap.typeSystem, p, bindings));
       final Resolver r = withEnv(bindings);
@@ -488,7 +491,8 @@ public class Resolver {
     } else {
       matches.forEach(
           (pat, exp) -> {
-            Core.Pat corePat = withDisplayType(toCore(pat, inst), pat);
+            Core.Pat corePat =
+                withDisplayType(toCore(pat, inst, typeMap.getType(exp)), pat);
             // If this binding is qualified (uses an overloaded name at an
             // abstract type), compile its value with dictionary parameters and
             // give the pattern a qualified type.
@@ -1781,7 +1785,7 @@ public class Resolver {
   private Core.Fn toCore(Ast.Fn fn) {
     final FnType type = (FnType) typeMap.getType(fn);
     final List<Core.Match> matchList =
-        transformEager(fn.matchList, this::toCore);
+        transformEager(fn.matchList, m -> toCore(m, type.paramType));
     final Core.Fn coreFn = core.fn(fn.pos, type, matchList, nameGenerator::inc);
     final Type paramType = enforcer.parameterType(fn, coreFn.idPat.type);
     if (paramType == null) {
@@ -1824,11 +1828,12 @@ public class Resolver {
   }
 
   private Core.Case toCore(Ast.Case case_) {
+    final Type argType = typeMap.getType(case_.exp);
     return core.caseOf(
         case_.pos,
         typeMap.getType(case_),
         toCore(case_.exp),
-        transformEager(case_.matchList, this::toCore));
+        transformEager(case_.matchList, m -> toCore(m, argType)));
   }
 
   private Core.Exp toCore(Ast.Let let) {
@@ -1873,6 +1878,18 @@ public class Resolver {
    * {@code inst}.
    */
   private Core.Pat toCore(Ast.Pat pat, boolean inst) {
+    return toCore(pat, inst, null);
+  }
+
+  /**
+   * Converts a pattern that a declaration binds, given the type of the value it
+   * is matched against.
+   *
+   * <p>The value's type is what a record pattern with an ellipsis needs: the
+   * pattern names some of the fields and its own type has only those, so it is
+   * the value's type that says which slots they are.
+   */
+  private Core.Pat toCore(Ast.Pat pat, boolean inst, @Nullable Type valueType) {
     final Type type = typeMap.getType(pat);
     if (inst && pat.op == Op.ID_PAT) {
       Ast.IdPat idPat = (Ast.IdPat) pat;
@@ -1899,7 +1916,7 @@ public class Resolver {
       pair.right.add(corePat);
       return corePat;
     }
-    return toCore(pat, type, type);
+    return toCore(pat, type, valueType == null ? type : valueType);
   }
 
   private Core.Pat toCore(Ast.Pat pat, Type targetType) {
@@ -2046,8 +2063,12 @@ public class Resolver {
     return typeMap.getType(argPat);
   }
 
-  private Core.Match toCore(Ast.Match match) {
-    final Core.Pat pat = toCore(match.pat);
+  /**
+   * Converts a branch, given the type of the value its pattern is matched
+   * against; see {@link #toCore(Ast.Pat, boolean, Type)}.
+   */
+  private Core.Match toCore(Ast.Match match, Type argType) {
+    final Core.Pat pat = toCore(match.pat, false, argType);
     final List<Binding> bindings = new ArrayList<>();
     Compiles.acceptBinding(typeMap.typeSystem, pat, bindings);
     final Core.Exp exp = withEnv(bindings).toCore(match.exp);
