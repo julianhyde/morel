@@ -317,22 +317,17 @@ public abstract class Compiles {
   private static Core.Decl color(
       TypeSystem typeSystem, Environment env, Session session, Core.Decl decl) {
     final String engine = Prop.ENGINE.stringValue(session.map);
-    if (!engine.equals(Profile.CALCITE.name)) {
+    final Profile profile;
+    if (engine.equals(Profile.CALCITE.name)) {
+      profile = Profile.CALCITE;
+    } else if (engine.equals(Profile.SQL.name)) {
+      profile = Profile.SQL;
+    } else {
       // No engine named, or none that is known.
       return decl;
     }
-    // Pushdown first, in a run of its own: a conjunct that moves below a
-    // join leaves a side that stands alone, and a side that stands alone is
-    // a side that can go. Then coloring, which is a whole-tree rule and so
-    // would otherwise have run before it.
-    final Core.Decl decl2 =
-        RelRules.rewrite(
-            typeSystem, env, ImmutableList.of(RelRules.FILTER_INTO_JOIN), decl);
     return RelRules.rewrite(
-        typeSystem,
-        env,
-        ImmutableList.of(Coloring.rule(Profile.CALCITE)),
-        decl2);
+        typeSystem, env, ImmutableList.of(Coloring.rule(profile)), decl);
   }
 
   /**

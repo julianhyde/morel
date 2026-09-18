@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.function.BiPredicate;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
 import org.jspecify.annotations.Nullable;
@@ -80,19 +81,80 @@ public class Profile {
    */
   private final BiPredicate<Core.Exp, Environment> holds;
 
+  /**
+   * Whether the engine can call back into Morel for what it cannot evaluate
+   * itself.
+   *
+   * <p>A deployment fact, and the third. In-process Calcite can: its plan may
+   * hold a callback, and one reading a column at that. A database reached over
+   * SQL cannot, and nor can a cluster the Morel runtime is not installed on.
+   * Only where the answer is no does {@link #evaluates} decide anything.
+   */
+  private final boolean callsBack;
+
+  /** The functions the engine has of its own. */
+  private final Set<BuiltIn> functions;
+
   private Profile(
       String name,
       Set<Op> ops,
       Set<Core.Rel.JoinType> joinTypes,
       boolean ordinals,
       boolean literalCounts,
-      BiPredicate<Core.Exp, Environment> holds) {
+      BiPredicate<Core.Exp, Environment> holds,
+      boolean callsBack,
+      Set<BuiltIn> functions) {
     this.name = requireNonNull(name, "name");
     this.ops = ImmutableSet.copyOf(ops);
     this.joinTypes = ImmutableSet.copyOf(joinTypes);
     this.ordinals = ordinals;
     this.literalCounts = literalCounts;
     this.holds = requireNonNull(holds, "holds");
+    this.callsBack = callsBack;
+    this.functions = ImmutableSet.copyOf(functions);
+  }
+
+  /** Returns whether the engine can call back into Morel. */
+  public boolean callsBack() {
+    return callsBack;
+  }
+
+  /**
+   * Returns whether the engine can evaluate an expression itself.
+   *
+   * <p>Asked only where the engine cannot call back. Every function in the
+   * expression must be one the engine has; a name, a literal, a field and a
+   * record of those it can always do. Anything else -- a function of the
+   * query's own, a {@code case}, a {@code let} -- it cannot.
+   */
+  public boolean evaluates(Core.Exp exp) {
+    final boolean[] ok = {true};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Literal literal) {
+            if (literal.op == Op.FN_LITERAL
+                && !functions.contains(literal.unwrap(BuiltIn.class))) {
+              ok[0] = false;
+            }
+          }
+
+          @Override
+          protected void visit(Core.Fn fn) {
+            ok[0] = false;
+          }
+
+          @Override
+          protected void visit(Core.Case case_) {
+            ok[0] = false;
+          }
+
+          @Override
+          protected void visit(Core.Let let) {
+            ok[0] = false;
+          }
+        });
+    return ok[0];
   }
 
   /** Creates a profile; for a test that wants engines this one has not. */
@@ -102,14 +164,31 @@ public class Profile {
       Set<Core.Rel.JoinType> joinTypes,
       boolean ordinals,
       boolean literalCounts,
-      BiPredicate<Core.Exp, Environment> holds) {
-    return new Profile(name, ops, joinTypes, ordinals, literalCounts, holds);
+      BiPredicate<Core.Exp, Environment> holds,
+      boolean callsBack,
+      Set<BuiltIn> functions) {
+    return new Profile(
+        name,
+        ops,
+        joinTypes,
+        ordinals,
+        literalCounts,
+        holds,
+        callsBack,
+        functions);
   }
 
   /** Returns whether a leaf is data this engine already holds. */
   public boolean holds(Core.Exp leaf, Environment env) {
     return holds.test(leaf, env);
   }
+
+  /** The functions Calcite has an exact equivalent for. */
+  private static final Set<BuiltIn> CALCITE_FUNCTIONS =
+      ImmutableSet.<BuiltIn>builder()
+          .addAll(CalciteCompiler.UNARY_OPERATORS.keySet())
+          .addAll(CalciteCompiler.BINARY_OPERATORS.keySet())
+          .build();
 
   /**
    * The profile of the Calcite adapter, as the translation has always had it,
@@ -141,7 +220,29 @@ public class Profile {
           ImmutableSet.of(Core.Rel.JoinType.INNER),
           false,
           true,
-          Profile::calciteHolds);
+          Profile::calciteHolds,
+          true,
+          CALCITE_FUNCTIONS);
+
+  /**
+   * The profile of a database reached over SQL: the same nodes as Calcite, but
+   * it cannot call back into Morel, so what it runs it must be able to
+   * evaluate.
+   *
+   * <p>Nothing executes a boundary that names it -- Morel runs one, as the
+   * identity permits -- so coloring for it says where a database *could* take a
+   * query, which is a question worth being able to ask.
+   */
+  public static final Profile SQL =
+      new Profile(
+          "sql",
+          CALCITE.ops,
+          CALCITE.joinTypes,
+          false,
+          true,
+          Profile::calciteHolds,
+          false,
+          CALCITE_FUNCTIONS);
 
   /**
    * Returns whether a leaf is one of Calcite's own relations: a field of a
