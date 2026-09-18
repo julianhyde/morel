@@ -2595,6 +2595,27 @@ Do not reword a commit to hide a wrong turn. "One thing tried that did
 not work, so it is not tried again" is the most valuable sentence in
 several of them.
 
+### What the spec audit found
+
+Run after steps 4 to 6, because spec.md is what morel-rust and
+morel-go build from and a drift there costs them directly.
+
+* **§3, the constructor set.** Accurate: twelve constructors, and
+  twelve concrete subclasses of `Core.Rel`.
+* **§4, the kind table.** Every row verified by evaluating it, both
+  kinds of input where the input's kind is a parameter. All eight
+  rows hold, including the ones whose "checked by" column was empty.
+* **§5, rule 4.** Was wrong about *who* checks distinct labels. The
+  validator does not; the builders do, and harder -- a sorted map
+  has no room for a repeat, and a `group` whose key and aggregate
+  labels collide is refused where it is built. Corrected, with a
+  changelog entry, because it says which part of an implementation
+  owes the check.
+* **A rule that builds such a node** got a Java exception, not a
+  Morel one. That is `Plan.program`'s business, and is fixed: the
+  constructor raises `Fail` at the position where the rule applied
+  it.
+
 ## Follow-ups (separate issues, clients of the sequence)
 
 - Unorder pushdown (the motivating rewrite; needs the step-0 kind
