@@ -716,6 +716,7 @@ and unset using `Sys.unset name`.
 | banner               | string | Morel version ... | Startup banner message displayed when launching the Morel shell. |
 | colorScheme          | string | null    | Color scheme for syntax highlighting in the shell: a built-in scheme ('dark', 'light' or 'none'), or a user-defined scheme. If unset, the scheme is deduced from the environment. |
 | directory            | file   |         | Path of the directory that the 'file' variable maps to in this connection. |
+| engine               | string |         | Name of the engine that coloring pushes to; empty for none. |
 | excludeStructures    | string | ^Test$  | Regular expression that controls which built-in structures are excluded from the environment. |
 | hybrid               | bool   | false   | Whether to try to create a hybrid execution plan that uses Apache Calcite relational algebra. |
 | inlinePassCount      | int    | 5       | Maximum number of inlining passes. |

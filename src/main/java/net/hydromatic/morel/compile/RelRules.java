@@ -563,7 +563,7 @@ public class RelRules {
    * Copies a node with its inputs and its expressions passed through the given
    * functions; returns the node itself if nothing changed.
    */
-  private static Core.Exp copy(
+  static Core.Exp copy(
       TypeSystem typeSystem,
       Core.Rel rel,
       Function<Core.Exp, Core.Exp> inputFn,

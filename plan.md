@@ -2494,6 +2494,28 @@ user-written rule, with the plan before and after in a script.
       another engine is declined. Before this the boundary fell to
       the translator's default and disabled pushdown for the whole
       subtree, which was a gap in the commit that added it.
+- [x] **Cleaving works, for the anchored half.** A session names an
+      engine (`Sys.set ("engine", "calcite")`, off by default), and
+      `Coloring.rule` puts a `boundary` at the top of each largest
+      subtree that engine can run: the profile permits every node in
+      it, and every leaf under it is data the engine holds -- a field
+      of a foreign value whose fields are its relations, found
+      through `RelRule.Context.env`. It runs after the standard
+      rules, not among them, because coloring is about the tree that
+      will run.
+      The execution half was one line: `RelCompiler` hands a
+      boundary's input to `Compiler.compileArg`, which is already
+      "run this elsewhere if you can" -- `CalciteCompiler` overrides
+      it to try the Calcite path -- and scans whatever comes back.
+      Measured in `hybrid.smli`: a join of a filtered, projected
+      `scott.depts` with a list the query wrote used to run wholly
+      in Morel, with no Calcite in the plan at all. With an engine
+      named, the filter and the projection are a `JdbcTableScan`
+      under a `LogicalFilter` in the database, embedded as a scan in
+      the local plan, and only the join is Morel's.
+      What is not built is the *shipped* half: no profile here can be
+      given data, so a leaf that is Morel's stays Morel's. That is
+      what a Spark profile would add.
 - [ ] **Rules and pushdown do not compose yet.** `Plan.program`
       recompiles with `new Compiler(typeSystem)`, and `Compiles`
       chooses `CalciteCompiler` only for a statement it prepares with

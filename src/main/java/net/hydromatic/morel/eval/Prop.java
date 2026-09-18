@@ -95,6 +95,21 @@ public enum Prop {
           + "this connection."),
 
   /**
+   * String property "engine" names the engine that coloring pushes to, or is
+   * empty for none.
+   *
+   * <p>Coloring puts a boundary in the tree where the engine's part of it
+   * begins, which a compiler that has that engine then runs there. It is off by
+   * default: no engine, no boundary, and plans read as they always have.
+   */
+  ENGINE(
+      "engine",
+      String.class,
+      true,
+      "",
+      "Name of the engine that coloring pushes to; empty for none."),
+
+  /**
    * String property "excludeStructures" is a Java regular expression that
    * controls which built-in structures are excluded from the environment. A
    * structure whose name matches the regex is excluded.
