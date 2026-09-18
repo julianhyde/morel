@@ -2513,6 +2513,19 @@ still known.
   revert a *source* statement, and the diff to check is of the
   statements, not the output.
 
+  **So every script was checked that way**, base to tip, for
+  statements the branch deleted. Five files had any, and only one
+  more was a loss. `such-that.smli` lost "a record with one field is
+  grounded by constraining that field" in `8a02b9ae`; the feature
+  works and gives the output the test asserted, so the test is
+  restored. `type-alias.smli` and `built-in.smli` rewrote a comment
+  each, and `built-in.smli` gained two tests with it. `blog.smli`
+  lost two `order deptno unorder` tricks on purpose: their comment
+  says they were for determinism across JDK versions, and the group
+  sink now iterates keys in first-arrival order rather than hash
+  order, so there is nothing left to stabilize. No script was
+  deleted outright.
+
 This is the cost of rebasing golden files across a main that changed
 the same outputs, and it is worth paying rather than merging: the
 alternative is a merge commit that hides which change moved which
