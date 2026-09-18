@@ -397,6 +397,62 @@ Sys.plan ();
 Sys.set ("engine", "");
 > val it = () : unit
 
+(* The third fact a profile carries: whether the engine can call back into
+ * Morel for what it cannot evaluate itself. In-process Calcite can, and its
+ * plan may hold a callback reading a column. A database reached over SQL
+ * cannot, so a condition it has no operator for keeps it out. Nothing
+ * executes a boundary named "sql" -- Morel runs one, as the identity permits
+ * -- so this says where a database could take the query. *)
+fun tricky s = String.size s + 1;
+> val tricky = fn : string -> int
+Sys.set ("engine", "calcite");
+> val it = () : unit
+from d in scott.depts where tricky d.dname > 5 yield d.deptno;
+> val it = [10,20,30,40] : int bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   boundary [calcite] : int bag
+>     project [#deptno $0] : int bag
+>       filter [#size String (#dname $0) + 1 > 5] : t$0
+>         #depts scott : t$0
+>
+> t$0 {deptno:int, dname:string, loc:string} bag
+> |_} : string
+Sys.set ("engine", "sql");
+> val it = () : unit
+from d in scott.depts where tricky d.dname > 5 yield d.deptno;
+> val it = [10,20,30,40] : int bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project [#deptno $0] : int bag
+>     filter [#size String (#dname $0) + 1 > 5] : t$0
+>       boundary [sql] : t$0
+>         #depts scott : t$0
+>
+> t$0 {deptno:int, dname:string, loc:string} bag
+> |_} : string
+
+(*) A condition SQL does have an operator for goes.
+from d in scott.depts where d.dname = "SALES" yield d.deptno;
+> val it = [30] : int bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   boundary [sql] : int bag
+>     project [#deptno $0] : int bag
+>       filter [#dname $0 = "SALES"] : t$0
+>         #depts scott : t$0
+>
+> t$0 {deptno:int, dname:string, loc:string} bag
+> |_} : string
+Sys.set ("engine", "");
+> val it = () : unit
+
 (*) Recursive query, 3
 Sys.set ("hybrid", false);
 > val it = () : unit
@@ -446,19 +502,19 @@ from w in [0w1, 0wxFFFFFFFFFFFFFFFF] compute max over w;
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat $0_189, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_221, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from p in [(1, 2), (2, 1), (1, 9)] compute max over p;
 > val it = (2,1) : int * int
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat $0_198, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_230, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from ox in [SOME 1, NONE, SOME 3] compute min over ox;
 > val it = NONE : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_207, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
+>   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_239, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
 >   : string
 Sys.set ("hybrid", false);
 > val it = () : unit

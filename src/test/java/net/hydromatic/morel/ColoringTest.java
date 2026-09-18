@@ -75,7 +75,22 @@ public class ColoringTest {
             ImmutableSet.of(Core.Rel.JoinType.INNER),
             false,
             true,
-            (leaf, env) -> leaf == mine);
+            (leaf, env) -> leaf == mine,
+            true,
+            ImmutableSet.of());
+
+    /** The same engine, but it cannot call back, and has only "&gt;". */
+    final Profile noCallback =
+        Profile.create(
+            "test",
+            ImmutableSet.of(
+                Op.FILTER, Op.PROJECT, Op.JOIN, Op.SORT, Op.BOUNDARY),
+            ImmutableSet.of(Core.Rel.JoinType.INNER),
+            false,
+            true,
+            (leaf, env) -> leaf == mine,
+            false,
+            ImmutableSet.of(BuiltIn.OP_GT));
 
     Core.Exp intLiteral(int i) {
       return core.intLiteral(BigDecimal.valueOf(i));
@@ -90,6 +105,10 @@ public class ColoringTest {
 
     /** Colors a tree. */
     Core.Exp colored(Core.Exp tree) {
+      return colored(profile, tree);
+    }
+
+    Core.Exp colored(Profile profile, Core.Exp tree) {
       return RelRules.rewrite(
           typeSystem, ImmutableList.of(Coloring.rule(profile)), tree);
     }
@@ -166,6 +185,34 @@ public class ColoringTest {
                 + "  boundary [test]\n"
                 + "    filter [$0 > 1]\n"
                 + "      [1, 2]\n"));
+  }
+
+  /**
+   * An engine that cannot call back must be able to evaluate what it runs, so a
+   * condition using a function it lacks keeps the node out.
+   */
+  @Test
+  void testCannotCallBack() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(f.mine);
+    b.filter(core.greaterThan(f.typeSystem, b.input(0), f.intLiteral(1)));
+    // '>' it has, so it takes the filter.
+    assertThat(
+        f.colored(f.noCallback, b.build()),
+        hasToString(
+            "boundary [test]\n" //
+                + "  filter [$0 > 1]\n"
+                + "    [1, 2]\n"));
+
+    final RelBuilder b2 = f.builder(f.mine);
+    b2.filter(core.lessThan(f.typeSystem, b2.input(0), f.intLiteral(1)));
+    // '<' it does not, so the filter stays outside and only the leaf goes.
+    assertThat(
+        f.colored(f.noCallback, b2.build()),
+        hasToString(
+            "filter [$0 < 1]\n" //
+                + "  boundary [test]\n"
+                + "    [1, 2]\n"));
   }
 
   /** Coloring a tree that is colored already changes nothing. */

@@ -99,12 +99,34 @@ public class Coloring {
     if (!profile.permits(rel)) {
       return false;
     }
+    if (!profile.callsBack() && !evaluates(cx, profile, rel)) {
+      // The engine cannot ask Morel for what it cannot do itself, so a node
+      // whose expressions it cannot evaluate is a node it cannot run.
+      return false;
+    }
     for (Core.Exp input : rel.inputs()) {
       if (!canGo(cx, profile, input)) {
         return false;
       }
     }
     return true;
+  }
+
+  /** Returns whether the engine can evaluate a node's own expressions. */
+  private static boolean evaluates(
+      RelRule.Context cx, Profile profile, Core.Rel rel) {
+    final boolean[] ok = {true};
+    RelRules.copy(
+        cx.typeSystem(),
+        rel,
+        input -> input,
+        exp -> {
+          if (!profile.evaluates(exp)) {
+            ok[0] = false;
+          }
+          return exp;
+        });
+    return ok[0];
   }
 
   /** Returns whether a tree contains a node of a given kind. */
