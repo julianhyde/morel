@@ -5968,6 +5968,7 @@ public enum BuiltIn {
                 .tyCon(Constructor.CORE_EXP_GROUP)
                 .tyCon(Constructor.CORE_EXP_SORT)
                 .tyCon(Constructor.CORE_EXP_UNORDER)
+                .tyCon(Constructor.CORE_EXP_BOUNDARY)
                 .tyCon(Constructor.CORE_EXP_SKIP)
                 .tyCon(Constructor.CORE_EXP_TAKE)
                 .tyCon(Constructor.CORE_EXP_IF_EMPTY)
@@ -6302,6 +6303,14 @@ public enum BuiltIn {
         Datatype.CORE_EXP,
         "APPLY",
         h -> Keys.tuple(ImmutableList.of(Keys.name("exp"), Keys.name("exp")))),
+    CORE_EXP_BOUNDARY(
+        Datatype.CORE_EXP,
+        "BOUNDARY",
+        h ->
+            Keys.record(
+                ImmutableList.of(
+                    Map.entry("engine", STRING.key()),
+                    Map.entry("input", Keys.name("exp"))))),
     CORE_EXP_BUILTIN(
         Datatype.CORE_EXP,
         "BUILTIN",

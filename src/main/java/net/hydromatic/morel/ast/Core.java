@@ -2433,6 +2433,51 @@ public class Core {
   }
 
   /**
+   * Says which engine runs a subtree.
+   *
+   * <p>The identity: it computes what its input computes, and its type is its
+   * input's type, kind included. What it changes is who does the computing, and
+   * it is a node rather than a call so that its components are its input's -- a
+   * boundary between two joins leaves the element flat, and a projection above
+   * it does not re-path.
+   *
+   * <p>The engine is a name, and contract text: it may carry a dialect, as
+   * {@code sql:hsqldb} does.
+   */
+  public static class Boundary extends SingleRel {
+    public final String engine;
+
+    Boundary(Pos pos, String engine, Exp input) {
+      super(pos, Op.BOUNDARY, input.type, input);
+      this.engine = requireNonNull(engine, "engine");
+    }
+
+    @Override
+    public String opName() {
+      return "boundary";
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      arg(w, engine);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Boundary copy(Exp input) {
+      return input == this.input ? this : core.boundary(pos, engine, input);
+    }
+  }
+
+  /**
    * Discards the first {@code count} elements.
    *
    * <p>{@code count} is evaluated once, before the first element exists, and

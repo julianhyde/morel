@@ -209,6 +209,7 @@ public enum Op {
   JOIN,
   SORT,
   IF_EMPTY,
+  BOUNDARY,
 
   IF,
   RAISE,

@@ -849,6 +849,7 @@ public enum CoreBuilder {
    */
   private static Core.@Nullable Exp elementPreserved(Core.Exp node) {
     switch (node.op) {
+      case BOUNDARY:
       case FILTER:
       case SORT:
       case UNORDER:
@@ -982,6 +983,16 @@ public enum CoreBuilder {
     checkCollection(input);
     final Type type = typeSystem.listType(input.type.elementType());
     return new Core.Sort(pos, type, row, ordinal, input, exp);
+  }
+
+  /** Creates a boundary, which says which engine runs its input. */
+  public Core.Boundary boundary(String engine, Core.Exp input) {
+    return boundary(Pos.ZERO, engine, input);
+  }
+
+  public Core.Boundary boundary(Pos pos, String engine, Core.Exp input) {
+    checkCollection(input);
+    return new Core.Boundary(pos, engine, input);
   }
 
   /** Creates an {@code unorder}; the output is always a {@code bag}. */

@@ -38,6 +38,10 @@ for the design is in discussion.md; the sequence is in plan.md.
 **Changes.** Frozen has meant stable and versioned since the first
 amendments landed. What a port has to re-check, newest first:
 
+* 2026-09-18 — §3.2, §6.3: `boundary`, which says which engine runs
+  its input. The identity, so an implementation that has no such
+  engine runs the input itself. Nothing produces one yet, so no
+  golden file changes.
 * 2026-09-18 — §5: rule 4, distinct labels, is checked where a node
   is built and not by the validator. No rule text changes; what
   changes is which part of an implementation owes the check.
@@ -235,6 +239,7 @@ just an expression".
 | `ifEmpty` | `e` of type `τ` | `τ` | — (§2 rule 1) |
 | `sort` | `e` | `τ` | `$0`, `$ordinal` |
 | `unorder` | — | `τ` | — |
+| `boundary` | engine: a word | `τ` | — |
 | `skip` | `n : int` | `τ` | — (§2 rule 1) |
 | `take` | `n : int` | `τ` | — (§2 rule 1) |
 
@@ -252,6 +257,18 @@ is evaluated only in the first case, when there is no element, so
 like the count of a `skip` it cannot mention `$0`; it can mention
 whatever encloses the tree, which inside the right input of a
 dependent join includes that join's left pattern.
+
+`boundary` says which engine runs its input. It is the identity --
+same elements, same type, same kind -- and what it changes is who
+computes them. It is a node rather than a call so that its components
+are its input's (§3.4): a boundary between two joins leaves the
+element flat, and a projection above it does not re-path. The engine
+is a name, and contract text; it may carry a dialect, as
+`sql:hsqldb` does, so the grammar's `word` admits a colon. Nothing in
+the surface language produces one: a rewrite does, and until one
+lands an implementation needs only to carry it -- and, where it has
+no engine of that name, to run the input itself, which is what the
+identity permits.
 
 `compute` is `group` with no keys, plus the extraction of the single
 element that the enclosing expression performs — see §6.
@@ -545,6 +562,7 @@ cont     ::= indent4 text '\n'        -- wrapped: 4 from the node
 op       ::= 'filter' | 'project' | 'ifEmpty'
            | 'join' | 'group' | 'sort' | 'unorder'
            | 'skip' | 'take' | 'union' | 'intersect' | 'except'
+           | 'boundary'
 arg      ::= '[' exp ']' | '[' label '=' exp (',' label '=' exp)* ']'
            | '[' word ']'
 defn     ::= '\n' 'r$' int ('[' name (',' name)* ']')? ' =' '\n' node

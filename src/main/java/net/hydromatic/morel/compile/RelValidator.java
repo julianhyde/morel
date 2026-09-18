@@ -198,6 +198,11 @@ public class RelValidator {
       requireDerivedType(
           rel,
           core.sort(typeSystem, sort.row, sort.ordinal, sort.input, sort.exp));
+    } else if (rel instanceof Core.Boundary) {
+      final Core.Boundary boundary = (Core.Boundary) rel;
+      input(boundary.input, outer);
+      // The identity: it binds nothing and changes nothing but who computes.
+      requireDerivedType(rel, core.boundary(boundary.engine, boundary.input));
     } else if (rel instanceof Core.Unorder) {
       final Core.Unorder unorder = (Core.Unorder) rel;
       input(unorder.input, outer);

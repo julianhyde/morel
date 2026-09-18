@@ -126,6 +126,7 @@ fun rt e = case e of
       SORT {input = rt input, key = rt key, ordinalPat = rto ordinalPat,
             row = rtp row}
   | UNORDER i => UNORDER (rt i)
+  | BOUNDARY {engine, input} => BOUNDARY {engine = engine, input = rt input}
   | SKIP {count, input} => SKIP {count = rt count, input = rt input}
   | TAKE {count, input} => TAKE {count = rt count, input = rt input}
   | IF_EMPTY {input, otherwise} =>

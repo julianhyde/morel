@@ -535,6 +535,11 @@ public class Visitor {
     sort.exp.accept(this);
   }
 
+  protected void visit(Core.Boundary boundary) {
+    visitRel(boundary);
+    boundary.input.accept(this);
+  }
+
   protected void visit(Core.Unorder unorder) {
     visitRel(unorder);
     unorder.input.accept(this);
@@ -634,6 +639,11 @@ public class Visitor {
     @Override
     protected void visit(Core.Sort sort) {
       rel(sort);
+    }
+
+    @Override
+    protected void visit(Core.Boundary boundary) {
+      rel(boundary);
     }
 
     @Override

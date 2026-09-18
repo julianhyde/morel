@@ -189,6 +189,8 @@ public abstract class CoreValues {
           return "SORT";
         case UNORDER:
           return "UNORDER";
+        case BOUNDARY:
+          return "BOUNDARY";
         case SKIP:
           return "SKIP";
         case TAKE:
@@ -310,6 +312,12 @@ public abstract class CoreValues {
           }
         case "UNORDER":
           return of(((Core.Unorder) exp).input);
+        case "BOUNDARY":
+          {
+            final Core.Boundary boundary = (Core.Boundary) exp;
+            // engine, input.
+            return ImmutableList.of(boundary.engine, of(boundary.input));
+          }
         case "SKIP":
           {
             final Core.Skip skip = (Core.Skip) exp;
@@ -569,6 +577,9 @@ public abstract class CoreValues {
                 toExp(fields.get(1))));
       case "UNORDER":
         return of(core.unorder(typeSystem, toExp(arg)));
+      case "BOUNDARY":
+        // engine, input.
+        return of(core.boundary((String) fields.get(0), toExp(fields.get(1))));
       case "SKIP":
         // count, input.
         return of(core.skip(toExp(fields.get(1)), toExp(fields.get(0))));
