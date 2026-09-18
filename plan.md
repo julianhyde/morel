@@ -179,6 +179,16 @@ Done. What it turned out to need, for the ports and for F2:
     `morelScalar` of text that names a pattern, which nothing can
     evaluate. It is reached only when the enclosing query is not
     itself pushed down, which the step list also could not survive.
+    **Could not be reproduced since.** Six shapes were tried under
+    `hybrid`: a nested query in a projection and in a condition, the
+    enclosing query pushed down and not (a `String.size` filter that
+    Calcite declines), the enclosing collection local and the nested
+    one over `scott`, and a nesting two deep. Every one gives the
+    right answer. Either the shape that reaches it is narrower than
+    the note says, or something between -- decorrelation, inlining,
+    the binder device being substituted away -- now prevents it. The
+    note stays because the hole in the reasoning is real; it should
+    not be read as a live defect.
 - [x] Every query is built as a tree. `FromBuilder` keeps its
       step-by-step surface -- the generators and the grounder write
       `scan(pat, exp)`, `where`, `yield_`, `distinct`, `order`,
@@ -832,8 +842,11 @@ something settled — §8's principle, applied to the sequence itself.
       generated binders it finds, from zero, in order of first
       occurrence. It survives nesting, which a rule about allocation
       does not, so it closes spec.md §6's hole as well.
-- [ ] The flip proper: the resolver builds trees natively, and the
-      lowering runs once.
+- [x] The flip proper: the resolver builds trees natively, and the
+      lowering runs once. Done by F1 and F2: the resolver builds a
+      tree, the tree executes, and `RelLowerer` is deleted. The
+      reasoning below is kept because it is why the flip was done
+      this way, not a thing still to do.
 
       **Not a differential shadow, and the reason narrowed.**
       `Resolver.toCore` is not pure, so a pass that shadows the
@@ -2463,7 +2476,7 @@ user-written rule, with the plan before and after in a script.
 
 ## Reorder and squash, before the branch lands
 
-221 commits, written as the work was understood rather than as it
+262 commits, written as the work was understood rather than as it
 should be read. The branch stays unsquashed until then, deliberately --
 a commit that records a wrong turn is worth having while the turn is
 still recent -- but what lands should be a sequence someone can
@@ -2507,7 +2520,48 @@ line.
   The amendments are drafts of one section and should be one commit
   that writes §6 as it stands.
 
+### The steps 4 to 6 commits, and the order they should read in
+
+Written in this order and needing no reordering among themselves;
+each depends only on the ones above it.
+
+1. **`0b4ab0bf` the rule framework** -- `RelRule`, `RelRules` and the
+   driver, with unorder pushdown as its first client.
+2. **`fb6e9397` the builder's simplifications as rules** -- filter
+   merge, project identity, project merge, skip zero; and
+   `RelRules.foldSelectors`, which `RelExpander` gives up.
+3. **`fddc6754` grounding as a rule** -- whole-tree rules, the rule
+   context, `SuchThatShuttle` deleted, `Compiles.checkGrounded`.
+4. **`9c56dc23` closures retain their Core**, and `Plan.bodyOf`.
+5. **`d7c200f4` the tree as a Morel value** -- `Core.exp`,
+   `Core.pat`, `CoreValues`.
+6. **`2ae8c189` `Plan.program`** -- a rule written in Morel, and
+   `Compiler.recompile`.
+
+`f849ed30` is plan text alone and folds into whichever of these
+follows it. `6a126fa3`, `07d6a39c` and `ad158e23` are plan, spec and
+suite text from before the framework, and stay where they are.
+
 ### Commits to separate out, because they are not this issue
+
+* **`6febf03f`, the ellipsis in a pattern.** A record pattern with an
+  ellipsis was converted against its own type rather than the value's,
+  so it bound by position: `val {b, ...} = {a=1, b="x", c=true}` bound
+  `b` to 1. It is a bug in main's code, found by writing rules over
+  `Core.exp` but owing nothing to the tree, and it should go to main
+  on its own.
+
+* **Closures retaining their Core** (`9c56dc23`) and the recompile it
+  enables (part of `2ae8c189`). `StackMatchCode` keeping the `Core.Fn`
+  it was compiled from, and the capture list beside it, is a change to
+  the compiler and the evaluator that the tree does not touch. It
+  could go to main as a pair, ahead of everything else here, and
+  `Plan.bodyOf` with it.
+
+* **The inliner's tolerance of an opaque value** (part of
+  `d7c200f4`). `valueToExp` threw on a value it could not spell as an
+  expression; returning a value literal is right whatever the value
+  is. Orthogonal, and a one-line change.
 
 * **The printer's move to Lindig**, with the `FreeFinder` move and
   `Core.Exp.freePats` that precede it. None of it is about the
