@@ -24,6 +24,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
@@ -420,6 +421,198 @@ public class RelRules {
               Function.identity());
         }
       };
+
+  /**
+   * Pushes the conjuncts of a {@code filter} into the inputs of the {@code
+   * join} below it, where a conjunct reads one side only.
+   *
+   * <p>A join's element is its inputs' components concatenated, so a condition
+   * above it reads a component by position, {@code #1 $0}. A conjunct whose
+   * positions all fall on one side asks nothing of the other, so it can be
+   * asked of that side alone, before the join has paired anything -- which is
+   * what lets the side be run somewhere else entire.
+   *
+   * <p>Only an inner join, whose sides a condition may not have to see
+   * together; and only a flat one, since a join that is not flat has one
+   * component and nothing to divide.
+   *
+   * <p>Not in {@link #STANDARD}. It is a good idea for any query, but it
+   * changes the plan of every query with a filter over a join, and that is a
+   * golden-file review of its own. It is used where it pays for itself at once:
+   * coloring, where a side that stands alone is a side that can go.
+   */
+  public static final RelRule FILTER_INTO_JOIN =
+      new RelRule() {
+        @Override
+        public String name() {
+          return "FilterIntoJoin";
+        }
+
+        @Override
+        public Core.@Nullable Exp apply(Context cx, Core.Rel rel) {
+          if (!(rel instanceof Core.Filter)) {
+            return null;
+          }
+          final Core.Filter filter = (Core.Filter) rel;
+          if (filter.ordinal != null || !(filter.input instanceof Core.Join)) {
+            return null;
+          }
+          final TypeSystem typeSystem = cx.typeSystem();
+          final Core.Join join = (Core.Join) filter.input;
+          if (join.joinType != Core.Rel.JoinType.INNER) {
+            return null;
+          }
+          final int leftCount = core.componentCount(join.left);
+          final int count = core.componentCount(join);
+          if (count != leftCount + core.componentCount(join.right)) {
+            // Not flat: one component, and nothing to divide.
+            return null;
+          }
+          // The rows the pushed filters will bind, and each side's components
+          // read out of them.
+          final Core.IdPat leftRow =
+              core.rowPat(
+                  join.left.type.elementType(), typeSystem.nameGenerator::inc);
+          final Core.IdPat rightRow =
+              core.rowPat(
+                  join.right.type.elementType(), typeSystem.nameGenerator::inc);
+          final List<Core.Exp> leftComponents =
+              core.components(typeSystem, join.left, core.id(leftRow));
+          final List<Core.Exp> rightComponents =
+              core.components(typeSystem, join.right, core.id(rightRow));
+
+          final List<Core.Exp> leftConjuncts = new ArrayList<>();
+          final List<Core.Exp> rightConjuncts = new ArrayList<>();
+          final List<Core.Exp> stay = new ArrayList<>();
+          for (Core.Exp conjunct : core.decomposeAnd(filter.condition)) {
+            final Sides sides = sidesOf(conjunct, filter.row, leftCount);
+            if (sides == Sides.LEFT) {
+              leftConjuncts.add(
+                  shift(typeSystem, conjunct, filter.row, 0, leftComponents));
+            } else if (sides == Sides.RIGHT) {
+              rightConjuncts.add(
+                  shift(
+                      typeSystem,
+                      conjunct,
+                      filter.row,
+                      leftCount,
+                      rightComponents));
+            } else {
+              stay.add(conjunct);
+            }
+          }
+          if (leftConjuncts.isEmpty() && rightConjuncts.isEmpty()) {
+            return null;
+          }
+          final Core.Exp left =
+              leftConjuncts.isEmpty()
+                  ? join.left
+                  : core.filter(
+                      filter.pos,
+                      leftRow,
+                      null,
+                      join.left,
+                      core.andAlso(typeSystem, leftConjuncts));
+          final Core.Exp right =
+              rightConjuncts.isEmpty()
+                  ? join.right
+                  : core.filter(
+                      filter.pos,
+                      rightRow,
+                      null,
+                      join.right,
+                      core.andAlso(typeSystem, rightConjuncts));
+          final Core.Exp join2 =
+              core.join(
+                  join.pos,
+                  typeSystem,
+                  join.joinType,
+                  join.leftRow,
+                  join.rightRow,
+                  join.ordinal,
+                  left,
+                  right,
+                  join.condition);
+          return stay.isEmpty()
+              ? join2
+              : core.filter(
+                  filter.pos,
+                  filter.row,
+                  null,
+                  join2,
+                  core.andAlso(typeSystem, stay));
+        }
+      };
+
+  /** Which side of a join a conjunct reads. */
+  private enum Sides {
+    LEFT,
+    RIGHT,
+    BOTH
+  }
+
+  /**
+   * Returns which side of a join a conjunct reads, by the positions it takes of
+   * the row; {@link Sides#BOTH} if it takes positions on both sides, or reads
+   * the row in any other way.
+   */
+  private static Sides sidesOf(
+      Core.Exp conjunct, Core.IdPat row, int leftCount) {
+    final boolean[] left = {false};
+    final boolean[] right = {false};
+    final boolean[] other = {false};
+    conjunct.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Apply apply) {
+            if (apply.fn.op == Op.RECORD_SELECTOR && isRow(apply.arg, row)) {
+              final int slot = ((Core.RecordSelector) apply.fn).slot;
+              if (slot < leftCount) {
+                left[0] = true;
+              } else {
+                right[0] = true;
+              }
+              return; // do not descend: the row reference is accounted for
+            }
+            super.visit(apply);
+          }
+
+          @Override
+          protected void visit(Core.Id id) {
+            if (id.idPat.equals(row)) {
+              other[0] = true;
+            }
+          }
+        });
+    if (other[0] || left[0] && right[0]) {
+      return Sides.BOTH;
+    }
+    return right[0] ? Sides.RIGHT : Sides.LEFT;
+  }
+
+  /**
+   * Rewrites a conjunct that reads one side of a join so that it reads that
+   * side's own element: position {@code base + i} of the join becomes component
+   * {@code i} of the side.
+   */
+  private static Core.Exp shift(
+      TypeSystem typeSystem,
+      Core.Exp conjunct,
+      Core.IdPat row,
+      int base,
+      List<Core.Exp> components) {
+    return conjunct.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Apply apply) {
+            if (apply.fn.op == Op.RECORD_SELECTOR && isRow(apply.arg, row)) {
+              final int slot = ((Core.RecordSelector) apply.fn).slot;
+              return components.get(slot - base);
+            }
+            return super.visit(apply);
+          }
+        });
+  }
 
   /**
    * The rules that every query is rewritten with, in order.

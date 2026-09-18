@@ -321,11 +321,18 @@ public abstract class Compiles {
       // No engine named, or none that is known.
       return decl;
     }
+    // Pushdown first, in a run of its own: a conjunct that moves below a
+    // join leaves a side that stands alone, and a side that stands alone is
+    // a side that can go. Then coloring, which is a whole-tree rule and so
+    // would otherwise have run before it.
+    final Core.Decl decl2 =
+        RelRules.rewrite(
+            typeSystem, env, ImmutableList.of(RelRules.FILTER_INTO_JOIN), decl);
     return RelRules.rewrite(
         typeSystem,
         env,
         ImmutableList.of(Coloring.rule(Profile.CALCITE)),
-        decl);
+        decl2);
   }
 
   /**
