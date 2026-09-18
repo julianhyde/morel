@@ -2496,9 +2496,22 @@ still known.
 * **Two commits carry golden output that was never regenerated.** The
   rebase onto main hit conflicts in `such-that.smli` and
   `built-in/sys.smli`; both were resolved by taking our side and
-  regenerating at the tip, which is right for the tip and leaves the
-  intermediate commits stale. Either regenerate in place or fold them
-  forward.
+  regenerating at the tip, which leaves the intermediate commits
+  stale. Either regenerate in place or fold them forward.
+
+  **And taking our side was not right for the tip.** It was for
+  `such-that.smli`, whose statements are unchanged. For
+  `built-in/sys.smli` it silently reverted #464 (`922c780c`), which
+  had made the environment listing tabular, filtered and sorted --
+  leaving out `scott`, `$csComplement` and `$dsRanges`, which differ
+  between implementations, for the ports' sake -- and had replaced a
+  second full listing with `env () = Sys.env ()`. What our side had,
+  and what came back, was the raw `Sys.env ()` twice, as a list of
+  tuples. Restored. It is why every commit that added a binding
+  churned hundreds of lines of that file. The lesson for the squash
+  is narrower than "regenerate": a conflict in a golden file can
+  revert a *source* statement, and the diff to check is of the
+  statements, not the output.
 
 This is the cost of rebasing golden files across a main that changed
 the same outputs, and it is worth paying rather than merging: the
