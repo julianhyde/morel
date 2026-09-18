@@ -915,9 +915,19 @@ implies, and is two things rather than one:
 Neither is the cleaving of §4 and §12.3, which is what the document
 spends its length on. Cleaving matters when a profile declines a
 node in the middle of a tree; today the decision is taken at the
-root, and a tree that declines anywhere runs locally in full. That
-is the case to measure next, and it is not measurable from the suite
-as it stands, because no query in it is partly pushable.
+root, and a tree that declines anywhere runs locally in full.
+
+**Since measured.** No query in the suite was partly pushable, but
+one is a line away, and `hybrid.smli` now has it: a join of
+`scott.depts`, anchored to the database, with a list the query wrote,
+which is Morel's. The plan has no Calcite in it at all. The same
+query without the list is a `JdbcTableScan` under a filter and two
+projections, so what the second engine costs is not only the join --
+it is the filter on `dname`, which the database could have done and
+now does not, over the whole table.
+
+That is the baseline cleaving has to beat, and the plan where the
+improvement will show.
 
 ## 17. Where coloring stops today: the leaf
 
