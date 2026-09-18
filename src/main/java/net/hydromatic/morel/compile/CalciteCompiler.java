@@ -657,16 +657,21 @@ public class CalciteCompiler extends Compiler {
    */
   private @Nullable TreeOut tree(
       RelContext cx, Core.Exp node, Core.IdPat target) {
+    // A leaf, and an 'ifEmpty', are offered whole: not run by this engine,
+    // but embedded in its plan as something it calls back into.
     if (!(node instanceof Core.Rel) || node instanceof Core.IfEmpty) {
       return toRel3(cx, node, true) ? slot(cx, target) : null;
+    }
+    // What this engine can run, given the node alone, is the profile's to
+    // say; what it can run given the node's expressions is decided below, and
+    // an aggregate's type by 'group'.
+    if (!Profile.CALCITE.permits((Core.Rel) node)) {
+      return null;
     }
     final TreeOut out;
     switch (node.op) {
       case FILTER:
         final Core.Filter filter = (Core.Filter) node;
-        if (filter.ordinal != null) {
-          return null;
-        }
         out = tree(cx, filter.input, filter.row);
         if (out == null) {
           return null;
@@ -677,9 +682,6 @@ public class CalciteCompiler extends Compiler {
 
       case PROJECT:
         final Core.Project project = (Core.Project) node;
-        if (project.ordinal != null) {
-          return null;
-        }
         out = tree(cx, project.input, project.row);
         if (out == null) {
           return null;
@@ -689,9 +691,6 @@ public class CalciteCompiler extends Compiler {
 
       case SORT:
         final Core.Sort sort = (Core.Sort) node;
-        if (sort.ordinal != null) {
-          return null;
-        }
         out = tree(cx, sort.input, sort.row);
         if (out == null) {
           return null;
@@ -703,9 +702,6 @@ public class CalciteCompiler extends Compiler {
 
       case SKIP:
         final Core.Skip skip = (Core.Skip) node;
-        if (skip.count.op != Op.INT_LITERAL) {
-          return null;
-        }
         out = tree(cx, skip.input, target);
         if (out == null) {
           return null;
@@ -716,9 +712,6 @@ public class CalciteCompiler extends Compiler {
 
       case TAKE:
         final Core.Take take = (Core.Take) node;
-        if (take.count.op != Op.INT_LITERAL) {
-          return null;
-        }
         out = tree(cx, take.input, target);
         if (out == null) {
           return null;
@@ -729,6 +722,10 @@ public class CalciteCompiler extends Compiler {
 
       case UNORDER:
         return tree(cx, ((Core.Unorder) node).input, target);
+      case BOUNDARY:
+        // The profile let this through, so the boundary names this engine;
+        // and a boundary is the identity, so there is nothing else to do.
+        return tree(cx, ((Core.Boundary) node).input, target);
 
       case GROUP:
         return group(cx, (Core.Group) node, target);
@@ -806,9 +803,6 @@ public class CalciteCompiler extends Compiler {
 
   private @Nullable TreeOut group(
       RelContext cx, Core.Group group, Core.IdPat target) {
-    if (group.ordinal != null) {
-      return null;
-    }
     // See the note in the step-list translation: Calcite's MIN and MAX do
     // not order every type the way Morel does.
     for (Core.Aggregate aggregate : group.aggregates.values()) {
@@ -854,9 +848,6 @@ public class CalciteCompiler extends Compiler {
 
   private @Nullable TreeOut join(
       RelContext cx, Core.Join join, Core.IdPat target) {
-    if (join.joinType != Core.Rel.JoinType.INNER || join.ordinal != null) {
-      return null;
-    }
     final TreeOut left = tree(cx, join.left, join.leftRow);
     if (left == null) {
       return null;
