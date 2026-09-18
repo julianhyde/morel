@@ -2521,12 +2521,17 @@ user-written rule, with the plan before and after in a script.
       condition above it reads a component by position; a conjunct
       whose positions all fall on one side is asked of that side
       alone, before the join has paired anything. Only an inner join,
-      and only a flat one. It is deliberately *not* in `STANDARD`: it
-      is a good idea for any query, but it changes the plan of every
-      query with a filter over a join, which is a golden review of
-      its own. It runs in a pass of its own before coloring, because
-      coloring is a whole-tree rule and would otherwise see the tree
-      before the conjuncts moved.
+      and only a flat one.
+      **In `STANDARD` after all, the golden review being done and
+      cheap**: four files, thirty-four lines. Two are real plan
+      improvements, in `such-that.smli` and `built-in/core.smli`,
+      where a filter over a join becomes a filter under it. The rest
+      is pattern renumbering. One thing the review found and fixed:
+      the rule allocated its row patterns before knowing whether it
+      would fire, so every plan downstream of a non-firing attempt
+      renumbered; the patterns are allocated only where a conjunct
+      actually moves. With the rule standard, coloring no longer
+      needs a pushdown pass of its own.
       With it, `from d in scott.depts, n in dnames where d.loc =
       "CHICAGO" andalso d.dname = n` -- the way anyone would write it
       -- puts the `loc` filter in the database and leaves the join
