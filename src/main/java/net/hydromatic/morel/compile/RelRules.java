@@ -436,10 +436,9 @@ public class RelRules {
    * together; and only a flat one, since a join that is not flat has one
    * component and nothing to divide.
    *
-   * <p>Not in {@link #STANDARD}. It is a good idea for any query, but it
-   * changes the plan of every query with a filter over a join, and that is a
-   * golden-file review of its own. It is used where it pays for itself at once:
-   * coloring, where a side that stands alone is a side that can go.
+   * <p>It pays twice: fewer rows reach the join, and a side that stands alone
+   * is a side that can be run somewhere else entire, which is what coloring
+   * needs.
    */
   public static final RelRule FILTER_INTO_JOIN =
       new RelRule() {
@@ -468,60 +467,35 @@ public class RelRules {
             // Not flat: one component, and nothing to divide.
             return null;
           }
-          // The rows the pushed filters will bind, and each side's components
-          // read out of them.
-          final Core.IdPat leftRow =
-              core.rowPat(
-                  join.left.type.elementType(), typeSystem.nameGenerator::inc);
-          final Core.IdPat rightRow =
-              core.rowPat(
-                  join.right.type.elementType(), typeSystem.nameGenerator::inc);
-          final List<Core.Exp> leftComponents =
-              core.components(typeSystem, join.left, core.id(leftRow));
-          final List<Core.Exp> rightComponents =
-              core.components(typeSystem, join.right, core.id(rightRow));
-
-          final List<Core.Exp> leftConjuncts = new ArrayList<>();
-          final List<Core.Exp> rightConjuncts = new ArrayList<>();
+          // Which side each conjunct reads. Nothing is built yet: a rule
+          // that does not fire must allocate no pattern, or every plan
+          // downstream of it renumbers.
+          final List<Core.Exp> leftRaw = new ArrayList<>();
+          final List<Core.Exp> rightRaw = new ArrayList<>();
           final List<Core.Exp> stay = new ArrayList<>();
           for (Core.Exp conjunct : core.decomposeAnd(filter.condition)) {
-            final Sides sides = sidesOf(conjunct, filter.row, leftCount);
-            if (sides == Sides.LEFT) {
-              leftConjuncts.add(
-                  shift(typeSystem, conjunct, filter.row, 0, leftComponents));
-            } else if (sides == Sides.RIGHT) {
-              rightConjuncts.add(
-                  shift(
-                      typeSystem,
-                      conjunct,
-                      filter.row,
-                      leftCount,
-                      rightComponents));
-            } else {
-              stay.add(conjunct);
+            switch (sidesOf(conjunct, filter.row, leftCount)) {
+              case LEFT:
+                leftRaw.add(conjunct);
+                break;
+              case RIGHT:
+                rightRaw.add(conjunct);
+                break;
+              default:
+                stay.add(conjunct);
             }
           }
-          if (leftConjuncts.isEmpty() && rightConjuncts.isEmpty()) {
+          if (leftRaw.isEmpty() && rightRaw.isEmpty()) {
             return null;
           }
           final Core.Exp left =
-              leftConjuncts.isEmpty()
+              leftRaw.isEmpty()
                   ? join.left
-                  : core.filter(
-                      filter.pos,
-                      leftRow,
-                      null,
-                      join.left,
-                      core.andAlso(typeSystem, leftConjuncts));
+                  : side(typeSystem, join.left, filter, leftRaw, 0);
           final Core.Exp right =
-              rightConjuncts.isEmpty()
+              rightRaw.isEmpty()
                   ? join.right
-                  : core.filter(
-                      filter.pos,
-                      rightRow,
-                      null,
-                      join.right,
-                      core.andAlso(typeSystem, rightConjuncts));
+                  : side(typeSystem, join.right, filter, rightRaw, leftCount);
           final Core.Exp join2 =
               core.join(
                   join.pos,
@@ -543,6 +517,28 @@ public class RelRules {
                   core.andAlso(typeSystem, stay));
         }
       };
+
+  /**
+   * Filters one side of a join by the conjuncts that read it, rewritten to read
+   * that side's own element.
+   */
+  private static Core.Exp side(
+      TypeSystem typeSystem,
+      Core.Exp input,
+      Core.Filter filter,
+      List<Core.Exp> conjuncts,
+      int base) {
+    final Core.IdPat row =
+        core.rowPat(input.type.elementType(), typeSystem.nameGenerator::inc);
+    final List<Core.Exp> components =
+        core.components(typeSystem, input, core.id(row));
+    final List<Core.Exp> shifted = new ArrayList<>();
+    for (Core.Exp conjunct : conjuncts) {
+      shifted.add(shift(typeSystem, conjunct, filter.row, base, components));
+    }
+    return core.filter(
+        filter.pos, row, null, input, core.andAlso(typeSystem, shifted));
+  }
 
   /** Which side of a join a conjunct reads. */
   private enum Sides {
@@ -634,7 +630,8 @@ public class RelRules {
           FILTER_MERGE,
           PROJECT_IDENTITY,
           PROJECT_MERGE,
-          SKIP_ZERO);
+          SKIP_ZERO,
+          FILTER_INTO_JOIN);
 
   private RelRules() {}
 
