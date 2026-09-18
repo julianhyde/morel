@@ -947,20 +947,38 @@ Bag (fn e => ...) (#emps scott)` or `#tabulate List (...)`, which
 becomes a `morelTable` -- Calcite's plan containing a call back into
 Morel, which is not Calcite running it.
 
-**The proposal.** A leaf is colorable when it is a field of a value
-the engine owns, and not otherwise. That is decidable from the node
-and the environment: `#emps scott` is an application of a record
-selector to a name, and whether that name is this engine's is what
-the environment says. It under-approximates, as §12.2 requires -- a
-collection the query wrote could be sent to an engine as a literal
-table, and this says it may not -- and it draws the line exactly
-where §16 found the current code blurs it, between the engine running
-something and the engine calling back into Morel for it.
+**A first proposal, and why it was wrong.** It was: a leaf is
+colorable when it is a field of a value the engine owns, and not
+otherwise. That is right for a SQL dialect, where the only data are
+the tables the database has, and wrong in general.
 
-It amends §12.2 by one word: coloring is a pure function of the tree,
-a profile **and the environment**. The environment is already to hand
--- `RelRule.Context` carries it, because grounding needed it -- and
-the ports need the same, since neither has Calcite's compiler to ask.
+**Settled: whether a leaf may be colored is a fact about the
+deployment, which is what a profile is for.** Spark Connect ships
+values from the environment to the cluster, so when coloring for
+Spark every referenced data set is colored `spark` -- not merely
+*may* be, but is, since a fragment that reads it must have it. For a
+SQL dialect, nothing ships, and only a table the database owns can be
+colored. So the profile gains a fact beside the node kinds: whether
+the engine can be given data, and by what means.
 
-Not built, because it decides what a profile means, and this document
-is where that is decided rather than in the code.
+**The environment divides, and not by type.** A *data set* may cross;
+a *built-in function* may not, whatever the profile. That is §12.1's
+first validator rule seen from the other side -- "a function, or a
+value containing one, cannot cross in any position" -- and the
+mechanism is already named there: the free variables of what is
+inside become parameters. So the question a fold asks of a leaf is
+not "does the engine own this?" but "is this data, and can this
+profile be given data?".
+
+**A leaf's colour therefore follows its consumer.** `#emps scott` is
+not colorable in itself; it is colored `spark` because what reads it
+is. So the fold is not the plain bottom-up pass §12.3 describes: node
+colorability propagates up, and a leaf takes the colour of the node
+that consumes it, where the profile allows. That is one more reason
+cleaving is the hard part and the part nothing has exercised.
+
+It still amends §12.2 by one phrase -- coloring is a pure function of
+the tree, a profile **and the environment** -- because the environment
+is what says whether a name is a data set or a function.
+`RelRule.Context` carries it already, because grounding needed it, and
+the ports need the same.
