@@ -2516,6 +2516,21 @@ user-written rule, with the plan before and after in a script.
       What is not built is the *shipped* half: no profile here can be
       given data, so a leaf that is Morel's stays Morel's. That is
       what a Spark profile would add.
+- [x] `FILTER_INTO_JOIN`, so that the natural spelling colors. A
+      join's element is its inputs' components concatenated, so a
+      condition above it reads a component by position; a conjunct
+      whose positions all fall on one side is asked of that side
+      alone, before the join has paired anything. Only an inner join,
+      and only a flat one. It is deliberately *not* in `STANDARD`: it
+      is a good idea for any query, but it changes the plan of every
+      query with a filter over a join, which is a golden review of
+      its own. It runs in a pass of its own before coloring, because
+      coloring is a whole-tree rule and would otherwise see the tree
+      before the conjuncts moved.
+      With it, `from d in scott.depts, n in dnames where d.loc =
+      "CHICAGO" andalso d.dname = n` -- the way anyone would write it
+      -- puts the `loc` filter in the database and leaves the join
+      and the conjunct that reads both sides in Morel.
 - [ ] **Rules and pushdown do not compose yet.** `Plan.program`
       recompiles with `new Compiler(typeSystem)`, and `Compiles`
       chooses `CalciteCompiler` only for a statement it prepares with

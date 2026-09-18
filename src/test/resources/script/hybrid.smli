@@ -357,17 +357,15 @@ Sys.plan ();
 >       JdbcTableScan(table=[[scott, DEPT]])
 > ))|_} : string
 
-(* Cleaving. With an engine named, coloring puts a boundary where the
- * engine's part of the tree begins, and the compiler runs that part there.
- * The filter and the projection over the database's own table now happen in
- * the database; only the join with Morel's list is local. *)
+(* Cleaving. With an engine named, a conjunct that reads one side of the
+ * join moves below it, coloring puts a boundary at the top of the largest
+ * subtree the engine can run, and the compiler runs that part there. So the
+ * filter on "loc" happens in the database; the join with Morel's list, and
+ * the conjunct that reads both sides, stay local. *)
 Sys.set ("engine", "calcite");
 > val it = () : unit
-from d in (from d2 in scott.depts
-             where d2.loc = "CHICAGO"
-             yield {d2.deptno, d2.dname}),
-    n in dnames
-  where d.dname = n
+from d in scott.depts, n in dnames
+  where d.loc = "CHICAGO" andalso d.dname = n
   yield d.deptno;
 > val it = [30] : int bag
 Sys.planEx "-1";
@@ -378,30 +376,24 @@ Sys.planEx "-1";
 >     filter [#dname (#1 $0) = #2 $0] : t$0
 >       join : t$0
 >         boundary [calcite] : t$1
->           project [{deptno = #deptno $0, dname = #dname $0}] : t$1
->             filter [#loc $0 = "CHICAGO"] : t$2
->               #depts scott : t$2
+>           filter [#loc $0 = "CHICAGO"] : t$1
+>             #depts scott : t$1
 >         dnames : string list
 >
-> t$0 ({deptno:int, dname:string} * string) bag
-> t$1 {deptno:int, dname:string} bag
-> t$2 {deptno:int, dname:string, loc:string} bag
+> t$0 ({deptno:int, dname:string, loc:string} * string) bag
+> t$1 {deptno:int, dname:string, loc:string} bag
 > |_} : string
-from d in (from d2 in scott.depts
-             where d2.loc = "CHICAGO"
-             yield {d2.deptno, d2.dname}),
-    n in dnames
-  where d.dname = n
+from d in scott.depts, n in dnames
+  where d.loc = "CHICAGO" andalso d.dname = n
   yield d.deptno;
 > val it = [30] : int bag
 Sys.plan ();
 > val it =
 >   {_|
-> globalMarshal(globals [scott], body from(sink join(pat $0_156, exp calcite(plan LogicalProject(deptno=[$0], dname=[$1])
->   LogicalFilter(condition=[=($2, 'CHICAGO')])
->     LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
->       JdbcTableScan(table=[[scott, DEPT]])
-> ), sink join(pat $1_159, exp constant([SALES, RESEARCH]), sink where(condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name $0)), stack(offset 1, name $1)), sink collect(apply(fnValue nth:0, argCode stack(offset 2, name $0))))))))|_} : string
+> globalMarshal(globals [scott], body from(sink join(pat $0_154, exp calcite(plan LogicalFilter(condition=[=($2, 'CHICAGO')])
+>   LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
+>     JdbcTableScan(table=[[scott, DEPT]])
+> ), sink join(pat $1_157, exp constant([SALES, RESEARCH]), sink where(condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name $0)), stack(offset 1, name $1)), sink collect(apply(fnValue nth:0, argCode stack(offset 2, name $0))))))))|_} : string
 Sys.set ("engine", "");
 > val it = () : unit
 
@@ -454,19 +446,19 @@ from w in [0w1, 0wxFFFFFFFFFFFFFFFF] compute max over w;
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat $0_196, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_198, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from p in [(1, 2), (2, 1), (1, 9)] compute max over p;
 > val it = (2,1) : int * int
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat $0_205, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_207, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from ox in [SOME 1, NONE, SOME 3] compute min over ox;
 > val it = NONE : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_214, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
+>   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_216, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
 >   : string
 Sys.set ("hybrid", false);
 > val it = () : unit
