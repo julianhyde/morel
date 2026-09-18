@@ -2483,6 +2483,33 @@ still recent -- but what lands should be a sequence someone can
 bisect. This is the list of what to do, written while the reasons are
 still known.
 
+### Before the rebase: what main has that the branch does not
+
+Measured at `julianhyde/main`, 18 commits ahead of the branch's base.
+Fourteen of them the branch already carries as copies, so a rebase
+should drop those; four are new.
+
+* `8a9bdcfe` touches `Resolver.java` only. A conflict, but a small
+  one.
+* `2f842c05` (#477) touches `Ast`, `AstWriter`, `Core` and `Op` --
+  all four heavily rewritten here, so expect real conflicts, in code
+  rather than golden files.
+* `c6fbd57c` (#474) touches `Codes`, `BuiltIn`, `Session` and two
+  scripts.
+* **`29017648` (#475) is the one to watch.** It changes a *statement*
+  in 47 scripts: `Sys.set ("stringDepth", ~1)` becomes `Sys.set
+  ("stringDepth", NONE)`, and likewise `printLength`, `printDepth`
+  and `lineWidth`, which all become `NON_NEGATIVE_INT_OPTION`. So
+  the old spelling stops working, not merely stops being idiomatic.
+  Resolve those conflicts by taking *main's* statement and
+  regenerating the output, never our side.
+
+  And five scripts this branch *adds* use the old spelling, so they
+  have no conflict to resolve and will simply fail: `built-in/core`
+  (twice), `built-in/plan`, `check`, `rel-rule`, `rel-tree`. They
+  need `NONE` by hand after the rebase. `rel-tree.smli` is the
+  conformance suite the ports read, so its spelling is theirs too.
+
 ### Commits that must move, because a step is not green without them
 
 * **`ungroundedPats` belongs with the deletion.** Deleting the step
