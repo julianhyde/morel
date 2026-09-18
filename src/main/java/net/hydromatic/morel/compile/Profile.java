@@ -21,9 +21,13 @@ package net.hydromatic.morel.compile;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableSet;
+import java.util.List;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.foreign.RelList;
+import net.hydromatic.morel.type.Binding;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -66,17 +70,45 @@ public class Profile {
   /** Whether the count of a {@code skip} or {@code take} must be a literal. */
   private final boolean literalCounts;
 
+  /**
+   * Whether a leaf is data this engine already holds.
+   *
+   * <p>The <i>anchored</i> question, and the engine's to answer: a database
+   * holds its own tables and nothing else. An engine that can be given data
+   * would answer differently, and would take a leaf's colour from what consumes
+   * it rather than from where the data is.
+   */
+  private final BiPredicate<Core.Exp, Environment> holds;
+
   private Profile(
       String name,
       Set<Op> ops,
       Set<Core.Rel.JoinType> joinTypes,
       boolean ordinals,
-      boolean literalCounts) {
+      boolean literalCounts,
+      BiPredicate<Core.Exp, Environment> holds) {
     this.name = requireNonNull(name, "name");
     this.ops = ImmutableSet.copyOf(ops);
     this.joinTypes = ImmutableSet.copyOf(joinTypes);
     this.ordinals = ordinals;
     this.literalCounts = literalCounts;
+    this.holds = requireNonNull(holds, "holds");
+  }
+
+  /** Creates a profile; for a test that wants engines this one has not. */
+  public static Profile create(
+      String name,
+      Set<Op> ops,
+      Set<Core.Rel.JoinType> joinTypes,
+      boolean ordinals,
+      boolean literalCounts,
+      BiPredicate<Core.Exp, Environment> holds) {
+    return new Profile(name, ops, joinTypes, ordinals, literalCounts, holds);
+  }
+
+  /** Returns whether a leaf is data this engine already holds. */
+  public boolean holds(Core.Exp leaf, Environment env) {
+    return holds.test(leaf, env);
   }
 
   /**
@@ -108,7 +140,30 @@ public class Profile {
               Op.EXCEPT),
           ImmutableSet.of(Core.Rel.JoinType.INNER),
           false,
-          true);
+          true,
+          Profile::calciteHolds);
+
+  /**
+   * Returns whether a leaf is one of Calcite's own relations: a field of a
+   * foreign value whose fields are relations. A collection the query wrote is
+   * not, and this profile cannot be given one.
+   */
+  private static boolean calciteHolds(Core.Exp exp, Environment env) {
+    if (exp.op != Op.APPLY) {
+      return false;
+    }
+    final Core.Apply apply = (Core.Apply) exp;
+    if (apply.fn.op != Op.RECORD_SELECTOR || apply.arg.op != Op.ID) {
+      return false;
+    }
+    final int slot = ((Core.RecordSelector) apply.fn).slot;
+    final @Nullable Binding binding = env.getOpt(((Core.Id) apply.arg).idPat);
+    if (binding == null || !(binding.value instanceof List)) {
+      return false;
+    }
+    final List<?> fields = (List<?>) binding.value;
+    return slot < fields.size() && fields.get(slot) instanceof RelList;
+  }
 
   /** Returns whether this engine can run a node, given the node alone. */
   public boolean permits(Core.Rel rel) {

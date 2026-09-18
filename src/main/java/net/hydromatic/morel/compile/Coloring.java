@@ -20,12 +20,9 @@ package net.hydromatic.morel.compile;
 
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
-import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Visitor;
-import net.hydromatic.morel.foreign.RelList;
-import net.hydromatic.morel.type.Binding;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -96,7 +93,7 @@ public class Coloring {
   private static boolean canGo(
       RelRule.Context cx, Profile profile, Core.Exp exp) {
     if (!(exp instanceof Core.Rel)) {
-      return anchored(cx, exp);
+      return profile.holds(exp, cx.env());
     }
     final Core.Rel rel = (Core.Rel) exp;
     if (!profile.permits(rel)) {
@@ -108,31 +105,6 @@ public class Coloring {
       }
     }
     return true;
-  }
-
-  /**
-   * Returns whether a leaf is data the engine already holds.
-   *
-   * <p>A field of a foreign value, {@code #depts scott}, whose value is one of
-   * that engine's relations. A collection the query wrote is not: it is
-   * Morel's, and no profile here can be given it.
-   */
-  private static boolean anchored(RelRule.Context cx, Core.Exp exp) {
-    if (exp.op != Op.APPLY) {
-      return false;
-    }
-    final Core.Apply apply = (Core.Apply) exp;
-    if (apply.fn.op != Op.RECORD_SELECTOR || apply.arg.op != Op.ID) {
-      return false;
-    }
-    final int slot = ((Core.RecordSelector) apply.fn).slot;
-    final Core.NamedPat pat = ((Core.Id) apply.arg).idPat;
-    final @Nullable Binding binding = cx.env().getOpt(pat);
-    if (binding == null || !(binding.value instanceof List)) {
-      return false;
-    }
-    final List<?> fields = (List<?>) binding.value;
-    return slot < fields.size() && fields.get(slot) instanceof RelList;
   }
 
   /** Returns whether a tree contains a node of a given kind. */
