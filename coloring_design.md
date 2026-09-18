@@ -810,3 +810,63 @@ one this document is for: rules in Morel match on applications,
 #359's reification is the identity, and a user's
 `Bag.filter (fn e => e.deptno = 20) emps` is the same Core as the
 query, so tree mode prints it too.
+
+## 16. What coloring has to do, measured
+
+Written after steps 4 to 6 landed, because §12.7's spike was
+specified before the rule driver existed and its acceptance test can
+now be run against the code as it stands. The measurement is over
+the whole script suite, which is a sample of what Morel compiles and
+not a proof about every program.
+
+**Where Morel appears inside a Calcite plan.** Three occurrences in
+the suite, and one absence:
+
+* `morelTable` twice, at `hybrid.smli` line 52 and `relational.smli`
+  line 3431. Both are a `LogicalTableFunctionScan`, which is to say
+  both are leaves: a `Bag.filter` over `scott.emps`, and a
+  `List.tabulate`.
+* `morelScalar` twice, both in the one plan at `hybrid.smli` line
+  135: `ten`, and `#nth List (ten :: 20 :: 30 :: [40], 1)`. Neither
+  reads the row. Both name only variables the enclosing `let` binds,
+  so each is a constant for the query, delivered by a callback where
+  a bind parameter would do.
+* `morelApply` never appears.
+
+**What reaches Calcite at all.** Of the eighteen hybrid-mode queries
+in `hybrid.smli` that print a plan, fifteen reach Calcite. The three
+that do not are the three the script's own comment at line 372
+describes: an aggregate over a type Calcite has no SQL type for --
+`word`, a tuple, an `option`.
+
+**What this says about the spike.** §12.7's acceptance test is that
+no `morelScalar` or `morelApply` appears inside a Calcite plan, that
+`morelTable` appears only at leaves, and that the logical plan holds
+only operators the profile lists. The first two hold today, before
+any coloring: there is no row-dependent Morel inside a Calcite plan
+anywhere in the suite. So the spike as specified would prove
+nothing, and §12.7 is obsolete twice over -- once because the step-4
+driver exists and coloring can be rules from the start rather than a
+pass to be thrown away, and once because its test already passes.
+
+**What is actually left to do**, then, is narrower than the document
+implies, and is two things rather than one:
+
+1. *The decision is implicit.* What may be pushed is whatever
+   `CalciteCompiler` does not decline -- ordinals, outer and
+   dependent joins, `ifEmpty`, and an aggregate whose type has no
+   SQL spelling. That is a capability description written as control
+   flow. Coloring's contribution is to make it a profile: data, read
+   the same way by three implementations, which is what §12.2 and
+   §12.5 are for. The boundary constructor of §12.1 is what lets a
+   rule *say* where the decision fell.
+2. *Query-constants cross as callbacks.* `morelScalar('ten', ...)`
+   is a value the enclosing environment already holds. Coloring, or
+   something smaller and sooner, could hoist it to a parameter.
+
+Neither is the cleaving of §4 and §12.3, which is what the document
+spends its length on. Cleaving matters when a profile declines a
+node in the middle of a tree; today the decision is taken at the
+root, and a tree that declines anywhere runs locally in full. That
+is the case to measure next, and it is not measurable from the suite
+as it stands, because no query in it is partly pushable.
