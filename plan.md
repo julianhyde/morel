@@ -2474,6 +2474,38 @@ user-written rule, with the plan before and after in a script.
 - [ ] (4) Reactor / MEMO / guard-dependency machinery as the second
       engine beside the driver.
 
+## Toward coloring
+
+- [x] **The profile, as data.** `Profile` says what an engine can be
+      asked to run, and `Profile.CALCITE` is what the Calcite
+      translation has always decided, gathered from six places in the
+      walk into one description: the node kinds it runs, the join
+      kinds, whether a node may bind an ordinal, whether a `skip` or
+      `take` count must be a literal. `permits` is a pure function of
+      a profile and one node, as §12.5 asks. No plan changes; the
+      Calcite-heavy scripts are byte-identical.
+      Two things stayed in the translator, and the class says why.
+      Whether an engine can evaluate an *expression* is a walk of the
+      expression, not a fact about a node, and the translation
+      already falls back to a callback. Whether it orders a *type* as
+      Morel does -- which decides whether `min` and `max` may be
+      pushed -- needs that engine's mapping of Morel's types.
+- [x] A `boundary` naming the engine is run by it, and one naming
+      another engine is declined. Before this the boundary fell to
+      the translator's default and disabled pushdown for the whole
+      subtree, which was a gap in the commit that added it.
+- [ ] **Rules and pushdown do not compose yet.** `Plan.program`
+      recompiles with `new Compiler(typeSystem)`, and `Compiles`
+      chooses `CalciteCompiler` only for a statement it prepares with
+      `hybrid` set. So a function a rule has optimized is never
+      offered to Calcite, and a coloring rule that produced
+      boundaries would have nothing read them. Which of the two to
+      change -- `Plan.program` choosing a compiler as `Compiles`
+      does, or coloring running inside the ordinary pipeline rather
+      than through `Plan.program` -- is the next thing to settle, and
+      §12.5 leans to the second: coloring is the compiler's rule set,
+      not a user's.
+
 ## Reorder and squash, before the branch lands
 
 262 commits, written as the work was understood rather than as it
