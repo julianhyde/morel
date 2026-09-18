@@ -46,6 +46,7 @@ datatype <a id='exp' href="#exp-impl">exp</a>
   | GROUP of {aggregates: (string * exp * exp option * ty) list, input: exp, keys: (string * exp) list, ordinalPat: pat option, row: pat}
   | SORT of {input: exp, key: exp, ordinalPat: pat option, row: pat}
   | UNORDER of exp
+  | BOUNDARY of {engine: string, input: exp}
   | SKIP of {count: exp, input: exp}
   | TAKE of {count: exp, input: exp}
   | IF_EMPTY of {input: exp, otherwise: exp}

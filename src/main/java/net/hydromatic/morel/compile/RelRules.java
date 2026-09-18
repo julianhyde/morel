@@ -61,6 +61,16 @@ public class RelRules {
   private static final int LIMIT = 10_000;
 
   /**
+   * Nesting beyond which a rule set is taken to be looping.
+   *
+   * <p>A rule that puts its own pattern back under its replacement recurses
+   * rather than iterating -- the replacement is rewritten below, and meets the
+   * rule again -- so it runs out of stack long before it runs out of firings. A
+   * tree a query builds is nowhere near this deep.
+   */
+  private static final int DEPTH_LIMIT = 100;
+
+  /**
    * Pushes an {@code unorder} down through the nodes that do not depend on
    * their input's order, and discards it where it reaches a {@code sort}, whose
    * order it discards, or a bag, which has none.
@@ -596,6 +606,10 @@ public class RelRules {
       return sort.copy(
           typeSystem, inputFn.apply(sort.input), expFn.apply(sort.exp));
     }
+    if (rel instanceof Core.Boundary) {
+      final Core.Boundary boundary = (Core.Boundary) rel;
+      return boundary.copy(inputFn.apply(boundary.input));
+    }
     if (rel instanceof Core.Unorder) {
       final Core.Unorder unorder = (Core.Unorder) rel;
       return unorder.copy(typeSystem, inputFn.apply(unorder.input));
@@ -636,6 +650,7 @@ public class RelRules {
     final List<RelRule> wholeTreeRules;
     final List<RelRule> nodeRules;
     int firings;
+    int depth;
 
     Driver(TypeSystem typeSystem, List<RelRule> rules) {
       this.typeSystem = typeSystem;
@@ -846,6 +861,18 @@ public class RelRules {
        * expressions, then the node rules at the node.
        */
       private Core.Exp rewriteNodes(Core.Rel rel) {
+        if (++depth > DEPTH_LIMIT) {
+          throw new IllegalStateException(
+              "rules did not converge after " + DEPTH_LIMIT + " levels");
+        }
+        try {
+          return rewriteNodes_(rel);
+        } finally {
+          --depth;
+        }
+      }
+
+      private Core.Exp rewriteNodes_(Core.Rel rel) {
         // The node's expressions may read its patterns; a join's right input
         // may read its left row, and its ordinal.
         final Walker inner = under(rel.patterns());

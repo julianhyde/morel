@@ -159,6 +159,11 @@ class RelCompiler {
               final RowSinkFactory nf = next.sink(row);
               return () -> RowSinks.take(takeCode, nf.get());
             });
+      case BOUNDARY:
+        // Nothing yet runs a subtree elsewhere, so a boundary computes what
+        // its input computes, here. An engine that honors it replaces this.
+        return stream(base, ((Core.Boundary) node).input, target, next);
+
       case UNORDER:
         // A change of type only; ordered and unordered streams have the same
         // representation.

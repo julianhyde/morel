@@ -190,6 +190,58 @@ Plan.program [collide] grouped;
 > uncaught exception Fail [Fail: cannot build GROUP: duplicate label in group keys [name] and aggregates [name]]
 >   raised at: stdIn:4.14-7.33
 
+(* ---------------------------------------------------------------- *)
+(* A boundary says which engine runs a subtree. It is the identity --
+ * same elements, same type, same kind -- so a rule may insert one and
+ * the query computes what it computed before.
+ *)
+fun colorFilter e =
+  case e of
+      FILTER {input = BOUNDARY _, ...} => NONE
+    | FILTER {condition, input, ordinalPat, row} =>
+        SOME (FILTER {condition = condition,
+                      input = BOUNDARY {engine = "calcite", input = input},
+                      ordinalPat = ordinalPat, row = row})
+    | _ => NONE;
+> val colorFilter = fn : exp -> exp option
+fun long n = from x in names where String.size x > n;
+> val long = fn : int -> string list
+Core.print (Plan.bodyOf long);
+> val it =
+>   {_|
+> filter [#size String $0 > n] : string list
+>   names : string list
+> |_} : string
+val long2 = Plan.program [colorFilter] long;
+> val long2 = fn : int -> string list
+Core.print (Plan.bodyOf long2);
+> val it =
+>   {_|
+> filter [#size String $0 > n] : string list
+>   boundary [calcite] : string list
+>     names : string list
+> |_} : string
+long 2;
+> val it = ["ann","cassandra"] : string list
+long2 2;
+> val it = ["ann","cassandra"] : string list
+Core.printType (Core.typeOf (Plan.bodyOf long2));
+> val it = "string list" : string
+
+(* A rule that puts its own pattern back under its replacement never
+ * finishes, and the driver says so rather than running out of stack. *)
+fun loopy e =
+  case e of
+      FILTER {condition, input, ordinalPat, row} =>
+        SOME (BOUNDARY {engine = "calcite",
+                        input = FILTER {condition = condition, input = input,
+                                        ordinalPat = ordinalPat, row = row}})
+    | _ => NONE;
+> val loopy = fn : exp -> exp option
+Plan.program [loopy] long;
+> uncaught exception Fail [Fail: rules did not converge after 100 levels]
+>   raised at: stdIn:1.1-1.21
+
 (*) A built-in has no body to rewrite.
 Plan.program [pushFilterOverProject] String.size;
 > uncaught exception Fail [Fail: not a compiled function]
