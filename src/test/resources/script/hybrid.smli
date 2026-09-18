@@ -329,6 +329,34 @@ in
 end;
 *)
 
+(* A query that reads two engines: a JDBC table, which is anchored to the
+ * database that holds it, and a list the query wrote, which is Morel's.
+ * Today the decision is taken at the root, so one side being Morel's sends
+ * the whole query local -- including the filter on "dname", which the
+ * database could have done. Cleaving is what would push the part that can
+ * go; until it does, this is the baseline, and when it lands this plan is
+ * where the improvement shows. *)
+val dnames = ["SALES", "RESEARCH"];
+> val dnames = ["SALES","RESEARCH"] : string list
+from d in scott.depts, n in dnames
+  where d.dname = n
+  yield d.deptno;
+> val it = [20,30] : int bag
+String.isPrefix "globalMarshal(globals [scott], body from(" (Sys.plan ());
+> val it = true : bool
+
+(*) The same query without the list is pushed down in full.
+from d in scott.depts where d.dname = "SALES" yield d.deptno;
+> val it = [30] : int bag
+Sys.plan ();
+> val it =
+>   {_|
+> globalMarshal(globals [scott], body calcite(plan LogicalProject(deptno=[$0])
+>   LogicalFilter(condition=[=($1, 'SALES')])
+>     LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
+>       JdbcTableScan(table=[[scott, DEPT]])
+> ))|_} : string
+
 (*) Recursive query, 3
 Sys.set ("hybrid", false);
 > val it = () : unit
@@ -378,19 +406,19 @@ from w in [0w1, 0wxFFFFFFFFFFFFFFFF] compute max over w;
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat $0_134, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_154, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from p in [(1, 2), (2, 1), (1, 9)] compute max over p;
 > val it = (2,1) : int * int
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat $0_143, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_163, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from ox in [SOME 1, NONE, SOME 3] compute min over ox;
 > val it = NONE : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_152, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
+>   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_172, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
 >   : string
 Sys.set ("hybrid", false);
 > val it = () : unit
