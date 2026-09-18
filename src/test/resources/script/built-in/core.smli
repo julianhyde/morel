@@ -165,10 +165,10 @@ Core.print (rt (Plan.bodyOf joined));
 > val it =
 >   {_|
 > project [{dname = #dname (#2 $0), name = #name (#1 $0)}] : t$0
->   filter [#id (#1 $0) > n] : t$1
->     join [#id $0 = #id $1] : t$1
+>   join [#id $0 = #id $1] : t$1
+>     filter [#id $0 > n] : t$2
 >       es : t$2
->       ds : t$3
+>     ds : t$3
 >
 > t$0 {dname:string, name:string} list
 > t$1 ({id:int, name:string} * {dname:string, id:int}) list
