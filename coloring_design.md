@@ -889,12 +889,36 @@ describes: an aggregate over a type Calcite has no SQL type for --
 **What this says about the spike.** §12.7's acceptance test is that
 no `morelScalar` or `morelApply` appears inside a Calcite plan, that
 `morelTable` appears only at leaves, and that the logical plan holds
-only operators the profile lists. The first two hold today, before
-any coloring: there is no row-dependent Morel inside a Calcite plan
-anywhere in the suite. So the spike as specified would prove
-nothing, and §12.7 is obsolete twice over -- once because the step-4
+only operators the profile lists. The first two hold across the
+suite, before any coloring. So the spike as specified would prove
+little, and §12.7 is obsolete twice over -- once because the step-4
 driver exists and coloring can be rules from the start rather than a
-pass to be thrown away, and once because its test already passes.
+pass to be thrown away, and once because its test passes on the
+suite as it stands.
+
+**But the suite is not the world, and this measurement said more
+than it knew.** It concluded that the boundary today is already
+clean. It is not. One ordinary query,
+`from d in scott.depts where tricky d.dname > 5`, where `tricky`
+calls `String.size`, puts this inside the Calcite plan:
+
+```
+LogicalFilter(condition=[>(+(morelScalar('string',
+    morelScalar('#size String', '{"type": "ANY" ...}'), $1), 1), 5)])
+```
+
+That is row-dependent Morel inside a Calcite plan -- it reads `$1`, a
+column -- and it is what §12.7 was right to test for. It happens
+with coloring and without it, so it is the translation's and not
+coloring's.
+
+For in-process Calcite the callback works, which is why nothing has
+complained. For the engines §12.4 actually names, a SQL dialect and
+Spark, it cannot cross. So whether an engine can call back into
+Morel is a third deployment fact a profile must carry, beside which
+nodes it runs and whether it can be given data -- and only where the
+answer is no does the expression-level capability have to be
+described at all.
 
 **What is actually left to do**, then, is narrower than the document
 implies, and is two things rather than one:
