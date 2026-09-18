@@ -38,6 +38,9 @@ for the design is in discussion.md; the sequence is in plan.md.
 **Changes.** Frozen has meant stable and versioned since the first
 amendments landed. What a port has to re-check, newest first:
 
+* 2026-09-18 — §5: rule 4, distinct labels, is checked where a node
+  is built and not by the validator. No rule text changes; what
+  changes is which part of an implementation owes the check.
 * 2026-09-17 — §6.8: grounding is a rule, and runs with the rules;
   the numbered phases are inlining passes only. `"-1"` is unchanged.
 * 2026-09-16 — §8: the step list is deleted. Both compilers read the
@@ -429,18 +432,27 @@ place to look when a rule is wrong.
    reference, but nothing a builder produces has one, so that two
    trees that mean the same thing print the same.
 
-**What the validator checks.** Rules 1, 3, 4 and 6 are properties of
-one tree, and the validator checks them: every node's type is the
-one rebuilding it derives, which covers the element type and the kind
+**What the validator checks.** Rules 1, 3 and 6 are properties of one
+tree, and the validator checks them: every node's type is the one
+rebuilding it derives, which covers the element type and the kind
 (rules 1 and 2 together); a name that says it is a node's pattern —
 it begins with `$` — is bound by the node or by an enclosing node
-that §2 allows; the labels within a node are distinct; a node that
-binds an ordinal has a `list` input. Two things it cannot check.
-Rule 5 is a property of a *pair* of trees, before and after a
-rewrite, and is checked by whatever applies the rule. And a name that
-is not a pattern is taken to be bound by the enclosing environment,
-because the validator is given a tree and no environment; the type
-checker settled those names before the tree was built.
+that §2 allows; a node that binds an ordinal has a `list` input.
+
+Rule 4 is checked earlier and harder: a node with two labels the same
+cannot be built. The record a `project` yields and the key and
+aggregate maps of a `group` are sorted maps, which have no room for a
+repeat, and a `group` whose key and aggregate labels collide is
+refused where it is built. An implementation whose builders do the
+same need not check labels in its validator; one whose builders do
+not, must.
+
+Two things nothing checks. Rule 5 is a property of a *pair* of trees,
+before and after a rewrite, and is checked by whatever applies the
+rule. And a name that is not a pattern is taken to be bound by the
+enclosing environment, because the validator is given a tree and no
+environment; the type checker settled those names before the tree was
+built.
 
 Rewrites that merge scopes — decorrelation, subquery unnesting — can
 bring two identically-named binders together. The rename convention

@@ -172,6 +172,24 @@ Core.print (Plan.bodyOf unchanged);
 >     names : string list
 > |_} : string
 
+(* A rule that builds a node the datatype does not allow -- a group whose
+ * key and aggregate share a label -- hears about it as a Morel program
+ * does. *)
+fun grouped () = from x in names group {name = x} compute {c = count over ()};
+> val grouped = fn : unit -> {c:int, name:string} list
+fun collide e =
+  case e of
+      GROUP {aggregates, input, keys, ordinalPat, row} =>
+        SOME (GROUP {aggregates = List.map (fn (n, f, a, t) => ("name", f, a, t))
+                                    aggregates,
+                     input = input, keys = keys, ordinalPat = ordinalPat,
+                     row = row})
+    | _ => NONE;
+> val collide = fn : exp -> exp option
+Plan.program [collide] grouped;
+> uncaught exception Fail [Fail: cannot build GROUP: duplicate label in group keys [name] and aggregates [name]]
+>   raised at: stdIn:4.14-7.33
+
 (*) A built-in has no body to rewrite.
 Plan.program [pushFilterOverProject] String.size;
 > uncaught exception Fail [Fail: not a compiled function]

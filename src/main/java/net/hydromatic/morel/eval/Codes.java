@@ -7388,7 +7388,7 @@ public abstract class Codes {
     if (dataType instanceof DataType
         && (((DataType) dataType).name.equals("exp")
             || ((DataType) dataType).name.equals("pat"))) {
-      return new CoreTyCon(name);
+      return new CoreTyCon(name, Pos.ZERO);
     }
     // Standard datatype constructor - return List
     return new BaseApplicable1(BuiltIn.Z_TY_CON) {
@@ -7438,11 +7438,11 @@ public abstract class Codes {
   }
 
   /** Constructor of {@code exp} or {@code pat}; see {@link CoreValues}. */
-  static class CoreTyCon extends ApplicableImpl {
+  static class CoreTyCon extends BasePositionedApplicable {
     private final String tyConName;
 
-    CoreTyCon(String tyConName) {
-      super(BuiltIn.Z_TY_CON);
+    CoreTyCon(String tyConName, Pos pos) {
+      super(BuiltIn.Z_TY_CON, pos);
       this.tyConName = tyConName;
     }
 
@@ -7452,11 +7452,27 @@ public abstract class Codes {
     }
 
     @Override
+    public Applicable withPos(Pos pos) {
+      return new CoreTyCon(tyConName, pos);
+    }
+
+    @Override
     public Object apply(Stack stack, Object arg) {
-      return CoreValues.fromConstructor(
-          tyConName,
-          arg,
-          requireNonNull(stack.session.typeSystem, "typeSystem"));
+      try {
+        return CoreValues.fromConstructor(
+            tyConName,
+            arg,
+            requireNonNull(stack.session.typeSystem, "typeSystem"));
+      } catch (IllegalArgumentException e) {
+        // The builders refuse a node that breaks the datatype's contract --
+        // a group whose key and aggregate share a label, say. A Morel
+        // program applied the constructor, so it should hear about it as a
+        // Morel program does, not as a Java exception.
+        throw new MorelRuntimeException(
+            BuiltInExn.FAIL,
+            "cannot build " + tyConName + ": " + e.getMessage(),
+            pos);
+      }
     }
   }
 
