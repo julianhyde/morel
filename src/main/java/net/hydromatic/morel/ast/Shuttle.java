@@ -719,6 +719,10 @@ public class Shuttle {
         typeSystem, sort.input.accept(this), sort.exp.accept(this));
   }
 
+  protected Core.Exp visit(Core.Boundary boundary) {
+    return boundary.copy(boundary.input.accept(this));
+  }
+
   protected Core.Exp visit(Core.Unorder unorder) {
     final Core.@Nullable Exp exp = visitRel(unorder);
     if (exp != null) {

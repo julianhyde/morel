@@ -3894,7 +3894,15 @@ public abstract class Codes {
     for (int i = 0; i < ruleValues.size(); i++) {
       rules.add(new MorelRule((Applicable) ruleValues.get(i), stack, i));
     }
-    final Core.Exp exp = RelRules.rewrite(typeSystem, env, rules, fn);
+    final Core.Exp exp;
+    try {
+      exp = RelRules.rewrite(typeSystem, env, rules, fn);
+    } catch (IllegalStateException e) {
+      // The driver gives up on a rule set that does not converge. For the
+      // compiler's own rules that is a bug; for these it is the program's
+      // mistake, and it hears about it as a Morel program does.
+      throw new MorelRuntimeException(BuiltInExn.FAIL, e.getMessage(), pos);
+    }
     if (!(exp instanceof Core.Fn)) {
       throw new MorelRuntimeException(
           BuiltInExn.FAIL, "rules did not leave a function", pos);
