@@ -209,6 +209,8 @@ public abstract class Compiles {
     // before the others reshape it.
     coreDecl = RelRules.rewrite(typeSystem, env, RelRules.STANDARD, coreDecl);
     checkGrounded(coreDecl);
+    // Coloring, after the rules, so that it sees the tree that will run.
+    coreDecl = color(typeSystem, env, session, coreDecl);
     tracer.onCore(-1, coreDecl);
     final Compiler compiler;
     if (hybrid) {
@@ -300,8 +302,30 @@ public abstract class Compiles {
     }
 
     // Pass -1 or any pass beyond the last: the final tree, after the rules,
-    // grounding among them.
-    return RelRules.rewrite(typeSystem, env, RelRules.STANDARD, coreDecl);
+    // grounding among them, and after coloring, as the compiler sees it.
+    coreDecl = RelRules.rewrite(typeSystem, env, RelRules.STANDARD, coreDecl);
+    return color(typeSystem, env, session, coreDecl);
+  }
+
+  /**
+   * Says which engine runs which part of each tree, if the session names one.
+   *
+   * <p>A separate pass, after the standard rules rather than among them,
+   * because coloring is about the tree that will run: a rule that had not fired
+   * yet would change where the line falls.
+   */
+  private static Core.Decl color(
+      TypeSystem typeSystem, Environment env, Session session, Core.Decl decl) {
+    final String engine = Prop.ENGINE.stringValue(session.map);
+    if (!engine.equals(Profile.CALCITE.name)) {
+      // No engine named, or none that is known.
+      return decl;
+    }
+    return RelRules.rewrite(
+        typeSystem,
+        env,
+        ImmutableList.of(Coloring.rule(Profile.CALCITE)),
+        decl);
   }
 
   /**

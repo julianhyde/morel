@@ -160,9 +160,11 @@ class RelCompiler {
               return () -> RowSinks.take(takeCode, nf.get());
             });
       case BOUNDARY:
-        // Nothing yet runs a subtree elsewhere, so a boundary computes what
-        // its input computes, here. An engine that honors it replaces this.
-        return stream(base, ((Core.Boundary) node).input, target, next);
+        // The engine named is to run the subtree. Offer it as an argument,
+        // which is where a compiler that has an engine takes one, and scan
+        // whatever comes back -- the engine's own code if it took it, and
+        // the ordinary local code if it did not.
+        return scan(base, ((Core.Boundary) node).input, target, next, true);
 
       case UNORDER:
         // A change of type only; ordered and unordered streams have the same
@@ -180,7 +182,24 @@ class RelCompiler {
   /** Scans a collection-valued expression, one slot per element. */
   private RowSinkFactory scan(
       Context base, Core.Exp collection, Core.IdPat target, Next next) {
-    final Code code = compiler.compile(base, collection);
+    return scan(base, collection, target, next, false);
+  }
+
+  /**
+   * Scans a collection-valued expression; {@code offer} hands it to the
+   * compiler as an argument, so that a compiler with an engine may run it
+   * there.
+   */
+  private RowSinkFactory scan(
+      Context base,
+      Core.Exp collection,
+      Core.IdPat target,
+      Next next,
+      boolean offer) {
+    final Code code =
+        offer
+            ? compiler.compileArg(base, collection)
+            : compiler.compile(base, collection);
     final RowSinkFactory nf = next.sink(rowOf(base).push(target));
     return () ->
         RowSinks.scan(Op.SCAN, target, 1, false, code, TRUE, null, nf.get());
