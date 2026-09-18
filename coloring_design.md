@@ -918,3 +918,49 @@ node in the middle of a tree; today the decision is taken at the
 root, and a tree that declines anywhere runs locally in full. That
 is the case to measure next, and it is not measurable from the suite
 as it stands, because no query in it is partly pushable.
+
+## 17. Where coloring stops today: the leaf
+
+§16 measured what coloring has to do. Trying to build the fold of
+§12.3 on top of `Profile` found what stops it, and it is one thing.
+
+**A node's colorability is a function of the node; a leaf's is not.**
+`Profile.permits` answers for a node from the node alone, which is
+what §12.5 asks. A leaf is an arbitrary expression, and the question
+"can this engine read it?" is answered today by *compiling* it:
+`CalciteCompiler.toRel3` compiles the expression and asks whether the
+`Code` that comes back is a `RelCode` that can become a `Rel`. That is
+not a function of the Core node, so a coloring fold cannot ask it and
+stay the pure function of tree and profile that §12.2 requires.
+
+And the question cannot be ducked, because a fold that says every
+leaf is colorable colors every tree at the root -- which is the
+decision the translation already takes, so it would add nothing --
+and one that says no leaf is colorable colors nothing, since every
+tree bottoms out in leaves.
+
+**What the leaves actually are.** In the suite they are of three
+shapes. `#emps scott`, a field of a foreign structure, which Calcite
+reads as a table scan. A collection the query wrote, `[1, 2, 3]` or a
+list of records. And a relational built-in over one of those, `#filter
+Bag (fn e => ...) (#emps scott)` or `#tabulate List (...)`, which
+becomes a `morelTable` -- Calcite's plan containing a call back into
+Morel, which is not Calcite running it.
+
+**The proposal.** A leaf is colorable when it is a field of a value
+the engine owns, and not otherwise. That is decidable from the node
+and the environment: `#emps scott` is an application of a record
+selector to a name, and whether that name is this engine's is what
+the environment says. It under-approximates, as §12.2 requires -- a
+collection the query wrote could be sent to an engine as a literal
+table, and this says it may not -- and it draws the line exactly
+where §16 found the current code blurs it, between the engine running
+something and the engine calling back into Morel for it.
+
+It amends §12.2 by one word: coloring is a pure function of the tree,
+a profile **and the environment**. The environment is already to hand
+-- `RelRule.Context` carries it, because grounding needed it -- and
+the ports need the same, since neither has Calcite's compiler to ask.
+
+Not built, because it decides what a profile means, and this document
+is where that is decided rather than in the code.
