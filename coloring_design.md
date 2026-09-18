@@ -970,12 +970,30 @@ inside become parameters. So the question a fold asks of a leaf is
 not "does the engine own this?" but "is this data, and can this
 profile be given data?".
 
-**A leaf's colour therefore follows its consumer.** `#emps scott` is
-not colorable in itself; it is colored `spark` because what reads it
-is. So the fold is not the plain bottom-up pass §12.3 describes: node
-colorability propagates up, and a leaf takes the colour of the node
-that consumes it, where the profile allows. That is one more reason
-cleaving is the hard part and the part nothing has exercised.
+**A leaf's colour follows its consumer, or is anchored, and which of
+the two is the profile's answer.** Where data ships, as it does to
+Spark, the colour follows the consumer: `#emps scott` is not colorable
+in itself, and is colored `spark` because what reads it is. Where it
+does not, as for SQL, the data set is *anchored* to the engine that
+holds it, and the colour is a fact about the data rather than about
+the computation.
+
+Anchoring is a property of the value, not of the profile: `scott` is
+that database's, and the profile only says whether an engine can be
+given data besides its own. The present code already embodies this
+for Calcite, which is why `#emps scott` becomes a table scan and a
+collection the query wrote becomes a `morelTable`.
+
+Two consequences, and both are cleaving's. Under anchoring the
+computation moves to the data, so a node whose inputs are anchored to
+*different* engines can be colored for neither, and the fragments
+meet in Morel -- or one side ships, where its neighbor's profile
+allows it. And the fold is not the plain bottom-up pass §12.3
+describes: colorability propagates up from nodes, while an anchor
+propagates up from a leaf and a shipped leaf takes its colour from
+above. That is the shape to build when cleaving is built, and the
+reason nothing has exercised it is that no query in the suite reads
+two engines.
 
 It still amends §12.2 by one phrase -- coloring is a pure function of
 the tree, a profile **and the environment** -- because the environment
