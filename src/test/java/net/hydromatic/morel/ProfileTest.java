@@ -25,6 +25,7 @@ import static org.hamcrest.Matchers.is;
 import com.google.common.collect.ImmutableList;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Simplification;
@@ -56,8 +57,7 @@ public class ProfileTest {
     /** A builder that simplifies nothing, so a node survives to be asked. */
     RelBuilder builder() {
       final RelBuilder b =
-          RelBuilder.create(
-              typeSystem, java.util.EnumSet.noneOf(Simplification.class));
+          RelBuilder.create(typeSystem, EnumSet.noneOf(Simplification.class));
       b.push(list);
       return b;
     }
