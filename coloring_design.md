@@ -345,6 +345,46 @@ colon. A field on each node is rejected for the reason §3 gives, and
 for two more: a field cannot sit on a scalar, and cleaving is a
 rewrite, which is testable through plan text where a field is not.
 
+**Resolved the other way: `run` is an ordinary built-in.** The
+argument above is kept because it is what was thought, but the
+decision is that the boundary is a function, `run "spark" e`, of type
+`string -> 'a -> 'a`, and nothing in the datatype changes.
+
+Nothing needed to change, because the tree has no requirement that a
+node's input be a node. `RelValidator.input` recurses where the input
+happens to be a `Core.Rel` and otherwise asks only that its type be a
+collection; `Core.Rel`'s constructor constrains only the node's own
+type; §3.1 already says a leaf is just an expression, and the leaves
+in the suite are applications like `#filter Bag (fn e => ...) (#emps
+scott)`. So a call of `run` at a collection type is a legal input
+wherever a node takes one, with no new `Op`, no second class, no row
+in §3.2 and no grammar line. The three validator rules above are
+still wanted, but they are rules about a built-in, not about a
+constructor.
+
+What the node form was to have bought is components, and that is real
+code rather than spec prose: `CoreBuilder.componentCount` returns 1
+for anything that is not a flat join or an element-preserving node,
+and the join compiler, the grounder and the flat-query reader all ask
+it. Measured, the difference is exactly what the argument said and
+nothing worse. `from a in as, b in bs, c in cs` joins a join to a
+leaf and its element is `(int * string * bool)`, three flat
+components, with the projection above reading `#1 $0`, `#2 $0`, `#3
+$0`. Wrap the inner join in an ordinary function and the element is
+`({a:int, b:string} * bool)`: two components, the first a record, and
+the projection above reads `#1 $0` for the pair. Both run, and both
+give the right answers -- the builder knows how many components each
+input has and builds the projection to match.
+
+So the cost is not that a tree breaks. It is that a rule which
+*inserts* a boundary beneath a join changes the element type above
+it, and must re-path every expression that reads through that join,
+or decline. A boundary at the root of a query, or anywhere above a
+join rather than beneath one, costs nothing at all. That is the
+question to settle when a coloring rule is written -- may a boundary
+sit under a join -- and it is a question about one rule, not about
+the datatype.
+
 ### 12.2 Coloring is a pure function of the tree and a profile
 
 The three implementations have different generators: Java's is
@@ -858,8 +898,9 @@ implies, and is two things rather than one:
    SQL spelling. That is a capability description written as control
    flow. Coloring's contribution is to make it a profile: data, read
    the same way by three implementations, which is what §12.2 and
-   §12.5 are for. The boundary constructor of §12.1 is what lets a
-   rule *say* where the decision fell.
+   §12.5 are for. The boundary of §12.1 -- an ordinary built-in, as
+   that section now records -- is what lets a rule *say* where the
+   decision fell.
 2. *Query-constants cross as callbacks.* `morelScalar('ten', ...)`
    is a value the enclosing environment already holds. Coloring, or
    something smaller and sooner, could hoist it to a parameter.
