@@ -2567,7 +2567,11 @@ should drop those; four are new.
   one.
 * `2f842c05` (#477) touches `Ast`, `AstWriter`, `Core` and `Op` --
   all four heavily rewritten here, so expect real conflicts, in code
-  rather than golden files.
+  rather than golden files. The branch reached the same fix
+  independently in `5c5242a2`, and `04d386b2` copies the two cases
+  that one missed, so the two sides now agree on what the code must
+  do. Both sides add `script/parse.smli`: take main's, which has
+  grown since and is a superset.
 * `c6fbd57c` (#474) touches `Codes`, `BuiltIn`, `Session` and two
   scripts.
 * **`29017648` (#475) is the one to watch.** It changes a *statement*
