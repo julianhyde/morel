@@ -29,6 +29,9 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeVisitor;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -95,6 +98,20 @@ public class Profile {
   /** The functions the engine has of its own. */
   private final Set<BuiltIn> functions;
 
+  /**
+   * Whether the engine can be given data it does not hold.
+   *
+   * <p>The second deployment fact. Spark Connect ships values from the
+   * environment to the cluster; a database reached over SQL is given nothing
+   * but the query. Where it can, a leaf's colour follows what consumes it
+   * rather than where the data is, which is the difference between the
+   * computation moving to the data and the data moving to the computation.
+   *
+   * <p>Data only. A function, or a value containing one, cannot cross in any
+   * position, whatever the engine.
+   */
+  private final boolean acceptsData;
+
   private Profile(
       String name,
       Set<Op> ops,
@@ -103,7 +120,8 @@ public class Profile {
       boolean literalCounts,
       BiPredicate<Core.Exp, Environment> holds,
       boolean callsBack,
-      Set<BuiltIn> functions) {
+      Set<BuiltIn> functions,
+      boolean acceptsData) {
     this.name = requireNonNull(name, "name");
     this.ops = ImmutableSet.copyOf(ops);
     this.joinTypes = ImmutableSet.copyOf(joinTypes);
@@ -112,6 +130,32 @@ public class Profile {
     this.holds = requireNonNull(holds, "holds");
     this.callsBack = callsBack;
     this.functions = ImmutableSet.copyOf(functions);
+    this.acceptsData = acceptsData;
+  }
+
+  /**
+   * Returns whether a leaf may be run by this engine: data it holds already, or
+   * -- where it can be given data -- any leaf that is data.
+   */
+  public boolean takes(Core.Exp leaf, Environment env) {
+    if (holds.test(leaf, env)) {
+      return true;
+    }
+    return acceptsData && isData(leaf.type);
+  }
+
+  /** Returns whether a type is data: no function anywhere within it. */
+  private static boolean isData(Type type) {
+    final boolean[] data = {true};
+    type.accept(
+        new TypeVisitor<Void>() {
+          @Override
+          public Void visit(FnType fnType) {
+            data[0] = false;
+            return null;
+          }
+        });
+    return data[0];
   }
 
   /** Returns whether the engine can call back into Morel. */
@@ -166,7 +210,8 @@ public class Profile {
       boolean literalCounts,
       BiPredicate<Core.Exp, Environment> holds,
       boolean callsBack,
-      Set<BuiltIn> functions) {
+      Set<BuiltIn> functions,
+      boolean acceptsData) {
     return new Profile(
         name,
         ops,
@@ -175,7 +220,8 @@ public class Profile {
         literalCounts,
         holds,
         callsBack,
-        functions);
+        functions,
+        acceptsData);
   }
 
   /** Returns whether a leaf is data this engine already holds. */
@@ -222,7 +268,8 @@ public class Profile {
           true,
           Profile::calciteHolds,
           true,
-          CALCITE_FUNCTIONS);
+          CALCITE_FUNCTIONS,
+          false);
 
   /**
    * The profile of a database reached over SQL: the same nodes as Calcite, but
@@ -242,7 +289,31 @@ public class Profile {
           true,
           Profile::calciteHolds,
           false,
-          CALCITE_FUNCTIONS);
+          CALCITE_FUNCTIONS,
+          false);
+
+  /**
+   * The profile of a Spark cluster with the Morel runtime on its executors.
+   *
+   * <p>Spark Connect ships values from the environment, so it can be given data
+   * it does not hold, and a leaf that is data takes the colour of what consumes
+   * it. The runtime being there, it can call back for what SQL cannot do, which
+   * is why its function set does not decide anything.
+   *
+   * <p>Nothing executes a boundary naming it. Coloring for it says what a
+   * cluster could be given, which is the question §13 is about.
+   */
+  public static final Profile SPARK =
+      new Profile(
+          "spark",
+          CALCITE.ops,
+          ImmutableSet.copyOf(Core.Rel.JoinType.values()),
+          false,
+          true,
+          (leaf, env) -> false,
+          true,
+          CALCITE_FUNCTIONS,
+          true);
 
   /**
    * Returns whether a leaf is one of Calcite's own relations: a field of a

@@ -93,7 +93,7 @@ public class Coloring {
   private static boolean canGo(
       RelRule.Context cx, Profile profile, Core.Exp exp) {
     if (!(exp instanceof Core.Rel)) {
-      return profile.holds(exp, cx.env());
+      return profile.takes(exp, cx.env());
     }
     final Core.Rel rel = (Core.Rel) exp;
     if (!profile.permits(rel)) {
