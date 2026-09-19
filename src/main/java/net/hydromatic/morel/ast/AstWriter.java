@@ -423,6 +423,8 @@ public class AstWriter {
       if (op.assoc == Op.Assoc.PREFIX) {
         return prefix(left, op, arg, right);
       }
+      // An infix operator is written between its operands only if it has
+      // two; used as a value, as in "op + p", it is written as a call.
       final List<? extends AstNode> args =
           arg instanceof Ast.Tuple
               ? ((Ast.Tuple) arg).args
