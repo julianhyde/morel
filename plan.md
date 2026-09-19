@@ -2747,6 +2747,26 @@ morel-go build from and a drift there costs them directly.
   constructor raises `Fail` at the position where the rule applied
   it.
 
+### The one message the tree cannot write as main does
+
+Seven goldens say `pattern is not grounded` where main says `pattern
+'j' is not grounded`: such-that (5), optimize (1), check (1). Every
+one is a query with a single binder.
+
+The names come back from the projection a query ends in, which names
+the element's components after the binders -- `project [{j = #1 $0, k
+= #2 $0}]`. A query with one binder yields the binder's value itself,
+so it has no such projection, and a tree keeps no other record of a
+name: paths are what it has where a step list has patterns.
+
+So restoring them needs a channel the compiler does not have -- the
+resolver knows the name at the moment it erases the pattern, and
+nothing carries it to the rule that grounds the leaf. A map from leaf
+to pattern, threaded into `RelRule.Context`, would do it; it is a
+design addition and not obviously worth seven messages, so it is
+written down rather than done. `RelExpander.expand` already takes the
+names as a parameter, so only the supply is missing.
+
 ## Follow-ups (separate issues, clients of the sequence)
 
 - Unorder pushdown (the motivating rewrite; needs the step-0 kind
