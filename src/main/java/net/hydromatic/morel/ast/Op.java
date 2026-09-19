@@ -265,7 +265,12 @@ public enum Op {
 
   Op(String padded, int precedence, Assoc assoc) {
     this.padded = requireNonNull(padded);
-    this.left = precedence * 2 + (assoc == Assoc.LEFT ? 0 : 1);
+    // A prefix operator has no left operand, so anything to its left
+    // parenthesizes it: "2 * (~ x)", never "2 * ~ x".
+    this.left =
+        assoc == Assoc.PREFIX
+            ? 0
+            : precedence * 2 + (assoc == Assoc.LEFT ? 0 : 1);
     this.right = precedence * 2 + (assoc == Assoc.RIGHT ? 0 : 1);
     this.assoc = assoc;
     this.opName = padded.isEmpty() ? null : "op " + padded.trim();
