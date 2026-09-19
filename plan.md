@@ -2766,6 +2766,28 @@ morel-go build from and a drift there costs them directly.
   constructor raises `Fail` at the position where the rule applied
   it.
 
+### What differs from main, statement by statement
+
+Every statement in the suite was run on the branch's base and on the
+tip, and the results compared. Twenty-five differ, in three groups.
+
+Sixteen are plan text or new tests -- what the branch is for. The
+plans are the tree's, so they read differently by design, and the
+scripts the branch adds have no base to differ from.
+
+Seven are the ungrounded-pattern messages that lose the binder's
+name, below.
+
+Two are row orders, and they were the branch being right: an
+unbounded variable should be iterated in its natural order, and the
+step list let the relation it was joined to decide instead. Main
+fixed that in #480, so the two sides now print the same rows in the
+same order, and nothing is left to reconcile.
+
+The span that is at parity is `a28fe4c7..HEAD`, 36 commits. The first
+of them, which deletes `Core.From`, was built and tested in a
+worktree; every commit after it compiles, so the range bisects.
+
 ### The one message the tree cannot write as main does
 
 Seven goldens say `pattern is not grounded` where main says `pattern
