@@ -2559,19 +2559,20 @@ still known.
 
 ### Before the rebase: what main has that the branch does not
 
-Measured at `julianhyde/main`, 18 commits ahead of the branch's base.
+Measured at `julianhyde/main`, 21 commits ahead of the branch's base.
 Fourteen of them the branch already carries as copies, so a rebase
-should drop those; four are new.
+should drop those; seven are new.
 
 * `8a9bdcfe` touches `Resolver.java` only. A conflict, but a small
   one.
-* `2f842c05` (#477) touches `Ast`, `AstWriter`, `Core` and `Op` --
-  all four heavily rewritten here, so expect real conflicts, in code
-  rather than golden files. The branch reached the same fix
-  independently in `5c5242a2`, and `04d386b2` copies the two cases
-  that one missed, so the two sides now agree on what the code must
-  do. Both sides add `script/parse.smli`: take main's, which has
-  grown since and is a superset.
+* `ae6aca05` (#477, and `2f842c05` before main was rebased) touches
+  `Ast`, `AstWriter`, `Core` and `Op` -- all four heavily rewritten
+  here, so expect real conflicts, in code rather than golden files.
+  The branch reached the same fix independently in `5c5242a2`, and
+  `04d386b2` copies the two cases that one missed, so the two sides
+  now agree on what the code must do. Both sides add
+  `script/parse.smli`: take main's, which has grown since and is a
+  superset.
 * `c6fbd57c` (#474) touches `Codes`, `BuiltIn`, `Session` and two
   scripts.
 * **`29017648` (#475) is the one to watch.** It changes a *statement*
@@ -2587,6 +2588,24 @@ should drop those; four are new.
   (twice), `built-in/plan`, `check`, `rel-rule`, `rel-tree`. They
   need `NONE` by hand after the rebase. `rel-tree.smli` is the
   conformance suite the ports read, so its spelling is theirs too.
+
+* `bfa5da66` (#478) gives `~` a precedence tighter than `div` and
+  `*`, in the grammar. The branch's own grammar changes are in other
+  productions, so it should apply cleanly. Until it does, the branch
+  parses `~x div 2` as `~(x div 2)` and evaluates it to `~2` where
+  main gives `~3`. The branch's printer already agrees with main --
+  `NEGATE` has precedence 8 and no left precedence -- so nothing here
+  needs changing to meet it.
+
+* `6cf824e6` (#479) adds `Sys.parseTree` and the larger half of
+  main's `parse.smli`. Part of the same add/add resolution: take
+  main's file.
+
+* `a3953e7c` (#480) is main catching up to this branch. It makes an
+  unbounded variable iterate in its natural order, which the tree
+  engine already does, and it rewrites the two `exists` queries in
+  `such-that.smli` to the order this branch already prints. So those
+  three queries agree on both sides and have no conflict left.
 
 ### Commits that must move, because a step is not green without them
 
