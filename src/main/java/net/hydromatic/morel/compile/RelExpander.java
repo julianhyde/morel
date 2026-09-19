@@ -1366,8 +1366,9 @@ public class RelExpander {
       if (generator == null || !free(generator, bound).isEmpty()) {
         // Either nothing bounds this component, or something that another
         // component binds does, which would need the product to be a
-        // dependent join.
-        throw new CompileException("pattern is not grounded", false, leaf.pos);
+        // dependent join. The component is the one to name: the leaf's other
+        // components may be bounded, and it is this one that is not.
+        throw new CompileException(Expander.notGrounded(name), false, leaf.pos);
       }
       final Core.Exp component =
           named(project(generator, name, leaf.pos, bound), name);

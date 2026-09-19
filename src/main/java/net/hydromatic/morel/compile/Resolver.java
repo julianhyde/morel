@@ -2373,9 +2373,6 @@ public class Resolver {
      */
     boolean rowIsElement = true;
 
-    /** Name of each scan's binder, in the order the scans were pushed. */
-    final List<List<String>> scanNames = new ArrayList<>();
-
     /**
      * Ordinal for the next binder that a {@link Scope} makes, counting down.
      *
@@ -2579,7 +2576,6 @@ public class Resolver {
         b.push(
             core.tuplePat(typeMap.typeSystem, pats),
             extent(scan.pat.pos, type));
-        scanNames.add(ImmutableList.copyOf(names));
         return names;
       }
       if (flatNames(scan.pat)) {
@@ -2598,17 +2594,7 @@ public class Resolver {
           extentPat(
               typeMap.typeSystem,
               Resolver.this.toCore(scan.pat, typeMap.getType(scan.pat)));
-      final List<String> names = push(flat, extent(scan.pat.pos, flat.type));
-      if (names.size() > 1 && flatIdPats(flat)) {
-        // `extentPat` flattens to a tuple of the pattern's variables, one per
-        // value the scan generates, so the lowering can scan under a pattern
-        // of their names. It numbers them -- converting the pattern above
-        // took the ordinals -- and a numbered name still says which variable
-        // it is, which `w$27` does not, and grounding quotes it in the error
-        // it raises when it cannot bound the leaf.
-        scanNames.set(scanNames.size() - 1, ImmutableList.copyOf(names));
-      }
-      return names;
+      return push(flat, extent(scan.pat.pos, flat.type));
     }
 
     /**
@@ -2723,7 +2709,6 @@ public class Resolver {
         b.project(matched);
       }
       // The pattern is gone, and what it bound is read back out by paths.
-      scanNames.add(ImmutableList.of());
       return names;
     }
 
@@ -2756,31 +2741,10 @@ public class Resolver {
       if (id != null) {
         final String name = id.name;
         b.push(name, collection);
-        scanNames.add(ImmutableList.of(name));
         return ImmutableList.of(name);
       }
       return push(
           Resolver.this.toCore(pat, collection.type.elementType()), collection);
-    }
-
-    /**
-     * Returns whether a pattern is a tuple of plain names, which is when the
-     * names it binds are the components of what it matches, one apiece.
-     *
-     * <p>False for an "as" pattern, which {@link #extentPat} leaves alone: it
-     * names the whole value as well as the parts, so it binds more names than
-     * the element has components.
-     */
-    private boolean flatIdPats(Core.Pat pat) {
-      if (!(pat instanceof Core.TuplePat)) {
-        return false;
-      }
-      for (Core.Pat arg : ((Core.TuplePat) pat).args) {
-        if (!(arg instanceof Core.IdPat)) {
-          return false;
-        }
-      }
-      return true;
     }
 
     /** As {@link #push(Ast.Pat, Core.Exp)}, for a pattern already converted. */
@@ -2806,8 +2770,6 @@ public class Resolver {
               super.visit(asPat);
             }
           });
-      // A pattern names no one thing, so the lowering invents a binder.
-      scanNames.add(ImmutableList.of());
       return names;
     }
 
@@ -2825,7 +2787,6 @@ public class Resolver {
       // pass of its own. Lowering here would leave a step list for grounding
       // to meet, and grounding a step list is the other engine.
       final Core.Exp inner = b.build();
-      scanNames.clear();
       // The function is evaluated once, on the whole collection, so it reads
       // the enclosing scope and not this query's row.
       final Core.Exp fn = toCore(through.exp, null);
