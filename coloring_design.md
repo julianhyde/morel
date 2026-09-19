@@ -1034,3 +1034,20 @@ the tree, a profile **and the environment** -- because the environment
 is what says whether a name is a data set or a function.
 `RelRule.Context` carries it already, because grounding needed it, and
 the ports need the same.
+
+**Built, and all three facts with it.** A profile now carries which
+nodes the engine runs, whether it can be given data, and whether it
+can call back into Morel. Three profiles exercise them, and only the
+first executes: `calcite`, in process, which holds its own tables and
+may call back; `sql`, which holds its own tables and may not, so a
+condition it has no operator for keeps it out; and `spark`, which
+holds nothing and can be given anything that is data, so a leaf takes
+the colour of what consumes it. A function, or a value containing
+one, crosses to none of them -- checked on the leaf's type, since a
+type with no arrow in it is data.
+
+The same query, coloured three ways, is in `hybrid.smli`. For
+`calcite` the boundary is around the database's table and the filter
+on it, and the join with Morel's list stays outside. For `spark` it
+is around the whole query. That difference is the second fact, and
+nothing but the profile changed.

@@ -322,6 +322,8 @@ public abstract class Compiles {
       profile = Profile.CALCITE;
     } else if (engine.equals(Profile.SQL.name)) {
       profile = Profile.SQL;
+    } else if (engine.equals(Profile.SPARK.name)) {
+      profile = Profile.SPARK;
     } else {
       // No engine named, or none that is known.
       return decl;
