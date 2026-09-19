@@ -543,22 +543,23 @@ public class Expander {
     // If we added shared patterns for joining, project them away at the end.
     // The final result should only contain the original query patterns.
     if (!sharedPats.isEmpty()) {
-      // Check if any shared patterns are in the current step environment
       final List<Core.NamedPat> toProject = new ArrayList<>();
       for (Binding binding : fromBuilder.stepEnv().bindings) {
         if (originalPats.contains(binding.id)) {
           toProject.add(binding.id);
         }
       }
+      final Core.Exp yieldExp = core.recordOrAtom(typeSystem, toProject);
       if (toProject.size() < fromBuilder.stepEnv().bindings.size()) {
-        // Some shared patterns need to be projected away.
-        // We also need distinct because projecting away variables that were
-        // used for joining (like y in "exists y where edge(x,y) andalso
-        // edge(y,z)") can cause duplicates. For example, (1, 3) would appear
-        // twice if there are two different y values connecting x=1 to z=3.
-        fromBuilder.yield_(core.recordOrAtom(typeSystem, toProject));
+        // Projecting away a variable that was used for joining can leave
+        // duplicates -- (1, 3) twice, where two values of y connect x = 1 to
+        // z = 3 -- so the projection needs a 'distinct'.
+        fromBuilder.yield_(yieldExp);
         fromBuilder.distinct();
       }
+      // Iterate unbounded variables in their natural order. (Even if we joined
+      // to a relation to find those values.)
+      fromBuilder.order(yieldExp);
     }
 
     return fromBuilder.build();
