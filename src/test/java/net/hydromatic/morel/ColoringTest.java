@@ -77,7 +77,22 @@ public class ColoringTest {
             true,
             (leaf, env) -> leaf == mine,
             true,
-            ImmutableSet.of());
+            ImmutableSet.of(),
+            false);
+
+    /** The same engine, but it can be given data it does not hold. */
+    final Profile ships =
+        Profile.create(
+            "test",
+            ImmutableSet.of(
+                Op.FILTER, Op.PROJECT, Op.JOIN, Op.SORT, Op.BOUNDARY),
+            ImmutableSet.of(Core.Rel.JoinType.INNER),
+            false,
+            true,
+            (leaf, env) -> false,
+            true,
+            ImmutableSet.of(),
+            true);
 
     /** The same engine, but it cannot call back, and has only "&gt;". */
     final Profile noCallback =
@@ -90,7 +105,8 @@ public class ColoringTest {
             true,
             (leaf, env) -> leaf == mine,
             false,
-            ImmutableSet.of(BuiltIn.OP_GT));
+            ImmutableSet.of(BuiltIn.OP_GT),
+            false);
 
     Core.Exp intLiteral(int i) {
       return core.intLiteral(BigDecimal.valueOf(i));
@@ -213,6 +229,39 @@ public class ColoringTest {
             "filter [$0 < 1]\n" //
                 + "  boundary [test]\n"
                 + "    [1, 2]\n"));
+  }
+
+  /**
+   * An engine that can be given data takes a leaf it does not hold, so the
+   * colour follows what consumes it; but never a leaf that is a function.
+   */
+  @Test
+  void testShipping() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder(f.theirs);
+    b.filter(core.greaterThan(f.typeSystem, b.input(0), f.intLiteral(1)));
+    assertThat(
+        f.colored(f.ships, b.build()),
+        hasToString(
+            "boundary [test]\n" //
+                + "  filter [$0 > 1]\n"
+                + "    [3, 4]\n"));
+
+    // A collection of functions is not data, so it does not cross.
+    final Core.Exp functions =
+        core.list(
+            f.typeSystem,
+            f.typeSystem.fnType(PrimitiveType.INT, PrimitiveType.INT),
+            ImmutableList.of());
+    final RelBuilder b2 =
+        RelBuilder.create(f.typeSystem, EnumSet.noneOf(Simplification.class));
+    b2.push(functions);
+    b2.sort(b2.input(0));
+    assertThat(
+        f.colored(f.ships, b2.build()),
+        hasToString(
+            "sort [$0]\n" //
+                + "  []\n"));
   }
 
   /** Coloring a tree that is colored already changes nothing. */

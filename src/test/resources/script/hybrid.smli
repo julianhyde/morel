@@ -436,6 +436,35 @@ Sys.planEx "-1";
 > t$0 {deptno:int, dname:string, loc:string} bag
 > |_} : string
 
+(* The second fact: whether the engine can be given data it does not hold.
+ * A database cannot, so the list the query wrote keeps the join out of the
+ * boundary. Spark Connect ships values, so both leaves are data it can be
+ * given and the whole query goes -- which is what "the colour follows the
+ * consumer" means. *)
+Sys.set ("engine", "spark");
+> val it = () : unit
+from d in scott.depts, n in dnames
+  where d.loc = "CHICAGO" andalso d.dname = n
+  yield d.deptno;
+> val it = [30] : int bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   boundary [spark] : int bag
+>     project [#deptno (#1 $0)] : int bag
+>       filter [#dname (#1 $0) = #2 $0] : t$0
+>         join : t$0
+>           filter [#loc $0 = "CHICAGO"] : t$1
+>             #depts scott : t$1
+>           dnames : string list
+>
+> t$0 ({deptno:int, dname:string, loc:string} * string) bag
+> t$1 {deptno:int, dname:string, loc:string} bag
+> |_} : string
+Sys.set ("engine", "sql");
+> val it = () : unit
+
 (*) A condition SQL does have an operator for goes.
 from d in scott.depts where d.dname = "SALES" yield d.deptno;
 > val it = [30] : int bag
@@ -502,19 +531,19 @@ from w in [0w1, 0wxFFFFFFFFFFFFFFFF] compute max over w;
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat $0_221, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_239, exp tuple(constant(1), constant(-1)), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from p in [(1, 2), (2, 1), (1, 9)] compute max over p;
 > val it = (2,1) : int * int
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat $0_230, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat $0_248, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from ox in [SOME 1, NONE, SOME 3] compute min over ox;
 > val it = NONE : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_239, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
+>   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat $0_257, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
 >   : string
 Sys.set ("hybrid", false);
 > val it = () : unit
