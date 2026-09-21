@@ -376,4 +376,50 @@ val {r: bool, s} = {r=1, s=2};
 > stdIn:1.1-1.30 Error: Cannot deduce type: conflict: int vs bool
 >   raised at: stdIn:1.1-1.30
 
+(* An ellipsis under a constructor, in a tuple or in a list stands for the
+ * fields of the value's type that the pattern does not name. *)
+datatype t = T of {a: int, b: string, c: bool};
+> datatype t = T of {a:int, b:string, c:bool}
+case T {a=1,b="x",c=true} of T {b, ...} => b;
+> val it = "x" : string
+case SOME {a=1,b="x",c=true} of SOME {c, ...} => c | NONE => false;
+> val it = true : bool
+case (1, {a=1,b="x",c=true}) of (_, {b, ...}) => b;
+> val it = "x" : string
+case [{a=1,b="x",c=true}] of [{b, ...}] => b | _ => "";
+> val it = "x" : string
+case {a=1,b="x",c=true} of {b, ...} => b;
+> val it = "x" : string
+
+(* A declaration's pattern is matched against the value, so the value's type
+ * says which fields the pattern leaves out. *)
+val {b, ...} = {a=1,b="x",c=true};
+> val b = "x" : string
+val r = {a=1,b="x",c=true};
+> val r = {a=1,b="x",c=true} : {a:int, b:string, c:bool}
+val {b, ...} = r;
+> val b = "x" : string
+let val {b, ...} = {a=1,b="x",c=true} in b end;
+> val it = "x" : string
+(fn {b, ...} => b) {a=1,b="x",c=true};
+> val it = "x" : string
+
+(* The same one level down, and under a constructor of a datatype whose
+ * argument still holds a type variable. *)
+val {p = {b, ...}, ...} = {p = {a = 1, b = "x", c = true}, q = 2};
+> val b = "x" : string
+datatype 'a t = T of {a: 'a, b: int};
+> datatype 'a t = T of {a:'a, b:int}
+fun f (T {b, ...}) = b;
+> val f = fn : 'a t -> int
+f (T {a = "x", b = 2});
+> val it = 2 : int
+
+(* Under "as", and in a cons pattern. *)
+val r as {b, ...} = {a = 1, b = "x", c = true};
+> val r = {a=1,b="x",c=true} : {a:int, b:string, c:bool}
+> val b = "x" : string
+val {b, ...} :: _ = [{a = 1, b = "x", c = true}];
+> val b = "x" : string
+
 (*) End match.smli

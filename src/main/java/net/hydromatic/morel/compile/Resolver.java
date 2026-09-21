@@ -26,6 +26,7 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.anyMatch;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skip;
@@ -82,6 +83,7 @@ import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeShuttle;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
@@ -470,7 +472,10 @@ public class Resolver {
     if (valDecl.rec) {
       final List<Core.Pat> pats = new ArrayList<>();
       matches.forEach(
-          (pat, exp) -> pats.add(withDisplayType(toCore(pat, inst), pat)));
+          (pat, exp) ->
+              pats.add(
+                  withDisplayType(
+                      toCore(pat, inst, typeMap.getType(exp)), pat)));
       pats.forEach(
           p -> Compiles.acceptBinding(typeMap.typeSystem, p, bindings));
       final Resolver r = withEnv(bindings);
@@ -483,7 +488,8 @@ public class Resolver {
     } else {
       matches.forEach(
           (pat, exp) -> {
-            Core.Pat corePat = withDisplayType(toCore(pat, inst), pat);
+            Core.Pat corePat =
+                withDisplayType(toCore(pat, inst, typeMap.getType(exp)), pat);
             // If this binding is qualified (uses an overloaded name at an
             // abstract type), compile its value with dictionary parameters and
             // give the pattern a qualified type.
@@ -1700,7 +1706,7 @@ public class Resolver {
   private Core.Fn toCore(Ast.Fn fn) {
     final FnType type = (FnType) typeMap.getType(fn);
     final List<Core.Match> matchList =
-        transformEager(fn.matchList, this::toCore);
+        transformEager(fn.matchList, m -> toCore(m, type.paramType));
     final Core.Fn coreFn = core.fn(fn.pos, type, matchList, nameGenerator::inc);
     final Type paramType = enforcer.parameterType(fn, coreFn.idPat.type);
     if (paramType == null) {
@@ -1743,11 +1749,12 @@ public class Resolver {
   }
 
   private Core.Case toCore(Ast.Case case_) {
+    final Type argType = typeMap.getType(case_.exp);
     return core.caseOf(
         case_.pos,
         typeMap.getType(case_),
         toCore(case_.exp),
-        transformEager(case_.matchList, this::toCore));
+        transformEager(case_.matchList, m -> toCore(m, argType)));
   }
 
   private Core.Exp toCore(Ast.Let let) {
@@ -1792,6 +1799,18 @@ public class Resolver {
    * {@code inst}.
    */
   private Core.Pat toCore(Ast.Pat pat, boolean inst) {
+    return toCore(pat, inst, null);
+  }
+
+  /**
+   * Converts a pattern that a declaration binds, given the type of the value it
+   * is matched against.
+   *
+   * <p>The value's type is what a record pattern with an ellipsis needs: the
+   * pattern names some of the fields and its own type has only those, so it is
+   * the value's type that says which slots they are.
+   */
+  private Core.Pat toCore(Ast.Pat pat, boolean inst, @Nullable Type valueType) {
     final Type type = typeMap.getType(pat);
     if (inst && pat.op == Op.ID_PAT) {
       Ast.IdPat idPat = (Ast.IdPat) pat;
@@ -1818,7 +1837,7 @@ public class Resolver {
       pair.right.add(corePat);
       return corePat;
     }
-    return toCore(pat, type, type);
+    return toCore(pat, type, valueType == null ? type : valueType);
   }
 
   private Core.Pat toCore(Ast.Pat pat, Type targetType) {
@@ -1857,7 +1876,7 @@ public class Resolver {
       case AS_PAT:
         final Ast.AsPat asPat = (Ast.AsPat) pat;
         return core.asPat(
-            type, asPat.id.name, nameGenerator, toCore(asPat.pat));
+            type, asPat.id.name, nameGenerator, toCore(asPat.pat, targetType));
 
       case ANNOTATED_PAT:
         // There is no annotated pat in core, because all patterns have types.
@@ -1866,7 +1885,14 @@ public class Resolver {
 
       case CON_PAT:
         final Ast.ConPat conPat = (Ast.ConPat) pat;
-        return core.conPat(type, conPat.tyCon.name, toCore(conPat.pat));
+        // The argument's target is the constructor's argument type, which has
+        // every field that a record pattern with an ellipsis leaves out; the
+        // argument pattern's own type has only the fields it wrote.
+        return core.conPat(
+            type,
+            conPat.tyCon.name,
+            toCore(
+                conPat.pat, conArgType(type, conPat.tyCon.name, conPat.pat)));
 
       case CON0_PAT:
         final Ast.Con0Pat con0Pat = (Ast.Con0Pat) pat;
@@ -1882,11 +1908,17 @@ public class Resolver {
         return core.consPat(
             type,
             BuiltIn.OP_CONS.mlName,
-            core.tuplePat(tupleType, toCore(infixPat.p0), toCore(infixPat.p1)));
+            core.tuplePat(
+                tupleType,
+                toCore(infixPat.p0, type.elementType()),
+                toCore(infixPat.p1, type)));
 
       case LIST_PAT:
         final Ast.ListPat listPat = (Ast.ListPat) pat;
-        return core.listPat(type, transformEager(listPat.args, this::toCore));
+        return core.listPat(
+            type,
+            transformEager(
+                listPat.args, arg -> toCore(arg, type.elementType())));
 
       case RECORD_PAT:
         final Ast.RecordPat recordPat = (Ast.RecordPat) pat;
@@ -1896,17 +1928,24 @@ public class Resolver {
           return core.wildcardPat(targetType);
         }
         // The target may be a tuple type; a tuple is a record whose labels
-        // are ordinals, and "{1 = x, 2 = y}" is a valid pattern for it.
-        final RecordLikeType recordLikeType = (RecordLikeType) targetType;
+        // are ordinals, and "{1 = x, 2 = y}" is a valid pattern for it. A
+        // target that is not a record -- a constructor whose argument is a
+        // type variable -- tells nothing, and the pattern's own type serves.
+        final RecordLikeType recordLikeType =
+            (RecordLikeType)
+                (targetType instanceof RecordLikeType ? targetType : type);
         final ImmutableList.Builder<Core.Pat> args = ImmutableList.builder();
         recordLikeType
             .argNameTypes()
             .forEach(
                 (label, argType) -> {
                   final Ast.Pat argPat = recordPat.args.get(label);
+                  // The field's type is the target for the field's pattern,
+                  // so that a nested record pattern with an ellipsis is
+                  // converted against the value's fields, not its own.
                   final Core.Pat corePat =
                       argPat != null
-                          ? toCore(argPat)
+                          ? toCore(argPat, argType)
                           : core.wildcardPat(argType);
                   args.add(corePat);
                 });
@@ -1916,17 +1955,50 @@ public class Resolver {
 
       case TUPLE_PAT:
         final Ast.TuplePat tuplePat = (Ast.TuplePat) pat;
+        final RecordLikeType tupleType2 = (RecordLikeType) type;
         final List<Core.Pat> argList =
-            transformEager(tuplePat.args, this::toCore);
-        return core.tuplePat((RecordLikeType) type, argList);
+            zip(tuplePat.args, tupleType2.argTypes()).transform(this::toCore);
+        return core.tuplePat(tupleType2, argList);
 
       default:
         throw new AssertionError("unknown pat " + pat.op);
     }
   }
 
-  private Core.Match toCore(Ast.Match match) {
-    final Core.Pat pat = toCore(match.pat);
+  /**
+   * Returns the type of a constructor's argument, given the datatype it makes;
+   * the argument pattern's own type if the datatype does not say.
+   */
+  private Type conArgType(Type type, String tyCon, Ast.Pat argPat) {
+    if (type instanceof DataType) {
+      final DataType dataType = (DataType) type;
+      if (dataType.arguments.stream().noneMatch(TypeSystem::hasTypeVar)) {
+        final @Nullable Type argType =
+            dataType.typeConstructors(typeMap.typeSystem).get(tyCon);
+        if (argType != null) {
+          return argType;
+        }
+      }
+      // A datatype whose arguments still hold type variables -- "SOME (c, s)"
+      // over "(char * 'b) option" -- cannot have them substituted into its
+      // constructors' types. The constructor's declared argument type has
+      // every field name, which is what a record pattern with an ellipsis
+      // needs; where a field's type is a type variable, the field pattern's
+      // own type serves.
+      final @Nullable TypeCon typeCon = typeMap.typeSystem.lookupTyCon(tyCon);
+      if (typeCon != null) {
+        return typeCon.argTypeKey.toType(typeMap.typeSystem);
+      }
+    }
+    return typeMap.getType(argPat);
+  }
+
+  /**
+   * Converts a branch, given the type of the value its pattern is matched
+   * against; see {@link #toCore(Ast.Pat, boolean, Type)}.
+   */
+  private Core.Match toCore(Ast.Match match, Type argType) {
+    final Core.Pat pat = toCore(match.pat, false, argType);
     final List<Binding> bindings = new ArrayList<>();
     Compiles.acceptBinding(typeMap.typeSystem, pat, bindings);
     final Core.Exp exp = withEnv(bindings).toCore(match.exp);
