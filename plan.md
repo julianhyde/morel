@@ -2583,11 +2583,13 @@ should drop those; seven are new.
   Resolve those conflicts by taking *main's* statement and
   regenerating the output, never our side.
 
-  And five scripts this branch *adds* use the old spelling, so they
-  have no conflict to resolve and will simply fail: `built-in/core`
-  (twice), `built-in/plan`, `check`, `rel-rule`, `rel-tree`. They
-  need `NONE` by hand after the rebase. `rel-tree.smli` is the
-  conformance suite the ports read, so its spelling is theirs too.
+  And four scripts this branch *adds* use the old spelling, so they
+  have no conflict to resolve and will simply fail: `built-in/core`,
+  `built-in/plan`, `rel-rule`, `rel-tree`. They need `NONE` by hand
+  after the rebase. `rel-tree.smli` is the conformance suite the
+  ports read, so its spelling is theirs too. (`check.smli` is not one
+  of them: main rewrites it too, so it conflicts and is resolved by
+  taking main's side, like the other 46.)
 
 * `bfa5da66` (#478) gives `~` a precedence tighter than `div` and
   `*`, in the grammar. The branch's own grammar changes are in other
