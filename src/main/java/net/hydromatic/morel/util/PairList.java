@@ -81,6 +81,28 @@ public interface PairList<T, U> extends List<Map.Entry<T, U>> {
     return builder.build();
   }
 
+  /**
+   * Returns a view of two lists as a list of pairs, which must be the same
+   * size; see {@code PairLists.ZipPairList}. Import statically, so that a call
+   * reads {@code zip (a, b)}.
+   */
+  static <T, U> PairList<T, U> zip(List<? extends T> ts, List<? extends U> us) {
+    return zip(ts, us, true);
+  }
+
+  /**
+   * As {@link #zip(List, List)}; if not {@code strict}, the lists may differ in
+   * size, and the view is as long as the shorter.
+   */
+  static <T, U> PairList<T, U> zip(
+      List<? extends T> ts, List<? extends U> us, boolean strict) {
+    if (strict) {
+      checkArgument(
+          ts.size() == us.size(), "sizes differ: %s, %s", ts.size(), us.size());
+    }
+    return new PairLists.ZipPairList<>(ts, us, Math.min(ts.size(), us.size()));
+  }
+
   /** Creates a PairList by transforming the elements of an iterable. */
   static <R, T, U> PairList<T, U> fromTransformed(
       Iterable<? extends R> iterable, BiTransformer<R, T, U> transformer) {

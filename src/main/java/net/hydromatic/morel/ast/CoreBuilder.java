@@ -23,8 +23,8 @@ import static com.google.common.collect.Maps.transformValues;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
-import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.PairList.fromTransformed;
+import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.allMatch;
 import static net.hydromatic.morel.util.Static.filterEager;
 import static net.hydromatic.morel.util.Static.plus;
@@ -72,7 +72,6 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
-import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
 /** Builds parse tree nodes. */
@@ -470,12 +469,9 @@ public enum CoreBuilder {
     final ImmutableList<Core.Exp> argList = ImmutableList.copyOf(args);
     final RecordLikeType tupleType;
     if (type instanceof RecordType) {
-      final PairList<String, Type> argNameTypes = PairList.of();
-      forEach(
-          type.argNames(),
-          argList,
-          (name, arg) -> argNameTypes.add(name, arg.type));
-      tupleType = typeSystem.recordType(argNameTypes);
+      tupleType =
+          typeSystem.recordType(
+              zip(type.argNames(), transform(argList, Core.Exp::type)));
     } else {
       tupleType = typeSystem.tupleType(transform(argList, Core.Exp::type));
     }

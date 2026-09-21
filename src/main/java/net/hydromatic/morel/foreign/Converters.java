@@ -21,7 +21,7 @@ package net.hydromatic.morel.foreign;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
-import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.only;
 import static org.apache.calcite.avatica.util.DateTimeUtils.unixDateToString;
 import static org.apache.calcite.avatica.util.DateTimeUtils.unixTimeToString;
@@ -444,16 +444,12 @@ public class Converters {
     public Function<Object, Object> toMorelObjectFunction() {
       switch (morelType.op()) {
         case TUPLE_TYPE:
-          final ImmutableList.Builder<Function<Object, Object>> b =
-              ImmutableList.builder();
-          forEach(
-              calciteType.getFieldList(),
-              ((TupleType) morelType).argTypes,
-              (field, argType) ->
-                  b.add(
-                      new C2m(field.getType(), argType)
-                          .toMorelObjectFunction()));
-          final ImmutableList<Function<Object, Object>> converters = b.build();
+          final List<Function<Object, Object>> converters =
+              zip(calciteType.getFieldList(), ((TupleType) morelType).argTypes)
+                  .transformEager(
+                      (field, argType) ->
+                          new C2m(field.getType(), argType)
+                              .toMorelObjectFunction());
           return v -> {
             final Object[] values = (Object[]) v;
             return new AbstractList<Object>() {
