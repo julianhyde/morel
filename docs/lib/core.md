@@ -31,7 +31,7 @@ License.
 <pre>
 type <a id='ty' href="#ty-impl">ty</a>
 datatype <a id='pat' href="#pat-impl">pat</a>
-  = ID_PAT of {i: int, name: string, ty: ty}
+  = ID_PAT of {i:int, name:string, ty:ty}
   | WILDCARD of ty
   | TUPLE_PAT of pat list
   | RECORD_PAT of (string * pat) list
@@ -40,19 +40,19 @@ datatype <a id='pat' href="#pat-impl">pat</a>
   | OPAQUE_PAT
 datatype <a id='join_kind' href="#join_kind-impl">join_kind</a> = INNER | LEFT | RIGHT | FULL
 datatype <a id='exp' href="#exp-impl">exp</a>
-  = FILTER of {condition: exp, input: exp, ordinalPat: pat option, row: pat}
-  | PROJECT of {exp: exp, input: exp, ordinalPat: pat option, row: pat}
-  | JOIN of {condition: exp, kind: join_kind, leftInput: exp, leftRow: pat, ordinalPat: pat option, rightInput: exp, rightRow: pat}
-  | GROUP of {aggregates: (string * exp * exp option * ty) list, input: exp, keys: (string * exp) list, ordinalPat: pat option, row: pat}
-  | SORT of {input: exp, key: exp, ordinalPat: pat option, row: pat}
+  = FILTER of {condition:exp, input:exp, ordinalPat:pat option, row:pat}
+  | PROJECT of {exp:exp, input:exp, ordinalPat:pat option, row:pat}
+  | JOIN of {condition:exp, kind:join_kind, leftInput:exp, leftRow:pat, ordinalPat:pat option, rightInput:exp, rightRow:pat}
+  | GROUP of {aggregates:(string * exp * exp option * ty) list, input:exp, keys:(string * exp) list, ordinalPat:pat option, row:pat}
+  | SORT of {input:exp, key:exp, ordinalPat:pat option, row:pat}
   | UNORDER of exp
-  | BOUNDARY of {engine: string, input: exp}
-  | SKIP of {count: exp, input: exp}
-  | TAKE of {count: exp, input: exp}
-  | IF_EMPTY of {input: exp, otherwise: exp}
-  | UNION of {inputs: exp list, unique: bool}
-  | INTERSECT of {inputs: exp list, unique: bool}
-  | EXCEPT of {inputs: exp list, unique: bool}
+  | BOUNDARY of {engine:string, input:exp}
+  | SKIP of {count:exp, input:exp}
+  | TAKE of {count:exp, input:exp}
+  | IF_EMPTY of {input:exp, otherwise:exp}
+  | UNION of {inputs:exp list, unique:bool}
+  | INTERSECT of {inputs:exp list, unique:bool}
+  | EXCEPT of {inputs:exp list, unique:bool}
   | ID of pat
   | LITERAL of variant
   | BUILTIN of string * ty
@@ -61,7 +61,7 @@ datatype <a id='exp' href="#exp-impl">exp</a>
   | TUPLE of exp list
   | RECORD_EXP of (string * exp) list
   | FN of pat * exp
-  | LET of {body: exp, pat: pat, value: exp}
+  | LET of {body:exp, pat:pat, value:exp}
   | CASE of exp * (pat * exp) list
   | OPAQUE
 
