@@ -21,7 +21,7 @@ package net.hydromatic.morel.compile;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.compile.FreeFinder.freePats;
+import static net.hydromatic.morel.ast.FreeFinder.freePats;
 import static net.hydromatic.morel.compile.Generators.maybeGenerator;
 import static net.hydromatic.morel.util.Static.append;
 import static net.hydromatic.morel.util.Static.forEachInIntersection;
@@ -891,7 +891,7 @@ public class Expander {
   /**
    * Finds free variables in an expression.
    *
-   * <p>It works similarly to {@link FreeFinder}.
+   * <p>It works similarly to {@link Core.Exp#freePats}.
    */
   static class StepAnalyzer extends EnvVisitor {
     final List<Core.NamedPat> freePats;
