@@ -1,0 +1,313 @@
+/*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ */
+package net.hydromatic.morel.compile;
+
+import static java.lang.String.format;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.Type;
+import net.hydromatic.morel.type.TypeSystem;
+
+/**
+ * Checks the invariants of a relational tree ({@link Core.Rel}).
+ *
+ * <p>Every node's type and kind are the ones its inputs and expressions derive,
+ * every expression has the type its position requires, and {@code $0} and
+ * {@code $1} occur only where a node binds them.
+ *
+ * <p>Run it after translation and after every rule firing. A rule that produces
+ * a tree the validator rejects is wrong, and it is much cheaper to find that
+ * here than in the wrong query results it would otherwise cause.
+ */
+public class RelValidator {
+  /** Which inputs an expression may reference. */
+  private static final Set<Integer> NONE = ImmutableSet.of();
+
+  private static final Set<Integer> ZERO = ImmutableSet.of(0);
+  private static final Set<Integer> ZERO_ONE = ImmutableSet.of(0, 1);
+
+  private final TypeSystem typeSystem;
+  private final List<String> violations = new ArrayList<>();
+
+  private RelValidator(TypeSystem typeSystem) {
+    this.typeSystem = typeSystem;
+  }
+
+  /**
+   * Returns the ways in which a tree violates the invariants; an empty list if
+   * it is valid.
+   */
+  public static List<String> violations(TypeSystem typeSystem, Core.Rel rel) {
+    return violations(typeSystem, rel, ImmutableSet.of());
+  }
+
+  /**
+   * Returns the ways in which a tree violates the invariants, given the
+   * patterns of the enclosing nodes; empty if it is valid.
+   *
+   * <p>A tree nested in a node's expression may read that node's patterns and
+   * those of the nodes enclosing it; checked on its own, such a read would look
+   * unbound.
+   */
+  public static List<String> violations(
+      TypeSystem typeSystem, Core.Rel rel, Set<Core.IdPat> outer) {
+    final RelValidator validator = new RelValidator(typeSystem);
+    validator.node(rel, outer);
+    return ImmutableList.copyOf(validator.violations);
+  }
+
+  /** Throws if a tree violates the invariants. */
+  public static void checkValid(TypeSystem typeSystem, Core.Rel rel) {
+    final List<String> violations = violations(typeSystem, rel);
+    if (!violations.isEmpty()) {
+      throw new IllegalStateException(
+          "invalid relational tree: " + String.join("; ", violations));
+    }
+  }
+
+  private void violation(String message, Object... args) {
+    violations.add(format(message, args));
+  }
+
+  /**
+   * Checks a node, given the patterns of enclosing nodes that its expressions
+   * may read: a join's left row inside its right input, and every enclosing
+   * node's patterns inside a nested tree.
+   */
+  private void node(Core.Rel rel, Set<Core.IdPat> outer) {
+    final Set<Core.IdPat> inner = union(outer, rel.patterns());
+    if (rel instanceof Core.RowRel) {
+      final Core.RowRel rowRel = (Core.RowRel) rel;
+      input(rowRel.input, outer);
+      if (rowRel.ordinal != null && !(rowRel.input.type instanceof ListType)) {
+        violation(
+            "%s binds an ordinal but its input is a bag: %s",
+            rel.op.lowerName, rowRel.input.type.moniker());
+      }
+    }
+    if (rel instanceof Core.Filter) {
+      final Core.Filter filter = (Core.Filter) rel;
+      requireType(filter.condition, PrimitiveType.BOOL, "filter condition");
+      scope(filter.condition, inner, "filter condition");
+      requireDerivedType(
+          rel,
+          core.filter(
+              filter.row, filter.ordinal, filter.input, filter.condition));
+    } else if (rel instanceof Core.Project) {
+      final Core.Project project = (Core.Project) rel;
+      scope(project.exp, inner, "project expression");
+      requireDerivedType(
+          rel,
+          core.project(
+              typeSystem,
+              project.row,
+              project.ordinal,
+              project.input,
+              project.exp));
+    } else if (rel instanceof Core.Join) {
+      final Core.Join join = (Core.Join) rel;
+      input(join.left, outer);
+      // The right input is evaluated once per left element, and may read it.
+      input(
+          join.right,
+          union(
+              outer,
+              join.ordinal == null
+                  ? ImmutableList.of(join.leftRow)
+                  : ImmutableList.of(join.leftRow, join.ordinal)));
+      requireType(join.condition, PrimitiveType.BOOL, "join condition");
+      scope(join.condition, inner, "join condition");
+      if (join.ordinal != null
+          && !(join.left.type instanceof ListType
+              && join.right.type instanceof ListType)) {
+        violation("join binds an ordinal but an input is a bag");
+      }
+      requireDerivedType(
+          rel,
+          core.join(
+              typeSystem,
+              join.joinType,
+              join.leftRow,
+              join.rightRow,
+              join.ordinal,
+              join.left,
+              join.right,
+              join.condition));
+    } else if (rel instanceof Core.Group) {
+      final Core.Group group = (Core.Group) rel;
+      group.keys.forEach((label, exp) -> scope(exp, inner, "group key"));
+      group.aggregates.forEach(
+          (label, aggregate) -> {
+            scope(aggregate.aggregate, inner, "aggregate function");
+            if (aggregate.argument != null) {
+              scope(aggregate.argument, inner, "aggregate argument");
+            }
+          });
+      requireDerivedType(
+          rel,
+          core.group(
+              typeSystem,
+              group.row,
+              group.ordinal,
+              group.input,
+              group.keys,
+              group.aggregates));
+    } else if (rel instanceof Core.Sort) {
+      final Core.Sort sort = (Core.Sort) rel;
+      scope(sort.exp, inner, "sort key");
+      requireDerivedType(
+          rel,
+          core.sort(typeSystem, sort.row, sort.ordinal, sort.input, sort.exp));
+    } else if (rel instanceof Core.Unorder) {
+      final Core.Unorder unorder = (Core.Unorder) rel;
+      input(unorder.input, outer);
+      requireDerivedType(rel, core.unorder(typeSystem, unorder.input));
+    } else if (rel instanceof Core.Skip) {
+      final Core.Skip skip = (Core.Skip) rel;
+      input(skip.input, outer);
+      requireType(skip.count, PrimitiveType.INT, "skip count");
+      // Evaluated before the first element exists.
+      scope(skip.count, outer, "skip count");
+      requireDerivedType(rel, core.skip(skip.input, skip.count));
+    } else if (rel instanceof Core.Take) {
+      final Core.Take take = (Core.Take) rel;
+      input(take.input, outer);
+      requireType(take.count, PrimitiveType.INT, "take count");
+      scope(take.count, outer, "take count");
+      requireDerivedType(rel, core.take(take.input, take.count));
+    } else if (rel instanceof Core.SetRel) {
+      final Core.SetRel setRel = (Core.SetRel) rel;
+      setRel.inputs.forEach(input -> input(input, outer));
+      final Type elementType = setRel.inputs.get(0).type.elementType();
+      setRel.inputs.forEach(
+          input -> {
+            if (!input.type.elementType().equals(elementType)) {
+              violation(
+                  "%s inputs have different element types: %s, %s",
+                  setRel.op.lowerName, elementType, input.type.elementType());
+            }
+          });
+      requireDerivedType(
+          rel, setRel.copy(typeSystem, setRel.distinct, setRel.inputs));
+    } else {
+      violation("unknown node: %s", rel.getClass());
+    }
+  }
+
+  private static Set<Core.IdPat> union(
+      Set<Core.IdPat> set, List<Core.IdPat> pats) {
+    if (pats.isEmpty()) {
+      return set;
+    }
+    final Set<Core.IdPat> set2 = new LinkedHashSet<>(set);
+    set2.addAll(pats);
+    return set2;
+  }
+
+  /**
+   * Validates an input: a nested node, or a leaf, which must be a collection
+   * and cannot see the element of the node above it.
+   */
+  private void input(Core.Exp input, Set<Core.IdPat> outer) {
+    if (input instanceof Core.Rel) {
+      node((Core.Rel) input, outer);
+      return;
+    }
+    if (!input.type.isCollection()) {
+      violation("input must be list or bag: %s", input.type);
+    }
+    scope(input, outer, "leaf");
+  }
+
+  /**
+   * Checks that a node's type is the one derived for it. Rebuilding is the
+   * derivation, so a node whose type disagrees was not built by the builder.
+   */
+  private void requireDerivedType(Core.Rel rel, Core.Rel derived) {
+    if (!rel.type.equals(derived.type)) {
+      violation(
+          "%s has type %s but derives %s",
+          rel.op.lowerName, rel.type.moniker(), derived.type.moniker());
+    }
+  }
+
+  private void requireType(Core.Exp exp, Type type, String what) {
+    if (!exp.type.equals(type)) {
+      violation("%s must be %s: %s", what, type.moniker(), exp.type.moniker());
+    }
+  }
+
+  /**
+   * Checks that an expression reads only the node patterns in scope: a
+   * reference to a pattern whose name says it is a node's -- {@code $0}, {@code
+   * $1}, {@code $ordinal} -- must be one the node or an enclosing node binds. A
+   * nested tree is checked with the same scope, extended by its own patterns.
+   *
+   * <p>A pattern the expression binds itself -- a function's parameter, a
+   * {@code let}, a {@code case} -- is its own to read, whatever its name; the
+   * resolver names the parameter of a composed aggregate function {@code $col}.
+   */
+  private void scope(Core.Exp exp, Set<Core.IdPat> allowed, String what) {
+    final Set<Core.IdPat> bound = new HashSet<>();
+    exp.accept(
+        new Visitor.RelBoundary() {
+          @Override
+          protected void visit(Core.IdPat idPat) {
+            bound.add(idPat);
+          }
+
+          @Override
+          protected void rel(Core.Rel rel) {}
+        });
+    exp.accept(
+        new Visitor.RelBoundary() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (id.idPat.name.charAt(0) == '$'
+                && !allowed.contains(id.idPat)
+                && !bound.contains(id.idPat)) {
+              violation("%s cannot reference %s", what, id.idPat.name);
+            }
+          }
+
+          @Override
+          protected void rel(Core.Rel rel) {
+            node(rel, allowed);
+          }
+        });
+  }
+
+  /**
+   * Visitor that does not descend into a nested relational node, because the
+   * node rebinds {@code $0}.
+   */
+}
+
+// End RelValidator.java

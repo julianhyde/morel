@@ -1886,14 +1886,14 @@ public class TypeResolver {
             String message =
                 format(
                     "'%s' step must not occur in '%s'",
-                    step.e.op.lowerName(), query.op.lowerName());
+                    step.e.op.lowerName, query.op.lowerName);
             throw new CompileException(message, false, step.e.pos);
           }
           if (!lastStep) {
             String message =
                 format(
                     "'%s' step must be last in '%s'",
-                    step.e.op.lowerName(), query.op.lowerName());
+                    step.e.op.lowerName, query.op.lowerName);
             throw new CompileException(
                 message, false, query.steps.get(step.i + 1).pos);
           }
