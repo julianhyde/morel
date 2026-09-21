@@ -43,7 +43,6 @@ public class MartelliUnifier extends Unifier {
       Map<Variable, Action> termActions,
       List<Constraint> constraints,
       Tracer tracer) {
-    final long start = System.nanoTime();
 
     // delete: G u { t = t }
     //   => G
@@ -175,13 +174,6 @@ public class MartelliUnifier extends Unifier {
         continue;
       }
 
-      final long duration = System.nanoTime() - start;
-      if (false) {
-        System.out.printf(
-            "Term count %,d iterations %,d duration %,d nanos"
-                + " (%,d nanos per iteration)%n",
-            termPairs.size(), iteration, duration, duration / (iteration + 1));
-      }
       // Any overload constraint that still has more than one candidate never
       // had its argument type pinned down; surface it so that it can become a
       // predicate of a qualified type.

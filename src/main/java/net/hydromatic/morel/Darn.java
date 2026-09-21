@@ -131,6 +131,7 @@ public class Darn {
     boolean changed = !result.lines.equals(inputLines);
     if (changed) {
       if (verifyOnly) {
+        // lint:skip 1
         System.err.printf(
             "Mismatch in %s: %d cell(s) differ%n", file, result.mismatchCount);
       } else {
@@ -138,6 +139,7 @@ public class Darn {
       }
     }
     if (verbose) {
+      // lint:skip 1
       System.out.println(result.toVerboseString(file.getName()));
     }
     return changed;
