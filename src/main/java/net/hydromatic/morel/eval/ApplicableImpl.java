@@ -32,6 +32,11 @@ abstract class ApplicableImpl implements Applicable {
     this.builtIn = builtIn;
   }
 
+  @Override
+  public BuiltIn builtIn() {
+    return builtIn;
+  }
+
   protected String name() {
     return builtIn.mlName.startsWith("op ")
         ? builtIn.mlName.substring("op ".length())

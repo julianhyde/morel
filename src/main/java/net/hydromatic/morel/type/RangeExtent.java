@@ -19,6 +19,7 @@
 package net.hydromatic.morel.type;
 
 import com.google.common.collect.BoundType;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableRangeSet;
 import com.google.common.collect.Lists;
@@ -61,18 +62,35 @@ public class RangeExtent {
   public final Type type;
   public final @Nullable Iterable iterable;
 
+  /**
+   * The names the query bound to the values, one per component of a tuple type
+   * or one for the whole; empty if the extent was not written as a query's
+   * scan. Diagnostics quote them; nothing else reads them.
+   */
+  public final ImmutableList<String> names;
+
   /** Creates a RangeExtent. */
-  @SuppressWarnings("unchecked")
   public RangeExtent(
       TypeSystem typeSystem,
       Type type,
       Map<String, ImmutableRangeSet> rangeSetMap) {
+    this(typeSystem, type, rangeSetMap, ImmutableList.of());
+  }
+
+  /** Creates a RangeExtent with the names the query bound. */
+  @SuppressWarnings("unchecked")
+  public RangeExtent(
+      TypeSystem typeSystem,
+      Type type,
+      Map<String, ImmutableRangeSet> rangeSetMap,
+      List<String> names) {
     this.rangeSetMap =
         ImmutableMap.copyOf(
             Maps.transformValues(
                 rangeSetMap, r -> ImmutableRangeSet.copyOf(r)));
     this.type = type;
     this.iterable = toList(type, typeSystem);
+    this.names = ImmutableList.copyOf(names);
   }
 
   @Override

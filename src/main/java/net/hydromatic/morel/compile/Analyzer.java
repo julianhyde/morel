@@ -21,9 +21,7 @@ package net.hydromatic.morel.compile;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
-import java.util.ArrayDeque;
 import java.util.Collection;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import net.hydromatic.morel.ast.AstNode;
@@ -36,16 +34,15 @@ public class Analyzer extends EnvVisitor {
 
   /** Creates an Analyzer. */
   private static Analyzer of(TypeSystem typeSystem, Environment env) {
-    return new Analyzer(typeSystem, env, new HashMap<>(), new ArrayDeque<>());
+    return new Analyzer(typeSystem, env, new HashMap<>());
   }
 
   /** Private constructor. */
   private Analyzer(
       TypeSystem typeSystem,
       Environment env,
-      Map<Core.NamedPat, MutableUse> map,
-      Deque<FromContext> fromStack) {
-    super(typeSystem, env, fromStack);
+      Map<Core.NamedPat, MutableUse> map) {
+    super(typeSystem, env);
     this.map = map;
   }
 
@@ -71,7 +68,7 @@ public class Analyzer extends EnvVisitor {
 
   @Override
   protected Analyzer push(Environment env) {
-    return new Analyzer(typeSystem, env, map, fromStack);
+    return new Analyzer(typeSystem, env, map);
   }
 
   @Override
@@ -101,6 +98,12 @@ public class Analyzer extends EnvVisitor {
   private static boolean isAtom(Core.Exp exp) {
     switch (exp.op) {
       case ID:
+        // A reference to a node's row, `$0`, is an identifier like any other,
+        // and as cheap to duplicate. A binding whose value is the row -- what
+        // beta-reducing a call in a query leaves -- must be substituted
+        // however often it is read, or the grounding engine cannot see the
+        // constraint behind it. `Inliner` still declines where the use is
+        // inside a nested tree, which is the one place moving it is unsound.
       case BOOL_LITERAL:
       case CHAR_LITERAL:
       case INT_LITERAL:
@@ -134,8 +137,7 @@ public class Analyzer extends EnvVisitor {
       final Multimap<Core.NamedPat, MutableUse> multimap =
           HashMultimap.create();
       final Map<Core.NamedPat, MutableUse> subMap = new HashMap<>();
-      final Analyzer analyzer =
-          new Analyzer(typeSystem, env, subMap, new ArrayDeque<>());
+      final Analyzer analyzer = new Analyzer(typeSystem, env, subMap);
       case_.matchList.forEach(
           e -> {
             subMap.clear();

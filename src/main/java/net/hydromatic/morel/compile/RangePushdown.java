@@ -22,11 +22,11 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
@@ -60,32 +60,135 @@ final class RangePushdown {
   private RangePushdown() {}
 
   /**
-   * Returns whether {@code scan.exp} is an infinite single-constructor range
-   * list. Used by {@link SuchThatShuttle#containsUnbounded} so that such scans
-   * go through the FBBT/Expander pipeline.
+   * Returns whether an expression is an infinite single-constructor range list.
+   * A leaf is a bare expression, with no pattern to go with it.
    */
-  static boolean isInfiniteRangeScan(Core.Scan scan) {
-    return match(scan) != null;
+  static boolean isInfiniteRange(Core.Exp exp) {
+    if (!(exp instanceof Core.Apply)) {
+      return false;
+    }
+    Core.Apply apply = (Core.Apply) exp;
+    if (apply.builtIn() == BuiltIn.BAG_FROM_LIST
+        && apply.arg instanceof Core.Apply) {
+      apply = (Core.Apply) apply.arg;
+    }
+    if (apply.builtIn() != BuiltIn.RANGE_FLATTEN
+        || !apply.arg.isCallTo(BuiltIn.Z_LIST)) {
+      return false;
+    }
+    final Core.Apply list = (Core.Apply) apply.arg;
+    if (list.args().size() != 1
+        || !(list.args().get(0) instanceof Core.Apply)) {
+      return false;
+    }
+    final Core.Apply ctor = (Core.Apply) list.args().get(0);
+    if (!(ctor.fn instanceof Core.Id)) {
+      return false;
+    }
+    final BuiltIn.Constructor ctorEnum =
+        BuiltIn.Constructor.forName(((Core.Id) ctor.fn).idPat.name);
+    if (ctorEnum == null) {
+      return false;
+    }
+    switch (ctorEnum) {
+      case RANGE_AT_LEAST:
+      case RANGE_AT_MOST:
+      case RANGE_GREATER_THAN:
+      case RANGE_LESS_THAN:
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**
-   * If {@code scan.exp} is {@code Range.flatten [<single_infinite_ctor>]} or
-   * {@code Bag.fromList (Range.flatten [<single_infinite_ctor>])}, returns a
-   * {@link ScanInfo}; otherwise null. The bag wrapper is matched so that
-   * generator-built scans (e.g. {@code from x where x >= 1}) share the same
-   * pushdown machinery as user-written {@code from x in [1..]}.
+   * Tightens a tree's leaf against a condition carried down to it, and returns
+   * the finite range and the conjunct it consumed, or null.
+   *
+   * <p>{@code filter [$0 < 5] (#flatten Range ([AT_LEAST 1]))} is {@code
+   * #flatten Range ([CLOSED_OPEN (1, 5)])}, which is finite, so grounding has
+   * nothing left to do. The condition is on {@code $0}, because a leaf has no
+   * pattern.
    */
-  static @Nullable ScanInfo match(Core.Scan scan) {
-    if (!(scan.pat instanceof Core.NamedPat)) {
+  static @Nullable Tightening tighten(
+      TypeSystem typeSystem,
+      Core.Exp leaf,
+      Core.IdPat row,
+      List<Core.Exp> conditions) {
+    return tighten(
+        typeSystem,
+        leaf,
+        conditions,
+        e -> e instanceof Core.Id && ((Core.Id) e).idPat.equals(row));
+  }
+
+  /**
+   * As {@link #tighten(TypeSystem, Core.Exp, Core.IdPat, List)}, where the leaf
+   * is one of a join's and the conditions name it rather than saying {@code
+   * $0}.
+   */
+  static @Nullable Tightening tighten(
+      TypeSystem typeSystem,
+      Core.Exp leaf,
+      List<Core.Exp> conditions,
+      Predicate<Core.Exp> isVar) {
+    final RangeInfo info = matchExp(leaf);
+    if (info == null) {
       return null;
     }
-    final Core.NamedPat namedPat = (Core.NamedPat) scan.pat;
-    if (!(scan.exp instanceof Core.Apply)) {
+    return findTightening(
+        typeSystem,
+        leaf.type.elementType(),
+        info.op,
+        info.value,
+        info.bagWrapped,
+        isVar,
+        conditions,
+        ImmutableSet.of());
+  }
+
+  /**
+   * Returns what an infinite range says about its element -- {@code v >= 1} for
+   * {@code [1..]} -- or null if the leaf is not one.
+   *
+   * <p>FBBT deduces a bound from the bounds it is given, and a range's is not
+   * among them until it is written as a constraint.
+   */
+  static Core.@Nullable Exp impliedBound(
+      TypeSystem typeSystem, Core.Exp leaf, Core.Exp varExp) {
+    final RangeInfo info = matchExp(leaf);
+    if (info == null) {
       return null;
     }
-    Core.Apply apply = (Core.Apply) scan.exp;
-    // Peel an optional Bag.fromList wrapper so we work on the inner
-    // Range.flatten regardless of the surrounding collection type.
+    // CHAR_OP_* are concretely typed (char * char -> bool); the OP_* family is
+    // polymorphic and needs the type-parameter form of core.call.
+    switch (info.op) {
+      case CHAR_OP_LT:
+      case CHAR_OP_LE:
+      case CHAR_OP_GT:
+      case CHAR_OP_GE:
+        return core.call(typeSystem, info.op, varExp, info.value);
+      default:
+        return core.call(
+            typeSystem,
+            info.op,
+            PrimitiveType.BOOL,
+            Pos.ZERO,
+            varExp,
+            info.value);
+    }
+  }
+
+  /**
+   * If {@code exp} is {@code Range.flatten [<single_infinite_ctor>]}, possibly
+   * wrapped in {@code Bag.fromList}, returns what the constructor says;
+   * otherwise null. Whether the element is a char, a leaf says with its type.
+   */
+  private static @Nullable RangeInfo matchExp(Core.Exp exp) {
+    if (!(exp instanceof Core.Apply)) {
+      return null;
+    }
+    Core.Apply apply = (Core.Apply) exp;
     final boolean bagWrapped;
     if (apply.builtIn() == BuiltIn.BAG_FROM_LIST
         && apply.arg instanceof Core.Apply) {
@@ -94,21 +197,16 @@ final class RangePushdown {
     } else {
       bagWrapped = false;
     }
-    if (apply.builtIn() != BuiltIn.RANGE_FLATTEN) {
-      return null;
-    }
-    if (!apply.arg.isCallTo(BuiltIn.Z_LIST)) {
+    if (apply.builtIn() != BuiltIn.RANGE_FLATTEN
+        || !apply.arg.isCallTo(BuiltIn.Z_LIST)) {
       return null;
     }
     final Core.Apply list = (Core.Apply) apply.arg;
-    if (list.args().size() != 1) {
+    if (list.args().size() != 1
+        || !(list.args().get(0) instanceof Core.Apply)) {
       return null;
     }
-    final Core.Exp elem = list.args().get(0);
-    if (!(elem instanceof Core.Apply)) {
-      return null;
-    }
-    final Core.Apply ctor = (Core.Apply) elem;
+    final Core.Apply ctor = (Core.Apply) list.args().get(0);
     if (!(ctor.fn instanceof Core.Id)) {
       return null;
     }
@@ -117,119 +215,62 @@ final class RangePushdown {
     if (ctorEnum == null) {
       return null;
     }
-    final boolean isChar = namedPat.type == PrimitiveType.CHAR;
+    final boolean isChar = exp.type.elementType() == PrimitiveType.CHAR;
     switch (ctorEnum) {
       case RANGE_AT_LEAST:
-        return new ScanInfo(
-            namedPat,
-            ctor.arg,
-            isChar ? BuiltIn.CHAR_OP_GE : BuiltIn.OP_GE,
-            bagWrapped);
+        return new RangeInfo(
+            ctor.arg, isChar ? BuiltIn.CHAR_OP_GE : BuiltIn.OP_GE, bagWrapped);
       case RANGE_AT_MOST:
-        return new ScanInfo(
-            namedPat,
-            ctor.arg,
-            isChar ? BuiltIn.CHAR_OP_LE : BuiltIn.OP_LE,
-            bagWrapped);
+        return new RangeInfo(
+            ctor.arg, isChar ? BuiltIn.CHAR_OP_LE : BuiltIn.OP_LE, bagWrapped);
       case RANGE_GREATER_THAN:
-        return new ScanInfo(
-            namedPat,
-            ctor.arg,
-            isChar ? BuiltIn.CHAR_OP_GT : BuiltIn.OP_GT,
-            bagWrapped);
+        return new RangeInfo(
+            ctor.arg, isChar ? BuiltIn.CHAR_OP_GT : BuiltIn.OP_GT, bagWrapped);
       case RANGE_LESS_THAN:
-        return new ScanInfo(
-            namedPat,
-            ctor.arg,
-            isChar ? BuiltIn.CHAR_OP_LT : BuiltIn.OP_LT,
-            bagWrapped);
+        return new RangeInfo(
+            ctor.arg, isChar ? BuiltIn.CHAR_OP_LT : BuiltIn.OP_LT, bagWrapped);
       default:
         return null;
     }
   }
 
-  /**
-   * For each infinite-range scan in {@code from}, finds a literal bound on the
-   * scan's pattern in the first downstream {@code where} step and combines it
-   * with the scan's existing range constructor to form a finite constructor.
-   * The scan exp is replaced (preserving the list type), and the consumed
-   * conjunct is removed from the where.
-   */
-  static Core.From apply(TypeSystem typeSystem, Core.From from) {
-    // Locate the first where step.
-    int whereIdx = -1;
-    for (int i = 0; i < from.steps.size(); i++) {
-      if (from.steps.get(i) instanceof Core.Where) {
-        whereIdx = i;
-        break;
-      }
+  /** What an infinite single-constructor range says, without a pattern. */
+  private static final class RangeInfo {
+    final Core.Exp value;
+    final BuiltIn op;
+    final boolean bagWrapped;
+
+    RangeInfo(Core.Exp value, BuiltIn op, boolean bagWrapped) {
+      this.value = value;
+      this.op = op;
+      this.bagWrapped = bagWrapped;
     }
-    if (whereIdx < 0) {
-      return from;
-    }
-    final Core.Where where = (Core.Where) from.steps.get(whereIdx);
-    final List<Core.Exp> whereConjuncts = core.decomposeAnd(where.exp);
-    final Set<Core.Exp> consumed = new HashSet<>();
-    final List<Core.FromStep> newSteps = new ArrayList<>(from.steps.size());
-    boolean changed = false;
-    for (int i = 0; i < from.steps.size(); i++) {
-      final Core.FromStep step = from.steps.get(i);
-      if (i == whereIdx) {
-        newSteps.add(step);
-        continue;
-      }
-      if (step.op == Op.SCAN) {
-        final Core.Scan scan = (Core.Scan) step;
-        final ScanInfo info = match(scan);
-        if (info != null) {
-          final Tightening t =
-              findTightening(typeSystem, info, whereConjuncts, consumed);
-          if (t != null) {
-            newSteps.add(
-                scan.copy(scan.env, scan.pat, t.newExp, scan.condition));
-            consumed.add(t.consumedConjunct);
-            changed = true;
-            continue;
-          }
-        }
-      }
-      newSteps.add(step);
-    }
-    if (!changed) {
-      return from;
-    }
-    final List<Core.Exp> remaining = new ArrayList<>();
-    for (Core.Exp c : whereConjuncts) {
-      if (!consumed.contains(c)) {
-        remaining.add(c);
-      }
-    }
-    if (remaining.isEmpty()) {
-      newSteps.remove(whereIdx);
-    } else {
-      newSteps.set(
-          whereIdx, where.copy(core.andAlso(typeSystem, remaining), where.env));
-    }
-    return core.from(typeSystem, newSteps);
   }
 
   /**
-   * Searches {@code whereConjuncts} for the tightest literal bound on {@code
-   * info.pat} that complements {@code info}'s open side. Returns a {@link
-   * Tightening} or {@code null} if no such bound exists.
+   * Searches {@code whereConjuncts} for the tightest literal bound that
+   * complements the range's open side, and returns a {@link Tightening} or null
+   * if there is none.
+   *
+   * <p>A leaf has no pattern, and the bound is on {@code $0}; {@code isVar} is
+   * what tells one side of a comparison from the other.
    */
   private static @Nullable Tightening findTightening(
       TypeSystem typeSystem,
-      ScanInfo info,
+      Type elementType,
+      BuiltIn scanOp,
+      Core.Exp scanValue,
+      boolean bagWrapped,
+      Predicate<Core.Exp> isVar,
       List<Core.Exp> whereConjuncts,
       Set<Core.Exp> consumed) {
     // AT_LEAST/GREATER_THAN -> need an upper bound; AT_MOST/LESS_THAN ->
     // need a lower bound.
     final boolean needUpper =
-        info.op == BuiltIn.OP_GE
-            || info.op == BuiltIn.OP_GT
-            || info.op == BuiltIn.CHAR_OP_GE
-            || info.op == BuiltIn.CHAR_OP_GT;
+        scanOp == BuiltIn.OP_GE
+            || scanOp == BuiltIn.OP_GT
+            || scanOp == BuiltIn.CHAR_OP_GE
+            || scanOp == BuiltIn.CHAR_OP_GT;
     Core.Exp bestConjunct = null;
     BigDecimal bestValue = null;
     boolean bestStrict = false;
@@ -237,7 +278,7 @@ final class RangePushdown {
       if (consumed.contains(c)) {
         continue;
       }
-      final LiteralBound lb = extractLiteralBound(c, info.pat);
+      final LiteralBound lb = extractLiteralBound(c, isVar);
       if (lb == null || lb.isUpper != needUpper) {
         continue;
       }
@@ -254,25 +295,25 @@ final class RangePushdown {
     }
     // 'bestValue' is assigned whenever 'bestConjunct' is.
     final BigDecimal bestValue2 = requireNonNull(bestValue);
-    final Core.@Nullable Literal scanLit = Bounds.scalarLiteral(info.value);
+    final Core.@Nullable Literal scanLit = Bounds.scalarLiteral(scanValue);
     if (scanLit == null) {
       return null;
     }
-    final BigDecimal scanValue = Bounds.asBigDecimal(scanLit);
+    final BigDecimal scanNumber = Bounds.asBigDecimal(scanLit);
     final BigDecimal lowerValue;
     final boolean lowerStrict;
     final BigDecimal upperValue;
     final boolean upperStrict;
     if (needUpper) {
-      lowerValue = scanValue;
-      lowerStrict = info.op == BuiltIn.OP_GT || info.op == BuiltIn.CHAR_OP_GT;
+      lowerValue = scanNumber;
+      lowerStrict = scanOp == BuiltIn.OP_GT || scanOp == BuiltIn.CHAR_OP_GT;
       upperValue = bestValue2;
       upperStrict = bestStrict;
     } else {
       lowerValue = bestValue2;
       lowerStrict = bestStrict;
-      upperValue = scanValue;
-      upperStrict = info.op == BuiltIn.OP_LT || info.op == BuiltIn.CHAR_OP_LT;
+      upperValue = scanNumber;
+      upperStrict = scanOp == BuiltIn.OP_LT || scanOp == BuiltIn.CHAR_OP_LT;
     }
     if (lowerValue.compareTo(upperValue) > 0) {
       return null;
@@ -280,12 +321,7 @@ final class RangePushdown {
     final BuiltIn.Constructor ctor = finiteCtor(lowerStrict, upperStrict);
     final Core.Exp newExp =
         buildRangeFlatten(
-            typeSystem,
-            info.pat.type,
-            ctor,
-            lowerValue,
-            upperValue,
-            info.bagWrapped);
+            typeSystem, elementType, ctor, lowerValue, upperValue, bagWrapped);
     return new Tightening(newExp, bestConjunct);
   }
 
@@ -360,7 +396,7 @@ final class RangePushdown {
    * {@code <, <=, >, >=}, returns a {@link LiteralBound}; otherwise null.
    */
   private static @Nullable LiteralBound extractLiteralBound(
-      Core.Exp c, Core.NamedPat pat) {
+      Core.Exp c, Predicate<Core.Exp> isVar) {
     if (c.op != Op.APPLY) {
       return null;
     }
@@ -370,8 +406,8 @@ final class RangePushdown {
     }
     final Core.Exp lhs = c.arg(0);
     final Core.Exp rhs = c.arg(1);
-    final boolean lhsIsPat = Bounds.isIdRef(lhs, pat);
-    final boolean rhsIsPat = Bounds.isIdRef(rhs, pat);
+    final boolean lhsIsPat = isVar.test(lhs);
+    final boolean rhsIsPat = isVar.test(rhs);
     final BuiltIn normalized;
     final Core.Exp constSide;
     if (lhsIsPat && !rhsIsPat) {
@@ -406,52 +442,6 @@ final class RangePushdown {
     }
   }
 
-  /**
-   * Descriptor of an infinite single-constructor range scan: which pattern it
-   * binds, the constructor's int value, the comparison op that value implies on
-   * the pattern (e.g. {@code AT_LEAST 1} implies {@code x >= 1}, so {@code op}
-   * is {@code OP_GE}), and whether the original scan exp was wrapped in {@code
-   * Bag.fromList} (so the rewritten scan can wear the same wrapper).
-   */
-  static final class ScanInfo {
-    final Core.NamedPat pat;
-    final Core.Exp value;
-    final BuiltIn op;
-    final boolean bagWrapped;
-
-    ScanInfo(
-        Core.NamedPat pat, Core.Exp value, BuiltIn op, boolean bagWrapped) {
-      this.pat = pat;
-      this.value = value;
-      this.op = op;
-      this.bagWrapped = bagWrapped;
-    }
-
-    /**
-     * Returns the bound expression {@code pat OP value} suitable for injection
-     * into a where clause.
-     */
-    Core.Exp boundExp(TypeSystem typeSystem) {
-      // CHAR_OP_* are concretely typed (char * char -> bool); the OP_* family
-      // is polymorphic and needs the type-parameter form of core.call.
-      switch (op) {
-        case CHAR_OP_LT:
-        case CHAR_OP_LE:
-        case CHAR_OP_GT:
-        case CHAR_OP_GE:
-          return core.call(typeSystem, op, core.id(pat), value);
-        default:
-          return core.call(
-              typeSystem,
-              op,
-              PrimitiveType.BOOL,
-              Pos.ZERO,
-              core.id(pat),
-              value);
-      }
-    }
-  }
-
   /** A literal bound conjunct on a specific pattern. */
   private static final class LiteralBound {
     final boolean isUpper;
@@ -469,7 +459,7 @@ final class RangePushdown {
    * Result of {@link #findTightening}: the new finite-range scan expression and
    * the where conjunct it consumed.
    */
-  private static final class Tightening {
+  static final class Tightening {
     final Core.Exp newExp;
     final Core.Exp consumedConjunct;
 
