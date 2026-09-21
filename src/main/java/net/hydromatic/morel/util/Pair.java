@@ -208,16 +208,9 @@ public class Pair<T1, T2>
    */
   public static <K, V> List<Pair<K, V>> zip(
       final List<K> ks, final List<V> vs, boolean strict) {
-    final int size;
-    if (strict) {
-      if (ks.size() != vs.size()) {
-        throw new AssertionError();
-      }
-      size = ks.size();
-    } else {
-      size = Math.min(ks.size(), vs.size());
-    }
-    return new ZipList<>(ks, vs, size);
+    // Qualified, because this class's own "zip" would shadow a static import.
+    // lint:skip 1
+    return PairList.zip(ks, vs, strict).transform(Pair::of);
   }
 
   /** Returns whether all pairs from two iterables match a given predicate. */
@@ -679,32 +672,6 @@ public class Pair<T1, T2>
       final Pair<E, E> pair = of(previous, current);
       previous = current;
       return pair;
-    }
-  }
-
-  /**
-   * Unmodifiable list of pairs, backed by a pair of lists.
-   *
-   * @param <K> Left-hand type
-   * @param <V> Right-hand type
-   */
-  private static class ZipList<K, V> extends AbstractList<Pair<K, V>> {
-    private final List<K> ks;
-    private final List<V> vs;
-    private final int size;
-
-    ZipList(List<K> ks, List<V> vs, int size) {
-      this.ks = ks;
-      this.vs = vs;
-      this.size = size;
-    }
-
-    public Pair<K, V> get(int index) {
-      return Pair.of(ks.get(index), vs.get(index));
-    }
-
-    public int size() {
-      return size;
     }
   }
 

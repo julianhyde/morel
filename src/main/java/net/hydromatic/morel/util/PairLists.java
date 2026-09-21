@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.util;
 
+import static com.google.common.base.Preconditions.checkElementIndex;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.unmodifiable;
 
@@ -29,8 +30,10 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.util.AbstractCollection;
 import java.util.AbstractList;
 import java.util.AbstractSet;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -142,6 +145,21 @@ class PairLists {
       ImmutableList.Builder<R> list = ImmutableList.builder();
       forEach((t, u) -> list.add(function.apply(t, u)));
       return list.build();
+    }
+
+    @Override
+    public boolean anyMatch(BiPredicate<T, U> predicate) {
+      return Pair.anyMatch(leftList(), rightList(), predicate);
+    }
+
+    @Override
+    public boolean allMatch(BiPredicate<T, U> predicate) {
+      return Pair.allMatch(leftList(), rightList(), predicate);
+    }
+
+    @Override
+    public int firstMatch(BiPredicate<T, U> predicate) {
+      return Pair.firstMatch(leftList(), rightList(), predicate);
     }
 
     @Override
@@ -1073,21 +1091,6 @@ class PairLists {
     }
 
     @Override
-    public boolean anyMatch(BiPredicate<T, U> predicate) {
-      return Pair.anyMatch(leftList(), rightList(), predicate);
-    }
-
-    @Override
-    public boolean allMatch(BiPredicate<T, U> predicate) {
-      return Pair.allMatch(leftList(), rightList(), predicate);
-    }
-
-    @Override
-    public int firstMatch(BiPredicate<T, U> predicate) {
-      return Pair.firstMatch(leftList(), rightList(), predicate);
-    }
-
-    @Override
     public int size() {
       return map.size();
     }
@@ -1100,6 +1103,99 @@ class PairLists {
     @Override
     public Map.Entry<T, U> get(int index) {
       return new MapEntry<>(left(index), right(index));
+    }
+  }
+
+  /**
+   * A read-only view of two lists as a list of pairs, the left elements being
+   * one list's and the right elements the other's.
+   *
+   * <p>Changes to the lists are visible through the view; the size is fixed
+   * when the view is made.
+   *
+   * @param <T> First type
+   * @param <U> Second type
+   */
+  static class ZipPairList<T, U> extends AbstractPairList<T, U> {
+    private final List<? extends T> ts;
+    private final List<? extends U> us;
+    private final int size;
+
+    ZipPairList(List<? extends T> ts, List<? extends U> us, int size) {
+      this.ts = requireNonNull(ts);
+      this.us = requireNonNull(us);
+      this.size = size;
+    }
+
+    @Override
+    List<@Nullable Object> backingList() {
+      final List<@Nullable Object> list = new ArrayList<>(size * 2);
+      for (int i = 0; i < size; i++) {
+        list.add(ts.get(i));
+        list.add(us.get(i));
+      }
+      return list;
+    }
+
+    @Override
+    public int size() {
+      return size;
+    }
+
+    @Override
+    public Map.Entry<T, U> get(int index) {
+      return Pair.of(left(index), right(index));
+    }
+
+    @Override
+    public T left(int index) {
+      checkElementIndex(index, size);
+      return ts.get(index);
+    }
+
+    @Override
+    public U right(int index) {
+      checkElementIndex(index, size);
+      return us.get(index);
+    }
+
+    @Override
+    public List<T> leftList() {
+      return Collections.unmodifiableList(ts.subList(0, size));
+    }
+
+    @Override
+    public List<U> rightList() {
+      return Collections.unmodifiableList(us.subList(0, size));
+    }
+
+    @Override
+    public void forEach(BiConsumer<T, U> consumer) {
+      for (int i = 0; i < size; i++) {
+        consumer.accept(ts.get(i), us.get(i));
+      }
+    }
+
+    @Override
+    public SortedMap<T, U> asSortedMap() {
+      return immutable().asSortedMap();
+    }
+
+    @Override
+    public ImmutablePairList<T, U> immutable() {
+      switch (size) {
+        case 0:
+          return ImmutablePairList.of();
+        case 1:
+          return ImmutablePairList.of(left(0), right(0));
+        default:
+          return new ArrayImmutablePairList<>(backingList().toArray());
+      }
+    }
+
+    @Override
+    public ImmutablePairList<T, U> withSortedKeys(Ordering<T> ordering) {
+      return immutable().withSortedKeys(ordering);
     }
   }
 

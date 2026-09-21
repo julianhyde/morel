@@ -18,6 +18,8 @@
  */
 package net.hydromatic.morel;
 
+import static net.hydromatic.morel.Matchers.list;
+import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.anyMatch;
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -166,6 +168,48 @@ class PairListTest {
       immutablePairList.forEach((k, v) -> list2.add(Pair.of(k, v)));
       assertThat(list2, is(list));
     }
+  }
+
+  /** Tests {@link PairList#zip(List, List)}, a view of two lists. */
+  @Test
+  void testZip() {
+    final List<Integer> ints = new ArrayList<>(list(1, 2));
+    final PairList<Integer, String> pairList = zip(ints, list("a", "b"));
+    assertThat(pairList, hasSize(2));
+    assertThat(pairList.transform((i, s) -> s + i), is(list("a1", "b2")));
+    assertThat(pairList.leftList(), is(list(1, 2)));
+    assertThat(pairList.rightList(), is(list("a", "b")));
+    assertThat(pairList.immutable(), hasToString("[<1, a>, <2, b>]"));
+
+    // A view: a change to a list shows through it.
+    ints.set(0, 3);
+    assertThat(pairList.left(0), is(3));
+    assertThat(pairList.get(0).getKey(), is(3));
+
+    assertThat(zip(list(), list()), empty());
+    assertThrows(IllegalArgumentException.class, () -> zip(list(1), list()));
+
+    // Not strict: as long as the shorter list, and an index beyond it is out
+    // of bounds even though the longer list has the element.
+    final PairList<Integer, String> short1 =
+        zip(list(1, 2, 3), list("a"), false);
+    assertThat(short1, hasSize(1));
+    assertThat(short1.right(0), is("a"));
+    assertThrows(IndexOutOfBoundsException.class, () -> short1.left(1));
+    assertThrows(IndexOutOfBoundsException.class, () -> short1.get(1));
+
+    // Equal to any pair list with the same pairs; iterates them in order.
+    final PairList<Integer, String> pairList2 = zip(list(3, 2), list("a", "b"));
+    assertThat(pairList2, is(ImmutablePairList.copyOf(3, "a", 2, "b")));
+    assertThat(
+        pairList2.hashCode(),
+        is(ImmutablePairList.copyOf(3, "a", 2, "b").hashCode()));
+    final List<String> seen = new ArrayList<>();
+    for (Map.Entry<Integer, String> e : pairList2) {
+      seen.add(e.getKey() + e.getValue());
+    }
+    assertThat(seen, is(list("3a", "2b")));
+    assertThat(pairList2.subList(1, 2), hasToString("[<2, b>]"));
   }
 
   /** Basic test for {@link PairList}. */

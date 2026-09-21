@@ -224,6 +224,7 @@ public class LintTest {
                     || line.contains("Objects.requireNonNull")
                     || line.contains("Ord.forEachIndexed")
                     || line.contains("Pair.forEach")
+                    || line.contains("PairList.zip")
                     || line.contains("Preconditions.")
                     || line.contains("Static."))
                 && line.filename().endsWith(".java")

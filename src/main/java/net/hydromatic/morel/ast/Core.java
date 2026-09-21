@@ -27,6 +27,7 @@ import static net.hydromatic.morel.type.TypeSystem.canAssign;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
+import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.allMatch;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.only;
@@ -668,16 +669,12 @@ public class Core {
       if (!transform(args, Core.Pat::type).equals(type.argTypes())) {
         // The field types do not match. Create a new record type with the same
         // field names, new field types.
-        final ImmutableSortedMap.Builder<String, Type> nameTypes =
-            ImmutableSortedMap.orderedBy(RecordType.ORDERING);
-        forEach(
-            type.argNames(),
-            args,
-            (name, pat) -> nameTypes.put(name, pat.type));
-
         // Cast is safe. If the previous type was a record type (non-empty,
         // field names are not consecutive integers) the new one will be also.
-        type = (RecordType) typeSystem.recordType(nameTypes.build());
+        type =
+            (RecordType)
+                typeSystem.recordType(
+                    zip(type.argNames(), transform(args, Core.Pat::type)));
       }
       return core.recordPat(type, args);
     }

@@ -162,8 +162,10 @@ public abstract class Matchers {
     };
   }
 
-  static List<Object> list(Object... values) {
-    return Arrays.asList(values);
+  /** Creates a list, as {@code list(1, 2)}. */
+  @SafeVarargs
+  static <E> List<E> list(E... elements) {
+    return Arrays.asList(elements);
   }
 
   /** Creates the runtime value of {@code SOME value}. */

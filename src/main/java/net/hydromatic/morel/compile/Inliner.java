@@ -22,6 +22,7 @@ import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
+import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.allMatch;
 
 import com.google.common.collect.ImmutableList;
@@ -501,12 +502,10 @@ public class Inliner extends EnvShuttle {
       case TUPLE_TYPE:
         final TupleType tupleType = (TupleType) type;
         list = (List<Object>) value;
-        final ImmutableList.Builder<Core.Exp> args = ImmutableList.builder();
-        forEach(
-            tupleType.argTypes,
-            list,
-            (t, v) -> args.add(valueToExp(typeSystem, t, v)));
-        return core.tuple(tupleType, args.build());
+        return core.tuple(
+            tupleType,
+            zip(tupleType.argTypes, list)
+                .transform((t, v) -> valueToExp(typeSystem, t, v)));
 
       default:
         throw new AssertionError(

@@ -25,6 +25,7 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.PairList.fromTransformed;
+import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.allMatch;
 import static net.hydromatic.morel.util.Static.filterEager;
 import static net.hydromatic.morel.util.Static.last;
@@ -447,12 +448,9 @@ public enum CoreBuilder {
     final ImmutableList<Core.Exp> argList = ImmutableList.copyOf(args);
     final RecordLikeType tupleType;
     if (type instanceof RecordType) {
-      final PairList<String, Type> argNameTypes = PairList.of();
-      forEach(
-          type.argNames(),
-          argList,
-          (name, arg) -> argNameTypes.add(name, arg.type));
-      tupleType = typeSystem.recordType(argNameTypes);
+      tupleType =
+          typeSystem.recordType(
+              zip(type.argNames(), transform(argList, Core.Exp::type)));
     } else {
       tupleType = typeSystem.tupleType(transform(argList, Core.Exp::type));
     }
