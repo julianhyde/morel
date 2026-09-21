@@ -101,8 +101,7 @@ public enum Prop {
    */
   ENGINE(
       "engine",
-      String.class,
-      true,
+      Kind.STRING,
       "",
       "Name of the engine that coloring pushes to; empty for none."),
 
