@@ -1024,7 +1024,7 @@ public abstract class Codes {
           return CoreValues.print(
               CoreValues.toExp(arg),
               requireNonNull(session.typeSystem, "typeSystem"),
-              Prop.LINE_WIDTH.intValue(session.map));
+              Prop.LINE_WIDTH.optionalIntValue(session.map, Integer.MAX_VALUE));
         }
       };
 
@@ -5970,7 +5970,8 @@ public abstract class Codes {
             // With types: planEx prints the collection type of every line.
             return coreAtPhase.unparseRenumbered(
                 session.typeSystem,
-                Prop.LINE_WIDTH.intValue(session.map),
+                Prop.LINE_WIDTH.optionalIntValue(
+                    session.map, Integer.MAX_VALUE),
                 true);
           } catch (Exception e) {
             return "Error re-planning: " + e.getMessage();

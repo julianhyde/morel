@@ -1320,7 +1320,8 @@ public class Resolver {
       final int width =
           session == null
               ? AstWriter.DEFAULT_WIDTH
-              : Prop.LINE_WIDTH.intValue(session.map);
+              : Prop.LINE_WIDTH.optionalIntValue(
+                  session.map, Integer.MAX_VALUE);
       // A query's plan is a tree, and prints as one even when the tree has
       // no node in it; anything else is just the expression. The argument's
       // *AST* says which, because by the time it is Core a query has become
