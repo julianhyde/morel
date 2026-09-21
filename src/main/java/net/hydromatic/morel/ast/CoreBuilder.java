@@ -23,12 +23,10 @@ import static com.google.common.collect.Maps.transformValues;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
-import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.PairList.fromTransformed;
 import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.allMatch;
 import static net.hydromatic.morel.util.Static.filterEager;
-import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.plus;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
@@ -49,14 +47,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
-import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
 import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.eval.Unit;
@@ -76,7 +72,6 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.Pair;
-import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
 /** Builds parse tree nodes. */
@@ -514,6 +509,11 @@ public enum CoreBuilder {
       Core.Exp exp,
       Iterable<? extends Core.Match> matchList) {
     return new Core.Case(pos, type, exp, ImmutableList.copyOf(matchList));
+  }
+
+  /** Creates a builder that builds a query, step by step, as a tree. */
+  public FromBuilder fromBuilder(TypeSystem typeSystem) {
+    return new FromBuilder(typeSystem);
   }
 
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {
@@ -1168,13 +1168,27 @@ public enum CoreBuilder {
   @SuppressWarnings({"rawtypes", "unchecked"})
   public Core.Exp extent(
       Pos pos, TypeSystem typeSystem, Type type, RangeSet rangeSet) {
+    return extent(pos, typeSystem, type, rangeSet, ImmutableList.of());
+  }
+
+  /**
+   * As {@link #extent(Pos, TypeSystem, Type, RangeSet)}, with the names the
+   * query bound to the values, which a diagnostic quotes.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public Core.Exp extent(
+      Pos pos,
+      TypeSystem typeSystem,
+      Type type,
+      RangeSet rangeSet,
+      List<String> names) {
     final Map<String, ImmutableRangeSet> map;
     if (rangeSet.complement().isEmpty()) {
       map = ImmutableMap.of();
     } else {
       map = ImmutableMap.of("/", ImmutableRangeSet.copyOf(rangeSet));
     }
-    return extent(pos, typeSystem, type, map);
+    return extent(pos, typeSystem, type, map, names);
   }
 
   /**
@@ -1186,6 +1200,20 @@ public enum CoreBuilder {
       TypeSystem typeSystem,
       Type type,
       Map<String, ImmutableRangeSet> rangeSetMap) {
+    return extent(pos, typeSystem, type, rangeSetMap, ImmutableList.of());
+  }
+
+  /**
+   * As {@link #extent(Pos, TypeSystem, Type, RangeSet, List)}, with a range-set
+   * map.
+   */
+  @SuppressWarnings("rawtypes")
+  public Core.Exp extent(
+      Pos pos,
+      TypeSystem typeSystem,
+      Type type,
+      Map<String, ImmutableRangeSet> rangeSetMap,
+      List<String> names) {
     // An extent yields its values in the natural order of the type, so it is
     // a list; 'Z_EXTENT' is declared to return one.
     final Type listType = typeSystem.listType(type);
@@ -1195,7 +1223,8 @@ public enum CoreBuilder {
         pos,
         listType,
         core.functionLiteral(listType, BuiltIn.Z_EXTENT),
-        core.internalLiteral(new RangeExtent(typeSystem, type, rangeSetMap)));
+        core.internalLiteral(
+            new RangeExtent(typeSystem, type, rangeSetMap, names)));
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
@@ -1739,239 +1768,6 @@ public enum CoreBuilder {
       }
     }
     return arg;
-  }
-
-  public Core.From from(Type type, List<Core.FromStep> steps) {
-    return new Core.From(type, ImmutableList.copyOf(steps));
-  }
-
-  /** Derives the result type, then calls {@link #from(Type, List)}. */
-  public Core.From from(TypeSystem typeSystem, List<Core.FromStep> steps) {
-    final Type elementType = fromElementType(typeSystem, steps);
-    final Type collectionType;
-    if (fromOrdered(steps)) {
-      collectionType = typeSystem.listType(elementType);
-    } else {
-      collectionType = typeSystem.bagType(elementType);
-    }
-    return from(collectionType, steps);
-  }
-
-  /**
-   * Returns the datatype of an element of a {@link Core.From} with the given
-   * steps.
-   */
-  private Type fromElementType(
-      TypeSystem typeSystem, List<Core.FromStep> steps) {
-    final Core.StepEnv lastStep = lastEnv(steps);
-    final PairList<String, Type> argNameTypes = PairList.of();
-    lastStep.bindings.forEach(b -> argNameTypes.add(b.id.name, b.id.type));
-    if (lastStep.atom) {
-      checkArgument(argNameTypes.size() == 1);
-      return argNameTypes.right(0);
-    }
-    return typeSystem.recordType(argNameTypes);
-  }
-
-  /**
-   * Returns whether the output of the last of a sequence of steps is ordered.
-   */
-  static boolean fromOrdered(List<Core.FromStep> steps) {
-    boolean ordered = true;
-    for (Core.FromStep step : steps) {
-      ordered = step.isOrdered(ordered);
-      checkArgument(
-          ordered == step.env.ordered,
-          "unexpected ordered [%s] in step [%s]",
-          step.env.ordered,
-          step);
-    }
-    return ordered;
-  }
-
-  /**
-   * Returns what would be the yield expression if we created a {@link
-   * Core.From} from the given steps.
-   *
-   * <p>Examples:
-   *
-   * <ul>
-   *   <li>{@code implicitYieldExp(steps=[scan(a=E:t)])} is {@code a} (a {@link
-   *       Core.Id});
-   *   <li>{@code implicitYieldExp(steps=[scan(a=E:t), scan(b=E2:t2)])} is
-   *       {@code {a = a, b = b}} (a record).
-   * </ul>
-   */
-  public Core.Exp implicitYieldExp(
-      TypeSystem typeSystem, List<Core.FromStep> steps) {
-    final Core.StepEnv lastEnv = lastEnv(steps);
-    if (lastEnv.bindings.size() == 1) {
-      return id(lastEnv.bindings.get(0).id);
-    } else {
-      final SortedMap<Core.NamedPat, Core.Exp> map = new TreeMap<>();
-      final PairList<String, Type> argNameTypes = PairList.of();
-      lastEnv.bindings.forEach(
-          b -> {
-            map.put(b.id, id(b.id));
-            argNameTypes.add(b.id.name, b.id.type);
-          });
-      return tuple(typeSystem.recordType(argNameTypes), map.values());
-    }
-  }
-
-  public Core.StepEnv lastEnv(List<? extends Core.FromStep> steps) {
-    return steps.isEmpty() ? Core.StepEnv.EMPTY : last(steps).env;
-  }
-
-  /**
-   * Creates a builder that will create a {@link Core.From} and validates if
-   * {@code env} is not null.
-   */
-  public FromBuilder fromBuilder(
-      TypeSystem typeSystem, @Nullable Environment env) {
-    final Supplier<Environment> envSupplier = env == null ? null : () -> env;
-    return fromBuilder(typeSystem, envSupplier);
-  }
-
-  public Core.Scan scan(
-      Core.StepEnv env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    return scan(Op.SCAN, env, pat, exp, condition);
-  }
-
-  public Core.Scan scan(
-      Op op, Core.StepEnv env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    env = env.withOrdered(env.ordered && exp.type instanceof ListType);
-    return new Core.Scan(op, env, pat, exp, condition);
-  }
-
-  public Core.Order order(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Order(env.withOrdered(true), exp);
-  }
-
-  public Core.GroupStep group(
-      boolean atom,
-      boolean ordered,
-      SortedMap<Core.IdPat, Core.Exp> groupExps,
-      SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
-    final List<Binding> bindings = new ArrayList<>();
-    groupExps.keySet().forEach(id -> bindings.add(Binding.of(id)));
-    aggregates.keySet().forEach(id -> bindings.add(Binding.of(id)));
-    checkArgument(
-        !atom || bindings.size() == 1,
-        "atom with %s bindings %s",
-        bindings.size(),
-        bindings);
-    return new Core.GroupStep(
-        Core.StepEnv.of(bindings, atom, ordered),
-        ImmutableSortedMap.copyOfSorted(groupExps),
-        ImmutableSortedMap.copyOfSorted(aggregates));
-  }
-
-  public Core.Where where(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Where(env, exp);
-  }
-
-  public Core.SkipStep skip(Core.StepEnv env, Core.Exp exp) {
-    return new Core.SkipStep(env, exp);
-  }
-
-  public Core.TakeStep take(Core.StepEnv env, Core.Exp exp) {
-    return new Core.TakeStep(env, exp);
-  }
-
-  public Core.ExceptStep except(
-      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.ExceptStep(env, distinct, ImmutableList.copyOf(args));
-  }
-
-  public Core.IntersectStep intersect(
-      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.IntersectStep(env, distinct, ImmutableList.copyOf(args));
-  }
-
-  public Core.UnionStep union(
-      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.UnionStep(env, distinct, ImmutableList.copyOf(args));
-  }
-
-  public Core.UnorderStep unorder(Core.StepEnv env) {
-    return new Core.UnorderStep(env.withOrdered(false));
-  }
-
-  public Core.Yield yield_(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Yield(env, exp);
-  }
-
-  /** Derives bindings, then calls {@link #yield_(Core.StepEnv, Core.Exp)}. */
-  public Core.Yield yield_(
-      TypeSystem typeSystem, Core.Exp exp, boolean atom, boolean ordered) {
-    final List<Core.NamedPat> idPats = new ArrayList<>();
-    if (atom) {
-      idPats.add(getIdPat(typeSystem, exp, null));
-    } else if (exp.op == Op.TUPLE) {
-      forEach(
-          ((RecordLikeType) exp.type).argNames(),
-          ((Core.Tuple) exp).args,
-          (name, arg) -> idPats.add(getIdPat(typeSystem, arg, name)));
-    } else {
-      ((RecordLikeType) exp.type)
-          .argNameTypes()
-          .forEach(
-              (name, type) ->
-                  idPats.add(idPat(type, name, typeSystem.nameGenerator::inc)));
-    }
-    return yield_(
-        Core.StepEnv.of(transform(idPats, Binding::of), atom, ordered), exp);
-  }
-
-  private Core.NamedPat getIdPat(
-      TypeSystem typeSystem, Core.Exp exp, @Nullable String name) {
-    if (exp instanceof Core.Id) {
-      Core.Id id = (Core.Id) exp;
-      if (name == null) {
-        // There is no preferred name, so this id will do.
-        return id.idPat;
-      }
-      if (id.idPat.name.equals(name)) {
-        // Name is specified, which means that we are trying to generate an
-        // IdPat from an assignment in a record constructor. If the left-hand
-        // side matches the name (e.g. '{x = x}') we can use the IdPat from the
-        // right side; but if it does not (e.g. '{y = x}') we cannot.
-        //
-        // It is better to use an existing IdPat, rather than generating a new
-        // IdPat with a different sequence number. (The underlying problem,
-        // which we should solve someday, is that the fields of record types
-        // have only names, no sequence numbers.)
-        return id.idPat;
-      }
-    }
-
-    // If the expression is "#deptno e" (also written as "e.deptno"), use
-    // "deptno" as the name.
-    if (name == null && exp instanceof Core.Apply) {
-      Core.Apply apply = (Core.Apply) exp;
-      if (apply.fn instanceof Core.RecordSelector) {
-        name = ((Core.RecordSelector) apply.fn).fieldName();
-      }
-    }
-
-    if (name == null) {
-      return idPat(exp.type, typeSystem.nameGenerator::get);
-    } else {
-      return idPat(exp.type, name, typeSystem.nameGenerator::inc);
-    }
-  }
-  /** Creates a builder that will create a {@link Core.From}. */
-  public FromBuilder fromBuilder(
-      TypeSystem typeSystem, @Nullable Supplier<Environment> envSupplier) {
-    return new FromBuilder(typeSystem, envSupplier);
-  }
-  /**
-   * Creates a builder that will create a {@link Core.From} but does not
-   * validate.
-   */
-  public FromBuilder fromBuilder(TypeSystem typeSystem) {
-    return fromBuilder(typeSystem, (Supplier<Environment>) null);
   }
 }
 

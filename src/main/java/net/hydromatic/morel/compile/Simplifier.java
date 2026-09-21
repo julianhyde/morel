@@ -22,8 +22,6 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.Multimap;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +32,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
+import net.hydromatic.morel.util.PairList;
 
 /** Simplifier of expressions. */
 class Simplifier {
@@ -41,13 +40,13 @@ class Simplifier {
   private final ImmutablePairList<Core.NamedPat, Generator> generators;
 
   Simplifier(
-      TypeSystem typeSystem, Multimap<Core.NamedPat, Generator> generators) {
+      TypeSystem typeSystem, PairList<Core.NamedPat, Generator> generators) {
     this.typeSystem = typeSystem;
-    this.generators = ImmutablePairList.copyOf(generators.entries());
+    this.generators = ImmutablePairList.copyOf(generators);
   }
 
   Simplifier(TypeSystem typeSystem) {
-    this(typeSystem, ImmutableMultimap.of());
+    this(typeSystem, PairList.of());
   }
 
   /**

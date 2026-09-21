@@ -18,8 +18,6 @@
  */
 package net.hydromatic.morel.compile;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.Code;
@@ -54,11 +52,8 @@ class GlobalFreeVarCollector extends EnvVisitor {
   private final Consumer<String> consumer;
 
   private GlobalFreeVarCollector(
-      TypeSystem typeSystem,
-      Environment env,
-      Deque<FromContext> fromStack,
-      Consumer<String> consumer) {
-    super(typeSystem, env, fromStack);
+      TypeSystem typeSystem, Environment env, Consumer<String> consumer) {
+    super(typeSystem, env);
     this.consumer = consumer;
   }
 
@@ -77,13 +72,12 @@ class GlobalFreeVarCollector extends EnvVisitor {
       Environment env,
       Core.Exp exp,
       Consumer<String> consumer) {
-    new GlobalFreeVarCollector(typeSystem, env, new ArrayDeque<>(), consumer)
-        .accept(exp);
+    new GlobalFreeVarCollector(typeSystem, env, consumer).accept(exp);
   }
 
   @Override
   protected EnvVisitor push(Environment env) {
-    return new GlobalFreeVarCollector(typeSystem, env, fromStack, consumer);
+    return new GlobalFreeVarCollector(typeSystem, env, consumer);
   }
 
   @Override

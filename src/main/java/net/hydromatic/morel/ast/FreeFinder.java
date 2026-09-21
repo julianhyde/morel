@@ -19,8 +19,6 @@
 package net.hydromatic.morel.ast;
 
 import com.google.common.collect.ImmutableSet;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.Set;
 import java.util.function.Consumer;
 import net.hydromatic.morel.compile.EnvVisitor;
@@ -29,30 +27,28 @@ import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.type.TypeSystem;
 
 /** Finds free variables in an expression. */
-public class FreeFinder extends EnvVisitor {
+class FreeFinder extends EnvVisitor {
   final Consumer<Core.NamedPat> consumer;
 
   protected FreeFinder(
       TypeSystem typeSystem,
       Environment env,
-      Deque<FromContext> fromStack,
       Consumer<Core.NamedPat> consumer) {
-    super(typeSystem, env, fromStack);
+    super(typeSystem, env);
     this.consumer = consumer;
   }
 
   /** Finds the free variables in an expression. */
-  public static Set<Core.NamedPat> freePats(
-      TypeSystem typeSystem, Core.Exp exp) {
+  static Set<Core.NamedPat> freePats(TypeSystem typeSystem, Core.Exp exp) {
     final ImmutableSet.Builder<Core.NamedPat> set = ImmutableSet.builder();
     final Environment env = Environments.empty();
-    exp.accept(new FreeFinder(typeSystem, env, new ArrayDeque<>(), set::add));
+    exp.accept(new FreeFinder(typeSystem, env, set::add));
     return set.build();
   }
 
   @Override
   protected EnvVisitor push(Environment env) {
-    return new FreeFinder(typeSystem, env, fromStack, consumer);
+    return new FreeFinder(typeSystem, env, consumer);
   }
 
   @Override

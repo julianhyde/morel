@@ -20,8 +20,6 @@ package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Verify.verifyNotNull;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.type.TypeSystem;
 
@@ -32,12 +30,11 @@ import net.hydromatic.morel.type.TypeSystem;
 public class RefChecker extends EnvVisitor {
   /** Creates a reference checker. */
   public static RefChecker of(TypeSystem typeSystem, Environment env) {
-    return new RefChecker(typeSystem, env, new ArrayDeque<>());
+    return new RefChecker(typeSystem, env);
   }
 
-  private RefChecker(
-      TypeSystem typeSystem, Environment env, Deque<FromContext> fromStack) {
-    super(typeSystem, env, fromStack);
+  private RefChecker(TypeSystem typeSystem, Environment env) {
+    super(typeSystem, env);
   }
 
   @Override
@@ -45,7 +42,7 @@ public class RefChecker extends EnvVisitor {
     if (env == this.env) {
       return this;
     }
-    return new RefChecker(typeSystem, env, fromStack);
+    return new RefChecker(typeSystem, env);
   }
 
   @Override

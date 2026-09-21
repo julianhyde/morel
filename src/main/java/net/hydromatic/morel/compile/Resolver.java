@@ -20,11 +20,11 @@ package net.hydromatic.morel.compile;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.anyMatch;
@@ -38,36 +38,41 @@ import static org.apache.calcite.util.Util.intersects;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableRangeSet;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Range;
 import java.math.BigDecimal;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
+import net.hydromatic.morel.ast.AstWriter;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.CoreBuilder;
-import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.ast.JoinType;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.ast.RelBuilder;
+import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.ast.Simplification;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Decimals;
+import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.AliasType;
@@ -272,8 +277,8 @@ public class Resolver {
    *   <li>{@code 1 + a0} is the post-expression, and becomes {@code e0}
    * </ul>
    *
-   * <p>If the pre- and post-expressions are non-trivial we end up with a {@link
-   * Core.Yield} on a {@link Core.GroupStep} on a {@link Core.Yield}.
+   * <p>If the pre- and post-expressions are non-trivial we end up with a
+   * projection on a group on a projection.
    *
    * <p>What is the environment? If the query is "{@code from e in emps group
    * e.deptno compute sum over e.salary * 2.0}", then this resolver (used for
@@ -284,12 +289,13 @@ public class Resolver {
    */
   Resolver withAggregateResolver(
       Environment baseEnv,
-      Core.StepEnv stepEnv,
+      List<Binding> bindings,
+      boolean ordered,
       Collection<? extends Core.IdPat> groupKeys,
       PairList<Core.IdPat, Core.Aggregate> aggregates) {
     final Environment outerEnv =
         Environments.bind(baseEnv, transform(groupKeys, Binding::of));
-    final Environment innerEnv = Environments.bind(outerEnv, stepEnv.bindings);
+    final Environment innerEnv = Environments.bind(outerEnv, bindings);
     final Resolver innerResolver =
         new Resolver(
             typeMap,
@@ -304,7 +310,7 @@ public class Resolver {
             AggregateResolver.UNSUPPORTED);
     final AggregateResolver aggregateResolver =
         new AggregateResolverImpl(
-            groupKeys, stepEnv.ordered, innerResolver, aggregates);
+            groupKeys, ordered, innerResolver, aggregates);
     return new Resolver(
         typeMap,
         nameGenerator,
@@ -680,6 +686,67 @@ public class Resolver {
     }
   }
 
+  /**
+   * Returns the name a pattern binds, if it binds exactly one and binds it
+   * directly: {@code x} or {@code x : t}. Null otherwise.
+   */
+  private static Ast.@Nullable IdPat bareId(Ast.Pat pat) {
+    if (pat instanceof Ast.AnnotatedPat) {
+      return bareId(((Ast.AnnotatedPat) pat).pat);
+    }
+    return pat instanceof Ast.IdPat ? (Ast.IdPat) pat : null;
+  }
+
+  /**
+   * Returns a pattern as a tuple of two or more plain names, or null if it is
+   * not one. Such a pattern's binders line up with the components of what it
+   * matches, one apiece.
+   */
+  private static Ast.@Nullable TuplePat flatTuple(Ast.Pat pat) {
+    if (pat instanceof Ast.AnnotatedPat) {
+      return flatTuple(((Ast.AnnotatedPat) pat).pat);
+    }
+    if (!(pat instanceof Ast.TuplePat)) {
+      return null;
+    }
+    final Ast.TuplePat tuplePat = (Ast.TuplePat) pat;
+    if (tuplePat.args.size() < 2) {
+      return null;
+    }
+    for (Ast.Pat arg : tuplePat.args) {
+      if (bareId(arg) == null) {
+        return null;
+      }
+    }
+    return tuplePat;
+  }
+
+  /**
+   * Returns whether a pattern names its type's values directly: a name, or a
+   * tuple of names.
+   *
+   * <p>Asked of an unbounded scan, whose pattern {@link #extentPat} flattens:
+   * for these two the flattening changes nothing, and for the rest the
+   * collection's element is a tuple where the pattern says a record.
+   */
+  private static boolean flatNames(Ast.Pat pat) {
+    if (pat instanceof Ast.AnnotatedPat) {
+      return flatNames(((Ast.AnnotatedPat) pat).pat);
+    }
+    if (pat instanceof Ast.IdPat) {
+      return true;
+    }
+    if (pat instanceof Ast.TuplePat) {
+      for (Ast.Pat arg : ((Ast.TuplePat) pat).args) {
+        if (!(arg instanceof Ast.IdPat)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
   private static boolean disjoint(Set<Integer> a, Set<Integer> b) {
     for (Integer i : a) {
       if (b.contains(i)) {
@@ -699,11 +766,7 @@ public class Resolver {
   private boolean references(List<PatExp> patExps) {
     final Set<Core.NamedPat> refSet = new HashSet<>();
     final ReferenceFinder finder =
-        new ReferenceFinder(
-            typeMap.typeSystem,
-            Environments.empty(),
-            refSet,
-            new ArrayDeque<>());
+        new ReferenceFinder(typeMap.typeSystem, Environments.empty(), refSet);
     patExps.forEach(x -> x.exp.accept(finder));
 
     final Set<Core.NamedPat> defSet = new HashSet<>();
@@ -753,17 +816,14 @@ public class Resolver {
     final Set<Core.NamedPat> set;
 
     protected ReferenceFinder(
-        TypeSystem typeSystem,
-        Environment env,
-        Set<Core.NamedPat> set,
-        Deque<FromContext> fromStack) {
-      super(typeSystem, env, fromStack);
+        TypeSystem typeSystem, Environment env, Set<Core.NamedPat> set) {
+      super(typeSystem, env);
       this.set = set;
     }
 
     @Override
     protected ReferenceFinder push(Environment env) {
-      return new ReferenceFinder(typeSystem, env, set, fromStack);
+      return new ReferenceFinder(typeSystem, env, set);
     }
 
     @Override
@@ -944,16 +1004,10 @@ public class Resolver {
   }
 
   private Core.Exp toCore(Ast.Ordinal ordinal) {
-    if (ordinalPat != null) {
-      // The step is preceded by a "yield" that materialized the ordinal as a
-      // field; read that field.
-      return core.id(ordinalPat);
-    }
-    // The step is itself a "yield", and can hold the call.
-    Core.Literal fn =
-        core.functionLiteral(typeMap.typeSystem, BuiltIn.Z_ORDINAL);
-    Core.Tuple arg = core.tuple(typeMap.typeSystem);
-    return core.apply(ordinal.pos, PrimitiveType.INT, fn, arg);
+    // The type checker admits `ordinal` only in a query, and the query's node
+    // binds the pattern that names it.
+    return core.id(
+        requireNonNull(ordinalPat, () -> "ordinal outside a node: " + ordinal));
   }
 
   /** Converts an id in a declaration to Core. */
@@ -1214,7 +1268,7 @@ public class Resolver {
         core.tuple(typeMap.typeSystem, toCore(exp)));
   }
 
-  private Core.Apply toCore(Ast.Apply apply) {
+  private Core.Exp toCore(Ast.Apply apply) {
     final Core.Exp coreArg =
         enforcer.withConstructorCheck(apply.fn, toCore(apply.arg));
     Type type = typeMap.getType(apply);
@@ -1258,6 +1312,30 @@ public class Resolver {
       coreFn = fn;
     }
     checkDecimalLiteral(apply, type, coreFn);
+    if (isBuiltIn(coreFn, BuiltIn.SYS_PLAN_OF)) {
+      // `Sys.planOf e` is the plan of `e`, and `e` is not evaluated. Expanded
+      // here, where the argument's Core is to hand and is the tree the
+      // resolver built. A macro cannot do this -- `Macro.expand` is given the
+      // argument's *type* and is called at the `Id`, not the `Apply` -- and
+      // expanding later would be worse than inconvenient: the rewrite passes
+      // run to a fixed point, so the answer would depend on when the inliner
+      // reached the call. A plan's text must depend on the query and
+      // nothing else.
+      final int width =
+          session == null
+              ? AstWriter.DEFAULT_WIDTH
+              : Prop.LINE_WIDTH.optionalIntValue(
+                  session.map, Integer.MAX_VALUE);
+      // A query's plan is a tree, and prints as one even when the tree has
+      // no node in it; anything else is just the expression. The argument's
+      // *AST* says which, because by the time it is Core a query has become
+      // the tree and a node-free tree is indistinguishable from an ordinary
+      // expression -- which was the whole trouble.
+      return core.stringLiteral(
+          apply.arg.op == Op.FROM
+              ? coreArg.unparsePlan(typeMap.typeSystem, width)
+              : coreArg.unparseRenumbered(typeMap.typeSystem, width, true));
+    }
     return core.apply(apply.pos, type, coreFn, coreArg);
   }
 
@@ -1282,6 +1360,29 @@ public class Resolver {
         }
       }
     }
+  }
+
+  /** Returns whether an expression is the function literal of a built-in. */
+  private boolean isBuiltIn(Core.Exp exp, BuiltIn builtIn) {
+    if (exp.op == Op.FN_LITERAL && ((Core.Literal) exp).value == builtIn) {
+      return true;
+    }
+    // A built-in reached through a structure is not a function literal yet:
+    // `Sys.planOf` resolves to `#planOf Sys`, an application of a record
+    // selector, and the inliner folds it later. So ask the environment what
+    // the expression's value is, and let the value say what it implements.
+    //
+    // Ask only where the answer could be yes. `valueOf` walks into a record
+    // to read a field, and a query's binder has no value to read: `intFn.f 1`
+    // is a selector application too, and looking that one up walks off the
+    // end of a placeholder row. The result type is enough of a filter,
+    // because the built-ins reached this way return a string.
+    if (!(exp.type instanceof FnType)
+        || ((FnType) exp.type).resultType != PrimitiveType.STRING) {
+      return false;
+    }
+    final @Nullable Object o = valueOf(env, exp);
+    return o instanceof Applicable && ((Applicable) o).builtIn() == builtIn;
   }
 
   /**
@@ -1585,6 +1686,12 @@ public class Resolver {
         } else if (o instanceof List) {
           @SuppressWarnings("unchecked")
           List<Object> list = (List<Object>) o;
+          if (recordSelector.slot >= list.size()) {
+            // Not a record we can read: a query's binder stands for a row
+            // that does not exist yet, and its placeholder is shorter than
+            // the type says. Not constant, rather than an exception.
+            return null;
+          }
           return list.get(recordSelector.slot);
         }
       }
@@ -2257,55 +2364,1104 @@ public class Resolver {
     return pos[0] != null ? pos[0] : compute.pos;
   }
 
-  /** Creates a {@link FromBuilder} whose environment is this resolver's. */
-  private FromBuilder newFromBuilder() {
-    return core.fromBuilder(
-        typeMap.typeSystem, () -> env.bindAll(aggregateResolver.bindings()));
+  /**
+   * Converts the steps of a query into a relational tree, one step at a time,
+   * through a {@link RelBuilder}.
+   *
+   * <p>A step is converted in the scope its predecessors built: a scan pushes a
+   * leaf and erases its pattern into paths that read the element, and the steps
+   * after it write their expressions over the builder's row. The names a step
+   * may use come from the builder's map, which stores the path to each name
+   * rather than a flag saying whether the name is the whole element.
+   *
+   * <p>What is true of the query as a whole -- {@code into}, {@code exists},
+   * {@code forall}, {@code compute}, and whether a step reads {@code ordinal}
+   * -- is {@link FromResolver}'s, which creates one of these per step list.
+   */
+  private class StepResolver {
+    // Every simplification but FILTER_MERGE, which would turn the `where`
+    // steps the user wrote into one `andalso`. A tree is entitled to say it
+    // either way; a plan the user reads is not.
+    final RelBuilder b =
+        RelBuilder.create(
+            typeMap.typeSystem,
+            EnumSet.complementOf(EnumSet.of(Simplification.FILTER_MERGE)));
+
+    /**
+     * Names that this query's steps bind.
+     *
+     * <p>Fewer than the builder knows: the builder also names the element's
+     * fields, and a scan {@code e in emps} binds {@code e} and nothing else. To
+     * bind {@code deptno} as well would shadow an enclosing {@code deptno} that
+     * the query is entitled to read -- a function's parameter, say. The builder
+     * says where each of these lives; this says which of them exist.
+     */
+    final Set<String> binders = new LinkedHashSet<>();
+
+    /**
+     * Whether the row is the one thing a single binder names, rather than a
+     * record of what the binders name.
+     *
+     * <p>The distinction is not the number of binders: {@code yield {j = i +
+     * 1}} binds one name and the row is still a record, so {@code current} is a
+     * record too.
+     */
+    boolean atom = true;
+
+    /**
+     * Whether the element is the row the user sees.
+     *
+     * <p>True everywhere except after a join, which leaves the element as its
+     * inputs' components concatenated. Where it is true, {@code current} is the
+     * element itself rather than a record rebuilt out of paths into it -- and
+     * rebuilding one would not merely be longer, it would be a projection that
+     * survives into the plan.
+     */
+    boolean rowIsElement = true;
+
+    /**
+     * Ordinal for the next binder that a {@link Scope} makes, counting down.
+     *
+     * <p>Negative, so that it cannot be an ordinal {@link NameGenerator#inc}
+     * hands out, and taking one from the generator instead would suffix every
+     * binder in every plan -- {@code from p_1 in ...} where the user wrote
+     * {@code p}. These patterns are substituted away before anything sees them;
+     * uniqueness is all their ordinals owe.
+     */
+    int scopeOrdinal = 0;
+
+    Core.Exp run(List<Ast.FromStep> steps) {
+      if (steps.isEmpty() || !(steps.get(0) instanceof Ast.Scan)) {
+        // A query with no scan -- `from`, `from where p`, `from yield e` --
+        // iterates over one row, which is unit.
+        b.push(
+            core.list(
+                typeMap.typeSystem,
+                PrimitiveType.UNIT,
+                ImmutableList.of(core.unitLiteral())));
+      }
+      steps.forEach(this::step);
+      if (steps.isEmpty() || !(last(steps) instanceof Ast.Yield)) {
+        finish();
+      }
+      return b.build();
+    }
+
+    /**
+     * Projects the record that the query's binders denote, which is what a
+     * query with no trailing yield returns.
+     *
+     * <p>One binder is the row itself, and the tree already has it. Several are
+     * a record of them, which the tree does not have: a join leaves its inputs'
+     * components concatenated, and naming them is this projection's job.
+     */
+    private void finish() {
+      if (rowIsElement) {
+        return;
+      }
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+      binders.forEach(name -> paths.put(name, b.name(name)));
+      final Core.Exp exp = natural(paths, b.input(0));
+      if (atom && binders.size() == 1) {
+        // A projection takes its names from the element's fields, and an atom
+        // row has none, so the binder is named explicitly or the steps after
+        // this one cannot find it.
+        b.project(requireNonNull(getOnlyElement(binders)), exp);
+      } else {
+        b.project(exp);
+      }
+      rowIsElement = true;
+    }
+
+    /**
+     * Returns the row as the user sees it: the one thing a single binder names,
+     * or a record of what several name.
+     *
+     * <p>Not the tree's element, which a join leaves as its inputs' components
+     * concatenated. {@code current} means this, and so does a query that ends
+     * without a yield.
+     */
+    private Core.Exp natural(Map<String, Core.Exp> paths, Core.Exp element) {
+      if (rowIsElement) {
+        return element;
+      }
+      if (paths.isEmpty()) {
+        // Nothing is bound, as after `from _ in xs`, and the row is unit.
+        return core.unitLiteral();
+      }
+      if (atom) {
+        return requireNonNull(getOnlyElement(paths.values()));
+      }
+      final PairList<String, Core.Exp> nameExps = PairList.of();
+      paths.forEach(nameExps::add);
+      return core.record(typeMap.typeSystem, nameExps);
+    }
+
+    private void step(Ast.FromStep step) {
+      b.at(step.pos);
+      if (step instanceof Ast.Scan) {
+        scan((Ast.Scan) step);
+      } else if (step instanceof Ast.Where) {
+        b.filter(toCore(((Ast.Where) step).exp));
+      } else if (step instanceof Ast.Order) {
+        b.sort(toCore(((Ast.Order) step).exp));
+      } else if (step instanceof Ast.Unorder) {
+        b.unorder();
+      } else if (step instanceof Ast.Skip) {
+        // A count is evaluated before the query has a row, so it reads the
+        // enclosing scope; `toCore(exp, null)` is that scope.
+        b.skip(toCore(((Ast.Skip) step).exp, null));
+      } else if (step instanceof Ast.Take) {
+        b.take(toCore(((Ast.Take) step).exp, null));
+      } else if (step instanceof Ast.Group) {
+        group_((Ast.Group) step);
+      } else if (step instanceof Ast.SetStep) {
+        setStep((Ast.SetStep) step);
+      } else if (step instanceof Ast.Require) {
+        // `require e` is `where not e`.
+        b.filter(
+            core.not(typeMap.typeSystem, toCore(((Ast.Require) step).exp)));
+      } else if (step instanceof Ast.Distinct) {
+        distinct();
+      } else if (step instanceof Ast.YieldAll) {
+        yieldAll((Ast.YieldAll) step);
+      } else if (step instanceof Ast.Through) {
+        through((Ast.Through) step);
+      } else {
+        yield_((Ast.Yield) step);
+      }
+    }
+
+    /**
+     * Scans a collection: the query's first, or a join onto what it has.
+     *
+     * <p>A pattern is erased -- the tree has paths, not patterns -- so what
+     * survives is one binder per name it binds, and none at all for {@code from
+     * _ in xs}, whose rows are {@code unit}.
+     */
+    private void scan(Ast.Scan scan) {
+      final Ast.@Nullable Exp scanExp = scan.exp;
+      if (b.size() == 0) {
+        binders.addAll(
+            scanExp == null
+                ? pushExtent(scan)
+                : push(scan.pat, toCore(scanExp)));
+        // Only a bare name leaves the element as the row; a pattern is erased,
+        // and what it bound is read back out by paths.
+        rowIsElement = bareId(scan.pat) != null;
+        typeCondition(scan, binders);
+      } else {
+        // The right input is a tree of its own, so it cannot say `$0` and
+        // mean the row so far. A binder crosses that boundary by ordinary
+        // lexical scoping, and the builder drops it again if the collection
+        // turns out to read nothing of the left -- which is the common case,
+        // and an independent join is far the better one.
+        final Core.IdPat binder = b.binder();
+        final List<String> names;
+        if (scanExp == null) {
+          names = pushExtent(scan);
+        } else {
+          names = push(scan.pat, toCoreSource(scanExp, core.id(binder)));
+        }
+        b.pair();
+        final Core.Exp condition =
+            scan.condition == null
+                ? core.boolLiteral(true)
+                : on(scan.condition, names);
+        b.join(joinType(scan.op), condition);
+        binders.addAll(names);
+        rowIsElement = false;
+        typeCondition(scan, names);
+      }
+      // About how many names are bound rather than how many the scan added:
+      // `from a in [1], _ in [true]` binds one, so its rows are ints and not
+      // records of one field.
+      atom = binders.size() == 1;
+    }
+
+    /**
+     * Returns the collection that an unbounded scan -- {@code from i} -- scans:
+     * every value of the pattern's type. Grounding replaces it with something
+     * finite, or says that it cannot.
+     */
+    private List<String> pushExtent(Ast.Scan scan) {
+      final Ast.@Nullable TuplePat tuplePat = flatTuple(scan.pat);
+      if (tuplePat != null) {
+        // `from (b, i)` names each component, and each is a value the scan
+        // generates. Scanning under a pattern of those names keeps them, where
+        // scanning under one name and reading the components out would lose
+        // them -- and grounding quotes them in what it says about a leaf it
+        // cannot bound. The patterns here are throwaway: the tree erases them
+        // to paths, so taking the names from the Ast rather than converting
+        // it leaves the generator's ordinals for the patterns the plan has.
+        final Type type = typeMap.getType(scan.pat);
+        final List<String> names =
+            transform(tuplePat.args, arg -> requireNonNull(bareId(arg)).name);
+        final List<Core.Pat> pats =
+            zip(names, ((RecordLikeType) type).argTypes())
+                .transform((name, argType) -> core.idPat(argType, name, 0));
+        b.push(
+            core.tuplePat(typeMap.typeSystem, pats),
+            extent(scan.pat.pos, type, names));
+        return names;
+      }
+      final Ast.@Nullable IdPat id = bareId(scan.pat);
+      if (id != null) {
+        // The pattern's type, from the type map, rather than the pattern
+        // converted: converting it would take the name from the generator, and
+        // the tree has no use for the pattern anyway -- `push` erases it to
+        // paths -- so only the type is wanted.
+        final Type type = typeMap.getType(scan.pat);
+        return push(
+            scan.pat, extent(scan.pat.pos, type, ImmutableList.of(id.name)));
+      }
+      // A pattern that is not a name or a tuple of names is flattened: `from
+      // {b, i}` scans `bool * int`, and the names are read out of the tuple
+      // rather than out of a record. The tree keeps paths either way, so
+      // which it is makes no difference above the scan.
+      final Core.Pat flat =
+          extentPat(
+              typeMap.typeSystem,
+              Resolver.this.toCore(scan.pat, typeMap.getType(scan.pat)));
+      final List<String> names = transform(flat.expand(), pat -> pat.name);
+      return push(flat, extent(scan.pat.pos, flat.type, names));
+    }
+
+    /**
+     * Filters by the condition of the checked type a scan is over, if it is
+     * over one.
+     *
+     * <p>A scan over a checked type enumerates the values of that type, so the
+     * type's condition belongs in the query, where grounding can use it to
+     * generate the values rather than generate and reject them. A filter of its
+     * own, and not part of a join's condition, which only a join reads.
+     */
+    private void typeCondition(Ast.Scan scan, Collection<String> names) {
+      if (scan.pat.op != Op.ANNOTATED_PAT) {
+        return;
+      }
+      final @Nullable Type type =
+          enforcer.claimedType(((Ast.AnnotatedPat) scan.pat).type);
+      if (type == null) {
+        return;
+      }
+      final Core.@Nullable Exp value = rowValue(names, type.unalias());
+      if (value == null) {
+        return;
+      }
+      final Core.@Nullable Exp condition =
+          enforcer.deepCondition(
+              type, value.type, value, "", false, scan.pat.pos);
+      if (condition != null) {
+        b.filter(condition);
+      }
+    }
+
+    /**
+     * Returns the value that a scan's names denote, for the type's condition to
+     * be asked of.
+     *
+     * <p>The names are read out of the builder rather than out of a pattern,
+     * because the tree has none. The field names come from the type the user
+     * wrote, because a record pattern reaches the tree as a tuple, whose fields
+     * are named 1, 2.
+     */
+    private Core.@Nullable Exp rowValue(
+        Collection<String> names, Type erasedType) {
+      if (names.size() == 1) {
+        return b.name(requireNonNull(getOnlyElement(names)));
+      }
+      if (!(erasedType instanceof RecordLikeType)) {
+        return null;
+      }
+      final Set<String> fields =
+          ((RecordLikeType) erasedType).argNameTypes().keySet();
+      if (fields.size() != names.size()) {
+        return null;
+      }
+      return core.record(
+          typeMap.typeSystem,
+          zip(ImmutableList.copyOf(fields), transformEager(names, b::name)));
+    }
+
+    /**
+     * Scans a collection under a pattern that filters but has no total test: a
+     * user datatype's constructor, which needs a {@code case} both to ask
+     * whether a value matches and to reach what it holds.
+     *
+     * <p>The {@code case} yields a collection of nought or one row, and a
+     * dependent join over it is the flat-map that keeps the rows that match --
+     * the same shape {@code FromBuilder} builds for such a scan. The join's
+     * left component is the value that was matched, which nothing above wants,
+     * so a projection drops it.
+     */
+    private List<String> pushMatching(Core.Pat pat, Core.Exp collection) {
+      final List<Core.NamedPat> bound = pat.expand();
+      final Core.Exp element = core.recordOrAtom(typeMap.typeSystem, bound);
+      final Type elementType = collection.type.elementType();
+      b.push(collection);
+      final Core.IdPat binder = b.binder();
+      final Core.Exp body =
+          core.caseOf(
+              Pos.ZERO,
+              typeMap.typeSystem.listType(element.type),
+              core.id(binder),
+              ImmutableList.of(
+                  core.match(
+                      Pos.ZERO,
+                      pat,
+                      core.list(
+                          typeMap.typeSystem,
+                          element.type,
+                          ImmutableList.of(element))),
+                  core.match(
+                      Pos.ZERO,
+                      core.wildcardPat(elementType),
+                      core.list(
+                          typeMap.typeSystem,
+                          element.type,
+                          ImmutableList.of()))));
+      b.push(body);
+      b.pair();
+      b.join(JoinType.INNER, core.boolLiteral(true));
+      final Core.Exp matched = core.field(typeMap.typeSystem, b.input(0), 1);
+      final List<String> names = new ArrayList<>();
+      bound.forEach(p -> names.add(p.name));
+      if (names.size() == 1) {
+        // One binder names the row, so the projection has to say the name; a
+        // record's fields the builder names for us.
+        b.project(names.get(0), matched);
+      } else {
+        b.project(matched);
+      }
+      // The pattern is gone, and what it bound is read back out by paths.
+      return names;
+    }
+
+    /**
+     * Returns the collection of every value of a type, carrying the names the
+     * scan bound so that grounding can quote them.
+     */
+    private Core.Exp extent(Pos pos, Type type, List<String> names) {
+      return core.extent(
+          pos,
+          typeMap.typeSystem,
+          type,
+          ImmutableRangeSet.of(Range.all()),
+          names);
+    }
+
+    /** Returns the kind of join a scan's keyword asks for. */
+    private JoinType joinType(Op op) {
+      switch (op) {
+        case LEFT_JOIN:
+          return JoinType.LEFT;
+        case RIGHT_JOIN:
+          return JoinType.RIGHT;
+        case FULL_JOIN:
+          return JoinType.FULL;
+        default:
+          return JoinType.INNER;
+      }
+    }
+
+    /**
+     * Pushes a collection under a pattern, and returns the names the pattern
+     * binds.
+     */
+    private List<String> push(Ast.Pat pat, Core.Exp collection) {
+      final Ast.@Nullable IdPat id = bareId(pat);
+      if (id != null) {
+        final String name = id.name;
+        b.push(name, collection);
+        return ImmutableList.of(name);
+      }
+      return push(
+          Resolver.this.toCore(pat, collection.type.elementType()), collection);
+    }
+
+    /** As {@link #push(Ast.Pat, Core.Exp)}, for a pattern already converted. */
+    private List<String> push(Core.Pat corePat, Core.Exp collection) {
+      if (!RelBuilder.destructurable(corePat)
+          && !RelBuilder.testable(corePat)) {
+        return pushMatching(corePat, collection);
+      }
+      b.push(corePat, collection);
+      final List<String> names = new ArrayList<>();
+      corePat.accept(
+          new Visitor() {
+            @Override
+            protected void visit(Core.IdPat idPat) {
+              names.add(idPat.name);
+            }
+
+            @Override
+            protected void visit(Core.AsPat asPat) {
+              // Both halves: `p as (a, b)` binds `p` and what it wraps binds,
+              // and each is a name the tree has a path for.
+              names.add(asPat.name);
+              super.visit(asPat);
+            }
+          });
+      return names;
+    }
+
+    /**
+     * Passes the query so far through a function, and scans what comes back.
+     *
+     * <p>{@code from ... through p in f} is {@code from p in f (from ...)}, so
+     * the tree built so far is finished here rather than at the end, and the
+     * builder starts again from the collection the function returns.
+     */
+    private void through(Ast.Through through) {
+      finish();
+      // The query so far is an expression, so it can be the function's
+      // argument as it stands.
+      final Core.Exp inner = b.build();
+      // The function is evaluated once, on the whole collection, so it reads
+      // the enclosing scope and not this query's row.
+      final Core.Exp fn = toCore(through.exp, null);
+      final Core.Exp collection =
+          core.apply(through.pos, typeMap.getType(through), fn, inner);
+      binders.clear();
+      binders.addAll(push(through.pat, collection));
+      atom = binders.size() == 1;
+      rowIsElement = through.pat instanceof Ast.IdPat;
+    }
+
+    /**
+     * Multiplies each row by the elements of a collection, and keeps only
+     * those.
+     *
+     * <p>A dependent join and a projection: the join's binder is how the right
+     * input names the current row of the left, and the projection drops the
+     * left again, since {@code yieldAll} yields only the elements.
+     */
+    private void yieldAll(Ast.YieldAll yieldAll) {
+      final Core.IdPat joinBinder = b.binder();
+      final Core.Exp collection =
+          toCoreSource(yieldAll.exp, core.id(joinBinder));
+      final String name =
+          yieldAll.binder == null
+              ? typeMap.typeSystem.nameGenerator.get()
+              : yieldAll.binder.name;
+      b.push(name, collection).pair();
+      b.join(JoinType.INNER, core.boolLiteral(true));
+      b.project(name, b.name(name));
+      binders.clear();
+      if (yieldAll.binder != null) {
+        binders.add(name);
+      }
+      atom = true;
+      rowIsElement = true;
+    }
+
+    /**
+     * Keeps one row of each distinct value, by grouping on every binder.
+     *
+     * <p>A row of {@code unit} is the exception: {@code group {}} always
+     * returns one row, so an empty input would gain one, and {@code take 1} is
+     * what is meant.
+     */
+    private void distinct() {
+      finish();
+      final SortedMap<String, Core.Exp> keys = new TreeMap<>();
+      if (binders.isEmpty() || atom) {
+        if (b.input(0).type == PrimitiveType.UNIT) {
+          b.take(core.intLiteral(BigDecimal.ONE));
+          return;
+        }
+        // The row is one value, so group by it and read it back out of the
+        // record the group makes.
+        final String name =
+            binders.isEmpty()
+                ? typeMap.typeSystem.nameGenerator.get()
+                : requireNonNull(getOnlyElement(binders));
+        keys.put(name, b.input(0));
+        b.group(keys, ImmutableSortedMap.of());
+        b.project(name, b.name(name));
+      } else {
+        binders.forEach(name -> keys.put(name, b.name(name)));
+        b.group(keys, ImmutableSortedMap.of());
+      }
+    }
+
+    /**
+     * Combines the query so far with one or more collections.
+     *
+     * <p>A set operator compares rows, so the row has to be built first: after
+     * a join the element is the inputs' components, which is not what the
+     * query's binders name. The arguments are whole collections, evaluated
+     * once, so they are read in the enclosing scope as a count is.
+     */
+    private void setStep(Ast.SetStep set) {
+      finish();
+      set.args.forEach(arg -> b.push(toCore(arg, null)));
+      final int n = set.args.size() + 1;
+      switch (set.op) {
+        case UNION:
+          b.union(n, set.distinct);
+          break;
+        case INTERSECT:
+          b.intersect(n, set.distinct);
+          break;
+        default:
+          b.except(n, set.distinct);
+          break;
+      }
+    }
+
+    /**
+     * Groups, and then names what the group produced.
+     *
+     * <p>A tree's group builds a record whether it has one label or many, so an
+     * atomizing group -- {@code group e.deptno}, whose rows are bare ints -- is
+     * that record and a projection that reads its one field. A group with
+     * expressions over its labels ({@code compute {n = count() * 2}}) is the
+     * same record and a projection that computes them.
+     */
+    private void group_(Ast.Group group) {
+      final boolean groupIsAtom = group.isAtom();
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+      for (String binder : binders) {
+        paths.put(binder, b.name(binder));
+      }
+      final Scope scope =
+          new Scope(paths, natural(paths, b.input(0)), ordinalPath());
+      final boolean ordered = b.peek().type instanceof ListType;
+
+      // Group keys and aggregate arguments read the row before the group, and
+      // the expressions that name the result read the labels the group made.
+      final PairList<Core.IdPat, Core.Exp> groupExps = PairList.of();
+      final PairList<Core.IdPat, Core.Aggregate> aggregates = PairList.of();
+      final PairList<String, Core.Exp> postExps = PairList.of();
+      if (groupIsAtom) {
+        final Resolver aggregateResolver =
+            scope
+                .resolver()
+                .withAggregateResolver(
+                    env,
+                    scope.bindings,
+                    ordered,
+                    ImmutableList.of(),
+                    aggregates);
+        final boolean emptyKey =
+            group.group instanceof Ast.Record
+                && ((Ast.Record) group.group).args.isEmpty();
+        final Core.Exp exp;
+        final @Nullable String label;
+        if (emptyKey) {
+          // No group keys, so compute is a singleton.
+          requireNonNull(group.aggregate);
+          exp = aggregateResolver.toCore(group.aggregate, null);
+          label = ast.implicitLabelOpt(group.aggregate);
+        } else {
+          // One group key, so compute is empty.
+          requireNonNull(group.group);
+          exp = scope.toCore(group.group);
+          label = ast.implicitLabelOpt(group.group);
+        }
+        // A reference to a binder has become a path by now, so the label is
+        // all there is.
+        final Core.IdPat idPat =
+            label != null
+                ? core.idPat(exp.type, label, 0)
+                : core.idPat(exp.type, typeMap.typeSystem.nameGenerator::get);
+        if (emptyKey) {
+          postExps.add(idPat.name, exp);
+        } else {
+          groupExps.add(idPat, exp);
+          postExps.add(idPat.name, core.id(idPat));
+        }
+      } else {
+        group
+            .key()
+            .args
+            .forEach(
+                (id, exp) -> groupExps.add(toCorePat(id), scope.toCore(exp)));
+        final Resolver aggregateResolver =
+            scope
+                .resolver()
+                .withAggregateResolver(
+                    env,
+                    scope.bindings,
+                    ordered,
+                    groupExps.leftList(),
+                    aggregates);
+        groupExps.forEach((id, exp) -> postExps.add(id.name, core.id(id)));
+        group
+            .compute()
+            .args
+            .forEach(
+                (id, exp) ->
+                    postExps.add(id.name, aggregateResolver.toCore(exp, id)));
+      }
+
+      final SortedMap<String, Core.Exp> keys = new TreeMap<>();
+      groupExps.forEach((pat, exp) -> keys.put(pat.name, exp));
+      final SortedMap<String, Core.Aggregate> aggs = new TreeMap<>();
+      aggregates.forEach(
+          (pat, aggregate) ->
+              aggs.put(
+                  pat.name,
+                  aggregate.copy(
+                      aggregate.type,
+                      aggregate.aggregate,
+                      aggregate.argument == null
+                          ? null
+                          // An argument reads the row before the group.
+                          : scope.substitute(aggregate.argument))));
+      b.group(keys, aggs);
+
+      // The group's element is a record of its labels, so the expressions
+      // that name the result read them off its fields.
+      final Map<String, Core.Exp> labels = new LinkedHashMap<>();
+      keys.keySet().forEach(name -> labels.put(name, b.name(name)));
+      aggs.keySet().forEach(name -> labels.put(name, b.name(name)));
+      final Scope after = new Scope(labels, b.input(0), null);
+      groupExps.forEach((pat, exp) -> after.alias(pat, b.name(pat.name)));
+      aggregates.forEach((pat, agg) -> after.alias(pat, b.name(pat.name)));
+      binders.clear();
+      if (group.binder != null) {
+        // `group g = {...}` names the whole result `g`, as `yield g = ...`
+        // does: one name, and not the labels the group made.
+        final PairList<String, Core.Exp> nameExps = PairList.of();
+        postExps.forEach(
+            (name, exp) -> nameExps.add(name, after.substitute(exp)));
+        b.project(
+            group.binder.name,
+            groupIsAtom
+                ? nameExps.right(0)
+                : core.record(typeMap.typeSystem, nameExps));
+        binders.add(group.binder.name);
+        atom = true;
+        rowIsElement = true;
+        return;
+      }
+      if (groupIsAtom) {
+        final String name = postExps.left(0);
+        b.project(name, after.substitute(postExps.right(0)));
+        binders.add(name);
+        atom = true;
+      } else {
+        postExps.forEach((name, exp) -> binders.add(name));
+        if (!isIdentity(postExps, labels.keySet())) {
+          // Only where the group's labels are not already what the query
+          // calls them. An identity projection here would be a second
+          // projection under the query's own yield, and merging the two
+          // binds the row to a variable -- which is right, but a `let` is
+          // something Calcite cannot push down.
+          final PairList<String, Core.Exp> nameExps = PairList.of();
+          postExps.forEach(
+              (name, exp) -> nameExps.add(name, after.substitute(exp)));
+          b.project(core.record(typeMap.typeSystem, nameExps));
+        }
+        atom = false;
+      }
+      rowIsElement = true;
+    }
+
+    /**
+     * Returns whether each expression is a reference to the group's label of
+     * its own name, so that a projection of them would leave the row as it is.
+     *
+     * <p>Being a label matters and not merely sharing a name: {@code compute
+     * sum}, with nothing to sum, reads the built-in {@code sum} under that
+     * name, and a row that dropped it would be a row short of a field.
+     */
+    private boolean isIdentity(
+        PairList<String, Core.Exp> nameExps, Set<String> labels) {
+      return nameExps.allMatch(
+          (name, exp) ->
+              labels.contains(name)
+                  && exp instanceof Core.Id
+                  && ((Core.Id) exp).idPat.name.equals(name));
+    }
+
+    /**
+     * Projects, and renames what the query binds, because the yield has
+     * replaced the row.
+     *
+     * <p>Follows the rule by which the type resolver has already decided which
+     * names the steps after this one may use: a record yield binds its fields,
+     * and any other yield binds the row under one name, if it has one to offer.
+     */
+    private void yield_(Ast.Yield yield) {
+      final Core.Exp exp = toCore(yield.exp);
+      binders.clear();
+      if (yield.binder != null) {
+        // `yield r = e` names the whole row `r`, whatever `e` is: a record
+        // yielded this way binds one name and not its fields.
+        b.project(yield.binder.name, exp);
+        binders.add(yield.binder.name);
+        atom = true;
+        rowIsElement = true;
+        return;
+      }
+      final @Nullable String name = atomName(yield.exp);
+      // 'record' is what the user wrote, not what the expression turned out to
+      // be: a record with modifiers is a record, and yet it is a 'let' by the
+      // time it gets here, so only the Ast can say.
+      if (TypeResolver.letBody(yield.exp).op == Op.RECORD
+          && exp.type.op() == Op.RECORD_TYPE) {
+        // The builder names an element's fields for us.
+        b.project(exp);
+        binders.addAll(((RecordLikeType) exp.type).argNameTypes().keySet());
+        atom = false;
+        rowIsElement = true;
+        return;
+      }
+      atom = true;
+      rowIsElement = true;
+      if (name == null) {
+        b.project(exp);
+      } else {
+        b.project(name, exp);
+        binders.add(name);
+      }
+    }
+
+    /**
+     * Returns the name that an atomizing yield binds its row under, or null if
+     * it offers none, in which case only {@code current} reads the row.
+     *
+     * <p>The same rule as {@link CoreBuilder}'s {@code getIdPat} -- a reference
+     * keeps its name, {@code e.deptno} gives {@code deptno}, and anything else
+     * is anonymous -- but read off the {@link Ast}, because by the time the
+     * expression is converted a reference to a binder has become a path into
+     * the element and no longer looks like one.
+     */
+    private @Nullable String atomName(Ast.Exp exp) {
+      switch (exp.op) {
+        case ID:
+          return ((Ast.Id) exp).name;
+
+        case CURRENT:
+          // The row has a name only where one binder is the whole of it.
+          return atom && binders.size() == 1 ? getOnlyElement(binders) : null;
+
+        case APPLY:
+          final Ast.Apply apply = (Ast.Apply) exp;
+          return apply.fn instanceof Ast.RecordSelector
+              ? ((Ast.RecordSelector) apply.fn).name
+              : null;
+
+        default:
+          return null;
+      }
+    }
+
+    /**
+     * Rewrites a path the builder gave -- which reads the element as {@code $0}
+     * -- to read it as {@code element} instead.
+     */
+    private Core.Exp rootAt(Core.Exp path, Core.Exp element) {
+      final Core.IdPat row = (Core.IdPat) ((Core.Id) b.input(0)).idPat;
+      if (element instanceof Core.Id && ((Core.Id) element).idPat.equals(row)) {
+        return path;
+      }
+      return path.accept(
+          new Shuttle(typeMap.typeSystem) {
+            @Override
+            protected Core.Exp visit(Core.Id id) {
+              return id.idPat.equals(row) ? core.at(element, id.pos) : id;
+            }
+          });
+    }
+
+    /**
+     * Converts an expression, resolving each name to the path that reads it out
+     * of the element.
+     *
+     * <p>The resolver gives a name as a reference to its binder; the builder
+     * says where that binder lives in the element, and the two are joined by
+     * substitution.
+     */
+    private Core.Exp toCore(Ast.Exp exp) {
+      return toCore(exp, b.size() == 0 ? null : b.input(0));
+    }
+
+    /**
+     * Converts an expression that reads the row through {@code element}, which
+     * is {@code $0} in a node's own expressions and a join's binder in its
+     * right input.
+     */
+    private Core.Exp toCore(Ast.Exp exp, Core.@Nullable Exp element) {
+      if (element == null) {
+        // The first scan's collection is evaluated before the query has a
+        // row, so it sees the enclosing scope and not this query's.
+        return Resolver.this.toCore(exp);
+      }
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+      for (String binder : binders) {
+        paths.put(binder, rootAt(b.name(binder), element));
+      }
+      return toCore(exp, paths, natural(paths, element), ordinalPath());
+    }
+
+    /**
+     * Converts the source of a dependent scan, which reads the left element
+     * through the join's left row.
+     *
+     * <p>Unlike an expression of a node, a source is an input, and a tree
+     * nested in it reads the join's patterns by ordinary scoping: the left row
+     * is in scope in the right input, and so is the join's ordinal. So nothing
+     * is bound with a {@code let} on the way in.
+     */
+    private Core.Exp toCoreSource(Ast.Exp exp, Core.Exp element) {
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>();
+      for (String binder : binders) {
+        paths.put(binder, rootAt(b.name(binder), element));
+      }
+      final Scope scope =
+          new Scope(paths, natural(paths, element), ordinalPath());
+      scope.bindNested = false;
+      return scope.toCore(exp);
+    }
+
+    /**
+     * Returns the path that reads the ordinal field, rooted where its reader
+     * reads it, or null if no field was projected.
+     */
+    private Core.Exp ordinalPath() {
+      return b.ordinal();
+    }
+
+    /**
+     * Converts a join's condition, which reads the left input as {@code $0} and
+     * the right as {@code $1}.
+     *
+     * <p>{@code current} is the row so far, which is the left's: the right's
+     * binder is in scope by name, but the condition is asked of a row the join
+     * has not made yet.
+     */
+    private Core.Exp on(Ast.Exp exp, List<String> rightBinders) {
+      final Map<String, Core.Exp> left = new LinkedHashMap<>();
+      for (String binder : binders) {
+        left.put(binder, b.name(0, binder));
+      }
+      final Map<String, Core.Exp> paths = new LinkedHashMap<>(left);
+      rightBinders.forEach(name -> paths.put(name, b.name(1, name)));
+      return toCore(exp, paths, natural(left, b.input(0)), b.ordinal());
+    }
+
+    /** Converts an expression, given where each name it may use is found. */
+    private Core.Exp toCore(
+        Ast.Exp exp,
+        Map<String, Core.Exp> paths,
+        Core.Exp current,
+        Core.@Nullable Exp ordinalPath) {
+      return new Scope(paths, current, ordinalPath).toCore(exp);
+    }
+
+    /**
+     * What names mean at one point in the build: where each is found in the
+     * element, and what {@code current} denotes.
+     *
+     * <p>The resolver gives a name as a reference to its binder; the builder
+     * says where that binder lives; and the two are joined by substitution.
+     */
+    private class Scope {
+      final Core.Exp current;
+      final List<Binding> bindings = new ArrayList<>();
+
+      /**
+       * Path to each binder, by the pattern that binds it rather than by its
+       * name.
+       *
+       * <p>By the pattern, because a name is not unique: {@code forall p in
+       * s.pictures require ... exists p in s.products where p.sku = sku}
+       * rebinds {@code p}, and the inner query says {@code p} again.
+       * Substituting by name would give the inner query the outer row. A fresh
+       * ordinal for each binder is what keeps them apart, and the resolver
+       * hands back the very pattern it was given.
+       */
+      private final Map<Core.NamedPat, Core.Exp> byPat = new LinkedHashMap<>();
+
+      /** The pattern that {@code current} resolves to; see the constructor. */
+      private final Core.IdPat currentPat;
+
+      /** The pattern that {@code ordinal} resolves to, or null. */
+      private final Core.@Nullable IdPat ordinalPat;
+
+      /**
+       * The node patterns this scope's paths read: the row, a join's right row,
+       * and the ordinal.
+       */
+      private final Set<Core.NamedPat> inputPats = new LinkedHashSet<>();
+
+      /**
+       * Whether a tree nested in the expression reads the node's patterns
+       * through a {@code let} that binds them first; false for the source of a
+       * dependent scan, which reads the join's patterns directly.
+       */
+      boolean bindNested = true;
+
+      Scope(
+          Map<String, Core.Exp> paths,
+          Core.Exp current,
+          Core.@Nullable Exp ordinalPath) {
+        this.current = current;
+        paths.forEach(
+            (name, path) -> {
+              final Core.IdPat pat =
+                  core.idPat(path.type, name, --scopeOrdinal);
+              byPat.put(pat, path);
+              bindings.add(Binding.of(pat));
+            });
+        // A path, and `current`, read an input of the tree, `$0` or `$1`, and
+        // a nested query is resolved against this environment, so the inputs
+        // must be visible in it. Substitution replaces them afterwards.
+        final Map<String, Core.NamedPat> inputs = new LinkedHashMap<>();
+        final Visitor inputBinder =
+            new Visitor() {
+              @Override
+              protected void visit(Core.Id id) {
+                inputs.put(id.idPat.name, id.idPat);
+              }
+            };
+        paths.values().forEach(path -> path.accept(inputBinder));
+        current.accept(inputBinder);
+        inputs.values().forEach(pat -> bindings.add(Binding.of(pat)));
+        inputPats.addAll(inputs.values());
+        // `ordinal` resolves to the ordinal pattern the node binds; a nested
+        // tree that reads it is caught by the same rule as one reading the
+        // row, because the pattern's name says it is a node's.
+        ordinalPat =
+            ordinalPath == null
+                ? null
+                : (Core.IdPat) ((Core.Id) ordinalPath).idPat;
+        if (ordinalPat != null) {
+          // As a path, so that a nested tree reading it is caught by the same
+          // rule as one reading the row, and binds it with a `let` first.
+          byPat.put(ordinalPat, core.id(ordinalPat));
+          inputPats.add(ordinalPat);
+        }
+        // `current` is a path like any other, so that a nested tree that reads
+        // the row is caught by the same rule that catches a nested tree
+        // reading a name. The pattern never survives substitution: outside a
+        // tree it becomes `current`, inside one the binder that `toCore` then
+        // binds.
+        currentPat = core.idPat(current.type, "current", --scopeOrdinal);
+        byPat.put(currentPat, current);
+      }
+
+      /**
+       * Adds a path for a pattern the caller already has.
+       *
+       * <p>The constructor invents a pattern per name, with an ordinal of its
+       * own, because in general it has only names. A {@code group}'s keys and
+       * aggregates are the exception: the resolver made those patterns and the
+       * expressions it is about to substitute refer to *them*, so the paths
+       * have to be filed under the patterns themselves or the substitution
+       * misses and a bare reference survives into the tree.
+       */
+      void alias(Core.NamedPat pat, Core.Exp path) {
+        byPat.put(pat, path);
+      }
+
+      /** Returns a resolver that reads this scope's names. */
+      Resolver resolver() {
+        final Resolver r =
+            Resolver.this.withEnv(bindings).withCurrent(core.id(currentPat));
+        return ordinalPat == null ? r : r.withOrdinalPat(ordinalPat);
+      }
+
+      /**
+       * Binder for each input that a nested tree reads, invented on demand.
+       *
+       * <p>A path reads the element as {@code $i}, and inside a tree nested in
+       * the expression that means the nested tree's own element, not this one.
+       * The remedy is to bind the element first, so a path planted inside a
+       * nested tree reads the binder instead, and {@link #toCore} wraps the
+       * expression in the {@code let} that binds it.
+       */
+      private final Map<Core.IdPat, Core.IdPat> rowPats = new LinkedHashMap<>();
+
+      /**
+       * Replaces each reference to a name with the path that reads it, and
+       * binds the element where a nested tree reads it.
+       */
+      Core.Exp substitute(Core.Exp exp) {
+        // Per call, not per scope: a scope converts several expressions, and
+        // only the ones with a nested tree that reads the element get a let.
+        rowPats.clear();
+        Core.Exp e = substitute(exp, false);
+        for (Map.Entry<Core.IdPat, Core.IdPat> entry : rowPats.entrySet()) {
+          e =
+              core.let(
+                  core.nonRecValDecl(
+                      Pos.ZERO,
+                      entry.getValue(),
+                      null,
+                      core.id(entry.getKey())),
+                  e);
+        }
+        rowPats.clear();
+        return e;
+      }
+
+      private Core.Exp substitute(Core.Exp exp, boolean inRel) {
+        return exp.accept(
+            new Shuttle(typeMap.typeSystem) {
+              @Override
+              protected Core.@Nullable Exp visitRel(Core.Rel rel) {
+                // Once inside a nested tree we stay inside: every path planted
+                // below here reads the binder rather than the input.
+                return inRel ? null : substitute(rel, true);
+              }
+
+              @Override
+              protected Core.Exp visit(Core.Id id) {
+                final Core.@Nullable Exp path = byPat.get(id.idPat);
+                if (path == null) {
+                  return id;
+                }
+                return core.at(
+                    inRel && bindNested ? bindInputs(path) : path, id.pos);
+              }
+            });
+      }
+
+      /** Replaces each input reference in a path with a binder for it. */
+      private Core.Exp bindInputs(Core.Exp path) {
+        return path.accept(
+            new Shuttle(typeMap.typeSystem) {
+              @Override
+              protected Core.Exp visit(Core.Id id) {
+                // Only this scope's own patterns: the row, a join's right
+                // row, the ordinal. A pattern of an enclosing node, such as
+                // a join's left row read by its right input, is an ordinary
+                // name here and needs no binding.
+                if (!inputPats.contains(id.idPat)) {
+                  return id;
+                }
+                return core.id(
+                    rowPats.computeIfAbsent(
+                        (Core.IdPat) id.idPat,
+                        p ->
+                            core.idPat(
+                                p.type, () -> nameGenerator.getPrefixed("v"))));
+              }
+            });
+      }
+
+      Core.Exp toCore(Ast.Exp exp) {
+        return substitute(resolver().toCore(exp));
+      }
+    }
   }
 
   /**
-   * Visitor that converts a {@link Ast.From}, {@link Ast.Exists} or {@link
-   * Ast.Forall} to {@link Core.From} by handling each subtype of {@link
-   * Ast.FromStep} calling {@link FromBuilder} appropriately.
+   * Converts a {@link Ast.From}, {@link Ast.Exists} or {@link Ast.Forall} to
+   * Core.
+   *
+   * <p>The steps themselves are {@link StepResolver}'s: this holds what is true
+   * of the query as a whole -- what {@code into}, {@code exists}, {@code
+   * forall} and {@code compute} wrap it in -- and answers the questions the
+   * step conversion asks about {@code ordinal}.
    */
-  private class FromResolver extends Visitor {
-    final FromBuilder fromBuilder;
-
-    /**
-     * The step environment before {@link FromBuilder#materializeOrdinal()}
-     * added the ordinal field; null unless the step being converted reads
-     * {@code ordinal}.
-     *
-     * <p>{@code current} is built from this environment, not from the one that
-     * contains the ordinal field. The field is an implementation detail, and
-     * must not change the type of the row that the user sees.
-     */
-    private final Core.@Nullable StepEnv stepPriorEnv;
-
-    FromResolver() {
-      this(newFromBuilder(), null);
-    }
-
-    private FromResolver(
-        FromBuilder fromBuilder, Core.@Nullable StepEnv stepPriorEnv) {
-      this.fromBuilder = fromBuilder;
-      this.stepPriorEnv = stepPriorEnv;
-    }
-
-    /**
-     * Returns a resolver for a step that reads {@code ordinal}, sharing this
-     * resolver's {@link FromBuilder}. Steps are converted through {@link
-     * Visitor#accept}, whose signature has no room for the extra context, so it
-     * travels in a resolver rather than in a parameter.
-     *
-     * <p>The field itself travels in the enclosing {@link Resolver}, which is
-     * where a nested query will look for it (see {@link Resolver#ordinalPat}).
-     */
-    private FromResolver withOrdinal(
-        Core.IdPat ordinalPat, Core.StepEnv priorEnv) {
-      return withOrdinalPat(ordinalPat).new FromResolver(fromBuilder, priorEnv);
-    }
-
+  private class FromResolver {
     Core.Exp run(Ast.Query query) {
       if (query.isInto()) {
         // Translate "from ... into f" as if they had written "f (from ...)"
@@ -2364,456 +3520,7 @@ public class Resolver {
     }
 
     private Core.Exp run(List<Ast.FromStep> steps) {
-      forEachIndexed(steps, this::acceptStep);
-      return fromBuilder.buildSimplify();
-    }
-
-    /**
-     * Converts one step, materializing the ordinal as a field first if the step
-     * reads {@code ordinal}.
-     *
-     * <p>The first step is never a reader: it has no input rows of its own, so
-     * an {@code ordinal} in it either belongs to an enclosing query (see {@link
-     * Resolver#ordinalPat}) or has already been rejected by the type resolver.
-     */
-    private void acceptStep(Ast.FromStep step, int i) {
-      if (i == 0 || !usesOrdinal(step)) {
-        accept(step);
-        return;
-      }
-      if (step instanceof Ast.Yield) {
-        // A "yield" is evaluated once per input row, so it can hold the call
-        // itself and needs no field. This is the common case -
-        // 'yield {ordinal, e.name}' - and it costs no extra step.
-        accept(step);
-        return;
-      }
-      final Core.StepEnv priorEnv = fromBuilder.stepEnv();
-      final Core.IdPat ordinalPat = fromBuilder.materializeOrdinal();
-      withOrdinal(ordinalPat, priorEnv).accept(step);
-      fromBuilder.dropOrdinal(ordinalPat, priorEnv);
-    }
-
-    /** Creates a new resolver, adding the bindings from the current step. */
-    private Resolver withStepEnv(Core.StepEnv stepEnv) {
-      // 'current' is the row as the user sees it, which excludes a
-      // materialized ordinal field; but that field must still be in the
-      // environment, so that references to it resolve.
-      final Core.StepEnv rowEnv = stepPriorEnv == null ? stepEnv : stepPriorEnv;
-      Core.Exp f;
-      if (rowEnv.atom) {
-        f = core.id(rowEnv.bindings.get(0).id);
-      } else {
-        f = core.record(typeMap.typeSystem, rowEnv.bindings);
-      }
-      return withEnv(stepEnv.bindings).withCurrent(f);
-    }
-
-    @Override
-    protected void visit(Ast.From from) {
-      // Do not traverse into the sub-"from".
-    }
-
-    /**
-     * Returns whether a step reads {@code ordinal}.
-     *
-     * <p>A nested query is evaluated once per row of the enclosing step, so an
-     * {@code ordinal} in one of the expressions that the nested query evaluates
-     * before its first row belongs to the enclosing step and counts here. An
-     * {@code ordinal} anywhere else in the nested query belongs to a step of
-     * that query, and does not.
-     *
-     * <p>By the same rule, a {@code take}, {@code skip}, {@code union}, {@code
-     * except}, {@code intersect}, {@code through} or {@code into} step is
-     * answered no whatever it contains: its expressions are evaluated before
-     * <i>this</i> query's first row, so an {@code ordinal} in them belongs to
-     * the step enclosing this query, which finds it through its own lookahead.
-     *
-     * <p>A step that reads {@code ordinal} several times needs one field, not
-     * several, so the answer is yes or no rather than a count.
-     *
-     * <p>The compiler applies the same rule: only a "yield" installs a
-     * row-ordinal counter, so a call compiled anywhere else has nothing to
-     * read, and throws. The two must agree.
-     */
-    private boolean usesOrdinal(Ast.FromStep step) {
-      if (isRootStep(step)) {
-        return false;
-      }
-      final AtomicBoolean b = new AtomicBoolean();
-      // A scan's condition has its own counter (see visit(Ast.Scan)), so only
-      // the extent can make the scan a reader.
-      final AstNode node =
-          step instanceof Ast.Scan && ((Ast.Scan) step).exp != null
-              ? ((Ast.Scan) step).exp
-              : step;
-      node.accept(
-          new Visitor() {
-            @Override
-            protected void visit(Ast.Ordinal ordinal) {
-              b.set(true);
-            }
-
-            @Override
-            protected void visit(Ast.From from) {
-              visitQuery(from.steps);
-            }
-
-            @Override
-            protected void visit(Ast.Exists exists) {
-              visitQuery(exists.steps);
-            }
-
-            @Override
-            protected void visit(Ast.Forall forall) {
-              visitQuery(forall.steps);
-            }
-
-            /**
-             * Visits the expressions that a nested query evaluates before its
-             * first row, and nothing else.
-             */
-            private void visitQuery(List<Ast.FromStep> steps) {
-              forEachIndexed(
-                  steps,
-                  (s, i) -> {
-                    if (i == 0 && s instanceof Ast.Scan) {
-                      final Ast.Scan scan = (Ast.Scan) s;
-                      if (scan.exp != null) {
-                        scan.exp.accept(this);
-                      }
-                    } else if (isRootStep(s)) {
-                      s.accept(this);
-                    }
-                  });
-            }
-          });
-      return b.get();
-    }
-
-    /**
-     * Returns whether every expression of a step is evaluated before its
-     * query's first row.
-     *
-     * @see #usesOrdinal(Ast.FromStep)
-     */
-    private boolean isRootStep(Ast.FromStep step) {
-      return step instanceof Ast.Skip
-          || step instanceof Ast.Take
-          || step instanceof Ast.SetStep
-          || step instanceof Ast.Through
-          || step instanceof Ast.Into;
-    }
-
-    @Override
-    protected void visit(Ast.Scan scan) {
-      final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      final Core.Exp coreExp;
-      final Core.Pat corePat;
-      if (scan.exp == null) {
-        corePat = extentPat(typeMap.typeSystem, r.toCore(scan.pat));
-        coreExp =
-            core.extent(
-                scan.pat.pos,
-                typeMap.typeSystem,
-                corePat.type,
-                ImmutableRangeSet.of(Range.all()));
-      } else {
-        // The first step's extent is evaluated before the query's first row,
-        // so 'current' in it is the enclosing query's row, not this query's
-        // (which has no rows yet). The type resolver read it that way too, in
-        // the root environment.
-        final Resolver rExp =
-            fromBuilder.stepEnv().bindings.isEmpty() ? Resolver.this : r;
-        coreExp = rExp.toCore(scan.exp);
-        final Type elementType = coreExp.type.elementType();
-        corePat = r.toCore(scan.pat, elementType);
-      }
-      final List<Binding> bindings2 =
-          new ArrayList<>(fromBuilder.stepEnv().bindings);
-      Compiles.acceptBinding(typeMap.typeSystem, corePat, bindings2);
-      // An 'ordinal' in the condition counts candidate pairs, which do not
-      // exist until the scan runs, so no preceding step can materialize it as
-      // a field. Clear the field: the call stays a call, and the compiler
-      // binds it to a counter that the scan itself advances.
-      Core.Exp coreCondition =
-          scan.condition == null
-              ? core.boolLiteral(true)
-              : r.withEnv(bindings2)
-                  .withOrdinalPat(null)
-                  .toCore(scan.condition);
-      fromBuilder.scan(scan.op, corePat, coreExp, coreCondition);
-      // The type's condition becomes a step of its own rather than part of
-      // the scan's condition, which only a join reads.
-      final Core.Exp typeCondition =
-          scanTypeCondition(scan.pat, corePat, scan.pat.pos);
-      if (typeCondition != null) {
-        fromBuilder.where(typeCondition);
-      }
-    }
-
-    /**
-     * Returns the condition of the checked type a scan is over, or null if it
-     * is not over one.
-     *
-     * <p>A scan over a checked type enumerates the values of that type, so the
-     * type's condition belongs in the scan's filter, where the planner can use
-     * it to generate the values rather than generate and reject them. It does
-     * not raise: which values the type has is the question being asked, not
-     * something already claimed of a value in hand.
-     */
-    private Core.@Nullable Exp scanTypeCondition(
-        Ast.Pat pat, Core.Pat corePat, Pos pos) {
-      if (pat.op != Op.ANNOTATED_PAT) {
-        return null;
-      }
-      final Type type = enforcer.claimedType(((Ast.AnnotatedPat) pat).type);
-      if (type == null) {
-        return null;
-      }
-      // The erased type comes from the value, not the pattern: a record
-      // pattern reaches Core as a tuple, whose fields are named 1, 2.
-      final Core.Exp value = rowValue(corePat, type.unalias());
-      return value == null
-          ? null
-          : enforcer.deepCondition(type, value.type, value, "", false, pos);
-    }
-
-    /**
-     * Returns an expression for the row a scan's pattern binds, or null if the
-     * pattern is one this does not know how to reassemble.
-     */
-    private Core.@Nullable Exp rowValue(Core.Pat corePat, Type erasedType) {
-      if (corePat instanceof Core.NamedPat) {
-        return core.id((Core.NamedPat) corePat);
-      }
-      if (corePat instanceof Core.TuplePat
-          && erasedType instanceof RecordLikeType) {
-        // A record pattern, '{i, j}', reaches Core as a tuple of the fields in
-        // field order, so the names come from the type the user wrote, not
-        // from the pattern, whose fields are named 1, 2.
-        final Core.TuplePat tuplePat = (Core.TuplePat) corePat;
-        final RecordLikeType recordType = (RecordLikeType) erasedType;
-        final PairList<String, Core.Exp> nameExps = PairList.of();
-        forEach(
-            recordType.argNameTypes().keySet(),
-            tuplePat.args,
-            (name, arg) -> {
-              if (arg instanceof Core.NamedPat) {
-                nameExps.add(name, core.id((Core.NamedPat) arg));
-              }
-            });
-        return nameExps.size() == tuplePat.args.size()
-            ? core.record(typeMap.typeSystem, nameExps)
-            : null;
-      }
-      return null;
-    }
-
-    @Override
-    protected void visit(Ast.Where where) {
-      final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      fromBuilder.where(r.toCore(where.exp));
-    }
-
-    @Override
-    protected void visit(Ast.Require require) {
-      // 'require e' translates to the same as 'where not e'
-      final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      final Core.Exp coreRequire = r.toCore(require.exp);
-      final Core.Exp coreNot = core.not(typeMap.typeSystem, coreRequire);
-      fromBuilder.where(coreNot);
-    }
-
-    @Override
-    protected void visit(Ast.Skip skip) {
-      final Resolver r = withEnv(env); // do not use 'from' bindings
-      fromBuilder.skip(r.toCore(skip.exp));
-    }
-
-    @Override
-    protected void visit(Ast.Take take) {
-      final Resolver r = withEnv(env); // do not use 'from' bindings
-      fromBuilder.take(r.toCore(take.exp));
-    }
-
-    @Override
-    protected void visit(Ast.Except except) {
-      fromBuilder.except(
-          except.distinct, transformEager(except.args, Resolver.this::toCore));
-    }
-
-    @Override
-    protected void visit(Ast.Intersect intersect) {
-      fromBuilder.intersect(
-          intersect.distinct,
-          transformEager(intersect.args, Resolver.this::toCore));
-    }
-
-    @Override
-    protected void visit(Ast.Union union) {
-      fromBuilder.union(
-          union.distinct, transformEager(union.args, Resolver.this::toCore));
-    }
-
-    @Override
-    protected void visit(Ast.Unorder unorder) {
-      fromBuilder.unorder();
-    }
-
-    @Override
-    protected void visit(Ast.Yield yield) {
-      final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      final Core.Exp exp = r.toCore(yield.exp);
-      final String binder = yield.binder == null ? null : yield.binder.name;
-      // The step binds the fields of the record it yields. The record may be
-      // wrapped in 'let's the user wrote, or -- if it has modifiers -- in the
-      // 'let's they mean, and 'exp' is then a 'let' or 'case', so ask the Ast,
-      // as TypeResolver did when it deduced the bindings.
-      final boolean record = TypeResolver.letBody(yield.exp).op == Op.RECORD;
-      fromBuilder.yield_(binder, exp, record);
-    }
-
-    @Override
-    protected void visit(Ast.Order order) {
-      final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      fromBuilder.order(r.toCore(order.exp));
-    }
-
-    @Override
-    protected void visit(Ast.Through through) {
-      // Translate "from ... through p in f"
-      // as if they wrote "from p in f (from ...)"
-      final Core.From from = fromBuilder.build();
-      fromBuilder.clear();
-      final Core.Exp exp = toCore(through.exp);
-      final Core.Pat pat = toCore(through.pat);
-      final Type type = typeMap.getType(through);
-      fromBuilder.scan(pat, core.apply(through.pos, type, exp, from));
-    }
-
-    @Override
-    protected void visit(Ast.YieldAll yieldAll) {
-      // Lower "yieldAll e" to a scan over the collection-valued expression "e"
-      // followed by a yield of the freshly-bound element. For example,
-      //
-      //   from r in orders
-      //     yieldAll r.items
-      //
-      // becomes
-      //
-      //   from r in orders,
-      //       i in r.items
-      //     yield i
-      //
-      // The scan multiplies each input row by the elements of "e" ("r.items"),
-      // then the yield drops the input bindings ("r"), keeping only the element
-      // ("i").
-      final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      final Core.Exp coreExp = r.toCore(yieldAll.exp);
-      final Type elementType = coreExp.type.elementType();
-      final Core.IdPat pat;
-      if (yieldAll.binder == null) {
-        pat = core.idPat(elementType, typeMap.typeSystem.nameGenerator::get);
-      } else {
-        pat =
-            core.idPat(
-                elementType,
-                yieldAll.binder.name,
-                typeMap.typeSystem.nameGenerator::inc);
-      }
-      fromBuilder.scan(pat, coreExp);
-      fromBuilder.yield_(core.id(pat));
-    }
-
-    @Override
-    protected void visit(Ast.Compute compute) {
-      visit((Ast.Group) compute);
-    }
-
-    @Override
-    protected void visit(Ast.Group group) {
-      final boolean atom = group.isAtom();
-      final Resolver r = withStepEnv(fromBuilder.stepEnv());
-      final PairList<Core.IdPat, Core.Exp> groupExps = PairList.of();
-      final Resolver aggregateResolver;
-      final PairList<Core.IdPat, Core.Aggregate> aggregates = PairList.of();
-      final PairList<String, Core.Exp> postExps = PairList.of();
-      if (atom) {
-        aggregateResolver =
-            r.withAggregateResolver(
-                env, fromBuilder.stepEnv(), ImmutableList.of(), aggregates);
-        final boolean emptyKey =
-            group.group instanceof Ast.Record
-                && ((Ast.Record) group.group).args.isEmpty();
-        final Core.Exp exp;
-        final String label;
-        if (emptyKey) {
-          // No group keys. Since this is atom, compute must be a singleton.
-          requireNonNull(group.aggregate);
-          exp = aggregateResolver.toCore(group.aggregate, null);
-          label = ast.implicitLabelOpt(group.aggregate);
-        } else {
-          // One group key. Since this is an atom, compute must be empty.
-          requireNonNull(group.group);
-          exp = r.toCore(group.group);
-          label = ast.implicitLabelOpt(group.group);
-        }
-        Core.Id id;
-        Core.IdPat idPat;
-        if (exp instanceof Core.Id) {
-          id = (Core.Id) exp;
-          idPat = (Core.IdPat) id.idPat;
-        } else if (label != null) {
-          idPat = core.idPat(exp.type, label, 0);
-          id = core.id(idPat);
-        } else {
-          idPat = core.idPat(exp.type, typeMap.typeSystem.nameGenerator::get);
-          id = core.id(idPat);
-        }
-        if (emptyKey) {
-          postExps.add(idPat.name, exp);
-        } else {
-          groupExps.add(idPat, exp);
-          postExps.add(idPat.name, id);
-        }
-      } else {
-        group
-            .key()
-            .args
-            .forEach((id, exp) -> groupExps.add(toCorePat(id), r.toCore(exp)));
-
-        aggregateResolver =
-            r.withAggregateResolver(
-                env, fromBuilder.stepEnv(), groupExps.leftList(), aggregates);
-        groupExps.forEach((id, exp) -> postExps.add(id.name, core.id(id)));
-        group
-            .compute()
-            .args
-            .forEach(
-                (id, exp) ->
-                    postExps.add(id.name, aggregateResolver.toCore(exp, id)));
-      }
-      final SortedMap<Core.IdPat, Core.Exp> groupMap =
-          groupExps.toImmutableSortedMap();
-      final SortedMap<Core.IdPat, Core.Aggregate> aggregateMap =
-          aggregates.toImmutableSortedMap();
-      int count = groupMap.size() + aggregateMap.size();
-      fromBuilder.group(atom && count == 1, groupMap, aggregateMap);
-
-      final Core.Exp yieldExp;
-      if (atom) {
-        yieldExp = postExps.right(0);
-      } else {
-        yieldExp = core.record(typeMap.typeSystem, postExps);
-      }
-      final String binder = group.binder == null ? null : group.binder.name;
-      fromBuilder.yield_(binder, yieldExp);
-    }
-
-    @Override
-    protected void visit(Ast.Distinct distinct) {
-      fromBuilder.distinct();
+      return new StepResolver().run(steps);
     }
   }
 
@@ -2911,7 +3618,10 @@ public class Resolver {
       if (orderedAgg != ordered) {
         // The aggregate function's collection kind differs from the input.
         // Compose a converter with the aggregate function:
-        //   fn $col => aggFn(converter($col))
+        //   fn col$0 => aggFn(converter(col$0))
+        // The parameter takes a generated name, not one starting with "$":
+        // a "$" name is a node's pattern, and the plan printer treats it as
+        // one.
         final BuiltIn converter =
             ordered
                 ? BuiltIn.BAG_FROM_LIST // input is list, fn expects bag
@@ -2922,7 +3632,9 @@ public class Resolver {
                 : typeMap.typeSystem.bagType(argElementType);
         final Core.IdPat param =
             core.idPat(
-                inputCollType, "$col", typeMap.typeSystem.nameGenerator::inc);
+                inputCollType,
+                typeMap.typeSystem.nameGenerator.getPrefixed("col"),
+                0);
         final Core.Exp paramRef = core.id(param);
         final Core.Exp converterLit =
             core.functionLiteral(typeMap.typeSystem, converter);

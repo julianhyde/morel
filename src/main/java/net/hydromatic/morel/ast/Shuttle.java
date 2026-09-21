@@ -763,62 +763,6 @@ public class Shuttle {
   protected Core.OverDecl visit(Core.OverDecl overDecl) {
     return overDecl;
   }
-
-  protected Core.Exp visit(Core.From from) {
-    return from.copy(typeSystem, null, visitList(from.steps));
-  }
-
-  protected Core.Scan visit(Core.Scan scan) {
-    return scan.copy(
-        scan.env,
-        scan.pat.accept(this),
-        scan.exp.accept(this),
-        scan.condition.accept(this));
-  }
-
-  protected Core.Where visit(Core.Where where) {
-    return where.copy(where.exp.accept(this), where.env);
-  }
-
-  protected Core.SkipStep visit(Core.SkipStep skip) {
-    return skip.copy(skip.exp.accept(this), skip.env);
-  }
-
-  protected Core.TakeStep visit(Core.TakeStep take) {
-    return take.copy(take.exp.accept(this), take.env);
-  }
-
-  protected Core.ExceptStep visit(Core.ExceptStep except) {
-    return except.copy(except.distinct, visitList(except.args), except.env);
-  }
-
-  protected Core.IntersectStep visit(Core.IntersectStep intersect) {
-    return intersect.copy(
-        intersect.distinct, visitList(intersect.args), intersect.env);
-  }
-
-  protected Core.UnionStep visit(Core.UnionStep union) {
-    return union.copy(union.distinct, visitList(union.args), union.env);
-  }
-
-  protected Core.GroupStep visit(Core.GroupStep group) {
-    return group.copy(
-        group.env.atom,
-        visitSortedMap(group.groupExps),
-        visitSortedMap(group.aggregates));
-  }
-
-  protected Core.Order visit(Core.Order order) {
-    return order.copy(order.env, order.exp.accept(this));
-  }
-
-  protected Core.Yield visit(Core.Yield yield) {
-    return yield.copy(yield.env, yield.exp.accept(this));
-  }
-
-  protected Core.UnorderStep visit(Core.UnorderStep unorder) {
-    return unorder;
-  }
 }
 
 // End Shuttle.java

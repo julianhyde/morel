@@ -271,8 +271,7 @@ public class RelValidator {
    * nested tree is checked with the same scope, extended by its own patterns.
    *
    * <p>A pattern the expression binds itself -- a function's parameter, a
-   * {@code let}, a {@code case} -- is its own to read, whatever its name; the
-   * resolver names the parameter of a composed aggregate function {@code $col}.
+   * {@code let}, a {@code case} -- is its own to read, whatever its name.
    */
   private void scope(Core.Exp exp, Set<Core.IdPat> allowed, String what) {
     final Set<Core.IdPat> bound = new HashSet<>();

@@ -31,6 +31,7 @@ import com.google.common.collect.MultimapBuilder;
 import com.google.common.collect.Multimaps;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -127,8 +128,33 @@ public abstract class RowSinks {
       Code conditionCode,
       int @Nullable [] ordinalSlots,
       RowSink rowSink) {
+    return scan(
+        op, pat, varCount, true, code, conditionCode, ordinalSlots, rowSink);
+  }
+
+  /**
+   * As {@link #scan(Op, Core.Pat, int, Code, Code, int[], RowSink)}, but {@code
+   * dependent} says whether the collection reads the current row. One that does
+   * not is evaluated once per execution rather than once per row.
+   */
+  public static RowSink scan(
+      Op op,
+      Core.Pat pat,
+      int varCount,
+      boolean dependent,
+      Code code,
+      Code conditionCode,
+      int @Nullable [] ordinalSlots,
+      RowSink rowSink) {
     return new ScanRowSink(
-        op, pat, varCount, code, conditionCode, ordinalSlots, rowSink);
+        op,
+        pat,
+        varCount,
+        dependent,
+        code,
+        conditionCode,
+        ordinalSlots,
+        rowSink);
   }
 
   /**
@@ -184,29 +210,22 @@ public abstract class RowSinks {
   }
 
   /**
-   * Creates a {@link RowSink} that pushes the current row's variables onto the
-   * stack before passing it downstream.
+   * Creates a {@link RowSink} that evaluates {@code codes} against the current
+   * row, pops the top {@code popCount} slots, and pushes the values in their
+   * place.
    *
-   * <p>It adapts a row produced "in the environment" (by name, after a {@code
-   * group}/{@code distinct}) to a downstream sink that expects it on the stack
-   * (positionally). The compiler inserts it when the two disagree; see {@link
-   * net.hydromatic.morel.compile.Compiler#compileSetSink}.
+   * <p>A relational tree's node hands its element to the node above as one
+   * slot, and this is how it folds the slots it pushed while computing that
+   * element back into one. The popped slots are restored before returning, so
+   * the sink upstream sees them as it left them.
    */
-  public static RowSink rematerialize(
-      ImmutablePairList<String, Code> slots, RowSink rowSink) {
-    return new RematerializeRowSink(slots, rowSink);
-  }
-
-  /** Creates a {@link RowSink} for a non-terminal {@code yield} step. */
   public static RowSink yield(
-      Map<String, Code> yieldCodes,
+      List<Code> codes,
+      int popCount,
       int @Nullable [] ordinalSlots,
       RowSink rowSink) {
     return new YieldRowSink(
-        ImmutableList.copyOf(yieldCodes.keySet()),
-        ImmutableList.copyOf(yieldCodes.values()),
-        ordinalSlots,
-        rowSink);
+        ImmutableList.copyOf(codes), popCount, ordinalSlots, rowSink);
   }
 
   /**
@@ -282,6 +301,12 @@ public abstract class RowSinks {
     /** Whether the newly scanned fields are optional downstream (left join). */
     final boolean optionalRight;
 
+    /**
+     * Whether the collection reads the current row. If not, it is evaluated
+     * once, in {@link #start}, and every row scans the same elements.
+     */
+    final boolean dependent;
+
     final Code code;
     final Code conditionCode;
     /**
@@ -290,10 +315,16 @@ public abstract class RowSinks {
      */
     final int @Nullable [] ordinalSlots;
 
+    /**
+     * The elements, if the collection is independent; set in {@link #start}.
+     */
+    @Nullable Iterable<Object> elements;
+
     ScanRowSink(
         Op op,
         Core.Pat pat,
         int varCount,
+        boolean dependent,
         Code code,
         Code conditionCode,
         int @Nullable [] ordinalSlots,
@@ -306,6 +337,7 @@ public abstract class RowSinks {
       this.op = op;
       this.pat = pat;
       this.varCount = varCount;
+      this.dependent = dependent;
       this.optionalRight = op.optionalizesRight();
       this.code = code;
       this.conditionCode = conditionCode;
@@ -319,7 +351,22 @@ public abstract class RowSinks {
         // reset here rather than in accept.
         ordinalSlots[0] = -1;
       }
+      if (!dependent) {
+        elements = elements(stack);
+      }
       super.start(stack);
+    }
+
+    /**
+     * Evaluates the collection, using the full stack so that outer variables
+     * resolve, as a collection that can be iterated more than once.
+     */
+    @SuppressWarnings("unchecked")
+    private Iterable<Object> elements(Stack stack) {
+      final Iterable<Object> iterable = (Iterable<Object>) code.eval(stack);
+      return iterable instanceof Collection
+          ? iterable
+          : ImmutableList.copyOf(iterable);
     }
 
     @Override
@@ -349,9 +396,8 @@ public abstract class RowSinks {
 
     @Override
     public void accept(Stack stack) {
-      // Evaluate the collection expression using the full stack so that outer
-      // variables (StackCode nodes) resolve correctly.
-      final Iterable<Object> elements = (Iterable<Object>) code.eval(stack);
+      final Iterable<Object> elements =
+          dependent ? elements(stack) : requireNonNull(this.elements);
       // Grow slots if needed for scan variable slots.
       Stack s = stack.ensureSize(varCount);
       final int savedTop = s.save();
@@ -596,51 +642,6 @@ public abstract class RowSinks {
       if ((Boolean) filterCode.eval(stack)) {
         rowSink.accept(stack);
       }
-    }
-  }
-
-  /**
-   * Implementation of {@link RowSink} that pushes the current row's variables
-   * onto the stack before delegating, adapting an environment-based row to a
-   * stack-based downstream sink.
-   */
-  private static class RematerializeRowSink extends BaseRowSink {
-    /**
-     * (Name, code) slots that read the row's variables from the environment.
-     */
-    final ImmutablePairList<String, Code> slots;
-
-    RematerializeRowSink(
-        ImmutablePairList<String, Code> slots, RowSink rowSink) {
-      super(rowSink);
-      this.slots = slots;
-    }
-
-    @Override
-    public Describer describe(Describer describer) {
-      return describer.start("rematerialize", d -> d.arg("sink", rowSink));
-    }
-
-    @Override
-    public int maxSlots() {
-      return slots.size() + rowSink.maxSlots();
-    }
-
-    @Override
-    public void accept(Stack stack) {
-      // Evaluate all values from the input stack/env before pushing any, so
-      // that StackCode offsets stay valid throughout (mirrors YieldRowSink).
-      final Object[] values = new Object[slots.size()];
-      for (int i = 0; i < slots.size(); i++) {
-        values[i] = slots.right(i).eval(stack);
-      }
-      final Stack s = stack.ensureSize(slots.size());
-      final int savedTop = s.top;
-      for (Object value : values) {
-        s.push(value);
-      }
-      rowSink.accept(s);
-      s.restore(savedTop);
     }
   }
 
@@ -963,9 +964,8 @@ public abstract class RowSinks {
           map.remove(value);
         }
       } else {
-        // The row's variables are live on the stack (a 'rematerialize' adapter
-        // is inserted upstream when they would otherwise be in the env); pass
-        // the stack through directly.
+        // The row is on the stack, in the one slot the compiler materialized
+        // it into; pass the stack through directly.
         rowSink.accept(stack);
       }
     }
@@ -1414,20 +1414,26 @@ public abstract class RowSinks {
    * therefore the value cannot be passed via the {@link EvalEnv}.
    */
   private static class YieldRowSink extends BaseRowSink {
-    final ImmutableList<String> names;
     final ImmutableList<Code> codes;
     final Object @Nullable [] values;
+    /** Number of slots to pop before pushing the values. */
+    final int popCount;
+
+    /** Holds the popped slots' values while the downstream sink runs. */
+    final Object[] popped;
+
     final int @Nullable [] ordinalSlots;
 
     YieldRowSink(
-        ImmutableList<String> names,
         ImmutableList<Code> codes,
+        int popCount,
         int @Nullable [] ordinalSlots,
         RowSink rowSink) {
       super(rowSink);
-      this.names = names;
       this.codes = codes;
-      this.values = names.size() == 1 ? null : new Object[names.size()];
+      this.values = codes.size() == 1 ? null : new Object[codes.size()];
+      this.popCount = popCount;
+      this.popped = new Object[popCount];
       this.ordinalSlots = ordinalSlots;
     }
 
@@ -1462,17 +1468,33 @@ public abstract class RowSinks {
       // affecting another yield's expression, and keeps StackCode offsets
       // valid throughout.
       if (values == null) {
-        s.push(codes.get(0).eval(stack));
+        final Object value = codes.get(0).eval(stack);
+        pop(s, savedTop);
+        s.push(value);
       } else {
         for (int i = 0; i < codes.size(); i++) {
           values[i] = codes.get(i).eval(stack);
         }
+        pop(s, savedTop);
         for (Object v : values) {
           s.push(v);
         }
       }
       rowSink.accept(s);
       s.restore(savedTop);
+      if (popCount > 0) {
+        // The pushes overwrote the popped slots, and the sink upstream still
+        // reads them: a scan reads its left row for every element it
+        // iterates.
+        System.arraycopy(popped, 0, s.slots, savedTop - popCount, popCount);
+      }
+    }
+
+    private void pop(Stack s, int savedTop) {
+      if (popCount > 0) {
+        System.arraycopy(s.slots, savedTop - popCount, popped, 0, popCount);
+        s.restore(savedTop - popCount);
+      }
     }
   }
 

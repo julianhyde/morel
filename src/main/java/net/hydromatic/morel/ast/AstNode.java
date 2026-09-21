@@ -37,7 +37,6 @@ import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Comparators;
-import org.jspecify.annotations.Nullable;
 
 /** Abstract syntax tree node. */
 public abstract class AstNode {
@@ -86,12 +85,8 @@ public abstract class AstNode {
    * withTypes}, a relational node prints the collection type of every line, as
    * {@code Sys.planEx} prints it.
    */
-  public final String unparseRenumbered() {
-    return unparseRenumbered(null, Integer.MAX_VALUE, false);
-  }
-
   public final String unparseRenumbered(
-      @Nullable TypeSystem typeSystem, int width, boolean withTypes) {
+      TypeSystem typeSystem, int width, boolean withTypes) {
     final AstWriter w = renumberingWriter(typeSystem, this, width, withTypes);
     if (this instanceof Core.Rel) {
       // The root prints in place; `unparse` would break it out.
@@ -135,10 +130,7 @@ public abstract class AstNode {
    * binder printed by one and read by the other reads as two.
    */
   public static AstWriter renumberingWriter(
-      @Nullable TypeSystem typeSystem,
-      AstNode root,
-      int width,
-      boolean withTypes) {
+      TypeSystem typeSystem, AstNode root, int width, boolean withTypes) {
     return new RenumberingAstWriter(
         typeSystem, boundInPlan(root), width, withTypes);
   }
@@ -224,7 +216,7 @@ public abstract class AstNode {
     final Map<Core.Rel, List<Core.NamedPat>> relParams =
         new IdentityHashMap<>();
 
-    final @Nullable TypeSystem typeSystem;
+    final TypeSystem typeSystem;
 
     /** What the plan binds; see {@code AstNode#boundInPlan(AstNode)}. */
     final Set<Core.NamedPat> boundInPlan;
@@ -233,11 +225,11 @@ public abstract class AstNode {
     final boolean withTypes;
 
     RenumberingAstWriter(
-        @Nullable TypeSystem typeSystem,
+        TypeSystem typeSystem,
         Set<Core.NamedPat> boundInPlan,
         int width,
         boolean withTypes) {
-      this.typeSystem = typeSystem;
+      this.typeSystem = requireNonNull(typeSystem);
       this.boundInPlan = ImmutableSet.copyOf(boundInPlan);
       this.width = width;
       this.withTypes = withTypes;
@@ -302,7 +294,7 @@ public abstract class AstNode {
           rel,
           r -> {
             final Set<Core.NamedPat> free =
-                new LinkedHashSet<>(r.freePats(requireNonNull(typeSystem)));
+                new LinkedHashSet<>(r.freePats(typeSystem));
             free.retainAll(boundInPlan);
             return ImmutableList.copyOf(free);
           });

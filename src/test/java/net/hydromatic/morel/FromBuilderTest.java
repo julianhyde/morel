@@ -22,611 +22,333 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasToString;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.function.Function;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.FromBuilder;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.compile.Environment;
-import net.hydromatic.morel.compile.Environments;
-import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
+import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.PairList;
 import org.junit.jupiter.api.Test;
 
-/** Test {@link net.hydromatic.morel.ast.FromBuilder}. */
+/**
+ * Tests {@link FromBuilder}, which builds a query as a relational tree from
+ * expressions written over the names the query binds.
+ *
+ * <p>Its duty is the names: each expression it is given reads bindings by name,
+ * and it rewrites them to paths into the tree's row. The tree's language is
+ * tested from Morel text in {@code rel-tree.smli}; this tests the bookkeeping.
+ */
 public class FromBuilderTest {
   private static class Fixture {
     final TypeSystem typeSystem = new TypeSystem();
-    final List<Binding> bindings = new ArrayList<>();
 
     {
-      // Register 'bag'; keep only the 'DESC' binding.
-      BuiltIn.dataTypes(typeSystem, bindings);
-      bindings.removeIf(b -> !b.id.name.equals("DESC"));
+      // Register 'bag' and the other built-in data types, which a built-in
+      // function's type, such as count's, is written over.
+      BuiltIn.dataTypes(typeSystem, new ArrayList<>());
     }
 
     final PrimitiveType intType = PrimitiveType.INT;
-    final PrimitiveType unitType = PrimitiveType.UNIT;
-    final Type intPairType = typeSystem.tupleType(intType, intType);
-    final Core.IdPat aPat = core.idPat(intType, "a", 0);
-    final Core.Id aId = core.id(aPat);
-    final Core.IdPat bPat = core.idPat(intType, "b", 0);
-    final Core.Id bId = core.id(bPat);
-    final Core.IdPat dPat = core.idPat(intPairType, "d", 0);
-    final Core.Id dId = core.id(dPat);
-    final Core.IdPat iPat = core.idPat(intType, "i", 0);
-    final Core.Id iId = core.id(iPat);
-    final Core.IdPat jPat = core.idPat(intType, "j", 0);
-    final Core.Id jId = core.id(jPat);
-    final Core.IdPat uPat = core.idPat(unitType, "u", 0);
-    final Core.Exp list12 = core.list(typeSystem, intLiteral(1), intLiteral(2));
-    final Core.Exp list34 = core.list(typeSystem, intLiteral(3), intLiteral(4));
-    final Core.Exp tuple12 =
-        core.tuple(typeSystem, intLiteral(1), intLiteral(2));
-    final Core.Exp tuple34 =
-        core.tuple(typeSystem, intLiteral(3), intLiteral(4));
-
-    Core.Literal intLiteral(int i) {
-      return core.literal(intType, i);
-    }
-
-    Core.Exp record(Core.Id... ids) {
-      final PairList<String, Core.Exp> nameExps =
-          PairList.fromTransformed(
-              Arrays.asList(ids), (id, c) -> c.accept(id.idPat.name, id));
-      return core.record(typeSystem, nameExps);
-    }
-
-    FromBuilder fromBuilder() {
-      Environment env = Environments.empty().bindAll(bindings);
-      return core.fromBuilder(typeSystem, env);
-    }
-  }
-
-  @Test
-  void testBasic() {
-    // from i in [1, 2]
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder.scan(f.iPat, f.list12);
-
-    final Core.From from = fromBuilder.build();
-    assertThat(from, hasToString("from i in [1, 2]"));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, hasToString("[1, 2]"));
-
-    // "from i in [1, 2] yield i" --> "[1, 2]"
-    fromBuilder.yield_(f.iId);
-    final Core.From from2 = fromBuilder.build();
-    assertThat(from2, is(from));
-    final Core.Exp e2 = fromBuilder.buildSimplify();
-    assertThat(e2, is(e));
-  }
-
-  @Test
-  void testDistinct() {
-    // from i in [1, 2] distinct
-    // The output type should remain 'int list', not '{i: int} list'.
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder.scan(f.iPat, f.list12);
-    fromBuilder.distinct();
-
-    final Core.From from = fromBuilder.build();
-    // Verify the output type is 'int list', not '{i: int} list'
-    assertThat(from.type.elementType(), is(f.intType));
-    assertThat(from, hasToString("from i in [1, 2] group i"));
-
-    // from i in [1, 2],
-    //   j in [3, 4]
-    //   distinct
-    //   where i < j
-    fromBuilder.clear();
-    fromBuilder.scan(f.iPat, f.list12);
-    fromBuilder.scan(f.jPat, f.list34);
-    fromBuilder.distinct();
-    fromBuilder.where(core.lessThan(f.typeSystem, f.iId, f.jId));
-
-    final Core.From from2 = fromBuilder.build();
-    final String s2 =
-        "from i in [1, 2] join j in [3, 4] " //
-            + "group {i = i, j = j} where i < j";
-    assertThat(from2, hasToString(s2));
-    assertThat(from2.type.elementType(), hasToString("{i:int, j:int}"));
-
-    // from u in [(), (), ()] distinct
-    fromBuilder.clear();
-    fromBuilder.scan(
-        f.uPat,
+    final PrimitiveType stringType = PrimitiveType.STRING;
+    final RecordLikeType pairType =
+        typeSystem.tupleType(ImmutableList.of(intType, stringType));
+    /** A list of pairs, {@code [(1, "a"), (2, "b")]}. */
+    final Core.Exp pairs =
         core.list(
-            f.typeSystem,
-            core.unitLiteral(),
-            core.unitLiteral(),
-            core.unitLiteral()));
-    fromBuilder.distinct();
-    final Core.From from3 = fromBuilder.build();
-    final String s3 = "from u in [(), (), ()] take 1";
-    assertThat(from3, hasToString(s3));
-    assertThat(from3.type.elementType(), hasToString("unit"));
-
-    // from u in [(), (), ()] where false distinct
-    fromBuilder.clear();
-    fromBuilder.scan(
-        f.uPat,
+            typeSystem,
+            pairType,
+            ImmutableList.of(
+                core.tuple(pairType, intLiteral(1), stringLiteral("a")),
+                core.tuple(pairType, intLiteral(2), stringLiteral("b"))));
+    /** A record type, {@code {deptno:int, name:string}}. */
+    final RecordType empType =
+        (RecordType)
+            typeSystem.recordType(
+                PairList.copyOf("deptno", intType, "name", stringType));
+    /** A list of records, {@code [{deptno=10,name="Fred"}, ...]}. */
+    final Core.Exp emps =
         core.list(
-            f.typeSystem,
-            core.unitLiteral(),
-            core.unitLiteral(),
-            core.unitLiteral()));
-    fromBuilder.where(core.boolLiteral(false));
-    fromBuilder.distinct();
-    final Core.From from4 = fromBuilder.build();
-    final String s4 = "from u in [(), (), ()] where false take 1";
-    assertThat(from4, hasToString(s4));
-    assertThat(from4.type.elementType(), hasToString("unit"));
-  }
+            typeSystem,
+            empType,
+            ImmutableList.of(emp(10, "Fred"), emp(20, "Velma")));
+    /** A list of scalars, {@code [1, 2, 3]}. */
+    final Core.Exp ints =
+        core.list(typeSystem, intLiteral(1), intLiteral(2), intLiteral(3));
 
-  @Test
-  void testWhereOrder() {
-    // from i in [1, 2] where i < 2 order DESC i
-    //  ==>
-    // from i in [1, 2]
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.iPat, f.list12)
-        .where(core.lessThan(f.typeSystem, f.iId, f.intLiteral(2)))
-        .order(core.desc(f.typeSystem, f.iId));
+    Core.Exp emp(int deptno, String name) {
+      return core.record(
+          typeSystem,
+          PairList.copyOf(
+              "deptno", intLiteral(deptno), "name", stringLiteral(name)));
+    }
 
-    final Core.From from = fromBuilder.build();
-    assertThat(from, hasToString("from i in [1, 2] where i < 2 order DESC i"));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
+    Core.Exp intLiteral(int i) {
+      return core.intLiteral(BigDecimal.valueOf(i));
+    }
 
-    // "where true" is ignored because it has no effect;
-    // "order {}" is retained because it could convert a bag to a list.
-    fromBuilder
-        .where(core.boolLiteral(true))
-        .order(core.tuple(f.typeSystem))
-        .where(core.greaterThan(f.typeSystem, f.iId, f.intLiteral(1)));
-    final Core.From from2 = fromBuilder.build();
-    assertThat(
-        from2,
-        hasToString(
-            "from i in [1, 2] where i < 2 order DESC i order () where i > 1"));
-    final Core.Exp e2 = fromBuilder.buildSimplify();
-    assertThat(e2, is(from2));
-  }
+    Core.Exp stringLiteral(String s) {
+      return core.stringLiteral(s);
+    }
 
-  @Test
-  void testTrivialYield() {
-    // from i in [1, 2] where i < 2 yield i
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.iPat, f.list12)
-        .where(core.lessThan(f.typeSystem, f.iId, f.intLiteral(2)))
-        .yield_(f.iId);
+    Core.IdPat idPat(String name, Type type) {
+      return core.idPat(type, name, 0);
+    }
 
-    final Core.From from = fromBuilder.build();
-    assertThat(from, hasToString("from i in [1, 2] where i < 2"));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
-  }
+    Core.Pat tuplePat(Core.IdPat... pats) {
+      return core.tuplePat(typeSystem, ImmutableList.copyOf(pats));
+    }
 
-  @Test
-  void testTrivialYield2() {
-    // from j in [1, 2], i in [3, 4] where i < 2 yield {i, j}
-    //   ==>
-    // from j in [1, 2], i in [3, 4] where i < 2
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.jPat, f.list12)
-        .scan(f.iPat, f.list34)
-        .where(core.lessThan(f.typeSystem, f.iId, f.intLiteral(2)))
-        .yield_(f.record(f.iId, f.jId));
-
-    final Core.From from = fromBuilder.build();
-    final String expected = "from j in [1, 2] join i in [3, 4] where i < 2";
-    assertThat(from, hasToString(expected));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
-  }
-
-  @Test
-  void testTrivialYield3() {
-    // from j in [1, 2] yield {j} join i in [3, 4]
-    //   ==>
-    // from j in [1, 2] join i in [3, 4]
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.jPat, f.list12)
-        .yield_(f.record(f.jId))
-        .scan(f.iPat, f.list34);
-
-    final Core.From from = fromBuilder.build();
-    final String expected = "from j in [1, 2] join i in [3, 4]";
-    assertThat(from, hasToString(expected));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
-  }
-
-  @Test
-  void testNested() {
-    // from i in (from j in [1, 2] where j < 2) where i > 1
-    //   ==>
-    // from j in [1, 2] where j < 2 yield {i = j} where i > 1
-    final Fixture f = new Fixture();
-    final Core.From innerFrom =
-        f.fromBuilder()
-            .scan(f.jPat, f.list12)
-            .where(core.lessThan(f.typeSystem, f.jId, f.intLiteral(2)))
-            .build();
-
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.iPat, innerFrom)
-        .where(core.greaterThan(f.typeSystem, f.iId, f.intLiteral(1)));
-
-    final Core.From from = fromBuilder.build();
-    final String expected =
-        "from j in [1, 2] where j < 2 yield {i = j} where i > 1";
-    assertThat(from, hasToString(expected));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
-  }
-
-  @Test
-  void testNested3() {
-    // from i in (from j in [1, 2]) where i > 1
-    //   ==>
-    // from j in [1, 2] yield {i = j} where i > 1
-    final Fixture f = new Fixture();
-    final Core.From innerFrom = f.fromBuilder().scan(f.jPat, f.list12).build();
-
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.iPat, innerFrom)
-        .where(core.greaterThan(f.typeSystem, f.iId, f.intLiteral(1)));
-
-    final Core.From from = fromBuilder.build();
-    final String expected = "from j in [1, 2] yield {i = j} where i > 1";
-    assertThat(from, hasToString(expected));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
-
-    // from j in (from j in [1, 2]) where j > 1
-    //   ==>
-    // from j in [1, 2] where j > 1
-    final FromBuilder fromBuilder2 = f.fromBuilder();
-    fromBuilder2
-        .scan(f.jPat, innerFrom)
-        .where(core.greaterThan(f.typeSystem, f.jId, f.intLiteral(1)));
-
-    final Core.From from2 = fromBuilder2.build();
-    final String expected2 = "from j in [1, 2] where j > 1";
-    assertThat(from2, hasToString(expected2));
-    final Core.Exp e2 = fromBuilder2.buildSimplify();
-    assertThat(e2, is(from2));
-
-    // from i in (from j in [1, 2])
-    //   ==>
-    // from j in [1, 2]
-    //   ==> simplification
-    // [1, 2]
-    final FromBuilder fromBuilder3 = f.fromBuilder();
-    fromBuilder3.scan(f.iPat, innerFrom);
-
-    final Core.From from3 = fromBuilder3.build();
-    final String expected3 = "from j in [1, 2]";
-    assertThat(from3, hasToString(expected3));
-    final Core.Exp e3 = fromBuilder3.buildSimplify();
-    assertThat(e3, is(f.list12));
-  }
-
-  @Test
-  void testNested4() {
-    // from d in [(1, 2), (3, 4)]
-    // join i in (from i in [#1 d])
-    //   ==>
-    // from d in [(1, 2), (3, 4)]
-    // join i in [#1 d]
-    final Fixture f = new Fixture();
-    final Function<List<Binding>, Core.From> innerFrom =
-        bindings ->
-            core.fromBuilder(
-                    f.typeSystem, Environments.empty().bindAll(bindings))
-                .scan(
-                    f.iPat,
-                    core.list(f.typeSystem, core.field(f.typeSystem, f.dId, 0)))
-                .build();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.dPat, core.list(f.typeSystem, f.tuple12, f.tuple34))
-        .scan(f.iPat, innerFrom.apply(fromBuilder.stepEnv().bindings));
-
-    final Core.From from = fromBuilder.build();
-    final String expected = "from d in [(1, 2), (3, 4)] join i in [#1 d]";
-    assertThat(from, hasToString(expected));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
-
-    // from d in [(1, 2), (3, 4)]
-    // join j in (from i in [#1 d])
-    // where j > #1 d
-    //   ==>
-    // from d in [(1, 2), (3, 4)]
-    // join i in [#1 d]
-    // yield {d, j = i}
-    // where j > #1 d
-    final FromBuilder fromBuilder2 = f.fromBuilder();
-    fromBuilder2
-        .scan(f.dPat, core.list(f.typeSystem, f.tuple12, f.tuple34))
-        .scan(f.jPat, innerFrom.apply(fromBuilder.stepEnv().bindings))
-        .where(
-            core.greaterThan(
-                f.typeSystem, f.jId, core.field(f.typeSystem, f.dId, 0)));
-
-    final Core.From from2 = fromBuilder2.build();
-    final String expected2 =
-        "from d in [(1, 2), (3, 4)] "
-            + "join i in [#1 d] "
-            + "yield {d = d, j = i} "
-            + "where j > #1 d";
-    assertThat(from2, hasToString(expected2));
-    final Core.Exp e2 = fromBuilder2.buildSimplify();
-    assertThat(e2, is(from2));
+    /** Returns {@code count over ()}. */
+    Core.Aggregate count() {
+      return core.aggregate(
+          Pos.ZERO,
+          intType,
+          core.functionLiteral(typeSystem, BuiltIn.RELATIONAL_COUNT),
+          null);
+    }
   }
 
   /**
-   * As {@link #testNested()} but inner and outer variables have the same name,
-   * and therefore no yield is required.
+   * A scan under a tuple pattern binds a name per component, and an expression
+   * that reads a name is rewritten to read the component: {@code p} is {@code
+   * #1 $0}, {@code s} is {@code #2 $0}.
    */
   @Test
-  void testNestedSameName() {
-    // from i in (from i in [1, 2] where i < 2) where i > 1
-    //   ==>
-    // from i in [1, 2] where i < 2 where i > 1
+  void testScanWhereYield() {
     final Fixture f = new Fixture();
-    final Core.From innerFrom =
-        f.fromBuilder()
-            .scan(f.iPat, f.list12)
-            .where(core.lessThan(f.typeSystem, f.iId, f.intLiteral(2)))
-            .build();
-
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(f.iPat, innerFrom)
-        .where(core.greaterThan(f.typeSystem, f.iId, f.intLiteral(1)));
-
-    final Core.From from = fromBuilder.build();
-    final String expected = "from i in [1, 2] where i < 2 where i > 1";
-    assertThat(from, hasToString(expected));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
+    final Core.IdPat p = f.idPat("p", f.intType);
+    final Core.IdPat s = f.idPat("s", f.stringType);
+    final FromBuilder fb = core.fromBuilder(f.typeSystem);
+    fb.scan(f.tuplePat(p, s), f.pairs)
+        .where(core.equal(f.typeSystem, core.id(p), f.intLiteral(1)))
+        .yield_(core.id(s));
+    final Core.Exp exp = fb.build();
+    assertThat(
+        exp,
+        hasToString(
+            "project [#2 $0]\n"
+                + "  filter [#1 $0 = 1]\n"
+                + "    [(1, \"a\"), (2, \"b\")]\n"));
+    assertThat(exp.type, hasToString("string list"));
   }
 
+  /**
+   * Three ways to read a binding: an id of the pattern that bound it, {@link
+   * FromBuilder#field(String)}, and {@link FromBuilder#field(int)} in the order
+   * the bindings were made. After a second scan the row is a tuple, and a
+   * binding from the first scan is a component of it.
+   */
   @Test
-  void testNested0() {
-    // from u in (from)
-    //   ==>
-    // from
+  void testFieldByNameAndOrdinal() {
     final Fixture f = new Fixture();
-    final Core.From innerFrom = f.fromBuilder().build();
+    final Core.IdPat e = f.idPat("e", f.empType);
+    final Core.IdPat p = f.idPat("p", f.intType);
+    final Core.IdPat s = f.idPat("s", f.stringType);
+    final FromBuilder fb = core.fromBuilder(f.typeSystem);
+    fb.scan(e, f.emps);
+    assertThat(fb.field("e"), hasToString("$0"));
+    assertThat(fb.field(0), hasToString("$0"));
+    assertThat(fb.field("e", "deptno"), hasToString("#deptno $0"));
 
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder.scan(f.uPat, innerFrom);
+    fb.scan(f.tuplePat(p, s), f.pairs);
+    assertThat(fb.field("e"), hasToString("#1 $0"));
+    assertThat(fb.field("p"), hasToString("#1 (#2 $0)"));
+    assertThat(fb.field(2), hasToString("#2 (#2 $0)"));
+    assertThat(fb.field("e", "name"), hasToString("#name (#1 $0)"));
+    assertThrows(IllegalArgumentException.class, () -> fb.field("q"));
 
-    final Core.From from = fromBuilder.build();
-    assertThat(from, hasToString("from u in (from)"));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, hasToString("from"));
+    // The id and the field are interchangeable in an expression.
+    fb.where(core.equal(f.typeSystem, fb.field("e", "deptno"), core.id(p)))
+        .yield_(
+            core.record(
+                f.typeSystem,
+                PairList.copyOf(
+                    "name", fb.field("e", "name"), "s", core.id(s))));
+    final Core.Exp exp = fb.build();
+    assertThat(
+        exp,
+        hasToString(
+            "project [{name = #name (#1 $0), s = #2 (#2 $0)}]\n"
+                + "  filter [#deptno (#1 $0) = #1 (#2 $0)]\n"
+                + "    join\n"
+                + "      [{deptno = 10, name = \"Fred\"},"
+                + " {deptno = 20, name = \"Velma\"}]\n"
+                + "      [(1, \"a\"), (2, \"b\")]\n"));
+    assertThat(exp.type, hasToString("{name:string, s:string} list"));
   }
 
+  /**
+   * A record pattern binds each field by name, and the names survive a join
+   * that puts the record in a tuple.
+   */
   @Test
-  void testNested2() {
-    // from {i = a, j = b} in (from a in [1, 2], b in [3, 4] where a < 2)
-    //   where i < j
-    //   ==>
-    // from a in [1, 2], b in [3, 4] where a < 2 yield {i = a, j = b}
-    //   where i < j
+  void testRecordPatternFields() {
     final Fixture f = new Fixture();
-    final Core.From innerFrom =
-        f.fromBuilder()
-            .scan(f.aPat, f.list12)
-            .scan(f.bPat, f.list34)
-            .where(core.lessThan(f.typeSystem, f.aId, f.intLiteral(2)))
-            .build();
+    final Core.IdPat deptno = f.idPat("deptno", f.intType);
+    final Core.IdPat name = f.idPat("name", f.stringType);
+    final Core.IdPat p = f.idPat("p", f.intType);
+    final Core.IdPat s = f.idPat("s", f.stringType);
+    final FromBuilder fb = core.fromBuilder(f.typeSystem);
+    fb.scan(core.recordPat(f.empType, ImmutableList.of(deptno, name)), f.emps);
+    assertThat(fb.field("deptno"), hasToString("#deptno $0"));
+    assertThat(fb.field("name"), hasToString("#name $0"));
 
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
+    fb.scan(f.tuplePat(p, s), f.pairs);
+    assertThat(fb.field("deptno"), hasToString("#deptno (#1 $0)"));
+    assertThat(fb.field("s"), hasToString("#2 (#2 $0)"));
+    fb.where(core.equal(f.typeSystem, core.id(deptno), core.id(p)))
+        .yield_(core.id(name));
+    final Core.Exp exp = fb.build();
+    assertThat(
+        exp,
+        hasToString(
+            "project [#name (#1 $0)]\n"
+                + "  filter [#deptno (#1 $0) = #1 (#2 $0)]\n"
+                + "    join\n"
+                + "      [{deptno = 10, name = \"Fred\"},"
+                + " {deptno = 20, name = \"Velma\"}]\n"
+                + "      [(1, \"a\"), (2, \"b\")]\n"));
+    assertThat(exp.type, hasToString("string list"));
+  }
+
+  /**
+   * A scan whose collection reads an earlier binding is a dependent join: the
+   * inner query is built by a builder of its own, over the outer binding's
+   * name, and the outer builder rewrites that name to its row.
+   */
+  @Test
+  void testCorrelatedSubquery() {
+    final Fixture f = new Fixture();
+    final Core.IdPat e = f.idPat("e", f.empType);
+    final Core.IdPat p = f.idPat("p", f.intType);
+    final Core.IdPat s = f.idPat("s", f.stringType);
+    final Core.IdPat t = f.idPat("t", f.stringType);
+    final FromBuilder inner = core.fromBuilder(f.typeSystem);
+    inner
+        .scan(f.tuplePat(p, s), f.pairs)
+        .where(
+            core.equal(
+                f.typeSystem,
+                core.id(p),
+                core.field(f.typeSystem, core.id(e), 0)))
+        .yield_(core.id(s));
+    final FromBuilder fb = core.fromBuilder(f.typeSystem);
+    fb.scan(e, f.emps).scan(t, inner.build()).yield_(core.id(t));
+    final Core.Exp exp = fb.build();
+    // The join carries a binder for its left row, which the subquery reads
+    // under a generated name; the plan printer renumbers it.
+    assertThat(
+        ((Core.Rel) exp).describe(f.typeSystem),
+        is(
+            "project [#2 $0]\n"
+                + "  join [v$0]\n"
+                + "    [{deptno = 10, name = \"Fred\"},"
+                + " {deptno = 20, name = \"Velma\"}]\n"
+                + "    project [#2 $0]\n"
+                + "      filter [#1 $0 = #deptno v$0]\n"
+                + "        [(1, \"a\"), (2, \"b\")]\n"));
+    assertThat(exp.type, hasToString("string list"));
+  }
+
+  /**
+   * A group over a record scan: the keys and aggregates are the bindings after
+   * it, and the row is a record of them.
+   */
+  @Test
+  void testGroup() {
+    final Fixture f = new Fixture();
+    final Core.IdPat e = f.idPat("e", f.empType);
+    final FromBuilder fb = core.fromBuilder(f.typeSystem);
+    fb.scan(e, f.emps);
+    final SortedMap<String, Core.Exp> keys = new TreeMap<>();
+    keys.put("d", fb.field("e", "deptno"));
+    final SortedMap<String, Core.Aggregate> aggregates = new TreeMap<>();
+    aggregates.put("c", f.count());
+    fb.group(false, keys, aggregates);
+    assertThat(fb.field("d"), hasToString("#d $0"));
+    assertThat(fb.field("c"), hasToString("#c $0"));
+    fb.where(core.greaterThan(f.typeSystem, fb.field("c"), f.intLiteral(1)));
+    final Core.Exp exp = fb.build();
+    assertThat(
+        ((Core.Rel) exp).describe(f.typeSystem),
+        is(
+            "filter [#c $0 > 1]\n"
+                + "  group [d = #deptno $0] [c = #count Relational]\n"
+                + "    [{deptno = 10, name = \"Fred\"},"
+                + " {deptno = 20, name = \"Velma\"}]\n"));
+    assertThat(exp.type, hasToString("{c:int, d:int} list"));
+  }
+
+  /**
+   * Scalars in and out: a scan over a list of {@code int} binds one name to the
+   * whole element, and a yield of a value that is not a binding leaves nothing
+   * to name.
+   */
+  @Test
+  void testScalars() {
+    final Fixture f = new Fixture();
+    final Core.IdPat i = f.idPat("i", f.intType);
+    final FromBuilder fb = core.fromBuilder(f.typeSystem);
+    fb.scan(i, f.ints);
+    assertThat(fb.field("i"), hasToString("$0"));
+    fb.where(core.greaterThan(f.typeSystem, core.id(i), f.intLiteral(1)))
+        .yield_(core.equal(f.typeSystem, fb.field("i"), f.intLiteral(2)));
+    assertThrows(IllegalArgumentException.class, () -> fb.field("i"));
+    final Core.Exp exp = fb.build();
+    assertThat(
+        exp,
+        hasToString(
+            "project [$0 = 2]\n" //
+                + "  filter [$0 > 1]\n"
+                + "    [1, 2, 3]\n"));
+    assertThat(exp.type, hasToString("bool list"));
+  }
+
+  /**
+   * Two scans that share a name: the second renames it and tests it against the
+   * first, as the grounding engine's chain does.
+   */
+  @Test
+  void testChainDistinct() {
+    final Fixture f = new Fixture();
+    final Core.IdPat p = f.idPat("p", f.intType);
+    final Core.IdPat x = f.idPat("x", f.stringType);
+    final Core.IdPat p1 = f.idPat("p'1", f.intType);
+    final Core.IdPat y = f.idPat("y", f.stringType);
+    final FromBuilder fb = core.fromBuilder(f.typeSystem);
+    fb.scan(f.tuplePat(p, x), f.pairs)
         .scan(
-            core.recordPat(
-                f.typeSystem, ImmutableMap.of("i", f.aPat, "j", f.bPat)),
-            innerFrom)
-        .where(core.lessThan(f.typeSystem, f.iId, f.jId));
-
-    final Core.From from = fromBuilder.build();
-    final String expected =
-        "from a in [1, 2] "
-            + "join b in [3, 4] "
-            + "where a < 2 "
-            + "yield {i = a, j = b} "
-            + "where i < j";
-    assertThat(from, hasToString(expected));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
-  }
-
-  @Test
-  void testNestedFromTuple() {
-    // from (a, b) in
-    //   (from (a, b) in
-    //     (from a in [1, 2] join b in [3, 4]))
-    // where a > b andalso b = 10
-    // yield b
-    //   ==>
-    // from a in [1, 2]
-    // join b in [3, 4]
-    // where a > b andalso a = 10
-    // yield b
-    final Fixture f = new Fixture();
-    final Core.Pat abPat =
-        core.tuplePat(f.typeSystem, Arrays.asList(f.aPat, f.bPat));
-
-    final Core.From innermostFrom =
-        f.fromBuilder().scan(f.aPat, f.list12).scan(f.bPat, f.list34).build();
-    final Core.From innerFrom =
-        f.fromBuilder().scan(abPat, innermostFrom).build();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder
-        .scan(abPat, innerFrom)
-        .where(
-            core.andAlso(
-                f.typeSystem,
-                core.greaterThan(f.typeSystem, f.aId, f.bId),
-                core.equal(
-                    f.typeSystem, f.aId, core.intLiteral(BigDecimal.TEN))))
-        .yield_(f.bId);
-
-    final Core.From from = fromBuilder.build();
-    final String expected =
-        "from a in [1, 2] "
-            + "join b in [3, 4] "
-            + "where a > b andalso a = 10 "
-            + "yield b";
-    assertThat(from, hasToString(expected));
-    final Core.Exp e = fromBuilder.buildSimplify();
-    assertThat(e, is(from));
-
-    // Tuple where variables are not in alphabetical order. Requires
-    // a 'yield' step to re-order variables.
-    //
-    // from (b, a) in
-    //   (from a in [1, 2] join b in [3, 4])
-    // where a > b andalso b = 10
-    // yield b
-    //   ==>
-    // from a in [1, 2]
-    // join b in [3, 4]
-    // yield {a = b, b = a}
-    // where a > b andalso a = 10
-    // yield b
-    final Core.Pat baPat =
-        core.tuplePat(f.typeSystem, Arrays.asList(f.bPat, f.aPat));
-    final FromBuilder fromBuilder2 = f.fromBuilder();
-    fromBuilder2
-        .scan(baPat, innermostFrom)
-        .where(
-            core.andAlso(
-                f.typeSystem,
-                core.greaterThan(f.typeSystem, f.aId, f.bId),
-                core.equal(
-                    f.typeSystem, f.aId, core.intLiteral(BigDecimal.TEN))))
-        .yield_(f.bId);
-
-    final Core.From from2 = fromBuilder2.build();
-    final String expected2 =
-        "from a in [1, 2] "
-            + "join b in [3, 4] "
-            + "yield {a = b, b = a} "
-            + "where a > b andalso a = 10 "
-            + "yield b";
-    assertThat(from2, hasToString(expected2));
-    final Core.Exp e2 = fromBuilder2.buildSimplify();
-    assertThat(e2, is(from2));
-
-    // from (i, j) in
-    //   (from a in [1, 2] join b in [3, 4])
-    // where i > j andalso j = 10
-    // yield i
-    //   ==>
-    // from a in [1, 2]
-    // join b in [3, 4]
-    // yield {i = a, j = b}
-    // where i > j andalso j = 10
-    // yield i
-    final Core.Pat ijPat =
-        core.tuplePat(f.typeSystem, Arrays.asList(f.iPat, f.jPat));
-    final FromBuilder fromBuilder3 = f.fromBuilder();
-    fromBuilder3
-        .scan(ijPat, innermostFrom)
-        .where(
-            core.andAlso(
-                f.typeSystem,
-                core.greaterThan(f.typeSystem, f.iId, f.jId),
-                core.equal(
-                    f.typeSystem, f.jId, core.intLiteral(BigDecimal.TEN))))
-        .yield_(f.jId);
-
-    final Core.From from3 = fromBuilder3.build();
-    final String expected3 =
-        "from a in [1, 2] "
-            + "join b in [3, 4] "
-            + "yield {i = a, j = b} "
-            + "where i > j andalso j = 10 "
-            + "yield j";
-    assertThat(from3, hasToString(expected3));
-    final Core.Exp e3 = fromBuilder3.buildSimplify();
-    assertThat(e3, is(from3));
-  }
-
-  /**
-   * Tests the shape that {@link FromBuilder#materializeOrdinal()} produces: a
-   * call to "ordinal" in a "yield", and a later step that reads the field it
-   * binds.
-   */
-  @Test
-  void testMaterializeOrdinal() {
-    // from i in [1, 2] yield {i = i, v$0 = ordinal} where v$0 < 2
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    fromBuilder.scan(f.iPat, f.list12);
-    final Core.IdPat ordinalPat = fromBuilder.materializeOrdinal();
-    fromBuilder.where(
-        core.lessThan(f.typeSystem, core.id(ordinalPat), f.intLiteral(2)));
-
-    final Core.From from = fromBuilder.build();
+            f.tuplePat(p1, y),
+            f.pairs,
+            core.equal(f.typeSystem, core.id(p1), core.id(p)))
+        .where(core.notEqual(f.typeSystem, core.id(x), core.id(y)));
+    final List<Core.IdPat> names = ImmutableList.of(x, y);
+    final Core.Exp row = core.recordOrAtom(f.typeSystem, names);
+    fb.yield_(row).distinct().order(row);
+    final Core.Exp exp = fb.build();
     assertThat(
-        from,
+        exp,
         hasToString(
-            "from i in [1, 2] yield {i = i, v$0 = $ordinal ()} where v$0 < 2"));
-  }
-
-  /**
-   * Tests that a "yield" may contain several calls to "ordinal". The increment
-   * belongs to the step, not to the call, so the calls are reads of one counter
-   * and all see the same value; merging, inlining or duplicating expressions
-   * within a "yield" is therefore safe.
-   */
-  @Test
-  void testSeveralOrdinalCallsInOneYield() {
-    // from i in [1, 2] yield {a = ordinal, b = ordinal}
-    final Fixture f = new Fixture();
-    final FromBuilder fromBuilder = f.fromBuilder();
-    final PairList<String, Core.Exp> nameExps =
-        PairList.copyOf(
-            "a", fromBuilder.ordinalExp(),
-            "b", fromBuilder.ordinalExp());
-    fromBuilder
-        .scan(f.iPat, f.list12)
-        .yield_(core.record(f.typeSystem, nameExps));
-
-    final Core.From from = fromBuilder.build();
-    assertThat(
-        from,
-        hasToString(
-            "from i in [1, 2] yield {a = $ordinal (), b = $ordinal ()}"));
+            "sort [$0]\n"
+                + "  group [x = #x $0, y = #y $0]\n"
+                + "    project [{x = #2 (#1 $0), y = #2 (#2 $0)}]\n"
+                + "      filter [#2 (#1 $0) <> #2 (#2 $0)]\n"
+                + "        join [#1 $1 = #1 $0]\n"
+                + "          [(1, \"a\"), (2, \"b\")]\n"
+                + "          [(1, \"a\"), (2, \"b\")]\n"));
+    assertThat(exp.type, hasToString("{x:string, y:string} list"));
   }
 }
 

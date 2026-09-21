@@ -288,6 +288,9 @@ public class Inliner extends EnvShuttle {
   private @Nullable Map<Core.NamedPat, Core.Exp> getSub(
       Core.Exp exp, Core.Match match) {
     if (match.pat.op == Op.ID_PAT && isAtomic(exp)) {
+      if (carriesInputIntoRel(exp, (Core.IdPat) match.pat, match.exp)) {
+        return null;
+      }
       return ImmutableMap.of((Core.IdPat) match.pat, exp);
     }
     if (exp.op == Op.TUPLE && match.pat.op == Op.TUPLE_PAT) {
@@ -297,17 +300,32 @@ public class Inliner extends EnvShuttle {
           && allMatch(tuplePat.args, arg -> arg.op == Op.ID_PAT)) {
         final ImmutableMap.Builder<Core.NamedPat, Core.Exp> builder =
             ImmutableMap.builder();
+        final boolean[] blocked = {false};
         forEach(
             tuple.args,
             tuplePat.args,
-            (arg, pat) -> builder.put((Core.IdPat) pat, arg));
-        return builder.build();
+            (arg, pat) -> {
+              if (carriesInputIntoRel(arg, (Core.IdPat) pat, match.exp)) {
+                blocked[0] = true;
+              }
+              builder.put((Core.IdPat) pat, arg);
+            });
+        return blocked[0] ? null : builder.build();
       }
     }
     return null;
   }
 
-  /** Returns whether an expression can be inlined without expansion. */
+  /**
+   * Returns whether an expression can be inlined without expansion.
+   *
+   * <p>{@code $0} counts. It is a node and not a variable, but it is as cheap
+   * to duplicate as an id, and a {@code case} over a tuple of the row's
+   * components is what beta-reducing a call in a query leaves: {@code case (x,
+   * $0) of (x, y) => (x, y) elem edges}. Leaving that unreduced hides the
+   * constraint from the grounding engine, which matches on {@code elem} over
+   * the query's variables.
+   */
   static boolean isAtomic(Core.Exp exp) {
     return exp instanceof Core.Literal || exp instanceof Core.Id;
   }
@@ -350,6 +368,64 @@ public class Inliner extends EnvShuttle {
             if (literal.op == Op.FN_LITERAL
                 && (literal.value == BuiltIn.Z_CHECK
                     || literal.value == BuiltIn.Z_ATTEMPT)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
+  }
+
+  /**
+   * Returns whether moving {@code exp} to the uses of {@code pat} in {@code
+   * body} would carry an input reference into a tree that does not bind it.
+   *
+   * <p>{@code $0} means the element of whichever node encloses it, so
+   * substituting a value that mentions one at a use inside a nested tree makes
+   * it that tree's element instead. The resolver binds the element precisely so
+   * that a nested tree can read it by name, and inlining the binding would undo
+   * that.
+   *
+   * <p>Only a use that crosses into a tree is a problem. A binding whose value
+   * is an input and whose uses are beside it -- what beta-reducing {@code from
+   * n where isNum n} leaves, {@code let val n = $0 in n elem nums end} -- must
+   * still be substituted, or the engine cannot see the constraint it grounds
+   * on.
+   */
+  private static boolean carriesInputIntoRel(
+      Core.Exp exp, Core.NamedPat pat, Core.Exp body) {
+    if (!containsInput(exp)) {
+      return false;
+    }
+    final boolean[] found = {false};
+    body.accept(
+        new Visitor() {
+          @Override
+          protected void visitRel(Core.Rel rel) {
+            if (!found[0] && containsReference(rel, pat)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
+  }
+
+  /**
+   * Returns whether an expression reads an input of the node that encloses it.
+   *
+   * <p>The walk stops at a nested node: a reference below one is that node's
+   * own element, and moving the expression does not take it out of scope. A
+   * function whose body is a tree -- {@code fn x => exists y where edge (x, y)}
+   * -- is an ordinary value, and must still be inlined, or the engine never
+   * sees the constraint that grounds the query calling it.
+   */
+  private static boolean containsInput(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor.RelBoundary() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (id.idPat.name.charAt(0) == '$') {
+              // A node's pattern: `$0`, `$1` or `$ordinal`.
               found[0] = true;
             }
           }
@@ -517,6 +593,17 @@ public class Inliner extends EnvShuttle {
 
   @Override
   protected Core.Exp visit(Core.Let let) {
+    if (let.decl instanceof Core.NonRecValDecl) {
+      final Core.NonRecValDecl decl = (Core.NonRecValDecl) let.decl;
+      if (carriesInputIntoRel(decl.exp, decl.pat, let.exp)) {
+        // Keep the declaration, and hide its value: `visit(Core.Id)` reads the
+        // value out of the environment and would make the same substitution
+        // this guard exists to stop.
+        final List<Binding> bindings = new ArrayList<>();
+        bindings.add(Binding.of(decl.pat));
+        return let.copy(let.decl.accept(this), let.exp.accept(bind(bindings)));
+      }
+    }
     final Analyzer.Use use =
         analysis == null
             ? Analyzer.Use.MULTI_UNSAFE
