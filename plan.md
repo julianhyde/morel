@@ -2734,6 +2734,120 @@ suite text from before the framework, and stay where they are.
   writer began working them out lazily. It comes back with Lindig, and
   this time as the only statement of the rule.
 
+### Landing plan: nine commits, built by subtraction from the tip
+
+Written after the rebase onto `a3953e7c`, which makes every hash in
+the subsections above stale; the subjects still hold. This section
+supersedes "Commits to combine" and "The steps 4 to 6 commits" where
+they differ: the stages are not made by reordering the 279 commits
+but by *subtracting* from the tip, because the middle of the history
+is scaffolding that was later deleted (the lowering, the translator,
+two shadows) and no reordering makes that bisect well.
+
+The whole branch against main is 95 files, +24,334 / -5,946, of which
+4,816 added lines are three markdown journals (`plan.md`,
+`discussion.md`, `coloring_design.md`) and 887 are `spec.md`.
+
+**Three options were weighed.**
+
+1. One squash commit. Unreviewable; lands four features and a journal
+   as one change; the ports get no seam to follow.
+2. Keep the history and clean it (279 to perhaps 120 commits). The
+   surviving middle is red or scaffolding, and each of the 21 rebases
+   showed how much golden churn a reordering costs.
+3. Subtract from the tip: land the small orthogonal fixes first, then
+   the parity milestone in two commits, then three feature stages.
+   Every commit is green, each has one idea, and the old branch stays
+   as an archive tag so "why is it like this" still has an answer.
+
+Option 3 is the plan.
+
+**Stage O: four fixes that owe nothing to the tree.** Each lands on
+main on its own, before anything else, as a PR of its own.
+
+| Commit | Content | Size | Case |
+|---|---|---|---|
+| O1 | A record pattern with an ellipsis is converted against the value's type, not its own (`match.smli`) | +64 / -10 | new |
+| O2 | The shell survives a backslash-escaped quote (`Shell`, `ShellTest`) | +89 / -6 | new |
+| O3 | Lint: no console print in a main source (`LintTest`, two `lint:skip`) | +16 | none |
+| O4 | `AstWriter` on Lindig; `FreeFinder` to `ast` as `Core.Exp.freePats`; `EnvVisitor` public; `TypeSystem.hasTypeVar` public | about +600 / -150 | new |
+
+O4 goes before the tree because Lindig makes "break a relation out"
+structural again (see "Commits to separate out"), and the tree's
+printer is written against that.
+
+**Stage B: the parity milestone, as two commits.** Together they are
+about 65 files, +12,700 / -4,900, of which 7,900 added lines are new
+files. What they do not contain: the rules that only optimize
+(`UNORDER_PUSHDOWN`, `FILTER_INTO_JOIN`; measured, deferring them
+moves 18 lines of parity plan text in `such-that` and `relational`),
+`Core` and `Plan` as Morel structures, coloring, and the journals.
+
+* **B1, the contract.** `Core.Rel` and its twelve nodes, `RelBuilder`
+  and `Simplification`, `RelValidator`, the tree's printer (`$0`,
+  renumbering, the type legend, breaking a relation out), the visitor
+  and shuttle cases, `spec.md` as `docs/relational-tree.md` and
+  `discussion.md` beside it, `RelTest` and `RelBuilderTest`. About
+  +5,400 / -100. Inert: nothing builds a tree yet, so main's suite
+  is untouched. This is what a port implements first, and it can be
+  reviewed without the engine.
+* **B2, the flip.** The resolver builds a tree, `RelCompiler`
+  executes it, `CalciteCompiler` translates it, `RelExpander` with
+  `Generators`, `Expander`, `Fbbt`, `RangePushdown`, `FlatQuery` and
+  `CanonicalRows` grounds it; the rule driver with `GROUND` and the
+  four builder simplifications as rules; `FromBuilder` as a front end
+  to `RelBuilder`; `Sys.planOf` and what `Sys.planEx` prints;
+  `Core.From`, `Core.FromStep`, the step-list compiler and grounder
+  and `SuchThatShuttle` deleted; `rel-tree.smli`, `RelExpanderTest`,
+  and the goldens. About +7,300 / -4,800. Not divisible further
+  without the scaffolding: execution cannot flip before grounding
+  moves, and `Core.From` cannot go before both.
+
+Parity, stated exactly: every test main has passes, except the
+thirteen `FromBuilderTest` cases that test the step-list builder,
+which `RelBuilderTest` replaces. Two row orders differ from main's
+base and agree with main's tip (#480). Seven ungrounded-pattern
+messages lose the binder's name (its own case, below).
+
+**Stages C, D, E: after parity, still on this branch.**
+
+| Stage | Content | Size | Case |
+|---|---|---|---|
+| C | `Core` as a Morel structure: `CoreValues`, `lib/core.sig`, `docs/lib/core.md`, `built-in/core.smli`, `CoreValuesTest`, the `BuiltIn`/`Codes` constants, `Applicable.builtIn` | about +2,000 / -50 | #470 |
+| D | `Plan`: closures retain their Core, `Plan.bodyOf`, `Plan.program` and `Compiler.recompile`, `lib/plan.sig`, `built-in/plan.smli`, `UNORDER_PUSHDOWN`, `FILTER_INTO_JOIN`, `rel-rule.smli`, `RelRulesTest` | about +1,800 / -150 | #359 |
+| E | Coloring: `Profile`, `Coloring`, `Core.Boundary`, `Op.BOUNDARY`, `Prop.ENGINE`, the `Compiles` hook, `ColoringTest`, `ProfileTest`, `hybrid.smli`'s comparison, `coloring_design.md` | about +2,600 / -160 | new, with #467 for Spark |
+
+C before D because `Plan.program` takes `Core.exp` values; E after D
+because a query colors only once `FILTER_INTO_JOIN` has put the
+conjunct where the engine can take it. E's footprint in shared files
+is about 200 lines, the largest being 45 in `Core` and 35 in
+`Compiles`, so it subtracts cleanly.
+
+**Follow-ups, each a case of its own, none blocking the milestone.**
+
+* The binder's name in an ungrounded-pattern message, for a query
+  with one binder: needs a leaf-to-pattern channel from the resolver
+  to grounding (see "The one message the tree cannot write").
+* Decorrelation, physical operators, the row-representation revisit
+  (see "Follow-ups" below).
+* #215, intermediate renames in `FromBuilder`: check whether
+  `PROJECT_MERGE` closes it, and close it if so.
+* #280, semantics over a set of core operators: `spec.md` §1 to §5
+  is most of the answer; link it there.
+
+**Cases to log before landing:** O1, O2, O4, E, and the diagnostic
+follow-up. C, D and the Spark half of E have cases already.
+
+**Mechanics.** Tag the tip `449-tree-history` and keep it. Branch
+`449-land` from main; make O1 to O4 by cherry-picking the hunks; make
+B1 by copying the tip's tree and deleting everything later, B2 the
+same with only C, D, E and the journals deleted; then C, D, E each
+restore their own files and hunks. Verify each stage two ways:
+`fullMake`, and `git diff` from the stage to the tip, which must be
+exactly the stages still to come. The commit messages carry the
+reasons, distilled from this file, since `plan.md` itself does not
+land. `.envrc` does not land either.
+
 ### What not to do
 
 Do not squash the whole branch. Six months of "why is it like this"
