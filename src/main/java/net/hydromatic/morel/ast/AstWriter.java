@@ -21,23 +21,145 @@ package net.hydromatic.morel.ast;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.parse.Parsers;
+import net.hydromatic.morel.util.Lindig;
+import net.hydromatic.morel.util.Lindig.Doc;
 
-/** Context for writing an AST out as a string. */
+/**
+ * Context for writing an AST out as a string.
+ *
+ * <p>Builds a {@link Doc} rather than a string, so that the layout can be
+ * chosen to fit a width. A run of characters with no break in it accumulates in
+ * {@code pending} and becomes one {@code text} when a break arrives, which
+ * keeps the document small and lets the hundred-odd {@code unparse} methods go
+ * on appending characters as they always did.
+ *
+ * <p>Until a break point is offered -- a {@link Lindig#group} around something
+ * that may be laid out either way -- the document is a flat concatenation, and
+ * renders the same at every width.
+ */
 public class AstWriter {
-  private final StringBuilder b;
+  /** Characters written since the last break. */
+  private final StringBuilder pending = new StringBuilder();
+
+  private final List<Doc> docs = new ArrayList<>();
+  private final List<Frame> stack = new ArrayList<>();
   private final boolean parenthesize;
 
-  AstWriter(StringBuilder b, boolean parenthesize) {
-    this.b = b;
+  /**
+   * Whether nothing but spaces has been written since the last line break.
+   * Tracked as it is written, because a document does not have a column until
+   * it is rendered.
+   */
+  private boolean lineStart = true;
+
+  public AstWriter() {
+    this(false);
+  }
+
+  /**
+   * Creates a writer that wraps every operator application in parentheses,
+   * which makes an expression's structure explicit.
+   */
+  public AstWriter(boolean parenthesize) {
     this.parenthesize = parenthesize;
   }
 
-  public AstWriter() {
-    this(new StringBuilder(), false);
+  /** Moves the characters written so far into the document. */
+  private void flush() {
+    if (pending.length() > 0) {
+      docs.add(Lindig.text(pending.toString()));
+      pending.setLength(0);
+    }
+  }
+
+  /**
+   * The width to lay the document out within.
+   *
+   * <p>Unbounded unless a subclass says otherwise, so that a plain writer --
+   * the one behind {@code toString}, an error message, a test matcher --
+   * produces the one layout a document with no break point has. Plan text is
+   * the thing with a width.
+   */
+  protected int width() {
+    return Integer.MAX_VALUE;
+  }
+
+  /**
+   * Starts a region that may be laid out on one line or broken.
+   *
+   * <p>Breaks offered inside it (by {@link #softBreak}) are taken only if what
+   * the region holds does not fit, and a broken line is indented {@code indent}
+   * from where the region began.
+   */
+  public AstWriter startGroup(int indent) {
+    return start(indent, true);
+  }
+
+  /**
+   * Starts a region that is indented but not grouped.
+   *
+   * <p>A group decides for itself whether to break; a nest only says where a
+   * break lands. Use this where several breaks must be taken together but at
+   * different indents -- the `let`, `in` and `end` of a `let` are one decision,
+   * and the two parts they enclose are indented.
+   */
+  public AstWriter startNest(int indent) {
+    return start(indent, false);
+  }
+
+  private AstWriter start(int indent, boolean group) {
+    flush();
+    stack.add(new Frame(docs.size(), indent, group));
+    return this;
+  }
+
+  /** Ends the region that {@link #startGroup} began. */
+  public AstWriter endGroup() {
+    return end();
+  }
+
+  /** Ends the region that {@link #startNest} began. */
+  public AstWriter endNest() {
+    return end();
+  }
+
+  private AstWriter end() {
+    flush();
+    final Frame frame = stack.remove(stack.size() - 1);
+    final List<Doc> inner =
+        new ArrayList<>(docs.subList(frame.start, docs.size()));
+    docs.subList(frame.start, docs.size()).clear();
+    final Doc doc = Lindig.nest(frame.indent, Lindig.hcat(inner));
+    docs.add(frame.group ? Lindig.group(doc) : doc);
+    return this;
+  }
+
+  /**
+   * Offers a break: a space if the enclosing group fits on one line, a line
+   * break and the group's indent if it does not.
+   */
+  public AstWriter softBreak() {
+    flush();
+    docs.add(Lindig.LINE);
+    return this;
+  }
+
+  /** An open {@link #startGroup} region. */
+  private static class Frame {
+    final int start;
+    final int indent;
+    final boolean group;
+
+    Frame(int start, int indent, boolean group) {
+      this.start = start;
+      this.indent = indent;
+      this.group = group;
+    }
   }
 
   /**
@@ -47,20 +169,58 @@ public class AstWriter {
    */
   @Override
   public String toString() {
-    return b.toString();
+    flush();
+    return Lindig.render(width(), Lindig.hcat(docs));
   }
 
-  /** Returns a writer that wraps everything in parentheses. */
-  public AstWriter withParenthesize(boolean parenthesize) {
-    return parenthesize == this.parenthesize
-        ? this
-        : new AstWriter(this.b, parenthesize);
+  /**
+   * Returns whether nothing but spaces has been written since the last line
+   * break, so that what comes next is the first non-whitespace on its line.
+   */
+  public boolean atLineStart() {
+    return lineStart;
+  }
+
+  /** Appends an identifier, quoting it if it needs quoting. */
+  private void appendQuoted(String name) {
+    final StringBuilder b = new StringBuilder();
+    Parsers.appendId(b, name);
+    raw(b.toString());
   }
 
   /** Appends a string to the output. */
   public AstWriter append(String s) {
-    b.append(s);
+    int i;
+    while ((i = s.indexOf('\n')) >= 0) {
+      pending.append(s, 0, i);
+      flush();
+      docs.add(Lindig.HARD_LINE);
+      lineStart = true;
+      s = s.substring(i + 1);
+    }
+    raw(s);
     return this;
+  }
+
+  /**
+   * Appends text verbatim. Unlike {@link #append(String)}, a subclass that
+   * renames what it prints does not see it; the text must not contain a line
+   * break.
+   */
+  public AstWriter appendRaw(String s) {
+    raw(s);
+    return this;
+  }
+
+  /** Appends characters that contain no line break. */
+  private void raw(String s) {
+    pending.append(s);
+    for (int i = 0; i < s.length(); i++) {
+      if (s.charAt(i) != ' ') {
+        lineStart = false;
+        break;
+      }
+    }
   }
 
   /**
@@ -70,7 +230,7 @@ public class AstWriter {
    * labels, which must be quoted if they are reserved words.
    */
   public AstWriter id(String name) {
-    b.append(name);
+    raw(name);
     return this;
   }
 
@@ -81,9 +241,9 @@ public class AstWriter {
    * forth.
    */
   public AstWriter id(String name, int i) {
-    b.append(name);
+    raw(name);
     if (i > 0) {
-      b.append('_').append(i);
+      raw("_" + i);
     }
     return this;
   }
@@ -94,17 +254,17 @@ public class AstWriter {
    * example, a variable named {@code left} round-trips.
    */
   public AstWriter idQuoted(String name) {
-    Parsers.appendId(b, name);
+    appendQuoted(name);
     return this;
   }
 
   /** Appends an ordinal-qualified variable identifier, quoting if necessary. */
   public AstWriter idQuoted(String name, int i) {
     if (i == 0) {
-      Parsers.appendId(b, name);
+      appendQuoted(name);
     } else {
       // "name_i" is never a reserved word, so it does not need quoting.
-      b.append(name).append('_').append(i);
+      raw(name + "_" + i);
     }
     return this;
   }
@@ -130,6 +290,8 @@ public class AstWriter {
       if (op.assoc == Op.Assoc.PREFIX) {
         return prefix(left, op, arg, right);
       }
+      // An infix operator is written between its operands only if it has
+      // two; used as a value, as in "op + p", it is written as a call.
       final List<? extends AstNode> args =
           arg instanceof Ast.Tuple
               ? ((Ast.Tuple) arg).args
@@ -145,14 +307,30 @@ public class AstWriter {
   public AstWriter infix(int left, AstNode a0, Op op, AstNode a1, int right) {
     final boolean p = parenthesize || left > op.left || op.right < right;
     if (p) {
-      b.append('(');
+      raw("(");
       left = right = 0;
     }
+    // `andalso` and `orelse` chain, and a plan's conditions are mostly made
+    // of them, so they are where a long line is worth breaking. Each is a
+    // group of its own, so an outer one breaks before an inner one does, and
+    // a condition that fits stays on its line.
+    final boolean breakable = op == Op.ANDALSO || op == Op.ORELSE;
+    if (breakable) {
+      startGroup(0);
+    }
     append(a0, left, op.left);
-    append(op.padded);
+    if (breakable) {
+      softBreak();
+      append(op.padded.substring(1));
+    } else {
+      append(op.padded);
+    }
     append(a1, op.right, right);
+    if (breakable) {
+      endGroup();
+    }
     if (p) {
-      b.append(')');
+      raw(")");
     }
     return this;
   }
@@ -161,13 +339,13 @@ public class AstWriter {
   public AstWriter prefix(int left, Op op, AstNode a, int right) {
     final boolean p = parenthesize || left > op.left || op.right < right;
     if (p) {
-      b.append('(');
+      raw("(");
       right = 0;
     }
     append(op.padded);
     a.unparse(this, op.right, right);
     if (p) {
-      b.append(')');
+      raw(")");
     }
     return this;
   }
@@ -197,12 +375,12 @@ public class AstWriter {
   public AstWriter append(AstNode node, int left, int right) {
     final boolean p = parenthesize || node.op.wraps(left, right);
     if (p) {
-      b.append('(');
+      raw("(");
       left = right = 0;
     }
     node.unparse(this, left, right);
     if (p) {
-      b.append(')');
+      raw(")");
     }
     return this;
   }
@@ -267,9 +445,12 @@ public class AstWriter {
 
   public AstWriter appendLiteral(Comparable value) {
     if (value instanceof String) {
-      append("\"")
-          .append(((String) value).replace("\\", "\\\\").replace("\"", "\\\""))
-          .append("\"");
+      // As one piece of text, so that a newline inside the literal is part
+      // of it rather than a line break the layout must take.
+      raw(
+          "\""
+              + ((String) value).replace("\\", "\\\\").replace("\"", "\\\"")
+              + "\"");
     } else if (value instanceof UnsignedLong) {
       // A word, e.g. "0wxFF". Like Standard ML, print in hexadecimal.
       append("0wx")

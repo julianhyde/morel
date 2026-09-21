@@ -42,6 +42,7 @@ import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.ObjIntConsumer;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -701,6 +702,16 @@ public class Core {
     /** Returns the type. */
     public Type type() {
       return type;
+    }
+
+    /**
+     * Returns the variables this expression reads that it does not bind.
+     *
+     * <p>Scope-aware: a name bound by a {@code let}, a {@code fn}, a match or a
+     * scan inside this expression is not free in it, however often it is read.
+     */
+    public Set<NamedPat> freePats(TypeSystem typeSystem) {
+      return FreeFinder.freePats(typeSystem, this);
     }
 
     @Override

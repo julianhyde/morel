@@ -21,7 +21,7 @@ package net.hydromatic.morel.compile;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.compile.FreeFinder.freePats;
+import static net.hydromatic.morel.ast.FreeFinder.freePats;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.transformEager;
 
