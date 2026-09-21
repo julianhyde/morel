@@ -24,6 +24,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.util.Lindig;
@@ -43,6 +45,13 @@ import net.hydromatic.morel.util.Lindig.Doc;
  * renders the same at every width.
  */
 public class AstWriter {
+  /**
+   * The width a plan is laid out within where the session does not say -- a
+   * test, an assertion message. Matches the default of the {@code lineWidth}
+   * property, which is what says it everywhere else.
+   */
+  public static final int DEFAULT_WIDTH = 79;
+
   /** Characters written since the last break. */
   private final StringBuilder pending = new StringBuilder();
 
@@ -174,6 +183,190 @@ public class AstWriter {
   }
 
   /**
+   * Returns whether a relational node should print the collection type of every
+   * line, as {@code Sys.planEx} prints it.
+   */
+  public boolean withTypes() {
+    return false;
+  }
+
+  /**
+   * The longest type moniker that a plan prints in full. A longer one is
+   * replaced by a reference, {@code t$0}, and printed once in the legend.
+   *
+   * <p>A character count rather than a rule about the type's shape, because
+   * this implementation, morel-rust and morel-go print the same plan text, so
+   * they must agree on it, and they already agree on the moniker's text. It
+   * sits above {@code int option list} (15) and {@code {a:int, b:int} list}
+   * (19), and below a three-field record (41).
+   */
+  public static final int MAX_TYPE_LENGTH = 24;
+
+  /**
+   * Returns whether a relation is broken out onto lines of its own, as {@code
+   * Sys.planEx} prints it, rather than nested in an expression like any other
+   * application.
+   */
+  public boolean treeMode() {
+    return false;
+  }
+
+  /**
+   * Appends a reference to a node's pattern: {@code $0}, {@code $1} or {@code
+   * $ordinal}. In tree mode, a pattern read outside the node that binds it -- a
+   * join's left row read from its right input -- prints under a generated name
+   * instead; see {@link #generatedName}.
+   */
+  public AstWriter rowRef(Core.IdPat pat) {
+    return append(pat.name);
+  }
+
+  /**
+   * Returns the generated name under which a node's pattern prints where the
+   * pattern's own name would be ambiguous: as a dependent join's argument, and
+   * in its right input.
+   */
+  public String generatedName(Core.IdPat pat) {
+    return "v$" + pat.i;
+  }
+
+  /**
+   * Appends a relational node's plan text: its own line, then its inputs,
+   * indented two deeper, each on lines of its own.
+   */
+  public AstWriter describe(Core.Rel rel, int indent) {
+    describeLine(rel, indent);
+    for (Core.Exp input : rel.inputs()) {
+      describeInput(input, indent + 2);
+    }
+    return this;
+  }
+
+  /**
+   * Appends a node's own line: its operator, its arguments, and if {@link
+   * #withTypes} its collection type.
+   */
+  private void describeLine(Core.Rel rel, int indent) {
+    indent(indent);
+    // The node's own line, which wraps four from the node where it does not
+    // fit. Its inputs are two, so a continuation cannot be mistaken for a
+    // child, and the run of continuations ends at the first line that is
+    // not four deeper.
+    //
+    // Only in tree mode. Elsewhere a nested node still prints in place, and
+    // its own line breaks would fall inside this one's indentation.
+    final boolean group = treeMode();
+    if (group) {
+      startGroup(indent + 4);
+    }
+    append(rel.op.lowerName);
+    inNode(rel, (w, r) -> r.describeArgs(w));
+    if (withTypes()) {
+      append(" : ").append(typeRef(rel.type.moniker()));
+    }
+    if (group) {
+      endGroup();
+    }
+    append("\n");
+  }
+
+  /**
+   * Appends an input of a node: a node's lines, or a leaf on a line of its own.
+   * Also how an expression that is not a node prints as a plan.
+   */
+  public AstWriter describeInput(Core.Exp input, int indent) {
+    if (input instanceof Core.Rel) {
+      return describe((Core.Rel) input, indent);
+    }
+    indent(indent);
+    // A leaf is a node line too, and wraps the same way: four from the leaf,
+    // never back to a column where it would read as a node of its own.
+    final boolean group = treeMode();
+    if (group) {
+      startGroup(indent + 4);
+    }
+    append(input, 0, 0);
+    if (withTypes()) {
+      append(" : ").append(typeRef(input.type.moniker()));
+    }
+    if (group) {
+      endGroup();
+    }
+    return append("\n");
+  }
+
+  private void indent(int indent) {
+    for (int i = 0; i < indent; i++) {
+      append(" ");
+    }
+  }
+
+  /** Appends a node argument in brackets, for {@link Core.Rel#describeArgs}. */
+  public AstWriter arg(Object arg) {
+    append(" [");
+    if (arg instanceof AstNode) {
+      append((AstNode) arg, 0, 0);
+    } else {
+      append(String.valueOf(arg));
+    }
+    return append("]");
+  }
+
+  /** Appends named node arguments in brackets, {@code [k = v, ...]}. */
+  public AstWriter args(Map<String, ? extends AstNode> map) {
+    append(" [");
+    int i = 0;
+    for (Map.Entry<String, ? extends AstNode> entry : map.entrySet()) {
+      if (i++ > 0) {
+        append(", ");
+      }
+      append(entry.getKey()).append(" = ").append(entry.getValue(), 0, 0);
+    }
+    return append("]");
+  }
+
+  /**
+   * Runs {@code action}, which prints a node's arguments, with {@code rel} as
+   * the node they belong to. A writer that renumbers binders scopes what the
+   * node binds to its arguments.
+   */
+  public void inNode(Core.Rel rel, BiConsumer<AstWriter, Core.Rel> action) {
+    action.accept(this, rel);
+  }
+
+  /**
+   * Registers a relation that cannot print where it stands, and returns the
+   * reference that prints instead -- {@code r$0}, {@code r$1}, and so on.
+   *
+   * <p>A relational operator is the first non-whitespace on its line. A
+   * relation reached from inside an expression is not, so it is broken out and
+   * defined below the tree.
+   */
+  public String relRef(Core.Rel rel) {
+    throw new UnsupportedOperationException("not in tree mode");
+  }
+
+  /**
+   * Returns the reference for the {@code i}th broken-out relation, with the
+   * variables it reads from outside itself -- {@code r$0[v$0, v$1]}. The same
+   * text stands at the reference and at the definition, so that a fragment that
+   * carries a variable into a fragment nested inside it says so.
+   */
+  public String relHeader(int i) {
+    throw new UnsupportedOperationException("not in tree mode");
+  }
+
+  /** Returns how many relations {@link #relRef} has broken out. */
+  public int relDefCount() {
+    return 0;
+  }
+
+  /** Returns the {@code i}th relation that {@link #relRef} broke out. */
+  public Core.Rel relDef(int i) {
+    throw new UnsupportedOperationException("not in tree mode");
+  }
+
+  /**
    * Returns whether nothing but spaces has been written since the last line
    * break, so that what comes next is the first non-whitespace on its line.
    */
@@ -186,6 +379,48 @@ public class AstWriter {
     final StringBuilder b = new StringBuilder();
     Parsers.appendId(b, name);
     raw(b.toString());
+  }
+
+  /**
+   * Returns how a type is written where a plan line names it: the moniker
+   * itself if it is short, otherwise a reference such as {@code t$0} that
+   * {@link #typeLegend} expands.
+   *
+   * <p>Whether a type is converted into a reference is based on a simple
+   * heuristic: whether the moniker is longer than {@link #MAX_TYPE_LENGTH}.
+   *
+   * <p>A better rule would allow monikers to share components with other
+   * monikers. For example,
+   *
+   * <pre>
+   *   t$0 {a:int, b:bool} list
+   *   t$1 {a:int, b:bool} option bag
+   * </pre>
+   *
+   * <p>could be shortened by introducing an intermediate type {@code t$2}:
+   *
+   * <pre>
+   *   t$0 t$2 list
+   *   t$1 t$2 option bag
+   *   t$2 {a:int, b:bool}
+   * </pre>
+   *
+   * <p>Choosing the set of common types that minimizes the total length of the
+   * {@link #typeLegend()} is the <a
+   * href="https://en.wikipedia.org/wiki/Smallest_grammar_problem">Smallest
+   * grammar problem</a>, which is NP-complete.
+   */
+  public String typeRef(String moniker) {
+    return moniker;
+  }
+
+  /**
+   * Returns the legend for the references {@link #typeRef} has handed out: one
+   * line per distinct type, in the order it was first encountered, or the empty
+   * string if there are none.
+   */
+  public String typeLegend() {
+    return "";
   }
 
   /** Appends a string to the output. */
@@ -255,6 +490,15 @@ public class AstWriter {
    */
   public AstWriter idQuoted(String name) {
     appendQuoted(name);
+    return this;
+  }
+
+  /**
+   * Appends a record selector, {@code #label}, quoting the label if it is not
+   * letters, digits, underscores and primes: {@code #`*`}.
+   */
+  public AstWriter selector(String label) {
+    raw(Parsers.appendSelector(new StringBuilder(), label).toString());
     return this;
   }
 
@@ -485,11 +729,7 @@ public class AstWriter {
           && !builtIn.structure.equals("$")) {
         // E.g. "#find List" for the List.find function, "#`*` Word" for the
         // Word.* operator.
-        append(
-                Parsers.appendSelector(new StringBuilder(), builtIn.mlName)
-                    .toString())
-            .append(" ")
-            .append(builtIn.structure);
+        selector(builtIn.mlName).append(" ").append(builtIn.structure);
       } else {
         append(builtIn.mlName);
       }

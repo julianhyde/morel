@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.compile;
 
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Static.transform;
 
 import java.util.ArrayList;
@@ -169,6 +170,66 @@ public abstract class EnvVisitor extends Visitor {
       this.step = step;
       this.stepEnv = stepEnv;
     }
+  }
+  /** Returns the bindings of a node's patterns. */
+  private static List<Binding> patternBindings(Core.Rel rel) {
+    final List<Binding> bindings = new ArrayList<>();
+    rel.patterns().forEach(pat -> bindings.add(Binding.of(pat)));
+    return bindings;
+  }
+
+  @Override
+  protected void visit(Core.Filter filter) {
+    filter.input.accept(this);
+    filter.condition.accept(bind(patternBindings(filter)));
+  }
+
+  @Override
+  protected void visit(Core.Project project) {
+    project.input.accept(this);
+    project.exp.accept(bind(patternBindings(project)));
+  }
+
+  @Override
+  protected void visit(Core.Sort sort) {
+    sort.input.accept(this);
+    sort.exp.accept(bind(patternBindings(sort)));
+  }
+
+  @Override
+  protected void visit(Core.Join join) {
+    join.left.accept(this);
+    // The right input is evaluated once per left element, and may read it.
+    final List<Binding> rightBindings = new ArrayList<>();
+    rightBindings.add(Binding.of(join.leftRow));
+    if (join.ordinal != null) {
+      rightBindings.add(Binding.of(join.ordinal));
+    }
+    join.right.accept(bind(rightBindings));
+    join.condition.accept(bind(patternBindings(join)));
+  }
+
+  @Override
+  protected void visit(Core.Group group) {
+    group.input.accept(this);
+    final EnvVisitor rowV = bind(patternBindings(group));
+    group.keys.values().forEach(rowV::accept);
+    // The aggregate's argument reads the row; the aggregate function may name
+    // a key -- `fn list => List.size list + k` -- so bind the keys for it.
+    final List<Binding> bindings = new ArrayList<>();
+    group.keys.forEach(
+        (name, key) -> bindings.add(Binding.of(core.idPat(key.type, name, 0))));
+    final EnvVisitor v2 = bind(bindings);
+    group
+        .aggregates
+        .values()
+        .forEach(
+            aggregate -> {
+              aggregate.aggregate.accept(v2);
+              if (aggregate.argument != null) {
+                aggregate.argument.accept(rowV);
+              }
+            });
   }
 }
 

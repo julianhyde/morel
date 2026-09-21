@@ -45,6 +45,7 @@ import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
@@ -256,6 +257,31 @@ public enum CoreBuilder {
   /** Creates a reference to a value that the compiler synthesized. */
   public Core.Id id(Core.NamedPat idPat) {
     return new Core.Id(Pos.ZERO, idPat);
+  }
+
+  /**
+   * Returns an expression at a given position, if it is of a kind whose
+   * position can be moved; otherwise returns it unchanged.
+   *
+   * <p>Use this where one expression is substituted for another, so that an
+   * error is blamed on the occurrence that was replaced rather than on wherever
+   * the replacement happened to be built. {@code from i in xs order i} becomes
+   * an order over the row, and it is the {@code i} the user wrote that
+   * "comparison not defined" should point at.
+   */
+  public Core.Exp at(Core.Exp exp, Pos pos) {
+    if (pos.equals(Pos.ZERO) || pos.equals(exp.pos)) {
+      return exp;
+    }
+    switch (exp.op) {
+      case ID:
+        return id(pos, ((Core.Id) exp).idPat);
+      case APPLY:
+        final Core.Apply apply = (Core.Apply) exp;
+        return apply(pos, apply.type, apply.fn, apply.arg);
+      default:
+        return exp;
+    }
   }
 
   /** Creates a reference to a constructor. */
@@ -490,112 +516,6 @@ public enum CoreBuilder {
     return new Core.Case(pos, type, exp, ImmutableList.copyOf(matchList));
   }
 
-  public Core.From from(Type type, List<Core.FromStep> steps) {
-    return new Core.From(type, ImmutableList.copyOf(steps));
-  }
-
-  /** Derives the result type, then calls {@link #from(Type, List)}. */
-  public Core.From from(TypeSystem typeSystem, List<Core.FromStep> steps) {
-    final Type elementType = fromElementType(typeSystem, steps);
-    final Type collectionType;
-    if (fromOrdered(steps)) {
-      collectionType = typeSystem.listType(elementType);
-    } else {
-      collectionType = typeSystem.bagType(elementType);
-    }
-    return from(collectionType, steps);
-  }
-
-  /**
-   * Returns the datatype of an element of a {@link Core.From} with the given
-   * steps.
-   */
-  private Type fromElementType(
-      TypeSystem typeSystem, List<Core.FromStep> steps) {
-    final Core.StepEnv lastStep = lastEnv(steps);
-    final PairList<String, Type> argNameTypes = PairList.of();
-    lastStep.bindings.forEach(b -> argNameTypes.add(b.id.name, b.id.type));
-    if (lastStep.atom) {
-      checkArgument(argNameTypes.size() == 1);
-      return argNameTypes.right(0);
-    }
-    return typeSystem.recordType(argNameTypes);
-  }
-
-  /**
-   * Returns whether the output of the last of a sequence of steps is ordered.
-   */
-  static boolean fromOrdered(List<Core.FromStep> steps) {
-    boolean ordered = true;
-    for (Core.FromStep step : steps) {
-      ordered = step.isOrdered(ordered);
-      checkArgument(
-          ordered == step.env.ordered,
-          "unexpected ordered [%s] in step [%s]",
-          step.env.ordered,
-          step);
-    }
-    return ordered;
-  }
-
-  /**
-   * Returns what would be the yield expression if we created a {@link
-   * Core.From} from the given steps.
-   *
-   * <p>Examples:
-   *
-   * <ul>
-   *   <li>{@code implicitYieldExp(steps=[scan(a=E:t)])} is {@code a} (a {@link
-   *       Core.Id});
-   *   <li>{@code implicitYieldExp(steps=[scan(a=E:t), scan(b=E2:t2)])} is
-   *       {@code {a = a, b = b}} (a record).
-   * </ul>
-   */
-  public Core.Exp implicitYieldExp(
-      TypeSystem typeSystem, List<Core.FromStep> steps) {
-    final Core.StepEnv lastEnv = lastEnv(steps);
-    if (lastEnv.bindings.size() == 1) {
-      return id(lastEnv.bindings.get(0).id);
-    } else {
-      final SortedMap<Core.NamedPat, Core.Exp> map = new TreeMap<>();
-      final PairList<String, Type> argNameTypes = PairList.of();
-      lastEnv.bindings.forEach(
-          b -> {
-            map.put(b.id, id(b.id));
-            argNameTypes.add(b.id.name, b.id.type);
-          });
-      return tuple(typeSystem.recordType(argNameTypes), map.values());
-    }
-  }
-
-  public Core.StepEnv lastEnv(List<? extends Core.FromStep> steps) {
-    return steps.isEmpty() ? Core.StepEnv.EMPTY : last(steps).env;
-  }
-
-  /** Creates a builder that will create a {@link Core.From}. */
-  public FromBuilder fromBuilder(
-      TypeSystem typeSystem, @Nullable Supplier<Environment> envSupplier) {
-    return new FromBuilder(typeSystem, envSupplier);
-  }
-
-  /**
-   * Creates a builder that will create a {@link Core.From} and validates if
-   * {@code env} is not null.
-   */
-  public FromBuilder fromBuilder(
-      TypeSystem typeSystem, @Nullable Environment env) {
-    final Supplier<Environment> envSupplier = env == null ? null : () -> env;
-    return fromBuilder(typeSystem, envSupplier);
-  }
-
-  /**
-   * Creates a builder that will create a {@link Core.From} but does not
-   * validate.
-   */
-  public FromBuilder fromBuilder(TypeSystem typeSystem) {
-    return fromBuilder(typeSystem, (Supplier<Environment>) null);
-  }
-
   public Core.Fn fn(FnType type, Core.IdPat idPat, Core.Exp exp) {
     return new Core.Fn(exp.pos, type, idPat, exp);
   }
@@ -671,137 +591,503 @@ public enum CoreBuilder {
     return new Core.DatatypeDecl(ImmutableList.copyOf(dataTypes));
   }
 
-  public Core.Scan scan(
-      Core.StepEnv env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    return scan(Op.SCAN, env, pat, exp, condition);
-  }
-
-  public Core.Scan scan(
-      Op op, Core.StepEnv env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
-    env = env.withOrdered(env.ordered && exp.type instanceof ListType);
-    return new Core.Scan(op, env, pat, exp, condition);
-  }
-
   public Core.Aggregate aggregate(
       Pos pos, Type type, Core.Exp aggregate, Core.@Nullable Exp argument) {
     return new Core.Aggregate(pos, type, aggregate, argument);
   }
 
-  public Core.Order order(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Order(env.withOrdered(true), exp);
+  // Relational tree (Core.Rel) nodes.
+
+  /**
+   * Creates the pattern that names a node's input element, {@code $0}. The
+   * ordinal makes it distinct from every other node's, and comes from the
+   * counter that numbers generated binders, so that the printer can name the
+   * pattern {@code v$}-ordinal outside its node without naming a binder.
+   */
+  public Core.IdPat rowPat(Type elementType, ToIntFunction<String> gen) {
+    return idPat(elementType, "$0", gen.applyAsInt("v$"));
   }
 
-  public Core.GroupStep group(
-      boolean atom,
-      boolean ordered,
-      SortedMap<Core.IdPat, Core.Exp> groupExps,
-      SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
-    final List<Binding> bindings = new ArrayList<>();
-    groupExps.keySet().forEach(id -> bindings.add(Binding.of(id)));
-    aggregates.keySet().forEach(id -> bindings.add(Binding.of(id)));
-    checkArgument(
-        !atom || bindings.size() == 1,
-        "atom with %s bindings %s",
-        bindings.size(),
-        bindings);
-    return new Core.GroupStep(
-        Core.StepEnv.of(bindings, atom, ordered),
-        ImmutableSortedMap.copyOfSorted(groupExps),
-        ImmutableSortedMap.copyOfSorted(aggregates));
+  /**
+   * Creates the pattern that names a join's right input element, {@code $1}.
+   */
+  public Core.IdPat rightRowPat(Type elementType, ToIntFunction<String> gen) {
+    return idPat(elementType, "$1", gen.applyAsInt("v$"));
   }
 
-  public Core.Where where(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Where(env, exp);
+  /**
+   * Creates the pattern that names the position of a node's input element,
+   * {@code $ordinal}.
+   */
+  public Core.IdPat ordinalPat(ToIntFunction<String> gen) {
+    return idPat(PrimitiveType.INT, "$ordinal", gen.applyAsInt("v$"));
   }
 
-  public Core.SkipStep skip(Core.StepEnv env, Core.Exp exp) {
-    return new Core.SkipStep(env, exp);
+  /**
+   * Creates a collection type: a {@code list} if {@code ordered}, otherwise a
+   * {@code bag}.
+   */
+  public Type collectionType(
+      TypeSystem typeSystem, boolean ordered, Type elementType) {
+    return ordered
+        ? typeSystem.listType(elementType)
+        : typeSystem.bagType(elementType);
   }
 
-  public Core.TakeStep take(Core.StepEnv env, Core.Exp exp) {
-    return new Core.TakeStep(env, exp);
+  /**
+   * Creates a filter; its condition is a {@code bool} expression over {@code
+   * $0}.
+   */
+  public Core.Filter filter(
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp condition) {
+    return filter(Pos.ZERO, row, ordinal, input, condition);
   }
 
-  public Core.ExceptStep except(
-      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.ExceptStep(env, distinct, ImmutableList.copyOf(args));
+  public Core.Filter filter(
+      Pos pos,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp condition) {
+    checkCollection(input);
+    checkBoolType(condition, "filter condition");
+    return new Core.Filter(pos, row, ordinal, input, condition);
   }
 
-  public Core.IntersectStep intersect(
-      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.IntersectStep(env, distinct, ImmutableList.copyOf(args));
+  /**
+   * Creates a projection; the element type is the type of {@code exp}, an
+   * expression over {@code $0}, and the kind is that of the input.
+   */
+  public Core.Project project(
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp exp) {
+    return project(Pos.ZERO, typeSystem, row, ordinal, input, exp);
   }
 
-  public Core.UnionStep union(
-      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
-    return new Core.UnionStep(env, distinct, ImmutableList.copyOf(args));
+  public Core.Project project(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp exp) {
+    checkCollection(input);
+    final Type type = collectionType(typeSystem, isOrdered(input), exp.type);
+    return new Core.Project(pos, type, row, ordinal, input, exp);
   }
 
-  public Core.UnorderStep unorder(Core.StepEnv env) {
-    return new Core.UnorderStep(env.withOrdered(false));
+  /** Creates an inner join. */
+  public Core.Join join(
+      TypeSystem typeSystem,
+      Core.IdPat leftRow,
+      Core.IdPat rightRow,
+      Core.Exp left,
+      Core.Exp right,
+      Core.Exp condition) {
+    return join(
+        Pos.ZERO, typeSystem, leftRow, rightRow, left, right, condition);
   }
 
-  public Core.Yield yield_(Core.StepEnv env, Core.Exp exp) {
-    return new Core.Yield(env, exp);
+  public Core.Join join(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.IdPat leftRow,
+      Core.IdPat rightRow,
+      Core.Exp left,
+      Core.Exp right,
+      Core.Exp condition) {
+    return join(
+        pos,
+        typeSystem,
+        JoinType.INNER,
+        leftRow,
+        rightRow,
+        null,
+        left,
+        right,
+        condition);
   }
 
-  /** Derives bindings, then calls {@link #yield_(Core.StepEnv, Core.Exp)}. */
-  public Core.Yield yield_(
-      TypeSystem typeSystem, Core.Exp exp, boolean atom, boolean ordered) {
-    final List<Core.NamedPat> idPats = new ArrayList<>();
-    if (atom) {
-      idPats.add(getIdPat(typeSystem, exp, null));
-    } else if (exp.op == Op.TUPLE) {
-      forEach(
-          ((RecordLikeType) exp.type).argNames(),
-          ((Core.Tuple) exp).args,
-          (name, arg) -> idPats.add(getIdPat(typeSystem, arg, name)));
-    } else {
-      ((RecordLikeType) exp.type)
-          .argNameTypes()
-          .forEach(
-              (name, type) ->
-                  idPats.add(idPat(type, name, typeSystem.nameGenerator::inc)));
+  /**
+   * Creates a join that may be dependent: {@code leftRow} is in scope in {@code
+   * right}, and a right input that reads it makes the join dependent, which is
+   * how a scan whose collection reads an earlier binder is expressed.
+   */
+  public Core.Join join(
+      TypeSystem typeSystem,
+      JoinType joinType,
+      Core.IdPat leftRow,
+      Core.IdPat rightRow,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp left,
+      Core.Exp right,
+      Core.Exp condition) {
+    return join(
+        Pos.ZERO,
+        typeSystem,
+        joinType,
+        leftRow,
+        rightRow,
+        ordinal,
+        left,
+        right,
+        condition);
+  }
+
+  public Core.Join join(
+      Pos pos,
+      TypeSystem typeSystem,
+      JoinType joinType,
+      Core.IdPat leftRow,
+      Core.IdPat rightRow,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp left,
+      Core.Exp right,
+      Core.Exp condition) {
+    checkCollection(left);
+    checkCollection(right);
+    checkBoolType(condition, "join condition");
+    final boolean ordered = isOrdered(left) && isOrdered(right);
+    final Type type =
+        collectionType(
+            typeSystem,
+            ordered,
+            joinElementType(typeSystem, joinType, left, right));
+    return new Core.Join(
+        pos, type, joinType, leftRow, rightRow, ordinal, left, right,
+        condition);
+  }
+
+  /**
+   * Returns expressions for a node's components, read out of an expression for
+   * its element: a join contributes its own, anything else contributes one.
+   */
+  public List<Core.Exp> components(
+      TypeSystem typeSystem, Core.Exp node, Core.Exp exp) {
+    final Core.@Nullable Exp input = elementPreserved(node);
+    if (input != null) {
+      return components(typeSystem, input, exp);
     }
-    return yield_(
-        Core.StepEnv.of(transform(idPats, Binding::of), atom, ordered), exp);
+    if (!(node instanceof Core.Join)) {
+      return ImmutableList.of(exp);
+    }
+    final int n = componentCount(node);
+    if (exp instanceof Core.Tuple && ((Core.Tuple) exp).args.size() == n) {
+      // The element is already a tuple of the components, so read them off
+      // it rather than projecting each out of it. `#1 (a, b)` is `a`, and
+      // leaving it unreduced hands whatever reads it a projection of a
+      // construction, which Calcite cannot resolve as a bare `#1`.
+      return ((Core.Tuple) exp).args;
+    }
+    final List<Core.Exp> exps = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      exps.add(field(typeSystem, exp, i));
+    }
+    return exps;
   }
 
-  private Core.NamedPat getIdPat(
-      TypeSystem typeSystem, Core.Exp exp, @Nullable String name) {
-    if (exp instanceof Core.Id) {
-      Core.Id id = (Core.Id) exp;
-      if (name == null) {
-        // There is no preferred name, so this id will do.
-        return id.idPat;
-      }
-      if (id.idPat.name.equals(name)) {
-        // Name is specified, which means that we are trying to generate an
-        // IdPat from an assignment in a record constructor. If the left-hand
-        // side matches the name (e.g. '{x = x}') we can use the IdPat from the
-        // right side; but if it does not (e.g. '{y = x}') we cannot.
-        //
-        // It is better to use an existing IdPat, rather than generating a new
-        // IdPat with a different sequence number. (The underlying problem,
-        // which we should solve someday, is that the fields of record types
-        // have only names, no sequence numbers.)
-        return id.idPat;
-      }
+  /** Returns how many components a node's element has. */
+  public int componentCount(Core.Exp node) {
+    final Core.@Nullable Exp input = elementPreserved(node);
+    if (input != null) {
+      return componentCount(input);
     }
-
-    // If the expression is "#deptno e" (also written as "e.deptno"), use
-    // "deptno" as the name.
-    if (name == null && exp instanceof Core.Apply) {
-      Core.Apply apply = (Core.Apply) exp;
-      if (apply.fn instanceof Core.RecordSelector) {
-        name = ((Core.RecordSelector) apply.fn).fieldName();
-      }
+    if (node instanceof Core.Join) {
+      final Core.Join join = (Core.Join) node;
+      return componentCount(join.left) + componentCount(join.right);
     }
+    return 1;
+  }
 
-    if (name == null) {
-      return idPat(exp.type, typeSystem.nameGenerator::get);
-    } else {
-      return idPat(exp.type, name, typeSystem.nameGenerator::inc);
+  /**
+   * Returns the input whose components a node passes through, or null if the
+   * node's element is its own.
+   *
+   * <p>A filter emits its input's rows unchanged, so its element *is* its
+   * input's element and its components are its input's components. Saying
+   * otherwise -- one component, because the node is not a join -- is invisible
+   * until something removes the filter: {@code join(filter(join(a, b)), c)}
+   * would have element {@code ((a, b), c)} where {@code join(join(a, b), c)}
+   * has {@code (a, b, c)}. The rules remove and reorder filters constantly, so
+   * this has to be the node's own answer rather than a caller's care. The same
+   * holds of every node that changes which rows there are, or in what order,
+   * but not what a row is.
+   */
+  private static Core.@Nullable Exp elementPreserved(Core.Exp node) {
+    switch (node.op) {
+      case FILTER:
+      case SORT:
+      case UNORDER:
+      case SKIP:
+      case TAKE:
+        return ((Core.SingleRel) node).input;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Replaces the reads of a pattern in an expression with an expression, which
+   * takes the position of each read.
+   */
+  public Core.Exp substitute(
+      TypeSystem typeSystem, Core.Exp exp, Core.NamedPat pat, Core.Exp e0) {
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            return id.idPat.equals(pat) ? at(e0, id.pos) : id;
+          }
+        });
+  }
+
+  /**
+   * Returns the element type of a join: its inputs' components, in order.
+   *
+   * <p>An outer join wraps each component of the absent side in {@code option},
+   * one option per component, which is Morel's own rule: {@code left join (j,
+   * k) in pairs} binds {@code j : int option} and {@code k : int option}, not
+   * {@code (int * int) option}. A join above one wraps them again, and wrapping
+   * is additive, which is where {@code int option option} comes from when two
+   * outer joins chain.
+   */
+  public Type joinElementType(
+      TypeSystem typeSystem, JoinType joinType, Core.Exp left, Core.Exp right) {
+    final List<Type> types = new ArrayList<>();
+    componentTypes(left)
+        .forEach(
+            t -> types.add(joinType.leftIsOption() ? typeSystem.option(t) : t));
+    componentTypes(right)
+        .forEach(
+            t ->
+                types.add(joinType.rightIsOption() ? typeSystem.option(t) : t));
+    return typeSystem.tupleType(types);
+  }
+
+  /**
+   * Returns the component types of a node's element, read off a join's own
+   * element rather than recomputed from its inputs, so that an outer join's
+   * option-wrapping is not applied twice.
+   */
+  public List<Type> componentTypes(Core.Exp node) {
+    final Core.@Nullable Exp input = elementPreserved(node);
+    if (input != null) {
+      return componentTypes(input);
+    }
+    if (node instanceof Core.Join) {
+      return ImmutableList.copyOf(
+          ((RecordLikeType) node.type.elementType()).argTypes());
+    }
+    return ImmutableList.of(node.type.elementType());
+  }
+
+  /**
+   * Creates a {@code group}; the element type is a record of the keys and
+   * aggregates.
+   */
+  public Core.Group group(
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      SortedMap<String, Core.Exp> keys,
+      SortedMap<String, Core.Aggregate> aggregates) {
+    return group(Pos.ZERO, typeSystem, row, ordinal, input, keys, aggregates);
+  }
+
+  public Core.Group group(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      SortedMap<String, Core.Exp> keys,
+      SortedMap<String, Core.Aggregate> aggregates) {
+    checkCollection(input);
+    final Map<String, Type> nameTypes = new LinkedHashMap<>();
+    keys.forEach((name, exp) -> nameTypes.put(name, exp.type));
+    aggregates.forEach((name, agg) -> nameTypes.put(name, agg.type));
+    if (nameTypes.size() < keys.size() + aggregates.size()) {
+      throw new IllegalArgumentException(
+          format(
+              "duplicate label in group keys %s and aggregates %s",
+              keys.keySet(), aggregates.keySet()));
+    }
+    // A record whether there is one label or many. Collapsing a one-label
+    // element to its bare type would make the element's *shape* depend on how
+    // many labels there are, so a rule that drops one of two labels would
+    // change the shape and everything above it would have to rewrite. Where
+    // the query wants the bare value, an ordinary projection of the field
+    // says so, and a projection is a node a rule can see.
+    final Type elementType =
+        typeSystem.recordType(ImmutableSortedMap.copyOf(nameTypes, ORDERING));
+    final Type type = collectionType(typeSystem, isOrdered(input), elementType);
+    return new Core.Group(
+        pos,
+        type,
+        row,
+        ordinal,
+        input,
+        ImmutableSortedMap.copyOf(keys, ORDERING),
+        ImmutableSortedMap.copyOf(aggregates, ORDERING));
+  }
+
+  /** Creates a {@code sort}; the output is always a {@code list}. */
+  public Core.Sort sort(
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp exp) {
+    return sort(Pos.ZERO, typeSystem, row, ordinal, input, exp);
+  }
+
+  public Core.Sort sort(
+      Pos pos,
+      TypeSystem typeSystem,
+      Core.IdPat row,
+      Core.@Nullable IdPat ordinal,
+      Core.Exp input,
+      Core.Exp exp) {
+    checkCollection(input);
+    final Type type = typeSystem.listType(input.type.elementType());
+    return new Core.Sort(pos, type, row, ordinal, input, exp);
+  }
+
+  /** Creates an {@code unorder}; the output is always a {@code bag}. */
+  public Core.Unorder unorder(TypeSystem typeSystem, Core.Exp input) {
+    return unorder(Pos.ZERO, typeSystem, input);
+  }
+
+  public Core.Unorder unorder(Pos pos, TypeSystem typeSystem, Core.Exp input) {
+    checkCollection(input);
+    final Type type = typeSystem.bagType(input.type.elementType());
+    return new Core.Unorder(pos, type, input);
+  }
+
+  /**
+   * Creates a {@code skip}; its count is evaluated before the first element
+   * exists, and therefore cannot mention {@code $0}.
+   */
+  public Core.Skip skip(Core.Exp input, Core.Exp count) {
+    return skip(Pos.ZERO, input, count);
+  }
+
+  public Core.Skip skip(Pos pos, Core.Exp input, Core.Exp count) {
+    checkCollection(input);
+    return new Core.Skip(pos, input, count);
+  }
+
+  /**
+   * Creates a {@code take}; its count is evaluated before the first element
+   * exists, and therefore cannot mention {@code $0}.
+   */
+  public Core.Take take(Core.Exp input, Core.Exp count) {
+    return take(Pos.ZERO, input, count);
+  }
+
+  public Core.Take take(Pos pos, Core.Exp input, Core.Exp count) {
+    checkCollection(input);
+    return new Core.Take(pos, input, count);
+  }
+
+  /** Creates a {@code union}. */
+  public Core.Union union(
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    return union(Pos.ZERO, typeSystem, distinct, inputs);
+  }
+
+  public Core.Union union(
+      Pos pos,
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
+    return new Core.Union(
+        pos, setRelType(typeSystem, inputList), distinct, inputList);
+  }
+
+  /** Creates an {@code intersect}. */
+  public Core.Intersect intersect(
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    return intersect(Pos.ZERO, typeSystem, distinct, inputs);
+  }
+
+  public Core.Intersect intersect(
+      Pos pos,
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
+    return new Core.Intersect(
+        pos, setRelType(typeSystem, inputList), distinct, inputList);
+  }
+
+  /** Creates an {@code except}. */
+  public Core.Except except(
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    return except(Pos.ZERO, typeSystem, distinct, inputs);
+  }
+
+  public Core.Except except(
+      Pos pos,
+      TypeSystem typeSystem,
+      boolean distinct,
+      Iterable<? extends Core.Exp> inputs) {
+    final ImmutableList<Core.Exp> inputList = ImmutableList.copyOf(inputs);
+    return new Core.Except(
+        pos, setRelType(typeSystem, inputList), distinct, inputList);
+  }
+
+  /**
+   * Returns the type of a set operator: all inputs must have the same element
+   * type, and the output is ordered only if every input is ordered.
+   */
+  private Type setRelType(
+      TypeSystem typeSystem, List<? extends Core.Exp> inputs) {
+    inputs.forEach(CoreBuilder::checkCollection);
+    final Type elementType = inputs.get(0).type.elementType();
+    boolean ordered = true;
+    for (Core.Exp input : inputs) {
+      if (!input.type.elementType().equals(elementType)) {
+        throw new IllegalArgumentException(
+            format(
+                "set operator inputs have different element types: %s, %s",
+                elementType, input.type.elementType()));
+      }
+      ordered = ordered && isOrdered(input);
+    }
+    return collectionType(typeSystem, ordered, elementType);
+  }
+
+  /** Returns whether an expression's collection type is a {@code list}. */
+  private static boolean isOrdered(Core.Exp exp) {
+    return exp.type instanceof ListType;
+  }
+
+  private static void checkCollection(Core.Exp exp) {
+    if (!exp.type.isCollection()) {
+      throw new IllegalArgumentException(
+          "input must be list or bag: " + exp.type);
+    }
+  }
+
+  private static void checkBoolType(Core.Exp exp, String what) {
+    if (exp.type != PrimitiveType.BOOL) {
+      throw new IllegalArgumentException(
+          format("%s must be bool: %s", what, exp.type));
     }
   }
 
@@ -1453,6 +1739,239 @@ public enum CoreBuilder {
       }
     }
     return arg;
+  }
+
+  public Core.From from(Type type, List<Core.FromStep> steps) {
+    return new Core.From(type, ImmutableList.copyOf(steps));
+  }
+
+  /** Derives the result type, then calls {@link #from(Type, List)}. */
+  public Core.From from(TypeSystem typeSystem, List<Core.FromStep> steps) {
+    final Type elementType = fromElementType(typeSystem, steps);
+    final Type collectionType;
+    if (fromOrdered(steps)) {
+      collectionType = typeSystem.listType(elementType);
+    } else {
+      collectionType = typeSystem.bagType(elementType);
+    }
+    return from(collectionType, steps);
+  }
+
+  /**
+   * Returns the datatype of an element of a {@link Core.From} with the given
+   * steps.
+   */
+  private Type fromElementType(
+      TypeSystem typeSystem, List<Core.FromStep> steps) {
+    final Core.StepEnv lastStep = lastEnv(steps);
+    final PairList<String, Type> argNameTypes = PairList.of();
+    lastStep.bindings.forEach(b -> argNameTypes.add(b.id.name, b.id.type));
+    if (lastStep.atom) {
+      checkArgument(argNameTypes.size() == 1);
+      return argNameTypes.right(0);
+    }
+    return typeSystem.recordType(argNameTypes);
+  }
+
+  /**
+   * Returns whether the output of the last of a sequence of steps is ordered.
+   */
+  static boolean fromOrdered(List<Core.FromStep> steps) {
+    boolean ordered = true;
+    for (Core.FromStep step : steps) {
+      ordered = step.isOrdered(ordered);
+      checkArgument(
+          ordered == step.env.ordered,
+          "unexpected ordered [%s] in step [%s]",
+          step.env.ordered,
+          step);
+    }
+    return ordered;
+  }
+
+  /**
+   * Returns what would be the yield expression if we created a {@link
+   * Core.From} from the given steps.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>{@code implicitYieldExp(steps=[scan(a=E:t)])} is {@code a} (a {@link
+   *       Core.Id});
+   *   <li>{@code implicitYieldExp(steps=[scan(a=E:t), scan(b=E2:t2)])} is
+   *       {@code {a = a, b = b}} (a record).
+   * </ul>
+   */
+  public Core.Exp implicitYieldExp(
+      TypeSystem typeSystem, List<Core.FromStep> steps) {
+    final Core.StepEnv lastEnv = lastEnv(steps);
+    if (lastEnv.bindings.size() == 1) {
+      return id(lastEnv.bindings.get(0).id);
+    } else {
+      final SortedMap<Core.NamedPat, Core.Exp> map = new TreeMap<>();
+      final PairList<String, Type> argNameTypes = PairList.of();
+      lastEnv.bindings.forEach(
+          b -> {
+            map.put(b.id, id(b.id));
+            argNameTypes.add(b.id.name, b.id.type);
+          });
+      return tuple(typeSystem.recordType(argNameTypes), map.values());
+    }
+  }
+
+  public Core.StepEnv lastEnv(List<? extends Core.FromStep> steps) {
+    return steps.isEmpty() ? Core.StepEnv.EMPTY : last(steps).env;
+  }
+
+  /**
+   * Creates a builder that will create a {@link Core.From} and validates if
+   * {@code env} is not null.
+   */
+  public FromBuilder fromBuilder(
+      TypeSystem typeSystem, @Nullable Environment env) {
+    final Supplier<Environment> envSupplier = env == null ? null : () -> env;
+    return fromBuilder(typeSystem, envSupplier);
+  }
+
+  public Core.Scan scan(
+      Core.StepEnv env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+    return scan(Op.SCAN, env, pat, exp, condition);
+  }
+
+  public Core.Scan scan(
+      Op op, Core.StepEnv env, Core.Pat pat, Core.Exp exp, Core.Exp condition) {
+    env = env.withOrdered(env.ordered && exp.type instanceof ListType);
+    return new Core.Scan(op, env, pat, exp, condition);
+  }
+
+  public Core.Order order(Core.StepEnv env, Core.Exp exp) {
+    return new Core.Order(env.withOrdered(true), exp);
+  }
+
+  public Core.GroupStep group(
+      boolean atom,
+      boolean ordered,
+      SortedMap<Core.IdPat, Core.Exp> groupExps,
+      SortedMap<Core.IdPat, Core.Aggregate> aggregates) {
+    final List<Binding> bindings = new ArrayList<>();
+    groupExps.keySet().forEach(id -> bindings.add(Binding.of(id)));
+    aggregates.keySet().forEach(id -> bindings.add(Binding.of(id)));
+    checkArgument(
+        !atom || bindings.size() == 1,
+        "atom with %s bindings %s",
+        bindings.size(),
+        bindings);
+    return new Core.GroupStep(
+        Core.StepEnv.of(bindings, atom, ordered),
+        ImmutableSortedMap.copyOfSorted(groupExps),
+        ImmutableSortedMap.copyOfSorted(aggregates));
+  }
+
+  public Core.Where where(Core.StepEnv env, Core.Exp exp) {
+    return new Core.Where(env, exp);
+  }
+
+  public Core.SkipStep skip(Core.StepEnv env, Core.Exp exp) {
+    return new Core.SkipStep(env, exp);
+  }
+
+  public Core.TakeStep take(Core.StepEnv env, Core.Exp exp) {
+    return new Core.TakeStep(env, exp);
+  }
+
+  public Core.ExceptStep except(
+      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
+    return new Core.ExceptStep(env, distinct, ImmutableList.copyOf(args));
+  }
+
+  public Core.IntersectStep intersect(
+      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
+    return new Core.IntersectStep(env, distinct, ImmutableList.copyOf(args));
+  }
+
+  public Core.UnionStep union(
+      Core.StepEnv env, boolean distinct, Iterable<? extends Core.Exp> args) {
+    return new Core.UnionStep(env, distinct, ImmutableList.copyOf(args));
+  }
+
+  public Core.UnorderStep unorder(Core.StepEnv env) {
+    return new Core.UnorderStep(env.withOrdered(false));
+  }
+
+  public Core.Yield yield_(Core.StepEnv env, Core.Exp exp) {
+    return new Core.Yield(env, exp);
+  }
+
+  /** Derives bindings, then calls {@link #yield_(Core.StepEnv, Core.Exp)}. */
+  public Core.Yield yield_(
+      TypeSystem typeSystem, Core.Exp exp, boolean atom, boolean ordered) {
+    final List<Core.NamedPat> idPats = new ArrayList<>();
+    if (atom) {
+      idPats.add(getIdPat(typeSystem, exp, null));
+    } else if (exp.op == Op.TUPLE) {
+      forEach(
+          ((RecordLikeType) exp.type).argNames(),
+          ((Core.Tuple) exp).args,
+          (name, arg) -> idPats.add(getIdPat(typeSystem, arg, name)));
+    } else {
+      ((RecordLikeType) exp.type)
+          .argNameTypes()
+          .forEach(
+              (name, type) ->
+                  idPats.add(idPat(type, name, typeSystem.nameGenerator::inc)));
+    }
+    return yield_(
+        Core.StepEnv.of(transform(idPats, Binding::of), atom, ordered), exp);
+  }
+
+  private Core.NamedPat getIdPat(
+      TypeSystem typeSystem, Core.Exp exp, @Nullable String name) {
+    if (exp instanceof Core.Id) {
+      Core.Id id = (Core.Id) exp;
+      if (name == null) {
+        // There is no preferred name, so this id will do.
+        return id.idPat;
+      }
+      if (id.idPat.name.equals(name)) {
+        // Name is specified, which means that we are trying to generate an
+        // IdPat from an assignment in a record constructor. If the left-hand
+        // side matches the name (e.g. '{x = x}') we can use the IdPat from the
+        // right side; but if it does not (e.g. '{y = x}') we cannot.
+        //
+        // It is better to use an existing IdPat, rather than generating a new
+        // IdPat with a different sequence number. (The underlying problem,
+        // which we should solve someday, is that the fields of record types
+        // have only names, no sequence numbers.)
+        return id.idPat;
+      }
+    }
+
+    // If the expression is "#deptno e" (also written as "e.deptno"), use
+    // "deptno" as the name.
+    if (name == null && exp instanceof Core.Apply) {
+      Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn instanceof Core.RecordSelector) {
+        name = ((Core.RecordSelector) apply.fn).fieldName();
+      }
+    }
+
+    if (name == null) {
+      return idPat(exp.type, typeSystem.nameGenerator::get);
+    } else {
+      return idPat(exp.type, name, typeSystem.nameGenerator::inc);
+    }
+  }
+  /** Creates a builder that will create a {@link Core.From}. */
+  public FromBuilder fromBuilder(
+      TypeSystem typeSystem, @Nullable Supplier<Environment> envSupplier) {
+    return new FromBuilder(typeSystem, envSupplier);
+  }
+  /**
+   * Creates a builder that will create a {@link Core.From} but does not
+   * validate.
+   */
+  public FromBuilder fromBuilder(TypeSystem typeSystem) {
+    return fromBuilder(typeSystem, (Supplier<Environment>) null);
   }
 }
 

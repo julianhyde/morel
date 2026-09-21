@@ -29,6 +29,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.UnaryOperator;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.util.Comparators;
 import net.hydromatic.morel.util.Pair;
 import net.hydromatic.morel.util.PairList;
 
@@ -99,7 +100,7 @@ public class RecordType extends BaseType implements RecordLikeType {
    * <p>Thus: 2, 22, 202, a, a2, a202, a22.
    */
   public static final Ordering<String> ORDERING =
-      Ordering.from(RecordType::compareNames);
+      Ordering.from(Comparators::compareNames);
 
   /** Creates a constant map, sorted by {@link #ORDERING}. */
   @SuppressWarnings("unchecked")
@@ -118,51 +119,6 @@ public class RecordType extends BaseType implements RecordLikeType {
   /** Creates a mutable map, sorted by {@link #ORDERING}. */
   public static <V> NavigableMap<String, V> mutableMap() {
     return new TreeMap<>(ORDERING);
-  }
-
-  /** Helper for {@link #ORDERING}. */
-  public static int compareNames(String o1, String o2) {
-    int i1 = parseInt(o1);
-    int i2 = parseInt(o2);
-    int c = Integer.compare(i1, i2);
-    if (c != 0) {
-      return c;
-    }
-    return o1.compareTo(o2);
-  }
-
-  /**
-   * Parses a string that contains an integer value; returns {@link
-   * Integer#MAX_VALUE} if the string does not contain an integer, or if the
-   * value is less than or equal to zero, or if the string starts with '0', or
-   * if the value is greater than or equal to 1 billion.
-   *
-   * <p>This approach is much faster for our purposes than {@link
-   * Integer#parseInt(String)}, which has to create and throw an exception if
-   * the value is not an integer.
-   */
-  private static int parseInt(String s) {
-    final int length = s.length();
-    if (length > 9) {
-      // We treat values that are 1 billion (1,000,000,000) or higher as if they
-      // are Integer.MAX_VALUE (2,147,483,648). Therefore, we do not need to
-      // check for overflow in the loop below.
-      return Integer.MAX_VALUE;
-    }
-    int n = 0;
-    for (int i = 0; i < length; i++) {
-      char c = s.charAt(i);
-      if (i == 0 && c == '0') {
-        // We do not regard '0' or '01' or '007' as positive integer values.
-        return Integer.MAX_VALUE;
-      }
-      if (c < '0' || c > '9') {
-        return Integer.MAX_VALUE;
-      }
-      int digit = c - '0';
-      n = n * 10 + digit;
-    }
-    return n;
   }
 }
 

@@ -24,6 +24,7 @@ import static java.util.Objects.hash;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.type.TypeSystem.canAssign;
+import static net.hydromatic.morel.util.Comparators.compareNames;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
@@ -45,6 +46,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.function.ObjIntConsumer;
+import java.util.regex.Pattern;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Extents;
@@ -58,7 +60,6 @@ import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Describer;
-import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -196,8 +197,27 @@ public class Core {
     public static final Ordering<NamedPat> ORDERING =
         Ordering.from(NamedPat::compare);
 
+    /**
+     * A binder that the compiler generated, such as {@code v$0}.
+     *
+     * <p>Package-private because a plan's type legend has to find these inside
+     * a type's text; see {@code AstNode.RenumberingAstWriter}.
+     */
+    static final Pattern GENERATED = Pattern.compile("[a-z]+\\$[0-9]+");
+
     public final String name;
     public final int i;
+
+    /**
+     * Returns whether a name is one the compiler generated, such as {@code
+     * v$0}.
+     *
+     * <p>Such a name is nothing the user wrote, so a diagnostic leaves it out
+     * and a printer renumbers it.
+     */
+    public static boolean isGenerated(String name) {
+      return GENERATED.matcher(name).matches();
+    }
 
     NamedPat(Op op, Type type, String name, int i) {
       super(op, type);
@@ -218,7 +238,7 @@ public class Core {
 
     /** Helper for {@link #ORDERING}. */
     static int compare(NamedPat o1, NamedPat o2) {
-      int c = RecordType.compareNames(o1.name, o2.name);
+      int c = compareNames(o1.name, o2.name);
       if (c != 0) {
         return c;
       }
@@ -694,6 +714,22 @@ public class Core {
       // no args
     }
 
+    /**
+     * Renders this expression as a query's plan: the tree the resolver built
+     * for it.
+     *
+     * <p>A tree with no node in it is still a tree. A query that translates to
+     * a bare expression -- {@code from}, whose tree is the unit leaf, or {@code
+     * from u: unit} -- prints as a leaf line with its collection type, the way
+     * the leaf of any other tree does.
+     */
+    public final String unparsePlan(TypeSystem typeSystem, int width) {
+      final AstWriter w =
+          AstNode.renumberingWriter(typeSystem, this, width, true);
+      w.describeInput(this, 0);
+      return AstNode.finish(w);
+    }
+
     /** Returns the {@code i}<sup>th</sup> argument. */
     public Exp arg(int i) {
       throw new UnsupportedOperationException();
@@ -705,7 +741,7 @@ public class Core {
     }
 
     /**
-     * Returns the variables this expression reads that it does not bind.
+     * Returns the variables this expression uses but does not bind.
      *
      * <p>Scope-aware: a name bound by a {@code let}, a {@code fn}, a match or a
      * scan inside this expression is not free in it, however often it is read.
@@ -833,6 +869,12 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      if (idPat.name.charAt(0) == '$') {
+        // A node's pattern: `$0`, `$1` or `$ordinal`. The writer decides
+        // whether to print the name or, outside the node that binds it, a
+        // generated one.
+        return w.rowRef((IdPat) idPat);
+      }
       return w.idQuoted(idPat.name, idPat.i);
     }
 
@@ -891,8 +933,7 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append(
-          Parsers.appendSelector(new StringBuilder(), fieldName()).toString());
+      return w.selector(fieldName());
     }
   }
 
@@ -1264,6 +1305,24 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      if (w.treeMode() && exp instanceof Rel) {
+        // Break after the '=' so that the plan's root operator is the first
+        // non-whitespace on its line. Otherwise every plan of
+        // a query would begin `val it = r[1]`, and its one interesting line
+        // would be an indirection.
+        w.append("val ").append(pat, 0, 0).append(" =\n");
+        w.describe((Rel) exp, 2);
+        return w;
+      }
+      if (w.treeMode()) {
+        // The value may start on the next line, indented two, which is what a
+        // `let` wants: `let` belongs at the head of a line of its own, not
+        // trailing an `=`.
+        w.startGroup(2);
+        w.append("val ").append(pat, 0, 0).append(" =").softBreak();
+        w.append(exp, 0, right);
+        return w.endGroup();
+      }
       return w.append("val ")
           .append(pat, 0, 0)
           .append(" = ")
@@ -1402,21 +1461,31 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
+      // A record or tuple may break after a comma, one field to a line, which
+      // is the other place a plan's lines get long.
+      w.startGroup(0);
       if (type instanceof RecordType) {
         w.append("{");
         forEach(
-            (i, name, exp) ->
-                w.append(i > 0 ? ", " : "")
-                    .append(name)
-                    .append(" = ")
-                    .append(exp, 0, 0));
-        return w.append("}");
+            (i, name, exp) -> {
+              if (i > 0) {
+                w.append(",").softBreak();
+              }
+              w.append(name).append(" = ").append(exp, 0, 0);
+            });
+        w.append("}");
       } else {
         w.append("(");
         forEach(
-            (i, name, arg) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
-        return w.append(")");
+            (i, name, arg) -> {
+              if (i > 0) {
+                w.append(",").softBreak();
+              }
+              w.append(arg, 0, 0);
+            });
+        w.append(")");
       }
+      return w.endGroup();
     }
 
     /**
@@ -1452,11 +1521,26 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("let ")
-          .append(decl, 0, 0)
-          .append(" in ")
-          .append(exp, 0, 0)
-          .append(" end");
+      // One decision, four breaks: a `let` that does not fit becomes `let`,
+      // its declaration, `in`, its body and `end`, each on a line, with the
+      // declaration and the body indented two. One group, so they are taken
+      // together; nests rather than groups inside it, so the two that are
+      // indented do not decide for themselves.
+      if (!w.treeMode()) {
+        // Outside a plan there is no width to fit, and a tree still prints in
+        // place here -- its line breaks would fall inside this indentation.
+        return w.append("let ")
+            .append(decl, 0, 0)
+            .append(" in ")
+            .append(exp, 0, 0)
+            .append(" end");
+      }
+      w.startGroup(0);
+      w.startNest(2).append("let").softBreak().append(decl, 0, 0).endNest();
+      w.softBreak().append("in");
+      w.startNest(2).softBreak().append(exp, 0, 0).endNest();
+      w.softBreak().append("end");
+      return w.endGroup();
     }
 
     @Override
@@ -1643,10 +1727,27 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("case ")
-          .append(exp, 0, 0)
-          .append(" of ")
-          .appendAll(matchList, left, Op.BAR, right);
+      if (!w.treeMode()) {
+        return w.append("case ")
+            .append(exp, 0, 0)
+            .append(" of ")
+            .appendAll(matchList, left, Op.BAR, right);
+      }
+      // A `case` that does not fit puts each arm after the first on a line of
+      // its own, behind the `|` that introduces it. `if` reaches here too: it
+      // is a `case` over `true` and `false` by the time a plan sees it.
+      w.startGroup(2);
+      w.append("case ").append(exp, 0, 0).append(" of ");
+      for (int i = 0; i < matchList.size(); i++) {
+        if (i > 0) {
+          w.softBreak().append("| ");
+        }
+        w.append(
+            matchList.get(i),
+            i == 0 ? left : Op.BAR.left,
+            i == matchList.size() - 1 ? right : Op.BAR.right);
+      }
+      return w.endGroup();
     }
 
     @Override
@@ -1666,6 +1767,881 @@ public class Core {
     }
   }
 
+  /** Returns whether an expression mentions a pattern. */
+  public static boolean mentions(Exp exp, NamedPat pat) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Id id) {
+            if (id.idPat.equals(pat)) {
+              found[0] = true;
+            }
+          }
+        });
+    return found[0];
+  }
+
+  /**
+   * Node in a relational tree: an operator whose inputs are collections and
+   * whose value is a collection of a definite type.
+   *
+   * <p>The resolver builds it, the rewrite passes carry it, and the compilers
+   * read it.
+   *
+   * <p>A node is an {@link Exp} whose type is a collection type. Therefore a
+   * node's input is simply an expression: a nested node, or a leaf such as
+   * {@code scott.emps} or {@code [1, 2]}. There is no scan operator; any
+   * collection-valued expression will do, and the node above it names its
+   * element {@code $0}.
+   *
+   * <p>A node carries no bindings. Its element type is derived from its inputs
+   * and its expressions, and is exactly the type of the value that flows out of
+   * it. A node binds patterns for its expressions, as {@code fn} and {@code
+   * case} do: the row, {@code $0} (and, in a {@link Join}, the right input's
+   * row {@code $1}), and optionally the row's ordinal, {@code $ordinal}. See
+   * {@link #patterns()}.
+   */
+  public abstract static class Rel extends Exp {
+    Rel(Pos pos, Op op, Type type) {
+      super(pos, op, type);
+      if (!type.isCollection()) {
+        throw new IllegalArgumentException("not a collection type: " + type);
+      }
+    }
+
+    /**
+     * Returns the patterns this node binds for its expressions: the row, and
+     * the ordinal if it has one. Empty for a node with no per-row expressions.
+     */
+    public List<IdPat> patterns() {
+      return ImmutableList.of();
+    }
+
+    /** Returns this node's inputs. */
+    public abstract List<Exp> inputs();
+
+    /**
+     * Appends this node's arguments, each in brackets, to a plan-text line.
+     *
+     * <p>Arguments that carry no information (an inner join's kind, a condition
+     * that is {@code true}) are omitted.
+     */
+    protected void describeArgs(AstWriter w) {}
+
+    /** Returns this node's plan text, as {@code Sys.plan} prints it. */
+    public String describe(TypeSystem typeSystem) {
+      return describe(typeSystem, AstWriter.DEFAULT_WIDTH, false);
+    }
+
+    /**
+     * Returns this node's plan text; if {@code withTypes}, appends the
+     * collection type of every node, as {@code Sys.planEx} prints it.
+     */
+    public String describe(
+        TypeSystem typeSystem, int width, boolean withTypes) {
+      final AstWriter w =
+          AstNode.renumberingWriter(typeSystem, this, width, withTypes);
+      w.describe(this, 0);
+      return AstNode.finish(w);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      // Onto the caller's writer, not as a string built by another: the
+      // binders a plan renumbers are numbered by first occurrence over the
+      // whole text, so a tree nested in an expression must share the count.
+      if (w.treeMode()) {
+        // Reached from inside an expression, which is the only way `unparse`
+        // is reached at all: a node's inputs go through `describe`, and a
+        // root through `describe` as well. A relational operator is the first
+        // non-whitespace on its line, and this one would not be, so it prints
+        // as a reference and its lines go below, where they can be read.
+        // Spliced in here, its indentation would begin again from zero inside
+        // the line that held it, so two nodes at different depths could print
+        // at the same indent.
+        return w.append(w.relRef(this));
+      }
+      return w.describe(this, 0);
+    }
+  }
+
+  /** Node with one input. */
+  public abstract static class SingleRel extends Rel {
+    public final Exp input;
+
+    SingleRel(Pos pos, Op op, Type type, Exp input) {
+      super(pos, op, type);
+      this.input = requireNonNull(input, "input");
+    }
+
+    @Override
+    public List<Exp> inputs() {
+      return ImmutableList.of(input);
+    }
+  }
+
+  /**
+   * A one-input node whose expressions run once per element of its input, and
+   * that binds patterns for them: the row, and optionally its ordinal.
+   */
+  public abstract static class RowRel extends SingleRel {
+    public final IdPat row;
+    public final @Nullable IdPat ordinal;
+
+    RowRel(
+        Pos pos,
+        Op op,
+        Type type,
+        IdPat row,
+        @Nullable IdPat ordinal,
+        Exp input) {
+      super(pos, op, type, input);
+      this.row = requireNonNull(row, "row");
+      this.ordinal = ordinal;
+      checkArgument(
+          row.type.equals(input.type.elementType()),
+          "row %s must have the element type %s",
+          row,
+          input.type.elementType());
+      checkArgument(
+          ordinal == null || ordinal.type == PrimitiveType.INT,
+          "ordinal %s must be int",
+          ordinal);
+    }
+
+    @Override
+    public List<IdPat> patterns() {
+      return ordinal == null
+          ? ImmutableList.of(row)
+          : ImmutableList.of(row, ordinal);
+    }
+  }
+
+  /**
+   * Removes the elements for which a condition, an expression over {@code $0},
+   * is false.
+   */
+  public static class Filter extends RowRel {
+    public final Exp condition;
+
+    Filter(
+        Pos pos, IdPat row, @Nullable IdPat ordinal, Exp input, Exp condition) {
+      super(pos, Op.FILTER, input.type, row, ordinal, input);
+      this.condition = requireNonNull(condition, "condition");
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      w.arg(condition);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Filter copy(Exp input, Exp condition) {
+      return input == this.input && condition == this.condition
+          ? this
+          : core.filter(pos, row, ordinal, input, condition);
+    }
+  }
+
+  /** Maps each element to one element, via an expression over {@code $0}. */
+  public static class Project extends RowRel {
+    public final Exp exp;
+
+    Project(
+        Pos pos,
+        Type type,
+        IdPat row,
+        @Nullable IdPat ordinal,
+        Exp input,
+        Exp exp) {
+      super(pos, Op.PROJECT, type, row, ordinal, input);
+      this.exp = requireNonNull(exp, "exp");
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      w.arg(exp);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Project copy(TypeSystem typeSystem, Exp input, Exp exp) {
+      return input == this.input && exp == this.exp
+          ? this
+          : core.project(pos, typeSystem, row, ordinal, input, exp);
+    }
+  }
+
+  /**
+   * Pairs elements of two inputs that satisfy a condition over {@code $0} and
+   * {@code $1}; the element is the inputs' components concatenated.
+   */
+  public static class Join extends Rel {
+    public final JoinType joinType;
+
+    /**
+     * Pattern that names the left input's element, {@code $0}. It is in scope
+     * in the condition and in {@link #right}: the right input is evaluated once
+     * per left element, and a right input that reads it makes the join
+     * <em>dependent</em>. Dependence is a free occurrence, not a mode, and
+     * decorrelation is rewriting the right input until it no longer reads it.
+     */
+    public final IdPat leftRow;
+
+    /**
+     * Pattern that names the right input's element, {@code $1}, in scope in the
+     * condition only.
+     */
+    public final IdPat rightRow;
+
+    public final @Nullable IdPat ordinal;
+    public final Exp left;
+    public final Exp right;
+    public final Exp condition;
+
+    Join(
+        Pos pos,
+        Type type,
+        JoinType joinType,
+        IdPat leftRow,
+        IdPat rightRow,
+        @Nullable IdPat ordinal,
+        Exp left,
+        Exp right,
+        Exp condition) {
+      super(pos, Op.JOIN, type);
+      this.joinType = requireNonNull(joinType, "joinType");
+      this.leftRow = requireNonNull(leftRow, "leftRow");
+      this.rightRow = requireNonNull(rightRow, "rightRow");
+      this.ordinal = ordinal;
+      this.left = requireNonNull(left, "left");
+      this.right = requireNonNull(right, "right");
+      this.condition = requireNonNull(condition, "condition");
+      checkArgument(
+          leftRow.type.equals(left.type.elementType()),
+          "left row %s must have the element type %s",
+          leftRow,
+          left.type.elementType());
+      checkArgument(
+          rightRow.type.equals(right.type.elementType()),
+          "right row %s must have the element type %s",
+          rightRow,
+          right.type.elementType());
+      checkArgument(
+          ordinal == null || ordinal.type == PrimitiveType.INT,
+          "ordinal %s must be int",
+          ordinal);
+    }
+
+    @Override
+    public List<IdPat> patterns() {
+      return ordinal == null
+          ? ImmutableList.of(leftRow, rightRow)
+          : ImmutableList.of(leftRow, rightRow, ordinal);
+    }
+
+    /**
+     * Returns whether the right input reads the left row, which makes this a
+     * dependent join.
+     */
+    public boolean isDependent() {
+      return mentions(right, leftRow);
+    }
+
+    @Override
+    public List<Exp> inputs() {
+      return ImmutableList.of(left, right);
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      if (joinType != JoinType.INNER) {
+        w.arg(joinType.opName());
+      }
+      if (isDependent()) {
+        // Raw, because the name is renumbered already, and the writer
+        // renumbers what it is asked to append.
+        w.append(" [").appendRaw(w.generatedName(leftRow)).append("]");
+      }
+      if (!condition.isBoolLiteral(true)) {
+        w.arg(condition);
+      }
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Join copy(
+        TypeSystem typeSystem,
+        JoinType joinType,
+        Exp left,
+        Exp right,
+        Exp condition) {
+      return joinType == this.joinType
+              && left == this.left
+              && right == this.right
+              && condition == this.condition
+          ? this
+          : core.join(
+              pos,
+              typeSystem,
+              joinType,
+              leftRow,
+              rightRow,
+              ordinal,
+              left,
+              right,
+              condition);
+    }
+  }
+
+  /**
+   * Groups elements by zero or more keys, computing zero or more aggregates.
+   *
+   * <p>Keys and aggregate arguments are expressions over {@code $0}; the labels
+   * are the output record's labels. {@code distinct} is this node with the
+   * whole element as its only key and no aggregates.
+   */
+  public static class Group extends RowRel {
+    public final ImmutableSortedMap<String, Exp> keys;
+    public final ImmutableSortedMap<String, Aggregate> aggregates;
+
+    Group(
+        Pos pos,
+        Type type,
+        IdPat row,
+        @Nullable IdPat ordinal,
+        Exp input,
+        ImmutableSortedMap<String, Exp> keys,
+        ImmutableSortedMap<String, Aggregate> aggregates) {
+      super(pos, Op.GROUP, type, row, ordinal, input);
+      this.keys = requireNonNull(keys, "keys");
+      this.aggregates = requireNonNull(aggregates, "aggregates");
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      w.args(keys);
+      if (!aggregates.isEmpty()) {
+        w.args(aggregates);
+      }
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Group copy(
+        TypeSystem typeSystem,
+        Exp input,
+        SortedMap<String, Exp> keys,
+        SortedMap<String, Aggregate> aggregates) {
+      return input == this.input
+              && keys.equals(this.keys)
+              && aggregates.equals(this.aggregates)
+          ? this
+          : core.group(pos, typeSystem, row, ordinal, input, keys, aggregates);
+    }
+  }
+
+  /**
+   * Sorts elements by an expression over {@code $0}; always yields a {@code
+   * list}.
+   */
+  public static class Sort extends RowRel {
+    public final Exp exp;
+
+    Sort(
+        Pos pos,
+        Type type,
+        IdPat row,
+        @Nullable IdPat ordinal,
+        Exp input,
+        Exp exp) {
+      super(pos, Op.SORT, type, row, ordinal, input);
+      this.exp = requireNonNull(exp, "exp");
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      w.arg(exp);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Sort copy(TypeSystem typeSystem, Exp input, Exp exp) {
+      return input == this.input && exp == this.exp
+          ? this
+          : core.sort(pos, typeSystem, row, ordinal, input, exp);
+    }
+  }
+
+  /** Discards order; always yields a {@code bag}. */
+  public static class Unorder extends SingleRel {
+    Unorder(Pos pos, Type type, Exp input) {
+      super(pos, Op.UNORDER, type, input);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Unorder copy(TypeSystem typeSystem, Exp input) {
+      return input == this.input ? this : core.unorder(pos, typeSystem, input);
+    }
+  }
+
+  /**
+   * Discards the first {@code count} elements.
+   *
+   * <p>{@code count} is evaluated once, before the first element exists, and
+   * therefore cannot mention {@code $0}.
+   */
+  public static class Skip extends SingleRel {
+    public final Exp count;
+
+    Skip(Pos pos, Exp input, Exp count) {
+      super(pos, Op.SKIP, input.type, input);
+      this.count = requireNonNull(count, "count");
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      w.arg(count);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Skip copy(Exp input, Exp count) {
+      return input == this.input && count == this.count
+          ? this
+          : core.skip(pos, input, count);
+    }
+  }
+
+  /**
+   * Keeps the first {@code count} elements.
+   *
+   * <p>{@code count} is evaluated once, before the first element exists, and
+   * therefore cannot mention {@code $0}.
+   */
+  public static class Take extends SingleRel {
+    public final Exp count;
+
+    Take(Pos pos, Exp input, Exp count) {
+      super(pos, Op.TAKE, input.type, input);
+      this.count = requireNonNull(count, "count");
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      w.arg(count);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    public Take copy(Exp input, Exp count) {
+      return input == this.input && count == this.count
+          ? this
+          : core.take(pos, input, count);
+    }
+  }
+
+  /**
+   * Base class of {@link Union}, {@link Intersect} and {@link Except}, which
+   * combine the elements of two or more inputs of the same element type.
+   */
+  public abstract static class SetRel extends Rel {
+    public final boolean distinct;
+    public final ImmutableList<Exp> inputs;
+
+    SetRel(
+        Pos pos,
+        Op op,
+        Type type,
+        boolean distinct,
+        ImmutableList<Exp> inputs) {
+      super(pos, op, type);
+      this.distinct = distinct;
+      this.inputs = requireNonNull(inputs, "inputs");
+      if (inputs.size() < 2) {
+        throw new IllegalArgumentException(
+            "set operator needs at least two inputs: " + inputs.size());
+      }
+    }
+
+    @Override
+    public List<Exp> inputs() {
+      return inputs;
+    }
+
+    @Override
+    protected void describeArgs(AstWriter w) {
+      if (!distinct) {
+        w.arg("all");
+      }
+    }
+
+    public abstract SetRel copy(
+        TypeSystem typeSystem, boolean distinct, List<Exp> inputs);
+  }
+
+  /** Combines the elements of its inputs. */
+  public static class Union extends SetRel {
+    Union(Pos pos, Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(pos, Op.UNION, type, distinct, inputs);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Union copy(
+        TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
+      return distinct == this.distinct && inputs.equals(this.inputs)
+          ? this
+          : core.union(pos, typeSystem, distinct, inputs);
+    }
+  }
+
+  /** Keeps the elements that occur in every input. */
+  public static class Intersect extends SetRel {
+    Intersect(Pos pos, Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(pos, Op.INTERSECT, type, distinct, inputs);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Intersect copy(
+        TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
+      return distinct == this.distinct && inputs.equals(this.inputs)
+          ? this
+          : core.intersect(pos, typeSystem, distinct, inputs);
+    }
+  }
+
+  /** Keeps the elements of the first input that occur in no other input. */
+  public static class Except extends SetRel {
+    Except(Pos pos, Type type, boolean distinct, ImmutableList<Exp> inputs) {
+      super(pos, Op.EXCEPT, type, distinct, inputs);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    public Except copy(
+        TypeSystem typeSystem, boolean distinct, List<Exp> inputs) {
+      return distinct == this.distinct && inputs.equals(this.inputs)
+          ? this
+          : core.except(pos, typeSystem, distinct, inputs);
+    }
+  }
+
+  /** Application of a function to its argument. */
+  public static class Apply extends Exp {
+    public final Exp fn;
+    public final Exp arg;
+
+    Apply(Pos pos, Type type, Exp fn, Exp arg) {
+      super(pos, Op.APPLY, type);
+      this.fn = fn;
+      this.arg = arg;
+    }
+
+    /**
+     * Returns the argument list (assuming that the arguments are a tuple or
+     * record).
+     *
+     * @throws ClassCastException if argument is not a tuple
+     */
+    public List<Exp> args() {
+      return ((Tuple) arg).args;
+    }
+
+    @Override
+    public Exp arg(int i) {
+      // Throws if the argument is not a tuple.
+      return arg.arg(i);
+    }
+
+    @Override
+    public Exp accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      switch (fn.op) {
+        case FN_LITERAL:
+          final BuiltIn builtIn = ((Literal) fn).unwrap(BuiltIn.class);
+
+          // Because the Core language is narrower than AST, a few AST
+          // expression
+          // types do not exist in Core and are translated to function
+          // applications. Here we convert them back to original syntax.
+          switch (builtIn) {
+            case Z_LIST:
+              w.append("[");
+              arg.forEachArg(
+                  (arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
+              return w.append("]");
+          }
+
+          // Convert built-ins to infix operators.
+          final Op op = Resolver.toOp(builtIn);
+          if (op != null) {
+            return w.infix(left, args().get(0), op, args().get(1), right);
+          }
+      }
+      return w.apply(left, fn, arg, right);
+    }
+
+    public Apply copy(Exp fn, Exp arg) {
+      return fn == this.fn && arg == this.arg
+          ? this
+          : core.apply(pos, type, fn, arg);
+    }
+
+    /**
+     * Creates an Apply with the same function and a list of new arguments. If
+     * the arguments are the same, returns this Apply.
+     */
+    public Apply withArgs(List<Exp> args) {
+      if (args.size() == 1) {
+        return copy(fn, args.get(0));
+      }
+      return withTupleArgs(args);
+    }
+
+    /**
+     * Creates an Apply with the same function and new arguments. If the
+     * arguments are the same, returns this Apply.
+     */
+    public Apply withArgs(Exp arg0, Exp... args) {
+      if (args.length == 0) {
+        return copy(fn, arg0);
+      }
+      return withArgs(Lists.asList(arg0, args));
+    }
+
+    private Apply withTupleArgs(List<Exp> args) {
+      if (args.equals(args())) {
+        return this;
+      }
+      final Tuple newArg = core.tuple((RecordLikeType) this.arg.type, args);
+      return core.apply(pos, type, fn, newArg);
+    }
+
+    @Override
+    public boolean isConstant() {
+      // A list of constants is constant
+      return isCallTo(BuiltIn.Z_LIST) && allMatch(args(), Exp::isConstant);
+    }
+
+    @Override
+    public BuiltIn builtIn() {
+      if (fn.op == Op.FN_LITERAL) {
+        return ((Literal) fn).unwrap(BuiltIn.class);
+      }
+      return super.builtIn();
+    }
+
+    @Override
+    public boolean isCallTo(BuiltIn.Constructor constructor) {
+      return fn instanceof Id
+          && ((Id) fn).idPat.name.equals(constructor.constructor);
+    }
+  }
+
+  /**
+   * Call to an aggregate function in a {@code compute} clause.
+   *
+   * <p>For example, in {@code compute {sumId = sum over #id e}}, {@code
+   * aggregate} is "sum", {@code argument} is "#id e".
+   */
+  public static class Aggregate extends BaseNode {
+    public final Type type;
+    public final Exp aggregate;
+    public final @Nullable Exp argument;
+
+    Aggregate(Pos pos, Type type, Exp aggregate, @Nullable Exp argument) {
+      super(pos, Op.AGGREGATE);
+      this.type = type;
+      this.aggregate = requireNonNull(aggregate);
+      this.argument = argument;
+    }
+
+    @Override
+    public Aggregate accept(Shuttle shuttle) {
+      return shuttle.visit(this);
+    }
+
+    @Override
+    public void accept(Visitor visitor) {
+      visitor.visit(this);
+    }
+
+    @Override
+    AstWriter unparse(AstWriter w, int left, int right) {
+      w.append(aggregate, 0, 0);
+      if (argument != null) {
+        w.append(" over ").append(argument, 0, 0);
+      }
+      return w;
+    }
+
+    public Aggregate copy(Type type, Exp aggregate, @Nullable Exp argument) {
+      return aggregate == this.aggregate && argument == this.argument
+          ? this
+          : core.aggregate(pos, type, aggregate, argument);
+    }
+  }
+
+  /**
+   * Wraps a value as a Comparable, and stores the global expression from which
+   * the value was derived. That global expression will be used if the value is
+   * converted by to Morel code.
+   */
+  static class Wrapper implements Comparable<Wrapper> {
+    private final Exp exp;
+    private final Object o;
+
+    private Wrapper(Exp exp, Object o) {
+      this.exp = exp;
+      this.o = o;
+      assert isValidValue(exp, o) : o;
+    }
+
+    private static boolean isValidValue(Exp exp, Object o) {
+      if (o instanceof Code) {
+        return false;
+      }
+      if (o instanceof Closure) {
+        return false;
+      }
+      if (o instanceof Id) {
+        final String name = ((Id) exp).idPat.name;
+        return !("true".equals(name) || "false".equals(name));
+      }
+      return true;
+    }
+
+    @Override
+    public int compareTo(Wrapper o) {
+      return Integer.compare(this.o.hashCode(), o.o.hashCode());
+    }
+
+    @Override
+    public String toString() {
+      return o.toString();
+    }
+
+    @Override
+    public int hashCode() {
+      return o.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj
+          || obj instanceof Wrapper && this.o.equals(((Wrapper) obj).o);
+    }
+
+    /** Returns the value. */
+    <T> T unwrap(Class<T> valueClass) {
+      return valueClass.cast(o);
+    }
+  }
   /** From expression. */
   public static class From extends Exp {
     public final ImmutableList<FromStep> steps;
@@ -2312,227 +3288,6 @@ public class Core {
       return env.equals(this.env) && exp == this.exp
           ? this
           : core.yield_(env, exp);
-    }
-  }
-
-  /** Application of a function to its argument. */
-  public static class Apply extends Exp {
-    public final Exp fn;
-    public final Exp arg;
-
-    Apply(Pos pos, Type type, Exp fn, Exp arg) {
-      super(pos, Op.APPLY, type);
-      this.fn = fn;
-      this.arg = arg;
-    }
-
-    /**
-     * Returns the argument list (assuming that the arguments are a tuple or
-     * record).
-     *
-     * @throws ClassCastException if argument is not a tuple
-     */
-    public List<Exp> args() {
-      return ((Tuple) arg).args;
-    }
-
-    @Override
-    public Exp arg(int i) {
-      // Throws if the argument is not a tuple.
-      return arg.arg(i);
-    }
-
-    @Override
-    public Exp accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
-
-    @Override
-    public void accept(Visitor visitor) {
-      visitor.visit(this);
-    }
-
-    @Override
-    AstWriter unparse(AstWriter w, int left, int right) {
-      switch (fn.op) {
-        case FN_LITERAL:
-          final BuiltIn builtIn = ((Literal) fn).unwrap(BuiltIn.class);
-
-          // Because the Core language is narrower than AST, a few AST
-          // expression
-          // types do not exist in Core and are translated to function
-          // applications. Here we convert them back to original syntax.
-          switch (builtIn) {
-            case Z_LIST:
-              w.append("[");
-              arg.forEachArg(
-                  (arg, i) -> w.append(i == 0 ? "" : ", ").append(arg, 0, 0));
-              return w.append("]");
-          }
-
-          // Convert built-ins to infix operators.
-          final Op op = Resolver.toOp(builtIn);
-          if (op != null) {
-            return w.infix(left, args().get(0), op, args().get(1), right);
-          }
-      }
-      return w.apply(left, fn, arg, right);
-    }
-
-    public Apply copy(Exp fn, Exp arg) {
-      return fn == this.fn && arg == this.arg
-          ? this
-          : core.apply(pos, type, fn, arg);
-    }
-
-    /**
-     * Creates an Apply with the same function and a list of new arguments. If
-     * the arguments are the same, returns this Apply.
-     */
-    public Apply withArgs(List<Exp> args) {
-      if (args.size() == 1) {
-        return copy(fn, args.get(0));
-      }
-      return withTupleArgs(args);
-    }
-
-    /**
-     * Creates an Apply with the same function and new arguments. If the
-     * arguments are the same, returns this Apply.
-     */
-    public Apply withArgs(Exp arg0, Exp... args) {
-      if (args.length == 0) {
-        return copy(fn, arg0);
-      }
-      return withArgs(Lists.asList(arg0, args));
-    }
-
-    private Apply withTupleArgs(List<Exp> args) {
-      if (args.equals(args())) {
-        return this;
-      }
-      final Tuple newArg = core.tuple((RecordLikeType) this.arg.type, args);
-      return core.apply(pos, type, fn, newArg);
-    }
-
-    @Override
-    public boolean isConstant() {
-      // A list of constants is constant
-      return isCallTo(BuiltIn.Z_LIST) && allMatch(args(), Exp::isConstant);
-    }
-
-    @Override
-    public BuiltIn builtIn() {
-      if (fn.op == Op.FN_LITERAL) {
-        return ((Literal) fn).unwrap(BuiltIn.class);
-      }
-      return super.builtIn();
-    }
-
-    @Override
-    public boolean isCallTo(BuiltIn.Constructor constructor) {
-      return fn instanceof Id
-          && ((Id) fn).idPat.name.equals(constructor.constructor);
-    }
-  }
-
-  /**
-   * Call to an aggregate function in a {@code compute} clause.
-   *
-   * <p>For example, in {@code compute {sumId = sum over #id e}}, {@code
-   * aggregate} is "sum", {@code argument} is "#id e".
-   */
-  public static class Aggregate extends BaseNode {
-    public final Type type;
-    public final Exp aggregate;
-    public final @Nullable Exp argument;
-
-    Aggregate(Pos pos, Type type, Exp aggregate, @Nullable Exp argument) {
-      super(pos, Op.AGGREGATE);
-      this.type = type;
-      this.aggregate = requireNonNull(aggregate);
-      this.argument = argument;
-    }
-
-    @Override
-    public Aggregate accept(Shuttle shuttle) {
-      return shuttle.visit(this);
-    }
-
-    @Override
-    public void accept(Visitor visitor) {
-      visitor.visit(this);
-    }
-
-    @Override
-    AstWriter unparse(AstWriter w, int left, int right) {
-      w.append(aggregate, 0, 0);
-      if (argument != null) {
-        w.append(" over ").append(argument, 0, 0);
-      }
-      return w;
-    }
-
-    public Aggregate copy(Type type, Exp aggregate, @Nullable Exp argument) {
-      return aggregate == this.aggregate && argument == this.argument
-          ? this
-          : core.aggregate(pos, type, aggregate, argument);
-    }
-  }
-
-  /**
-   * Wraps a value as a Comparable, and stores the global expression from which
-   * the value was derived. That global expression will be used if the value is
-   * converted by to Morel code.
-   */
-  static class Wrapper implements Comparable<Wrapper> {
-    private final Exp exp;
-    private final Object o;
-
-    private Wrapper(Exp exp, Object o) {
-      this.exp = exp;
-      this.o = o;
-      assert isValidValue(exp, o) : o;
-    }
-
-    private static boolean isValidValue(Exp exp, Object o) {
-      if (o instanceof Code) {
-        return false;
-      }
-      if (o instanceof Closure) {
-        return false;
-      }
-      if (o instanceof Id) {
-        final String name = ((Id) exp).idPat.name;
-        return !("true".equals(name) || "false".equals(name));
-      }
-      return true;
-    }
-
-    @Override
-    public int compareTo(Wrapper o) {
-      return Integer.compare(this.o.hashCode(), o.o.hashCode());
-    }
-
-    @Override
-    public String toString() {
-      return o.toString();
-    }
-
-    @Override
-    public int hashCode() {
-      return o.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      return this == obj
-          || obj instanceof Wrapper && this.o.equals(((Wrapper) obj).o);
-    }
-
-    /** Returns the value. */
-    <T> T unwrap(Class<T> valueClass) {
-      return valueClass.cast(o);
     }
   }
 }

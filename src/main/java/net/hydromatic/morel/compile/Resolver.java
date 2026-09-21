@@ -2966,7 +2966,7 @@ public class Resolver {
               type,
               core.functionLiteral(fnType, BuiltIn.FN_ID),
               inputResolver.current);
-      String base = Op.ELEMENTS.lowerName();
+      String base = Op.ELEMENTS.lowerName;
       final String name = generateName(base, this::nameIsUnavailable);
       final Core.IdPat idPat = core.idPat(coreAggregate.type, name, 0);
       aggregates.add(idPat, coreAggregate);

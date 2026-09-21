@@ -24,7 +24,7 @@ import static java.util.Objects.hash;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.ORDERING;
-import static net.hydromatic.morel.type.RecordType.compareNames;
+import static net.hydromatic.morel.util.Comparators.compareNames;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Static.transformEager;
 import static org.apache.calcite.util.Util.firstDuplicate;
@@ -3660,7 +3660,7 @@ public class Ast {
       if (left > op.left || op.right < right) {
         return w.append("(").append(this, 0, 0).append(")");
       } else {
-        w.append(op.lowerName()); // "from", "exists", "forall"
+        w.append(op.lowerName); // "from", "exists", "forall"
         forEachIndexed(
             steps,
             (step, i) -> {

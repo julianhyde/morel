@@ -469,6 +469,193 @@ public class Visitor {
     match.exp.accept(this);
   }
 
+  protected void visit(Core.NonRecValDecl valDecl) {
+    valDecl.pat.accept(this);
+    valDecl.exp.accept(this);
+  }
+
+  protected void visit(Core.RecValDecl recValDecl) {
+    recValDecl.list.forEach(this::accept);
+  }
+
+  protected void visit(Core.Aggregate aggregate) {
+    aggregate.aggregate.accept(this);
+    if (aggregate.argument != null) {
+      aggregate.argument.accept(this);
+    }
+  }
+
+  // Relational tree (Core.Rel) nodes.
+
+  /**
+   * Called on entering each {@link Core.Rel} node, before its children are
+   * visited.
+   *
+   * <p>It is the one place a visitor sees a node before what is under it, and
+   * therefore the one place it can tell the root of a tree from an interior
+   * node.
+   */
+  protected void visitRel(Core.Rel rel) {}
+
+  protected void visit(Core.Filter filter) {
+    visitRel(filter);
+    filter.input.accept(this);
+    filter.condition.accept(this);
+  }
+
+  protected void visit(Core.Project project) {
+    visitRel(project);
+    project.input.accept(this);
+    project.exp.accept(this);
+  }
+
+  protected void visit(Core.Join join) {
+    visitRel(join);
+    join.left.accept(this);
+    join.right.accept(this);
+    join.condition.accept(this);
+  }
+
+  protected void visit(Core.Group group) {
+    visitRel(group);
+    group.input.accept(this);
+    group.keys.values().forEach(this::accept);
+    group.aggregates.values().forEach(this::accept);
+  }
+
+  protected void visit(Core.Sort sort) {
+    visitRel(sort);
+    sort.input.accept(this);
+    sort.exp.accept(this);
+  }
+
+  protected void visit(Core.Unorder unorder) {
+    visitRel(unorder);
+    unorder.input.accept(this);
+  }
+
+  protected void visit(Core.Skip skip) {
+    visitRel(skip);
+    skip.input.accept(this);
+    skip.count.accept(this);
+  }
+
+  protected void visit(Core.Take take) {
+    visitRel(take);
+    take.input.accept(this);
+    take.count.accept(this);
+  }
+
+  protected void visit(Core.SetRel setRel) {
+    visitRel(setRel);
+    setRel.inputs.forEach(this::accept);
+  }
+
+  protected void visit(Core.Union union) {
+    visit((Core.SetRel) union);
+  }
+
+  protected void visit(Core.Intersect intersect) {
+    visit((Core.SetRel) intersect);
+  }
+
+  protected void visit(Core.Except except) {
+    visit((Core.SetRel) except);
+  }
+
+  protected void visit(Core.TuplePat tuplePat) {
+    tuplePat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.RecordPat recordPat) {
+    recordPat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.ListPat listPat) {
+    listPat.args.forEach(this::accept);
+  }
+
+  protected void visit(Core.ConPat conPat) {
+    conPat.pat.accept(this);
+  }
+
+  protected void visit(Core.Con0Pat con0Pat) {}
+
+  protected void visit(Core.IdPat idPat) {}
+
+  protected void visit(Core.AsPat asPat) {
+    asPat.pat.accept(this);
+  }
+
+  protected void visit(Core.LiteralPat idPat) {}
+
+  protected void visit(Core.WildcardPat wildcardPat) {}
+
+  /**
+   * Visitor that does not descend into a relational node, because the node
+   * rebinds {@code $0}: an input reference below it is the node's own, not the
+   * enclosing expression's.
+   */
+  public abstract static class RelBoundary extends Visitor {
+    /** Called in place of descending into a node. */
+    protected void rel(Core.Rel rel) {}
+
+    @Override
+    protected void visit(Core.Filter filter) {
+      rel(filter);
+    }
+
+    @Override
+    protected void visit(Core.Project project) {
+      rel(project);
+    }
+
+    @Override
+    protected void visit(Core.Join join) {
+      rel(join);
+    }
+
+    @Override
+    protected void visit(Core.Group group) {
+      rel(group);
+    }
+
+    @Override
+    protected void visit(Core.Sort sort) {
+      rel(sort);
+    }
+
+    @Override
+    protected void visit(Core.Unorder unorder) {
+      rel(unorder);
+    }
+
+    @Override
+    protected void visit(Core.Skip skip) {
+      rel(skip);
+    }
+
+    @Override
+    protected void visit(Core.Take take) {
+      rel(take);
+    }
+
+    @Override
+    protected void visit(Core.Union union) {
+      rel(union);
+    }
+
+    @Override
+    protected void visit(Core.Intersect intersect) {
+      rel(intersect);
+    }
+
+    @Override
+    protected void visit(Core.Except except) {
+      rel(except);
+    }
+  }
+
   protected void visit(Core.From from) {
     from.steps.forEach(step -> step.accept(this));
   }
@@ -505,25 +692,9 @@ public class Visitor {
     union.args.forEach(this::accept);
   }
 
-  protected void visit(Core.NonRecValDecl valDecl) {
-    valDecl.pat.accept(this);
-    valDecl.exp.accept(this);
-  }
-
-  protected void visit(Core.RecValDecl recValDecl) {
-    recValDecl.list.forEach(this::accept);
-  }
-
   protected void visit(Core.GroupStep group) {
     group.groupExps.values().forEach(this::accept);
     group.aggregates.values().forEach(this::accept);
-  }
-
-  protected void visit(Core.Aggregate aggregate) {
-    aggregate.aggregate.accept(this);
-    if (aggregate.argument != null) {
-      aggregate.argument.accept(this);
-    }
   }
 
   protected void visit(Core.Order order) {
@@ -535,34 +706,6 @@ public class Visitor {
   }
 
   protected void visit(Core.UnorderStep unorder) {}
-
-  protected void visit(Core.TuplePat tuplePat) {
-    tuplePat.args.forEach(this::accept);
-  }
-
-  protected void visit(Core.RecordPat recordPat) {
-    recordPat.args.forEach(this::accept);
-  }
-
-  protected void visit(Core.ListPat listPat) {
-    listPat.args.forEach(this::accept);
-  }
-
-  protected void visit(Core.ConPat conPat) {
-    conPat.pat.accept(this);
-  }
-
-  protected void visit(Core.Con0Pat con0Pat) {}
-
-  protected void visit(Core.IdPat idPat) {}
-
-  protected void visit(Core.AsPat asPat) {
-    asPat.pat.accept(this);
-  }
-
-  protected void visit(Core.LiteralPat idPat) {}
-
-  protected void visit(Core.WildcardPat wildcardPat) {}
 }
 
 // End Visitor.java

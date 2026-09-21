@@ -199,6 +199,14 @@ public enum Op {
   INTO,
   THROUGH,
   AGGREGATE,
+
+  // relational tree (see Core.Rel); GROUP, SKIP, TAKE, UNORDER, UNION,
+  // INTERSECT and EXCEPT are shared with the from-steps of the same name
+  FILTER,
+  PROJECT,
+  JOIN,
+  SORT,
+
   IF,
   RAISE,
   OVER_DECL;
@@ -213,6 +221,9 @@ public enum Op {
   final Assoc assoc;
   /** Operator name. Sometimes null, sometimes something like "op +". */
   public final @Nullable String opName;
+
+  /** Name in lower case. */
+  public final String lowerName;
 
   public static final ImmutableMap<String, Op> BY_OP_NAME;
 
@@ -262,6 +273,7 @@ public enum Op {
     this.right = precedence * 2 + (assoc == Assoc.RIGHT ? 0 : 1);
     this.assoc = assoc;
     this.opName = padded.isEmpty() ? null : "op " + padded.trim();
+    this.lowerName = name().toLowerCase(Locale.ROOT);
   }
 
   /** Associativity of an operator. */
@@ -327,11 +339,6 @@ public enum Op {
    */
   public boolean optionalizesRight() {
     return this == LEFT_JOIN || this == FULL_JOIN;
-  }
-
-  /** Returns the name in lower case, e.g. "exists" for {@link #EXISTS}. */
-  public String lowerName() {
-    return name().toLowerCase(Locale.ROOT);
   }
 
   /**

@@ -69,7 +69,7 @@ public enum AstBuilder {
       case CURRENT:
       case ELEMENTS:
       case ORDINAL:
-        return exp.op.lowerName();
+        return exp.op.lowerName;
       case ID:
         return ((Ast.Id) exp).name;
       case AGGREGATE:
