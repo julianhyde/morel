@@ -33,6 +33,7 @@ import net.hydromatic.morel.compile.OutputMatcher;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -332,6 +333,105 @@ public class TypeTest {
         m.codeEqual(
             stringListType, "[\"a\\nb\", \"c\"]", lines("[{|a", "b|}, \"c\"]")),
         is(true));
+  }
+
+  /**
+   * Tests that {@link OutputMatcher#equivalent} compares the rows of a bag's
+   * table as a multiset, and everything else about the table as text.
+   */
+  @Test
+  void testOutputMatcherTable() {
+    final TypeSystem typeSystem = new TypeSystem();
+    BuiltIn.dataTypes(typeSystem, new ArrayList<>());
+    final OutputMatcher m = new OutputMatcher(typeSystem);
+    final RecordLikeType rowType =
+        typeSystem.recordType(
+            ImmutableSortedMap.of(
+                "count", PrimitiveType.INT, "deptno", PrimitiveType.INT));
+    final Type bagType = typeSystem.bagType(rowType);
+    final Type listType = typeSystem.listType(rowType);
+    final String table =
+        lines(
+            "count deptno",
+            "----- ------",
+            "    3     10",
+            "    5     20",
+            "",
+            "val it : {count:int, deptno:int} bag");
+    final String permuted =
+        lines(
+            "count deptno",
+            "----- ------",
+            "    5     20",
+            "    3     10",
+            "",
+            "val it : {count:int, deptno:int} bag");
+    assertThat(m.equivalent(bagType, table, table), is(true));
+    assertThat(m.equivalent(bagType, permuted, table), is(true));
+    // A list's rows are in order.
+    assertThat(m.equivalent(listType, permuted, table), is(false));
+    // A different row, a duplicated row, a different header, and a different
+    // type are all differences.
+    assertThat(
+        m.equivalent(
+            bagType, permuted.replace("    3     10", "    4     10"), table),
+        is(false));
+    assertThat(
+        m.equivalent(
+            bagType, permuted.replace("    3     10", "    5     20"), table),
+        is(false));
+    assertThat(
+        m.equivalent(bagType, permuted.replace("count", "total"), table),
+        is(false));
+    assertThat(
+        m.equivalent(bagType, permuted.replace("} bag", "} list"), table),
+        is(false));
+    // A truncated table shows which rows it shows.
+    final String truncated =
+        lines(
+            "count deptno",
+            "----- ------",
+            "    3     10",
+            "...",
+            "",
+            "val it : {count:int, deptno:int} bag");
+    assertThat(m.equivalent(bagType, truncated, truncated), is(true));
+    assertThat(
+        m.equivalent(
+            bagType,
+            truncated.replace("    3     10", "    5     20"),
+            truncated),
+        is(false));
+    // A row with a nested collection spans several lines, so such a table is
+    // compared as text.
+    final RecordLikeType nestedType =
+        typeSystem.recordType(
+            ImmutableSortedMap.of(
+                "deptno",
+                PrimitiveType.INT,
+                "emps",
+                typeSystem.listType(PrimitiveType.STRING)));
+    final Type nestedBagType = typeSystem.bagType(nestedType);
+    final String nested =
+        lines(
+            "deptno emps",
+            "------ -----",
+            "    10 CLARK",
+            "       KING",
+            "    20 SMITH",
+            "",
+            "val it : {deptno:int, emps:string list} bag");
+    final String nestedPermuted =
+        lines(
+            "deptno emps",
+            "------ -----",
+            "    20 SMITH",
+            "    10 CLARK",
+            "       KING",
+            "",
+            "val it : {deptno:int, emps:string list} bag");
+    assertThat(m.equivalent(nestedBagType, nested, nested), is(true));
+    assertThat(m.equivalent(nestedBagType, nestedPermuted, nested), is(false));
   }
 
   /** Joins lines with newlines (no trailing newline). */

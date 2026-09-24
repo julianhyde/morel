@@ -22,8 +22,10 @@ import static java.lang.Character.isDigit;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Characters.scanNumber;
 
+import com.google.common.collect.HashMultiset;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,6 +36,7 @@ import java.util.regex.Pattern;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
@@ -90,6 +93,9 @@ public class OutputMatcher {
    * <p>If in doubt, we return false; we cannot afford false-positives.
    */
   public boolean equivalent(Type type, String actual, String expected) {
+    if (ruleLine(expected.split("\n", -1)) >= 0) {
+      return tablesEquivalent(type, actual, expected);
+    }
     final Split split0 = Split.of(actual);
     final Split split1 = Split.of(expected);
     if (split0.val == null || split1.val == null) {
@@ -110,6 +116,82 @@ public class OutputMatcher {
     }
 
     return codeEqual(type, split0.val, split1.val);
+  }
+
+  /**
+   * Returns whether two outputs are equivalent when the expected one is a
+   * table, which is how a collection of records prints under {@code Sys.set
+   * ("output", "tabular")}: a header, a rule of dashes, one line per row, a
+   * blank line, and the value's type.
+   *
+   * <p>A bag's rows are in no particular order, so the rows are compared as a
+   * multiset; everything else must match as text. Only a table whose rows are
+   * single lines is compared this way: a row with a nested record or collection
+   * spans several lines, and a multiset of lines could pair a line with the
+   * wrong row. A truncated table, whose last row is "...", shows which rows it
+   * shows, and a different order may show different ones; its rows are compared
+   * as text.
+   */
+  private boolean tablesEquivalent(Type type, String actual, String expected) {
+    if (actual.equals(expected)) {
+      return true;
+    }
+    if (!(type instanceof DataType && type.isCollection())) {
+      // A list's rows are in order, and a table of anything else is not what
+      // a script prints.
+      return false;
+    }
+    final Type elementType = type.elementType().unalias();
+    if (!(elementType instanceof RecordLikeType)) {
+      return false;
+    }
+    for (Type fieldType : ((RecordLikeType) elementType).argTypes()) {
+      if (!TabularPrinter.printsInOneLine(fieldType)) {
+        return false;
+      }
+    }
+    final List<String> lines0 = Arrays.asList(actual.split("\n", -1));
+    final List<String> lines1 = Arrays.asList(expected.split("\n", -1));
+    final int rule = ruleLine(lines1);
+    // Rows end at the blank line before the type; the header, the rule, and
+    // whatever precedes them -- warnings, say -- must match as text, and so
+    // must the blank line and the type.
+    final int end = lines1.size() - 2;
+    if (lines0.size() != lines1.size()
+        || ruleLine(lines0) != rule
+        || end <= rule
+        || !lines1.get(end).isEmpty()
+        || !lines0.subList(0, rule + 1).equals(lines1.subList(0, rule + 1))
+        || !lines0
+            .subList(end, lines0.size())
+            .equals(lines1.subList(end, lines1.size()))) {
+      return false;
+    }
+    final List<String> rows0 = lines0.subList(rule + 1, end);
+    final List<String> rows1 = lines1.subList(rule + 1, end);
+    if (rows0.contains("...") || rows1.contains("...")) {
+      return rows0.equals(rows1);
+    }
+    return HashMultiset.create(rows0).equals(HashMultiset.create(rows1));
+  }
+
+  /**
+   * Returns the index of a table's rule, the line of dashes under the header,
+   * or -1 if there is none.
+   */
+  private static int ruleLine(String[] lines) {
+    return ruleLine(Arrays.asList(lines));
+  }
+
+  private static int ruleLine(List<String> lines) {
+    for (int i = 1; i < lines.size(); i++) {
+      final String line = lines.get(i);
+      if (line.startsWith("-")
+          && line.chars().allMatch(c -> c == '-' || c == ' ')) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /** Returns whether two value strings are equivalent. */
