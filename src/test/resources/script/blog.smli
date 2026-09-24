@@ -2044,11 +2044,9 @@ List.`except` [["candy", "soda", "soda", "candy", "candy"],
 
 (* Count employees and compute total salary for each
  * department. *)
-(* The "order deptno unorder" line is added for determinism across JDK versions. *)
 from e in scott.emps
   group e.deptno
-    compute {count over (), sumSal = sum over e.sal}
-  order deptno unorder;
+    compute {count over (), sumSal = sum over e.sal};
 > count deptno sumSal
 > ----- ------ ------
 >     3     10   8750
@@ -2059,10 +2057,8 @@ from e in scott.emps
 
 (* One group key and no compute expressions gives an
  * atomic result. *)
-(* The "order deptno unorder" line is added for determinism across JDK versions. *)
 from e in scott.emps
-  group e.deptno
-  order deptno unorder;
+  group e.deptno;
 > val it = [10,20,30] : int bag
 
 (* Empty group key and one compute expression gives an
