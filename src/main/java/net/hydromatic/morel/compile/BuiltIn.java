@@ -1261,6 +1261,186 @@ public enum BuiltIn {
   DATE_YEAR_DAY(
       "Date", "yearDay", true, ts -> ts.fnType(ts.lookup(Eqtype.DATE), INT)),
 
+  DECIMAL_ABS(
+      "Decimal",
+      "abs",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_CEIL(
+      "Decimal", "ceil", true, ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), INT)),
+  DECIMAL_COMPARE(
+      "Decimal",
+      "compare",
+      true,
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.order())),
+  DECIMAL_DECIMAL(
+      "Decimal", "decimal", ts -> ts.fnType(STRING, ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_DIVIDE(
+      "Decimal",
+      "/",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_FLOOR(
+      "Decimal",
+      "floor",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), INT)),
+  DECIMAL_FMT(
+      "Decimal",
+      "fmt",
+      ts ->
+          ts.fnType(
+              ts.lookup(Datatype.STRING_CVT_REALFMT),
+              ts.fnType(ts.lookup(Eqtype.DECIMAL), STRING))),
+  DECIMAL_FROM_INT(
+      "Decimal", "fromInt", ts -> ts.fnType(INT, ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_FROM_REAL(
+      "Decimal", "fromReal", ts -> ts.fnType(REAL, ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_FROM_STRING(
+      "Decimal",
+      "fromString",
+      ts -> ts.fnType(STRING, ts.option(ts.lookup(Eqtype.DECIMAL)))),
+  DECIMAL_MAX(
+      "Decimal",
+      "max",
+      true,
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_MAX_FINITE("Decimal", "maxFinite", ts -> ts.lookup(Eqtype.DECIMAL)),
+  DECIMAL_MIN(
+      "Decimal",
+      "min",
+      true,
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_MIN_POS("Decimal", "minPos", ts -> ts.lookup(Eqtype.DECIMAL)),
+  DECIMAL_OP_GE(
+      "Decimal",
+      ">=",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              BOOL)),
+  DECIMAL_OP_GT(
+      "Decimal",
+      ">",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              BOOL)),
+  DECIMAL_OP_LE(
+      "Decimal",
+      "<=",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              BOOL)),
+  DECIMAL_OP_LT(
+      "Decimal",
+      "<",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              BOOL)),
+  DECIMAL_OP_MINUS(
+      "Decimal",
+      "-",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_OP_NEGATE(
+      "Decimal",
+      "~",
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_OP_PLUS(
+      "Decimal",
+      "+",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_OP_TIMES(
+      "Decimal",
+      "*",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_PRECISION("Decimal", "precision", ts -> INT),
+  DECIMAL_RADIX("Decimal", "radix", ts -> INT),
+  DECIMAL_REAL_CEIL(
+      "Decimal",
+      "realCeil",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_REAL_FLOOR(
+      "Decimal",
+      "realFloor",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_REAL_ROUND(
+      "Decimal",
+      "realRound",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_REAL_TRUNC(
+      "Decimal",
+      "realTrunc",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_REM(
+      "Decimal",
+      "rem",
+      true,
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.lookup(Eqtype.DECIMAL))),
+  DECIMAL_ROUND(
+      "Decimal",
+      "round",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), INT)),
+  DECIMAL_SIGN(
+      "Decimal", "sign", true, ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), INT)),
+  DECIMAL_TO_REAL(
+      "Decimal",
+      "toReal",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), REAL)),
+  DECIMAL_TO_STRING(
+      "Decimal",
+      "toString",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), STRING)),
+  DECIMAL_TRUNC(
+      "Decimal",
+      "trunc",
+      true,
+      ts -> ts.fnType(ts.lookup(Eqtype.DECIMAL), INT)),
+
   /**
    * Function "Either.app", of type "(&alpha; &rarr; unit) * (&beta; &rarr;
    * unit) * (&alpha;, &beta;) either &rarr; unit".
@@ -5550,6 +5730,7 @@ public enum BuiltIn {
     consumer.accept("not", BOOL_NOT);
     consumer.accept("chr", CHAR_CHR);
     consumer.accept("ord", CHAR_ORD);
+    consumer.accept("decimal", DECIMAL_DECIMAL);
     consumer.accept("before", GENERAL_BEFORE);
     consumer.accept("exnMessage", GENERAL_EXN_MESSAGE);
     consumer.accept("exnName", GENERAL_EXN_NAME);
@@ -6091,6 +6272,7 @@ public enum BuiltIn {
      */
     COLLECTION("$collection", 1),
     DATE("date", 0),
+    DECIMAL("decimal", 0),
     LIST("list", 1),
     TIME("time", 0),
     VECTOR("vector", 1);
