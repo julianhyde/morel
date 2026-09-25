@@ -24,6 +24,7 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -153,6 +154,9 @@ public class Comparators {
           switch (dataType.name) {
             case "bag":
               return listComparator(dataType.elementType());
+
+            case "decimal":
+              return Comparator.<BigDecimal>naturalOrder();
 
             case "descending":
               Comparator<Object> objectComparator =
