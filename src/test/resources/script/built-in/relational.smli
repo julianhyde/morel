@@ -149,7 +149,7 @@ Sys.plan ();
 >   : string
 Relational.sum (bag [Decimal.maxFinite, Decimal.maxFinite]);
 > uncaught exception Overflow [overflow]
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.60
 from d in [decimal "1.5", decimal "2.25"] compute sum over d;
 > val it = 3.75 : decimal
 
