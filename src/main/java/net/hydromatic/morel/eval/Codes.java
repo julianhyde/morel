@@ -3790,11 +3790,11 @@ public abstract class Codes {
    * #OP_LT}.
    *
    * <p>If the type of the operands is known at compile time, {@link #withType}
-   * creates a copy whose comparator is specialized to that type. {@code real}
-   * values are compared according to IEEE 754, by {@link
-   * Comparators#compareReals}; values of other types are compared in the order
-   * given by {@link Comparators#comparatorFor}, the same order used by {@code
-   * order}, {@code min} and {@code max}.
+   * creates a copy whose comparator, created by {@link
+   * Comparators#partialComparatorFor}, is specialized to that type. Values are
+   * compared in the same order used by {@code order}, {@code min} and {@code
+   * max}, except that {@code real} values, including those inside composite
+   * values such as tuples and options, are compared according to IEEE 754.
    *
    * <p>If the type is not known at compile time (for example, in a polymorphic
    * function), the comparator is {@link Comparators#comparePartial}.
@@ -3821,10 +3821,7 @@ public abstract class Codes {
         return this;
       }
       return new OpCompare(
-          builtIn,
-          argType == PrimitiveType.REAL
-              ? Comparators::compareReals
-              : Comparators.comparatorFor(typeSystem, argType, pos));
+          builtIn, Comparators.partialComparatorFor(typeSystem, argType, pos));
     }
 
     @SuppressWarnings("unchecked")

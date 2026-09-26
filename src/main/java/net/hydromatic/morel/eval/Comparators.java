@@ -36,6 +36,7 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypeVar;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
 
@@ -50,12 +51,30 @@ public class Comparators {
    */
   public static Comparator comparatorFor(
       TypeSystem typeSystem, Type type, Pos pos) {
-    return new ComparatorBuilder(typeSystem, pos).comparatorFor(type);
+    return new ComparatorBuilder(typeSystem, pos, false).comparatorFor(type);
   }
 
   /**
-   * Value returned by {@link #compareReals} and {@link #comparePartial} if
-   * their arguments are unordered.
+   * Returns a comparator for a given type that compares {@code real} values
+   * according to IEEE 754, as the operators {@code <}, {@code <=}, {@code >},
+   * {@code >=} do.
+   *
+   * <p>It is the same as {@link #comparatorFor}, except that it compares {@code
+   * real} values using {@link #compareReals}, and values whose type is a type
+   * variable using {@link #comparePartial}. When it reaches values that are
+   * unordered, it returns {@link #UNORDERED}. For example, it returns {@code
+   * UNORDERED} for {@code ((1.0, 2), (NaN, 3))}, but -1 for {@code ((1.0, NaN),
+   * (2.0, 3.0))} because the first fields decide the order.
+   */
+  public static Comparator partialComparatorFor(
+      TypeSystem typeSystem, Type type, Pos pos) {
+    return new ComparatorBuilder(typeSystem, pos, true).comparatorFor(type);
+  }
+
+  /**
+   * Value returned by {@link #compareReals}, {@link #comparePartial} and the
+   * comparators created by {@link #partialComparatorFor} if their arguments are
+   * unordered.
    */
   public static final int UNORDERED = Integer.MIN_VALUE;
 
@@ -111,11 +130,15 @@ public class Comparators {
   static class ComparatorBuilder {
     private final TypeSystem typeSystem;
     private final Pos pos;
+    /** Whether to compare {@code real} values according to IEEE 754. */
+    private final boolean partial;
+
     private final Map<Type.Key, Comparator> cache = new HashMap<>();
 
-    ComparatorBuilder(TypeSystem typeSystem, Pos pos) {
+    ComparatorBuilder(TypeSystem typeSystem, Pos pos, boolean partial) {
       this.typeSystem = requireNonNull(typeSystem);
       this.pos = requireNonNull(pos);
+      this.partial = partial;
     }
 
     Comparator comparatorFor(Type t2) {
@@ -158,6 +181,14 @@ public class Comparators {
           // natural order.
           if (type == PrimitiveType.WORD) {
             return Comparators::compareUnsigned;
+          }
+          if (partial) {
+            if (type == PrimitiveType.REAL) {
+              return Comparators::compareReals;
+            }
+            if (type instanceof TypeVar) {
+              return Comparators::comparePartial;
+            }
           }
           return Comparators::compare;
 
