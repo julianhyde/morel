@@ -322,7 +322,7 @@ let
     union
     (from d in descendants (),
         e in scott.emps
-      where e.mgr = SOME (d.e.empno)
+      where e.mgr = SOME d.e.empno
       yield {e, level = d.level + 1});
 in
   descendants ()
@@ -340,7 +340,7 @@ let
       descendants2 (from d in descendants union newDescendants)
           (from d in newDescendants,
               e in scott.emps
-            where e.mgr = SOME (d.e.empno)
+            where e.mgr = SOME d.e.empno
             yield {e, level = d.level + 1})
 in
   from d in descendants2 Bag.nil

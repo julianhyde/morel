@@ -729,7 +729,7 @@ public class AlgebraTest {
             + "          (from d in descendants union newDescendants)\n"
             + "          (from d in newDescendants,\n"
             + "              e in scott.emps\n"
-            + "            where e.mgr = SOME (d.e.empno)\n"
+            + "            where e.mgr = SOME d.e.empno\n"
             + "            yield {e, level = d.level + 1})\n"
             + "in\n"
             + "  from d in descendants2 Bag.nil\n"
@@ -774,7 +774,7 @@ public class AlgebraTest {
             + "    fn (oldList, newList) =>\n"
             + "      (from d in newList,\n"
             + "          e in scott.emps\n"
-            + "        where e.mgr = SOME (d.e.empno)\n"
+            + "        where e.mgr = SOME d.e.empno\n"
             + "        yield {e, level = d.level + 1})\n"
             + "  yield {i.e.empno, i.e.ename, i.level, i.e.mgr}";
     ml(ml)
