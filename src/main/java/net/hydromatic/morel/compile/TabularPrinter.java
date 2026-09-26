@@ -189,6 +189,15 @@ class TabularPrinter {
   }
 
   /**
+   * Returns whether a field of a given type prints in one line: a scalar or an
+   * option of one. A nested record or collection may take several.
+   */
+  static boolean printsInOneLine(Type type) {
+    type = type.unalias();
+    return isScalar(type) || optionScalar(type) != null;
+  }
+
+  /**
    * Returns whether a type prints as a single-token scalar, namely a primitive
    * or an enum (see {@link #isEnum}).
    */
