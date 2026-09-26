@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.util.Comparators;
 
 /** Abstract syntax tree node. */
 public abstract class AstNode {
@@ -131,25 +132,6 @@ public abstract class AstNode {
       TypeSystem typeSystem, AstNode root, int width, boolean withTypes) {
     return new RenumberingAstWriter(
         typeSystem, boundInPlan(root), width, withTypes);
-  }
-
-  /**
-   * Orders generated names by their number rather than as text, so that {@code
-   * v$2} comes before {@code v$10}.
-   */
-  static int compareGenerated(String a, String b) {
-    final int i = a.indexOf('$');
-    final int j = b.indexOf('$');
-    if (i < 0 || j < 0 || i != j || !a.startsWith(b.substring(0, j))) {
-      return a.compareTo(b);
-    }
-    try {
-      return Integer.compare(
-          Integer.parseInt(a.substring(i + 1)),
-          Integer.parseInt(b.substring(j + 1)));
-    } catch (NumberFormatException e) {
-      return a.compareTo(b);
-    }
   }
 
   /**
@@ -299,7 +281,7 @@ public abstract class AstNode {
                   p.name.charAt(0) == '$'
                       ? generatedName((Core.IdPat) p)
                       : rename(p.name)));
-      names.sort(AstNode::compareGenerated);
+      names.sort(Comparators::compareNumberedNames);
       return "r$" + i + "[" + String.join(", ", names) + "]";
     }
 

@@ -24,6 +24,7 @@ import static java.util.Objects.hash;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.type.TypeSystem.canAssign;
+import static net.hydromatic.morel.util.Comparators.compareNames;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 import static net.hydromatic.morel.util.Pair.forEachIndexed;
@@ -233,7 +234,7 @@ public class Core {
 
     /** Helper for {@link #ORDERING}. */
     static int compare(NamedPat o1, NamedPat o2) {
-      int c = RecordType.compareNames(o1.name, o2.name);
+      int c = compareNames(o1.name, o2.name);
       if (c != 0) {
         return c;
       }
