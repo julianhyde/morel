@@ -5394,6 +5394,10 @@ public abstract class Codes {
                 return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_REAL);
             }
           }
+          if (resultType instanceof DataType
+              && ((DataType) resultType).name.equals("decimal")) {
+            return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_DECIMAL);
+          }
         }
         throw notDefined(BuiltIn.RELATIONAL_SUM, argType, pos);
       };
@@ -7287,6 +7291,39 @@ public abstract class Codes {
   /** @see BuiltIn#Z_LIST */
   private static final Applicable1 Z_LIST = identity(BuiltIn.Z_LIST);
 
+  /** Implements {@link #RELATIONAL_SUM} for type {@code decimal list}. */
+  private static final Applicable Z_SUM_DECIMAL = new ZSumDecimal(Pos.ZERO);
+
+  /**
+   * Implements {@link #Z_SUM_DECIMAL}. Adds exactly, then rounds; raises {@link
+   * BuiltInExn#OVERFLOW} if the sum is too large.
+   */
+  private static class ZSumDecimal
+      extends BasePositionedApplicable1<BigDecimal, List<BigDecimal>> {
+    ZSumDecimal(Pos pos) {
+      super(BuiltIn.Z_SUM_DECIMAL, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new ZSumDecimal(pos);
+    }
+
+    @Override
+    protected String name() {
+      return "Relational.sum$decimal";
+    }
+
+    @Override
+    public BigDecimal apply(List<BigDecimal> decimals) {
+      BigDecimal sum = BigDecimal.ZERO;
+      for (BigDecimal d : decimals) {
+        sum = sum.add(d);
+      }
+      return decimalChecked(sum, pos);
+    }
+  }
+
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
   private static final Applicable Z_SUM_INT =
       new BaseApplicable1<Integer, List<? extends Number>>(BuiltIn.Z_SUM_INT) {
@@ -8316,6 +8353,7 @@ public abstract class Codes {
     b.add(BuiltIn.Z_ORDINAL, 0);
     b.add(BuiltIn.Z_ORELSE, Unit.INSTANCE);
     b.add(BuiltIn.Z_REQUIRE, Unit.INSTANCE);
+    b.add(BuiltIn.Z_SUM_DECIMAL, Z_SUM_DECIMAL);
     b.add(BuiltIn.Z_SUM_INT, Z_SUM_INT);
     b.add(BuiltIn.Z_SUM_REAL, Z_SUM_REAL);
     b.add(BuiltIn.Z_TEST_OVER_COUNT_BAG, Z_TEST_OVER_COUNT_BAG);

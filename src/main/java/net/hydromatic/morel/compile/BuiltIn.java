@@ -5783,6 +5783,19 @@ public enum BuiltIn {
    */
   Z_REQUIRE("$", "$require", ts -> UNIT),
 
+  /**
+   * Internal relational sum operator "sum", of type "decimal * decimal &rarr;
+   * decimal".
+   */
+  Z_SUM_DECIMAL(
+      "$",
+      "sum:decimal",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
+              ts.lookup(Eqtype.DECIMAL))),
+
   /** Internal relational sum operator "sum", of type "int * int &rarr; int". */
   Z_SUM_INT("$", "sum:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
