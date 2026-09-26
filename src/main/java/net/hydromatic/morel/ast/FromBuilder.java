@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.ast;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 
 import com.google.common.collect.ImmutableList;
@@ -328,6 +329,31 @@ public class FromBuilder {
     bindings.clear();
     atom = true;
     return this;
+  }
+
+  /**
+   * Returns a reference to the {@code i}th binding, in the order the bindings
+   * were made, as an expression over the row.
+   */
+  public Core.Exp field(int i) {
+    return field(ImmutableList.copyOf(bindings).get(i));
+  }
+
+  /**
+   * Returns a reference to a binding, by name, as an expression over the row.
+   */
+  public Core.Exp field(String name) {
+    checkArgument(
+        bindings.contains(name), "no binding '%s' in %s", name, bindings);
+    return b.name(0, name);
+  }
+
+  /**
+   * Returns a field of a binding that is a record, as {@code e.deptno} reads
+   * one.
+   */
+  public Core.Exp field(String name, String fieldName) {
+    return b.field(field(name), fieldName);
   }
 
   /** Returns the tree built so far. */

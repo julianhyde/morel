@@ -21,10 +21,12 @@ package net.hydromatic.morel;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasToString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -175,6 +177,8 @@ public class RelBuilderTest {
     b.push("i", f.list12).push("j", f.list12).pair();
     nameExps.add("i", b.name(0, "i"));
     nameExps.add("j", b.name(1, "j"));
+    // Before the join, each name reads its own input's row.
+    assertThat(nameExps, hasToString("[<i, $0>, <j, $1>]"));
     final Core.Exp rel =
         b.join(Core.Rel.JoinType.INNER, core.boolLiteral(true)).build();
     assertThat(
@@ -541,6 +545,76 @@ public class RelBuilderTest {
         core.literalPat(Op.INT_LITERAL_PAT, PrimitiveType.INT, BigDecimal.ONE);
     assertThat(RelBuilder.destructurable(idPat), is(true));
     assertThat(RelBuilder.destructurable(literalPat), is(false));
+    assertThat(RelBuilder.testable(literalPat), is(true));
+  }
+
+  /**
+   * A literal pattern binds nothing and filters: {@code push} puts a filter
+   * above the collection.
+   */
+  @Test
+  void testLiteralPatternFilters() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder();
+    final Core.Pat literalPat =
+        core.literalPat(Op.INT_LITERAL_PAT, PrimitiveType.INT, BigDecimal.ONE);
+    b.push(literalPat, f.list12);
+    assertThat(
+        b.build(),
+        hasToString(
+            "filter [$0 = 1]\n" //
+                + "  [1, 2]\n"));
+  }
+
+  /**
+   * Rebuilding a tree through a builder that simplifies nothing gives the tree
+   * back; through one that simplifies, it gives what the simplifications make
+   * of it.
+   */
+  @Test
+  void testRebuild() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder();
+    b.push("i", f.list12);
+    b.filter(core.greaterThan(f.typeSystem, b.name("i"), f.intLiteral(0)));
+    b.filter(core.lessThan(f.typeSystem, b.name("i"), f.intLiteral(3)));
+    final Core.Exp tree = b.build();
+    final String text = tree.toString();
+    assertThat(
+        RelBuilder.rebuild(f.typeSystem, tree, Simplification.none()),
+        hasToString(text));
+    assertThat(
+        RelBuilder.rebuild(
+            f.typeSystem, tree, EnumSet.of(Simplification.FILTER_MERGE)),
+        hasToString(
+            "filter [$0 > 0 andalso $0 < 3]\n" //
+                + "  [1, 2]\n"));
+  }
+
+  /** {@code checkValid} throws with the violations, and is silent without. */
+  @Test
+  void testCheckValid() {
+    final Fixture f = new Fixture();
+    final RelBuilder b = f.builder();
+    b.push("i", f.list12);
+    b.filter(core.greaterThan(f.typeSystem, b.name("i"), f.intLiteral(0)));
+    final Core.Rel tree = (Core.Rel) b.build();
+    RelValidator.checkValid(f.typeSystem, tree);
+
+    // A filter whose condition reads a pattern that nothing binds.
+    final Core.IdPat stray = core.idPat(PrimitiveType.INT, "$1", 99);
+    final Core.Rel bad =
+        core.filter(
+            core.idPat(PrimitiveType.INT, "$0", 98),
+            null,
+            f.list12,
+            core.greaterThan(f.typeSystem, core.id(stray), f.intLiteral(0)));
+    final IllegalStateException e =
+        assertThrows(
+            IllegalStateException.class,
+            () -> RelValidator.checkValid(f.typeSystem, bad));
+    assertThat(e.getMessage(), containsString("invalid relational tree"));
+    assertThat(e.getMessage(), containsString("$1"));
   }
 
   /**
