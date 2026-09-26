@@ -538,6 +538,25 @@ Sys.plan ();
 >     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >       JdbcTableScan(table=[[scott, EMP]])
 > ))|_} : string
+(* Comparing a 'decimal option' column using '=' or '<>' is evaluated by
+ * Morel; the values in the column and in the query may have different
+ * scales. *)
+from e in scott.emps where e.comm = SOME (decimal "300") yield e.ename;
+> val it = ["ALLEN"] : string bag
+from e in scott.emps where e.comm = SOME (decimal "1400") yield e.ename;
+> val it = ["MARTIN"] : string bag
+from e in scott.emps where e.comm <> SOME (decimal "300") compute count over ();
+> val it = 13 : int
+(* A 'decimal' literal that Calcite cannot represent is evaluated by Morel.
+ * An integer must fit in a BIGINT. *)
+from e in scott.emps where e.sal < decimal "9999999999999999999"
+  compute count over ();
+> val it = 14 : int
+from e in scott.emps where e.sal < decimal "1E100" compute count over ();
+> val it = 14 : int
+from e in scott.emps where e.sal > decimal "0.000000000000000000001"
+  compute count over ();
+> val it = 14 : int
 Sys.set ("hybrid", false);
 > val it = () : unit
 

@@ -741,6 +741,23 @@ public class Core {
     }
 
     /**
+     * Returns whether this expression is the given nullary constructor of a
+     * built-in datatype, such as {@code NONE}.
+     *
+     * <p>For a call to a constructor that has an argument, such as {@code SOME
+     * x}, use {@link #isCallTo(BuiltIn.Constructor)}.
+     */
+    public boolean isConstructor(BuiltIn.Constructor constructor) {
+      return false;
+    }
+
+    /** Returns whether the type of this expression is a constructor's type. */
+    boolean isTypeOf(BuiltIn.Constructor constructor) {
+      return type instanceof DataType
+          && ((DataType) type).name.equals(constructor.datatype.mlName());
+    }
+
+    /**
      * Returns whether this expression iterates over the values of a type. Some
      * extents are infinite.
      */
@@ -809,6 +826,12 @@ public class Core {
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
       return w.idQuoted(idPat.name, idPat.i);
+    }
+
+    @Override
+    public boolean isConstructor(BuiltIn.Constructor constructor) {
+      return idPat.name.equals(constructor.constructor)
+          && isTypeOf(constructor);
     }
   }
 
@@ -1019,6 +1042,23 @@ public class Core {
     @Override
     public boolean isConstant() {
       return true;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>A nullary constructor such as {@code NONE} becomes a value literal,
+     * whose value is a singleton list containing the constructor's name.
+     */
+    @Override
+    public boolean isConstructor(BuiltIn.Constructor constructor) {
+      if (op != Op.VALUE_LITERAL || !isTypeOf(constructor)) {
+        return false;
+      }
+      final Object o = unwrap(Object.class);
+      return o instanceof List
+          && ((List<?>) o).size() == 1
+          && constructor.constructor.equals(((List<?>) o).get(0));
     }
   }
 
