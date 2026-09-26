@@ -246,6 +246,41 @@ public class RelExpanderTest {
   }
 
   /**
+   * Tests that a leaf that is a list of numbers bounds its name, and that FBBT
+   * carries the bound to another name: {@code z} in [1, 3] and {@code x + 1 =
+   * z} put {@code x} in [0, 2].
+   */
+  @Test
+  void testListBounds() {
+    assertThat(
+        expanded("from z in [1, 2, 3], x where x + 1 = z"),
+        is(
+            "project [{x = #2 $0, z = #1 $0}]\n" //
+                + "  filter [#2 $0 + 1 = #1 $0]\n"
+                + "    join\n"
+                + "      [1, 2, 3]\n"
+                + "      #flatten Range ([CLOSED (0, 2)])\n"));
+  }
+
+  /**
+   * Tests that a leaf correlated with an unbounded name is not taken as a bound
+   * for it: {@code y in [x * 2]} cannot run until {@code x} has a generator, so
+   * {@code x < y} is not what bounds {@code x}, and the constant bounds are.
+   */
+  @Test
+  void testCorrelatedLeafIsNoBound() {
+    assertThat(
+        expanded(
+            "from x, y in [x * 2] where x > 0 andalso x < 10 andalso x < y"),
+        is(
+            "project [{x = #1 $0, y = #2 $0}]\n" //
+                + "  filter [#1 $0 < #2 $0]\n"
+                + "    join [v$0]\n"
+                + "      #flatten Range ([OPEN (0, 10)])\n"
+                + "      [#* Int (v$0, 2)]\n"));
+  }
+
+  /**
    * Tests that a condition reaches a leaf through a projection, which the step
    * list cannot do.
    *

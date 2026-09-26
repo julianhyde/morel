@@ -26,6 +26,7 @@ import static net.hydromatic.morel.util.Static.last;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -42,6 +43,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
@@ -646,6 +648,12 @@ public class RelExpander {
           // follows every scan.
           frame.order.add(new Expander.Ground(null, constraint));
         });
+    // A leaf that is a list of numbers bounds its name: `z in [1, 2, 3]` says
+    // `1 <= z andalso z <= 3`, and FBBT can carry that to another name, as
+    // in `from z in [1, 2, 3], x, y where x + y = z`. The bound is for FBBT
+    // to read and not for the engine to apply -- the leaf enforces it -- so
+    // it is written into `constraints` and never into the order.
+    frame.leaves.forEach((leaf, pat) -> listBounds(leaf, pat, constraints));
     // Left to right through the tree, and not `frame.leaves`, whose order is
     // an IdentityHashMap's. The engine registers each extent as it is given
     // them and improves the generators after every constraint, so the order
@@ -663,8 +671,10 @@ public class RelExpander {
           expand(join.right, ImmutableList.of()),
           join.condition);
     }
+    final Set<Core.NamedPat> ungrounded = ungroundedPats(extents);
+    correlatedPats(join, frame, ImmutableMap.of(), ungrounded);
     final Generators.Cache cache =
-        new Generators.Cache(typeSystem, env, ungroundedPats(extents));
+        new Generators.Cache(typeSystem, env, ungrounded);
     // Interleaved, in the order the walk reached them; the conjuncts that
     // strengthening added are not in that order, having no place in the tree,
     // so they go at the end.
@@ -1439,6 +1449,48 @@ public class RelExpander {
   }
 
   /**
+   * If a leaf is a list of numeric literals, adds the least and the greatest of
+   * them as bounds on its name to {@code bounds}.
+   */
+  private void listBounds(Core.Exp leaf, Core.Pat pat, List<Core.Exp> bounds) {
+    if (!(pat instanceof Core.NamedPat)
+        || !leaf.isCallTo(BuiltIn.Z_LIST)
+        || pat.type != PrimitiveType.INT && pat.type != PrimitiveType.REAL) {
+      return;
+    }
+    final Core.Exp arg = ((Core.Apply) leaf).arg;
+    if (arg.op != Op.TUPLE || ((Core.Tuple) arg).args.isEmpty()) {
+      return;
+    }
+    BigDecimal min = BigDecimal.ZERO;
+    BigDecimal max = BigDecimal.ZERO;
+    boolean first = true;
+    for (Core.Exp element : ((Core.Tuple) arg).args) {
+      final Core.@Nullable Literal literal = Bounds.numericLiteral(element);
+      if (literal == null) {
+        // Not a constant, so the list says nothing about the range.
+        return;
+      }
+      final BigDecimal value = literal.unwrap(BigDecimal.class);
+      min = first || value.compareTo(min) < 0 ? value : min;
+      max = first || value.compareTo(max) > 0 ? value : max;
+      first = false;
+    }
+    final Core.Exp id = core.id((Core.NamedPat) pat);
+    final PrimitiveType type = (PrimitiveType) pat.type;
+    bounds.add(
+        core.greaterThanOrEqualTo(typeSystem, id, core.literal(type, min)));
+    bounds.add(
+        core.call(
+            typeSystem,
+            BuiltIn.OP_LE,
+            PrimitiveType.BOOL,
+            Pos.ZERO,
+            id,
+            core.literal(type, max)));
+  }
+
+  /**
    * Replaces each leaf that is an infinite range with the finite range that the
    * conditions make of it.
    *
@@ -1727,6 +1779,52 @@ public class RelExpander {
     final Set<Core.NamedPat> pats = new LinkedHashSet<>();
     extents.forEach((pat, exp) -> pats.addAll(pat.expand()));
     return pats;
+  }
+
+  /**
+   * Adds to {@code pats} the names of every leaf that reads one of them,
+   * directly or through the binder of a dependent join, and so cannot run until
+   * that name has a generator.
+   *
+   * <p>{@code y in [x * 2]} is no better than {@code x} as a bound for {@code
+   * x}: were the engine to take {@code x < y} as one, the scan of {@code y}
+   * would wait on {@code x} and the range of {@code x} on {@code y}, and the
+   * join it built would read a name nothing binds. Left to right, so a leaf
+   * that reads a correlated leaf is correlated too.
+   */
+  private void correlatedPats(
+      Core.Exp node,
+      Frame frame,
+      Map<Core.NamedPat, Core.Exp> binders,
+      Set<Core.NamedPat> pats) {
+    if (node instanceof Core.Join) {
+      final Core.Join join = (Core.Join) node;
+      correlatedPats(join.left, frame, binders, pats);
+      final Map<Core.NamedPat, Core.Exp> binders2 =
+          new LinkedHashMap<>(binders);
+      binders2.put(join.leftRow, requireNonNull(frame.elements.get(join.left)));
+      correlatedPats(join.right, frame, binders2, pats);
+      return;
+    }
+    if (node instanceof Core.Filter) {
+      correlatedPats(((Core.Filter) node).input, frame, binders, pats);
+      return;
+    }
+    final Core.@Nullable Pat pat = frame.leaves.get(node);
+    if (pat == null || node.isExtent()) {
+      return;
+    }
+    for (Core.NamedPat read : node.freePats(typeSystem)) {
+      final Core.@Nullable Exp element = binders.get(read);
+      final boolean correlated =
+          element == null
+              ? pats.contains(read)
+              : !Collections.disjoint(element.freePats(typeSystem), pats);
+      if (correlated) {
+        pats.addAll(pat.expand());
+        return;
+      }
+    }
   }
 
   private Core.Exp bound(
