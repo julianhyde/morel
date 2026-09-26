@@ -83,13 +83,13 @@ import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
-import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypeVar;
 import net.hydromatic.morel.util.Characters;
 import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.ImmutablePairList;
@@ -3770,56 +3770,145 @@ public abstract class Codes {
       };
 
   /** @see BuiltIn#OP_GE */
-  private static final Applicable2 OP_GE =
-      new BaseApplicable2<Boolean, Comparable, Comparable>(BuiltIn.OP_GE) {
-        @Override
-        public Boolean apply(Comparable a0, Comparable a1) {
-          if (a0 instanceof Float && Float.isNaN((Float) a0)
-              || a1 instanceof Float && Float.isNaN((Float) a1)) {
-            return false;
-          }
-          return a0.compareTo(a1) >= 0;
-        }
-      };
+  private static final Applicable OP_GE = new DynamicCompare(BuiltIn.OP_GE);
 
   /** @see BuiltIn#OP_GT */
-  private static final Applicable2 OP_GT =
-      new BaseApplicable2<Boolean, Comparable, Comparable>(BuiltIn.OP_GT) {
-        @Override
-        public Boolean apply(Comparable a0, Comparable a1) {
-          if (a0 instanceof Float && Float.isNaN((Float) a0)
-              || a1 instanceof Float && Float.isNaN((Float) a1)) {
-            return false;
-          }
-          return a0.compareTo(a1) > 0;
-        }
-      };
+  private static final Applicable OP_GT = new DynamicCompare(BuiltIn.OP_GT);
 
   /** @see BuiltIn#OP_LE */
-  private static final Applicable2 OP_LE =
-      new BaseApplicable2<Boolean, Comparable, Comparable>(BuiltIn.OP_LE) {
-        @Override
-        public Boolean apply(Comparable a0, Comparable a1) {
-          if (a0 instanceof Float && Float.isNaN((Float) a0)
-              || a1 instanceof Float && Float.isNaN((Float) a1)) {
-            return false;
-          }
-          return a0.compareTo(a1) <= 0;
-        }
-      };
+  private static final Applicable OP_LE = new DynamicCompare(BuiltIn.OP_LE);
 
   /** @see BuiltIn#OP_LT */
-  private static final Applicable2 OP_LT =
-      new BaseApplicable2<Boolean, Comparable, Comparable>(BuiltIn.OP_LT) {
-        @Override
-        public Boolean apply(Comparable a0, Comparable a1) {
-          if (a0 instanceof Float && Float.isNaN((Float) a0)
-              || a1 instanceof Float && Float.isNaN((Float) a1)) {
-            return false;
-          }
-          return a0.compareTo(a1) < 0;
-        }
-      };
+  private static final Applicable OP_LT = new DynamicCompare(BuiltIn.OP_LT);
+
+  /**
+   * Base class for implementations of {@link #OP_GE}, {@link #OP_GT}, {@link
+   * #OP_LE} and {@link #OP_LT}.
+   */
+  private abstract static class OpCompare
+      extends BaseApplicable2<Boolean, Object, Object> implements Typed {
+    OpCompare(BuiltIn builtIn) {
+      super(builtIn);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type, Pos pos) {
+      // 'type' is 'argType * argType -> bool' (perhaps wrapped in a
+      // ForallType if the operator is used as a value).
+      final FnType fnType = FnType.of(type);
+      final Type paramType = fnType.paramType;
+      if (!(paramType instanceof TupleType)) {
+        return this;
+      }
+      final Type argType = ((TupleType) paramType).argTypes.get(0);
+      if (argType == PrimitiveType.REAL) {
+        return new RealOpCompare(builtIn);
+      }
+      if (argType instanceof TypeVar) {
+        return this;
+      }
+      return new StaticCompare(
+          builtIn, Comparators.comparatorFor(typeSystem, argType, pos));
+    }
+
+    /** Converts the result of a comparison to the result of this operator. */
+    boolean test(int c) {
+      switch (builtIn) {
+        case OP_GE:
+          return c >= 0;
+        case OP_GT:
+          return c > 0;
+        case OP_LE:
+          return c <= 0;
+        case OP_LT:
+          return c < 0;
+        default:
+          throw new AssertionError(builtIn);
+      }
+    }
+  }
+
+  /**
+   * Implements {@link #OP_GE}, {@link #OP_GT}, {@link #OP_LE} and {@link
+   * #OP_LT}.
+   *
+   * <p>Compares values using the order given by {@link
+   * Comparators#comparatorFor} for their type, the same order used by {@code
+   * order}, {@code min} and {@code max}. If the type is not known at compile
+   * time (for example, in a polymorphic function), uses the natural order of
+   * the values. {@code real} values are compared by {@link RealOpCompare}.
+   */
+  private static class DynamicCompare extends OpCompare {
+    DynamicCompare(BuiltIn builtIn) {
+      super(builtIn);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Boolean apply(Object a0, Object a1) {
+      if (a0 instanceof Float) {
+        // A Float is a 'real'. We get here only if the type was not known at
+        // compile time.
+        return RealOpCompare.getBoolean(builtIn, (Float) a0, (Float) a1);
+      }
+      final Comparable c0 = (Comparable) a0;
+      return test(c0.compareTo(a1));
+    }
+  }
+
+  /** Implements comparison operations using a comparator. */
+  private static class StaticCompare extends OpCompare {
+    private final Comparator comparator;
+
+    StaticCompare(BuiltIn builtIn, Comparator comparator) {
+      super(builtIn);
+      this.comparator = requireNonNull(comparator);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Boolean apply(Object a0, Object a1) {
+      return test(comparator.compare(a0, a1));
+    }
+  }
+
+  /**
+   * Comparison operator for {@code real} values.
+   *
+   * <p>Comparison follows IEEE 754, which is not a total order: any comparison
+   * involving {@code NaN} is false, and {@code ~0.0} equals {@code 0.0}. (By
+   * contrast, {@code order} and {@link Comparators#comparatorFor} put {@code
+   * NaN} last and {@code ~0.0} before {@code 0.0}.)
+   */
+  private static class RealOpCompare extends OpCompare {
+    RealOpCompare(BuiltIn builtIn) {
+      super(builtIn);
+    }
+
+    @Override
+    public Boolean apply(Object a0, Object a1) {
+      // Java's primitive float comparisons follow IEEE 754: any comparison
+      // involving NaN is false, and ~0.0 equals 0.0.
+      final float f0 = (Float) a0;
+      final float f1 = (Float) a1;
+      return getBoolean(builtIn, f0, f1);
+    }
+
+    static Boolean getBoolean(BuiltIn builtIn, float f0, float f1) {
+      switch (builtIn) {
+        case OP_GE:
+          return f0 >= f1;
+        case OP_GT:
+          return f0 > f1;
+        case OP_LE:
+          return f0 <= f1;
+        case OP_LT:
+          return f0 < f1;
+        default:
+          throw new AssertionError(builtIn);
+      }
+    }
+  }
 
   /** @see BuiltIn#OP_MINUS */
   private static final Macro OP_MINUS =
@@ -5227,9 +5316,8 @@ public abstract class Codes {
       // 'type' is 'elementType bag -> elementType' (perhaps wrapped in a
       // ForallType if the function is used as a value); its result type is the
       // element type.
-      final Type fnType =
-          type instanceof ForallType ? ((ForallType) type).type : type;
-      final Type elementType = ((FnType) fnType).resultType;
+      final FnType fnType = FnType.of(type);
+      final Type elementType = fnType.resultType;
       final Comparator comparator =
           Comparators.comparatorFor(typeSystem, elementType, pos);
       return new RelationalMinMax(builtIn, pos, comparator);
@@ -5283,9 +5371,9 @@ public abstract class Codes {
       // 'type' is '(elementType -> keyType) -> elementType bag -> elementType'
       // (perhaps wrapped in a ForallType if the function is used as a value);
       // the key type is the result type of its first argument.
-      final Type fnType =
-          type instanceof ForallType ? ((ForallType) type).type : type;
-      final Type keyType = ((FnType) ((FnType) fnType).paramType).resultType;
+      final FnType fnType = FnType.of(type);
+      final FnType fnType1 = (FnType) fnType.paramType;
+      final Type keyType = fnType1.resultType;
       final Comparator comparator =
           Comparators.comparatorFor(typeSystem, keyType, pos);
       return new RelationalMinMaxBy(builtIn, pos, comparator);

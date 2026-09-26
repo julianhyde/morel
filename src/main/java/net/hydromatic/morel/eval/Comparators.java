@@ -24,7 +24,6 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
-import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -155,9 +154,6 @@ public class Comparators {
             case "bag":
               return listComparator(dataType.elementType());
 
-            case "decimal":
-              return Comparator.<BigDecimal>naturalOrder();
-
             case "descending":
               Comparator<Object> objectComparator =
                   comparatorFor(dataType.arg(0));
@@ -165,6 +161,11 @@ public class Comparators {
               return (Comparator<List>)
                   (list1, list2) ->
                       objectComparator.compare(list2.get(1), list1.get(1));
+          }
+          if (dataType.typeConstructors.isEmpty()) {
+            // An opaque type, such as 'decimal', 'time' or 'date', whose values
+            // are Java objects with a natural order.
+            return (Comparator<Comparable>) Comparable::compareTo;
           }
           final PairList<String, Ord<Comparator>> b = PairList.of();
           dataType
