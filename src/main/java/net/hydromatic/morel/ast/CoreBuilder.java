@@ -1188,13 +1188,27 @@ public enum CoreBuilder {
   @SuppressWarnings({"rawtypes", "unchecked"})
   public Core.Exp extent(
       Pos pos, TypeSystem typeSystem, Type type, RangeSet rangeSet) {
+    return extent(pos, typeSystem, type, rangeSet, ImmutableList.of());
+  }
+
+  /**
+   * As {@link #extent(Pos, TypeSystem, Type, RangeSet)}, with the names the
+   * query bound to the values, which a diagnostic quotes.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public Core.Exp extent(
+      Pos pos,
+      TypeSystem typeSystem,
+      Type type,
+      RangeSet rangeSet,
+      List<String> names) {
     final Map<String, ImmutableRangeSet> map;
     if (rangeSet.complement().isEmpty()) {
       map = ImmutableMap.of();
     } else {
       map = ImmutableMap.of("/", ImmutableRangeSet.copyOf(rangeSet));
     }
-    return extent(pos, typeSystem, type, map);
+    return extent(pos, typeSystem, type, map, names);
   }
 
   /**
@@ -1206,6 +1220,20 @@ public enum CoreBuilder {
       TypeSystem typeSystem,
       Type type,
       Map<String, ImmutableRangeSet> rangeSetMap) {
+    return extent(pos, typeSystem, type, rangeSetMap, ImmutableList.of());
+  }
+
+  /**
+   * As {@link #extent(Pos, TypeSystem, Type, RangeSet, List)}, with a range-set
+   * map.
+   */
+  @SuppressWarnings("rawtypes")
+  public Core.Exp extent(
+      Pos pos,
+      TypeSystem typeSystem,
+      Type type,
+      Map<String, ImmutableRangeSet> rangeSetMap,
+      List<String> names) {
     // An extent yields its values in the natural order of the type, so it is
     // a list; 'Z_EXTENT' is declared to return one.
     final Type listType = typeSystem.listType(type);
@@ -1215,7 +1243,8 @@ public enum CoreBuilder {
         pos,
         listType,
         core.functionLiteral(listType, BuiltIn.Z_EXTENT),
-        core.internalLiteral(new RangeExtent(typeSystem, type, rangeSetMap)));
+        core.internalLiteral(
+            new RangeExtent(typeSystem, type, rangeSetMap, names)));
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})

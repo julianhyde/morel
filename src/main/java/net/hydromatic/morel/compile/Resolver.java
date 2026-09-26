@@ -2531,7 +2531,7 @@ public class Resolver {
             });
         b.push(
             core.tuplePat(typeMap.typeSystem, pats),
-            extent(scan.pat.pos, type));
+            extent(scan.pat.pos, type, names));
         scanNames.add(ImmutableList.copyOf(names));
         return names;
       }
@@ -2541,7 +2541,11 @@ public class Resolver {
         // the lowering's own scan of this collection finds `x` taken and calls
         // itself `x_1`. The tree has no use for the pattern anyway -- `push`
         // erases it to paths -- so only the type is wanted.
-        return push(scan.pat, extent(scan.pat.pos, typeMap.getType(scan.pat)));
+        final Ast.@Nullable IdPat id = bareId(scan.pat);
+        final List<String> names =
+            id == null ? ImmutableList.of() : ImmutableList.of(id.name);
+        return push(
+            scan.pat, extent(scan.pat.pos, typeMap.getType(scan.pat), names));
       }
       // A pattern that is not a name or a tuple of names is flattened, as the
       // step list flattens it: `from {b, i}` scans `bool * int`, and the names
@@ -2551,7 +2555,13 @@ public class Resolver {
           extentPat(
               typeMap.typeSystem,
               Resolver.this.toCore(scan.pat, typeMap.getType(scan.pat)));
-      final List<String> names = push(flat, extent(scan.pat.pos, flat.type));
+      final List<String> names =
+          push(
+              flat,
+              extent(
+                  scan.pat.pos,
+                  flat.type,
+                  transform(flat.expand(), pat -> pat.name)));
       if (names.size() > 1 && flatIdPats(flat)) {
         // `extentPat` flattens to a tuple of the pattern's variables, one per
         // value the scan generates, so the lowering can scan under a pattern
@@ -2680,10 +2690,17 @@ public class Resolver {
       return names;
     }
 
-    /** Returns the collection of every value of a type. */
-    private Core.Exp extent(Pos pos, Type type) {
+    /**
+     * Returns the collection of every value of a type, carrying the names the
+     * scan bound so that grounding can quote them.
+     */
+    private Core.Exp extent(Pos pos, Type type, List<String> names) {
       return core.extent(
-          pos, typeMap.typeSystem, type, ImmutableRangeSet.of(Range.all()));
+          pos,
+          typeMap.typeSystem,
+          type,
+          ImmutableRangeSet.of(Range.all()),
+          names);
     }
 
     /** Returns the kind of join a scan's keyword asks for. */

@@ -20,12 +20,17 @@ package net.hydromatic.morel.compile;
 
 import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasToString;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.io.StringReader;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Ast;
@@ -41,15 +46,13 @@ import org.junit.jupiter.api.Test;
  * Tests {@link RelExpander}, the front end that grounds the infinite-extent
  * leaves of a relational tree.
  *
- * <p>The engine it calls is the one that grounds a step list, unchanged, so
- * what these tests check is the front end: that naming a leaf's element and
- * rewriting the filters above it in terms of that name yields the generator the
- * step list would have found.
+ * <p>The engine it calls is {@link Generators}, so what these tests check is
+ * the front end: that naming a leaf's element and rewriting the filters above
+ * it in terms of that name yields the generator the constraints call for.
  *
  * <p>A generator appears wrapped in {@code group ... order ...} where its
- * duplicates would be observable, which is {@code Expander}'s rule: a
- * collection may hold a value twice, and an unbounded scan yields each
- * assignment once.
+ * duplicates would be observable: a collection may hold a value twice, and an
+ * unbounded scan yields each assignment once.
  */
 public class RelExpanderTest {
   /**
@@ -120,10 +123,54 @@ public class RelExpanderTest {
    */
   private static String expanded(String ml) {
     final Fixture f = new Fixture(ml);
-    final Core.Exp tree = RelExpander.expand(f.typeSystem, f.env, f.tree());
+    final Core.Exp tree =
+        RelExpander.expand(
+            f.typeSystem, f.env, f.tree(), true, ImmutableList.of());
     return tree instanceof Core.Rel
         ? ((Core.Rel) tree).describe(f.typeSystem)
         : tree + "\n";
+  }
+
+  /**
+   * The patterns a query was written with are read back off the projection that
+   * names the element's components, or, where there is no such projection, off
+   * the names the extents carry.
+   */
+  @Test
+  void testLeafPats() {
+    final Fixture f =
+        new Fixture("from i, j where i elem [1] andalso j elem [2]");
+    assertThat(RelExpander.leafPats(f.tree()), hasToString("[i, j]"));
+    // A query with one binder has no projection, so the name is the one the
+    // extent carries; a scan under a tuple of names carries one per component.
+    final Fixture f2 = new Fixture("from i where i elem [1]");
+    assertThat(RelExpander.leafPats(f2.tree()), hasToString("[i]"));
+    final Fixture f3 = new Fixture("from (b: bool, i) where i elem [1]");
+    assertThat(RelExpander.leafPats(f3.tree()), hasToString("[(b, i)]"));
+    // A leaf that is not an extent carries no name.
+    final Fixture f4 = new Fixture("from i in [1, 2] where i > 1");
+    assertThat(RelExpander.leafPats(f4.tree()), empty());
+  }
+
+  /**
+   * {@code ungrounded} names the first leaf that is still an infinite extent,
+   * which after grounding is a leaf that nothing bounds.
+   */
+  @Test
+  void testUngrounded() {
+    final Fixture f = new Fixture("from i, j where j elem [2]");
+    final List<Core.Pat> leafPats = RelExpander.leafPats(f.tree());
+    assertThat(RelExpander.ungrounded(f.tree(), leafPats), hasToString("i"));
+    final Fixture f1 = new Fixture("from j where j elem [1 ..]");
+    final List<Core.Pat> leafPats1 = RelExpander.leafPats(f1.tree());
+    assertThat(RelExpander.ungrounded(f1.tree(), leafPats1), hasToString("j"));
+    final Fixture f2 =
+        new Fixture("from i, j where i elem [1] andalso j elem [2]");
+    final List<Core.Pat> leafPats2 = RelExpander.leafPats(f2.tree());
+    assertThat(RelExpander.ungrounded(f2.tree(), leafPats2), hasToString("i"));
+    final Core.Exp grounded =
+        RelExpander.expand(f2.typeSystem, f2.env, f2.tree(), true, leafPats2);
+    assertThat(RelExpander.ungrounded(grounded, leafPats2), nullValue());
   }
 
   /** Tests that a leaf constrained by 'elem' is grounded by the list. */
@@ -217,8 +264,8 @@ public class RelExpanderTest {
    * Tests that leaves which one generator binds together become one scan.
    *
    * <p>Replacing them separately would enumerate the collection once per leaf
-   * and pair every value with every other; the step list makes them one scan
-   * because the user wrote one pattern, and a tree has to notice.
+   * and pair every value with every other; the user wrote one pattern, and a
+   * tree has to notice.
    */
   @Test
   void testLeavesOneGeneratorBinds() {
@@ -245,12 +292,12 @@ public class RelExpanderTest {
   void testRowsNotUsed() {
     final Fixture f = new Fixture("from w : int join x : int where x = 3");
     final Core.Exp expanded =
-        RelExpander.expand(f.typeSystem, f.env, f.tree(), false);
+        RelExpander.expand(
+            f.typeSystem, f.env, f.tree(), false, ImmutableList.of());
     // `w` is gone, and so is the condition, which the generator enforces, and
     // so is the projection: nothing reads the rows, so what a row *is* is not
     // observable, and a projection written for two components cannot stand
-    // over a collection that now has one. The step list changes the row's
-    // type here too -- `exists w, x where x = 3` becomes `from x in [3]`.
+    // over a collection that now has one.
     assertThat(
         expanded instanceof Core.Rel
             ? ((Core.Rel) expanded).describe(f.typeSystem)
@@ -323,9 +370,7 @@ public class RelExpanderTest {
    *
    * <p>{@code dno} is unbounded until the condition {@code #deptno v = dno} is
    * seen, and by then {@code v} has not been declared; so {@code v} comes
-   * first, and {@code dno} is read out of each of its rows. The step list
-   * defers in the same way, which is what such-that.smli's "forward references
-   * are required" comment is about.
+   * first, and {@code dno} is read out of each of its rows.
    */
   @Test
   void testReordersToGroundAChain() {
@@ -359,9 +404,9 @@ public class RelExpanderTest {
   }
 
   /**
-   * Tests that a condition reaches the leaf through the steps that do not
-   * change the element, as it does in the step list: {@code from x take 3 where
-   * x elem [1, 2, 3]} bounds x and then takes 3 of what remains.
+   * Tests that a condition reaches the leaf through the nodes that do not
+   * change the element: {@code from x take 3 where x elem [1, 2, 3]} bounds x
+   * and then takes 3 of what remains.
    */
   @Test
   void testThroughOrderTakeSkip() {

@@ -202,7 +202,7 @@ from y where y elem [1,2] andalso y elem [2,3];
 
 (*) An 'elem' over an infinite range does not ground the variable.
 from j where j elem [1 ..];
-> stdIn:1.6 Error: pattern is not grounded
+> stdIn:1.6 Error: pattern 'j' is not grounded
 >   raised at: stdIn:1.6
 
 (* An infinite-range 'elem' combines with another bound to give a
@@ -310,7 +310,7 @@ from e where (case e of
  * With symbolic math we could deduce that the solution is [~2,3],
  * but we don't have symbolic math. *)
 from x where (x + 2) * (x - 3) = 0;
-> stdIn:1.6 Error: pattern is not grounded
+> stdIn:1.6 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.6
 
 (* FBBT (feasibility-based bound tightening) lets the planner ground
@@ -424,8 +424,8 @@ Sys.planEx "999";
 >   {_|
 > val it =
 >   sort [$0] : int list
->     project [#g$0 $0] : int list
->       group [g$0 = $0] : {g$0:int} list
+>     project [#x $0] : int list
+>       group [x = $0] : {x:int} list
 >         [1, 2, 4] : int list
 > |_} : string
 
@@ -981,7 +981,7 @@ from SOME (i: int);
 > stdIn:1.6-1.19 Error: cannot enumerate all values of type 'int'
 >   raised at: stdIn:1.6-1.19
 from i :: t;
-> stdIn:1.6-1.12 Error: pattern is not grounded
+> stdIn:1.6-1.12 Error: pattern 'i' is not grounded
 >   raised at: stdIn:1.6-1.12
 from (i: int, ());
 > stdIn:1.6-1.18 Error: cannot enumerate all values of type 'int'
@@ -1002,7 +1002,7 @@ from b: bool, i;
 > stdIn:1.15 Error: pattern 'i' is not grounded
 >   raised at: stdIn:1.15
 from (b: bool, i);
-> stdIn:1.6-1.18 Error: pattern is not grounded
+> stdIn:1.6-1.18 Error: pattern 'i' is not grounded
 >   raised at: stdIn:1.6-1.18
 
 (* A query that only counts its rows, as 'exists' does, may ignore a variable
@@ -1122,7 +1122,7 @@ in
     where isEmp50 e
     yield e.ename
 end;
-> stdIn:5.8 Error: pattern is not grounded
+> stdIn:5.8 Error: pattern 'e' is not grounded
 >   raised at: stdIn:5.8
 
 (*) A function with external extent.
@@ -1216,8 +1216,8 @@ Sys.planEx "999";
 >           #nonEmpty Relational (r$0[v$0])
 >         end] : string list
 >       sort [$0] : string list
->         project [#g$0 $0] : string bag
->           group [g$0 = $0] : {g$0:string} bag
+>         project [#p $0] : string bag
+>           group [p = $0] : {p:string} bag
 >             project [#2 $0] : string bag
 >               join [v$1] : (string * string) bag
 >                 ["abcd", "ant"] : string list
@@ -1650,7 +1650,7 @@ from x where isS3 x;
 fun tuPair (a, b) = true;
 > val tuPair = fn : 'a * 'b -> bool
 from p where tuPair p;
-> stdIn:1.6 Error: pattern is not grounded
+> stdIn:1.6 Error: pattern 'p' is not grounded
 >   raised at: stdIn:1.6
 from x, y where tuPair (x, y);
 > stdIn:1.6 Error: pattern 'x' is not grounded
@@ -1681,6 +1681,16 @@ from p: int * int where #1 p elem [0,1] andalso #2 p elem [2,3];
 > 1 3
 >
 > val it : (int * int) list
+
+(* A record with one field is grounded by constraining that field.
+ * There is no join to do, and the row is the field. *)
+from p: {i: int} where p.i elem [0,1];
+> i
+> -
+> 0
+> 1
+>
+> val it : {i:int} list
 
 (* Joe's bar ---------------------------------------------------------
  *
@@ -2173,12 +2183,12 @@ Sys.planEx "3";
 >   {_|
 > val it =
 >   sort [$0] : t$0
->     project [#g$0 $0] : t$0
->       group [g$0 = $0] : t$1
+>     project [#d $0] : t$0
+>       group [d = $0] : t$1
 >         #toList Bag (#depts scott) : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} list
-> t$1 {g$0:{deptno:int, dname:string, loc:string}} list
+> t$1 {d:{deptno:int, dname:string, loc:string}} list
 > |_} : string
 
 (* testFromSuchThat2c - Record pattern with field renaming *)
@@ -2305,8 +2315,8 @@ Sys.planEx "3";
 >       project [(#2 $0, #3 $0, #1 $0)] : t$1
 >         join [v$0] : t$2
 >           sort [$0] : t$3
->             project [#g$0 $0] : t$3
->               group [g$0 = $0] : t$4
+>             project [#v $0] : t$3
+>               group [v = $0] : t$4
 >                 #toList Bag (#depts scott) : t$3
 >           join : (int * string) list
 >             [#deptno v$0] : int list
@@ -2316,7 +2326,7 @@ Sys.planEx "3";
 > t$1 (int * string * {deptno:int, dname:string, loc:string}) list
 > t$2 ({deptno:int, dname:string, loc:string} * int * string) list
 > t$3 {deptno:int, dname:string, loc:string} list
-> t$4 {g$0:{deptno:int, dname:string, loc:string}} list
+> t$4 {v:{deptno:int, dname:string, loc:string}} list
 > |_} : string
 
 (* testFromSuchThat2d4 - Forward references with inequality constraint *)
@@ -2361,8 +2371,8 @@ Sys.planEx "3";
 >       project [(#2 $0, #3 $0, #1 $0)] : t$1
 >         join [v$0] : t$2
 >           sort [$0] : t$3
->             project [#g$0 $0] : t$3
->               group [g$0 = $0] : t$4
+>             project [#v $0] : t$3
+>               group [v = $0] : t$4
 >                 #toList Bag (#depts scott) : t$3
 >           join : (int * string) list
 >             [#deptno v$0] : int list
@@ -2372,7 +2382,7 @@ Sys.planEx "3";
 > t$1 (int * string * {deptno:int, dname:string, loc:string}) list
 > t$2 ({deptno:int, dname:string, loc:string} * int * string) list
 > t$3 {deptno:int, dname:string, loc:string} list
-> t$4 {g$0:{deptno:int, dname:string, loc:string}} list
+> t$4 {v:{deptno:int, dname:string, loc:string}} list
 > |_} : string
 
 (* testFromSuchThat2e - Function inlining with elem predicate.
@@ -2403,12 +2413,12 @@ Sys.planEx "999";
 >   project [#dname $0] : string list
 >     filter [#deptno $0 = 20] : t$0
 >       sort [$0] : t$0
->         project [#g$0 $0] : t$0
->           group [g$0 = $0] : t$1
+>         project [#d $0] : t$0
+>           group [d = $0] : t$1
 >             #toList Bag (#depts scott) : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} list
-> t$1 {g$0:{deptno:int, dname:string, loc:string}} list
+> t$1 {d:{deptno:int, dname:string, loc:string}} list
 > |_} : string
 
 (* testFromSuchThat2f - Join via suchthat with two functions *)
@@ -2459,19 +2469,19 @@ Sys.planEx "999";
 >         andalso #deptno (#1 $0) = 20] : t$0
 >       join : t$0
 >         sort [$0] : t$1
->           project [#g$0 $0] : t$1
->             group [g$0 = $0] : t$2
+>           project [#d $0] : t$1
+>             group [d = $0] : t$2
 >               #toList Bag (#depts scott) : t$1
 >         sort [$0] : t$3
->           project [#g$1 $0] : t$3
->             group [g$1 = $0] : t$4
+>           project [#e $0] : t$3
+>             group [e = $0] : t$4
 >               #toList Bag (#emps scott) : t$3
 >
 > t$0 ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list
 > t$1 {deptno:int, dname:string, loc:string} list
-> t$2 {g$0:{deptno:int, dname:string, loc:string}} list
+> t$2 {d:{deptno:int, dname:string, loc:string}} list
 > t$3 {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
-> t$4 {g$1:{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}} list
+> t$4 {e:{comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}} list
 > |_} : string
 
 (* testProvenanceThroughFunction - Provenance propagation through
@@ -2506,8 +2516,8 @@ Sys.planEx "999";
 >   {_|
 > val it =
 >   sort [$0] : int list
->     project [#g$0 $0] : int list
->       group [g$0 = $0] : {g$0:int} list
+>     project [#x $0] : int list
+>       group [x = $0] : {x:int} list
 >         [1, 2, 3] : int list
 > |_} : string
 
@@ -2541,8 +2551,8 @@ Sys.planEx "999";
 > val it =
 >   filter [$0 > 1] : int list
 >     sort [$0] : int list
->       project [#g$0 $0] : int list
->         group [g$0 = $0] : {g$0:int} list
+>       project [#x $0] : int list
+>         group [x = $0] : {x:int} list
 >           [1, 2, 3] : int list
 > |_} : string
 

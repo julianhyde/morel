@@ -467,7 +467,7 @@ from x where abs x < 10 andalso x > 0;
 (* Disjoint case (abs x > c) is two intervals — FBBT skips and the
  * constraint cannot be inverted by the existing extractor either. *)
 from x where abs x > 5;
-> stdIn:1.6 Error: pattern is not grounded
+> stdIn:1.6 Error: pattern 'x' is not grounded
 >   raised at: stdIn:1.6
 
 (* Strengthened bounds via a non-linear constraint. FBBT recognizes

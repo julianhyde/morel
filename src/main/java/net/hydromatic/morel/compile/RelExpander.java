@@ -20,6 +20,7 @@ package net.hydromatic.morel.compile;
 
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
+import static net.hydromatic.morel.util.PairList.zip;
 import static net.hydromatic.morel.util.Static.last;
 
 import com.google.common.collect.ImmutableList;
@@ -41,6 +42,7 @@ import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.RelBuilder;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -256,7 +258,8 @@ public class RelExpander {
    * several binders ends in a projection that names its element's components
    * after them: {@code project [{deptno = #2 $0, loc = #1 $0, name = #3 $0}]}.
    * A join concatenates its inputs' components, so component <i>k</i> is leaf
-   * <i>k</i>, and the projection is the map from leaf to name.
+   * <i>k</i>, and the projection is the map from leaf to name. Where there is
+   * no such projection, an extent carries the names its scan bound.
    *
    * <p>It matters beyond plan text. Grounding names what it builds after the
    * leaf it bounds, a group's key record sorts its fields by label, and a
@@ -264,6 +267,12 @@ public class RelExpander {
    * a query's rows in a different order.
    */
   public static List<Core.Pat> leafPats(Core.Exp tree) {
+    final List<Core.Pat> pats = projectedPats(tree);
+    return pats.isEmpty() ? extentPats(tree) : pats;
+  }
+
+  /** Reads the leaf patterns back out of the projection at a tree's root. */
+  private static List<Core.Pat> projectedPats(Core.Exp tree) {
     if (!(tree instanceof Core.Project)) {
       return ImmutableList.of();
     }
@@ -311,6 +320,43 @@ public class RelExpander {
   }
 
   /**
+   * Reads the leaf patterns from the names the extents carry, for a tree with
+   * no projection to read them from: a query with one binder, or one whose
+   * binders are the components of one scan, as {@code from (b, i)}.
+   *
+   * <p>Empty unless every leaf is an extent that names its element: a name for
+   * a leaf whose element is one value, or a name per component for a tuple. The
+   * names identify a leaf whatever is above it, so the walk is over every leaf,
+   * not only those a projection could have named.
+   */
+  private static List<Core.Pat> extentPats(Core.Exp tree) {
+    final List<Core.Exp> leaves = new ArrayList<>();
+    allLeaves(tree, leaves);
+    final ImmutableList.Builder<Core.Pat> pats = ImmutableList.builder();
+    for (Core.Exp leaf : leaves) {
+      if (!leaf.isExtent()) {
+        return ImmutableList.of();
+      }
+      final RangeExtent extent = leaf.getRangeExtent();
+      final Type type = extent.type;
+      if (extent.names.size() == 1) {
+        pats.add(core.idPat(type, extent.names.get(0), 0));
+      } else if (type instanceof TupleType
+          && extent.names.size() == ((TupleType) type).argTypes.size()) {
+        pats.add(
+            core.tuplePat(
+                (TupleType) type,
+                zip(extent.names, ((TupleType) type).argTypes)
+                    .transform(
+                        (name, argType) -> core.idPat(argType, name, 0))));
+      } else {
+        return ImmutableList.of();
+      }
+    }
+    return pats.build();
+  }
+
+  /**
    * Collects the leaves under a node, left to right, and returns whether every
    * node on the way is one that leaves the components alone.
    *
@@ -339,8 +385,7 @@ public class RelExpander {
    * the tree does not name it.
    *
    * <p>The name a diagnostic wants. A tree holds no names, so this is
-   * `leafPats` again -- the projection at the root, read back -- and a query
-   * with one binder has no projection and so no name
+   * `leafPats` again: the projection at the root, or the extents, read back.
    */
   public static Core.@Nullable NamedPat ungrounded(
       Core.Exp tree, List<Core.Pat> leafPats) {
@@ -1645,10 +1690,25 @@ public class RelExpander {
    * under a join.
    */
   private Core.Exp bound(Core.Exp leaf, List<Core.Exp> conditions) {
+    final int mark = nextName;
+    final int leafMark = nextLeafPat;
     try {
       return bound(leaf, conditions, false);
     } catch (CompileException e) {
-      return bound(leaf, conditions, true);
+      // As for a join tree: nothing the first attempt recorded survives it,
+      // and if the retry fails too, the first attempt's message is the one
+      // made with the names the query wrote.
+      subsumed.clear();
+      simplified.clear();
+      tightened.clear();
+      dropped = null;
+      nextName = mark;
+      nextLeafPat = leafMark;
+      try {
+        return bound(leaf, conditions, true);
+      } catch (CompileException e2) {
+        throw e;
+      }
     }
   }
 
