@@ -24,7 +24,6 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
-import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +51,39 @@ public class Comparators {
   public static Comparator comparatorFor(
       TypeSystem typeSystem, Type type, Pos pos) {
     return new ComparatorBuilder(typeSystem, pos).comparatorFor(type);
+  }
+
+  /**
+   * Value returned by {@link #compareReals} and {@link #comparePartial} if
+   * their arguments are unordered.
+   */
+  public static final int UNORDERED = Integer.MIN_VALUE;
+
+  /**
+   * Compares two {@code real} values according to IEEE 754, as the operators
+   * {@code <}, {@code <=}, {@code >}, {@code >=} do.
+   *
+   * <p>IEEE 754 comparison is a partial order: {@code ~0.0} equals {@code 0.0},
+   * and {@code NaN} is unordered with respect to every value, including itself,
+   * so this method returns {@link #UNORDERED} if either argument is {@code
+   * NaN}. By contrast, the comparator returned by {@link #comparatorFor}, which
+   * is used by {@code order}, {@code min} and {@code max}, is a total order: it
+   * puts {@code NaN} last and {@code ~0.0} before {@code 0.0}.
+   */
+  static int compareReals(Object o1, Object o2) {
+    final float f1 = (Float) o1;
+    final float f2 = (Float) o2;
+    return f1 < f2 ? -1 : f1 > f2 ? 1 : f1 == f2 ? 0 : UNORDERED;
+  }
+
+  /**
+   * Compares two values whose type is not known at compile time, as the
+   * operators {@code <}, {@code <=}, {@code >}, {@code >=} do. A Java {@link
+   * Float} is a {@code real}, and is compared by {@link #compareReals}; other
+   * values are compared using their natural order.
+   */
+  static int comparePartial(Object o1, Object o2) {
+    return o1 instanceof Float ? compareReals(o1, o2) : compare(o1, o2);
   }
 
   /** Compares two objects using their natural order. */
@@ -155,9 +187,6 @@ public class Comparators {
             case "bag":
               return listComparator(dataType.elementType());
 
-            case "decimal":
-              return Comparator.<BigDecimal>naturalOrder();
-
             case "descending":
               Comparator<Object> objectComparator =
                   comparatorFor(dataType.arg(0));
@@ -165,6 +194,11 @@ public class Comparators {
               return (Comparator<List>)
                   (list1, list2) ->
                       objectComparator.compare(list2.get(1), list1.get(1));
+          }
+          if (dataType.typeConstructors.isEmpty()) {
+            // An opaque type, such as 'decimal', 'time' or 'date', whose values
+            // are Java objects with a natural order.
+            return (Comparator<Comparable>) Comparable::compareTo;
           }
           final PairList<String, Ord<Comparator>> b = PairList.of();
           dataType
