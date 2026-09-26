@@ -3808,11 +3808,17 @@ public abstract class Codes {
         return this;
       }
       return new StaticCompare(
-          builtIn, Comparators.comparatorFor(typeSystem, argType, pos));
+          builtIn, Comparators.partialComparatorFor(typeSystem, argType, pos));
     }
 
-    /** Converts the result of a comparison to the result of this operator. */
+    /**
+     * Converts the result of a comparison to the result of this operator. If
+     * the values are {@link Comparators#UNORDERED unordered}, returns false.
+     */
     boolean test(int c) {
+      if (c == Comparators.UNORDERED) {
+        return false;
+      }
       switch (builtIn) {
         case OP_GE:
           return c >= 0;
@@ -3856,7 +3862,14 @@ public abstract class Codes {
     }
   }
 
-  /** Implements comparison operations using a comparator. */
+  /**
+   * Implements comparison operations using a comparator.
+   *
+   * <p>The comparator is created by {@link Comparators#partialComparatorFor},
+   * so a {@code real} inside a composite value, such as a tuple or option, is
+   * compared according to IEEE 754, as a {@code real} is by {@link
+   * RealOpCompare}.
+   */
   private static class StaticCompare extends OpCompare {
     private final Comparator comparator;
 

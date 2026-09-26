@@ -736,6 +736,28 @@ from x in [SOME 3, NONE, SOME 1] where x > SOME 1;
 (fn x => x + 1) < (fn x => x + 2);
 > stdIn:1.1-1.34 Error: comparison not defined for type 'int -> int'
 >   raised at: stdIn:1.1-1.34
+(* A real inside a composite value is also compared according to IEEE 754.
+ * ~0.0 equals 0.0, so the second fields decide; a NaN makes every
+ * comparison false, unless an earlier field decides; "order" is unaffected,
+ * and puts NaN last. *)
+(~0.0, 1) < (0.0, 0);
+> val it = false : bool
+(~0.0, 1) > (0.0, 0);
+> val it = true : bool
+(1.0, 2) < (0.0 / 0.0, 3);
+> val it = false : bool
+(1.0, 2) >= (0.0 / 0.0, 3);
+> val it = false : bool
+(1.0, 0.0 / 0.0) < (2.0, 3.0);
+> val it = true : bool
+{a = 0.0 / 0.0} < {a = 1.0};
+> val it = false : bool
+SOME (0.0 / 0.0) <= SOME 1.0;
+> val it = false : bool
+[~0.0] <= [0.0];
+> val it = true : bool
+from x in [(0.0 / 0.0, 1), (~0.0, 2), (0.0, 3)] order x;
+> val it = [(~0,2),(0,3),(nan,1)] : (real * int) list
 
 (* "op >" : numtext (int, real, string, char, word). *)
 op >;

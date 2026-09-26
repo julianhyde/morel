@@ -50,7 +50,45 @@ public class Comparators {
    */
   public static Comparator comparatorFor(
       TypeSystem typeSystem, Type type, Pos pos) {
-    return new ComparatorBuilder(typeSystem, pos).comparatorFor(type);
+    return new ComparatorBuilder(typeSystem, pos, false).comparatorFor(type);
+  }
+
+  /**
+   * Value returned by a comparator created by {@link #partialComparatorFor} if
+   * its arguments are unordered.
+   */
+  public static final int UNORDERED = Integer.MIN_VALUE;
+
+  /**
+   * Returns a comparator for a given type that compares {@code real} values
+   * according to IEEE 754, as the operators {@code <}, {@code <=}, {@code >},
+   * {@code >=} do.
+   *
+   * <p>IEEE 754 comparison is a partial order: {@code ~0.0} equals {@code 0.0},
+   * and {@code NaN} is unordered with respect to every value, including itself.
+   * When the comparator reaches a {@code real} that is unordered, it returns
+   * {@link #UNORDERED}. For example, it returns {@code UNORDERED} for {@code
+   * ((1.0, 2), (NaN, 3))}, but -1 for {@code ((1.0, NaN), (2.0, 3.0))} because
+   * the first fields decide the order.
+   *
+   * <p>By contrast, the comparator returned by {@link #comparatorFor}, which is
+   * used by {@code order}, {@code min} and {@code max}, is a total order: it
+   * puts {@code NaN} last and {@code ~0.0} before {@code 0.0}.
+   */
+  public static Comparator partialComparatorFor(
+      TypeSystem typeSystem, Type type, Pos pos) {
+    return new ComparatorBuilder(typeSystem, pos, true).comparatorFor(type);
+  }
+
+  /**
+   * Compares two {@code real} values according to IEEE 754. Returns {@link
+   * #UNORDERED} if either is {@code NaN}; treats {@code ~0.0} and {@code 0.0}
+   * as equal.
+   */
+  static int compareReals(Object o1, Object o2) {
+    final float f1 = (Float) o1;
+    final float f2 = (Float) o2;
+    return f1 < f2 ? -1 : f1 > f2 ? 1 : f1 == f2 ? 0 : UNORDERED;
   }
 
   /** Compares two objects using their natural order. */
@@ -78,11 +116,15 @@ public class Comparators {
   static class ComparatorBuilder {
     private final TypeSystem typeSystem;
     private final Pos pos;
+    /** Whether to compare {@code real} values according to IEEE 754. */
+    private final boolean partial;
+
     private final Map<Type.Key, Comparator> cache = new HashMap<>();
 
-    ComparatorBuilder(TypeSystem typeSystem, Pos pos) {
+    ComparatorBuilder(TypeSystem typeSystem, Pos pos, boolean partial) {
       this.typeSystem = requireNonNull(typeSystem);
       this.pos = requireNonNull(pos);
+      this.partial = partial;
     }
 
     Comparator comparatorFor(Type t2) {
@@ -125,6 +167,9 @@ public class Comparators {
           // natural order.
           if (type == PrimitiveType.WORD) {
             return Comparators::compareUnsigned;
+          }
+          if (type == PrimitiveType.REAL && partial) {
+            return Comparators::compareReals;
           }
           return Comparators::compare;
 
