@@ -507,6 +507,37 @@ Sys.plan ();
 > }'), ROW($0, 2))])
 >   LogicalValues(tuples=[[{ 1.250 }, { 2.500 }, { 0.001 }]])
 > )|_} : string
+(* Arithmetic on 'decimal' values is evaluated by Morel, not Calcite, because
+ * Calcite's DECIMAL type has less precision. *)
+from e in scott.emps
+  where e.deptno = 10
+  yield {e.ename, pay = e.sal * decimal "1.05" + getOpt (e.comm, decimal "0")};
+> val it =
+>   [{ename="CLARK",pay=2572.5},{ename="KING",pay=5250},
+>    {ename="MILLER",pay=1365}] : {ename:string, pay:decimal} bag
+Sys.plan ();
+> val it =
+>   {_|
+> globalMarshal(globals [scott], body calcite(plan LogicalProject(ename=[$3], pay=[morelScalar('decimal * decimal', morelScalar('(#`+` Decimal : decimal * decimal -> decimal)', '{
+>   "type": "ANY",
+>   "nullable": false,
+>   "precision": -1,
+>   "scale": -2147483648
+> }'), ROW(morelScalar('decimal * decimal', morelScalar('(#`*` Decimal : decimal * decimal -> decimal)', '{
+>   "type": "ANY",
+>   "nullable": false,
+>   "precision": -1,
+>   "scale": -2147483648
+> }'), ROW($7, 1.05:DECIMAL(3, 2))), morelScalar('decimal option * decimal', morelScalar('(#getOpt Option : decimal option * decimal -> decimal)', '{
+>   "type": "ANY",
+>   "nullable": false,
+>   "precision": -1,
+>   "scale": -2147483648
+> }'), ROW($0, 0))))])
+>   LogicalFilter(condition=[=($1, 10)])
+>     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+>       JdbcTableScan(table=[[scott, EMP]])
+> ))|_} : string
 Sys.set ("hybrid", false);
 > val it = () : unit
 

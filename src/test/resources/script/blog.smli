@@ -699,7 +699,7 @@ from e in emps,
   where e.deptno = d.deptno
   group {e.deptno, d.dname, e.job}
     compute {sumSal = sum over e.sal,
-      minRemuneration = min over Decimal.`+` (e.sal, getOpt (e.comm, decimal "0"))}
+      minRemuneration = min over e.sal + getOpt (e.comm, decimal "0")}
   order (deptno, job);
 > val it =
 >   [{deptno=10,dname="ACCOUNTING",job="CLERK",minRemuneration=1300,
@@ -1468,7 +1468,7 @@ val emps3 = from e in emps2 union
 val emps4 =
   from e in emps3
     yield if e.job = "MANAGER"
-      then {e replace sal = Decimal.`*` (e.sal, decimal "2")}
+      then {e replace sal = e.sal * decimal "2"}
       else e;
 > val emps4 =
 >   [{comm=NONE,deptno=20,empno=7369,ename="SMITH",hiredate="1980-12-17",
@@ -1530,7 +1530,7 @@ val summary2 =
         yield {e.deptno, c = 1, sum_sal = e.sal})
     union
       (from e in empsRemoved
-        yield {e.deptno, c = ~1, sum_sal = Decimal.`~` e.sal})
+        yield {e.deptno, c = ~1, sum_sal = ~ e.sal})
     group s.deptno compute {c = sum over s.c, sum_sal = sum over s.sum_sal}
     order deptno
     where c <> 0;
@@ -2068,7 +2068,7 @@ from e in scott.emps
 (* Empty group key and one compute expression gives an
  * atomic result. *)
 from e in scott.emps
-  group {} compute min over Decimal.`+` (e.sal, getOpt (e.comm, decimal "0"));
+  group {} compute min over e.sal + getOpt (e.comm, decimal "0");
 > val it = [800] : decimal bag
 
 (* Which job titles exist in department 10 and also in
@@ -2264,7 +2264,7 @@ from e in scott.emps
 from e in scott.emps
   yield {name = String.map Char.toUpper e.ename,
       position = String.map Char.toLower e.job,
-      annualSalary = Decimal.`*` (e.sal, decimal "12")};
+      annualSalary = e.sal * decimal "12"};
 > annualSalary name   position
 > ------------ ------ ---------
 >         9600 SMITH  clerk
@@ -2313,7 +2313,7 @@ fun analyzeResults (emps: {deptno: int, sal: decimal} bag) =
     val {count, sumSal} =
       from e in emps
         compute {count over (), sumSal = sum over e.sal}
-    val avgSal = Decimal.`/` (sumSal, Decimal.fromInt count)
+    val avgSal = sumSal / Decimal.fromInt count
   in
     {employeeCount = count,
       averageSalary = avgSal,

@@ -166,6 +166,9 @@ public abstract class Codes {
   /** @see BuiltIn#ABS */
   private static final Macro ABS =
       (typeSystem, env, argType, pos) -> {
+        if (isDecimal(argType)) {
+          return core.functionLiteral(typeSystem, BuiltIn.DECIMAL_ABS);
+        }
         switch ((PrimitiveType) argType) {
           case INT:
             return core.functionLiteral(typeSystem, BuiltIn.INT_ABS);
@@ -1748,6 +1751,11 @@ public abstract class Codes {
         }
       };
     }
+  }
+
+  /** Returns whether a type is {@code decimal}. */
+  private static boolean isDecimal(Type type) {
+    return type instanceof DataType && ((DataType) type).name.equals("decimal");
   }
 
   /**
@@ -3751,6 +3759,19 @@ public abstract class Codes {
         }
       };
 
+  /** @see BuiltIn#OP_DIVIDE */
+  private static final Macro OP_DIVIDE =
+      (typeSystem, env, argType, pos) -> {
+        final Type resultType = ((TupleType) argType).argTypes.get(0);
+        if (isDecimal(resultType)) {
+          return core.functionLiteral(typeSystem, BuiltIn.DECIMAL_DIVIDE);
+        }
+        if (resultType == PrimitiveType.REAL) {
+          return core.functionLiteral(typeSystem, BuiltIn.REAL_DIVIDE);
+        }
+        throw notDefined(BuiltIn.OP_DIVIDE, argType, pos);
+      };
+
   /** @see BuiltIn#OP_ELEM */
   private static final Applicable2 OP_ELEM =
       new BaseApplicable2<Boolean, Object, List>(BuiltIn.OP_ELEM) {
@@ -3850,6 +3871,9 @@ public abstract class Codes {
   private static final Macro OP_MINUS =
       (typeSystem, env, argType, pos) -> {
         final Type resultType = ((TupleType) argType).argTypes.get(0);
+        if (isDecimal(resultType)) {
+          return core.functionLiteral(typeSystem, BuiltIn.DECIMAL_OP_MINUS);
+        }
         switch ((PrimitiveType) resultType) {
           case INT:
             return core.functionLiteral(typeSystem, BuiltIn.INT_OP_MINUS);
@@ -3888,6 +3912,9 @@ public abstract class Codes {
   /** @see BuiltIn#OP_NEGATE */
   private static final Macro OP_NEGATE =
       (typeSystem, env, argType, pos) -> {
+        if (isDecimal(argType)) {
+          return core.functionLiteral(typeSystem, BuiltIn.DECIMAL_OP_NEGATE);
+        }
         switch ((PrimitiveType) argType) {
           case INT:
             return core.functionLiteral(typeSystem, BuiltIn.INT_OP_NEGATE);
@@ -3913,6 +3940,9 @@ public abstract class Codes {
   private static final Macro OP_PLUS =
       (typeSystem, env, argType, pos) -> {
         final Type resultType = ((TupleType) argType).argTypes.get(0);
+        if (isDecimal(resultType)) {
+          return core.functionLiteral(typeSystem, BuiltIn.DECIMAL_OP_PLUS);
+        }
         switch ((PrimitiveType) resultType) {
           case INT:
             return core.functionLiteral(typeSystem, BuiltIn.INT_OP_PLUS);
@@ -3929,6 +3959,9 @@ public abstract class Codes {
   private static final Macro OP_TIMES =
       (typeSystem, env, argType, pos) -> {
         final Type resultType = ((TupleType) argType).argTypes.get(0);
+        if (isDecimal(resultType)) {
+          return core.functionLiteral(typeSystem, BuiltIn.DECIMAL_OP_TIMES);
+        }
         switch ((PrimitiveType) resultType) {
           case INT:
             return core.functionLiteral(typeSystem, BuiltIn.INT_OP_TIMES);
@@ -8076,6 +8109,7 @@ public abstract class Codes {
     b.add(BuiltIn.MATH_TANH, MATH_TANH);
     b.add(BuiltIn.OP_CONS, OP_CONS);
     b.add(BuiltIn.OP_DIV, OP_DIV);
+    b.add(BuiltIn.OP_DIVIDE, OP_DIVIDE);
     b.add(BuiltIn.OP_ELEM, OP_ELEM);
     b.add(BuiltIn.OP_EQ, OP_EQ);
     b.add(BuiltIn.OP_GE, OP_GE);

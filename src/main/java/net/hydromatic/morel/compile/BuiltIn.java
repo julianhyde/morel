@@ -60,7 +60,7 @@ import org.jspecify.annotations.Nullable;
 public enum BuiltIn {
   /**
    * Function "abs", of type "&alpha; &rarr; &alpha;" (where &alpha; must be
-   * numeric).
+   * {@code int}, {@code real} or {@code decimal}).
    */
   ABS(
       "Top",
@@ -221,6 +221,18 @@ public enum BuiltIn {
       "Top",
       "op div",
       PrimitiveType.INT,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), h.get(0)))),
+
+  /**
+   * Infix operator "/", of type "&alpha; * &alpha; &rarr; &alpha;" (where
+   * &alpha; must be {@code real} or {@code decimal}).
+   */
+  OP_DIVIDE(
+      "Top",
+      "op /",
+      PrimitiveType.REAL,
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.tupleType(h.get(0), h.get(0)), h.get(0)))),
@@ -6005,7 +6017,6 @@ public enum BuiltIn {
     consumer.accept("$dsContains", RANGE_DISCRETE_SET_CONTAINS);
     consumer.accept("$dsRanges", RANGE_DISCRETE_SET_RANGES);
     consumer.accept("ceil", REAL_CEIL);
-    consumer.accept("op /", REAL_DIVIDE);
     consumer.accept("floor", REAL_FLOOR);
     consumer.accept("real", REAL_FROM_INT);
     consumer.accept("round", REAL_ROUND);

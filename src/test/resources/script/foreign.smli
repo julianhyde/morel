@@ -263,11 +263,10 @@ where d.deptno notelem (from e in scott.emps
 val emp2 =
   from e in scott.emps
   yield {e.deptno, e.job, e.ename,
-    salIn = fn year =>
-      Decimal.`+` (e.sal,
-        Decimal.`*` (e.sal,
-          Decimal.`*` (Decimal.`-` (year, decimal "2019"),
-            if e.job = "CLERK" then decimal "0.2" else decimal "0.05")))};
+    salIn = fn year => e.sal
+       + e.sal
+         * (year - decimal "2019")
+         * (if e.job = "CLERK" then decimal "0.2" else decimal "0.05")};
 > val emp2 =
 >   [{deptno=20,ename="SMITH",job="CLERK",salIn=fn},
 >    {deptno=30,ename="ALLEN",job="SALESMAN",salIn=fn},

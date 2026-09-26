@@ -228,7 +228,7 @@ from (name, t) in Sys.env ()
 > op *           forall 'a. 'a * 'a -> 'a
 > op +           forall 'a. 'a * 'a -> 'a
 > op -           forall 'a. 'a * 'a -> 'a
-> op /           real * real -> real
+> op /           forall 'a. 'a * 'a -> 'a
 > op ::          forall 'a. 'a * 'a list -> 'a list
 > op <           forall 'a. 'a * 'a -> bool
 > op <=          forall 'a. 'a * 'a -> bool
