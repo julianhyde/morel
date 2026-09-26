@@ -56,6 +56,7 @@ import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Describer;
+import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -859,7 +860,8 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      return w.append("#").append(fieldName());
+      return w.append(
+          Parsers.appendSelector(new StringBuilder(), fieldName()).toString());
     }
   }
 

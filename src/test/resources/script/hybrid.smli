@@ -491,6 +491,22 @@ Sys.plan ();
 >         JdbcTableScan(table=[[scott, EMP]])
 >       LogicalValues(tuples=[[{ 1250.50 }, { 2975.25 }]])
 > ))|_} : string
+(* A call to an operator in a structure, such as 'Decimal.*', is sent to
+ * Calcite as Morel code, and the operator name is quoted, as in '#`*`'. *)
+from x in [decimal "1.25", decimal "2.5", decimal "0.001"]
+  yield Decimal.`*` (x, decimal "2");
+> val it = [2.5,5,0.002] : decimal list
+Sys.plan ();
+> val it =
+>   {_|
+> calcite(plan LogicalProject($f0=[morelScalar('decimal * decimal', morelScalar('(#`*` Decimal : decimal * decimal -> decimal)', '{
+>   "type": "ANY",
+>   "nullable": false,
+>   "precision": -1,
+>   "scale": -2147483648
+> }'), ROW($0, 2))])
+>   LogicalValues(tuples=[[{ 1.250 }, { 2.500 }, { 0.001 }]])
+> )|_} : string
 Sys.set ("hybrid", false);
 > val it = () : unit
 
