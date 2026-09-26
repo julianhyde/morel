@@ -32,6 +32,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -655,6 +656,19 @@ public class CalciteCompiler extends Compiler {
             return cx.relBuilder.literal(literal.value);
         }
 
+      case VALUE_LITERAL:
+        // A 'decimal' value, e.g. from 'decimal "12.30"', becomes a SQL
+        // DECIMAL literal. (Other value literals, such as 'SOME 1', are
+        // evaluated as Morel code, below.)
+        final Object value = ((Core.Literal) exp).unwrap(Object.class);
+        if (value instanceof BigDecimal) {
+          // Calcite requires a non-negative scale, but a canonical decimal
+          // may have a negative scale; for example, 2900 is 2.9E+3.
+          final BigDecimal d = (BigDecimal) value;
+          return cx.relBuilder.literal(d.scale() < 0 ? d.setScale(0) : d);
+        }
+        break;
+
       case ID:
         // In 'from e in emps yield e', 'e' expands to a record,
         // '{e.deptno, e.ename}'
@@ -1136,8 +1150,9 @@ public class CalciteCompiler extends Compiler {
    * functions order values of {@code type} the same way Morel does.
    *
    * <p>True for the scalar types {@code bool}, {@code char}, {@code int},
-   * {@code real} and {@code string}. False for {@code word} (Calcite compares
-   * it as a signed {@code BIGINT}) and for composite types -- tuples, records,
+   * {@code real} and {@code string}, and for {@code decimal} (which Calcite
+   * represents as {@code DECIMAL}). False for {@code word} (Calcite compares it
+   * as a signed {@code BIGINT}) and for composite types -- tuples, records,
    * lists, and datatypes such as {@code option} -- which Calcite cannot order
    * the way Morel does, or at all. For those types {@code max} and {@code min}
    * fall back to local evaluation.
@@ -1154,6 +1169,9 @@ public class CalciteCompiler extends Compiler {
         default:
           break;
       }
+    }
+    if (type instanceof DataType && ((DataType) type).name.equals("decimal")) {
+      return true;
     }
     return false;
   }

@@ -52,8 +52,10 @@ Sys.plan();
 >     LogicalTableFunctionScan(invocation=[morelTable('#filter Bag (fn e2 => #empno e2 < 7700) (#emps scott)', '{
 >   "fields": [
 >     {
->       "type": "REAL",
+>       "type": "DECIMAL",
 >       "nullable": true,
+>       "precision": 19,
+>       "scale": 0,
 >       "name": "comm"
 >     },
 >     {
@@ -90,13 +92,15 @@ Sys.plan();
 >       "name": "mgr"
 >     },
 >     {
->       "type": "REAL",
+>       "type": "DECIMAL",
 >       "nullable": false,
+>       "precision": 19,
+>       "scale": 0,
 >       "name": "sal"
 >     }
 >   ],
 >   "nullable": false
-> }')], rowType=[RecordType(REAL comm, INTEGER deptno, INTEGER empno, VARCHAR ename, VARCHAR hiredate, VARCHAR job, INTEGER mgr, REAL sal)])
+> }')], rowType=[RecordType(DECIMAL(19, 0) comm, INTEGER deptno, INTEGER empno, VARCHAR ename, VARCHAR hiredate, VARCHAR job, INTEGER mgr, DECIMAL(19, 0) sal)])
 > ))|_} : string
 
 (* Query in Hybrid mode (99% Calcite; there is a variable but it is not
@@ -404,7 +408,7 @@ from e in scott.emps where e.deptno = 30 yield {e.ename, e.comm};
 >   [{comm=SOME 300,ename="ALLEN"},{comm=SOME 500,ename="WARD"},
 >    {comm=SOME 1400,ename="MARTIN"},{comm=NONE,ename="BLAKE"},
 >    {comm=SOME 0,ename="TURNER"},{comm=NONE,ename="JAMES"}]
->   : {comm:real option, ename:string} bag
+>   : {comm:decimal option, ename:string} bag
 from e in scott.emps where e.deptno = 10 yield e.mgr;
 > val it = [SOME 7839,NONE,SOME 7782] : int option bag
 from e in scott.emps where e.comm = NONE andalso e.deptno = 30 yield e.ename;
@@ -446,12 +450,47 @@ from e in scott.emps
   where Option.isSome e.comm
   yield (e.ename, valOf e.comm);
 > val it = [("ALLEN",300),("WARD",500),("MARTIN",1400),("TURNER",0)]
->   : (string * real) bag
+>   : (string * decimal) bag
 from e in scott.emps
   group e.deptno compute {c = count over (), s = sum over e.sal};
 > val it =
 >   [{c=5,deptno=20,s=10875},{c=3,deptno=10,s=8750},{c=6,deptno=30,s=9400}]
->   : {c:int, deptno:int, s:real} bag
+>   : {c:int, deptno:int, s:decimal} bag
+(* A DECIMAL column has type 'decimal'. A 'decimal' literal is converted at
+ * compile time, and becomes a SQL DECIMAL literal. *)
+from e in scott.emps where e.sal > decimal "2900" yield {e.ename, e.sal};
+> val it =
+>   [{ename="JONES",sal=2975},{ename="SCOTT",sal=3000},{ename="KING",sal=5000},
+>    {ename="FORD",sal=3000}] : {ename:string, sal:decimal} bag
+Sys.plan ();
+> val it =
+>   {_|
+> globalMarshal(globals [scott], body calcite(plan LogicalProject(ename=[$3], sal=[$7])
+>   LogicalFilter(condition=[>($7, 2900)])
+>     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+>       JdbcTableScan(table=[[scott, EMP]])
+> ))|_} : string
+(* Decimal values from Morel keep their scale when passed to Calcite. *)
+from e in scott.emps, x in [decimal "1250.5", decimal "2975.25"]
+  where e.sal < x andalso e.deptno = 30
+  yield {e.ename, e.sal, x};
+> val it =
+>   [{ename="ALLEN",sal=1600,x=2975.25},{ename="WARD",sal=1250,x=1250.5},
+>    {ename="WARD",sal=1250,x=2975.25},{ename="MARTIN",sal=1250,x=1250.5},
+>    {ename="MARTIN",sal=1250,x=2975.25},{ename="BLAKE",sal=2850,x=2975.25},
+>    {ename="TURNER",sal=1500,x=2975.25},{ename="JAMES",sal=950,x=1250.5},
+>    {ename="JAMES",sal=950,x=2975.25}]
+>   : {ename:string, sal:decimal, x:decimal} bag
+Sys.plan ();
+> val it =
+>   {_|
+> globalMarshal(globals [scott], body calcite(plan LogicalProject(ename=[$3], sal=[$7], x=[$8])
+>   LogicalFilter(condition=[AND(<($7, $8), =($1, 30))])
+>     LogicalJoin(condition=[true], joinType=[inner])
+>       LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+>         JdbcTableScan(table=[[scott, EMP]])
+>       LogicalValues(tuples=[[{ 1250.50 }, { 2975.25 }]])
+> ))|_} : string
 Sys.set ("hybrid", false);
 > val it = () : unit
 
