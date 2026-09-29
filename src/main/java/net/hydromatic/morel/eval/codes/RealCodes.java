@@ -19,9 +19,9 @@
 package net.hydromatic.morel.eval.codes;
 
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
-import static net.hydromatic.morel.eval.Codes.floatToString;
 import static net.hydromatic.morel.eval.Codes.isNegative;
 import static net.hydromatic.morel.eval.Codes.optionSome;
+import static net.hydromatic.morel.eval.Codes.realToString;
 import static net.hydromatic.morel.eval.codes.DateCodes.digits;
 import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_EQUAL;
 import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_GREATER;
@@ -900,7 +900,7 @@ public final class RealCodes {
         public String apply(Float f) {
           // Java's formatting is reasonably close to ML's formatting,
           // if we replace minus signs.
-          return floatToString(f);
+          return realToString(f);
         }
       };
 

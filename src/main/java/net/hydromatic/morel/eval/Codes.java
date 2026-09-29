@@ -24,15 +24,13 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.eval.Slots.maxOf;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Static.SKIP;
+import static net.hydromatic.morel.util.Static.floatToString;
 import static net.hydromatic.morel.util.Static.transform;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import java.math.BigDecimal;
-import java.math.MathContext;
-import java.math.RoundingMode;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,7 +38,6 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -66,7 +63,6 @@ import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ImmutablePairList;
-import net.hydromatic.morel.util.JavaVersion;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
@@ -74,11 +70,6 @@ import org.jspecify.annotations.Nullable;
 /** Helpers for {@link Code}. */
 @SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class Codes {
-  /** Converts a {@code float} to a String per the JDK. */
-  public static final Function<Float, String> FLOAT_TO_STRING =
-      JavaVersion.CURRENT.compareTo(JavaVersion.of(19)) >= 0
-          ? f -> Float.toString(f)
-          : Codes::floatToString0;
 
   private Codes() {}
 
@@ -622,7 +613,7 @@ public abstract class Codes {
   }
 
   public static StringBuilder appendFloat(StringBuilder buf, float f) {
-    return buf.append(floatToString(f));
+    return buf.append(realToString(f));
   }
 
   /**
@@ -633,8 +624,8 @@ public abstract class Codes {
    * ".0" from whole-number reals (so {@code 1.0} prints as "1" and {@code
    * 1.0e10} prints as "1E10").
    */
-  public static String floatToString(float f) {
-    return floatToString(f, '~');
+  public static String realToString(float f) {
+    return realToString(f, '~');
   }
 
   /**
@@ -644,9 +635,9 @@ public abstract class Codes {
    * <p>Standard ML writes negation as a tilde, {@code ~2.5}; tabular output
    * writes it as a minus sign, {@code -2.5}.
    */
-  public static String floatToString(float f, char negation) {
+  public static String realToString(float f, char negation) {
     if (Float.isFinite(f)) {
-      final String s = stripTrailingZero(FLOAT_TO_STRING.apply(f));
+      final String s = stripTrailingZero(floatToString(f));
       return negation == '-' ? s : s.replace('-', negation);
     } else if (f == Float.POSITIVE_INFINITY) {
       return "inf";
@@ -673,54 +664,6 @@ public abstract class Codes {
       return s.substring(0, mantissaEnd - 2) + s.substring(mantissaEnd);
     }
     return s;
-  }
-
-  /**
-   * Converts a {@code float} to a string, emulating JDK 19 and later on older
-   * JDKs.
-   *
-   * <p>Before JDK 19, {@link Float#toString(float)} sometimes returns more
-   * digits than necessary (e.g. "1.50000005E10" rather than "1.5E10"), or a
-   * decimal that round-trips but is not the closest (JDK-4511638). We return
-   * the decimal with the fewest digits (at least 2) that converts back to
-   * {@code f}, and among those, the one closest to {@code f}.
-   */
-  private static String floatToString0(float f) {
-    final String s = Float.toString(f);
-    if (Float.isNaN(f) || Float.isInfinite(f) || f == 0f) {
-      return s;
-    }
-    final int n =
-        Math.max(2, new BigDecimal(s).stripTrailingZeros().precision());
-    final BigDecimal exact = new BigDecimal(f);
-    for (int p = 2; p <= n; p++) {
-      final BigDecimal d =
-          exact.round(new MathContext(p, RoundingMode.HALF_EVEN));
-      if (Float.parseFloat(d.toString()) == f) {
-        return formatFloat(d.stripTrailingZeros());
-      }
-    }
-    return s;
-  }
-
-  /**
-   * Formats a decimal in the style of {@link Float#toString(float)}: plain
-   * notation if its magnitude is in [10<sup>-3</sup>, 10<sup>7</sup>),
-   * otherwise scientific notation; always at least one digit after the point.
-   */
-  private static String formatFloat(BigDecimal d) {
-    final String digits = d.unscaledValue().abs().toString();
-    final int exp = digits.length() - 1 - d.scale();
-    if (exp >= -3 && exp < 7) {
-      final String plain = d.toPlainString();
-      return plain.indexOf('.') < 0 ? plain + ".0" : plain;
-    }
-    return (d.signum() < 0 ? "-" : "")
-        + digits.charAt(0)
-        + "."
-        + (digits.length() > 1 ? digits.substring(1) : "0")
-        + "E"
-        + exp;
   }
 
   /**

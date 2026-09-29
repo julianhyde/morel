@@ -19,10 +19,10 @@
 package net.hydromatic.morel.eval.codes;
 
 import static java.util.Objects.requireNonNull;
-import static net.hydromatic.morel.eval.Codes.FLOAT_TO_STRING;
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
 import static net.hydromatic.morel.eval.codes.DateCodes.order;
+import static net.hydromatic.morel.util.Static.floatToString;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -255,7 +255,7 @@ public final class DecimalCodes {
             throw new MorelRuntimeException(BuiltInExn.OVERFLOW, pos);
           }
           // The shortest decimal that converts back to the same float.
-          return decimalChecked(new BigDecimal(FLOAT_TO_STRING.apply(f)), pos);
+          return decimalChecked(new BigDecimal(floatToString(f)), pos);
         case DECIMAL_FROM_STRING:
           final BigDecimal d2 = Decimals.parsePrefix((String) arg);
           return d2 == null ? OPTION_NONE : optionSome(decimalChecked(d2, pos));

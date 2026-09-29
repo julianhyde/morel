@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.eval.codes;
 
+import static net.hydromatic.morel.util.Static.floatToString;
 import static net.hydromatic.morel.util.Static.padRightTo;
 
 import java.math.BigDecimal;
@@ -26,7 +27,6 @@ import java.math.RoundingMode;
 import java.util.List;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.eval.BuiltInExn;
-import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.MorelRuntimeException;
 
 /**
@@ -148,7 +148,7 @@ class FmtSpec {
 
   /** Formats {@code abs} as a non-negative BigDecimal with the bits of r. */
   private static BigDecimal toBigDecimal(float r) {
-    return new BigDecimal(Codes.FLOAT_TO_STRING.apply(Math.abs(r)));
+    return new BigDecimal(floatToString(Math.abs(r)));
   }
 
   private static StringBuilder formatFix(
