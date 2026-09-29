@@ -61,7 +61,8 @@ import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.OutputMatcher;
 import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
-import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.BuiltInExn;
+import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
@@ -636,7 +637,7 @@ public class Main {
 
     @Override
     public void use(String fileName, boolean silent, Pos pos) {
-      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.EVAL_ONLY, pos);
+      throw new MorelRuntimeException(BuiltInExn.EVAL_ONLY, pos);
     }
 
     @Override
@@ -754,7 +755,7 @@ public class Main {
             "[use failed: Io: openIn failed on "
                 + fileName
                 + ", No such file or directory]");
-        throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR, pos);
+        throw new MorelRuntimeException(BuiltInExn.ERROR, pos);
       }
       final Integer maxDepth =
           Prop.MAX_USE_DEPTH.optionalIntValue(main.session.map);
@@ -766,7 +767,7 @@ public class Main {
             "[use failed: Io: openIn failed on "
                 + fileName
                 + ", Too many open files]");
-        throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR, pos);
+        throw new MorelRuntimeException(BuiltInExn.ERROR, pos);
       }
       final Consumer<String> echoLines2 = silent ? line -> {} : echoLines;
       final Consumer<String> outLines2 = silent ? line -> {} : outLines;
@@ -847,7 +848,7 @@ public class Main {
             bindingMap.put(binding.id.name, binding);
           }
         }
-      } catch (Codes.MorelRuntimeException e) {
+      } catch (MorelRuntimeException e) {
         appendToOutput(e, outLines);
         if (buffered) {
           // As in emit, but there is no expected output to keep: the

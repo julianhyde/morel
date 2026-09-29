@@ -42,7 +42,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
-import net.hydromatic.morel.eval.Codes.BuiltInExn;
+import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -307,7 +307,7 @@ public enum BuiltIn {
    * <p>"drop (b, i)" returns what is left after dropping the first {@code i}
    * elements of the bag {@code b}.
    *
-   * <p>It raises {@link net.hydromatic.morel.eval.Codes.BuiltInExn#SUBSCRIPT
+   * <p>It raises {@link net.hydromatic.morel.eval.BuiltInExn#SUBSCRIPT
    * Subscript} if i &lt; 0 or i &gt; length {@code b}.
    *
    * <p>It holds that {@code take(b, i) @ drop(b, i) = l} when 0 &le; i &le;
@@ -393,7 +393,7 @@ public enum BuiltIn {
    * {@code length l} and with the {@code i}<sup>th</sup> element of {@code l}
    * used as the {@code i}<sup>th</sup> element of the bag. If the length of the
    * list is greater than {@code maxLen}, then the {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#SIZE Size} exception is raised.
+   * net.hydromatic.morel.eval.BuiltInExn#SIZE Size} exception is raised.
    */
   BAG_FROM_LIST(
       "Bag",
@@ -425,8 +425,8 @@ public enum BuiltIn {
    * Function "Bag.hd", of type "&alpha; bag &rarr; &alpha;".
    *
    * <p>"hd b" returns the first element of {@code b}. It raises {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY Empty} if {@code b} is
-   * nil. Results are nondeterministic because bag elements are unordered.
+   * net.hydromatic.morel.eval.BuiltInExn#EMPTY Empty} if {@code b} is nil.
+   * Results are nondeterministic because bag elements are unordered.
    */
   BAG_HD(
       "Bag",
@@ -494,8 +494,8 @@ public enum BuiltIn {
    *
    * <p>"nth (l, i)" returns the {@code i}<sup>th</sup> element of the bag
    * {@code l}, counting from 0. It raises {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#SUBSCRIPT Subscript} if {@code i
-   * < 0} or {@code i >= length l}. We have {@code nth(l,0) = hd l}, ignoring
+   * net.hydromatic.morel.eval.BuiltInExn#SUBSCRIPT Subscript} if {@code i < 0}
+   * or {@code i >= length l}. We have {@code nth(l,0) = hd l}, ignoring
    * exceptions.
    */
   BAG_NTH(
@@ -521,9 +521,9 @@ public enum BuiltIn {
    * Function "Bag.only", of type "&alpha; bag &rarr; &alpha;".
    *
    * <p>"only b" returns the only element of bag {@code b}. It raises {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY Empty} if {@code b} is
-   * empty, {@link net.hydromatic.morel.eval.Codes.BuiltInExn#SIZE Size} if
-   * {@code b} has more than one element.
+   * net.hydromatic.morel.eval.BuiltInExn#EMPTY Empty} if {@code b} is empty,
+   * {@link net.hydromatic.morel.eval.BuiltInExn#SIZE Size} if {@code b} has
+   * more than one element.
    */
   BAG_ONLY(
       "Bag",
@@ -559,7 +559,7 @@ public enum BuiltIn {
    *
    * <p>"tabulate (n, f)" returns a bag of length n equal to {@code [f(0), f(1),
    * ..., f(n-1)]}, created from left to right. It raises {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#SIZE Size} if n &lt; 0.
+   * net.hydromatic.morel.eval.BuiltInExn#SIZE Size} if n &lt; 0.
    */
   BAG_TABULATE(
       "Bag",
@@ -575,9 +575,8 @@ public enum BuiltIn {
    * Function "Bag.take", of type "&alpha; bag * int &rarr; &alpha; bag".
    *
    * <p>"take (b, i)" returns the first i elements of the bag {@code b}. It
-   * raises {@link net.hydromatic.morel.eval.Codes.BuiltInExn#SUBSCRIPT
-   * Subscript} if i &lt; 0 or i &gt; length {@code b}. We have {@code take(l,
-   * length b) = b}.
+   * raises {@link net.hydromatic.morel.eval.BuiltInExn#SUBSCRIPT Subscript} if
+   * i &lt; 0 or i &gt; length {@code b}. We have {@code take(l, length b) = b}.
    */
   BAG_TAKE(
       "Bag",
@@ -591,8 +590,8 @@ public enum BuiltIn {
    * Function "Bag.tl", of type "&alpha; bag &rarr; &alpha; bag".
    *
    * <p>"tl b" returns all but the first element of {@code b}. It raises {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY empty} if b is nil.
-   * Results are nondeterministic because bag elements are unordered.
+   * net.hydromatic.morel.eval.BuiltInExn#EMPTY empty} if b is nil. Results are
+   * nondeterministic because bag elements are unordered.
    */
   BAG_TL(
       "Bag",
@@ -607,9 +606,8 @@ public enum BuiltIn {
    * {@code length b} and with the {@code i}<sup>th</sup> element of {@code b}
    * used as the {@code i}<sup>th</sup> element of the list. If the length of
    * the bag is greater than {@code maxLen}, then the {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#SIZE Size} exception is raised.
-   * The order of the list is nondeterministic because bag elements are
-   * unordered.
+   * net.hydromatic.morel.eval.BuiltInExn#SIZE Size} exception is raised. The
+   * order of the list is nondeterministic because bag elements are unordered.
    */
   BAG_TO_LIST(
       "Bag",
@@ -2618,9 +2616,9 @@ public enum BuiltIn {
    * Function "List.only", of type "&alpha; list &rarr; &alpha;".
    *
    * <p>"only l" returns the only element of list {@code l}. It raises {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn#EMPTY Empty} if {@code l} is
-   * empty, {@link net.hydromatic.morel.eval.Codes.BuiltInExn#SIZE Size} if
-   * {@code l} has more than one element.
+   * net.hydromatic.morel.eval.BuiltInExn#EMPTY Empty} if {@code l} is empty,
+   * {@link net.hydromatic.morel.eval.BuiltInExn#SIZE Size} if {@code l} has
+   * more than one element.
    */
   LIST_ONLY(
       "List",
@@ -6612,7 +6610,7 @@ public enum BuiltIn {
     // chained on the EXN datatype below — they are intentionally not visible
     // at top level (Date/Option/Time would clash with a structure name; Error
     // and EvalOnly are not in the standard basis). They exist here so that
-    // Codes.BuiltInExn can refer to them by name.
+    // BuiltInExn can refer to them by name.
     EXN_BIND(Datatype.EXN, "Bind"),
     EXN_CHR(Datatype.EXN, "Chr"),
     EXN_CONSTRAINT(Datatype.EXN, "Constraint"),

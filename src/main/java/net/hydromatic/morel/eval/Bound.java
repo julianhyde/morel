@@ -127,8 +127,7 @@ class Bound {
       } else {
         start = discrete.next(lo.value);
         if (start == null) {
-          throw new Codes.MorelRuntimeException(
-              Codes.BuiltInExn.SIZE, pos); // empty range
+          throw new MorelRuntimeException(BuiltInExn.SIZE, pos); // empty range
         }
       }
     }
@@ -138,7 +137,7 @@ class Bound {
     final BigInteger count =
         discrete.ordinal(end).subtract(discrete.ordinal(start));
     if (count.compareTo(maxLength) >= 0) {
-      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, pos);
+      throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
     }
 
     Comparator<Object> cmp = discrete.comparator();

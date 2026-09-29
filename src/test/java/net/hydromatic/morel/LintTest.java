@@ -58,7 +58,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.parse.MorelParserImplConstants;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.util.Generation;
@@ -1828,7 +1828,7 @@ public class LintTest {
    * Checks that every built-in is declared by a spec in {@code lib/*.sig}: a
    * {@code val} spec for each non-internal {@link BuiltIn} entry, a {@code
    * type} or {@code datatype} spec for each {@link BuiltIn.Datatype}, and an
-   * {@code exception} spec for each {@link Codes.BuiltInExn}.
+   * {@code exception} spec for each {@link BuiltInExn}.
    *
    * <p>{@link SignatureChecker} checks the other direction, that what a
    * signature declares exists in the enums; it cannot notice a built-in that no
@@ -1872,7 +1872,7 @@ public class LintTest {
         missing.add("type", structure + "." + datatype.mlName());
       }
     }
-    for (Codes.BuiltInExn exn : Codes.BuiltInExn.values()) {
+    for (BuiltInExn exn : BuiltInExn.values()) {
       if (!MODEL.containsException(exn.structure, exn.mlName())) {
         missing.add("exception", exn.structure + "." + exn.mlName());
       }
@@ -1932,7 +1932,7 @@ public class LintTest {
 
   /**
    * Checks that every {@link BuiltIn.Constructor} entry whose datatype is
-   * {@link BuiltIn.Datatype#EXN} is referenced by some {@link Codes.BuiltInExn}
+   * {@link BuiltIn.Datatype#EXN} is referenced by some {@link BuiltInExn}
    * entry.
    */
   @Test
@@ -1940,14 +1940,14 @@ public class LintTest {
     final EnumSet<BuiltIn.Constructor> missing =
         EnumSet.allOf(BuiltIn.Constructor.class);
     missing.removeIf(c -> c.datatype != BuiltIn.Datatype.EXN);
-    for (Codes.BuiltInExn exn : EnumSet.allOf(Codes.BuiltInExn.class)) {
+    for (BuiltInExn exn : EnumSet.allOf(BuiltInExn.class)) {
       missing.remove(exn.constructor);
     }
     if (!missing.isEmpty()) {
       fail(
           format(
               "EXN-datatype constructors with no matching "
-                  + "Codes.BuiltInExn entry: %s\n"
+                  + "BuiltInExn entry: %s\n"
                   + "Add a BuiltInExn variant referencing each.",
               missing));
     }
@@ -2006,7 +2006,7 @@ public class LintTest {
    * Validates that signature files in the lib directory are well-formed and
    * that their value and exception declarations match the corresponding entries
    * in the {@link net.hydromatic.morel.compile.BuiltIn} and {@link
-   * net.hydromatic.morel.eval.Codes.BuiltInExn} enums.
+   * net.hydromatic.morel.eval.BuiltInExn} enums.
    */
   @Test
   void testSignatures() throws Exception {

@@ -48,11 +48,13 @@ import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.Applicable3;
 import net.hydromatic.morel.eval.Applicable4;
+import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.EvalEnv;
+import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.RowSink;
 import net.hydromatic.morel.eval.Session;
@@ -489,9 +491,9 @@ public class Compiler {
             // said to have decided; let it out.
             throw e;
           }
-          if (e instanceof Codes.MorelRuntimeException
-              && ((Codes.MorelRuntimeException) e).builtInExn()
-                  == Codes.BuiltInExn.CONSTRAINT) {
+          if (e instanceof MorelRuntimeException
+              && ((MorelRuntimeException) e).builtInExn()
+                  == BuiltInExn.CONSTRAINT) {
             // A check on a component has already reported, and said precisely
             // which component and why. Wrapping it again would bury that.
             throw e;
@@ -507,9 +509,9 @@ public class Compiler {
             b.append(": ").append(blame);
           }
           b.append("; ").append(strip((MorelException) e));
-          throw new Codes.MorelRuntimeException(
-              Codes.BuiltInExn.CONSTRAINT,
-              new Codes.Description(b.toString()),
+          throw new MorelRuntimeException(
+              BuiltInExn.CONSTRAINT,
+              new MorelRuntimeException.Description(b.toString()),
               pos);
         }
         if (holds) {
@@ -526,9 +528,9 @@ public class Compiler {
         if (!blame.isEmpty()) {
           b.append(": ").append(blame);
         }
-        throw new Codes.MorelRuntimeException(
-            Codes.BuiltInExn.CONSTRAINT,
-            new Codes.Description(b.toString()),
+        throw new MorelRuntimeException(
+            BuiltInExn.CONSTRAINT,
+            new MorelRuntimeException.Description(b.toString()),
             pos);
       }
 
@@ -553,8 +555,8 @@ public class Compiler {
    */
   private static String strip(MorelException e) {
     final String s = e.describeTo(new StringBuilder()).toString();
-    return s.startsWith(Codes.UNCAUGHT_PREFIX)
-        ? s.substring(Codes.UNCAUGHT_PREFIX.length())
+    return s.startsWith(MorelRuntimeException.UNCAUGHT_PREFIX)
+        ? s.substring(MorelRuntimeException.UNCAUGHT_PREFIX.length())
         : s;
   }
 
@@ -1618,7 +1620,7 @@ public class Compiler {
                         ? Binding.of(pat2, expForBinding, o2)
                         : Binding.inst(
                             pat2, overloadPat, expForBinding, o2)))) {
-          throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
+          throw new MorelRuntimeException(BuiltInExn.BIND, pos);
         }
         // Add the new bindings to session.globalEnv so closures created by
         // this statement automatically see the latest bindings (including
@@ -1645,7 +1647,7 @@ public class Compiler {
           outs.add(line);
           outLines.accept(line);
         }
-      } catch (Codes.MorelRuntimeException e) {
+      } catch (MorelRuntimeException e) {
         session.handle(e, buf);
         final String line = str(buf);
         outs.add(line);

@@ -73,7 +73,7 @@ class FmtSpec {
         throw new AssertionError("unknown realfmt: " + kind);
     }
     if (n != null && n < minN) {
-      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, pos);
+      throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
     }
     return new FmtSpec(kind, n != null ? n : defaultN);
   }
