@@ -16,29 +16,29 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
-import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.eval.Applicable2;
-import net.hydromatic.morel.eval.Codes.Positioned;
+import net.hydromatic.morel.eval.Applicable1;
+import net.hydromatic.morel.eval.Stack;
 
 /**
- * Base class with which to implement {@link Applicable2} and {@link
- * Positioned}.
+ * Base class with which to implement {@link Applicable1}.
  *
  * @param <R> return type
- * @param <A0> type of argument 0
- * @param <A1> type of argument 1
+ * @param <A0> type of argument
  */
-abstract class BasePositionedApplicable2<R, A0, A1>
-    extends BaseApplicable2<R, A0, A1> implements Positioned {
-  protected final Pos pos;
-
-  protected BasePositionedApplicable2(BuiltIn builtIn, Pos pos) {
+@SuppressWarnings({"unchecked"})
+abstract class BaseApplicable1<R, A0> extends BaseApplicable
+    implements Applicable1<R, A0> {
+  protected BaseApplicable1(BuiltIn builtIn) {
     super(builtIn);
-    this.pos = pos;
+  }
+
+  @Override // Applicable
+  public Object apply(Stack stack, Object argValue) {
+    return apply((A0) argValue);
   }
 }
 
-// End BasePositionedApplicable2.java
+// End BaseApplicable1.java

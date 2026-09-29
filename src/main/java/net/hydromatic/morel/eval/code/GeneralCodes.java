@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
@@ -24,7 +24,7 @@ import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
-import static net.hydromatic.morel.eval.codes.StringCodes.scanString;
+import static net.hydromatic.morel.eval.code.StringCodes.scanString;
 
 import com.google.common.collect.ImmutableList;
 import java.util.Comparator;
@@ -46,7 +46,7 @@ import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.eval.Variant;
 import net.hydromatic.morel.eval.Variants;
-import net.hydromatic.morel.eval.codes.StringCodes.CharSource;
+import net.hydromatic.morel.eval.code.StringCodes.CharSource;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -58,9 +58,10 @@ import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 
 /**
- * Implementations of built-in functions and values in the General, Op, Order,
- * Bool and Fn structures.
+ * Implementations of built-in functions and values in the {@code General},
+ * {@code Order}, {@code Bool} and {@code Fn} structures.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class GeneralCodes {
   private GeneralCodes() {}
 

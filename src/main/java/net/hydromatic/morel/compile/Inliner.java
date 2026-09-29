@@ -44,7 +44,7 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
-import net.hydromatic.morel.eval.codes.GeneralCodes;
+import net.hydromatic.morel.eval.code.GeneralCodes;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;

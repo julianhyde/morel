@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static java.util.Objects.requireNonNull;
 

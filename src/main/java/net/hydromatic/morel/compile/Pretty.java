@@ -44,7 +44,7 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Variant;
-import net.hydromatic.morel.eval.codes.RangeCodes;
+import net.hydromatic.morel.eval.code.RangeCodes;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.AliasType;

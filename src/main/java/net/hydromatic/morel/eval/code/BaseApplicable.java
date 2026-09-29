@@ -16,37 +16,30 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
-import java.util.List;
+import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.Applicable;
+import net.hydromatic.morel.eval.Describer;
 
-/**
- * Number base for formatting and scanning integers and words.
- *
- * <p>The constant names match the constructors of the {@code StringCvt.radix}
- * datatype, so {@link #of(List)} can recover the {@code Radix} from a runtime
- * {@code radix} value.
- */
-enum Radix {
-  BIN(2),
-  OCT(8),
-  DEC(10),
-  HEX(16);
+/** Implementation of {@link Applicable} that stores a {@link BuiltIn}. */
+abstract class BaseApplicable implements Applicable {
+  protected final BuiltIn builtIn;
 
-  /** The numeric base, e.g. 16 for {@link #HEX}. */
-  final int base;
-
-  Radix(int base) {
-    this.base = base;
+  protected BaseApplicable(BuiltIn builtIn) {
+    this.builtIn = builtIn;
   }
 
-  /**
-   * Returns the {@code Radix} for a runtime {@code StringCvt.radix} value (a
-   * one-element list holding the constructor name).
-   */
-  static Radix of(List radix) {
-    return valueOf((String) radix.get(0));
+  @Override
+  public Describer describe(Describer describer) {
+    return describer.start(name(), d -> {});
+  }
+
+  protected String name() {
+    return builtIn.mlName.startsWith("op ")
+        ? builtIn.mlName.substring("op ".length())
+        : builtIn.structure + "." + builtIn.mlName;
   }
 }
 
-// End Radix.java
+// End BaseApplicable.java

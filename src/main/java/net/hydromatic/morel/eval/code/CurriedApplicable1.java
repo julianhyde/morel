@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable1;
@@ -35,6 +35,7 @@ import net.hydromatic.morel.eval.Describer;
  * @param <R> return type
  * @param <A0> type of first argument
  */
+@SuppressWarnings({"rawtypes"})
 abstract class CurriedApplicable1<R, A0> extends BaseApplicable1<R, A0> {
   private final Applicable1 parent;
 

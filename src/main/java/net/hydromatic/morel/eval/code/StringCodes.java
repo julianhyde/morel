@@ -16,16 +16,16 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
-import static net.hydromatic.morel.eval.codes.DateCodes.order;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_EQUAL;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_GREATER;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_LESS;
+import static net.hydromatic.morel.eval.code.DateCodes.order;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_EQUAL;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_GREATER;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_LESS;
 import static net.hydromatic.morel.util.Characters.isPrint;
 import static net.hydromatic.morel.util.Static.padRightTo;
 
@@ -51,9 +51,10 @@ import org.apache.calcite.runtime.FlatLists;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Implementations of built-in functions and values in the Char and String
- * structures.
+ * Implementations of built-in functions and values in the {@code Char} and
+ * {@code String} structures.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class StringCodes {
   private StringCodes() {}
 

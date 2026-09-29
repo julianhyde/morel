@@ -16,12 +16,12 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
-import static net.hydromatic.morel.eval.codes.DateCodes.order;
-import static net.hydromatic.morel.eval.codes.WordCodes.identity;
+import static net.hydromatic.morel.eval.code.DateCodes.order;
+import static net.hydromatic.morel.eval.code.WordCodes.identity;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
 
@@ -47,9 +47,10 @@ import org.apache.calcite.runtime.FlatLists;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Implementations of built-in functions and values in the Bag, List and
- * ListPair structures.
+ * Implementations of built-in functions and values in the {@code Bag}, {@code
+ * List} and {@code ListPair} structures.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class ListCodes {
   private ListCodes() {}
 

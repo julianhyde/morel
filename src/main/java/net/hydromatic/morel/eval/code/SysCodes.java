@@ -16,12 +16,12 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.eval.codes.RelationalCodes.RELATIONAL_SUM;
+import static net.hydromatic.morel.eval.code.RelationalCodes.RELATIONAL_SUM;
 
 import com.google.common.collect.ImmutableList;
 import java.io.StringReader;
@@ -62,9 +62,11 @@ import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Implementations of built-in functions and values in the Sys, Interact,
- * Datalog, Test, Variant and PP structures.
+ * Implementations of built-in functions and values in the {@code Sys}, {@code
+ * Interact}, {@code Datalog}, {@code Test}, {@code Variant} and {@code PP}
+ * structures.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class SysCodes {
   private SysCodes() {}
 

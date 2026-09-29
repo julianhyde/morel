@@ -16,17 +16,17 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
-import static net.hydromatic.morel.eval.codes.ListCodes.all;
-import static net.hydromatic.morel.eval.codes.ListCodes.collate;
-import static net.hydromatic.morel.eval.codes.ListCodes.exists;
-import static net.hydromatic.morel.eval.codes.ListCodes.find;
-import static net.hydromatic.morel.eval.codes.ListCodes.length;
-import static net.hydromatic.morel.eval.codes.ListCodes.listMapi;
-import static net.hydromatic.morel.eval.codes.WordCodes.identity;
+import static net.hydromatic.morel.eval.code.ListCodes.all;
+import static net.hydromatic.morel.eval.code.ListCodes.collate;
+import static net.hydromatic.morel.eval.code.ListCodes.exists;
+import static net.hydromatic.morel.eval.code.ListCodes.find;
+import static net.hydromatic.morel.eval.code.ListCodes.length;
+import static net.hydromatic.morel.eval.code.ListCodes.listMapi;
+import static net.hydromatic.morel.eval.code.WordCodes.identity;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 
 import com.google.common.collect.ImmutableList;
@@ -40,8 +40,8 @@ import net.hydromatic.morel.eval.Applicable3;
 import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.Unit;
-import net.hydromatic.morel.eval.codes.ListCodes.ListNth;
-import net.hydromatic.morel.eval.codes.ListCodes.ListTabulate;
+import net.hydromatic.morel.eval.code.ListCodes.ListNth;
+import net.hydromatic.morel.eval.code.ListCodes.ListTabulate;
 import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 
@@ -49,6 +49,7 @@ import org.apache.calcite.runtime.FlatLists;
  * Implementations of built-in functions and values in the {@code Vector}
  * structure.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class VectorCodes {
   private VectorCodes() {}
 

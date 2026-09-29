@@ -16,17 +16,17 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.ast.CoreBuilder.core;
-import static net.hydromatic.morel.eval.codes.DateCodes.order;
-import static net.hydromatic.morel.eval.codes.DecimalCodes.decimalChecked;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.notDefined;
-import static net.hydromatic.morel.eval.codes.ListCodes.empty;
-import static net.hydromatic.morel.eval.codes.ListCodes.length;
-import static net.hydromatic.morel.eval.codes.WordCodes.identity;
+import static net.hydromatic.morel.eval.code.DateCodes.order;
+import static net.hydromatic.morel.eval.code.DecimalCodes.decimalChecked;
+import static net.hydromatic.morel.eval.code.GeneralCodes.notDefined;
+import static net.hydromatic.morel.eval.code.ListCodes.empty;
+import static net.hydromatic.morel.eval.code.ListCodes.length;
+import static net.hydromatic.morel.eval.code.WordCodes.identity;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
@@ -47,7 +47,7 @@ import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.Codes.Typed;
 import net.hydromatic.morel.eval.Comparators;
 import net.hydromatic.morel.eval.MorelRuntimeException;
-import net.hydromatic.morel.eval.codes.ListCodes.RelationalOnly;
+import net.hydromatic.morel.eval.code.ListCodes.RelationalOnly;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -63,6 +63,7 @@ import org.jspecify.annotations.Nullable;
  * Implementations of built-in functions and values in the {@code Relational}
  * structure.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class RelationalCodes {
   private RelationalCodes() {}
 

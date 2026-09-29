@@ -153,7 +153,7 @@ stay nested in `Codes` (cohesive with the other node classes).
 and value helpers used outside the built-ins (`OPTION_NONE`,
 `optionSome`, float/int formatting and parsing, ...).
 
-New package `net.hydromatic.morel.eval.codes`:
+New package `code`:
 
 | Class | Structures |
 |---|---|

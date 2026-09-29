@@ -16,29 +16,17 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
-
-import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.eval.Applicable1;
-import net.hydromatic.morel.eval.Stack;
 
 /**
- * Base class with which to implement {@link Applicable1}.
+ * Implementations of built-in functions and values, one class per group of
+ * related structures.
  *
- * @param <R> return type
- * @param <A0> type of argument
+ * <p>Each class has a {@code register} method that adds its implementations to
+ * {@link net.hydromatic.morel.eval.Codes#BUILT_IN_VALUES}.
  */
-@SuppressWarnings({"unchecked"})
-abstract class BaseApplicable1<R, A0> extends BaseApplicable
-    implements Applicable1<R, A0> {
-  protected BaseApplicable1(BuiltIn builtIn) {
-    super(builtIn);
-  }
+@NullMarked
+package net.hydromatic.morel.eval.code;
 
-  @Override // Applicable
-  public Object apply(Stack stack, Object argValue) {
-    return apply((A0) argValue);
-  }
-}
+import org.jspecify.annotations.NullMarked;
 
-// End BaseApplicable1.java
+// End package-info.java

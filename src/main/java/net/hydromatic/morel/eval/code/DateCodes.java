@@ -16,15 +16,15 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static java.lang.String.format;
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_EQUAL;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_GREATER;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_LESS;
-import static net.hydromatic.morel.eval.codes.StringCodes.scanString;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_EQUAL;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_GREATER;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_LESS;
+import static net.hydromatic.morel.eval.code.StringCodes.scanString;
 import static net.hydromatic.morel.util.Static.transformEager;
 
 import com.google.common.collect.ImmutableList;
@@ -50,14 +50,15 @@ import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
-import net.hydromatic.morel.eval.codes.StringCodes.CharSource;
+import net.hydromatic.morel.eval.code.StringCodes.CharSource;
 import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Implementations of built-in functions and values in the Date and Time
- * structures.
+ * Implementations of built-in functions and values in the {@code Date} and
+ * {@code Time} structures.
  */
+@SuppressWarnings({"rawtypes"})
 public final class DateCodes {
   private DateCodes() {}
 

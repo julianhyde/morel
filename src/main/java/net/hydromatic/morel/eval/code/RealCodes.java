@@ -16,18 +16,18 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.isNegative;
 import static net.hydromatic.morel.eval.Codes.optionSome;
 import static net.hydromatic.morel.eval.Codes.realToString;
-import static net.hydromatic.morel.eval.codes.DateCodes.digits;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_EQUAL;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_GREATER;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.ORDER_LESS;
-import static net.hydromatic.morel.eval.codes.GeneralCodes.consume;
-import static net.hydromatic.morel.eval.codes.StringCodes.scanString;
+import static net.hydromatic.morel.eval.code.DateCodes.digits;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_EQUAL;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_GREATER;
+import static net.hydromatic.morel.eval.code.GeneralCodes.ORDER_LESS;
+import static net.hydromatic.morel.eval.code.GeneralCodes.consume;
+import static net.hydromatic.morel.eval.code.StringCodes.scanString;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
@@ -38,13 +38,14 @@ import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.MorelRuntimeException;
-import net.hydromatic.morel.eval.codes.StringCodes.CharSource;
+import net.hydromatic.morel.eval.code.StringCodes.CharSource;
 import net.hydromatic.morel.util.PairList;
 
 /**
- * Implementations of built-in functions and values in the Real, Math and
- * IEEEReal structures.
+ * Implementations of built-in functions and values in the {@code Real}, {@code
+ * Math} and {@code IEEEReal} structures.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class RealCodes {
   private RealCodes() {}
 

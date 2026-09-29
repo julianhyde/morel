@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
@@ -37,9 +37,10 @@ import org.apache.calcite.runtime.FlatLists;
 import org.jspecify.annotations.NonNull;
 
 /**
- * Implementations of built-in functions and values in the Option and Either
- * structures.
+ * Implementations of built-in functions and values in the {@code Option} and
+ * {@code Either} structures.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class OptionCodes {
   private OptionCodes() {}
 

@@ -114,7 +114,7 @@ Parse → Type Check → Compile → Evaluate.
 - `Applicable`: Function objects with apply methods
 - `Session`: Maintains REPL state and configuration
 
-**Built-in implementations (`net.hydromatic.morel.eval.codes`)**
+**Built-in implementations (`net.hydromatic.morel.eval.code`)**
 - One class per group of related structures: `ListCodes` (Bag, List,
   ListPair), `StringCodes` (Char, String), `RealCodes` (Real, Math),
   `DateCodes` (Date, Time), `OptionCodes` (Option, Either),

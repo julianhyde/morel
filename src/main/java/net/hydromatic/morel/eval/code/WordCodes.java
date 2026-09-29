@@ -16,13 +16,13 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
-import static net.hydromatic.morel.eval.codes.DateCodes.digits;
-import static net.hydromatic.morel.eval.codes.DateCodes.order;
-import static net.hydromatic.morel.eval.codes.StringCodes.scanString;
+import static net.hydromatic.morel.eval.code.DateCodes.digits;
+import static net.hydromatic.morel.eval.code.DateCodes.order;
+import static net.hydromatic.morel.eval.code.StringCodes.scanString;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
@@ -34,13 +34,14 @@ import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.MorelRuntimeException;
-import net.hydromatic.morel.eval.codes.StringCodes.CharSource;
+import net.hydromatic.morel.eval.code.StringCodes.CharSource;
 import net.hydromatic.morel.util.PairList;
 
 /**
  * Implementations of built-in functions and values in the {@code Word}
  * structure.
  */
+@SuppressWarnings({"rawtypes"})
 public final class WordCodes {
   private WordCodes() {}
 

@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
@@ -50,6 +50,7 @@ import org.jspecify.annotations.Nullable;
  * Implementations of built-in functions and values in the {@code Range}
  * structure.
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public final class RangeCodes {
   private RangeCodes() {}
 
@@ -460,7 +461,6 @@ public final class RangeCodes {
           Prop.RANGE_MAX_LENGTH.bigIntegerValue(ImmutableMap.of()), ranges);
     }
 
-    @SuppressWarnings("unchecked")
     private List apply(BigInteger maxLength, List ranges) {
       final ImmutableList.Builder<Object> result = ImmutableList.builder();
       for (Object r : ranges) {

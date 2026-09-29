@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static net.hydromatic.morel.util.Static.floatToString;
 import static net.hydromatic.morel.util.Static.padRightTo;
@@ -50,21 +50,19 @@ class FmtSpec {
    * (SOME ~1))} raises {@code Size} immediately, matching SML/NJ's behavior;
    * {@code pos} is the position to report.
    */
-  static FmtSpec parse(List spec, Pos pos) {
+  @SuppressWarnings("unchecked")
+  static FmtSpec parse(List<Object> spec, Pos pos) {
     final String kind = (String) spec.get(0);
     if (kind.equals("EXACT")) {
       return new FmtSpec("EXACT", 0);
     }
-    final List opt = (List) spec.get(1);
+    final List<Object> opt = (List<Object>) spec.get(1);
     final Integer n = opt.size() == 2 ? (Integer) opt.get(1) : null;
     final int defaultN;
     final int minN;
     switch (kind) {
-      case "SCI":
-        defaultN = 6;
-        minN = 0;
-        break;
       case "FIX":
+      case "SCI":
         defaultN = 6;
         minN = 0;
         break;
@@ -196,7 +194,7 @@ class FmtSpec {
     final BigDecimal bd = abs.stripTrailingZeros();
     // Emit as 0.<digits>; the exponent is one greater than the standard
     // scientific exponent because the implied decimal point moves left by 1.
-    sb.append("0.").append(bd.unscaledValue().toString());
+    sb.append("0.").append(bd.unscaledValue());
     final int exp = decimalExp(bd) + 1;
     if (exp == 0) {
       return sb;

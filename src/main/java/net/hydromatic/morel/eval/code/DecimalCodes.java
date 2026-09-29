@@ -16,12 +16,12 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval.codes;
+package net.hydromatic.morel.eval.code;
 
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.eval.Codes.OPTION_NONE;
 import static net.hydromatic.morel.eval.Codes.optionSome;
-import static net.hydromatic.morel.eval.codes.DateCodes.order;
+import static net.hydromatic.morel.eval.code.DateCodes.order;
 import static net.hydromatic.morel.util.Static.floatToString;
 
 import java.math.BigDecimal;
@@ -41,6 +41,7 @@ import net.hydromatic.morel.util.PairList;
  * Implementations of built-in functions and values in the {@code Decimal}
  * structure.
  */
+@SuppressWarnings({"rawtypes"})
 public final class DecimalCodes {
   private DecimalCodes() {}
 
