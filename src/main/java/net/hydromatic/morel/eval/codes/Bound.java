@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval;
+package net.hydromatic.morel.eval.codes;
 
 import static java.util.Objects.requireNonNull;
 
@@ -27,6 +27,9 @@ import java.util.List;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.BuiltInExn;
+import net.hydromatic.morel.eval.Discrete;
+import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 

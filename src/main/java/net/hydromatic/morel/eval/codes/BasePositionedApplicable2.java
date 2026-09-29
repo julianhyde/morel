@@ -16,37 +16,29 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval;
+package net.hydromatic.morel.eval.codes;
 
-import java.util.List;
+import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.Applicable2;
+import net.hydromatic.morel.eval.Codes.Positioned;
 
 /**
- * Number base for formatting and scanning integers and words.
+ * Base class with which to implement {@link Applicable2} and {@link
+ * Positioned}.
  *
- * <p>The constant names match the constructors of the {@code StringCvt.radix}
- * datatype, so {@link #of(List)} can recover the {@code Radix} from a runtime
- * {@code radix} value.
+ * @param <R> return type
+ * @param <A0> type of argument 0
+ * @param <A1> type of argument 1
  */
-enum Radix {
-  BIN(2),
-  OCT(8),
-  DEC(10),
-  HEX(16);
+abstract class BasePositionedApplicable2<R, A0, A1>
+    extends BaseApplicable2<R, A0, A1> implements Positioned {
+  protected final Pos pos;
 
-  /** The numeric base, e.g. 16 for {@link #HEX}. */
-  final int base;
-
-  Radix(int base) {
-    this.base = base;
-  }
-
-  /**
-   * Returns the {@code Radix} for a runtime {@code StringCvt.radix} value (a
-   * one-element list holding the constructor name).
-   */
-  static Radix of(List radix) {
-    return valueOf((String) radix.get(0));
+  protected BasePositionedApplicable2(BuiltIn builtIn, Pos pos) {
+    super(builtIn);
+    this.pos = pos;
   }
 }
 
-// End Radix.java
+// End BasePositionedApplicable2.java

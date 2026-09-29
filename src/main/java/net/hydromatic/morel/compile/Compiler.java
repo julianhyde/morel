@@ -60,6 +60,7 @@ import net.hydromatic.morel.eval.RowSink;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
+import net.hydromatic.morel.eval.codes.GeneralCodes;
 import net.hydromatic.morel.foreign.CalciteFunctions;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
@@ -409,7 +410,7 @@ public class Compiler {
       case RECORD_SELECTOR:
         final Core.RecordSelector recordSelector =
             (Core.RecordSelector) expression;
-        return Codes.nth(recordSelector.slot).asCode();
+        return GeneralCodes.nth(recordSelector.slot).asCode();
 
       case APPLY:
         return compileApply(cx, (Core.Apply) expression);
@@ -816,7 +817,7 @@ public class Compiler {
 
       case RECORD_SELECTOR:
         final Core.RecordSelector recordSelector = (Core.RecordSelector) fn;
-        return Codes.nth(recordSelector.slot);
+        return GeneralCodes.nth(recordSelector.slot);
 
       default:
         return null;

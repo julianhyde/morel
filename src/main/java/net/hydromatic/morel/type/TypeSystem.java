@@ -50,6 +50,7 @@ import net.hydromatic.morel.compile.NameGenerator;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.eval.Variants;
+import net.hydromatic.morel.eval.codes.GeneralCodes;
 import net.hydromatic.morel.type.Type.Key;
 import net.hydromatic.morel.util.ComparableSingletonList;
 import org.jspecify.annotations.Nullable;
@@ -99,7 +100,8 @@ public class TypeSystem {
     } else {
       final Type type2 = wrap(dataType, fnType(type, dataType));
       return Binding.of(
-          core.idPat(type2, tyConName, 0), Codes.tyCon(dataType, tyConName));
+          core.idPat(type2, tyConName, 0),
+          GeneralCodes.tyCon(dataType, tyConName));
     }
   }
 

@@ -44,6 +44,7 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Variant;
+import net.hydromatic.morel.eval.codes.RangeCodes;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.type.AliasType;
@@ -391,7 +392,7 @@ class Pretty {
     }
     if (dataType.name.equals("continuous_set")
         || dataType.name.equals("discrete_set")) {
-      arg = Codes.setToRangeList(arg);
+      arg = RangeCodes.setToRangeList(arg);
     }
     final Type argType =
         requireNonNull(

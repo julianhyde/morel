@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval;
+package net.hydromatic.morel.eval.codes;
 
 import static net.hydromatic.morel.util.Static.padRightTo;
 
@@ -25,6 +25,9 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.List;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.eval.BuiltInExn;
+import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.MorelRuntimeException;
 
 /**
  * Real formatting specification, after validation: a kind ("SCI", "FIX", "GEN",

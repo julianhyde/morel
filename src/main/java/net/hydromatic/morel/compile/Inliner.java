@@ -44,6 +44,7 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
+import net.hydromatic.morel.eval.codes.GeneralCodes;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -186,7 +187,7 @@ public class Inliner extends EnvShuttle {
       final List list = ((Core.Literal) apply2.arg).unwrap(List.class);
       final Object o = list.get(selector.slot);
       if (o instanceof Applicable || o instanceof Macro) {
-        // E.g. apply is '#filter List', o is Codes.LIST_FILTER,
+        // E.g. apply is '#filter List', o is ListCodes.LIST_FILTER,
         // builtIn is BuiltIn.LIST_FILTER.
         final BuiltIn builtIn = Codes.BUILT_IN_MAP.get(o);
         if (builtIn != null) {
@@ -537,7 +538,7 @@ public class Inliner extends EnvShuttle {
             return null;
           }
           if (dataType.typeConstructors.containsKey(conName)) {
-            final Applicable tyCon = Codes.tyCon(apply.type, conName);
+            final Applicable tyCon = GeneralCodes.tyCon(apply.type, conName);
             final Object arg = expToValue(apply.arg);
             if (arg == null) {
               return null;

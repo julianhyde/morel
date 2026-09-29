@@ -16,9 +16,11 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval;
+package net.hydromatic.morel.eval.codes;
 
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.Applicable;
+import net.hydromatic.morel.eval.Describer;
 
 /**
  * Abstract implementation of {@link Applicable} that describes itself with a
