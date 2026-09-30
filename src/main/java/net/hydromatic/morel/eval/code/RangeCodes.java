@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableMap;
 import java.math.BigInteger;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
@@ -55,22 +56,24 @@ public final class RangeCodes {
   private RangeCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.RANGE_CONTAINS, RANGE_CONTAINS);
-    b.add(
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.RANGE_CONTAINS, RANGE_CONTAINS);
+    c.accept(
         BuiltIn.RANGE_CONTINUOUS_SET_COMPLEMENT,
         RANGE_CONTINUOUS_SET_COMPLEMENT);
-    b.add(BuiltIn.RANGE_CONTINUOUS_SET_CONTAINS, RANGE_CONTINUOUS_SET_CONTAINS);
-    b.add(BuiltIn.RANGE_CONTINUOUS_SET_OF, RANGE_CONTINUOUS_SET_OF);
-    b.add(BuiltIn.RANGE_CONTINUOUS_SET_RANGES, RANGE_CONTINUOUS_SET_RANGES);
-    b.add(BuiltIn.RANGE_DISCRETE_SET_COMPLEMENT, RANGE_DISCRETE_SET_COMPLEMENT);
-    b.add(BuiltIn.RANGE_DISCRETE_SET_CONTAINS, RANGE_DISCRETE_SET_CONTAINS);
-    b.add(BuiltIn.RANGE_DISCRETE_SET_OF, RANGE_DISCRETE_SET_OF);
-    b.add(BuiltIn.RANGE_DISCRETE_SET_RANGES, RANGE_DISCRETE_SET_RANGES);
-    b.add(BuiltIn.RANGE_DISCRETE_SET_TO_BAG, RANGE_DISCRETE_SET_TO_BAG);
-    b.add(BuiltIn.RANGE_DISCRETE_SET_TO_LIST, RANGE_DISCRETE_SET_TO_LIST);
-    b.add(BuiltIn.RANGE_FLATTEN, RANGE_FLATTEN);
+    c.accept(
+        BuiltIn.RANGE_CONTINUOUS_SET_CONTAINS, RANGE_CONTINUOUS_SET_CONTAINS);
+    c.accept(BuiltIn.RANGE_CONTINUOUS_SET_OF, RANGE_CONTINUOUS_SET_OF);
+    c.accept(BuiltIn.RANGE_CONTINUOUS_SET_RANGES, RANGE_CONTINUOUS_SET_RANGES);
+    c.accept(
+        BuiltIn.RANGE_DISCRETE_SET_COMPLEMENT, RANGE_DISCRETE_SET_COMPLEMENT);
+    c.accept(BuiltIn.RANGE_DISCRETE_SET_CONTAINS, RANGE_DISCRETE_SET_CONTAINS);
+    c.accept(BuiltIn.RANGE_DISCRETE_SET_OF, RANGE_DISCRETE_SET_OF);
+    c.accept(BuiltIn.RANGE_DISCRETE_SET_RANGES, RANGE_DISCRETE_SET_RANGES);
+    c.accept(BuiltIn.RANGE_DISCRETE_SET_TO_BAG, RANGE_DISCRETE_SET_TO_BAG);
+    c.accept(BuiltIn.RANGE_DISCRETE_SET_TO_LIST, RANGE_DISCRETE_SET_TO_LIST);
+    c.accept(BuiltIn.RANGE_FLATTEN, RANGE_FLATTEN);
   }
 
   // lint: sort until '#}' \

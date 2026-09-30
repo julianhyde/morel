@@ -29,6 +29,7 @@ import static net.hydromatic.morel.eval.code.StringCodes.scanString;
 import com.google.common.collect.ImmutableList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
@@ -54,7 +55,6 @@ import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypeVar;
-import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 
 /**
@@ -66,51 +66,51 @@ public final class GeneralCodes {
   private GeneralCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.ABS, ABS);
-    b.add(BuiltIn.BOOL_ANDALSO, BOOL_ANDALSO);
-    b.add(BuiltIn.BOOL_FROM_STRING, BOOL_FROM_STRING);
-    b.add(BuiltIn.BOOL_IMPLIES, BOOL_IMPLIES);
-    b.add(BuiltIn.BOOL_NOT, BOOL_NOT);
-    b.add(BuiltIn.BOOL_OP_EQ, BOOL_OP_EQ);
-    b.add(BuiltIn.BOOL_OP_GT, BOOL_OP_GT);
-    b.add(BuiltIn.BOOL_OP_LT, BOOL_OP_LT);
-    b.add(BuiltIn.BOOL_OP_NE, BOOL_OP_NE);
-    b.add(BuiltIn.BOOL_ORELSE, BOOL_ORELSE);
-    b.add(BuiltIn.BOOL_SCAN, BOOL_SCAN);
-    b.add(BuiltIn.BOOL_TO_STRING, BOOL_TO_STRING);
-    b.add(BuiltIn.FN_APPLY, FN_APPLY);
-    b.add(BuiltIn.FN_CONST, FN_CONST);
-    b.add(BuiltIn.FN_CURRY, FN_CURRY);
-    b.add(BuiltIn.FN_EQUAL, FN_EQUAL);
-    b.add(BuiltIn.FN_FLIP, FN_FLIP);
-    b.add(BuiltIn.FN_ID, FN_ID);
-    b.add(BuiltIn.FN_NOT_EQUAL, FN_NOT_EQUAL);
-    b.add(BuiltIn.FN_O, FN_OP_O);
-    b.add(BuiltIn.FN_REPEAT, FN_REPEAT);
-    b.add(BuiltIn.FN_UNCURRY, FN_UNCURRY);
-    b.add(BuiltIn.GENERAL_BEFORE, GENERAL_BEFORE);
-    b.add(BuiltIn.GENERAL_EXN_MESSAGE, GENERAL_EXN_MESSAGE);
-    b.add(BuiltIn.GENERAL_EXN_NAME, GENERAL_EXN_NAME);
-    b.add(BuiltIn.GENERAL_IGNORE, GENERAL_IGNORE);
-    b.add(BuiltIn.GENERAL_O, GENERAL_OP_O);
-    b.add(BuiltIn.OP_CONS, OP_CONS);
-    b.add(BuiltIn.OP_DIV, OP_DIV);
-    b.add(BuiltIn.OP_DIVIDE, OP_DIVIDE);
-    b.add(BuiltIn.OP_ELEM, OP_ELEM);
-    b.add(BuiltIn.OP_EQ, OP_EQ);
-    b.add(BuiltIn.OP_GE, OP_GE);
-    b.add(BuiltIn.OP_GT, OP_GT);
-    b.add(BuiltIn.OP_LE, OP_LE);
-    b.add(BuiltIn.OP_LT, OP_LT);
-    b.add(BuiltIn.OP_MINUS, OP_MINUS);
-    b.add(BuiltIn.OP_MOD, OP_MOD);
-    b.add(BuiltIn.OP_NE, OP_NE);
-    b.add(BuiltIn.OP_NEGATE, OP_NEGATE);
-    b.add(BuiltIn.OP_NOT_ELEM, OP_NOT_ELEM);
-    b.add(BuiltIn.OP_PLUS, OP_PLUS);
-    b.add(BuiltIn.OP_TIMES, OP_TIMES);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.ABS, ABS);
+    c.accept(BuiltIn.BOOL_ANDALSO, BOOL_ANDALSO);
+    c.accept(BuiltIn.BOOL_FROM_STRING, BOOL_FROM_STRING);
+    c.accept(BuiltIn.BOOL_IMPLIES, BOOL_IMPLIES);
+    c.accept(BuiltIn.BOOL_NOT, BOOL_NOT);
+    c.accept(BuiltIn.BOOL_OP_EQ, BOOL_OP_EQ);
+    c.accept(BuiltIn.BOOL_OP_GT, BOOL_OP_GT);
+    c.accept(BuiltIn.BOOL_OP_LT, BOOL_OP_LT);
+    c.accept(BuiltIn.BOOL_OP_NE, BOOL_OP_NE);
+    c.accept(BuiltIn.BOOL_ORELSE, BOOL_ORELSE);
+    c.accept(BuiltIn.BOOL_SCAN, BOOL_SCAN);
+    c.accept(BuiltIn.BOOL_TO_STRING, BOOL_TO_STRING);
+    c.accept(BuiltIn.FN_APPLY, FN_APPLY);
+    c.accept(BuiltIn.FN_CONST, FN_CONST);
+    c.accept(BuiltIn.FN_CURRY, FN_CURRY);
+    c.accept(BuiltIn.FN_EQUAL, FN_EQUAL);
+    c.accept(BuiltIn.FN_FLIP, FN_FLIP);
+    c.accept(BuiltIn.FN_ID, FN_ID);
+    c.accept(BuiltIn.FN_NOT_EQUAL, FN_NOT_EQUAL);
+    c.accept(BuiltIn.FN_O, FN_OP_O);
+    c.accept(BuiltIn.FN_REPEAT, FN_REPEAT);
+    c.accept(BuiltIn.FN_UNCURRY, FN_UNCURRY);
+    c.accept(BuiltIn.GENERAL_BEFORE, GENERAL_BEFORE);
+    c.accept(BuiltIn.GENERAL_EXN_MESSAGE, GENERAL_EXN_MESSAGE);
+    c.accept(BuiltIn.GENERAL_EXN_NAME, GENERAL_EXN_NAME);
+    c.accept(BuiltIn.GENERAL_IGNORE, GENERAL_IGNORE);
+    c.accept(BuiltIn.GENERAL_O, GENERAL_OP_O);
+    c.accept(BuiltIn.OP_CONS, OP_CONS);
+    c.accept(BuiltIn.OP_DIV, OP_DIV);
+    c.accept(BuiltIn.OP_DIVIDE, OP_DIVIDE);
+    c.accept(BuiltIn.OP_ELEM, OP_ELEM);
+    c.accept(BuiltIn.OP_EQ, OP_EQ);
+    c.accept(BuiltIn.OP_GE, OP_GE);
+    c.accept(BuiltIn.OP_GT, OP_GT);
+    c.accept(BuiltIn.OP_LE, OP_LE);
+    c.accept(BuiltIn.OP_LT, OP_LT);
+    c.accept(BuiltIn.OP_MINUS, OP_MINUS);
+    c.accept(BuiltIn.OP_MOD, OP_MOD);
+    c.accept(BuiltIn.OP_NE, OP_NE);
+    c.accept(BuiltIn.OP_NEGATE, OP_NEGATE);
+    c.accept(BuiltIn.OP_NOT_ELEM, OP_NOT_ELEM);
+    c.accept(BuiltIn.OP_PLUS, OP_PLUS);
+    c.accept(BuiltIn.OP_TIMES, OP_TIMES);
   }
 
   // lint: sort until '#}' \

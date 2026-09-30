@@ -31,6 +31,7 @@ import static net.hydromatic.morel.util.Ord.forEachIndexed;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
@@ -42,7 +43,6 @@ import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.eval.code.ListCodes.ListNth;
 import net.hydromatic.morel.eval.code.ListCodes.ListTabulate;
-import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 
 /**
@@ -54,28 +54,28 @@ public final class VectorCodes {
   private VectorCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.VECTOR_ALL, VECTOR_ALL);
-    b.add(BuiltIn.VECTOR_APP, VECTOR_APP);
-    b.add(BuiltIn.VECTOR_APPI, VECTOR_APPI);
-    b.add(BuiltIn.VECTOR_COLLATE, VECTOR_COLLATE);
-    b.add(BuiltIn.VECTOR_CONCAT, VECTOR_CONCAT);
-    b.add(BuiltIn.VECTOR_EXISTS, VECTOR_EXISTS);
-    b.add(BuiltIn.VECTOR_FIND, VECTOR_FIND);
-    b.add(BuiltIn.VECTOR_FINDI, VECTOR_FINDI);
-    b.add(BuiltIn.VECTOR_FOLDL, VECTOR_FOLDL);
-    b.add(BuiltIn.VECTOR_FOLDLI, VECTOR_FOLDLI);
-    b.add(BuiltIn.VECTOR_FOLDR, VECTOR_FOLDR);
-    b.add(BuiltIn.VECTOR_FOLDRI, VECTOR_FOLDRI);
-    b.add(BuiltIn.VECTOR_FROM_LIST, VECTOR_FROM_LIST);
-    b.add(BuiltIn.VECTOR_LENGTH, VECTOR_LENGTH);
-    b.add(BuiltIn.VECTOR_MAP, VECTOR_MAP);
-    b.add(BuiltIn.VECTOR_MAPI, VECTOR_MAPI);
-    b.add(BuiltIn.VECTOR_MAX_LEN, VECTOR_MAX_LEN);
-    b.add(BuiltIn.VECTOR_SUB, VECTOR_SUB);
-    b.add(BuiltIn.VECTOR_TABULATE, VECTOR_TABULATE);
-    b.add(BuiltIn.VECTOR_UPDATE, VECTOR_UPDATE);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.VECTOR_ALL, VECTOR_ALL);
+    c.accept(BuiltIn.VECTOR_APP, VECTOR_APP);
+    c.accept(BuiltIn.VECTOR_APPI, VECTOR_APPI);
+    c.accept(BuiltIn.VECTOR_COLLATE, VECTOR_COLLATE);
+    c.accept(BuiltIn.VECTOR_CONCAT, VECTOR_CONCAT);
+    c.accept(BuiltIn.VECTOR_EXISTS, VECTOR_EXISTS);
+    c.accept(BuiltIn.VECTOR_FIND, VECTOR_FIND);
+    c.accept(BuiltIn.VECTOR_FINDI, VECTOR_FINDI);
+    c.accept(BuiltIn.VECTOR_FOLDL, VECTOR_FOLDL);
+    c.accept(BuiltIn.VECTOR_FOLDLI, VECTOR_FOLDLI);
+    c.accept(BuiltIn.VECTOR_FOLDR, VECTOR_FOLDR);
+    c.accept(BuiltIn.VECTOR_FOLDRI, VECTOR_FOLDRI);
+    c.accept(BuiltIn.VECTOR_FROM_LIST, VECTOR_FROM_LIST);
+    c.accept(BuiltIn.VECTOR_LENGTH, VECTOR_LENGTH);
+    c.accept(BuiltIn.VECTOR_MAP, VECTOR_MAP);
+    c.accept(BuiltIn.VECTOR_MAPI, VECTOR_MAPI);
+    c.accept(BuiltIn.VECTOR_MAX_LEN, VECTOR_MAX_LEN);
+    c.accept(BuiltIn.VECTOR_SUB, VECTOR_SUB);
+    c.accept(BuiltIn.VECTOR_TABULATE, VECTOR_TABULATE);
+    c.accept(BuiltIn.VECTOR_UPDATE, VECTOR_UPDATE);
   }
 
   // lint: sort until '#}' \

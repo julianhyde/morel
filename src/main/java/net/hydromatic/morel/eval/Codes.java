@@ -554,19 +554,19 @@ public abstract class Codes {
 
   static {
     final PairList<BuiltIn, Object> b = PairList.of();
-    ListCodes.register(b);
-    StringCodes.register(b);
-    VectorCodes.register(b);
-    IntCodes.register(b);
-    RealCodes.register(b);
-    WordCodes.register(b);
-    DecimalCodes.register(b);
-    DateCodes.register(b);
-    OptionCodes.register(b);
-    RelationalCodes.register(b);
-    RangeCodes.register(b);
-    SysCodes.register(b);
-    GeneralCodes.register(b);
+    ListCodes.register(b::add);
+    StringCodes.register(b::add);
+    VectorCodes.register(b::add);
+    IntCodes.register(b::add);
+    RealCodes.register(b::add);
+    WordCodes.register(b::add);
+    DecimalCodes.register(b::add);
+    DateCodes.register(b::add);
+    OptionCodes.register(b::add);
+    RelationalCodes.register(b::add);
+    RangeCodes.register(b::add);
+    SysCodes.register(b::add);
+    GeneralCodes.register(b::add);
     // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
     b.add(BuiltIn.BAG_NIL, ImmutableList.of());
     b.add(BuiltIn.LIST_NIL, ImmutableList.of());

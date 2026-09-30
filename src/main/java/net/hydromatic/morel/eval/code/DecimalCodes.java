@@ -27,6 +27,7 @@ import static net.hydromatic.morel.util.Static.floatToString;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
@@ -35,7 +36,6 @@ import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.MorelRuntimeException;
-import net.hydromatic.morel.util.PairList;
 
 /**
  * Implementations of built-in functions and values in the {@code Decimal}
@@ -46,42 +46,42 @@ public final class DecimalCodes {
   private DecimalCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.DECIMAL_ABS, DECIMAL_ABS);
-    b.add(BuiltIn.DECIMAL_CEIL, DECIMAL_CEIL);
-    b.add(BuiltIn.DECIMAL_COMPARE, DECIMAL_COMPARE);
-    b.add(BuiltIn.DECIMAL_DECIMAL, DECIMAL_DECIMAL);
-    b.add(BuiltIn.DECIMAL_DIVIDE, DECIMAL_DIVIDE);
-    b.add(BuiltIn.DECIMAL_FLOOR, DECIMAL_FLOOR);
-    b.add(BuiltIn.DECIMAL_FMT, DECIMAL_FMT);
-    b.add(BuiltIn.DECIMAL_FROM_INT, DECIMAL_FROM_INT);
-    b.add(BuiltIn.DECIMAL_FROM_REAL, DECIMAL_FROM_REAL);
-    b.add(BuiltIn.DECIMAL_FROM_STRING, DECIMAL_FROM_STRING);
-    b.add(BuiltIn.DECIMAL_MAX, DECIMAL_MAX);
-    b.add(BuiltIn.DECIMAL_MAX_FINITE, DECIMAL_MAX_FINITE);
-    b.add(BuiltIn.DECIMAL_MIN, DECIMAL_MIN);
-    b.add(BuiltIn.DECIMAL_MIN_POS, DECIMAL_MIN_POS);
-    b.add(BuiltIn.DECIMAL_OP_GE, DECIMAL_OP_GE);
-    b.add(BuiltIn.DECIMAL_OP_GT, DECIMAL_OP_GT);
-    b.add(BuiltIn.DECIMAL_OP_LE, DECIMAL_OP_LE);
-    b.add(BuiltIn.DECIMAL_OP_LT, DECIMAL_OP_LT);
-    b.add(BuiltIn.DECIMAL_OP_MINUS, DECIMAL_OP_MINUS);
-    b.add(BuiltIn.DECIMAL_OP_NEGATE, DECIMAL_OP_NEGATE);
-    b.add(BuiltIn.DECIMAL_OP_PLUS, DECIMAL_OP_PLUS);
-    b.add(BuiltIn.DECIMAL_OP_TIMES, DECIMAL_OP_TIMES);
-    b.add(BuiltIn.DECIMAL_PRECISION, DECIMAL_PRECISION);
-    b.add(BuiltIn.DECIMAL_RADIX, DECIMAL_RADIX);
-    b.add(BuiltIn.DECIMAL_REAL_CEIL, DECIMAL_REAL_CEIL);
-    b.add(BuiltIn.DECIMAL_REAL_FLOOR, DECIMAL_REAL_FLOOR);
-    b.add(BuiltIn.DECIMAL_REAL_ROUND, DECIMAL_REAL_ROUND);
-    b.add(BuiltIn.DECIMAL_REAL_TRUNC, DECIMAL_REAL_TRUNC);
-    b.add(BuiltIn.DECIMAL_REM, DECIMAL_REM);
-    b.add(BuiltIn.DECIMAL_ROUND, DECIMAL_ROUND);
-    b.add(BuiltIn.DECIMAL_SIGN, DECIMAL_SIGN);
-    b.add(BuiltIn.DECIMAL_TO_REAL, DECIMAL_TO_REAL);
-    b.add(BuiltIn.DECIMAL_TO_STRING, DECIMAL_TO_STRING);
-    b.add(BuiltIn.DECIMAL_TRUNC, DECIMAL_TRUNC);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.DECIMAL_ABS, DECIMAL_ABS);
+    c.accept(BuiltIn.DECIMAL_CEIL, DECIMAL_CEIL);
+    c.accept(BuiltIn.DECIMAL_COMPARE, DECIMAL_COMPARE);
+    c.accept(BuiltIn.DECIMAL_DECIMAL, DECIMAL_DECIMAL);
+    c.accept(BuiltIn.DECIMAL_DIVIDE, DECIMAL_DIVIDE);
+    c.accept(BuiltIn.DECIMAL_FLOOR, DECIMAL_FLOOR);
+    c.accept(BuiltIn.DECIMAL_FMT, DECIMAL_FMT);
+    c.accept(BuiltIn.DECIMAL_FROM_INT, DECIMAL_FROM_INT);
+    c.accept(BuiltIn.DECIMAL_FROM_REAL, DECIMAL_FROM_REAL);
+    c.accept(BuiltIn.DECIMAL_FROM_STRING, DECIMAL_FROM_STRING);
+    c.accept(BuiltIn.DECIMAL_MAX, DECIMAL_MAX);
+    c.accept(BuiltIn.DECIMAL_MAX_FINITE, DECIMAL_MAX_FINITE);
+    c.accept(BuiltIn.DECIMAL_MIN, DECIMAL_MIN);
+    c.accept(BuiltIn.DECIMAL_MIN_POS, DECIMAL_MIN_POS);
+    c.accept(BuiltIn.DECIMAL_OP_GE, DECIMAL_OP_GE);
+    c.accept(BuiltIn.DECIMAL_OP_GT, DECIMAL_OP_GT);
+    c.accept(BuiltIn.DECIMAL_OP_LE, DECIMAL_OP_LE);
+    c.accept(BuiltIn.DECIMAL_OP_LT, DECIMAL_OP_LT);
+    c.accept(BuiltIn.DECIMAL_OP_MINUS, DECIMAL_OP_MINUS);
+    c.accept(BuiltIn.DECIMAL_OP_NEGATE, DECIMAL_OP_NEGATE);
+    c.accept(BuiltIn.DECIMAL_OP_PLUS, DECIMAL_OP_PLUS);
+    c.accept(BuiltIn.DECIMAL_OP_TIMES, DECIMAL_OP_TIMES);
+    c.accept(BuiltIn.DECIMAL_PRECISION, DECIMAL_PRECISION);
+    c.accept(BuiltIn.DECIMAL_RADIX, DECIMAL_RADIX);
+    c.accept(BuiltIn.DECIMAL_REAL_CEIL, DECIMAL_REAL_CEIL);
+    c.accept(BuiltIn.DECIMAL_REAL_FLOOR, DECIMAL_REAL_FLOOR);
+    c.accept(BuiltIn.DECIMAL_REAL_ROUND, DECIMAL_REAL_ROUND);
+    c.accept(BuiltIn.DECIMAL_REAL_TRUNC, DECIMAL_REAL_TRUNC);
+    c.accept(BuiltIn.DECIMAL_REM, DECIMAL_REM);
+    c.accept(BuiltIn.DECIMAL_ROUND, DECIMAL_ROUND);
+    c.accept(BuiltIn.DECIMAL_SIGN, DECIMAL_SIGN);
+    c.accept(BuiltIn.DECIMAL_TO_REAL, DECIMAL_TO_REAL);
+    c.accept(BuiltIn.DECIMAL_TO_STRING, DECIMAL_TO_STRING);
+    c.accept(BuiltIn.DECIMAL_TRUNC, DECIMAL_TRUNC);
   }
 
   // lint: sort until '#}' \

@@ -31,6 +31,7 @@ import static net.hydromatic.morel.eval.code.StringCodes.scanString;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
@@ -39,7 +40,6 @@ import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.code.StringCodes.CharSource;
-import net.hydromatic.morel.util.PairList;
 
 /**
  * Implementations of built-in functions and values in the {@code Real}, {@code
@@ -50,74 +50,74 @@ public final class RealCodes {
   private RealCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.MATH_ACOS, MATH_ACOS);
-    b.add(BuiltIn.MATH_ASIN, MATH_ASIN);
-    b.add(BuiltIn.MATH_ATAN, MATH_ATAN);
-    b.add(BuiltIn.MATH_ATAN2, MATH_ATAN2);
-    b.add(BuiltIn.MATH_COS, MATH_COS);
-    b.add(BuiltIn.MATH_COSH, MATH_COSH);
-    b.add(BuiltIn.MATH_E, MATH_E);
-    b.add(BuiltIn.MATH_EXP, MATH_EXP);
-    b.add(BuiltIn.MATH_LN, MATH_LN);
-    b.add(BuiltIn.MATH_LOG10, MATH_LOG10);
-    b.add(BuiltIn.MATH_PI, MATH_PI);
-    b.add(BuiltIn.MATH_POW, MATH_POW);
-    b.add(BuiltIn.MATH_SIN, MATH_SIN);
-    b.add(BuiltIn.MATH_SINH, MATH_SINH);
-    b.add(BuiltIn.MATH_SQRT, MATH_SQRT);
-    b.add(BuiltIn.MATH_TAN, MATH_TAN);
-    b.add(BuiltIn.MATH_TANH, MATH_TANH);
-    b.add(BuiltIn.REAL_ABS, REAL_ABS);
-    b.add(BuiltIn.REAL_CEIL, REAL_CEIL);
-    b.add(BuiltIn.REAL_CHECK_FLOAT, REAL_CHECK_FLOAT);
-    b.add(BuiltIn.REAL_COMPARE, REAL_COMPARE);
-    b.add(BuiltIn.REAL_COPY_SIGN, REAL_COPY_SIGN);
-    b.add(BuiltIn.REAL_DIVIDE, REAL_DIVIDE);
-    b.add(BuiltIn.REAL_FLOOR, REAL_FLOOR);
-    b.add(BuiltIn.REAL_FMT, REAL_FMT);
-    b.add(BuiltIn.REAL_FROM_INT, REAL_FROM_INT);
-    b.add(BuiltIn.REAL_FROM_MAN_EXP, REAL_FROM_MAN_EXP);
-    b.add(BuiltIn.REAL_FROM_STRING, REAL_FROM_STRING);
-    b.add(BuiltIn.REAL_IS_FINITE, REAL_IS_FINITE);
-    b.add(BuiltIn.REAL_IS_NAN, REAL_IS_NAN);
-    b.add(BuiltIn.REAL_IS_NORMAL, REAL_IS_NORMAL);
-    b.add(BuiltIn.REAL_MAX, REAL_MAX);
-    b.add(BuiltIn.REAL_MAX_FINITE, REAL_MAX_FINITE);
-    b.add(BuiltIn.REAL_MIN, REAL_MIN);
-    b.add(BuiltIn.REAL_MIN_NORMAL_POS, REAL_MIN_NORMAL_POS);
-    b.add(BuiltIn.REAL_MIN_POS, REAL_MIN_POS);
-    b.add(BuiltIn.REAL_NEG_INF, REAL_NEG_INF);
-    b.add(BuiltIn.REAL_OP_EQ, REAL_OP_EQ);
-    b.add(BuiltIn.REAL_OP_GE, REAL_OP_GE);
-    b.add(BuiltIn.REAL_OP_GT, REAL_OP_GT);
-    b.add(BuiltIn.REAL_OP_LE, REAL_OP_LE);
-    b.add(BuiltIn.REAL_OP_LT, REAL_OP_LT);
-    b.add(BuiltIn.REAL_OP_MINUS, REAL_OP_MINUS);
-    b.add(BuiltIn.REAL_OP_NE, REAL_OP_NE);
-    b.add(BuiltIn.REAL_OP_NEGATE, REAL_OP_NEGATE);
-    b.add(BuiltIn.REAL_OP_PLUS, REAL_OP_PLUS);
-    b.add(BuiltIn.REAL_OP_TIMES, REAL_OP_TIMES);
-    b.add(BuiltIn.REAL_POS_INF, REAL_POS_INF);
-    b.add(BuiltIn.REAL_PRECISION, REAL_PRECISION);
-    b.add(BuiltIn.REAL_RADIX, REAL_RADIX);
-    b.add(BuiltIn.REAL_REAL_CEIL, REAL_REAL_CEIL);
-    b.add(BuiltIn.REAL_REAL_FLOOR, REAL_REAL_FLOOR);
-    b.add(BuiltIn.REAL_REAL_MOD, REAL_REAL_MOD);
-    b.add(BuiltIn.REAL_REAL_ROUND, REAL_REAL_ROUND);
-    b.add(BuiltIn.REAL_REAL_TRUNC, REAL_REAL_TRUNC);
-    b.add(BuiltIn.REAL_REM, REAL_REM);
-    b.add(BuiltIn.REAL_ROUND, REAL_ROUND);
-    b.add(BuiltIn.REAL_SAME_SIGN, REAL_SAME_SIGN);
-    b.add(BuiltIn.REAL_SCAN, REAL_SCAN);
-    b.add(BuiltIn.REAL_SIGN, REAL_SIGN);
-    b.add(BuiltIn.REAL_SIGN_BIT, REAL_SIGN_BIT);
-    b.add(BuiltIn.REAL_SPLIT, REAL_SPLIT);
-    b.add(BuiltIn.REAL_TO_MAN_EXP, REAL_TO_MAN_EXP);
-    b.add(BuiltIn.REAL_TO_STRING, REAL_TO_STRING);
-    b.add(BuiltIn.REAL_TRUNC, REAL_TRUNC);
-    b.add(BuiltIn.REAL_UNORDERED, REAL_UNORDERED);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.MATH_ACOS, MATH_ACOS);
+    c.accept(BuiltIn.MATH_ASIN, MATH_ASIN);
+    c.accept(BuiltIn.MATH_ATAN, MATH_ATAN);
+    c.accept(BuiltIn.MATH_ATAN2, MATH_ATAN2);
+    c.accept(BuiltIn.MATH_COS, MATH_COS);
+    c.accept(BuiltIn.MATH_COSH, MATH_COSH);
+    c.accept(BuiltIn.MATH_E, MATH_E);
+    c.accept(BuiltIn.MATH_EXP, MATH_EXP);
+    c.accept(BuiltIn.MATH_LN, MATH_LN);
+    c.accept(BuiltIn.MATH_LOG10, MATH_LOG10);
+    c.accept(BuiltIn.MATH_PI, MATH_PI);
+    c.accept(BuiltIn.MATH_POW, MATH_POW);
+    c.accept(BuiltIn.MATH_SIN, MATH_SIN);
+    c.accept(BuiltIn.MATH_SINH, MATH_SINH);
+    c.accept(BuiltIn.MATH_SQRT, MATH_SQRT);
+    c.accept(BuiltIn.MATH_TAN, MATH_TAN);
+    c.accept(BuiltIn.MATH_TANH, MATH_TANH);
+    c.accept(BuiltIn.REAL_ABS, REAL_ABS);
+    c.accept(BuiltIn.REAL_CEIL, REAL_CEIL);
+    c.accept(BuiltIn.REAL_CHECK_FLOAT, REAL_CHECK_FLOAT);
+    c.accept(BuiltIn.REAL_COMPARE, REAL_COMPARE);
+    c.accept(BuiltIn.REAL_COPY_SIGN, REAL_COPY_SIGN);
+    c.accept(BuiltIn.REAL_DIVIDE, REAL_DIVIDE);
+    c.accept(BuiltIn.REAL_FLOOR, REAL_FLOOR);
+    c.accept(BuiltIn.REAL_FMT, REAL_FMT);
+    c.accept(BuiltIn.REAL_FROM_INT, REAL_FROM_INT);
+    c.accept(BuiltIn.REAL_FROM_MAN_EXP, REAL_FROM_MAN_EXP);
+    c.accept(BuiltIn.REAL_FROM_STRING, REAL_FROM_STRING);
+    c.accept(BuiltIn.REAL_IS_FINITE, REAL_IS_FINITE);
+    c.accept(BuiltIn.REAL_IS_NAN, REAL_IS_NAN);
+    c.accept(BuiltIn.REAL_IS_NORMAL, REAL_IS_NORMAL);
+    c.accept(BuiltIn.REAL_MAX, REAL_MAX);
+    c.accept(BuiltIn.REAL_MAX_FINITE, REAL_MAX_FINITE);
+    c.accept(BuiltIn.REAL_MIN, REAL_MIN);
+    c.accept(BuiltIn.REAL_MIN_NORMAL_POS, REAL_MIN_NORMAL_POS);
+    c.accept(BuiltIn.REAL_MIN_POS, REAL_MIN_POS);
+    c.accept(BuiltIn.REAL_NEG_INF, REAL_NEG_INF);
+    c.accept(BuiltIn.REAL_OP_EQ, REAL_OP_EQ);
+    c.accept(BuiltIn.REAL_OP_GE, REAL_OP_GE);
+    c.accept(BuiltIn.REAL_OP_GT, REAL_OP_GT);
+    c.accept(BuiltIn.REAL_OP_LE, REAL_OP_LE);
+    c.accept(BuiltIn.REAL_OP_LT, REAL_OP_LT);
+    c.accept(BuiltIn.REAL_OP_MINUS, REAL_OP_MINUS);
+    c.accept(BuiltIn.REAL_OP_NE, REAL_OP_NE);
+    c.accept(BuiltIn.REAL_OP_NEGATE, REAL_OP_NEGATE);
+    c.accept(BuiltIn.REAL_OP_PLUS, REAL_OP_PLUS);
+    c.accept(BuiltIn.REAL_OP_TIMES, REAL_OP_TIMES);
+    c.accept(BuiltIn.REAL_POS_INF, REAL_POS_INF);
+    c.accept(BuiltIn.REAL_PRECISION, REAL_PRECISION);
+    c.accept(BuiltIn.REAL_RADIX, REAL_RADIX);
+    c.accept(BuiltIn.REAL_REAL_CEIL, REAL_REAL_CEIL);
+    c.accept(BuiltIn.REAL_REAL_FLOOR, REAL_REAL_FLOOR);
+    c.accept(BuiltIn.REAL_REAL_MOD, REAL_REAL_MOD);
+    c.accept(BuiltIn.REAL_REAL_ROUND, REAL_REAL_ROUND);
+    c.accept(BuiltIn.REAL_REAL_TRUNC, REAL_REAL_TRUNC);
+    c.accept(BuiltIn.REAL_REM, REAL_REM);
+    c.accept(BuiltIn.REAL_ROUND, REAL_ROUND);
+    c.accept(BuiltIn.REAL_SAME_SIGN, REAL_SAME_SIGN);
+    c.accept(BuiltIn.REAL_SCAN, REAL_SCAN);
+    c.accept(BuiltIn.REAL_SIGN, REAL_SIGN);
+    c.accept(BuiltIn.REAL_SIGN_BIT, REAL_SIGN_BIT);
+    c.accept(BuiltIn.REAL_SPLIT, REAL_SPLIT);
+    c.accept(BuiltIn.REAL_TO_MAN_EXP, REAL_TO_MAN_EXP);
+    c.accept(BuiltIn.REAL_TO_STRING, REAL_TO_STRING);
+    c.accept(BuiltIn.REAL_TRUNC, REAL_TRUNC);
+    c.accept(BuiltIn.REAL_UNORDERED, REAL_UNORDERED);
   }
 
   // lint: sort until '#}' \

@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableList;
 import java.io.StringReader;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import net.hydromatic.morel.ast.AstDumper;
 import net.hydromatic.morel.ast.AstNode;
@@ -58,7 +59,6 @@ import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.ColorScheme;
 import net.hydromatic.morel.util.Lindig;
 import net.hydromatic.morel.util.MorelHighlighter;
-import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -71,63 +71,63 @@ public final class SysCodes {
   private SysCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.DATALOG_EXECUTE, DATALOG_EXECUTE);
-    b.add(BuiltIn.DATALOG_TRANSLATE, DATALOG_TRANSLATE);
-    b.add(BuiltIn.DATALOG_VALIDATE, DATALOG_VALIDATE);
-    b.add(BuiltIn.INTERACT_USE, INTERACT_USE);
-    b.add(BuiltIn.INTERACT_USE_SILENTLY, INTERACT_USE_SILENTLY);
-    b.add(BuiltIn.PP_ALIGN, PP_ALIGN);
-    b.add(BuiltIn.PP_BESIDE, PP_BESIDE);
-    b.add(BuiltIn.PP_BRACES, PP_BRACES);
-    b.add(BuiltIn.PP_BRACKETS, PP_BRACKETS);
-    b.add(BuiltIn.PP_CAT, PP_CAT);
-    b.add(BuiltIn.PP_EMPTY, PP_EMPTY);
-    b.add(BuiltIn.PP_ENCLOSE_SEP, PP_ENCLOSE_SEP);
-    b.add(BuiltIn.PP_FILL_CAT, PP_FILL_CAT);
-    b.add(BuiltIn.PP_FILL_SEP, PP_FILL_SEP);
-    b.add(BuiltIn.PP_GROUP, PP_GROUP);
-    b.add(BuiltIn.PP_HANG, PP_HANG);
-    b.add(BuiltIn.PP_HARD_LINE, PP_HARD_LINE);
-    b.add(BuiltIn.PP_HCAT, PP_HCAT);
-    b.add(BuiltIn.PP_HSEP, PP_HSEP);
-    b.add(BuiltIn.PP_INDENT, PP_INDENT);
-    b.add(BuiltIn.PP_LINE, PP_LINE);
-    b.add(BuiltIn.PP_LINE_BREAK, PP_LINE_BREAK);
-    b.add(BuiltIn.PP_NEST, PP_NEST);
-    b.add(BuiltIn.PP_PACK, PP_PACK);
-    b.add(BuiltIn.PP_PARENS, PP_PARENS);
-    b.add(BuiltIn.PP_PUNCTUATE, PP_PUNCTUATE);
-    b.add(BuiltIn.PP_RENDER, PP_RENDER);
-    b.add(BuiltIn.PP_SEP, PP_SEP);
-    b.add(BuiltIn.PP_SOFT_BREAK, PP_SOFT_BREAK);
-    b.add(BuiltIn.PP_SOFT_LINE, PP_SOFT_LINE);
-    b.add(BuiltIn.PP_TEXT, PP_TEXT);
-    b.add(BuiltIn.PP_VCAT, PP_VCAT);
-    b.add(BuiltIn.PP_VSEP, PP_VSEP);
-    b.add(BuiltIn.SYS_CLEAR_ENV, SYS_CLEAR_ENV);
-    b.add(BuiltIn.SYS_COLOR_SCHEMES, SYS_COLOR_SCHEMES);
-    b.add(BuiltIn.SYS_DEDUCE_COLOR_SCHEME, SYS_DEDUCE_COLOR_SCHEME);
-    b.add(BuiltIn.SYS_ENV, (Macro) SysCodes::sysEnv);
-    b.add(BuiltIn.SYS_PARSE_TREE, SYS_PARSE_TREE);
-    b.add(BuiltIn.SYS_PLAN, SYS_PLAN);
-    b.add(BuiltIn.SYS_PLAN_EX, SYS_PLAN_EX);
-    b.add(BuiltIn.SYS_PLAN_OF, SYS_PLAN_OF);
-    b.add(BuiltIn.SYS_SET, SYS_SET);
-    b.add(BuiltIn.SYS_SHOW, SYS_SHOW);
-    b.add(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL);
-    b.add(BuiltIn.SYS_UNSET, SYS_UNSET);
-    b.add(BuiltIn.TEST_BAG_SUM, TEST_BAG_SUM);
-    b.add(BuiltIn.TEST_FOO, TEST_FOO);
-    b.add(BuiltIn.TEST_HIGHLIGHT, TEST_HIGHLIGHT);
-    b.add(BuiltIn.TEST_LIST_SUM, TEST_LIST_SUM);
-    b.add(BuiltIn.TEST_OVER_COUNT, TEST_OVER_COUNT);
-    b.add(BuiltIn.TEST_OVER_SUM, TEST_OVER_SUM);
-    b.add(BuiltIn.VARIANT_PARSE, VARIANT_PARSE);
-    b.add(BuiltIn.VARIANT_PRINT, VARIANT_PRINT);
-    b.add(BuiltIn.Z_TEST_OVER_COUNT_BAG, Z_TEST_OVER_COUNT_BAG);
-    b.add(BuiltIn.Z_TEST_OVER_COUNT_LIST, Z_TEST_OVER_COUNT_LIST);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.DATALOG_EXECUTE, DATALOG_EXECUTE);
+    c.accept(BuiltIn.DATALOG_TRANSLATE, DATALOG_TRANSLATE);
+    c.accept(BuiltIn.DATALOG_VALIDATE, DATALOG_VALIDATE);
+    c.accept(BuiltIn.INTERACT_USE, INTERACT_USE);
+    c.accept(BuiltIn.INTERACT_USE_SILENTLY, INTERACT_USE_SILENTLY);
+    c.accept(BuiltIn.PP_ALIGN, PP_ALIGN);
+    c.accept(BuiltIn.PP_BESIDE, PP_BESIDE);
+    c.accept(BuiltIn.PP_BRACES, PP_BRACES);
+    c.accept(BuiltIn.PP_BRACKETS, PP_BRACKETS);
+    c.accept(BuiltIn.PP_CAT, PP_CAT);
+    c.accept(BuiltIn.PP_EMPTY, PP_EMPTY);
+    c.accept(BuiltIn.PP_ENCLOSE_SEP, PP_ENCLOSE_SEP);
+    c.accept(BuiltIn.PP_FILL_CAT, PP_FILL_CAT);
+    c.accept(BuiltIn.PP_FILL_SEP, PP_FILL_SEP);
+    c.accept(BuiltIn.PP_GROUP, PP_GROUP);
+    c.accept(BuiltIn.PP_HANG, PP_HANG);
+    c.accept(BuiltIn.PP_HARD_LINE, PP_HARD_LINE);
+    c.accept(BuiltIn.PP_HCAT, PP_HCAT);
+    c.accept(BuiltIn.PP_HSEP, PP_HSEP);
+    c.accept(BuiltIn.PP_INDENT, PP_INDENT);
+    c.accept(BuiltIn.PP_LINE, PP_LINE);
+    c.accept(BuiltIn.PP_LINE_BREAK, PP_LINE_BREAK);
+    c.accept(BuiltIn.PP_NEST, PP_NEST);
+    c.accept(BuiltIn.PP_PACK, PP_PACK);
+    c.accept(BuiltIn.PP_PARENS, PP_PARENS);
+    c.accept(BuiltIn.PP_PUNCTUATE, PP_PUNCTUATE);
+    c.accept(BuiltIn.PP_RENDER, PP_RENDER);
+    c.accept(BuiltIn.PP_SEP, PP_SEP);
+    c.accept(BuiltIn.PP_SOFT_BREAK, PP_SOFT_BREAK);
+    c.accept(BuiltIn.PP_SOFT_LINE, PP_SOFT_LINE);
+    c.accept(BuiltIn.PP_TEXT, PP_TEXT);
+    c.accept(BuiltIn.PP_VCAT, PP_VCAT);
+    c.accept(BuiltIn.PP_VSEP, PP_VSEP);
+    c.accept(BuiltIn.SYS_CLEAR_ENV, SYS_CLEAR_ENV);
+    c.accept(BuiltIn.SYS_COLOR_SCHEMES, SYS_COLOR_SCHEMES);
+    c.accept(BuiltIn.SYS_DEDUCE_COLOR_SCHEME, SYS_DEDUCE_COLOR_SCHEME);
+    c.accept(BuiltIn.SYS_ENV, (Macro) SysCodes::sysEnv);
+    c.accept(BuiltIn.SYS_PARSE_TREE, SYS_PARSE_TREE);
+    c.accept(BuiltIn.SYS_PLAN, SYS_PLAN);
+    c.accept(BuiltIn.SYS_PLAN_EX, SYS_PLAN_EX);
+    c.accept(BuiltIn.SYS_PLAN_OF, SYS_PLAN_OF);
+    c.accept(BuiltIn.SYS_SET, SYS_SET);
+    c.accept(BuiltIn.SYS_SHOW, SYS_SHOW);
+    c.accept(BuiltIn.SYS_SHOW_ALL, SYS_SHOW_ALL);
+    c.accept(BuiltIn.SYS_UNSET, SYS_UNSET);
+    c.accept(BuiltIn.TEST_BAG_SUM, TEST_BAG_SUM);
+    c.accept(BuiltIn.TEST_FOO, TEST_FOO);
+    c.accept(BuiltIn.TEST_HIGHLIGHT, TEST_HIGHLIGHT);
+    c.accept(BuiltIn.TEST_LIST_SUM, TEST_LIST_SUM);
+    c.accept(BuiltIn.TEST_OVER_COUNT, TEST_OVER_COUNT);
+    c.accept(BuiltIn.TEST_OVER_SUM, TEST_OVER_SUM);
+    c.accept(BuiltIn.VARIANT_PARSE, VARIANT_PARSE);
+    c.accept(BuiltIn.VARIANT_PRINT, VARIANT_PRINT);
+    c.accept(BuiltIn.Z_TEST_OVER_COUNT_BAG, Z_TEST_OVER_COUNT_BAG);
+    c.accept(BuiltIn.Z_TEST_OVER_COUNT_LIST, Z_TEST_OVER_COUNT_LIST);
   }
 
   // lint: sort until '#}' \

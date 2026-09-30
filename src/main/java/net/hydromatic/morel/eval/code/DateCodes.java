@@ -40,6 +40,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
@@ -51,7 +52,6 @@ import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.code.StringCodes.CharSource;
-import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -63,50 +63,50 @@ public final class DateCodes {
   private DateCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.DATE_COMPARE, DATE_COMPARE);
-    b.add(BuiltIn.DATE_DATE, DATE_DATE);
-    b.add(BuiltIn.DATE_DAY, DATE_DAY);
-    b.add(BuiltIn.DATE_FMT, DATE_FMT);
-    b.add(BuiltIn.DATE_FROM_STRING, DATE_FROM_STRING);
-    b.add(BuiltIn.DATE_FROM_TIME_LOCAL, DATE_FROM_TIME_LOCAL);
-    b.add(BuiltIn.DATE_FROM_TIME_UNIV, DATE_FROM_TIME_UNIV);
-    b.add(BuiltIn.DATE_HOUR, DATE_HOUR);
-    b.add(BuiltIn.DATE_IS_DST, DATE_IS_DST);
-    b.add(BuiltIn.DATE_LOCAL_OFFSET, DATE_LOCAL_OFFSET);
-    b.add(BuiltIn.DATE_MINUTE, DATE_MINUTE);
-    b.add(BuiltIn.DATE_MONTH_FN, DATE_MONTH_FN);
-    b.add(BuiltIn.DATE_SCAN, DATE_SCAN);
-    b.add(BuiltIn.DATE_SECOND, DATE_SECOND);
-    b.add(BuiltIn.DATE_TO_STRING, DATE_TO_STRING);
-    b.add(BuiltIn.DATE_TO_TIME, DATE_TO_TIME);
-    b.add(BuiltIn.DATE_WEEK_DAY, DATE_WEEK_DAY);
-    b.add(BuiltIn.DATE_YEAR, DATE_YEAR);
-    b.add(BuiltIn.DATE_YEAR_DAY, DATE_YEAR_DAY);
-    b.add(BuiltIn.TIME_ADD, TIME_ADD);
-    b.add(BuiltIn.TIME_COMPARE, TIME_COMPARE);
-    b.add(BuiltIn.TIME_FMT, TIME_FMT);
-    b.add(BuiltIn.TIME_FROM_MICROSECONDS, TIME_FROM_MICROSECONDS);
-    b.add(BuiltIn.TIME_FROM_MILLISECONDS, TIME_FROM_MILLISECONDS);
-    b.add(BuiltIn.TIME_FROM_NANOSECONDS, TIME_FROM_NANOSECONDS);
-    b.add(BuiltIn.TIME_FROM_REAL, TIME_FROM_REAL);
-    b.add(BuiltIn.TIME_FROM_SECONDS, TIME_FROM_SECONDS);
-    b.add(BuiltIn.TIME_FROM_STRING, TIME_FROM_STRING);
-    b.add(BuiltIn.TIME_GE, TIME_GE);
-    b.add(BuiltIn.TIME_GT, TIME_GT);
-    b.add(BuiltIn.TIME_LE, TIME_LE);
-    b.add(BuiltIn.TIME_LT, TIME_LT);
-    b.add(BuiltIn.TIME_NOW, TIME_NOW);
-    b.add(BuiltIn.TIME_SCAN, TIME_SCAN);
-    b.add(BuiltIn.TIME_SUBTRACT, TIME_SUBTRACT);
-    b.add(BuiltIn.TIME_TO_MICROSECONDS, TIME_TO_MICROSECONDS);
-    b.add(BuiltIn.TIME_TO_MILLISECONDS, TIME_TO_MILLISECONDS);
-    b.add(BuiltIn.TIME_TO_NANOSECONDS, TIME_TO_NANOSECONDS);
-    b.add(BuiltIn.TIME_TO_REAL, TIME_TO_REAL);
-    b.add(BuiltIn.TIME_TO_SECONDS, TIME_TO_SECONDS);
-    b.add(BuiltIn.TIME_TO_STRING, TIME_TO_STRING);
-    b.add(BuiltIn.TIME_ZERO_TIME, TIME_ZERO_TIME);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.DATE_COMPARE, DATE_COMPARE);
+    c.accept(BuiltIn.DATE_DATE, DATE_DATE);
+    c.accept(BuiltIn.DATE_DAY, DATE_DAY);
+    c.accept(BuiltIn.DATE_FMT, DATE_FMT);
+    c.accept(BuiltIn.DATE_FROM_STRING, DATE_FROM_STRING);
+    c.accept(BuiltIn.DATE_FROM_TIME_LOCAL, DATE_FROM_TIME_LOCAL);
+    c.accept(BuiltIn.DATE_FROM_TIME_UNIV, DATE_FROM_TIME_UNIV);
+    c.accept(BuiltIn.DATE_HOUR, DATE_HOUR);
+    c.accept(BuiltIn.DATE_IS_DST, DATE_IS_DST);
+    c.accept(BuiltIn.DATE_LOCAL_OFFSET, DATE_LOCAL_OFFSET);
+    c.accept(BuiltIn.DATE_MINUTE, DATE_MINUTE);
+    c.accept(BuiltIn.DATE_MONTH_FN, DATE_MONTH_FN);
+    c.accept(BuiltIn.DATE_SCAN, DATE_SCAN);
+    c.accept(BuiltIn.DATE_SECOND, DATE_SECOND);
+    c.accept(BuiltIn.DATE_TO_STRING, DATE_TO_STRING);
+    c.accept(BuiltIn.DATE_TO_TIME, DATE_TO_TIME);
+    c.accept(BuiltIn.DATE_WEEK_DAY, DATE_WEEK_DAY);
+    c.accept(BuiltIn.DATE_YEAR, DATE_YEAR);
+    c.accept(BuiltIn.DATE_YEAR_DAY, DATE_YEAR_DAY);
+    c.accept(BuiltIn.TIME_ADD, TIME_ADD);
+    c.accept(BuiltIn.TIME_COMPARE, TIME_COMPARE);
+    c.accept(BuiltIn.TIME_FMT, TIME_FMT);
+    c.accept(BuiltIn.TIME_FROM_MICROSECONDS, TIME_FROM_MICROSECONDS);
+    c.accept(BuiltIn.TIME_FROM_MILLISECONDS, TIME_FROM_MILLISECONDS);
+    c.accept(BuiltIn.TIME_FROM_NANOSECONDS, TIME_FROM_NANOSECONDS);
+    c.accept(BuiltIn.TIME_FROM_REAL, TIME_FROM_REAL);
+    c.accept(BuiltIn.TIME_FROM_SECONDS, TIME_FROM_SECONDS);
+    c.accept(BuiltIn.TIME_FROM_STRING, TIME_FROM_STRING);
+    c.accept(BuiltIn.TIME_GE, TIME_GE);
+    c.accept(BuiltIn.TIME_GT, TIME_GT);
+    c.accept(BuiltIn.TIME_LE, TIME_LE);
+    c.accept(BuiltIn.TIME_LT, TIME_LT);
+    c.accept(BuiltIn.TIME_NOW, TIME_NOW);
+    c.accept(BuiltIn.TIME_SCAN, TIME_SCAN);
+    c.accept(BuiltIn.TIME_SUBTRACT, TIME_SUBTRACT);
+    c.accept(BuiltIn.TIME_TO_MICROSECONDS, TIME_TO_MICROSECONDS);
+    c.accept(BuiltIn.TIME_TO_MILLISECONDS, TIME_TO_MILLISECONDS);
+    c.accept(BuiltIn.TIME_TO_NANOSECONDS, TIME_TO_NANOSECONDS);
+    c.accept(BuiltIn.TIME_TO_REAL, TIME_TO_REAL);
+    c.accept(BuiltIn.TIME_TO_SECONDS, TIME_TO_SECONDS);
+    c.accept(BuiltIn.TIME_TO_STRING, TIME_TO_STRING);
+    c.accept(BuiltIn.TIME_ZERO_TIME, TIME_ZERO_TIME);
   }
 
   // lint: sort until '#}' \

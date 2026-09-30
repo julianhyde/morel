@@ -37,6 +37,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.Macro;
@@ -55,7 +56,6 @@ import net.hydromatic.morel.type.RangeExtent;
 import net.hydromatic.morel.type.TupleType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
-import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 import org.jspecify.annotations.Nullable;
 
@@ -68,24 +68,24 @@ public final class RelationalCodes {
   private RelationalCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.RELATIONAL_COMPARE, RELATIONAL_COMPARE);
-    b.add(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT);
-    b.add(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY);
-    b.add(BuiltIn.RELATIONAL_ITERATE, RELATIONAL_ITERATE);
-    b.add(BuiltIn.RELATIONAL_MAX, RELATIONAL_MAX);
-    b.add(BuiltIn.RELATIONAL_MAX_BY, RELATIONAL_MAX_BY);
-    b.add(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN);
-    b.add(BuiltIn.RELATIONAL_MIN_BY, RELATIONAL_MIN_BY);
-    b.add(BuiltIn.RELATIONAL_NON_EMPTY, RELATIONAL_NON_EMPTY);
-    b.add(BuiltIn.RELATIONAL_ONLY, RELATIONAL_ONLY);
-    b.add(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM);
-    b.add(BuiltIn.Z_EXTENT, Z_EXTENT);
-    b.add(BuiltIn.Z_LIST, Z_LIST);
-    b.add(BuiltIn.Z_SUM_DECIMAL, Z_SUM_DECIMAL);
-    b.add(BuiltIn.Z_SUM_INT, Z_SUM_INT);
-    b.add(BuiltIn.Z_SUM_REAL, Z_SUM_REAL);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.RELATIONAL_COMPARE, RELATIONAL_COMPARE);
+    c.accept(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT);
+    c.accept(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY);
+    c.accept(BuiltIn.RELATIONAL_ITERATE, RELATIONAL_ITERATE);
+    c.accept(BuiltIn.RELATIONAL_MAX, RELATIONAL_MAX);
+    c.accept(BuiltIn.RELATIONAL_MAX_BY, RELATIONAL_MAX_BY);
+    c.accept(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN);
+    c.accept(BuiltIn.RELATIONAL_MIN_BY, RELATIONAL_MIN_BY);
+    c.accept(BuiltIn.RELATIONAL_NON_EMPTY, RELATIONAL_NON_EMPTY);
+    c.accept(BuiltIn.RELATIONAL_ONLY, RELATIONAL_ONLY);
+    c.accept(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM);
+    c.accept(BuiltIn.Z_EXTENT, Z_EXTENT);
+    c.accept(BuiltIn.Z_LIST, Z_LIST);
+    c.accept(BuiltIn.Z_SUM_DECIMAL, Z_SUM_DECIMAL);
+    c.accept(BuiltIn.Z_SUM_INT, Z_SUM_INT);
+    c.accept(BuiltIn.Z_SUM_REAL, Z_SUM_REAL);
   }
 
   // lint: sort until '#}' \

@@ -28,6 +28,7 @@ import static net.hydromatic.morel.eval.code.WordCodes.identity;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
@@ -36,7 +37,6 @@ import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.code.StringCodes.CharSource;
-import net.hydromatic.morel.util.PairList;
 
 /**
  * Implementations of built-in functions and values in the {@code Int}
@@ -47,37 +47,37 @@ public final class IntCodes {
   private IntCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.INT_ABS, INT_ABS);
-    b.add(BuiltIn.INT_COMPARE, INT_COMPARE);
-    b.add(BuiltIn.INT_DIV, INT_DIV);
-    b.add(BuiltIn.INT_FMT, INT_FMT);
-    b.add(BuiltIn.INT_FROM_INT, INT_FROM_INT);
-    b.add(BuiltIn.INT_FROM_LARGE, INT_FROM_LARGE);
-    b.add(BuiltIn.INT_FROM_STRING, INT_FROM_STRING);
-    b.add(BuiltIn.INT_MAX, INT_MAX);
-    b.add(BuiltIn.INT_MAX_INT, INT_MAX_INT);
-    b.add(BuiltIn.INT_MIN, INT_MIN);
-    b.add(BuiltIn.INT_MIN_INT, INT_MIN_INT);
-    b.add(BuiltIn.INT_MOD, INT_MOD);
-    b.add(BuiltIn.INT_OP_GE, INT_OP_GE);
-    b.add(BuiltIn.INT_OP_GT, INT_OP_GT);
-    b.add(BuiltIn.INT_OP_LE, INT_OP_LE);
-    b.add(BuiltIn.INT_OP_LT, INT_OP_LT);
-    b.add(BuiltIn.INT_OP_MINUS, INT_OP_MINUS);
-    b.add(BuiltIn.INT_OP_NEGATE, INT_OP_NEGATE);
-    b.add(BuiltIn.INT_OP_PLUS, INT_OP_PLUS);
-    b.add(BuiltIn.INT_OP_TIMES, INT_OP_TIMES);
-    b.add(BuiltIn.INT_PRECISION, INT_PRECISION);
-    b.add(BuiltIn.INT_QUOT, INT_QUOT);
-    b.add(BuiltIn.INT_REM, INT_REM);
-    b.add(BuiltIn.INT_SAME_SIGN, INT_SAME_SIGN);
-    b.add(BuiltIn.INT_SCAN, INT_SCAN);
-    b.add(BuiltIn.INT_SIGN, INT_SIGN);
-    b.add(BuiltIn.INT_TO_INT, INT_TO_INT);
-    b.add(BuiltIn.INT_TO_LARGE, INT_TO_LARGE);
-    b.add(BuiltIn.INT_TO_STRING, INT_TO_STRING);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.INT_ABS, INT_ABS);
+    c.accept(BuiltIn.INT_COMPARE, INT_COMPARE);
+    c.accept(BuiltIn.INT_DIV, INT_DIV);
+    c.accept(BuiltIn.INT_FMT, INT_FMT);
+    c.accept(BuiltIn.INT_FROM_INT, INT_FROM_INT);
+    c.accept(BuiltIn.INT_FROM_LARGE, INT_FROM_LARGE);
+    c.accept(BuiltIn.INT_FROM_STRING, INT_FROM_STRING);
+    c.accept(BuiltIn.INT_MAX, INT_MAX);
+    c.accept(BuiltIn.INT_MAX_INT, INT_MAX_INT);
+    c.accept(BuiltIn.INT_MIN, INT_MIN);
+    c.accept(BuiltIn.INT_MIN_INT, INT_MIN_INT);
+    c.accept(BuiltIn.INT_MOD, INT_MOD);
+    c.accept(BuiltIn.INT_OP_GE, INT_OP_GE);
+    c.accept(BuiltIn.INT_OP_GT, INT_OP_GT);
+    c.accept(BuiltIn.INT_OP_LE, INT_OP_LE);
+    c.accept(BuiltIn.INT_OP_LT, INT_OP_LT);
+    c.accept(BuiltIn.INT_OP_MINUS, INT_OP_MINUS);
+    c.accept(BuiltIn.INT_OP_NEGATE, INT_OP_NEGATE);
+    c.accept(BuiltIn.INT_OP_PLUS, INT_OP_PLUS);
+    c.accept(BuiltIn.INT_OP_TIMES, INT_OP_TIMES);
+    c.accept(BuiltIn.INT_PRECISION, INT_PRECISION);
+    c.accept(BuiltIn.INT_QUOT, INT_QUOT);
+    c.accept(BuiltIn.INT_REM, INT_REM);
+    c.accept(BuiltIn.INT_SAME_SIGN, INT_SAME_SIGN);
+    c.accept(BuiltIn.INT_SCAN, INT_SCAN);
+    c.accept(BuiltIn.INT_SIGN, INT_SIGN);
+    c.accept(BuiltIn.INT_TO_INT, INT_TO_INT);
+    c.accept(BuiltIn.INT_TO_LARGE, INT_TO_LARGE);
+    c.accept(BuiltIn.INT_TO_STRING, INT_TO_STRING);
   }
 
   // lint: sort until '#}' \

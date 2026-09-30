@@ -27,6 +27,7 @@ import static net.hydromatic.morel.eval.code.StringCodes.scanString;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
@@ -35,7 +36,6 @@ import net.hydromatic.morel.eval.Applicable2;
 import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.code.StringCodes.CharSource;
-import net.hydromatic.morel.util.PairList;
 
 /**
  * Implementations of built-in functions and values in the {@code Word}
@@ -46,46 +46,46 @@ public final class WordCodes {
   private WordCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.WORD_ANDB, WORD_ANDB);
-    b.add(BuiltIn.WORD_COMPARE, WORD_COMPARE);
-    b.add(BuiltIn.WORD_DIV, WORD_DIV);
-    b.add(BuiltIn.WORD_FMT, WORD_FMT);
-    b.add(BuiltIn.WORD_FROM_INT, WORD_FROM_INT);
-    b.add(BuiltIn.WORD_FROM_LARGE, WORD_FROM_LARGE);
-    b.add(BuiltIn.WORD_FROM_LARGE_INT, WORD_FROM_LARGE_INT);
-    b.add(BuiltIn.WORD_FROM_LARGE_WORD, WORD_FROM_LARGE_WORD);
-    b.add(BuiltIn.WORD_FROM_STRING, WORD_FROM_STRING);
-    b.add(BuiltIn.WORD_MAX, WORD_MAX);
-    b.add(BuiltIn.WORD_MIN, WORD_MIN);
-    b.add(BuiltIn.WORD_MOD, WORD_MOD);
-    b.add(BuiltIn.WORD_NOTB, WORD_NOTB);
-    b.add(BuiltIn.WORD_OP_GE, WORD_OP_GE);
-    b.add(BuiltIn.WORD_OP_GT, WORD_OP_GT);
-    b.add(BuiltIn.WORD_OP_LE, WORD_OP_LE);
-    b.add(BuiltIn.WORD_OP_LT, WORD_OP_LT);
-    b.add(BuiltIn.WORD_OP_MINUS, WORD_OP_MINUS);
-    b.add(BuiltIn.WORD_OP_NEGATE, WORD_OP_NEGATE);
-    b.add(BuiltIn.WORD_OP_PLUS, WORD_OP_PLUS);
-    b.add(BuiltIn.WORD_OP_SHIFT_LEFT, WORD_OP_SHIFT_LEFT);
-    b.add(BuiltIn.WORD_OP_SHIFT_RIGHT, WORD_OP_SHIFT_RIGHT);
-    b.add(
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.WORD_ANDB, WORD_ANDB);
+    c.accept(BuiltIn.WORD_COMPARE, WORD_COMPARE);
+    c.accept(BuiltIn.WORD_DIV, WORD_DIV);
+    c.accept(BuiltIn.WORD_FMT, WORD_FMT);
+    c.accept(BuiltIn.WORD_FROM_INT, WORD_FROM_INT);
+    c.accept(BuiltIn.WORD_FROM_LARGE, WORD_FROM_LARGE);
+    c.accept(BuiltIn.WORD_FROM_LARGE_INT, WORD_FROM_LARGE_INT);
+    c.accept(BuiltIn.WORD_FROM_LARGE_WORD, WORD_FROM_LARGE_WORD);
+    c.accept(BuiltIn.WORD_FROM_STRING, WORD_FROM_STRING);
+    c.accept(BuiltIn.WORD_MAX, WORD_MAX);
+    c.accept(BuiltIn.WORD_MIN, WORD_MIN);
+    c.accept(BuiltIn.WORD_MOD, WORD_MOD);
+    c.accept(BuiltIn.WORD_NOTB, WORD_NOTB);
+    c.accept(BuiltIn.WORD_OP_GE, WORD_OP_GE);
+    c.accept(BuiltIn.WORD_OP_GT, WORD_OP_GT);
+    c.accept(BuiltIn.WORD_OP_LE, WORD_OP_LE);
+    c.accept(BuiltIn.WORD_OP_LT, WORD_OP_LT);
+    c.accept(BuiltIn.WORD_OP_MINUS, WORD_OP_MINUS);
+    c.accept(BuiltIn.WORD_OP_NEGATE, WORD_OP_NEGATE);
+    c.accept(BuiltIn.WORD_OP_PLUS, WORD_OP_PLUS);
+    c.accept(BuiltIn.WORD_OP_SHIFT_LEFT, WORD_OP_SHIFT_LEFT);
+    c.accept(BuiltIn.WORD_OP_SHIFT_RIGHT, WORD_OP_SHIFT_RIGHT);
+    c.accept(
         BuiltIn.WORD_OP_SHIFT_RIGHT_ARITHMETIC, WORD_OP_SHIFT_RIGHT_ARITHMETIC);
-    b.add(BuiltIn.WORD_OP_TIMES, WORD_OP_TIMES);
-    b.add(BuiltIn.WORD_ORB, WORD_ORB);
-    b.add(BuiltIn.WORD_SCAN, WORD_SCAN);
-    b.add(BuiltIn.WORD_TO_INT, WORD_TO_INT);
-    b.add(BuiltIn.WORD_TO_INT_X, WORD_TO_INT_X);
-    b.add(BuiltIn.WORD_TO_LARGE, WORD_TO_LARGE);
-    b.add(BuiltIn.WORD_TO_LARGE_INT, WORD_TO_LARGE_INT);
-    b.add(BuiltIn.WORD_TO_LARGE_INT_X, WORD_TO_LARGE_INT_X);
-    b.add(BuiltIn.WORD_TO_LARGE_WORD, WORD_TO_LARGE_WORD);
-    b.add(BuiltIn.WORD_TO_LARGE_WORD_X, WORD_TO_LARGE_WORD_X);
-    b.add(BuiltIn.WORD_TO_LARGE_X, WORD_TO_LARGE_X);
-    b.add(BuiltIn.WORD_TO_STRING, WORD_TO_STRING);
-    b.add(BuiltIn.WORD_WORD_SIZE, WORD_WORD_SIZE);
-    b.add(BuiltIn.WORD_XORB, WORD_XORB);
+    c.accept(BuiltIn.WORD_OP_TIMES, WORD_OP_TIMES);
+    c.accept(BuiltIn.WORD_ORB, WORD_ORB);
+    c.accept(BuiltIn.WORD_SCAN, WORD_SCAN);
+    c.accept(BuiltIn.WORD_TO_INT, WORD_TO_INT);
+    c.accept(BuiltIn.WORD_TO_INT_X, WORD_TO_INT_X);
+    c.accept(BuiltIn.WORD_TO_LARGE, WORD_TO_LARGE);
+    c.accept(BuiltIn.WORD_TO_LARGE_INT, WORD_TO_LARGE_INT);
+    c.accept(BuiltIn.WORD_TO_LARGE_INT_X, WORD_TO_LARGE_INT_X);
+    c.accept(BuiltIn.WORD_TO_LARGE_WORD, WORD_TO_LARGE_WORD);
+    c.accept(BuiltIn.WORD_TO_LARGE_WORD_X, WORD_TO_LARGE_WORD_X);
+    c.accept(BuiltIn.WORD_TO_LARGE_X, WORD_TO_LARGE_X);
+    c.accept(BuiltIn.WORD_TO_STRING, WORD_TO_STRING);
+    c.accept(BuiltIn.WORD_WORD_SIZE, WORD_WORD_SIZE);
+    c.accept(BuiltIn.WORD_XORB, WORD_XORB);
   }
 
   // lint: sort until '#}' \

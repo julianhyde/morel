@@ -23,6 +23,7 @@ import static net.hydromatic.morel.eval.Codes.optionSome;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
@@ -32,7 +33,6 @@ import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.Unit;
-import net.hydromatic.morel.util.PairList;
 import org.apache.calcite.runtime.FlatLists;
 import org.jspecify.annotations.NonNull;
 
@@ -45,31 +45,31 @@ public final class OptionCodes {
   private OptionCodes() {}
 
   /** Registers the implementations in this class. */
-  public static void register(PairList<BuiltIn, Object> b) {
-    // lint: sort until '#}' where '##b\.add\(BuiltIn' erase 'b\.'
-    b.add(BuiltIn.EITHER_APP, EITHER_APP);
-    b.add(BuiltIn.EITHER_APP_LEFT, EITHER_APP_LEFT);
-    b.add(BuiltIn.EITHER_APP_RIGHT, EITHER_APP_RIGHT);
-    b.add(BuiltIn.EITHER_AS_LEFT, EITHER_AS_LEFT);
-    b.add(BuiltIn.EITHER_AS_RIGHT, EITHER_AS_RIGHT);
-    b.add(BuiltIn.EITHER_FOLD, EITHER_FOLD);
-    b.add(BuiltIn.EITHER_IS_LEFT, EITHER_IS_LEFT);
-    b.add(BuiltIn.EITHER_IS_RIGHT, EITHER_IS_RIGHT);
-    b.add(BuiltIn.EITHER_MAP, EITHER_MAP);
-    b.add(BuiltIn.EITHER_MAP_LEFT, EITHER_MAP_LEFT);
-    b.add(BuiltIn.EITHER_MAP_RIGHT, EITHER_MAP_RIGHT);
-    b.add(BuiltIn.EITHER_PARTITION, EITHER_PARTITION);
-    b.add(BuiltIn.EITHER_PROJ, EITHER_PROJ);
-    b.add(BuiltIn.OPTION_APP, OPTION_APP);
-    b.add(BuiltIn.OPTION_COMPOSE, OPTION_COMPOSE);
-    b.add(BuiltIn.OPTION_COMPOSE_PARTIAL, OPTION_COMPOSE_PARTIAL);
-    b.add(BuiltIn.OPTION_FILTER, OPTION_FILTER);
-    b.add(BuiltIn.OPTION_GET_OPT, OPTION_GET_OPT);
-    b.add(BuiltIn.OPTION_IS_SOME, OPTION_IS_SOME);
-    b.add(BuiltIn.OPTION_JOIN, OPTION_JOIN);
-    b.add(BuiltIn.OPTION_MAP, OPTION_MAP);
-    b.add(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL);
-    b.add(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF);
+  public static void register(BiConsumer<BuiltIn, Object> c) {
+    // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
+    c.accept(BuiltIn.EITHER_APP, EITHER_APP);
+    c.accept(BuiltIn.EITHER_APP_LEFT, EITHER_APP_LEFT);
+    c.accept(BuiltIn.EITHER_APP_RIGHT, EITHER_APP_RIGHT);
+    c.accept(BuiltIn.EITHER_AS_LEFT, EITHER_AS_LEFT);
+    c.accept(BuiltIn.EITHER_AS_RIGHT, EITHER_AS_RIGHT);
+    c.accept(BuiltIn.EITHER_FOLD, EITHER_FOLD);
+    c.accept(BuiltIn.EITHER_IS_LEFT, EITHER_IS_LEFT);
+    c.accept(BuiltIn.EITHER_IS_RIGHT, EITHER_IS_RIGHT);
+    c.accept(BuiltIn.EITHER_MAP, EITHER_MAP);
+    c.accept(BuiltIn.EITHER_MAP_LEFT, EITHER_MAP_LEFT);
+    c.accept(BuiltIn.EITHER_MAP_RIGHT, EITHER_MAP_RIGHT);
+    c.accept(BuiltIn.EITHER_PARTITION, EITHER_PARTITION);
+    c.accept(BuiltIn.EITHER_PROJ, EITHER_PROJ);
+    c.accept(BuiltIn.OPTION_APP, OPTION_APP);
+    c.accept(BuiltIn.OPTION_COMPOSE, OPTION_COMPOSE);
+    c.accept(BuiltIn.OPTION_COMPOSE_PARTIAL, OPTION_COMPOSE_PARTIAL);
+    c.accept(BuiltIn.OPTION_FILTER, OPTION_FILTER);
+    c.accept(BuiltIn.OPTION_GET_OPT, OPTION_GET_OPT);
+    c.accept(BuiltIn.OPTION_IS_SOME, OPTION_IS_SOME);
+    c.accept(BuiltIn.OPTION_JOIN, OPTION_JOIN);
+    c.accept(BuiltIn.OPTION_MAP, OPTION_MAP);
+    c.accept(BuiltIn.OPTION_MAP_PARTIAL, OPTION_MAP_PARTIAL);
+    c.accept(BuiltIn.OPTION_VAL_OF, OPTION_VAL_OF);
   }
 
   // lint: sort until '#}' \
