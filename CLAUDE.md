@@ -221,7 +221,7 @@ When implementing a structure from the
    argument — or the first element of its tuple argument — is the structure's
    own type, following the same pattern as `REAL_COMPARE`.
 
-2. **`eval/codes/{Group}Codes.java`** — Add an `Applicable`
+2. **`eval/code/{Group}Codes.java`** — Add an `Applicable`
    implementation for each function, as a `private static final` field
    in the class for the structure's group (or a new class, which must
    also be called from the static initializer in `Codes`), and add it
@@ -286,14 +286,14 @@ When implementing a structure from the
 Notes:
 - In Morel, `LargeReal.real` = `real` and `LargeInt.int` = `int`.
 - Enum constants in `BuiltIn.java`, and fields and `register` entries in
-  `eval/codes/*Codes.java`, must be in alphabetical order within their
+  `eval/code/*Codes.java`, must be in alphabetical order within their
   sort region (checked by `LintTest.testLint`).
 - For opaque eqtypes (like `time`) backed by non-List Java objects,
   `Pretty.java` handles printing via `!(value instanceof List)` in
   `prettyDataType`.
 - A `.sig` file is signature-driven for lint: as soon as `lib/{name}.sig`
   exists, `LintTest` (`testSignatures`, `testStructureDocs`,
-  `testGeneratedSections`) requires the full `BuiltIn`/`eval.codes`
+  `testGeneratedSections`) requires the full `BuiltIn`/`eval.code`
   implementation, a `docs/lib/{name}.md` page, and the
   `index.md`/`reference.md` rows. You cannot land the `.sig` on its own;
   add it together with the implementation and docs.
@@ -360,7 +360,7 @@ don't fit in `int` and cannot honor the spec's "never raises" for `toLargeIntX`.
 3. Update `TypeResolver.java` for type checking
 4. Add compilation logic in `Compiler.java`
 5. Add evaluation logic in `Codes.java` (`Code` nodes) or
-   `eval/codes/*Codes.java` (built-in functions)
+   `eval/code/*Codes.java` (built-in functions)
 6. Add tests
 
 ### Debugging Type Errors
