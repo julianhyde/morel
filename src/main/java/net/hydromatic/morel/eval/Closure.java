@@ -109,7 +109,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
         return code.eval(new Stack(session, code.maxSlots()));
       }
     }
-    throw new Codes.MorelRuntimeException(Codes.BuiltInExn.BIND, pos);
+    throw new MorelRuntimeException(BuiltInExn.BIND, pos);
   }
 
   /**
@@ -395,8 +395,7 @@ public class Closure implements Comparable<Closure>, Applicable, Applicable1 {
         }
         stack.restore(armTop);
       }
-      throw new Codes.MorelRuntimeException(
-          Codes.BuiltInExn.BIND, matchCode.pos);
+      throw new MorelRuntimeException(BuiltInExn.BIND, matchCode.pos);
     }
 
     /**

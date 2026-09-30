@@ -105,11 +105,25 @@ Parse → Type Check → Compile → Evaluate.
 
 **Evaluation (`net.hydromatic.morel.eval`)**
 - `Code`: Interface for executable code nodes
-- `Codes`: Implementations of all code types
+- `Codes`: Implementations of all code types, and the registry of
+  built-in values (`BUILT_IN_VALUES`)
+- `BuiltInExn`, `MorelRuntimeException`: Built-in exceptions and the
+  Java exception that carries them
 - `EvalEnv`: Runtime environment mapping variables to values
 - `Closure`: Function values that capture their environment
 - `Applicable`: Function objects with apply methods
 - `Session`: Maintains REPL state and configuration
+
+**Built-in implementations (`net.hydromatic.morel.eval.code`)**
+- One class per group of related structures: `ListCodes` (Bag, List,
+  ListPair), `StringCodes` (Char, String), `RealCodes` (Real, Math),
+  `DateCodes` (Date, Time), `OptionCodes` (Option, Either),
+  `GeneralCodes` (General, Op, Order, Bool, Fn), `SysCodes` (Sys,
+  Interact, Datalog, Test, Variant, PP), `IntCodes`, `WordCodes`,
+  `DecimalCodes`, `VectorCodes`, `RelationalCodes`, `RangeCodes`
+- Each has a `register` method called from `Codes`' static initializer
+- `BaseApplicable*`, `BasePositionedApplicable*`: package-private base
+  classes for implementations
 
 **Datalog (`net.hydromatic.morel.datalog`)**
 - `DatalogParserImpl`: JavaCC parser for Datalog syntax
@@ -207,9 +221,12 @@ When implementing a structure from the
    argument — or the first element of its tuple argument — is the structure's
    own type, following the same pattern as `REAL_COMPARE`.
 
-2. **`Codes.java`** — Add an `Applicable` implementation for each function
-   and register it in the `CODES` static map. If the structure has an
-   exception (e.g., `exception Time`), add it to `BuiltInExn`.
+2. **`eval/code/{Group}Codes.java`** — Add an `Applicable`
+   implementation for each function, as a `private static final` field
+   in the class for the structure's group (or a new class, which must
+   also be called from the static initializer in `Codes`), and add it
+   to that class's `register` method. If the structure has an exception
+   (e.g., `exception Time`), add it to `BuiltInExn`.
 
 3. **`lib/{name}.sig`** — Add a signature file declaring each `val`,
    `eqtype`/`type`, `datatype`, and `exception` in the structure. Types
@@ -268,14 +285,15 @@ When implementing a structure from the
 
 Notes:
 - In Morel, `LargeReal.real` = `real` and `LargeInt.int` = `int`.
-- Enum constants in `BuiltIn.java` and `Codes.java` must be in alphabetical
-  order within their sort region (checked by `LintTest.testLint`).
+- Enum constants in `BuiltIn.java`, and fields and `register` entries in
+  `eval/code/*Codes.java`, must be in alphabetical order within their
+  sort region (checked by `LintTest.testLint`).
 - For opaque eqtypes (like `time`) backed by non-List Java objects,
   `Pretty.java` handles printing via `!(value instanceof List)` in
   `prettyDataType`.
 - A `.sig` file is signature-driven for lint: as soon as `lib/{name}.sig`
   exists, `LintTest` (`testSignatures`, `testStructureDocs`,
-  `testGeneratedSections`) requires the full `BuiltIn`/`Codes`
+  `testGeneratedSections`) requires the full `BuiltIn`/`eval.code`
   implementation, a `docs/lib/{name}.md` page, and the
   `index.md`/`reference.md` rows. You cannot land the `.sig` on its own;
   add it together with the implementation and docs.
@@ -341,7 +359,8 @@ don't fit in `int` and cannot honor the spec's "never raises" for `toLargeIntX`.
 2. Add AST node types to `Ast.java` if needed
 3. Update `TypeResolver.java` for type checking
 4. Add compilation logic in `Compiler.java`
-5. Add evaluation logic in `Codes.java`
+5. Add evaluation logic in `Codes.java` (`Code` nodes) or
+   `eval/code/*Codes.java` (built-in functions)
 6. Add tests
 
 ### Debugging Type Errors

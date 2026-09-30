@@ -24,9 +24,9 @@ import java.util.List;
  * Applicable whose argument is a 4-tuple.
  *
  * <p>Implementations that use {@code Applicable4} are more efficient and
- * concise than {@link ApplicableImpl} because there is no need to create an
- * ephemeral tuple (Java {@link List}) to pass the arguments, and Java's
- * generics provide the casting.
+ * concise than {@link net.hydromatic.morel.eval.code.ApplicableImpl} because
+ * there is no need to create an ephemeral tuple (Java {@link List}) to pass the
+ * arguments, and Java's generics provide the casting.
  *
  * <p>But the rewrite assumes that the function is <b>strict</b> (always
  * evaluates all arguments, even if the function throws) and doesn't use {@link

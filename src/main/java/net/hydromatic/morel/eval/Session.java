@@ -232,8 +232,8 @@ public class Session {
     INSTANCE {
       @Override
       public void handle(RuntimeException e, StringBuilder buf) {
-        if (e instanceof Codes.MorelRuntimeException) {
-          ((Codes.MorelRuntimeException) e).describeTo(buf);
+        if (e instanceof MorelRuntimeException) {
+          ((MorelRuntimeException) e).describeTo(buf);
         } else if (e instanceof CompileException) {
           buf.append(e.getMessage());
         } else {
@@ -252,7 +252,7 @@ public class Session {
 
     @Override
     public void use(String fileName, boolean silent, Pos pos) {
-      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.EVAL_ONLY, pos);
+      throw new MorelRuntimeException(BuiltInExn.EVAL_ONLY, pos);
     }
   }
 }
