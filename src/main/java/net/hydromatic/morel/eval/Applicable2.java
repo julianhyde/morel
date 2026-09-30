@@ -54,8 +54,8 @@ import java.util.List;
  *
  * @see Applicable3
  * @see Applicable4
- * @see Codes.BaseApplicable2
- * @see Codes.BasePositionedApplicable2
+ * @see net.hydromatic.morel.eval.code.BaseApplicable2
+ * @see net.hydromatic.morel.eval.code.BasePositionedApplicable2
  * @param <R> return type
  * @param <A0> type of argument 0
  * @param <A1> type of argument 1

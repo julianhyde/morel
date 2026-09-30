@@ -16,7 +16,7 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval;
+package net.hydromatic.morel.eval.code;
 
 import static java.util.Objects.requireNonNull;
 
@@ -27,6 +27,9 @@ import java.util.List;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.BuiltInExn;
+import net.hydromatic.morel.eval.Discrete;
+import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.util.PairList;
 import org.jspecify.annotations.Nullable;
 
@@ -127,8 +130,7 @@ class Bound {
       } else {
         start = discrete.next(lo.value);
         if (start == null) {
-          throw new Codes.MorelRuntimeException(
-              Codes.BuiltInExn.SIZE, pos); // empty range
+          throw new MorelRuntimeException(BuiltInExn.SIZE, pos); // empty range
         }
       }
     }
@@ -138,7 +140,7 @@ class Bound {
     final BigInteger count =
         discrete.ordinal(end).subtract(discrete.ordinal(start));
     if (count.compareTo(maxLength) >= 0) {
-      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, pos);
+      throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
     }
 
     Comparator<Object> cmp = discrete.comparator();

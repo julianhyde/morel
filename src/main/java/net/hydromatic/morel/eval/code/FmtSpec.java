@@ -16,8 +16,9 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval;
+package net.hydromatic.morel.eval.code;
 
+import static net.hydromatic.morel.util.Static.floatToString;
 import static net.hydromatic.morel.util.Static.padRightTo;
 
 import java.math.BigDecimal;
@@ -25,6 +26,8 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.List;
 import net.hydromatic.morel.ast.Pos;
+import net.hydromatic.morel.eval.BuiltInExn;
+import net.hydromatic.morel.eval.MorelRuntimeException;
 
 /**
  * Real formatting specification, after validation: a kind ("SCI", "FIX", "GEN",
@@ -47,21 +50,19 @@ class FmtSpec {
    * (SOME ~1))} raises {@code Size} immediately, matching SML/NJ's behavior;
    * {@code pos} is the position to report.
    */
-  static FmtSpec parse(List spec, Pos pos) {
+  @SuppressWarnings("unchecked")
+  static FmtSpec parse(List<Object> spec, Pos pos) {
     final String kind = (String) spec.get(0);
     if (kind.equals("EXACT")) {
       return new FmtSpec("EXACT", 0);
     }
-    final List opt = (List) spec.get(1);
+    final List<Object> opt = (List<Object>) spec.get(1);
     final Integer n = opt.size() == 2 ? (Integer) opt.get(1) : null;
     final int defaultN;
     final int minN;
     switch (kind) {
-      case "SCI":
-        defaultN = 6;
-        minN = 0;
-        break;
       case "FIX":
+      case "SCI":
         defaultN = 6;
         minN = 0;
         break;
@@ -73,7 +74,7 @@ class FmtSpec {
         throw new AssertionError("unknown realfmt: " + kind);
     }
     if (n != null && n < minN) {
-      throw new Codes.MorelRuntimeException(Codes.BuiltInExn.SIZE, pos);
+      throw new MorelRuntimeException(BuiltInExn.SIZE, pos);
     }
     return new FmtSpec(kind, n != null ? n : defaultN);
   }
@@ -145,7 +146,7 @@ class FmtSpec {
 
   /** Formats {@code abs} as a non-negative BigDecimal with the bits of r. */
   private static BigDecimal toBigDecimal(float r) {
-    return new BigDecimal(Codes.FLOAT_TO_STRING.apply(Math.abs(r)));
+    return new BigDecimal(floatToString(Math.abs(r)));
   }
 
   private static StringBuilder formatFix(
@@ -193,7 +194,7 @@ class FmtSpec {
     final BigDecimal bd = abs.stripTrailingZeros();
     // Emit as 0.<digits>; the exponent is one greater than the standard
     // scientific exponent because the implied decimal point moves left by 1.
-    sb.append("0.").append(bd.unscaledValue().toString());
+    sb.append("0.").append(bd.unscaledValue());
     final int exp = decimalExp(bd) + 1;
     if (exp == 0) {
       return sb;

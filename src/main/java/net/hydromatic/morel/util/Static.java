@@ -26,6 +26,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -55,6 +58,13 @@ public class Static {
    */
   public static final boolean SKIP =
       getBooleanProperty("skipMorelBuiltIns", false);
+
+  /**
+   * Whether {@link Float#toString(float)} returns the shortest decimal that
+   * converts back to the same {@code float}, as it does from JDK 19.
+   */
+  private static final boolean FLOAT_TO_STRING_IS_SHORTEST =
+      JavaVersion.CURRENT.compareTo(JavaVersion.of(19)) >= 0;
 
   /**
    * Returns the value of a system property, converted into a boolean value.
@@ -557,6 +567,62 @@ public class Static {
       sb.append(c);
     }
     return sb;
+  }
+
+  /**
+   * Converts a {@code float} to a string in the format of {@link
+   * Float#toString(float)} in JDK 19 and later, whatever the current JDK.
+   */
+  public static String floatToString(float f) {
+    return FLOAT_TO_STRING_IS_SHORTEST ? Float.toString(f) : floatToString0(f);
+  }
+
+  /**
+   * Converts a {@code float} to a string, emulating JDK 19 and later on older
+   * JDKs.
+   *
+   * <p>Before JDK 19, {@link Float#toString(float)} sometimes returns more
+   * digits than necessary (e.g. "1.50000005E10" rather than "1.5E10"), or a
+   * decimal that round-trips but is not the closest (JDK-4511638). We return
+   * the decimal with the fewest digits (at least 2) that converts back to
+   * {@code f}, and among those, the one closest to {@code f}.
+   */
+  private static String floatToString0(float f) {
+    final String s = Float.toString(f);
+    if (Float.isNaN(f) || Float.isInfinite(f) || f == 0f) {
+      return s;
+    }
+    final int n =
+        Math.max(2, new BigDecimal(s).stripTrailingZeros().precision());
+    final BigDecimal exact = new BigDecimal(f);
+    for (int p = 2; p <= n; p++) {
+      final BigDecimal d =
+          exact.round(new MathContext(p, RoundingMode.HALF_EVEN));
+      if (Float.parseFloat(d.toString()) == f) {
+        return formatFloat(d.stripTrailingZeros());
+      }
+    }
+    return s;
+  }
+
+  /**
+   * Formats a decimal in the style of {@link Float#toString(float)}: plain
+   * notation if its magnitude is in [10<sup>-3</sup>, 10<sup>7</sup>),
+   * otherwise scientific notation; always at least one digit after the point.
+   */
+  private static String formatFloat(BigDecimal d) {
+    final String digits = d.unscaledValue().abs().toString();
+    final int exp = digits.length() - 1 - d.scale();
+    if (exp >= -3 && exp < 7) {
+      final String plain = d.toPlainString();
+      return plain.indexOf('.') < 0 ? plain + ".0" : plain;
+    }
+    return (d.signum() < 0 ? "-" : "")
+        + digits.charAt(0)
+        + "."
+        + (digits.length() > 1 ? digits.substring(1) : "0")
+        + "E"
+        + exp;
   }
 }
 

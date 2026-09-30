@@ -51,7 +51,8 @@ import net.hydromatic.morel.compile.Environment;
 import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
-import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.BuiltInExn;
+import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
@@ -1031,7 +1032,7 @@ public class Shell {
               "[use failed: Io: openIn failed on "
                   + fileName
                   + ", No such file or directory]");
-          throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR, pos);
+          throw new MorelRuntimeException(BuiltInExn.ERROR, pos);
         }
         final Integer maxDepth =
             Prop.MAX_USE_DEPTH.optionalIntValue(session.map);
@@ -1040,7 +1041,7 @@ public class Shell {
               "[use failed: Io: openIn failed on "
                   + fileName
                   + ", Too many open files]");
-          throw new Codes.MorelRuntimeException(Codes.BuiltInExn.ERROR, pos);
+          throw new MorelRuntimeException(BuiltInExn.ERROR, pos);
         }
         try (FileReader fileReader = new FileReader(file);
             BufferedReader bufferedReader = new BufferedReader(fileReader)) {

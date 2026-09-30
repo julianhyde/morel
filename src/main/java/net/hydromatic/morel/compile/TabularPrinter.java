@@ -342,7 +342,7 @@ class TabularPrinter {
     }
     if (value instanceof Float) {
       // Tabular output writes negation as '-', not the '~' of Standard ML.
-      return Codes.floatToString((Float) value, '-');
+      return Codes.realToString((Float) value, '-');
     }
     if (value instanceof BigDecimal) {
       return Decimals.toString((BigDecimal) value, '-');

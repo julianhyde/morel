@@ -60,7 +60,7 @@ import java.util.Map;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.eval.Applicable1;
-import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.ForeignValue;
 import net.hydromatic.morel.parse.MorelParseException;
@@ -911,8 +911,7 @@ public class MainTest {
             + "  $String.substring(\"hello\",\n"
             + "    1, 15)$ ^\n"
             + "  \"y\"\n")
-        .assertEvalError(
-            pos -> throwsA(Codes.BuiltInExn.SUBSCRIPT.mlName(), pos));
+        .assertEvalError(pos -> throwsA(BuiltInExn.SUBSCRIPT.mlName(), pos));
   }
 
   /** Tests the name of {@link TypeVar}. */

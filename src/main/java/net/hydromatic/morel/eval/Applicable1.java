@@ -34,8 +34,8 @@ package net.hydromatic.morel.eval;
  * @see Applicable2#curry()
  * @see Applicable3#curry()
  * @see Applicable4#curry()
- * @see Codes.BaseApplicable1
- * @see Codes.BasePositionedApplicable1
+ * @see net.hydromatic.morel.eval.code.BaseApplicable1
+ * @see net.hydromatic.morel.eval.code.BasePositionedApplicable1
  * @param <R> return type
  * @param <A0> type of argument
  */

@@ -101,7 +101,7 @@ public class Comparators {
    * Float} is a {@code real}, and is compared by {@link #compareReals}; other
    * values are compared using their natural order.
    */
-  static int comparePartial(Object o1, Object o2) {
+  public static int comparePartial(Object o1, Object o2) {
     return o1 instanceof Float ? compareReals(o1, o2) : compare(o1, o2);
   }
 

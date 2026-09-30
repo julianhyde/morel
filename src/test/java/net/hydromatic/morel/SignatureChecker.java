@@ -48,7 +48,7 @@ import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
-import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.BuiltInExn;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
@@ -730,7 +730,7 @@ public class SignatureChecker {
     String exnName = exnSpec.name.name;
     // Find matching exception in BuiltInExn
     boolean found = false;
-    for (Codes.BuiltInExn builtInExn : Codes.BuiltInExn.values()) {
+    for (BuiltInExn builtInExn : BuiltInExn.values()) {
       if (structure.equals(builtInExn.structure)
           && exnName.equals(builtInExn.mlName())) {
         found = true;

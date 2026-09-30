@@ -16,42 +16,29 @@
  * language governing permissions and limitations under the
  * License.
  */
-package net.hydromatic.morel.eval;
+package net.hydromatic.morel.eval.code;
 
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.Applicable1;
+import net.hydromatic.morel.eval.Stack;
 
 /**
- * Abstract implementation of {@link Applicable} that describes itself with a
- * constant name.
+ * Base class with which to implement {@link Applicable1}.
+ *
+ * @param <R> return type
+ * @param <A0> type of argument
  */
-abstract class ApplicableImpl implements Applicable {
-  protected final BuiltIn builtIn;
-
-  /** Creates an ApplicableImpl that directly implements a BuiltIn. */
-  protected ApplicableImpl(BuiltIn builtIn) {
-    this.builtIn = builtIn;
+@SuppressWarnings({"unchecked"})
+abstract class BaseApplicable1<R, A0> extends BaseApplicable
+    implements Applicable1<R, A0> {
+  protected BaseApplicable1(BuiltIn builtIn) {
+    super(builtIn);
   }
 
-  @Override
-  public BuiltIn builtIn() {
-    return builtIn;
-  }
-
-  protected String name() {
-    return builtIn.mlName.startsWith("op ")
-        ? builtIn.mlName.substring("op ".length())
-        : builtIn.structure + "." + builtIn.mlName;
-  }
-
-  @Override
-  public String toString() {
-    return name();
-  }
-
-  @Override
-  public Describer describe(Describer describer) {
-    return describer.start(name(), d -> {});
+  @Override // Applicable
+  public Object apply(Stack stack, Object argValue) {
+    return apply((A0) argValue);
   }
 }
 
-// End ApplicableImpl.java
+// End BaseApplicable1.java

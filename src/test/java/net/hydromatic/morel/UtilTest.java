@@ -474,7 +474,7 @@ public class UtilTest {
     Function<String, String> fn =
         s -> {
           float f = Float.parseFloat(s);
-          return Codes.floatToString(f);
+          return Codes.realToString(f);
         };
     assertThat(fn.apply("1.17549435E-38"), is("1.1754944E~38"));
     assertThat(fn.apply("1.1754944E-38"), is("1.1754944E~38"));

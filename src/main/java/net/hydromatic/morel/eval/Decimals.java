@@ -44,7 +44,7 @@ public final class Decimals {
   public static final int PRECISION = 34;
 
   /** Rounding for arithmetic: 34 digits, half-even. */
-  static final MathContext MATH_CONTEXT = MathContext.DECIMAL128;
+  public static final MathContext MATH_CONTEXT = MathContext.DECIMAL128;
 
   /** Largest adjusted exponent, 6144. */
   private static final int E_MAX = 6144;
@@ -110,7 +110,7 @@ public final class Decimals {
    * Returns the exponent of a value in scientific notation; 0 for [1, 10), 1
    * for [10, 100), -1 for [0.1, 1), etc.
    */
-  static int adjustedExponent(BigDecimal d) {
+  public static int adjustedExponent(BigDecimal d) {
     return d.precision() - d.scale() - 1;
   }
 
@@ -137,7 +137,7 @@ public final class Decimals {
    *
    * <p>This is the semantics of the {@code Decimal.fromString} function.
    */
-  static @Nullable BigDecimal parsePrefix(String s) {
+  public static @Nullable BigDecimal parsePrefix(String s) {
     int i = 0;
     while (i < s.length() && Character.isWhitespace(s.charAt(i))) {
       ++i;

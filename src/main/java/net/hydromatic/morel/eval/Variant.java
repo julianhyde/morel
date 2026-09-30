@@ -21,9 +21,9 @@ package net.hydromatic.morel.eval;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.eval.Codes.appendFloat;
-import static net.hydromatic.morel.eval.Codes.floatToString;
 import static net.hydromatic.morel.eval.Codes.intToString;
 import static net.hydromatic.morel.eval.Codes.optionSome;
+import static net.hydromatic.morel.eval.Codes.realToString;
 import static net.hydromatic.morel.parse.Parsers.charToString;
 import static net.hydromatic.morel.parse.Parsers.stringToString;
 import static net.hydromatic.morel.util.Static.skip;
@@ -626,7 +626,7 @@ public class Variant extends AbstractImmutableList<Object> {
           return "INT " + intToString(intVal);
         case REAL:
           final float realVal = (Float) value;
-          return "REAL " + floatToString(realVal);
+          return "REAL " + realToString(realVal);
         case CHAR:
           final char ch = (Character) value;
           return "CHAR #\"" + charToString(ch) + "\"";

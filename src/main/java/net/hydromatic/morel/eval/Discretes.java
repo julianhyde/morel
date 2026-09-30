@@ -48,7 +48,7 @@ public class Discretes {
 
   /** Returns a generic Discrete instance. */
   @SuppressWarnings({"unchecked"})
-  static Discrete<Object> dummy() {
+  public static Discrete<Object> dummy() {
     return (Discrete<Object>) (Discrete<?>) UNIT;
   }
 
