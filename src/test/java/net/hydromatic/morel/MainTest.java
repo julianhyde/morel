@@ -3145,7 +3145,7 @@ public class MainTest {
             + " yield {a, a2 = a + a, sb}";
     final String plan =
         "from("
-            + "sink join(pat $0, exp tuple(tuple(constant(2), constant(3))), "
+            + "sink join(pat v$0, exp tuple(tuple(constant(2), constant(3))), "
             + "sink group(key tuple(apply(fnValue nth:0, argCode stack(offset 1, name $0))), "
             + "agg aggregate, "
             + "sink yield(codes [tuple(get(name a), get(name sb))], "

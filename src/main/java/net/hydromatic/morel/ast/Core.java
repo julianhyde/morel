@@ -140,14 +140,43 @@ public class Core {
           new AstWriter() {
             @Override
             public AstWriter id(String name, int i) {
+              final String generated = generated(name, i);
+              if (generated != null) {
+                return super.id(generated, 0);
+              }
               int j = describer.register(name, i);
               return super.id(name, j);
             }
 
             @Override
             public AstWriter idQuoted(String name, int i) {
+              final String generated = generated(name, i);
+              if (generated != null) {
+                return super.id(generated, 0);
+              }
               int j = describer.register(name, i);
               return super.idQuoted(name, j);
+            }
+
+            /**
+             * Returns the name under which a generated pattern prints, or null
+             * if the pattern is not generated.
+             *
+             * <p>A node's pattern ({@code $0}, {@code $1}, {@code $ordinal})
+             * prints as {@code v$}-ordinal, as {@link AstWriter#generatedName}
+             * names it in a tree's plan; its ordinal comes from the counter
+             * that numbers generated binders, so it names no binder. A
+             * generated binder such as {@code t$12} keeps its prefix. Either is
+             * renumbered by first occurrence.
+             */
+            private @Nullable String generated(String name, int i) {
+              if (name.startsWith("$")) {
+                return describer.rename("v$" + i);
+              }
+              if (i == 0 && NamedPat.isGenerated(name)) {
+                return describer.rename(name);
+              }
+              return null;
             }
           };
       return unparse(w);
