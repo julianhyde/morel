@@ -35,6 +35,7 @@ import java.util.Map;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import org.jspecify.annotations.Nullable;
 
@@ -59,9 +60,64 @@ public class SparkFunctionTable {
   private static final SparkFunctionTable INSTANCE = load();
 
   private final ImmutableMap<String, Entry> entries;
+  private final ImmutableMap<BuiltIn, Entry> byBuiltIn;
 
   private SparkFunctionTable(Map<String, Entry> entries) {
     this.entries = ImmutableMap.copyOf(entries);
+    final Map<BuiltIn, Entry> byBuiltIn = new LinkedHashMap<>();
+    entries.forEach(
+        (name, entry) -> {
+          final BuiltIn builtIn = builtIn(name);
+          if (builtIn != null) {
+            byBuiltIn.put(builtIn, entry);
+          }
+        });
+    // An "op X" row covers every type instance of the operator: the tree
+    // carries the instance that overload resolution chose, "Real.*" rather
+    // than the "*" the programmer wrote. A row naming the instance wins,
+    // which is how "Real./" stays distinct from "op div".
+    for (BuiltIn builtIn : BuiltIn.values()) {
+      if (!byBuiltIn.containsKey(builtIn)) {
+        final Entry entry = entries.get("op " + builtIn.mlName);
+        if (entry != null) {
+          byBuiltIn.put(builtIn, entry);
+        }
+      }
+    }
+    this.byBuiltIn = ImmutableMap.copyOf(byBuiltIn);
+  }
+
+  /**
+   * Returns the built-in that the table calls {@code name}, or null if there is
+   * none. {@code SparkFunctionsTest} requires that every name in the file
+   * resolves, so a null here means the file and the built-ins have drifted
+   * apart, and that test will say so; this class leaves the entry out rather
+   * than failing to load.
+   */
+  private static @Nullable BuiltIn builtIn(String name) {
+    final int dot = name.indexOf('.');
+    if (dot < 0) {
+      return BuiltIn.BY_ML_NAME.get(name);
+    }
+    final String structureName = name.substring(0, dot);
+    final String memberName = name.substring(dot + 1);
+    if (structureName.equals("$")) {
+      // Internal operators are deliberately absent from BY_STRUCTURE, so
+      // that nothing reaches them by name by accident. The table names
+      // them anyway, because they are what the core tree carries. Their
+      // own names are inconsistent about the sigil -- "andalso" but
+      // "$current" -- so accept the member with or without it.
+      for (BuiltIn builtIn : BuiltIn.values()) {
+        if (builtIn.structure.equals("$")
+            && (builtIn.mlName.equals(memberName)
+                || builtIn.mlName.equals("$" + memberName))) {
+          return builtIn;
+        }
+      }
+      return null;
+    }
+    final BuiltIn.Structure structure = BuiltIn.BY_STRUCTURE.get(structureName);
+    return structure == null ? null : structure.memberMap.get(memberName);
   }
 
   /** Returns the table. */
@@ -77,6 +133,16 @@ public class SparkFunctionTable {
    */
   public @Nullable Entry get(String morelName) {
     return entries.get(morelName);
+  }
+
+  /**
+   * Returns how {@code builtIn} reaches Spark, or null if the table does not
+   * mention it. This is the lookup the translator makes: it has a {@link
+   * BuiltIn} in hand, from a function literal in the core tree, not the name
+   * the table writes.
+   */
+  public @Nullable Entry get(BuiltIn builtIn) {
+    return byBuiltIn.get(builtIn);
   }
 
   /** Returns every entry, in the order the file lists them. */

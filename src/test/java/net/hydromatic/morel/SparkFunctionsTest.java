@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Resources;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -129,10 +130,22 @@ public class SparkFunctionsTest {
     if (dot < 0) {
       return BuiltIn.BY_ML_NAME.containsKey(morel);
     }
-    final BuiltIn.Structure structure =
-        BuiltIn.BY_STRUCTURE.get(morel.substring(0, dot));
-    return structure != null
-        && structure.memberMap.containsKey(morel.substring(dot + 1));
+    final String structureName = morel.substring(0, dot);
+    final String memberName = morel.substring(dot + 1);
+    if (structureName.equals("$")) {
+      // An internal operator is absent from BY_STRUCTURE, by design, but the
+      // table names it because it is what the core tree carries. Its own name
+      // is inconsistent about the sigil -- "andalso" but "$current" -- so
+      // either spelling denotes it.
+      return Arrays.stream(BuiltIn.values())
+          .anyMatch(
+              b ->
+                  b.structure.equals("$")
+                      && (b.mlName.equals(memberName)
+                          || b.mlName.equals("$" + memberName)));
+    }
+    final BuiltIn.Structure structure = BuiltIn.BY_STRUCTURE.get(structureName);
+    return structure != null && structure.memberMap.containsKey(memberName);
   }
 }
 

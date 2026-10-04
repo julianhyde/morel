@@ -49,6 +49,13 @@
   {morel = "op >=", kind = "direct", spark = ">=",
    divergence = "as for <"},
   {morel = "Bool.andalso", kind = "direct", spark = "and", divergence = ""},
+  (* The "andalso" and "orelse" syntax resolves to internal operators,
+   * which short-circuit, rather than to the Bool members above, which
+   * do not. Spark evaluates as it sees fit, so both reach the same
+   * function. An internal operator has no source-level name, so it is
+   * named here for the structure it belongs to, "$". *)
+  {morel = "$.andalso", kind = "direct", spark = "and", divergence = ""},
+  {morel = "$.orelse", kind = "direct", spark = "or", divergence = ""},
   {morel = "Bool.orelse", kind = "direct", spark = "or", divergence = ""},
   {morel = "Bool.not", kind = "direct", spark = "not", divergence = ""},
   {morel = "Int.min", kind = "direct", spark = "least", divergence = ""},
