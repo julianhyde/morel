@@ -145,8 +145,9 @@ public class RelBuilderTest {
     assertThat(
         f.plan(rel),
         is(
-            "filter [#deptno $0 = 10]\n"
-                + "  [{deptno = 10}, {deptno = 20}]\n"));
+            "filter [#deptno e = 10]\n" //
+                + "  [{deptno = 10}, {deptno = 20}]\n"
+                + ""));
   }
 
   /**
@@ -179,7 +180,7 @@ public class RelBuilderTest {
     nameExps.add("i", b.name(0, "i"));
     nameExps.add("j", b.name(1, "j"));
     // Before the join, each name reads its own input's row.
-    assertThat(nameExps, hasToString("[<i, $0>, <j, $1>]"));
+    assertThat(nameExps, hasToString("[<i, i>, <j, $1>]"));
     final Core.Exp rel = b.join(JoinType.INNER, core.boolLiteral(true)).build();
     assertThat(
         f.plan(rel),
@@ -210,7 +211,8 @@ public class RelBuilderTest {
         is(
             "join [v$0]\n" //
                 + "  [{deptno = 10}, {deptno = 20}]\n"
-                + "  [#deptno v$0]\n"));
+                + "  [#deptno e]\n"
+                + ""));
   }
 
   /**
@@ -224,15 +226,17 @@ public class RelBuilderTest {
     assertThat(
         f.plan(offeredBinder(f)),
         is(
-            "join [$0 = $1]\n" //
+            "join [i = $1]\n" //
                 + "  [1, 2]\n"
-                + "  [1, 2]\n"));
+                + "  [1, 2]\n"
+                + ""));
     assertThat(
         f.plan(offeredBinder(f, Simplification.values())),
         is(
-            "join [$0 = $1]\n" //
+            "join [i = $1]\n" //
                 + "  [1, 2]\n"
-                + "  [1, 2]\n"));
+                + "  [1, 2]\n"
+                + ""));
   }
 
   private static Core.Exp offeredBinder(Fixture f, Simplification... simps) {
@@ -272,9 +276,10 @@ public class RelBuilderTest {
     assertThat(
         f.plan(rel),
         is(
-            "join [v$0] [#deptno $0 = 10]\n" //
+            "join [v$0] [#deptno e = 10]\n" //
                 + "  [{deptno = 10}, {deptno = 20}]\n"
-                + "  [#deptno v$0]\n"));
+                + "  [#deptno e]\n"
+                + ""));
   }
 
   /**
@@ -584,7 +589,7 @@ public class RelBuilderTest {
         RelBuilder.rebuild(
             f.typeSystem, tree, EnumSet.of(Simplification.FILTER_MERGE)),
         hasToString(
-            "filter [$0 > 0 andalso $0 < 3]\n" //
+            "filter [i > 0 andalso i < 3]\n" //
                 + "  [1, 2]\n"));
   }
 

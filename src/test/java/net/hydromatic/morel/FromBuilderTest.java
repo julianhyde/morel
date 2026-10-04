@@ -158,9 +158,9 @@ public class FromBuilderTest {
     final Core.IdPat s = f.idPat("s", f.stringType);
     final FromBuilder fb = core.fromBuilder(f.typeSystem);
     fb.scan(e, f.emps);
-    assertThat(fb.field("e"), hasToString("$0"));
-    assertThat(fb.field(0), hasToString("$0"));
-    assertThat(fb.field("e", "deptno"), hasToString("#deptno $0"));
+    assertThat(fb.field("e"), hasToString("e"));
+    assertThat(fb.field(0), hasToString("e"));
+    assertThat(fb.field("e", "deptno"), hasToString("#deptno e"));
 
     fb.scan(f.tuplePat(p, s), f.pairs);
     assertThat(fb.field("e"), hasToString("#1 $0"));
@@ -252,13 +252,13 @@ public class FromBuilderTest {
     assertThat(
         ((Core.Rel) exp).describe(f.typeSystem),
         is(
-            "project [#2 $0]\n"
+            "project [#2 $0]\n" //
                 + "  join [v$0]\n"
-                + "    [{deptno = 10, name = \"Fred\"},"
-                + " {deptno = 20, name = \"Velma\"}]\n"
+                + "    [{deptno = 10, name = \"Fred\"}, {deptno = 20, name = \"Velma\"}]\n"
                 + "    project [#2 $0]\n"
-                + "      filter [#1 $0 = #deptno v$0]\n"
-                + "        [(1, \"a\"), (2, \"b\")]\n"));
+                + "      filter [#1 $0 = #deptno e]\n"
+                + "        [(1, \"a\"), (2, \"b\")]\n"
+                + ""));
     assertThat(exp.type, hasToString("string list"));
   }
 
@@ -284,10 +284,10 @@ public class FromBuilderTest {
     assertThat(
         ((Core.Rel) exp).describe(f.typeSystem),
         is(
-            "filter [#c $0 > 1]\n"
-                + "  group [d = #deptno $0] [c = #count Relational]\n"
-                + "    [{deptno = 10, name = \"Fred\"},"
-                + " {deptno = 20, name = \"Velma\"}]\n"));
+            "filter [#c $0 > 1]\n" //
+                + "  group [d = #deptno e] [c = #count Relational]\n"
+                + "    [{deptno = 10, name = \"Fred\"}, {deptno = 20, name = \"Velma\"}]\n"
+                + ""));
     assertThat(exp.type, hasToString("{c:int, d:int} list"));
   }
 
@@ -302,7 +302,7 @@ public class FromBuilderTest {
     final Core.IdPat i = f.idPat("i", f.intType);
     final FromBuilder fb = core.fromBuilder(f.typeSystem);
     fb.scan(i, f.ints);
-    assertThat(fb.field("i"), hasToString("$0"));
+    assertThat(fb.field("i"), hasToString("i"));
     fb.where(core.greaterThan(f.typeSystem, core.id(i), f.intLiteral(1)))
         .yield_(core.equal(f.typeSystem, fb.field("i"), f.intLiteral(2)));
     assertThrows(IllegalArgumentException.class, () -> fb.field("i"));
@@ -310,9 +310,11 @@ public class FromBuilderTest {
     assertThat(
         exp,
         hasToString(
-            "project [$0 = 2]\n" //
-                + "  filter [$0 > 1]\n"
-                + "    [1, 2, 3]\n"));
+            "project [i = 2]\n" //
+                + "  filter [i_1 > 1]\n"
+                + "    [1, 2, 3]\n"
+                + ""
+                + ""));
     assertThat(exp.type, hasToString("bool list"));
   }
 

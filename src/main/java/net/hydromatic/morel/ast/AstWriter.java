@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -30,6 +31,7 @@ import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.parse.Parsers;
 import net.hydromatic.morel.util.Lindig;
 import net.hydromatic.morel.util.Lindig.Doc;
+import net.hydromatic.morel.util.Pair;
 
 /**
  * Context for writing an AST out as a string.
@@ -65,6 +67,12 @@ public class AstWriter {
    * it is rendered.
    */
   private boolean lineStart = true;
+
+  /** The suffix each pattern prints under; see {@link #suffix}. */
+  private final Map<Pair<String, Integer>, Integer> suffixes = new HashMap<>();
+
+  /** How many patterns of each name this writer has met. */
+  private final Map<String, Integer> nextSuffix = new HashMap<>();
 
   public AstWriter() {
     this(false);
@@ -477,10 +485,27 @@ public class AstWriter {
    */
   public AstWriter id(String name, int i) {
     raw(name);
-    if (i > 0) {
-      raw("_" + i);
+    final int j = suffix(name, i);
+    if (j > 0) {
+      raw("_" + j);
     }
     return this;
+  }
+
+  /**
+   * Returns the suffix under which the {@code i}th pattern called {@code name}
+   * prints: 0, meaning no suffix, for the first one this writer meets, 1 for
+   * the next, and so on.
+   *
+   * <p>The ordinal a pattern carries counts every binder the compiler made, so
+   * printing it would make the text depend on how many binders came before --
+   * on history, not on the expression. Numbering by the order the reader meets
+   * them keeps the text a function of what is printed, so that two expressions
+   * that differ only in their binders' ordinals print alike.
+   */
+  private int suffix(String name, int i) {
+    return suffixes.computeIfAbsent(
+        Pair.of(name, i), k -> nextSuffix.merge(name, 1, Integer::sum) - 1);
   }
 
   /**
@@ -504,11 +529,12 @@ public class AstWriter {
 
   /** Appends an ordinal-qualified variable identifier, quoting if necessary. */
   public AstWriter idQuoted(String name, int i) {
-    if (i == 0) {
+    final int j = suffix(name, i);
+    if (j == 0) {
       appendQuoted(name);
     } else {
       // "name_i" is never a reserved word, so it does not need quoting.
-      raw(name + "_" + i);
+      raw(name + "_" + j);
     }
     return this;
   }

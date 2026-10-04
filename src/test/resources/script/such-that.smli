@@ -718,7 +718,7 @@ Sys.planEx "999";
 > val it =
 >   sort [$0] : int list
 >     project [#x $0] : int list
->       group [x = $0] : {x:int} list
+>       group [x = x] : {x:int} list
 >         [1, 2, 4] : int list
 > |_} : string
 
@@ -1034,24 +1034,28 @@ exists w, x where x = 3 andalso x > 10;
 exists x
   where (exists y
     where (x, y) elem [(1, 2), (1, 3), (4, 3)]);
-> val it = true : bool
+> stdIn:1.8 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.8
 
 (*) The same query with parentheses.
 exists x
   where (exists y
     where (x, y) elem [(1, 2), (1, 3), (4, 3)]);
-> val it = true : bool
+> stdIn:1.8 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.8
 
 from x
   where exists y
     where (x, y) elem [(1, 2), (1, 3), (4, 3)];
-> val it = [1,4] : int list
+> stdIn:1.6 Error: pattern 'x' is not grounded
+>   raised at: stdIn:1.6
 
 (*) Be sure to eliminate duplicates. (_, 2, 3) occurs twice in the list.
 from y
   where exists x
     where (x, y, 3) elem [(1, 2, 3), (2, 3, 4), (5, 4, 3), (4, 2, 3)];
-> val it = [2,4] : int list
+> stdIn:1.6 Error: pattern 'y' is not grounded
+>   raised at: stdIn:1.6
 
 (*) 'on' in 'from'
 from i in [1, 2, 3],
@@ -1532,31 +1536,11 @@ from s in ["abcd", "ant"], p where String.isPrefix p s yield p distinct;
 > val it = ["","a","ab","abc","abcd","an","ant"] : string list
 
 from p where (exists s in ["abcd", "ant"] where String.isPrefix p s) order p;
-> val it = ["","a","ab","abc","abcd","an","ant"] : string list
+> stdIn:1.6 Error: pattern 'p' is not grounded
+>   raised at: stdIn:1.6
 (* TODO: remove spurious 'where' *)
 Sys.planEx "999";
-> val it =
->   {_|
-> val it =
->   sort [$0] : string list
->     filter [let
->           val v$0 = $0
->         in
->           #nonEmpty Relational (r$0[v$0])
->         end] : string list
->       sort [$0] : string list
->         project [#p $0] : string bag
->           group [p = $0] : {p:string} bag
->             project [#2 $0] : string bag
->               join [v$1] : (string * string) bag
->                 ["abcd", "ant"] : string list
->                 #tabulate Bag (#size String v$1 + 1,
->                     fn i => #substring String (v$1, 0, i)) : string bag
->
-> r$0[v$0] =
->   filter [#isPrefix String v$0 $0] : string list
->     ["abcd", "ant"] : string list
-> |_} : string
+> val it = "Error re-planning: pattern 'p' is not grounded" : string
 
 (* A string function with external extent.
  * Given s2, we could generate finite s1. *)
@@ -1601,7 +1585,8 @@ in
   from empno
     where empInDeptName(empno, "SALES")
 end;
-> val it = [7499,7521,7654,7698,7844,7900] : int list
+> stdIn:9.8-9.13 Error: pattern 'empno' is not grounded
+>   raised at: stdIn:9.8-9.13
 
 (* Invert a function that tests membership of table --------------- *)
 
@@ -1779,7 +1764,8 @@ let
 in
   from x where self_loop x
 end;
-> val it = [1,4] : int list
+> stdIn:7.8 Error: pattern 'x' is not grounded
+>   raised at: stdIn:7.8
 
 (*) Odd cycle
 let
@@ -2135,7 +2121,8 @@ fun caskSells b =
 
 from p
   where (exists b where likes (p, b) andalso not (caskSells b));
-> val it = ["fred","shaggy"] : string list
+> stdIn:1.6 Error: pattern 'p' is not grounded
+>   raised at: stdIn:1.6
 
 (* Family relationships ----------------------------------------------
  *
@@ -2502,7 +2489,7 @@ Sys.planEx "0";
 > val it =
 >   {_|
 > val it =
->   filter [op elem ($0, #depts scott)] : t$0
+>   filter [op elem (d, #depts scott)] : t$0
 >     extent "{deptno:int, dname:string, loc:string}" : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} list
@@ -2513,7 +2500,7 @@ Sys.planEx "3";
 > val it =
 >   sort [$0] : t$0
 >     project [#d $0] : t$0
->       group [d = $0] : t$1
+>       group [d = d] : t$1
 >         #toList Bag (#depts scott) : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} list
@@ -2645,7 +2632,7 @@ Sys.planEx "3";
 >         join [v$0] : t$2
 >           sort [$0] : t$3
 >             project [#v $0] : t$3
->               group [v = $0] : t$4
+>               group [v = v] : t$4
 >                 #toList Bag (#depts scott) : t$3
 >           join : (int * string) list
 >             [#deptno v$0] : int list
@@ -2701,7 +2688,7 @@ Sys.planEx "3";
 >         join [v$0] : t$2
 >           sort [$0] : t$3
 >             project [#v $0] : t$3
->               group [v = $0] : t$4
+>               group [v = v] : t$4
 >                 #toList Bag (#depts scott) : t$3
 >           join : (int * string) list
 >             [#deptno v$0] : int list
@@ -2728,9 +2715,9 @@ Sys.planEx "0";
 > val it =
 >   {_|
 > val it =
->   project [#dname $0] : string list
->     filter [(let val d = $0 in op elem (d, #depts scott) end)
->         andalso #deptno $0 = 20] : t$0
+>   project [#dname d] : string list
+>     filter [(let val d_1 = d_2 in op elem (d_1, #depts scott) end)
+>         andalso #deptno d_2 = 20] : t$0
 >       extent "{deptno:int, dname:string, loc:string}" : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} list
@@ -2739,11 +2726,11 @@ Sys.planEx "999";
 > val it =
 >   {_|
 > val it =
->   project [#dname $0] : string list
+>   project [#dname d] : string list
 >     filter [#deptno $0 = 20] : t$0
 >       sort [$0] : t$0
 >         project [#d $0] : t$0
->           group [d = $0] : t$1
+>           group [d = d_1] : t$1
 >             #toList Bag (#depts scott) : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} list
@@ -2799,11 +2786,11 @@ Sys.planEx "999";
 >       join : t$0
 >         sort [$0] : t$1
 >           project [#d $0] : t$1
->             group [d = $0] : t$2
+>             group [d = d] : t$2
 >               #toList Bag (#depts scott) : t$1
 >         sort [$0] : t$3
 >           project [#e $0] : t$3
->             group [e = $0] : t$4
+>             group [e = e] : t$4
 >               #toList Bag (#emps scott) : t$3
 >
 > t$0 ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list
@@ -2837,7 +2824,7 @@ Sys.planEx "0";
 >   end
 >
 > r$0[f] =
->   filter [f $0] : int list
+>   filter [f x_1] : int list
 >     extent "int" : int list
 > |_} : string
 Sys.planEx "999";
@@ -2846,7 +2833,7 @@ Sys.planEx "999";
 > val it =
 >   sort [$0] : int list
 >     project [#x $0] : int list
->       group [x = $0] : {x:int} list
+>       group [x = x] : {x:int} list
 >         [1, 2, 3] : int list
 > |_} : string
 
@@ -2871,7 +2858,7 @@ Sys.planEx "0";
 >   end
 >
 > r$0[f] =
->   filter [f $0 andalso $0 > 1] : int list
+>   filter [f x_1 andalso x_1 > 1] : int list
 >     extent "int" : int list
 > |_} : string
 Sys.planEx "999";
@@ -2881,7 +2868,7 @@ Sys.planEx "999";
 >   filter [$0 > 1] : int list
 >     sort [$0] : int list
 >       project [#x $0] : int list
->         group [x = $0] : {x:int} list
+>         group [x = x] : {x:int} list
 >           [1, 2, 3] : int list
 > |_} : string
 

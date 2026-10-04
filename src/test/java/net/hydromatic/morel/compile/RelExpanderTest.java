@@ -213,8 +213,9 @@ public class RelExpanderTest {
         is(
             "sort [$0]\n" //
                 + "  project [#`g$0` $0]\n"
-                + "    group [g$0 = $0]\n"
-                + "      [1, 2, 3]\n"));
+                + "    group [g$0 = g$0]\n"
+                + "      [1, 2, 3]\n"
+                + ""));
   }
 
   /** Tests that a condition a generator does not subsume is kept. */
@@ -226,8 +227,9 @@ public class RelExpanderTest {
             "filter [$0 > 1]\n" //
                 + "  sort [$0]\n"
                 + "    project [#`g$0` $0]\n"
-                + "      group [g$0 = $0]\n"
-                + "        [1, 2, 3]\n"));
+                + "      group [g$0 = g$0]\n"
+                + "        [1, 2, 3]\n"
+                + ""));
   }
 
   /**
@@ -277,7 +279,8 @@ public class RelExpanderTest {
                 + "  filter [#1 $0 < #2 $0]\n"
                 + "    join [v$0]\n"
                 + "      #flatten Range ([OPEN (0, 10)])\n"
-                + "      [#`*` Int (v$0, 2)]\n"));
+                + "      [#`*` Int (x, 2)]\n"
+                + ""));
   }
 
   /**
@@ -366,16 +369,17 @@ public class RelExpanderTest {
                 + "    join\n"
                 + "      sort [$0]\n"
                 + "        project [#`g$0` $0]\n"
-                + "          group [g$0 = $0]\n"
+                + "          group [g$0 = g$0]\n"
                 + "            [1, 2]\n"
                 + "      sort [$0]\n"
                 + "        project [#`g$1` $0]\n"
-                + "          group [g$1 = $0]\n"
+                + "          group [g$1 = g$1]\n"
                 + "            [3, 4]\n"
                 + "    sort [$0]\n"
                 + "      project [#`g$2` $0]\n"
-                + "        group [g$2 = $0]\n"
-                + "          [5, 6]\n"));
+                + "        group [g$2 = g$2]\n"
+                + "          [5, 6]\n"
+                + ""));
   }
 
   /**
@@ -419,12 +423,13 @@ public class RelExpanderTest {
                 + "    join [v$0]\n"
                 + "      sort [$0]\n"
                 + "        project [#`g$0` $0]\n"
-                + "          group [g$0 = $0]\n"
+                + "          group [g$0 = g$0]\n"
                 + "            [[1], [2]]\n"
                 + "      sort [$0]\n"
                 + "        project [#`g$1` $0]\n"
-                + "          group [g$1 = $0]\n"
-                + "            v$0\n"));
+                + "          group [g$1 = g$1]\n"
+                + "            v$0\n"
+                + ""));
   }
 
   /** Tests that a query that cannot be bounded is an error. */

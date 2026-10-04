@@ -193,20 +193,23 @@ public class InlineTest {
             + "  yield e.deptno\n"
             + "end";
     final String core0 =
-        "val it = let val isEven = fn n => n mod 2 = 0 "
-            + "in project [#deptno $0]\n" //
-            + "  filter [isEven (#empno $0)]\n"
+        "val it = let val isEven = fn n => n mod 2 = 0 in project [#deptno e]\n" //
+            + "  filter [isEven (#empno e_1)]\n"
             + "    #emps scott\n"
             + " end";
     final String core1 =
-        "val it = project [#deptno $0]\n" //
-            + "  filter [let val n = #empno $0 in #mod Int (n, 2) = 0 end]\n"
-            + "    #emps scott\n";
+        "val it = project [#deptno e]\n" //
+            + "  filter [let val n = #empno e_1 in #mod Int (n, 2) = 0 end]\n"
+            + "    #emps scott\n"
+            + ""
+            + "";
     // The third is the final tree, which is what executes.
     final String core2 =
-        "val it = project [#deptno $0]\n" //
-            + "  filter [#mod Int (#empno $0, 2) = 0]\n"
-            + "    #emps scott\n";
+        "val it = project [#deptno e]\n" //
+            + "  filter [#mod Int (#empno e_1, 2) = 0]\n"
+            + "    #emps scott\n"
+            + ""
+            + "";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -228,23 +231,27 @@ public class InlineTest {
             + "  yield e.ename\n"
             + "end";
     final String core0 =
-        "val it = let val evenEmp = fn x => filter [#empno $0 mod 2 = 0]\n" //
+        "val it = let val evenEmp = fn x => filter [#empno e mod 2 = 0]\n" //
             + "  #emps scott\n"
-            + " in project [#ename $0]\n"
-            + "  filter [#deptno $0 = 10]\n"
+            + " in project [#ename e_1]\n"
+            + "  filter [#deptno e_2 = 10]\n"
             + "    evenEmp 1\n"
             + " end";
     final String core1 =
-        "val it = project [#ename $0]\n" //
-            + "  filter [#deptno $0 = 10]\n"
-            + "    let val x = 1 in filter [#mod Int (#empno $0, 2) = 0]\n"
+        "val it = project [#ename e]\n" //
+            + "  filter [#deptno e_1 = 10]\n"
+            + "    let val x = 1 in filter [#mod Int (#empno e_2, 2) = 0]\n"
             + "  #emps scott\n"
-            + " end\n";
+            + " end\n"
+            + ""
+            + "";
     // The third is the final tree, which is what executes.
     final String core2 =
-        "val it = project [#ename $0]\n" //
-            + "  filter [#mod Int (#empno $0, 2) = 0 andalso #deptno $0 = 10]\n"
-            + "    #emps scott\n";
+        "val it = project [#ename e]\n" //
+            + "  filter [#mod Int (#empno e_1, 2) = 0 andalso #deptno e_1 = 10]\n"
+            + "    #emps scott\n"
+            + ""
+            + "";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -262,13 +269,11 @@ public class InlineTest {
         "Bag.map (fn e => (#empno e))\n"
             + "  (Bag.filter (fn e => (#deptno e) = 30) (#emps scott))";
     final String core0 =
-        "val it = "
-            + "#map Bag (fn e_1 => #empno e_1) "
-            + "(#filter Bag (fn e => #deptno e = 30) "
-            + "(#emps scott))";
+        "val it = #map Bag (fn e => #empno e) (#filter Bag (fn e_1 => #deptno e_1 = 30) (#emps scott))";
     final String core1 =
-        "val it = project [(fn e_1 => #empno e_1) $0]\n"
-            + "  #filter Bag (fn e => #deptno e = 30) (#emps scott)\n";
+        "val it = project [(fn e => #empno e) $0]\n" //
+            + "  #filter Bag (fn e_1 => #deptno e_1 = 30) (#emps scott)\n"
+            + "";
     final String core2 =
         "val it = project [#empno $0]\n" //
             + "  filter [#deptno $0 = 30]\n"
@@ -295,18 +300,11 @@ public class InlineTest {
             + "        (Bag.filter (fn e => #deptno e = 30)\n"
             + "          (#emps scott)))))";
     final String core0 =
-        "val it = "
-            + "#map Bag (fn r_2 => r_2 + 100)"
-            + " (#map Bag (fn r_1 => #x r_1 + #z r_1)"
-            + " (#filter Bag (fn r => #y r > #z r)"
-            + " (#map Bag (fn e_1 => {x = #empno e_1, y = #deptno e_1, z = 15})"
-            + " (#filter Bag (fn e => #deptno e = 30) (#emps scott)))))";
+        "val it = #map Bag (fn r => r + 100) (#map Bag (fn r_1 => #x r_1 + #z r_1) (#filter Bag (fn r_2 => #y r_2 > #z r_2) (#map Bag (fn e => {x = #empno e, y = #deptno e, z = 15}) (#filter Bag (fn e_1 => #deptno e_1 = 30) (#emps scott)))))";
     final String core1 =
-        "val it = project [(fn r_2 => r_2 + 100) $0]\n"
-            + "  #map Bag (fn r_1 => #x r_1 + #z r_1)"
-            + " (#filter Bag (fn r => #y r > #z r)"
-            + " (#map Bag (fn e_1 => {x = #empno e_1, y = #deptno e_1, z = 15})"
-            + " (#filter Bag (fn e => #deptno e = 30) (#emps scott))))\n";
+        "val it = project [(fn r => r + 100) $0]\n" //
+            + "  #map Bag (fn r_1 => #x r_1 + #z r_1) (#filter Bag (fn r_2 => #y r_2 > #z r_2) (#map Bag (fn e => {x = #empno e, y = #deptno e, z = 15}) (#filter Bag (fn e_1 => #deptno e_1 = 30) (#emps scott))))\n"
+            + "";
     final String core2 =
         "val it = project [#x $0 + #z $0 + 100]\n" //
             + "  filter [#y $0 > #z $0]\n"
@@ -329,21 +327,27 @@ public class InlineTest {
             + "where i > 10\n"
             + "yield i div 10";
     final String core0 =
-        "val it = project [$0 div 10]\n" //
-            + "  filter [$0 > 10]\n"
-            + "    project [#deptno $0]\n"
-            + "      #emps scott\n";
+        "val it = project [i div 10]\n" //
+            + "  filter [i_1 > 10]\n"
+            + "    project [#deptno e]\n"
+            + "      #emps scott\n"
+            + ""
+            + "";
     final String core1 =
-        "val it = project [#div Int ($0, 10)]\n" //
-            + "  filter [$0 > 10]\n"
-            + "    project [#deptno $0]\n"
-            + "      #emps scott\n";
+        "val it = project [#div Int (i, 10)]\n" //
+            + "  filter [i_1 > 10]\n"
+            + "    project [#deptno e]\n"
+            + "      #emps scott\n"
+            + ""
+            + "";
     // The third is the final tree, which is what executes.
     final String core2 =
-        "val it = project [#div Int ($0, 10)]\n" //
-            + "  filter [$0 > 10]\n"
-            + "    project [#deptno $0]\n"
-            + "      #emps scott\n";
+        "val it = project [#div Int (i, 10)]\n" //
+            + "  filter [i_1 > 10]\n"
+            + "    project [#deptno e]\n"
+            + "      #emps scott\n"
+            + ""
+            + "";
     ml(ml)
         .withBinding("scott", BuiltInDataSet.SCOTT)
         .assertCoreString(
@@ -358,9 +362,11 @@ public class InlineTest {
             + "where 3 < 4\n"
             + "yield {u, v = 10}";
     final String core0 =
-        "val it = project [{u = $0, v = 10}]\n" //
+        "val it = project [{u = u, v = 10}]\n" //
             + "  filter [3 < 4]\n"
-            + "    [()]\n";
+            + "    [()]\n"
+            + ""
+            + "";
     final String core1 = core0;
     // The third is the final tree, which is what executes.
     final String core2 = core0;

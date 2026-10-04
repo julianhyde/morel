@@ -44,7 +44,7 @@ useSilently "scott.smli";
  *)
 Sys.planOf (from i in [1, 2, 3] where i > 1);
 > val it = {_|
-> filter [$0 > 1] : int list
+> filter [i > 1] : int list
 >   [1, 2, 3] : int list
 > |_} : string
 
@@ -56,8 +56,8 @@ Sys.planOf (from i in [1, 2, 3] where i > 1);
 Sys.planOf (from d in scott.depts where d.deptno > 20 yield d.dname);
 > val it =
 >   {_|
-> project [#dname $0] : string bag
->   filter [#deptno $0 > 20] : t$0
+> project [#dname d] : string bag
+>   filter [#deptno d_1 > 20] : t$0
 >     #depts scott : t$0
 >
 > t$0 {deptno:int, dname:string, loc:string} bag
@@ -142,7 +142,7 @@ Sys.planOf (
 > project [{dname = #dname (#1 $0), ename = #ename (#2 $0)}] : t$0
 >   join [v$0] : t$1
 >     #depts scott : t$2
->     filter [#deptno $0 = #deptno v$0] : t$3
+>     filter [#deptno e2 = #deptno d] : t$3
 >       #emps scott : t$3
 >
 > t$0 {dname:string, ename:string} bag
@@ -187,7 +187,7 @@ Sys.planOf (
 > val it =
 >   {_|
 > project [{dname = #dname (#1 $0), who = #map Option #ename (#2 $0)}] : t$0
->   join [left] [#deptno $1 = #deptno $0] : t$1
+>   join [left] [#deptno $1 = #deptno d] : t$1
 >     #depts scott : t$2
 >     #emps scott : t$3
 >
@@ -205,8 +205,8 @@ Sys.planOf (
 > val it =
 >   {_|
 > project [{dname = #dname (#2 $0), who = #map Option #ename (#1 $0)}] : t$0
->   join [right] [#deptno $0 = #deptno $1] : t$1
->     filter [#job $0 = "PRESIDENT"] : t$2
+>   join [right] [#deptno e = #deptno $1] : t$1
+>     filter [#job x = "PRESIDENT"] : t$2
 >       #emps scott : t$2
 >     #depts scott : t$3
 >
@@ -236,8 +236,8 @@ Sys.planOf (
 >   {_|
 > project [{dname = #map Option #dname (#2 $0),
 >     who = #map Option #ename (#1 $0)}] : t$0
->   join [full] [#deptno $0 = #deptno $1] : t$1
->     filter [#job $0 = "PRESIDENT"] : t$2
+>   join [full] [#deptno e = #deptno $1] : t$1
+>     filter [#job x = "PRESIDENT"] : t$2
 >       #emps scott : t$2
 >     #depts scott : t$3
 >
@@ -258,7 +258,7 @@ Sys.planOf (
     compute {c = count over (), total = sum over e.sal});
 > val it =
 >   {_|
-> group [deptno = #deptno $0] [c = count over (), total = sum over #sal $0] : t$0
+> group [deptno = #deptno e] [c = count over (), total = sum over #sal e] : t$0
 >   #emps scott : t$1
 >
 > t$0 {c:int, deptno:int, total:real} bag
@@ -291,10 +291,10 @@ Sys.planOf (
   from e in scott.emps order e.sal skip 2 take 3 yield e.ename);
 > val it =
 >   {_|
-> project [#ename $0] : string list
+> project [#ename e] : string list
 >   take [3] : t$0
 >     skip [2] : t$0
->       sort [#sal $0] : t$0
+>       sort [#sal e_1] : t$0
 >         #emps scott : t$1
 >
 > t$0 {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} list
@@ -330,7 +330,7 @@ Sys.planOf (from i in [3, 1, 2] order i unorder);
 > val it =
 >   {_|
 > unorder : int bag
->   sort [$0] : int list
+>   sort [i] : int list
 >     [3, 1, 2] : int list
 > |_} : string
 
@@ -356,21 +356,18 @@ Sys.planOf (
     yield x);
 > val it =
 >   {_|
-> filter [let
->       val v$0 = $0
->     in
->       #nonEmpty Relational (r$0[v$0]) andalso #nonEmpty Relational (r$1[v$0])
->     end] : int list
+> filter [#nonEmpty Relational (r$0[x])
+>     andalso #nonEmpty Relational (r$1[x])] : int list
 >   [1, 2, 3] : int list
 >
-> r$0[v$0] =
+> r$0[x] =
 >   project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
->     filter [#1 $0 = v$0] : (int * int) list
+>     filter [#1 $0 = x] : (int * int) list
 >       pairs : (int * int) list
 >
-> r$1[v$0] =
+> r$1[x] =
 >   project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
->     filter [#2 $0 = v$0 + 1] : (int * int) list
+>     filter [#2 $0 = x + 1] : (int * int) list
 >       pairs : (int * int) list
 > |_} : string
 
@@ -401,21 +398,21 @@ Sys.planOf (
     yield x);
 > val it =
 >   {_|
-> filter [let val v$0 = $0 in #nonEmpty Relational (r$0[v$0]) end] : int list
+> filter [#nonEmpty Relational (r$0[x])] : int list
 >   [1, 2, 3] : int list
 >
-> r$0[v$0] =
+> r$0[x] =
 >   project [{a = #1 $0, b = #2 $0}] : {a:int, b:int} list
 >     filter [let
->           val v$1 = $0
+>           val v$0 = $0
 >         in
->           #1 $0 = v$0 andalso #nonEmpty Relational (r$1[v$1])
+>           #1 $0 = x andalso #nonEmpty Relational (r$1[v$0])
 >         end] : (int * int) list
 >       pairs : (int * int) list
 >
-> r$1[v$1] =
+> r$1[v$0] =
 >   project [{c = #1 $0, d = #2 $0}] : {c:int, d:int} list
->     filter [#1 $0 = #2 v$1] : (int * int) list
+>     filter [#1 $0 = #2 v$0] : (int * int) list
 >       pairs : (int * int) list
 > |_} : string
 
@@ -425,27 +422,27 @@ Sys.planOf (
  * before anything prints it, so these negate a variable. *)
 Sys.planOf (from i in [1, 2, 3] yield ~i);
 > val it = {_|
-> project [~ $0] : int list
+> project [~ i] : int list
 >   [1, 2, 3] : int list
 > |_} : string
 Sys.planOf (from i in [1, 2, 3] yield op ~ i);
 > val it = {_|
-> project [~ $0] : int list
+> project [~ i] : int list
 >   [1, 2, 3] : int list
 > |_} : string
 Sys.planOf (from i in [1, 2, 3] yield ~ (i + 1));
 > val it = {_|
-> project [~ ($0 + 1)] : int list
+> project [~ (i + 1)] : int list
 >   [1, 2, 3] : int list
 > |_} : string
 Sys.planOf (from i in [1, 2, 3] yield ~i + 1);
 > val it = {_|
-> project [~ $0 + 1] : int list
+> project [~ i + 1] : int list
 >   [1, 2, 3] : int list
 > |_} : string
 Sys.planOf (from i in [1, 2, 3] where ~i < 0);
 > val it = {_|
-> filter [~ $0 < 0] : int list
+> filter [~ i < 0] : int list
 >   [1, 2, 3] : int list
 > |_} : string
 from i in [1, 2, 3] yield ~i;
@@ -470,7 +467,7 @@ Sys.planOf (from e in es order e.deptno where ordinal > 1);
 > val it =
 >   {_|
 > filter [$ordinal > 1] : t$0
->   sort [#deptno $0] : t$0
+>   sort [#deptno e] : t$0
 >     es : t$0
 >
 > t$0 {deptno:int, id:int, name:string} list
@@ -483,7 +480,7 @@ Sys.planOf (from e in es order e.deptno where ordinal > 1);
 > val it =
 >   {_|
 > filter [$ordinal > 1] : t$0
->   sort [#deptno $0] : t$0
+>   sort [#deptno e] : t$0
 >     es : t$0
 >
 > t$0 {deptno:int, id:int, name:string} list
@@ -528,9 +525,9 @@ Sys.planOf (
     yield e.ename);
 > val it =
 >   {_|
-> project [#ename $0] : string bag
->   filter [#deptno $0 = 10 andalso #job $0 = "CLERK"
->       andalso #sal $0 > 1000.0] : t$0
+> project [#ename e] : string bag
+>   filter [#deptno e_1 = 10 andalso #job e_1 = "CLERK"
+>       andalso #sal e_1 > 1000.0] : t$0
 >     #emps scott : t$0
 >
 > t$0 {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real} bag
@@ -546,7 +543,7 @@ Sys.planOf (from i in [1, 2, 3] group i);
 > val it =
 >   {_|
 > project [#i $0] : int list
->   group [i = $0] : {i:int} list
+>   group [i = i] : {i:int} list
 >     [1, 2, 3] : int list
 > |_} : string
 from i in [1, 2, 3] group i;
@@ -559,7 +556,7 @@ from i in [1, 2, 3] group i;
 Sys.planOf (from c in [#"a" ..] where c <= #"d");
 > val it =
 >   {_|
-> filter [$0 <= #"d"] : char list
+> filter [c <= #"d"] : char list
 >   #flatten Range ([AT_LEAST #"a"]) : char list
 > |_} : string
 from c in [#"a" ..] where c <= #"d";
@@ -567,7 +564,7 @@ from c in [#"a" ..] where c <= #"d";
 Sys.planOf (from i where i elem [1, 2, 3] andalso i > 1);
 > val it =
 >   {_|
-> filter [$0 elem [1, 2, 3] andalso $0 > 1] : int list
+> filter [i elem [1, 2, 3] andalso i > 1] : int list
 >   extent "int" : int list
 > |_} : string
 from i where i elem [1, 2, 3] andalso i > 1;

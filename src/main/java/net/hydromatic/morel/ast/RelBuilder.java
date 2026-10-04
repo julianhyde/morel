@@ -69,6 +69,14 @@ import org.jspecify.annotations.Nullable;
 public class RelBuilder {
   private final TypeSystem typeSystem;
   private final ImmutableSet<Simplification> simps;
+  /**
+   * The row that the node being rebuilt had, consumed by the next {@link
+   * #above}. A rebuild must reproduce the tree it read, and the printer tells
+   * two rows of the same name apart by their ordinal, so a fresh row would
+   * print differently.
+   */
+  private Core.@Nullable IdPat rebuiltRow;
+
   private final Deque<Frame> stack = new ArrayDeque<>();
 
   /**
@@ -113,8 +121,16 @@ public class RelBuilder {
 
   /** Pushes the rebuilt form of one node, having rebuilt its inputs. */
   private void rebuild(Core.Exp exp) {
+    rebuild(exp, null);
+  }
+
+  /** Rebuilds a node, giving a leaf the row pattern of the node above it. */
+  private void rebuild(Core.Exp exp, Core.@Nullable IdPat above) {
     if (!(exp instanceof Core.Rel)) {
-      push(exp);
+      // The leaf's own row is not in the tree -- a leaf is just an
+      // expression -- so it takes a fresh row of the name the node above
+      // used. Only the nodes reuse their rows.
+      push(exp, above == null ? null : rowPat(exp, above.name));
       return;
     }
     rebuildRel((Core.Rel) exp);
@@ -125,12 +141,18 @@ public class RelBuilder {
   private void rebuildRel(Core.Rel exp) {
     if (exp instanceof Core.Filter) {
       final Core.Filter filter = (Core.Filter) exp;
-      rebuild(filter.input);
-      filter(repattern(filter, filter.condition));
+      rebuild(filter.input, filter.row);
+      // Compute the condition first: repatterning uses the builder, and
+      // would consume the row meant for this node.
+      final Core.Exp condition2 = repattern(filter, filter.condition);
+      rebuiltRow = filter.row;
+      filter(condition2);
     } else if (exp instanceof Core.Project) {
       final Core.Project project = (Core.Project) exp;
-      rebuild(project.input);
-      project(repattern(project, project.exp));
+      rebuild(project.input, project.row);
+      final Core.Exp exp2 = repattern(project, project.exp);
+      rebuiltRow = project.row;
+      project(exp2);
     } else if (exp instanceof Core.Join) {
       final Core.Join join = (Core.Join) exp;
       rebuild(join.left);
@@ -235,7 +257,20 @@ public class RelBuilder {
 
   /** Pushes a relational expression, whose element has no name of its own. */
   public RelBuilder push(Core.Exp rel) {
-    final Core.IdPat row = rowPat(rel);
+    return push(rel, null);
+  }
+
+  /**
+   * Pushes a relational expression, over a given row pattern if there is one
+   * worth keeping.
+   *
+   * <p>Rebuilding a tree uses this. The tree it reads has already named its
+   * rows, and it reuses the very pattern rather than a fresh one of the same
+   * name: the printer disambiguates by the pattern's ordinal, and a rebuild
+   * would start counting again.
+   */
+  private RelBuilder push(Core.Exp rel, Core.@Nullable IdPat rowPat) {
+    final Core.IdPat row = rowPat == null ? rowPat(rel) : rowPat;
     stack.push(new Frame(rel, row, elementNames(rel, row, ImmutableMap.of())));
     return this;
   }
@@ -245,7 +280,7 @@ public class RelBuilder {
    * emps} names the element {@code e}.
    */
   public RelBuilder push(String name, Core.Exp rel) {
-    final Core.IdPat row = rowPat(rel);
+    final Core.IdPat row = rowPat(rel, name);
     stack.push(
         new Frame(
             rel,
@@ -267,7 +302,12 @@ public class RelBuilder {
    */
   public RelBuilder push(Core.Pat pat, Core.Exp rel) {
     final Map<String, Core.Exp> names = new LinkedHashMap<>();
-    final Core.IdPat row = rowPat(rel);
+    // A bare name lends the row its name; anything else is erased, and the
+    // row has no name to borrow.
+    final Core.IdPat row =
+        pat instanceof Core.IdPat
+            ? rowPat(rel, ((Core.IdPat) pat).name)
+            : rowPat(rel);
     final Core.Exp element = core.id(row);
     if (!destructure(pat, element, names)) {
       throw new IllegalArgumentException(
@@ -697,11 +737,33 @@ public class RelBuilder {
   }
 
   /**
+   * Returns the pattern that names a collection's element, called after the
+   * name the query gave it.
+   *
+   * <p>A row called {@code e} rather than {@code $0} makes a plan easier to
+   * read, and gives a translator to another system a name to use: Spark calls
+   * it a subquery alias, and {@code $0} is not a name Spark would accept.
+   */
+  private Core.IdPat rowPat(Core.Exp rel, String name) {
+    return core.idPat(
+        rel.type.elementType(), name, typeSystem.nameGenerator.inc("v$"));
+  }
+
+  /**
    * Returns the frame for a node built on another frame whose element is the
    * same, so that it offers the same names, over a row of its own.
    */
   private Frame above(Frame frame, Core.Exp rel) {
-    final Core.IdPat row = rowPat(rel);
+    // The element is the input's, so the row keeps the input's name; a node
+    // above a collection called `e` still calls its row `e`. A rebuild says
+    // which row, so that it reproduces what it read rather than renumbering.
+    final Core.IdPat row;
+    if (rebuiltRow != null) {
+      row = rebuiltRow;
+      rebuiltRow = null;
+    } else {
+      row = rowPat(rel, frame.row.name);
+    }
     final ImmutableMap.Builder<String, Core.Exp> b = ImmutableMap.builder();
     frame.names.forEach(
         (name, exp) ->
