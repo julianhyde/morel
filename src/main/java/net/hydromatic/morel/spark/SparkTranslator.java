@@ -30,6 +30,7 @@ import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import org.apache.spark.connect.proto.Aggregate;
 import org.apache.spark.connect.proto.Expression;
 import org.apache.spark.connect.proto.Filter;
 import org.apache.spark.connect.proto.Join;
@@ -94,6 +95,24 @@ public class SparkTranslator {
                 .addAllExpressions(
                     projections(
                         project.exp, parts(project.input), project.type)));
+        break;
+
+      case GROUP:
+        final Core.Group group = (Core.Group) exp;
+        final Aggregate.Builder aggregate =
+            Aggregate.newBuilder()
+                .setInput(input(group.input, group.row))
+                .setGroupType(Aggregate.GroupType.GROUP_TYPE_GROUPBY);
+        final List<String> groupParts = parts(group.input);
+        group.keys.forEach(
+            (name, key) ->
+                aggregate.addGroupingExpressions(
+                    named(exp(key, groupParts), name)));
+        group.aggregates.forEach(
+            (name, agg) ->
+                aggregate.addAggregateExpressions(
+                    named(aggregate(agg, groupParts), name)));
+        b.setAggregate(aggregate);
         break;
 
       case JOIN:
@@ -323,6 +342,52 @@ public class SparkTranslator {
       default:
         throw unsupported(builtIn + ", which the table calls " + entry.kind);
     }
+  }
+
+  /**
+   * Translates an aggregate function over a group: the function the table
+   * names, applied to what the query aggregates. An aggregate with no argument
+   * counts rows, and Spark counts them by counting a constant.
+   */
+  private Expression aggregate(Core.Aggregate agg, List<String> parts) {
+    if (agg.aggregate.op != Op.FN_LITERAL) {
+      throw unsupported("aggregate " + agg.aggregate.op);
+    }
+    final BuiltIn builtIn = (BuiltIn) ((Core.Literal) agg.aggregate).value;
+    final SparkFunctionTable.Entry entry = functions.get(builtIn);
+    if (entry == null) {
+      throw unsupported("aggregate " + builtIn + ", which the table omits");
+    }
+    if (entry.kind != SparkFunctionTable.Kind.AGGREGATE) {
+      throw unsupported(
+          builtIn + " over a group, which the table calls " + entry.kind);
+    }
+    final Expression.UnresolvedFunction.Builder b =
+        Expression.UnresolvedFunction.newBuilder().setFunctionName(entry.spark);
+    b.addArguments(
+        agg.argument == null || agg.argument.op == Op.UNIT_LITERAL
+            ? literal(Expression.Literal.newBuilder().setInteger(1))
+            : exp(agg.argument, parts));
+    return Expression.newBuilder().setUnresolvedFunction(b).build();
+  }
+
+  /**
+   * Names an expression, unless it already reads the field of that name: a key
+   * called `deptno` that reads `deptno` needs no alias, and an aggregate always
+   * does.
+   */
+  private static Expression named(Expression expression, String name) {
+    if (expression.hasUnresolvedAttribute()) {
+      final String id =
+          expression.getUnresolvedAttribute().getUnparsedIdentifier();
+      if (id.endsWith("." + name) || id.equals(name)) {
+        return expression;
+      }
+    }
+    return Expression.newBuilder()
+        .setAlias(
+            Expression.Alias.newBuilder().setExpr(expression).addName(name))
+        .build();
   }
 
   private static Expression attribute(String identifier) {

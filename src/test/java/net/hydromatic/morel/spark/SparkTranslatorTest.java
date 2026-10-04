@@ -149,6 +149,21 @@ public class SparkTranslatorTest {
                 + "  yield {e.ename, d.dname}");
     assertThat(f.plan(), is(seedPlan("q2")));
   }
+
+  /**
+   * Query 3: group by with aggregates. Pins the aggregate relation, the
+   * grouping key, and count, sum and max.
+   */
+  @Test
+  void testQuery3() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps\n"
+                + "  group e.deptno\n"
+                + "    compute {c = count over (), total = sum over e.sal,\n"
+                + "             top = max over e.sal}");
+    assertThat(f.plan(), is(seedPlan("q3")));
+  }
 }
 
 // End SparkTranslatorTest.java

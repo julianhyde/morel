@@ -137,6 +137,13 @@
   {morel = "Relational.count", kind = "aggregate", spark = "count",
    divergence = ""},
   {morel = "Relational.sum", kind = "aggregate", spark = "sum", divergence = ""},
+  (* `sum` resolves to an internal operator, one per summable type;
+   * Spark picks the type itself, so all three reach one function. *)
+  {morel = "$.sum:int", kind = "aggregate", spark = "sum", divergence = ""},
+  {morel = "$.sum:real", kind = "aggregate", spark = "sum",
+   divergence = ""},
+  {morel = "$.sum:decimal", kind = "aggregate", spark = "sum",
+   divergence = ""},
   {morel = "Relational.min", kind = "aggregate", spark = "min", divergence = ""},
   {morel = "Relational.max", kind = "aggregate", spark = "max", divergence = ""},
   {morel = "op elem", kind = "subquery", spark = "exists",
