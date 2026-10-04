@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.JoinType;
 import net.hydromatic.morel.ast.Op;
@@ -34,12 +35,14 @@ import org.apache.spark.connect.proto.Aggregate;
 import org.apache.spark.connect.proto.Expression;
 import org.apache.spark.connect.proto.Filter;
 import org.apache.spark.connect.proto.Join;
+import org.apache.spark.connect.proto.Limit;
 import org.apache.spark.connect.proto.LocalRelation;
 import org.apache.spark.connect.proto.Plan;
 import org.apache.spark.connect.proto.Project;
 import org.apache.spark.connect.proto.Read;
 import org.apache.spark.connect.proto.Relation;
 import org.apache.spark.connect.proto.RelationCommon;
+import org.apache.spark.connect.proto.Sort;
 import org.apache.spark.connect.proto.SubqueryAlias;
 import org.jspecify.annotations.Nullable;
 
@@ -113,6 +116,27 @@ public class SparkTranslator {
                 aggregate.addAggregateExpressions(
                     named(aggregate(agg, groupParts), name)));
         b.setAggregate(aggregate);
+        break;
+
+      case SORT:
+        final Core.Sort sort = (Core.Sort) exp;
+        final Sort.Builder sortBuilder =
+            Sort.newBuilder().setInput(input(sort.input, sort.row));
+        sortOrder(sort.exp, false, parts(sort.input), sortBuilder::addOrder);
+        // A query orders its whole result, not each partition of it.
+        b.setSort(sortBuilder.setIsGlobal(true));
+        break;
+
+      case TAKE:
+        final Core.Take take = (Core.Take) exp;
+        if (take.count.op != Op.INT_LITERAL) {
+          throw unsupported("take of " + take.count.op);
+        }
+        b.setLimit(
+            Limit.newBuilder()
+                .setInput(rel(take.input))
+                .setLimit(
+                    ((Number) ((Core.Literal) take.count).value).intValue()));
         break;
 
       case JOIN:
@@ -278,7 +302,10 @@ public class SparkTranslator {
         if (apply.fn.op == Op.RECORD_SELECTOR) {
           final String qualifier = qualifier(apply.arg, parts);
           if (qualifier != null) {
-            return attribute(qualifier + "." + selectedName(apply));
+            return attribute(
+                qualifier.isEmpty()
+                    ? selectedName(apply)
+                    : qualifier + "." + selectedName(apply));
           }
         }
         if (apply.fn.op == Op.FN_LITERAL) {
@@ -390,6 +417,44 @@ public class SparkTranslator {
         .build();
   }
 
+  /**
+   * Translates the keys a query orders by, which are a tuple when there is more
+   * than one, and each of which may be wrapped in `DESC`.
+   *
+   * <p>Spark puts nulls where that direction puts them: last when descending,
+   * first when ascending.
+   */
+  private void sortOrder(
+      Core.Exp exp,
+      boolean descending,
+      List<String> parts,
+      Consumer<Expression.SortOrder> consumer) {
+    if (exp.isCallTo(BuiltIn.Constructor.DESCENDING_DESC)) {
+      sortOrder(((Core.Apply) exp).arg, !descending, parts, consumer);
+      return;
+    }
+    if (exp.op == Op.TUPLE) {
+      for (Core.Exp arg : ((Core.Tuple) exp).args) {
+        sortOrder(arg, descending, parts, consumer);
+      }
+      return;
+    }
+    consumer.accept(
+        Expression.SortOrder.newBuilder()
+            .setChild(exp(exp, parts))
+            .setDirection(
+                descending
+                    ? Expression.SortOrder.SortDirection
+                        .SORT_DIRECTION_DESCENDING
+                    : Expression.SortOrder.SortDirection
+                        .SORT_DIRECTION_ASCENDING)
+            .setNullOrdering(
+                descending
+                    ? Expression.SortOrder.NullOrdering.SORT_NULLS_LAST
+                    : Expression.SortOrder.NullOrdering.SORT_NULLS_FIRST)
+            .build());
+  }
+
   private static Expression attribute(String identifier) {
     return Expression.newBuilder()
         .setUnresolvedAttribute(
@@ -414,7 +479,10 @@ public class SparkTranslator {
    */
   private static @Nullable String qualifier(Core.Exp exp, List<String> parts) {
     if (exp.op == Op.ID) {
-      return ((Core.Id) exp).idPat.name;
+      final String name = ((Core.Id) exp).idPat.name;
+      // A row the compiler named, as a projection's output is, has no alias
+      // in the plan, so a column of it is unqualified.
+      return name.startsWith("$") ? "" : name;
     }
     if (exp.op == Op.APPLY) {
       final Core.Apply apply = (Core.Apply) exp;

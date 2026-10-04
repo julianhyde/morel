@@ -164,6 +164,21 @@ public class SparkTranslatorTest {
                 + "             top = max over e.sal}");
     assertThat(f.plan(), is(seedPlan("q3")));
   }
+
+  /**
+   * Query 4: sort and limit. Pins the sort relation with mixed directions, a
+   * limit, and that the result is an ordered list.
+   */
+  @Test
+  void testQuery4() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps\n"
+                + "  yield {e.ename, e.sal}\n"
+                + "  order (DESC sal, ename)\n"
+                + "  take 3");
+    assertThat(f.plan(), is(seedPlan("q4")));
+  }
 }
 
 // End SparkTranslatorTest.java
