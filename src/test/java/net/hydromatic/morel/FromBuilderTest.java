@@ -343,13 +343,14 @@ public class FromBuilderTest {
     assertThat(
         exp,
         hasToString(
-            "sort [$0]\n"
+            "sort [$0]\n" //
                 + "  group [x = #x $0, y = #y $0]\n"
                 + "    project [{x = #2 (#1 $0), y = #2 (#2 $0)}]\n"
                 + "      filter [#2 (#1 $0) <> #2 (#2 $0)]\n"
-                + "        join [#1 $1 = #1 $0]\n"
+                + "        join [#1 $0 = #1 $0]\n"
                 + "          [(1, \"a\"), (2, \"b\")]\n"
-                + "          [(1, \"a\"), (2, \"b\")]\n"));
+                + "          [(1, \"a\"), (2, \"b\")]\n"
+                + ""));
     assertThat(exp.type, hasToString("{x:string, y:string} list"));
   }
 }

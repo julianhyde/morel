@@ -180,7 +180,7 @@ public class RelBuilderTest {
     nameExps.add("i", b.name(0, "i"));
     nameExps.add("j", b.name(1, "j"));
     // Before the join, each name reads its own input's row.
-    assertThat(nameExps, hasToString("[<i, i>, <j, $1>]"));
+    assertThat(nameExps, hasToString("[<i, i>, <j, j>]"));
     final Core.Exp rel = b.join(JoinType.INNER, core.boolLiteral(true)).build();
     assertThat(
         f.plan(rel),
@@ -226,16 +226,18 @@ public class RelBuilderTest {
     assertThat(
         f.plan(offeredBinder(f)),
         is(
-            "join [i = $1]\n" //
+            "join [i = $0]\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"
+                + ""
                 + ""));
     assertThat(
         f.plan(offeredBinder(f, Simplification.values())),
         is(
-            "join [i = $1]\n" //
+            "join [i = $0]\n" //
                 + "  [1, 2]\n"
                 + "  [1, 2]\n"
+                + ""
                 + ""));
   }
 

@@ -707,9 +707,8 @@ public class RelBuilder {
   /** Returns the pattern that names a frame's element as a right input. */
   private Core.IdPat rightRow(Frame frame) {
     if (frame.rightRow == null) {
-      frame.rightRow =
-          core.rightRowPat(
-              frame.rel.type.elementType(), typeSystem.nameGenerator::inc);
+      // As for a left row, the name the query gave the element beats `$1`.
+      frame.rightRow = rowPat(frame.rel, frame.row.name);
     }
     return frame.rightRow;
   }

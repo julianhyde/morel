@@ -187,7 +187,7 @@ Sys.planOf (
 > val it =
 >   {_|
 > project [{dname = #dname (#1 $0), who = #map Option #ename (#2 $0)}] : t$0
->   join [left] [#deptno $1 = #deptno d] : t$1
+>   join [left] [#deptno e = #deptno d] : t$1
 >     #depts scott : t$2
 >     #emps scott : t$3
 >
@@ -205,7 +205,7 @@ Sys.planOf (
 > val it =
 >   {_|
 > project [{dname = #dname (#2 $0), who = #map Option #ename (#1 $0)}] : t$0
->   join [right] [#deptno e = #deptno $1] : t$1
+>   join [right] [#deptno e = #deptno d] : t$1
 >     filter [#job x = "PRESIDENT"] : t$2
 >       #emps scott : t$2
 >     #depts scott : t$3
@@ -236,7 +236,7 @@ Sys.planOf (
 >   {_|
 > project [{dname = #map Option #dname (#2 $0),
 >     who = #map Option #ename (#1 $0)}] : t$0
->   join [full] [#deptno e = #deptno $1] : t$1
+>   join [full] [#deptno e = #deptno d] : t$1
 >     filter [#job x = "PRESIDENT"] : t$2
 >       #emps scott : t$2
 >     #depts scott : t$3
