@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.JoinType;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.foreign.SparkBackend;
@@ -31,9 +32,11 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import org.apache.spark.connect.proto.Expression;
 import org.apache.spark.connect.proto.Filter;
+import org.apache.spark.connect.proto.Join;
 import org.apache.spark.connect.proto.LocalRelation;
 import org.apache.spark.connect.proto.Plan;
 import org.apache.spark.connect.proto.Project;
+import org.apache.spark.connect.proto.Read;
 import org.apache.spark.connect.proto.Relation;
 import org.apache.spark.connect.proto.RelationCommon;
 import org.apache.spark.connect.proto.SubqueryAlias;
@@ -80,7 +83,7 @@ public class SparkTranslator {
         b.setFilter(
             Filter.newBuilder()
                 .setInput(input(filter.input, filter.row))
-                .setCondition(exp(filter.condition, filter.row)));
+                .setCondition(exp(filter.condition, parts(filter.input))));
         break;
 
       case PROJECT:
@@ -89,7 +92,18 @@ public class SparkTranslator {
             Project.newBuilder()
                 .setInput(input(project.input, project.row))
                 .addAllExpressions(
-                    projections(project.exp, project.row, project.type)));
+                    projections(
+                        project.exp, parts(project.input), project.type)));
+        break;
+
+      case JOIN:
+        final Core.Join join = (Core.Join) exp;
+        b.setJoin(
+            Join.newBuilder()
+                .setLeft(input(join.left, join.leftRow))
+                .setRight(input(join.right, join.rightRow))
+                .setJoinCondition(exp(join.condition, ImmutableList.of()))
+                .setJoinType(joinType(join.joinType)));
         break;
 
       default:
@@ -128,7 +142,49 @@ public class SparkTranslator {
                   .setSchema(SparkSchema.schemaJson(elementType(exp.type))))
           .build();
     }
+    if (tableName(exp) != null) {
+      return Relation.newBuilder()
+          .setCommon(RelationCommon.newBuilder().setPlanId(planId))
+          .setRead(
+              Read.newBuilder()
+                  .setNamedTable(
+                      Read.NamedTable.newBuilder()
+                          .setUnparsedIdentifier(tableName(exp))))
+          .build();
+    }
     throw unsupported("collection " + exp.op);
+  }
+
+  /**
+   * Returns the name of the table a collection reads, or null if it is not a
+   * table. A table is a field of a foreign value, so {@code scott.emps} is a
+   * record selector applied to a name, and Spark wants the two joined by a dot,
+   * as the user wrote them.
+   */
+  private static @Nullable String tableName(Core.Exp exp) {
+    if (exp.op == Op.APPLY) {
+      final Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn.op == Op.RECORD_SELECTOR && apply.arg.op == Op.ID) {
+        return ((Core.Id) apply.arg).idPat.name + "." + selectedName(apply);
+      }
+    }
+    return null;
+  }
+
+  /** Translates a join's kind. */
+  private static Join.JoinType joinType(JoinType joinType) {
+    switch (joinType) {
+      case INNER:
+        return Join.JoinType.JOIN_TYPE_INNER;
+      case LEFT:
+        return Join.JoinType.JOIN_TYPE_LEFT_OUTER;
+      case RIGHT:
+        return Join.JoinType.JOIN_TYPE_RIGHT_OUTER;
+      case FULL:
+        return Join.JoinType.JOIN_TYPE_FULL_OUTER;
+      default:
+        throw unsupported("join kind " + joinType);
+    }
   }
 
   /**
@@ -154,7 +210,7 @@ public class SparkTranslator {
    * same name needs no alias; anything else is aliased to the output name.
    */
   private List<Expression> projections(
-      Core.Exp exp, Core.IdPat row, Type type) {
+      Core.Exp exp, List<String> parts, Type type) {
     if (exp.op != Op.TUPLE) {
       throw unsupported("projection " + exp.op);
     }
@@ -165,8 +221,8 @@ public class SparkTranslator {
     for (int i = 0; i < tuple.args.size(); i++) {
       final Core.Exp arg = tuple.args.get(i);
       final String name = names.get(i);
-      final Expression expression = exp(arg, row);
-      if (name.equals(fieldName(arg, row))) {
+      final Expression expression = exp(arg, parts);
+      if (name.equals(fieldName(arg))) {
         expressions.add(expression);
       } else {
         expressions.add(
@@ -185,10 +241,10 @@ public class SparkTranslator {
    * Returns the name of the input field that {@code exp} reads, or null if it
    * reads none: that is, if it is anything but a field of the row.
    */
-  private static @Nullable String fieldName(Core.Exp exp, Core.IdPat row) {
+  private static @Nullable String fieldName(Core.Exp exp) {
     if (exp.op == Op.APPLY) {
       final Core.Apply apply = (Core.Apply) exp;
-      if (apply.fn.op == Op.RECORD_SELECTOR && isRow(apply.arg, row)) {
+      if (apply.fn.op == Op.RECORD_SELECTOR) {
         return selectedName(apply);
       }
     }
@@ -196,18 +252,21 @@ public class SparkTranslator {
   }
 
   /** Translates an expression. */
-  private Expression exp(Core.Exp exp, Core.IdPat row) {
+  private Expression exp(Core.Exp exp, List<String> parts) {
     switch (exp.op) {
       case APPLY:
         final Core.Apply apply = (Core.Apply) exp;
-        if (apply.fn.op == Op.RECORD_SELECTOR && isRow(apply.arg, row)) {
-          return attribute(row.name + "." + selectedName(apply));
+        if (apply.fn.op == Op.RECORD_SELECTOR) {
+          final String qualifier = qualifier(apply.arg, parts);
+          if (qualifier != null) {
+            return attribute(qualifier + "." + selectedName(apply));
+          }
         }
         if (apply.fn.op == Op.FN_LITERAL) {
           return function(
               (BuiltIn) ((Core.Literal) apply.fn).value,
               arguments(apply.arg),
-              row);
+              parts);
         }
         throw unsupported("call to " + apply.fn.op);
 
@@ -247,7 +306,7 @@ public class SparkTranslator {
 
   /** Translates a call to a built-in. */
   private Expression function(
-      BuiltIn builtIn, List<Core.Exp> args, Core.IdPat row) {
+      BuiltIn builtIn, List<Core.Exp> args, List<String> parts) {
     final SparkFunctionTable.Entry entry = functions.get(builtIn);
     if (entry == null) {
       throw unsupported("built-in " + builtIn + ", which the table omits");
@@ -258,7 +317,7 @@ public class SparkTranslator {
             Expression.UnresolvedFunction.newBuilder()
                 .setFunctionName(entry.spark);
         for (Core.Exp arg : args) {
-          b.addArguments(exp(arg, row));
+          b.addArguments(exp(arg, parts));
         }
         return Expression.newBuilder().setUnresolvedFunction(b).build();
       default:
@@ -279,9 +338,41 @@ public class SparkTranslator {
     return Expression.newBuilder().setLiteral(literal).build();
   }
 
-  /** Returns whether an expression is the row variable itself. */
-  private static boolean isRow(Core.Exp exp, Core.IdPat row) {
-    return exp.op == Op.ID && ((Core.Id) exp).idPat.equals(row);
+  /**
+   * Returns the alias that qualifies a field read out of {@code exp}, or null
+   * if {@code exp} is not something a field can be read from.
+   *
+   * <p>A field of the row is qualified by the row's own name. A field of a
+   * component of the row -- what a projection over a join reads -- is qualified
+   * by the name of the input that contributed it, which {@code parts} lists in
+   * order.
+   */
+  private static @Nullable String qualifier(Core.Exp exp, List<String> parts) {
+    if (exp.op == Op.ID) {
+      return ((Core.Id) exp).idPat.name;
+    }
+    if (exp.op == Op.APPLY) {
+      final Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn.op == Op.RECORD_SELECTOR && apply.arg.op == Op.ID) {
+        final int slot = ((Core.RecordSelector) apply.fn).slot;
+        if (slot < parts.size()) {
+          return parts.get(slot);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Returns the names of a node's input's components: a join's two sides, or
+   * nothing at all, since only a join concatenates rows.
+   */
+  private static List<String> parts(Core.Exp input) {
+    if (input instanceof Core.Join) {
+      final Core.Join join = (Core.Join) input;
+      return ImmutableList.of(join.leftRow.name, join.rightRow.name);
+    }
+    return ImmutableList.of();
   }
 
   /** Returns the field name that a record selector selects. */

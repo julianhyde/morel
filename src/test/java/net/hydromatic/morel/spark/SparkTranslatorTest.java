@@ -29,6 +29,7 @@ import java.io.StringReader;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
+import net.hydromatic.morel.BuiltInDataSet;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
@@ -40,6 +41,7 @@ import net.hydromatic.morel.compile.Environments;
 import net.hydromatic.morel.compile.Inliner;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
+import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.TypeSystem;
 import org.junit.jupiter.api.Test;
@@ -62,7 +64,12 @@ public class SparkTranslatorTest {
       final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
       final AstNode statement = parser.statementEofSafe();
       final Environment env =
-          Environments.env(typeSystem, null, ImmutableMap.of());
+          Environments.env(
+              typeSystem,
+              null,
+              Calcite.withDataSets(
+                      ImmutableMap.of("scott", BuiltInDataSet.SCOTT))
+                  .foreignValues());
       final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
       final Consumer<CompileException> ignoreWarnings = w -> {};
       final TypeResolver.Resolved resolved =
@@ -127,6 +134,20 @@ public class SparkTranslatorTest {
                 + "  where r.b andalso r.i > 1\n"
                 + "  yield {r.s, y = r.x * 2.0}");
     assertThat(f.plan(), is(seedPlan("q1")));
+  }
+
+  /**
+   * Query 2: equijoin. Pins the join relation, the qualification of a column
+   * name that both inputs have, and projection over the concatenated row.
+   */
+  @Test
+  void testQuery2() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps\n"
+                + "  join d in scott.depts on e.deptno = d.deptno\n"
+                + "  yield {e.ename, d.dname}");
+    assertThat(f.plan(), is(seedPlan("q2")));
   }
 }
 
