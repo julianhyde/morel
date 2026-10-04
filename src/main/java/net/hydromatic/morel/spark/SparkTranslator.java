@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.JoinType;
 import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.RecordLikeType;
@@ -44,6 +45,8 @@ import org.apache.spark.connect.proto.Relation;
 import org.apache.spark.connect.proto.RelationCommon;
 import org.apache.spark.connect.proto.Sort;
 import org.apache.spark.connect.proto.SubqueryAlias;
+import org.apache.spark.connect.proto.SubqueryExpression;
+import org.apache.spark.connect.proto.WithRelations;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -63,6 +66,13 @@ public class SparkTranslator {
   private final TypeSystem typeSystem;
   private final SparkFunctionTable functions = SparkFunctionTable.instance();
   private final List<Integer> localRowCounts = new ArrayList<>();
+
+  /**
+   * The relations that expressions in the query refer to, which Spark carries
+   * beside the root rather than inside it. A correlated subquery is one.
+   */
+  private final List<Relation> references = new ArrayList<>();
+
   private int nextPlanId;
 
   private SparkTranslator(TypeSystem typeSystem) {
@@ -77,9 +87,59 @@ public class SparkTranslator {
         Plan.newBuilder().setRoot(root).build(), translator.localRowCounts);
   }
 
-  /** Translates one relational node. */
+  /**
+   * Translates a relational node, wrapping it where its own expressions refer
+   * to relations: Spark keeps those beside the node, not inside it, and the
+   * wrapper is what holds them. The wrapper takes the plan id above the node's,
+   * which is the order the text prints them.
+   */
   private Relation rel(Core.Exp exp) {
-    final int planId = nextPlanId++;
+    if (!refersToRelation(exp)) {
+      return relNode(exp, nextPlanId++);
+    }
+    final int wrapperId = nextPlanId++;
+    final List<Relation> enclosing = new ArrayList<>(references);
+    references.clear();
+    final Relation node = relNode(exp, nextPlanId++);
+    final List<Relation> own = new ArrayList<>(references);
+    references.clear();
+    references.addAll(enclosing);
+    return Relation.newBuilder()
+        .setCommon(RelationCommon.newBuilder().setPlanId(wrapperId))
+        .setWithRelations(
+            WithRelations.newBuilder().setRoot(node).addAllReferences(own))
+        .build();
+  }
+
+  /** Returns whether a node's own expressions ask a question of a query. */
+  private static boolean refersToRelation(Core.Exp exp) {
+    if (exp instanceof Core.Filter) {
+      return containsSubquery(((Core.Filter) exp).condition);
+    }
+    if (exp instanceof Core.Project) {
+      return containsSubquery(((Core.Project) exp).exp);
+    }
+    return false;
+  }
+
+  /** Returns whether an expression asks a question of a query. */
+  private static boolean containsSubquery(Core.Exp exp) {
+    final boolean[] found = {false};
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Apply apply) {
+            if (apply.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)) {
+              found[0] = true;
+            }
+            super.visit(apply);
+          }
+        });
+    return found[0];
+  }
+
+  /** Translates one relational node, under a given plan id. */
+  private Relation relNode(Core.Exp exp, int planId) {
     final Relation.Builder b = Relation.newBuilder();
     switch (exp.op) {
       case FILTER:
@@ -255,7 +315,9 @@ public class SparkTranslator {
   private List<Expression> projections(
       Core.Exp exp, List<String> parts, Type type) {
     if (exp.op != Op.TUPLE) {
-      throw unsupported("projection " + exp.op);
+      // A query can yield one unnamed column -- `yield d.dname` -- and then
+      // there is no record of names to draw an alias from.
+      return ImmutableList.of(exp(exp, parts));
     }
     final Core.Tuple tuple = (Core.Tuple) exp;
     final List<String> names =
@@ -307,6 +369,9 @@ public class SparkTranslator {
                     ? selectedName(apply)
                     : qualifier + "." + selectedName(apply));
           }
+        }
+        if (apply.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)) {
+          return subquery(apply.arg);
         }
         if (apply.fn.op == Op.FN_LITERAL) {
           return function(
@@ -453,6 +518,31 @@ public class SparkTranslator {
                     ? Expression.SortOrder.NullOrdering.SORT_NULLS_LAST
                     : Expression.SortOrder.NullOrdering.SORT_NULLS_FIRST)
             .build());
+  }
+
+  /**
+   * Translates a query that an expression asks a question of: whether it has a
+   * row. The query goes beside the root, under a plan id of its own, and the
+   * expression quotes that id.
+   *
+   * <p>The query may read the outer row, which is what makes it correlated;
+   * nothing special is needed for that, because the outer row prints under the
+   * name it has, and Spark resolves it against the enclosing relation.
+   */
+  private Expression subquery(Core.Exp exp) {
+    if (!(exp instanceof Core.Rel)) {
+      throw unsupported("exists over " + exp.op);
+    }
+    final int planId = nextPlanId++;
+    final Relation relation = relNode(exp, planId);
+    references.add(relation);
+    return Expression.newBuilder()
+        .setSubqueryExpression(
+            SubqueryExpression.newBuilder()
+                .setPlanId(planId)
+                .setSubqueryType(
+                    SubqueryExpression.SubqueryType.SUBQUERY_TYPE_EXISTS))
+        .build();
   }
 
   private static Expression attribute(String identifier) {
