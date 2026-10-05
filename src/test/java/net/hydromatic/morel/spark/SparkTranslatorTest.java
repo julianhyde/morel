@@ -113,11 +113,24 @@ public class SparkTranslatorTest {
       throw new IllegalArgumentException("no section " + header.trim());
     }
     final int from = start + header.length();
-    final int next = text.indexOf("\n=== ", from); // a header starts a line
-    final String section =
-        next < 0 ? text.substring(from) : text.substring(from, next);
+    // A plan runs to the next header, or, for the last plan, to the comment
+    // that ends the file.
+    final int next =
+        Math.min(
+            before(text, from, "\n=== "), // a header starts a line
+            before(text, from, "\n# ")); // and so does the closing comment
+    final String section = text.substring(from, next);
     // Sections are separated by blank lines that are not part of a plan.
     return section.replaceAll("\\s+$", "");
+  }
+
+  /**
+   * Returns where {@code marker} next occurs at or after {@code from}, or the
+   * end of the text if it does not occur again.
+   */
+  private static int before(String text, int from, String marker) {
+    final int i = text.indexOf(marker, from);
+    return i < 0 ? text.length() : i;
   }
 
   /**
@@ -302,6 +315,40 @@ public class SparkTranslatorTest {
   void testQuery14() throws IOException {
     final Fixture f = new Fixture("from e in scott.emps compute count over ()");
     assertThat(f.plan(), is(seedPlan("q14")));
+  }
+
+  /** Query 15: except, of bags, so every row counts. */
+  @Test
+  void testQuery15a() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps yield {n = e.deptno}\n"
+                + "  except (from d in scott.depts\n"
+                + "      where d.deptno > 20 yield {n = d.deptno})");
+    assertThat(f.plan(), is(seedPlan("q15a")));
+  }
+
+  /** Query 15 again, intersecting rather than subtracting. */
+  @Test
+  void testQuery15b() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps yield {n = e.deptno}\n"
+                + "  intersect (from d in scott.depts\n"
+                + "      where d.deptno > 20 yield {n = d.deptno})");
+    assertThat(f.plan(), is(seedPlan("q15b")));
+  }
+
+  /** Query 16: two grouping keys and two aggregates, then a sort. */
+  @Test
+  void testQuery16() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps\n"
+                + "  group {e.deptno, e.job}\n"
+                + "    compute {n = count over (), s = sum over e.sal}\n"
+                + "  order (deptno, job)");
+    assertThat(f.plan(), is(seedPlan("q16")));
   }
 }
 
