@@ -1067,19 +1067,8 @@ root {
           }
         }
         condition {
-          unresolved_function {
-            function_name: "startsWith"
-            arguments {
-              unresolved_attribute {
-                unparsed_identifier: "e.ename"
-                is_metadata_column: false
-              }
-            }
-            arguments {
-              literal {
-                string: "S"
-              }
-            }
+          expression_string {
+            expression: "startswith(e.ename, \'S\')"
           }
         }
       }
@@ -1109,34 +1098,8 @@ root {
     expressions {
       alias {
         expr {
-          unresolved_function {
-            function_name: "substring"
-            arguments {
-              unresolved_attribute {
-                unparsed_identifier: "e.ename"
-                is_metadata_column: false
-              }
-            }
-            arguments {
-              unresolved_function {
-                function_name: "+"
-                arguments {
-                  literal {
-                    integer: 0
-                  }
-                }
-                arguments {
-                  literal {
-                    integer: 1
-                  }
-                }
-              }
-            }
-            arguments {
-              literal {
-                integer: 2
-              }
-            }
+          expression_string {
+            expression: "substring(e.ename, 0 + 1, 2)"
           }
         }
         name: "s"
@@ -1381,13 +1344,18 @@ root {
         }
         group_type: GROUP_TYPE_GROUPBY
         aggregate_expressions {
-          unresolved_function {
-            function_name: "count"
-            arguments {
-              literal {
-                integer: 1
+          alias {
+            expr {
+              unresolved_function {
+                function_name: "count"
+                arguments {
+                  literal {
+                    integer: 1
+                  }
+                }
               }
             }
+            name: "count"
           }
         }
       }
@@ -1433,7 +1401,7 @@ root {
             }
           }
         }
-        name: "it"
+        name: "count"
       }
     }
   }

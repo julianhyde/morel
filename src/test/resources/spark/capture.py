@@ -169,11 +169,13 @@ q10 = (e.where(F.col("e.deptno") == 10)
 show("q10", q10)
 
 # Query 11: string functions.
-q11 = (e.where(F.col("e.ename").startswith("S"))
+# isPrefix and substring are rewritten functions -- Morel's arguments are in
+# the other order, and its substring counts from zero -- so they cross as SQL.
+q11 = (e.where(F.expr("startswith(e.ename, 'S')"))
        .select(
            F.col("e.ename"),
            F.length(F.col("e.ename")).alias("n"),
-           F.substring(F.col("e.ename"), F.lit(0) + F.lit(1), F.lit(2)).alias("s"),
+           F.expr("substring(e.ename, 0 + 1, 2)").alias("s"),
            F.concat(F.col("e.ename"), F.lit("!")).alias("t")))
 show("q11", q11)
 
@@ -188,11 +190,14 @@ show("q12", q12)
 q13 = d.select(
     F.col("d.dname"),
     e.where(F.col("e.deptno") == F.col("d.deptno"))
-     .agg(F.count(F.lit(1))).scalar().alias("n"))
+     .agg(F.count(F.lit(1)).alias("count")).scalar().alias("n"))
 show("q13", q13)
 
 # Query 14: a non-collection result is a single-row, single-column relation.
-q14 = e.agg(F.count(F.lit(1)).alias("it"))
+# The column takes the name Morel's `compute` gives the aggregate, as in the
+# query above; what the value is bound to outside the query is Morel's own
+# business, and nothing reads the name of a column it takes whole.
+q14 = e.agg(F.count(F.lit(1)).alias("count"))
 show("q14", q14)
 
 # Query 15: except and intersect, of bags.

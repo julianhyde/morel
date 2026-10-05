@@ -150,7 +150,7 @@ public class SparkTranslator {
   }
 
   /** Returns whether a node's own expressions ask a question of a query. */
-  private static boolean refersToRelation(Core.Exp exp) {
+  private boolean refersToRelation(Core.Exp exp) {
     if (exp instanceof Core.Filter) {
       return containsSubquery(((Core.Filter) exp).condition);
     }
@@ -160,15 +160,23 @@ public class SparkTranslator {
     return false;
   }
 
-  /** Returns whether an expression asks a question of a query. */
-  private static boolean containsSubquery(Core.Exp exp) {
+  /**
+   * Returns whether an expression asks a question of a query. The function
+   * table says which built-ins do.
+   */
+  private boolean containsSubquery(Core.Exp exp) {
     final boolean[] found = {false};
     exp.accept(
         new Visitor() {
           @Override
           protected void visit(Core.Apply apply) {
-            if (apply.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)) {
-              found[0] = true;
+            if (apply.fn.op == Op.FN_LITERAL) {
+              final SparkFunctionTable.Entry entry =
+                  functions.get((BuiltIn) ((Core.Literal) apply.fn).value);
+              if (entry != null
+                  && entry.kind == SparkFunctionTable.Kind.SUBQUERY) {
+                found[0] = true;
+              }
             }
             super.visit(apply);
           }
@@ -489,14 +497,10 @@ public class SparkTranslator {
                     : qualifier + "." + selectedName(apply));
           }
         }
-        if (apply.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)) {
-          return subquery(apply.arg);
-        }
-        if (apply.fn.op == Op.FN_LITERAL) {
-          return function(
-              (BuiltIn) ((Core.Literal) apply.fn).value,
-              arguments(apply.arg),
-              parts);
+        final List<Core.Exp> args = new ArrayList<>();
+        final Core.Exp fn = flatten(apply, args);
+        if (fn.op == Op.FN_LITERAL) {
+          return function((BuiltIn) ((Core.Literal) fn).value, args, parts);
         }
         throw unsupported("call to " + apply.fn.op);
 
@@ -548,6 +552,25 @@ public class SparkTranslator {
     return arg.op == Op.TUPLE ? ((Core.Tuple) arg).args : ImmutableList.of(arg);
   }
 
+  /**
+   * Peels a call down to the function it calls, adding the arguments it meets
+   * to {@code args} in the order they were written.
+   *
+   * <p>A built-in takes its arguments one way or the other: {@code
+   * String.substring (s, 0, 2)} is one application of a tuple, and {@code
+   * String.isPrefix "S" s} is two applications, one per argument. Both arrive
+   * here as the same list, which is what the function table's templates number.
+   */
+  private static Core.Exp flatten(Core.Exp exp, List<Core.Exp> args) {
+    if (exp.op != Op.APPLY) {
+      return exp;
+    }
+    final Core.Apply apply = (Core.Apply) exp;
+    final Core.Exp fn = flatten(apply.fn, args);
+    args.addAll(arguments(apply.arg));
+    return fn;
+  }
+
   /** Translates a call to a built-in. */
   private Expression function(
       BuiltIn builtIn, List<Core.Exp> args, List<String> parts) {
@@ -566,6 +589,9 @@ public class SparkTranslator {
                         requireNonNull(entry.template)
                             .expand(i -> sql(args.get(i), parts))))
             .build();
+
+      case SUBQUERY:
+        return subquery(builtIn, args, parts);
 
       case DIRECT:
         final Expression.UnresolvedFunction.Builder b =
@@ -665,28 +691,115 @@ public class SparkTranslator {
   }
 
   /**
-   * Translates a query that an expression asks a question of: whether it has a
-   * row. The query goes beside the root, under a plan id of its own, and the
-   * expression quotes that id.
+   * Translates a call that asks a question of a query: whether it has a row,
+   * whether it holds a value, or what its one value is. The query goes beside
+   * the root, under a plan id of its own, and the expression quotes that id.
    *
    * <p>The query may read the outer row, which is what makes it correlated;
    * nothing special is needed for that, because the outer row prints under the
    * name it has, and Spark resolves it against the enclosing relation.
    */
-  private Expression subquery(Core.Exp exp) {
-    if (!(exp instanceof Core.Rel)) {
-      throw unsupported("exists over " + exp.op);
+  private Expression subquery(
+      BuiltIn builtIn, List<Core.Exp> args, List<String> parts) {
+    final SubqueryExpression.SubqueryType type;
+    final Relation relation;
+    final boolean negated;
+    switch (builtIn) {
+      case OP_ELEM:
+      case OP_NOT_ELEM:
+        relation = elemRelation(args.get(1), args.get(0), nextPlanId++);
+        type = SubqueryExpression.SubqueryType.SUBQUERY_TYPE_EXISTS;
+        negated = builtIn == BuiltIn.OP_NOT_ELEM;
+        break;
+
+      case RELATIONAL_ONLY:
+        relation = relation(args.get(0));
+        type = SubqueryExpression.SubqueryType.SUBQUERY_TYPE_SCALAR;
+        negated = false;
+        break;
+
+      case RELATIONAL_NON_EMPTY:
+      case RELATIONAL_EMPTY:
+      case LIST_NULL:
+        relation = relation(args.get(0));
+        type = SubqueryExpression.SubqueryType.SUBQUERY_TYPE_EXISTS;
+        // Spark has no NOT EXISTS of its own; `empty` is `exists` denied.
+        negated = builtIn != BuiltIn.RELATIONAL_NON_EMPTY;
+        break;
+
+      default:
+        throw unsupported(builtIn + ", which the table calls a subquery");
     }
-    final int planId = nextPlanId++;
-    final Relation relation = relNode(exp, planId);
+    // The expression quotes the plan id of the relation it asks about, which
+    // the relation itself knows; a node the translation leaves out, such as a
+    // projection that reads the whole of its input, never had one.
+    final int planId = (int) relation.getCommon().getPlanId();
     references.add(relation);
-    return Expression.newBuilder()
-        .setSubqueryExpression(
-            SubqueryExpression.newBuilder()
-                .setPlanId(planId)
-                .setSubqueryType(
-                    SubqueryExpression.SubqueryType.SUBQUERY_TYPE_EXISTS))
+    final Expression expression =
+        Expression.newBuilder()
+            .setSubqueryExpression(
+                SubqueryExpression.newBuilder()
+                    .setPlanId(planId)
+                    .setSubqueryType(type))
+            .build();
+    return negated ? call("not", expression) : expression;
+  }
+
+  /** Translates the query a subquery expression asks about. */
+  private Relation relation(Core.Exp exp) {
+    if (!(exp instanceof Core.Rel)) {
+      throw unsupported("a subquery over " + exp.op);
+    }
+    return rel(exp);
+  }
+
+  /**
+   * Translates the collection of an {@code elem} as the relation of an EXISTS
+   * subquery: not the values the query yields, but the rows that hold the value
+   * asked about.
+   *
+   * <p>Spark Connect 4.0 has no IN subquery, so {@code x elem q} becomes {@code
+   * exists q where v = x}, where v is what q yields. The projection comes off
+   * -- EXISTS does not look at it -- and the expression it yielded goes into
+   * the condition, which is also the only place it can go, since nothing
+   * outside a subquery can name a column of it. Where q filters already, the
+   * equality joins that condition rather than standing in a second filter above
+   * it.
+   */
+  private Relation elemRelation(
+      Core.Exp collection, Core.Exp value, int planId) {
+    if (collection.op != Op.PROJECT) {
+      throw unsupported("elem over " + collection.op);
+    }
+    final Core.Project project = (Core.Project) collection;
+    final List<String> parts = parts(project.input);
+    final Expression equality =
+        call("==", exp(project.exp, parts), exp(value, parts));
+    final Filter.Builder filterBuilder = Filter.newBuilder();
+    if (project.input.op == Op.FILTER) {
+      final Core.Filter filter = (Core.Filter) project.input;
+      filterBuilder
+          .setInput(input(filter.input, filter.row))
+          .setCondition(call("and", exp(filter.condition, parts), equality));
+    } else {
+      filterBuilder
+          .setInput(input(project.input, project.row))
+          .setCondition(equality);
+    }
+    return Relation.newBuilder()
+        .setCommon(RelationCommon.newBuilder().setPlanId(planId))
+        .setFilter(filterBuilder)
         .build();
+  }
+
+  /** Builds a call to a Spark function. */
+  private static Expression call(String name, Expression... args) {
+    final Expression.UnresolvedFunction.Builder b =
+        Expression.UnresolvedFunction.newBuilder().setFunctionName(name);
+    for (Expression arg : args) {
+      b.addArguments(arg);
+    }
+    return Expression.newBuilder().setUnresolvedFunction(b).build();
   }
 
   /**
@@ -797,11 +910,10 @@ public class SparkTranslator {
                 : qualifier + "." + selectedName(apply);
           }
         }
-        if (apply.fn.op == Op.FN_LITERAL) {
-          return sqlCall(
-              (BuiltIn) ((Core.Literal) apply.fn).value,
-              arguments(apply.arg),
-              parts);
+        final List<Core.Exp> args = new ArrayList<>();
+        final Core.Exp fn = flatten(apply, args);
+        if (fn.op == Op.FN_LITERAL) {
+          return sqlCall((BuiltIn) ((Core.Literal) fn).value, args, parts);
         }
         break;
 

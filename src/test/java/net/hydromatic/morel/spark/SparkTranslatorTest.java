@@ -248,6 +248,61 @@ public class SparkTranslatorTest {
                 + "         y = e.empno div 7, z = e.empno mod 7}");
     assertThat(f.plan(), is(seedPlan("q10")));
   }
+
+  /**
+   * Query 11: string functions. {@code String.isPrefix} is curried, so the call
+   * is two applications, and both of its arguments have to reach the template.
+   */
+  @Test
+  void testQuery11() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps\n"
+                + "  where String.isPrefix \"S\" e.ename\n"
+                + "  yield {e.ename, n = size e.ename,\n"
+                + "         s = String.substring (e.ename, 0, 2),\n"
+                + "         t = e.ename ^ \"!\"}");
+    assertThat(f.plan(), is(seedPlan("q11")));
+  }
+
+  /**
+   * Query 12: {@code elem}. Spark Connect 4.0 has no IN subquery, so the
+   * collection becomes an EXISTS whose condition holds the equality.
+   */
+  @Test
+  void testQuery12() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps\n"
+                + "  where e.deptno elem (from d in scott.depts\n"
+                + "      where d.loc = \"CHICAGO\"\n"
+                + "      yield d.deptno)\n"
+                + "  yield e.ename");
+    assertThat(f.plan(), is(seedPlan("q12")));
+  }
+
+  /** Query 13: a correlated scalar subquery. */
+  @Test
+  void testQuery13() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from d in scott.depts\n"
+                + "  yield {d.dname,\n"
+                + "         n = (from e in scott.emps\n"
+                + "              where e.deptno = d.deptno\n"
+                + "              compute count over ())}");
+    assertThat(f.plan(), is(seedPlan("q13")));
+  }
+
+  /**
+   * Query 14: a result that is not a collection. Spark has only relations, so a
+   * value is a relation of one row and one column.
+   */
+  @Test
+  void testQuery14() throws IOException {
+    final Fixture f = new Fixture("from e in scott.emps compute count over ()");
+    assertThat(f.plan(), is(seedPlan("q14")));
+  }
 }
 
 // End SparkTranslatorTest.java
