@@ -46,6 +46,7 @@ import org.apache.spark.connect.proto.Project;
 import org.apache.spark.connect.proto.Read;
 import org.apache.spark.connect.proto.Relation;
 import org.apache.spark.connect.proto.RelationCommon;
+import org.apache.spark.connect.proto.SetOperation;
 import org.apache.spark.connect.proto.Sort;
 import org.apache.spark.connect.proto.SubqueryAlias;
 import org.apache.spark.connect.proto.SubqueryExpression;
@@ -259,6 +260,27 @@ public class SparkTranslator {
                 .setOffset(count(skip.count, "skip")));
         break;
 
+      case UNION:
+      case INTERSECT:
+      case EXCEPT:
+        final Core.SetRel setRel = (Core.SetRel) exp;
+        if (setRel.inputs.size() != 2) {
+          // Spark's set operation takes two inputs; Morel's takes any
+          // number, and nothing yet folds the one into the other.
+          throw unsupported(exp.op + " of " + setRel.inputs.size() + " inputs");
+        }
+        b.setSetOp(
+            SetOperation.newBuilder()
+                .setLeftInput(rel(setRel.inputs.get(0)))
+                .setRightInput(rel(setRel.inputs.get(1)))
+                .setSetOpType(setOpType(exp.op))
+                // Morel's set operators are over bags and keep every row,
+                // unless the query asked for distinct.
+                .setIsAll(!setRel.distinct)
+                .setByName(false)
+                .setAllowMissingColumns(false));
+        break;
+
       case JOIN:
         final Core.Join join = (Core.Join) exp;
         b.setJoin(
@@ -332,6 +354,20 @@ public class SparkTranslator {
       }
     }
     return null;
+  }
+
+  /** Translates a set operator. */
+  private static SetOperation.SetOpType setOpType(Op op) {
+    switch (op) {
+      case UNION:
+        return SetOperation.SetOpType.SET_OP_TYPE_UNION;
+      case INTERSECT:
+        return SetOperation.SetOpType.SET_OP_TYPE_INTERSECT;
+      case EXCEPT:
+        return SetOperation.SetOpType.SET_OP_TYPE_EXCEPT;
+      default:
+        throw unsupported("set operator " + op);
+    }
   }
 
   /** Translates a join's kind. */

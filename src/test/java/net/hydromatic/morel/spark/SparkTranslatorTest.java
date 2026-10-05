@@ -226,6 +226,16 @@ public class SparkTranslatorTest {
                 + "  yield {d.dname, e}");
     assertThat(f.plan(), is(seedPlan("q8")));
   }
+
+  /** Query 9: union, of bags, so every row is kept. */
+  @Test
+  void testQuery9() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps where e.deptno = 10 yield {n = e.empno}\n"
+                + "  union (from d in scott.depts yield {n = d.deptno})");
+    assertThat(f.plan(), is(seedPlan("q9")));
+  }
 }
 
 // End SparkTranslatorTest.java
