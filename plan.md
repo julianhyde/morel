@@ -292,6 +292,46 @@ substrate-independent and serve as this milestone's acceptance tests.
 Everything that depends on #449 (M5, and through it M8, M9 and M11) is done
 last; M0 through M4, M6 and M7 do not depend on it and come first.
 
+**A left join whose right rows are all optional cannot say "no match".**
+A task, or a bug to log if it is not done in this pass.
+
+Spark's left join gives the absent side a row of nulls, so Morel asks
+whether the side matched by testing a column that cannot itself be null,
+and builds the `option` from the answer: `when(isNull(e.deptno), null,
+struct(...))`. A row every one of whose columns is optional has no such
+column, and the trouble is not that the witness is hard to choose -- it is
+that the two cases are the same bytes. A matched row of all nulls and no
+match at all are indistinguishable in what Spark returns.
+
+```sml
+from d in scott.depts
+  left join e in (from x in scott.emps yield {x.comm, x.mgr}) on true
+  yield {d.dname, e};
+```
+
+gives `{dname:string, e:{comm:decimal option, mgr:int option} option} bag`,
+and KING, who has neither commission nor manager, really does contribute
+`SOME {comm=NONE, mgr=NONE}`. Had no employee matched, the answer would be
+`NONE`, and Spark would send the same thing either way. In SQL the query
+is unremarkable --
+
+```sql
+SELECT d.dname, e.*
+FROM scott.dept AS d
+LEFT JOIN (SELECT comm, mgr FROM scott.emp) AS e ON TRUE
+```
+
+-- because SQL never claims to tell the two apart: the columns are null,
+and that is all it says. The distinction exists only because Morel types
+the absent side as an option.
+
+The fix is to carry the answer rather than deduce it: project a constant
+column onto the right input before the join, and test that. It costs a
+node in the plan and no rows, and it would let every left join use one
+rule instead of a rule plus an exception. Until then the translator should
+reject such a join rather than pick a column that cannot answer the
+question.
+
 **M6.** Done. The adapter is package `net.hydromatic.morel.spark`, compiled
 only under the `spark` Maven profile (JDK 17 and later), with protobuf
 messages and gRPC stubs generated from Spark 4.0.0's `.proto` files in
@@ -349,3 +389,35 @@ is part of the contract. `ScriptTest` gains a simple way to skip a script
 (scripts needing a live server skip unless the gating property is set).
 The live tests run in a separate weekly GitHub workflow; the existing
 workflow keeps its short timeout and never starts Docker.
+
+## Phase 2 questions
+
+**Should an uploaded collection be sent once and reused?** A catalog
+table costs nothing to refer to twice -- it is a name that Spark resolves
+-- but a local collection crosses as a `LocalRelation`, and since
+`prepare` fixes a free variable's value when the plan is made, two plans
+over the same bag each carry their own copy of the rows.
+
+Connect has the mechanism: `CachedLocalRelation` carries nothing but a
+sha-256 hash of the serialized `LocalRelation`, so a client can transfer
+the rows once and refer to them by hash afterwards. It is session-scoped
+by design -- `userId` and `sessionId` are reserved fields, removed
+because "it is never valid to access a local relation from a different
+session/user" -- and the hash is of bytes the translator already builds,
+so identical data collides on its own, with no bookkeeping about which
+Morel variable it came from.
+
+Three things it would cost, which is why it is a question and not a
+milestone:
+
+* **`prepare` would stop being local.** It touches no server today,
+  which is what lets it work against the `"mock:"` connection and lets
+  `spark-plan.smli` run with no container. Uploading before referring by
+  hash gives it a round trip.
+* **Plan text would depend on data bytes.** A cached relation prints as
+  a hash where an inline one prints as `data: [N rows]` -- and that
+  substitution exists precisely so that a plan's text does not depend on
+  how Arrow encoded the rows. The hash would also have to be identical
+  in morel-rust and morel-go, since the three share the text.
+* **It only pays above some size.** Below it, carrying the rows inline
+  is cheaper than a round trip plus a hash.

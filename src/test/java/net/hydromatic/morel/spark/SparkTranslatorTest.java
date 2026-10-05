@@ -207,6 +207,25 @@ public class SparkTranslatorTest {
                 + "  yield {e.empno, e.ename}");
     assertThat(f.plan(), is(seedPlan("q6")));
   }
+
+  /** Query 7: distinct, a group with no aggregates. */
+  @Test
+  void testQuery7() throws IOException {
+    final Fixture f = new Fixture("from e in scott.emps group e.job");
+    assertThat(f.plan(), is(seedPlan("q7")));
+  }
+
+  /** Query 8: left join. The absent side is an option of the record. */
+  @Test
+  void testQuery8() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from d in scott.depts\n"
+                + "  left join e in scott.emps on d.deptno = e.deptno\n"
+                + "  where d.deptno >= 30\n"
+                + "  yield {d.dname, e}");
+    assertThat(f.plan(), is(seedPlan("q8")));
+  }
 }
 
 // End SparkTranslatorTest.java

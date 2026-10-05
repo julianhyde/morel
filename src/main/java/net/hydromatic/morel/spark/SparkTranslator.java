@@ -33,6 +33,8 @@ import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import org.apache.spark.connect.proto.Aggregate;
+import org.apache.spark.connect.proto.DataType;
+import org.apache.spark.connect.proto.Deduplicate;
 import org.apache.spark.connect.proto.Expression;
 import org.apache.spark.connect.proto.Filter;
 import org.apache.spark.connect.proto.Join;
@@ -95,6 +97,13 @@ public class SparkTranslator {
    * which is the order the text prints them.
    */
   private Relation rel(Core.Exp exp) {
+    if (isWholeOfInput(exp)) {
+      // Morel distinguishes a bag of one-field records from a bag of values,
+      // and a projection turns the one into the other. Spark does not: a
+      // relation always has named columns, so the projection is nothing to
+      // do, and takes no plan id.
+      return rel(((Core.Project) exp).input);
+    }
     if (!refersToRelation(exp)) {
       return relNode(exp, nextPlanId++);
     }
@@ -110,6 +119,30 @@ public class SparkTranslator {
         .setWithRelations(
             WithRelations.newBuilder().setRoot(node).addAllReferences(own))
         .build();
+  }
+
+  /**
+   * Returns whether a node is a projection that reads the whole of its input:
+   * the one field of a one-field row, which leaves the relation as it was.
+   */
+  private static boolean isWholeOfInput(Core.Exp exp) {
+    if (!(exp instanceof Core.Project)) {
+      return false;
+    }
+    final Core.Project project = (Core.Project) exp;
+    if (project.exp.op != Op.APPLY) {
+      return false;
+    }
+    final Core.Apply apply = (Core.Apply) project.exp;
+    if (apply.fn.op != Op.RECORD_SELECTOR || apply.arg.op != Op.ID) {
+      return false;
+    }
+    final Type elementType = project.input.type.arg(0);
+    return elementType instanceof RecordLikeType
+        && ((RecordLikeType) elementType).argNameTypes().size() == 1
+        && ((RecordLikeType) elementType)
+            .argNameTypes()
+            .containsKey(selectedName(apply));
   }
 
   /** Returns whether a node's own expressions ask a question of a query. */
@@ -163,6 +196,28 @@ public class SparkTranslator {
 
       case GROUP:
         final Core.Group group = (Core.Group) exp;
+        if (group.aggregates.isEmpty()) {
+          // Grouping without aggregating asks only for distinct rows, which
+          // Spark does by projecting the keys and deduplicating them. One
+          // node becomes two, so the inner one takes the next plan id.
+          final Project.Builder keys = Project.newBuilder();
+          final int keyId = nextPlanId++;
+          final Relation keyInput = input(group.input, group.row);
+          final List<String> keyParts = parts(group.input);
+          group.keys.forEach(
+              (name, key) ->
+                  keys.addExpressions(named(exp(key, keyParts), name)));
+          b.setDeduplicate(
+              Deduplicate.newBuilder()
+                  .setInput(
+                      Relation.newBuilder()
+                          .setCommon(
+                              RelationCommon.newBuilder().setPlanId(keyId))
+                          .setProject(keys.setInput(keyInput)))
+                  .setAllColumnsAsKeys(true)
+                  .setWithinWatermark(false));
+          break;
+        }
         final Aggregate.Builder aggregate =
             Aggregate.newBuilder()
                 .setInput(input(group.input, group.row))
@@ -377,6 +432,15 @@ public class SparkTranslator {
     switch (exp.op) {
       case APPLY:
         final Core.Apply apply = (Core.Apply) exp;
+        if (apply.fn.op == Op.RECORD_SELECTOR
+            && apply.arg.op == Op.ID
+            && !parts.isEmpty()
+            && ((Core.RecordSelector) apply.fn).slot < parts.size()) {
+          // A whole input of a join, not a column of one: `yield {d.dname, e}`
+          // asks for all of `e`.
+          return component(
+              parts.get(((Core.RecordSelector) apply.fn).slot), apply.type);
+        }
         if (apply.fn.op == Op.RECORD_SELECTOR) {
           final String qualifier = qualifier(apply.arg, parts);
           if (qualifier != null) {
@@ -561,6 +625,77 @@ public class SparkTranslator {
         .build();
   }
 
+  /**
+   * Translates a reference to a whole input of a join: a struct of its columns,
+   * and, where the input may be absent, null instead of the struct when it was.
+   *
+   * <p>Spark gives an absent side a row of nulls rather than an absent row, so
+   * the only way to tell is to ask whether a column that cannot be null is
+   * null. A row all of whose columns are optional has no such column, and the
+   * two cases are then the same bytes, so such a join is refused; `plan.md`
+   * records what it would take to support it.
+   */
+  private static Expression component(String alias, Type type) {
+    final Type valueType = SparkSchema.optionValueType(type);
+    final Type rowType = valueType != null ? valueType : type;
+    if (!(rowType instanceof RecordLikeType)) {
+      throw unsupported("a whole input of type " + rowType);
+    }
+    final Map<String, Type> fields = ((RecordLikeType) rowType).argNameTypes();
+    final Expression.UnresolvedFunction.Builder struct =
+        Expression.UnresolvedFunction.newBuilder().setFunctionName("struct");
+    fields.forEach(
+        (name, fieldType) ->
+            struct.addArguments(
+                Expression.newBuilder()
+                    .setAlias(
+                        Expression.Alias.newBuilder()
+                            .setExpr(attribute(alias + "." + name))
+                            .addName(name))
+                    .build()));
+    final Expression structExp =
+        Expression.newBuilder().setUnresolvedFunction(struct).build();
+    if (valueType == null) {
+      return structExp;
+    }
+    final String witness = witness(fields);
+    return Expression.newBuilder()
+        .setUnresolvedFunction(
+            Expression.UnresolvedFunction.newBuilder()
+                .setFunctionName("when")
+                .addArguments(
+                    Expression.newBuilder()
+                        .setUnresolvedFunction(
+                            Expression.UnresolvedFunction.newBuilder()
+                                .setFunctionName("isNull")
+                                .addArguments(attribute(alias + "." + witness)))
+                        .build())
+                .addArguments(
+                    literal(
+                        Expression.Literal.newBuilder()
+                            .setNull(
+                                DataType.newBuilder()
+                                    .setNull(
+                                        DataType.NULL.getDefaultInstance()))))
+                .addArguments(structExp))
+        .build();
+  }
+
+  /**
+   * Returns the column that says whether a row is there: the first whose type
+   * is not an option, in the order the row holds its fields.
+   */
+  private static String witness(Map<String, Type> fields) {
+    for (Map.Entry<String, Type> field : fields.entrySet()) {
+      if (SparkSchema.optionValueType(field.getValue()) == null) {
+        return field.getKey();
+      }
+    }
+    throw unsupported(
+        "a left join whose right rows are all optional, which Spark cannot "
+            + "distinguish from no row at all");
+  }
+
   private static Expression attribute(String identifier) {
     return Expression.newBuilder()
         .setUnresolvedAttribute(
@@ -610,6 +745,15 @@ public class SparkTranslator {
     if (input instanceof Core.Join) {
       final Core.Join join = (Core.Join) input;
       return ImmutableList.of(join.leftRow.name, join.rightRow.name);
+    }
+    if (input instanceof Core.Filter
+        || input instanceof Core.Sort
+        || input instanceof Core.Skip
+        || input instanceof Core.Take
+        || input instanceof Core.Unorder) {
+      // These pass their element through, so a node above one still reads
+      // the components of whatever join is below it.
+      return parts(((Core.SingleRel) input).input);
     }
     return ImmutableList.of();
   }

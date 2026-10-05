@@ -135,10 +135,11 @@ public class SparkSchema {
 
   /**
    * Returns the type an {@code option} wraps, or null if {@code type} is not an
-   * option. An option of an option has no Spark equivalent, since a column is
-   * nullable or not, and is rejected rather than flattened.
+   * option. The translator asks too, of a join's absent side. An option of an
+   * option has no Spark equivalent, since a column is nullable or not, and is
+   * rejected rather than flattened.
    */
-  private static @Nullable Type optionValueType(Type type) {
+  static @Nullable Type optionValueType(Type type) {
     if (type instanceof DataType && ((DataType) type).name.equals("option")) {
       final Type valueType = ((DataType) type).arguments.get(0);
       if (optionValueType(valueType) != null) {

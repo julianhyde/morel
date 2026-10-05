@@ -694,7 +694,7 @@ root {
                 function_name: "isNull"
                 arguments {
                   unresolved_attribute {
-                    unparsed_identifier: "e.empno"
+                    unparsed_identifier: "e.deptno"
                     is_metadata_column: false
                   }
                 }
