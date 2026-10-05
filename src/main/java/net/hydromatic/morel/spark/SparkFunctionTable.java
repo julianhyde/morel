@@ -37,6 +37,7 @@ import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.parse.MorelParserImpl;
+import net.hydromatic.morel.util.Template;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -255,11 +256,19 @@ public class SparkFunctionTable {
     /** Known semantic divergence, or empty if the two agree. */
     public final String divergence;
 
+    /**
+     * The template, if this entry is rewritten; null otherwise. Making it here
+     * means a malformed template fails when the table loads rather than when
+     * some query reaches the operator.
+     */
+    public final @Nullable Template template;
+
     Entry(String morel, Kind kind, String spark, String divergence) {
       this.morel = requireNonNull(morel, "morel");
       this.kind = requireNonNull(kind, "kind");
       this.spark = requireNonNull(spark, "spark");
       this.divergence = requireNonNull(divergence, "divergence");
+      this.template = kind == Kind.REWRITTEN ? Template.of(spark) : null;
     }
 
     @Override

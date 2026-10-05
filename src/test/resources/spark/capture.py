@@ -29,6 +29,7 @@
 # Connect server at localhost:15002 (started by start-spark.sh, which
 # seeds the scott database) and print their rows.
 import re, sys
+from decimal import Decimal
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import *
@@ -116,9 +117,15 @@ q5 = d.where(inner.exists()).select(F.col("d.dname"))
 show("q5", q5)
 
 # The remaining queries extend the corpus (spark-plan.smli, spark-exec.smli).
-# A Morel real literal is a float, so it is emitted as a float literal.
-def real(x):
-    return Column(LiteralExpression(x, FloatType()))
+# A Morel decimal literal is arbitrary-precision, so it is emitted with the
+# narrowest decimal type that holds it, as Spark's parser gives `2BD`;
+# F.lit would default to decimal(10, 0) whatever the value.
+def dec(s):
+    d = Decimal(s)
+    scale = max(-d.as_tuple().exponent, 0)
+    return Column(
+        LiteralExpression(d, DecimalType(max(len(d.as_tuple().digits),
+                                             scale + 1), scale)))
 
 # Query 6: order, skip, take, then project.
 q6 = (e.orderBy(F.col("e.empno")).offset(2).limit(3)
@@ -132,12 +139,14 @@ show("q7", q7)
 # Query 8: left join. The absent side is null, and crosses to Morel as an
 # option of the record; so the right row is a struct that is null when the
 # join found nothing.
+# The witness -- the column whose nullness says the join found nothing -- has
+# to be one that is not nullable in itself; comm is, so it is deptno.
 emp_fields = ["comm", "deptno", "empno", "ename", "hiredate", "job", "mgr", "sal"]
 q8 = (d.join(e, F.col("d.deptno") == F.col("e.deptno"), "left")
       .where(F.col("d.deptno") >= 30)
       .select(
           F.col("d.dname"),
-          F.when(F.col("e.empno").isNull(), F.lit(None))
+          F.when(F.col("e.deptno").isNull(), F.lit(None))
            .otherwise(F.struct(*[F.col("e." + f).alias(f) for f in emp_fields]))
            .alias("e")))
 show("q8", q8)
@@ -148,13 +157,15 @@ q9 = (e.where(F.col("e.deptno") == 10).select(F.col("e.empno").alias("n"))
 show("q9", q9)
 
 # Query 10: arithmetic, including the templates for div and mod.
+# Morel's div and mod floor, and Spark's operators truncate, so the function
+# table rewrites them into SQL text, which crosses as an expression string.
 q10 = (e.where(F.col("e.deptno") == 10)
        .select(
            F.col("e.empno"),
            (-F.col("e.empno")).alias("w"),
-           (F.col("e.sal") * real(2.0)).alias("x"),
-           F.floor(F.col("e.empno") / F.lit(7)).cast("int").alias("y"),
-           ((F.col("e.empno") % F.lit(7) + F.lit(7)) % F.lit(7)).alias("z")))
+           (F.col("e.sal") * dec("2")).alias("x"),
+           F.expr("cast(floor(e.empno / 7) as int)").alias("y"),
+           F.expr("((e.empno % 7 + 7) % 7)").alias("z")))
 show("q10", q10)
 
 # Query 11: string functions.

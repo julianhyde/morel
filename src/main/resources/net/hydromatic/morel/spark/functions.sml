@@ -25,8 +25,11 @@
  *               "String.size" for a member of a structure.
  *   kind        "direct": Spark has a function with the same
  *               semantics, named by "spark";
- *               "rewritten": "spark" is a template over the
- *               arguments $0, $1, ...;
+ *               "rewritten": "spark" is a SQL template whose
+ *               placeholders {0}, {1}, ... stand for the arguments,
+ *               and "{{" for a literal brace. An expander asks for
+ *               each argument it uses, so an argument a template
+ *               does not use is never rendered;
  *               "aggregate", "subquery": the translator handles the
  *               construct structurally; "spark" names what it emits;
  *               "unsupported": prepare rejects the expression.
@@ -72,22 +75,22 @@
   {morel = "op ~", kind = "direct", spark = "negative", divergence = ""},
   {morel = "Real./", kind = "direct", spark = "/", divergence = ""},
   {morel = "op div", kind = "rewritten",
-   spark = "cast(floor($0 / $1) as int)",
+   spark = "cast(floor({0} / {1}) as int)",
    divergence = "SML rounds toward negative infinity, and Spark's div truncates, hence the template"},
-  {morel = "op mod", kind = "rewritten", spark = "(($0 % $1 + $1) % $1)",
+  {morel = "op mod", kind = "rewritten", spark = "(({0} % {1} + {1}) % {1})",
    divergence = "the SML result has the divisor's sign, Spark's % the dividend's, hence the template"},
   {morel = "abs", kind = "direct", spark = "abs", divergence = ""},
-  {morel = "Real.floor", kind = "rewritten", spark = "cast(floor($0) as int)",
+  {morel = "Real.floor", kind = "rewritten", spark = "cast(floor({0}) as int)",
    divergence = ""},
-  {morel = "Real.ceil", kind = "rewritten", spark = "cast(ceil($0) as int)",
+  {morel = "Real.ceil", kind = "rewritten", spark = "cast(ceil({0}) as int)",
    divergence = ""},
-  {morel = "Real.trunc", kind = "rewritten", spark = "cast($0 as int)",
+  {morel = "Real.trunc", kind = "rewritten", spark = "cast({0} as int)",
    divergence = ""},
-  {morel = "Real.round", kind = "rewritten", spark = "cast(round($0) as int)",
+  {morel = "Real.round", kind = "rewritten", spark = "cast(round({0}) as int)",
    divergence = "SML rounds half to even, Spark half away from zero"},
-  {morel = "Real.fromInt", kind = "rewritten", spark = "cast($0 as double)",
+  {morel = "Real.fromInt", kind = "rewritten", spark = "cast({0} as double)",
    divergence = ""},
-  {morel = "Int.toString", kind = "rewritten", spark = "cast($0 as string)",
+  {morel = "Int.toString", kind = "rewritten", spark = "cast({0} as string)",
    divergence = "Morel writes a negative number with ~"},
   {morel = "Real.toString", kind = "unsupported", spark = "",
    divergence = "formatting differs"},
@@ -104,19 +107,19 @@
 
   (* Strings *)
   {morel = "String.^", kind = "direct", spark = "concat", divergence = ""},
-  {morel = "String.concat", kind = "rewritten", spark = "array_join($0, '')",
+  {morel = "String.concat", kind = "rewritten", spark = "array_join({0}, '')",
    divergence = ""},
   {morel = "String.size", kind = "direct", spark = "length", divergence = ""},
   {morel = "String.substring", kind = "rewritten",
-   spark = "substring($0, $1 + 1, $2)",
+   spark = "substring({0}, {1} + 1, {2})",
    divergence = "out of range raises Subscript in Morel, is clamped in Spark"},
-  {morel = "String.sub", kind = "rewritten", spark = "substring($0, $1 + 1, 1)",
+  {morel = "String.sub", kind = "rewritten", spark = "substring({0}, {1} + 1, 1)",
    divergence = "out of range raises Subscript in Morel, is empty in Spark"},
-  {morel = "String.isPrefix", kind = "rewritten", spark = "startswith($1, $0)",
+  {morel = "String.isPrefix", kind = "rewritten", spark = "startswith({1}, {0})",
    divergence = ""},
-  {morel = "String.isSuffix", kind = "rewritten", spark = "endswith($1, $0)",
+  {morel = "String.isSuffix", kind = "rewritten", spark = "endswith({1}, {0})",
    divergence = ""},
-  {morel = "String.isSubstring", kind = "rewritten", spark = "contains($1, $0)",
+  {morel = "String.isSubstring", kind = "rewritten", spark = "contains({1}, {0})",
    divergence = ""},
   {morel = "String.compare", kind = "unsupported", spark = "",
    divergence = "returns order, which has no Spark type in phase 1"},
@@ -159,17 +162,17 @@
   {morel = "Relational.only", kind = "subquery", spark = "scalar",
    divergence = ""},
   {morel = "List.length", kind = "direct", spark = "size", divergence = ""},
-  {morel = "List.nth", kind = "rewritten", spark = "element_at($0, $1 + 1)",
+  {morel = "List.nth", kind = "rewritten", spark = "element_at({0}, {1} + 1)",
    divergence = ""},
-  {morel = "List.hd", kind = "rewritten", spark = "element_at($0, 1)",
+  {morel = "List.hd", kind = "rewritten", spark = "element_at({0}, 1)",
    divergence = ""},
   {morel = "List.@", kind = "direct", spark = "concat", divergence = ""},
   {morel = "List.rev", kind = "direct", spark = "reverse", divergence = ""},
   {morel = "Option.isSome", kind = "direct", spark = "isnotnull",
    divergence = ""},
-  {morel = "Option.valOf", kind = "rewritten", spark = "assert_not_null($0)",
+  {morel = "Option.valOf", kind = "rewritten", spark = "assert_not_null({0})",
    divergence = ""},
-  {morel = "Option.getOpt", kind = "rewritten", spark = "coalesce($0, $1)",
+  {morel = "Option.getOpt", kind = "rewritten", spark = "coalesce({0}, {1})",
    divergence = ""},
   {morel = "Relational.iterate", kind = "unsupported", spark = "",
    divergence = "recursive"}

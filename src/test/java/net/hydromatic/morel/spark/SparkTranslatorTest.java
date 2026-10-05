@@ -236,6 +236,18 @@ public class SparkTranslatorTest {
                 + "  union (from d in scott.depts yield {n = d.deptno})");
     assertThat(f.plan(), is(seedPlan("q9")));
   }
+
+  /** Query 10: arithmetic, including the templates for div and mod. */
+  @Test
+  void testQuery10() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps\n"
+                + "  where e.deptno = 10\n"
+                + "  yield {e.empno, w = ~e.empno, x = e.sal * decimal \"2\",\n"
+                + "         y = e.empno div 7, z = e.empno mod 7}");
+    assertThat(f.plan(), is(seedPlan("q10")));
+  }
 }
 
 // End SparkTranslatorTest.java

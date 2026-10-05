@@ -18,7 +18,10 @@
  */
 package net.hydromatic.morel.spark;
 
+import static java.util.Objects.requireNonNull;
+
 import com.google.common.collect.ImmutableList;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -518,6 +521,20 @@ public class SparkTranslator {
             Expression.Literal.newBuilder()
                 .setString((String) ((Core.Literal) exp).value));
 
+      case VALUE_LITERAL:
+        // A `decimal` literal, which `decimal "2"` folded to. Morel's decimal
+        // is arbitrary-precision, and Spark's is not, so the literal carries
+        // the narrowest decimal type that holds the value -- the type Spark's
+        // own parser gives the same literal written as SQL.
+        final BigDecimal d = decimalValue(exp);
+        return literal(
+            Expression.Literal.newBuilder()
+                .setDecimal(
+                    Expression.Literal.Decimal.newBuilder()
+                        .setValue(d.toPlainString())
+                        .setPrecision(Math.max(d.precision(), d.scale() + 1))
+                        .setScale(d.scale())));
+
       default:
         throw unsupported("expression " + exp.op);
     }
@@ -539,6 +556,17 @@ public class SparkTranslator {
       throw unsupported("built-in " + builtIn + ", which the table omits");
     }
     switch (entry.kind) {
+      case REWRITTEN:
+        // The template is SQL, so its arguments must be SQL too, and so must
+        // anything inside them. Spark parses what comes out.
+        return Expression.newBuilder()
+            .setExpressionString(
+                Expression.ExpressionString.newBuilder()
+                    .setExpression(
+                        requireNonNull(entry.template)
+                            .expand(i -> sql(args.get(i), parts))))
+            .build();
+
       case DIRECT:
         final Expression.UnresolvedFunction.Builder b =
             Expression.UnresolvedFunction.newBuilder()
@@ -730,6 +758,119 @@ public class SparkTranslator {
     throw unsupported(
         "a left join whose right rows are all optional, which Spark cannot "
             + "distinguish from no row at all");
+  }
+
+  /**
+   * Renders an expression as SQL, for a template to put its arguments into.
+   *
+   * <p>Every compound expression is parenthesized, whatever its operator: the
+   * text goes to Spark's parser, and parenthesizing unconditionally is both
+   * shorter to write and safer to read than a table of precedences.
+   */
+  private String sql(Core.Exp exp, List<String> parts) {
+    switch (exp.op) {
+      case BOOL_LITERAL:
+      case INT_LITERAL:
+        return ((Core.Literal) exp).value.toString();
+
+      case REAL_LITERAL:
+        return Float.toString(
+            ((Number) ((Core.Literal) exp).value).floatValue());
+
+      case VALUE_LITERAL:
+        // `BD` is how SQL spells a decimal literal; without it, Spark would
+        // read `2` as an int and `2.5` as a double.
+        return decimalValue(exp).toPlainString() + "BD";
+
+      case STRING_LITERAL:
+        return "'"
+            + ((String) ((Core.Literal) exp).value).replace("'", "''")
+            + "'";
+
+      case APPLY:
+        final Core.Apply apply = (Core.Apply) exp;
+        if (apply.fn.op == Op.RECORD_SELECTOR) {
+          final String qualifier = qualifier(apply.arg, parts);
+          if (qualifier != null) {
+            return qualifier.isEmpty()
+                ? selectedName(apply)
+                : qualifier + "." + selectedName(apply);
+          }
+        }
+        if (apply.fn.op == Op.FN_LITERAL) {
+          return sqlCall(
+              (BuiltIn) ((Core.Literal) apply.fn).value,
+              arguments(apply.arg),
+              parts);
+        }
+        break;
+
+      default:
+        break;
+    }
+    throw unsupported("expression " + exp.op + " inside a SQL template");
+  }
+
+  /**
+   * Returns the value of a decimal literal, with a scale that Spark allows
+   * (Spark has no negative scale, so {@code 2E+3} becomes {@code 2000}).
+   */
+  private static BigDecimal decimalValue(Core.Exp exp) {
+    // A value literal keeps its value wrapped, so that a literal compares by
+    // the expression it stands for.
+    final BigDecimal value = ((Core.Literal) exp).unwrap(BigDecimal.class);
+    return value.scale() < 0 ? value.setScale(0) : value;
+  }
+
+  /** Renders a call to a built-in as SQL. */
+  private String sqlCall(
+      BuiltIn builtIn, List<Core.Exp> args, List<String> parts) {
+    final SparkFunctionTable.Entry entry = functions.get(builtIn);
+    if (entry == null) {
+      throw unsupported(
+          "built-in "
+              + builtIn
+              + " inside a SQL template, which the table"
+              + " omits");
+    }
+    switch (entry.kind) {
+      case REWRITTEN:
+        return requireNonNull(entry.template)
+            .expand(i -> sql(args.get(i), parts));
+
+      case DIRECT:
+        if (args.size() == 2 && !isWord(entry.spark)) {
+          return "("
+              + sql(args.get(0), parts)
+              + " "
+              + entry.spark
+              + " "
+              + sql(args.get(1), parts)
+              + ")";
+        }
+        final StringBuilder b = new StringBuilder(entry.spark).append('(');
+        for (int i = 0; i < args.size(); i++) {
+          if (i > 0) {
+            b.append(", ");
+          }
+          b.append(sql(args.get(i), parts));
+        }
+        return b.append(')').toString();
+
+      default:
+        throw unsupported(
+            builtIn
+                + " inside a SQL template, which the table calls "
+                + entry.kind);
+    }
+  }
+
+  /**
+   * Returns whether a Spark name is a word, and so written as a call, rather
+   * than a symbol written between its arguments.
+   */
+  private static boolean isWord(String name) {
+    return Character.isLetter(name.charAt(0));
   }
 
   private static Expression attribute(String identifier) {

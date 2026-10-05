@@ -1001,7 +1001,11 @@ root {
             }
             arguments {
               literal {
-                float: 2.0
+                decimal {
+                  value: "2"
+                  precision: 1
+                  scale: 0
+                }
               }
             }
           }
@@ -1012,29 +1016,8 @@ root {
     expressions {
       alias {
         expr {
-          cast {
-            expr {
-              unresolved_function {
-                function_name: "floor"
-                arguments {
-                  unresolved_function {
-                    function_name: "/"
-                    arguments {
-                      unresolved_attribute {
-                        unparsed_identifier: "e.empno"
-                        is_metadata_column: false
-                      }
-                    }
-                    arguments {
-                      literal {
-                        integer: 7
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            type_str: "int"
+          expression_string {
+            expression: "cast(floor(e.empno / 7) as int)"
           }
         }
         name: "y"
@@ -1043,39 +1026,8 @@ root {
     expressions {
       alias {
         expr {
-          unresolved_function {
-            function_name: "%"
-            arguments {
-              unresolved_function {
-                function_name: "+"
-                arguments {
-                  unresolved_function {
-                    function_name: "%"
-                    arguments {
-                      unresolved_attribute {
-                        unparsed_identifier: "e.empno"
-                        is_metadata_column: false
-                      }
-                    }
-                    arguments {
-                      literal {
-                        integer: 7
-                      }
-                    }
-                  }
-                }
-                arguments {
-                  literal {
-                    integer: 7
-                  }
-                }
-              }
-            }
-            arguments {
-              literal {
-                integer: 7
-              }
-            }
+          expression_string {
+            expression: "((e.empno % 7 + 7) % 7)"
           }
         }
         name: "z"

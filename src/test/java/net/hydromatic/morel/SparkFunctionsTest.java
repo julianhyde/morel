@@ -106,8 +106,8 @@ public class SparkFunctionsTest {
           break;
         case "rewritten":
           assertThat(
-              "template of " + morel + " uses $0",
-              spark.contains("$0"),
+              "template of " + morel + " uses {0}",
+              spark.contains("{0}"),
               is(true));
           break;
         case "aggregate":

@@ -64,7 +64,12 @@ public class SparkFunctionTableTest {
     final Entry div =
         requireNonNull(SparkFunctionTable.instance().get("op div"));
     assertThat(div.kind, is(Kind.REWRITTEN));
-    assertThat(div.spark, is("cast(floor($0 / $1) as int)"));
+    assertThat(div.spark, is("cast(floor({0} / {1}) as int)"));
+    // A rewritten entry carries its template, made when the table loaded.
+    assertThat(requireNonNull(div.template).argCount(), is(2));
+    assertThat(
+        div.template.expand("e.empno", "7"),
+        is("cast(floor(e.empno / 7) as int)"));
     // A divergence is the reason the template exists.
     assertThat(div.divergence.isEmpty(), is(false));
   }
