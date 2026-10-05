@@ -265,8 +265,15 @@ template), or unsupported, with a flag for known semantic divergence (integer
 division, overflow, collation, NaN ordering). Tests iterate the table through
 the triple format.
 
-**M5.** The tests are delivered ahead of the translator, since the tree it
-will read is on the 449-tree branch: `spark.smli` runs the corpus locally
+**M5.** The translator is `spark.SparkTranslator`, and all sixteen seed
+queries now translate: `SparkTranslatorTest` holds each against the plan
+`spark/seed-plans.txt` captured for it, which `capture.py` still reproduces
+exactly, so a decision the translator makes is one PySpark can be made to
+make too. What remains of the milestone is the `Spark` structure's `prepare`,
+which is what turns `spark-plan.smli` on.
+
+The tests were delivered ahead of the translator, since the tree it
+reads was on the 449-tree branch: `spark.smli` runs the corpus locally
 (sixteen queries: the five seed queries plus skip and take, distinct, left
 join, union, arithmetic with the `div` and `mod` templates, string functions,
 `elem`, a correlated scalar subquery, a scalar result, except and intersect,
@@ -278,12 +285,19 @@ each query on the offline connection and expects the plan text; and
 container and expects the results, plus a parameterized plan and `remote`.
 The `spark-prepare` condition holds once the `Spark` structure has `prepare`,
 so the scripts turn on by themselves. Decisions the corpus pins beyond M1: a
-real literal is a float literal; `div` is `cast(floor($0 / $1) as int)` and
-`mod` is `(($0 % $1 + $1) % $1)`; `elem` is an EXISTS subquery with an
-equality, since Connect 4.0 has no IN subquery; a left join's absent side is
-a struct that is null when the join found nothing, decoded as an option;
-distinct is `deduplicate`; union, except and intersect keep all rows; a
-scalar result is an aggregate with one column, `it`. The translator itself is
+real literal is a double literal, and a decimal literal carries the narrowest
+decimal type that holds it, as Spark's own parser gives `2BD`; `div` is
+`cast(floor({0} / {1}) as int)` and `mod` is `(({0} % {1} + {1}) % {1})`, and
+a rewritten function crosses as an expression string, not as the tree its
+template would parse to; `elem` is an EXISTS subquery with an equality, since
+Connect 4.0 has no IN subquery, and the collection's projection comes off,
+its expression joining the condition; a left join's absent side is a struct
+that is null when the join found nothing, decoded as an option, and the
+column it asks about is the first field, in field order, whose type is not an
+option; distinct is `deduplicate`; union, except and intersect keep all rows;
+a scalar result is an aggregate with one column, named for what Morel's
+`compute` names the aggregate. Every one of these is plan text, so all three
+implementations must agree on it. The translator itself is
 built on the 449-tree branch when it lands: Sequenced after the core tree
 restructuring ([#449](https://github.com/hydromatic/morel/issues/449), branch
 `449-tree`): Connect's Relation proto is a conventional operator tree, and
