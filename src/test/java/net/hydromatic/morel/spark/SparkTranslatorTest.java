@@ -179,6 +179,34 @@ public class SparkTranslatorTest {
                 + "  take 3");
     assertThat(f.plan(), is(seedPlan("q4")));
   }
+
+  /**
+   * Query 5: correlated exists subquery. Pins the subquery expression whose
+   * inner plan refers to the outer row.
+   */
+  @Test
+  void testQuery5() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from d in scott.depts\n"
+                + "  where (exists e in scott.emps\n"
+                + "    where e.deptno = d.deptno andalso e.job = \"CLERK\")\n"
+                + "  yield d.dname");
+    assertThat(f.plan(), is(seedPlan("q5")));
+  }
+
+  /** Query 6: order, skip, take, then project. */
+  @Test
+  void testQuery6() throws IOException {
+    final Fixture f =
+        new Fixture(
+            "from e in scott.emps\n"
+                + "  order e.empno\n"
+                + "  skip 2\n"
+                + "  take 3\n"
+                + "  yield {e.empno, e.ename}");
+    assertThat(f.plan(), is(seedPlan("q6")));
+  }
 }
 
 // End SparkTranslatorTest.java

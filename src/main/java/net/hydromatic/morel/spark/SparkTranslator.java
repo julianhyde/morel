@@ -38,6 +38,7 @@ import org.apache.spark.connect.proto.Filter;
 import org.apache.spark.connect.proto.Join;
 import org.apache.spark.connect.proto.Limit;
 import org.apache.spark.connect.proto.LocalRelation;
+import org.apache.spark.connect.proto.Offset;
 import org.apache.spark.connect.proto.Plan;
 import org.apache.spark.connect.proto.Project;
 import org.apache.spark.connect.proto.Read;
@@ -189,14 +190,18 @@ public class SparkTranslator {
 
       case TAKE:
         final Core.Take take = (Core.Take) exp;
-        if (take.count.op != Op.INT_LITERAL) {
-          throw unsupported("take of " + take.count.op);
-        }
         b.setLimit(
             Limit.newBuilder()
                 .setInput(rel(take.input))
-                .setLimit(
-                    ((Number) ((Core.Literal) take.count).value).intValue()));
+                .setLimit(count(take.count, "take")));
+        break;
+
+      case SKIP:
+        final Core.Skip skip = (Core.Skip) exp;
+        b.setOffset(
+            Offset.newBuilder()
+                .setInput(rel(skip.input))
+                .setOffset(count(skip.count, "skip")));
         break;
 
       case JOIN:
@@ -288,6 +293,17 @@ public class SparkTranslator {
       default:
         throw unsupported("join kind " + joinType);
     }
+  }
+
+  /**
+   * Returns how many rows a `take` or a `skip` counts. Spark wants a number, so
+   * a count that is not a literal cannot be pushed down.
+   */
+  private static int count(Core.Exp exp, String what) {
+    if (exp.op != Op.INT_LITERAL) {
+      throw unsupported(what + " of " + exp.op);
+    }
+    return ((Number) ((Core.Literal) exp).value).intValue();
   }
 
   /**
