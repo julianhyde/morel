@@ -265,12 +265,22 @@ template), or unsupported, with a flag for known semantic divergence (integer
 division, overflow, collation, NaN ordering). Tests iterate the table through
 the triple format.
 
-**M5.** The translator is `spark.SparkTranslator`, and all sixteen seed
-queries now translate: `SparkTranslatorTest` holds each against the plan
-`spark/seed-plans.txt` captured for it, which `capture.py` still reproduces
-exactly, so a decision the translator makes is one PySpark can be made to
-make too. What remains of the milestone is the `Spark` structure's `prepare`,
-which is what turns `spark-plan.smli` on.
+**M5.** Done, but for executing. The translator is `spark.SparkTranslator`,
+and all sixteen seed queries translate: `SparkTranslatorTest` holds each
+against the plan `spark/seed-plans.txt` captured for it, which `capture.py`
+still reproduces exactly, so a decision the translator makes is one PySpark
+can be made to make too. The `Spark` structure has the `('a, 'b) plan` type,
+`prepare` and `toString`, so `spark-plan.smli` runs: its seventeen plans are
+the captured ones, byte for byte, reached through Morel rather than through a
+Java test. `execute` and `remote` are M8's.
+
+`prepare` is an intrinsic, expanded where it is resolved, as `Sys.planOf` is:
+it reads the parse tree of its function rather than evaluating it, inlines it
+once so that a built-in is a function literal the translator can recognise,
+and makes the plan a literal, so that a plan is translated once however often
+it is used. A table reaches it as a value rather than an expression, because
+inlining replaced the read with the rows; the name is in the expression the
+value remembers.
 
 The tests were delivered ahead of the translator, since the tree it
 reads was on the 449-tree branch: `spark.smli` runs the corpus locally

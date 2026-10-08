@@ -46,6 +46,8 @@ public final class SparkCodes {
     c.accept(BuiltIn.SPARK_CLOSE, SPARK_CLOSE);
     c.accept(BuiltIn.SPARK_CONNECT, SPARK_CONNECT);
     c.accept(BuiltIn.SPARK_CONNECT_DEFAULT, SPARK_CONNECT_DEFAULT);
+    c.accept(BuiltIn.SPARK_PREPARE, SPARK_PREPARE);
+    c.accept(BuiltIn.SPARK_TO_STRING, SPARK_TO_STRING);
     c.accept(BuiltIn.SPARK_USING, SPARK_USING);
   }
 
@@ -66,6 +68,34 @@ public final class SparkCodes {
         public Unit apply(SparkBackend.Connection connection) {
           SparkConnections.close(connection);
           return Unit.INSTANCE;
+        }
+      };
+
+  /**
+   * The resolver replaces {@code prepare (c, f)} with the plan of {@code f}, so
+   * this runs only where {@code prepare} is used as a value rather than applied
+   * to a function expression -- passed to {@code map}, say -- which it cannot
+   * serve, because by then the function is a closure and its parse tree is
+   * gone.
+   *
+   * @see BuiltIn#SPARK_PREPARE
+   */
+  private static final Applicable SPARK_PREPARE =
+      new ApplicableImpl(BuiltIn.SPARK_PREPARE) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          throw new SparkBackend.SparkException(
+              "UNSUPPORTED",
+              "Spark.prepare must be applied to a function expression");
+        }
+      };
+
+  /** @see BuiltIn#SPARK_TO_STRING */
+  private static final Applicable1 SPARK_TO_STRING =
+      new BaseApplicable1<String, SparkBackend.Plan>(BuiltIn.SPARK_TO_STRING) {
+        @Override
+        public String apply(SparkBackend.Plan plan) {
+          return plan.text();
         }
       };
 

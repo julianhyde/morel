@@ -223,7 +223,7 @@ val spark = Spark.connect "mock:";
 from e in spark.catalog.scott.emps where e.sal > 2500.0 yield e.ename;
 val q = spark.connection.prepare (fn () =>
   from e in spark.catalog.scott.emps where e.sal > 1000.0);
-q.toString;
+q.toString ();
 q.execute ();
 spark.connection.close ();
 ```

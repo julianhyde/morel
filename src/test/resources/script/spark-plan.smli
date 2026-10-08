@@ -22,7 +22,11 @@
  * Runs once the translator exists (Spark.prepare); see
  * docs/script-format.md.
  *)
-(*) requires: spark-prepare
+(*) requires: spark-adapter spark-prepare
+
+(*) A plan is a long string, and is printed whole.
+Sys.set ("stringDepth", NONE);
+> val it = () : unit
 
 val spark = Spark.connect "mock:";
 > val spark = {catalog={},connection=<connection mock:>}
@@ -35,7 +39,7 @@ val spark = Spark.connect "mock:";
              {i = 3, s = "three", b = true, x = 3.5}]
     where r.b andalso r.i > 1
     yield {r.s, y = r.x * 2.0}
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -129,7 +133,7 @@ val spark = Spark.connect "mock:";
   from e in spark.catalog.scott.emps
     join d in spark.catalog.scott.depts on e.deptno = d.deptno
     yield {e.ename, d.dname}
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -218,7 +222,7 @@ val spark = Spark.connect "mock:";
   from e in spark.catalog.scott.emps
     group e.deptno
       compute {c = count over (), total = sum over e.sal, top = max over e.sal}
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -307,7 +311,7 @@ val spark = Spark.connect "mock:";
     yield {e.ename, e.sal}
     order (DESC sal, ename)
     take 3
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -390,7 +394,7 @@ val spark = Spark.connect "mock:";
     where (exists e in spark.catalog.scott.emps
            where e.deptno = d.deptno andalso e.job = "CLERK")
     yield d.dname
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -515,7 +519,7 @@ val spark = Spark.connect "mock:";
     skip 2
     take 3
     yield {e.empno, e.ename}
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -593,7 +597,7 @@ val spark = Spark.connect "mock:";
 (*) Query 7: distinct, a group with no aggregates.
 (spark.connection.prepare (fn () =>
   from e in spark.catalog.scott.emps group e.job
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -643,7 +647,7 @@ val spark = Spark.connect "mock:";
     left join e in spark.catalog.scott.emps on d.deptno = e.deptno
     where d.deptno >= 30
     yield {d.dname, e}
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -751,7 +755,7 @@ val spark = Spark.connect "mock:";
 >                 function_name: "isNull"
 >                 arguments {
 >                   unresolved_attribute {
->                     unparsed_identifier: "e.empno"
+>                     unparsed_identifier: "e.deptno"
 >                     is_metadata_column: false
 >                   }
 >                 }
@@ -870,7 +874,7 @@ val spark = Spark.connect "mock:";
 (spark.connection.prepare (fn () =>
   from e in spark.catalog.scott.emps where e.deptno = 10 yield {n = e.empno}
     union (from d in spark.catalog.scott.depts yield {n = d.deptno})
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -986,7 +990,7 @@ val spark = Spark.connect "mock:";
     where e.deptno = 10
     yield {e.empno, w = ~e.empno, x = e.sal * decimal "2", y = e.empno div 7,
            z = e.empno mod 7}
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -1070,7 +1074,11 @@ val spark = Spark.connect "mock:";
 >             }
 >             arguments {
 >               literal {
->                 float: 2.0
+>                 decimal {
+>                   value: "2"
+>                   precision: 1
+>                   scale: 0
+>                 }
 >               }
 >             }
 >           }
@@ -1081,29 +1089,8 @@ val spark = Spark.connect "mock:";
 >     expressions {
 >       alias {
 >         expr {
->           cast {
->             expr {
->               unresolved_function {
->                 function_name: "floor"
->                 arguments {
->                   unresolved_function {
->                     function_name: "/"
->                     arguments {
->                       unresolved_attribute {
->                         unparsed_identifier: "e.empno"
->                         is_metadata_column: false
->                       }
->                     }
->                     arguments {
->                       literal {
->                         integer: 7
->                       }
->                     }
->                   }
->                 }
->               }
->             }
->             type_str: "int"
+>           expression_string {
+>             expression: "cast(floor(e.empno / 7) as int)"
 >           }
 >         }
 >         name: "y"
@@ -1112,39 +1099,8 @@ val spark = Spark.connect "mock:";
 >     expressions {
 >       alias {
 >         expr {
->           unresolved_function {
->             function_name: "%"
->             arguments {
->               unresolved_function {
->                 function_name: "+"
->                 arguments {
->                   unresolved_function {
->                     function_name: "%"
->                     arguments {
->                       unresolved_attribute {
->                         unparsed_identifier: "e.empno"
->                         is_metadata_column: false
->                       }
->                     }
->                     arguments {
->                       literal {
->                         integer: 7
->                       }
->                     }
->                   }
->                 }
->                 arguments {
->                   literal {
->                     integer: 7
->                   }
->                 }
->               }
->             }
->             arguments {
->               literal {
->                 integer: 7
->               }
->             }
+>           expression_string {
+>             expression: "((e.empno % 7 + 7) % 7)"
 >           }
 >         }
 >         name: "z"
@@ -1159,7 +1115,7 @@ val spark = Spark.connect "mock:";
     where String.isPrefix "S" e.ename
     yield {e.ename, n = String.size e.ename,
            s = String.substring (e.ename, 0, 2), t = e.ename ^ "!"}
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -1191,19 +1147,8 @@ val spark = Spark.connect "mock:";
 >           }
 >         }
 >         condition {
->           unresolved_function {
->             function_name: "startsWith"
->             arguments {
->               unresolved_attribute {
->                 unparsed_identifier: "e.ename"
->                 is_metadata_column: false
->               }
->             }
->             arguments {
->               literal {
->                 string: "S"
->               }
->             }
+>           expression_string {
+>             expression: "startswith(e.ename, \'S\')"
 >           }
 >         }
 >       }
@@ -1233,34 +1178,8 @@ val spark = Spark.connect "mock:";
 >     expressions {
 >       alias {
 >         expr {
->           unresolved_function {
->             function_name: "substring"
->             arguments {
->               unresolved_attribute {
->                 unparsed_identifier: "e.ename"
->                 is_metadata_column: false
->               }
->             }
->             arguments {
->               unresolved_function {
->                 function_name: "+"
->                 arguments {
->                   literal {
->                     integer: 0
->                   }
->                 }
->                 arguments {
->                   literal {
->                     integer: 1
->                   }
->                 }
->               }
->             }
->             arguments {
->               literal {
->                 integer: 2
->               }
->             }
+>           expression_string {
+>             expression: "substring(e.ename, 0 + 1, 2)"
 >           }
 >         }
 >         name: "s"
@@ -1297,7 +1216,7 @@ val spark = Spark.connect "mock:";
       (from d in spark.catalog.scott.depts
        where d.loc = "CHICAGO" yield d.deptno)
     yield e.ename
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -1421,7 +1340,7 @@ val spark = Spark.connect "mock:";
     yield {d.dname,
            n = (from e in spark.catalog.scott.emps where e.deptno = d.deptno
                 compute count over ())}
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -1520,13 +1439,18 @@ val spark = Spark.connect "mock:";
 >         }
 >         group_type: GROUP_TYPE_GROUPBY
 >         aggregate_expressions {
->           unresolved_function {
->             function_name: "count"
->             arguments {
->               literal {
->                 integer: 1
+>           alias {
+>             expr {
+>               unresolved_function {
+>                 function_name: "count"
+>                 arguments {
+>                   literal {
+>                     integer: 1
+>                   }
+>                 }
 >               }
 >             }
+>             name: "count"
 >           }
 >         }
 >       }
@@ -1537,7 +1461,7 @@ val spark = Spark.connect "mock:";
 (*) Query 14: a result that is not a collection.
 (spark.connection.prepare (fn () =>
   from e in spark.catalog.scott.emps compute count over ()
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -1576,7 +1500,7 @@ val spark = Spark.connect "mock:";
 >             }
 >           }
 >         }
->         name: "it"
+>         name: "count"
 >       }
 >     }
 >   }
@@ -1587,7 +1511,7 @@ val spark = Spark.connect "mock:";
   from e in spark.catalog.scott.emps yield {n = e.deptno}
     except (from d in spark.catalog.scott.depts
             where d.deptno > 20 yield {n = d.deptno})
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -1702,7 +1626,7 @@ val spark = Spark.connect "mock:";
   from e in spark.catalog.scott.emps yield {n = e.deptno}
     intersect (from d in spark.catalog.scott.depts
                where d.deptno > 20 yield {n = d.deptno})
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {
@@ -1818,7 +1742,7 @@ val spark = Spark.connect "mock:";
     group {e.deptno, e.job}
       compute {n = count over (), s = sum over e.sal}
     order (deptno, job)
-)).toString;
+)).toString ();
 > val it =
 >   {_|
 > root {

@@ -75,6 +75,7 @@ import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
+import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
@@ -1339,7 +1340,59 @@ public class Resolver {
               ? coreArg.unparsePlan(typeMap.typeSystem, width)
               : coreArg.unparseRenumbered(typeMap.typeSystem, width, true));
     }
-    return core.apply(apply.pos(), type, coreFn, coreArg);
+    final Core.Exp apply2 = core.apply(apply.pos(), type, coreFn, coreArg);
+    if (isBuiltIn(coreFn, BuiltIn.SPARK_PREPARE)) {
+      return prepare(apply, apply2, coreArg);
+    }
+    return apply2;
+  }
+
+  /** Returns whether a type is "(&alpha;, &beta;) plan". */
+  private static boolean isPlanType(Type type) {
+    return type instanceof DataType
+        && ((DataType) type).name.equals(BuiltIn.Eqtype.PLAN.mlName());
+  }
+
+  /**
+   * Expands {@code prepare (c, f)} into the plan it makes of {@code f}: a
+   * literal whose value is the plan, so that the plan is translated once, here,
+   * rather than each time the value is used.
+   *
+   * <p>Expanded here for the reason {@code Sys.planOf} is: the argument's Core
+   * is to hand and is the tree the resolver built. The one thing the translator
+   * needs that the resolver has not yet done is inlining, because until a
+   * built-in is a function literal the translator cannot see which function a
+   * call is to; one pass is enough, and is what the compiler would do first
+   * anyway.
+   */
+  private Core.Exp prepare(Ast.Apply apply, Core.Exp apply2, Core.Exp coreArg) {
+    if (coreArg.op != Op.TUPLE || ((Core.Tuple) coreArg).args.size() != 2) {
+      throw new CompileException(
+          "prepare expects a connection and a function", false, apply.pos());
+    }
+    final Core.Exp fn = ((Core.Tuple) coreArg).args.get(1);
+    final Core.Exp inlined =
+        fn.accept(Inliner.of(typeMap.typeSystem, env, null));
+    final Core.Rel[] rels = {null};
+    inlined.accept(
+        new Visitor() {
+          @Override
+          protected void visitRel(Core.Rel rel) {
+            if (rels[0] == null) {
+              rels[0] = rel;
+            }
+          }
+        });
+    if (rels[0] == null) {
+      // Phase 1 prepares a query and nothing else; a function whose body is
+      // not relational has no plan.
+      throw Codes.sparkException(
+          new SparkBackend.SparkException(
+              "UNSUPPORTED", "Spark cannot do a function that is not a query"),
+          apply.pos());
+    }
+    return core.valueLiteral(
+        apply2, SparkBackend.translate(typeMap.typeSystem, rels[0]));
   }
 
   /**
@@ -1379,9 +1432,12 @@ public class Resolver {
     // to read a field, and a query's binder has no value to read: `intFn.f 1`
     // is a selector application too, and looking that one up walks off the
     // end of a placeholder row. The result type is enough of a filter,
-    // because the built-ins reached this way return a string.
-    if (!(exp.type instanceof FnType)
-        || ((FnType) exp.type).resultType != PrimitiveType.STRING) {
+    // because the built-ins reached this way return a string or a plan.
+    if (!(exp.type instanceof FnType)) {
+      return false;
+    }
+    final Type resultType = ((FnType) exp.type).resultType;
+    if (resultType != PrimitiveType.STRING && !isPlanType(resultType)) {
       return false;
     }
     final @Nullable Object o = valueOf(env, exp);

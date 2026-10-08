@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.spark;
 
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.TypeSystem;
 
@@ -32,6 +33,11 @@ public class SparkConnectBackend implements SparkBackend {
   @Override
   public Connection connect(TypeSystem typeSystem, String uri) {
     return new SparkConnection(typeSystem, uri);
+  }
+
+  @Override
+  public Plan prepare(TypeSystem typeSystem, Core.Rel query) {
+    return SparkTranslator.translate(typeSystem, query);
   }
 }
 

@@ -6715,7 +6715,13 @@ public class TypeResolver {
             final TypedValue typedValue = expandField(env, apply.arg);
             if (typedValue != null) {
               typedValue.discoverField(typeSystem, selector.name);
-              return typedValue.fieldValueAs(selector.name, TypedValue.class);
+              // Only a field that is itself a typed value continues the walk.
+              // A connection is not one: there is nothing in it to discover,
+              // and `c.prepare f` names a method of a connection, not a field
+              // of one.
+              final Object field =
+                  typedValue.fieldValueAs(selector.name, Object.class);
+              return field instanceof TypedValue ? (TypedValue) field : null;
             }
           }
           return null;

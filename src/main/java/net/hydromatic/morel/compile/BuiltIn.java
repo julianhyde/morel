@@ -4526,6 +4526,45 @@ public enum BuiltIn {
       "Spark", "connectDefault", ts -> ts.fnType(UNIT, connectionRecord(ts))),
 
   /**
+   * Function "Spark.prepare", of type "connection * (&alpha; &rarr; &beta;)
+   * &rarr; (&alpha;, &beta;) plan".
+   *
+   * <p>"prepare (c, f)" translates f into a plan that computes the same
+   * function on connection c.
+   *
+   * <p>It is an intrinsic: it reads the parse tree of f rather than evaluating
+   * it, and is expanded where it is resolved, as {@link #SYS_PLAN_OF} is; see
+   * {@code Resolver.toCore(Ast.Apply)}.
+   */
+  SPARK_PREPARE(
+      "Spark",
+      "prepare",
+      true,
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(
+                          ts.lookup(Eqtype.CONNECTION),
+                          ts.fnType(h.get(0), h.get(1))),
+                      planType(ts, h.get(0), h.get(1))))),
+
+  /**
+   * Function "Spark.toString", of type "(&alpha;, &beta;) plan &rarr; string".
+   *
+   * <p>"toString p" is the plan as text, in the rendering that {@code
+   * spark/seed-plans.txt} fixes.
+   */
+  SPARK_TO_STRING(
+      "Spark",
+      "toString",
+      true,
+      ts ->
+          ts.forallType(
+              2, h -> ts.fnType(planType(ts, h.get(0), h.get(1)), STRING))),
+
+  /**
    * Function "Spark.using", of type "(connection * &alpha; &rarr; &beta;)
    * &rarr; &alpha; &rarr; &beta;".
    *
@@ -6029,6 +6068,11 @@ public enum BuiltIn {
             .build());
   }
 
+  /** Returns the type "(&alpha;, &beta;) plan". */
+  private static Type planType(TypeSystem ts, Type argType, Type resultType) {
+    return ts.apply(ts.lookup(Eqtype.PLAN), argType, resultType);
+  }
+
   BuiltIn(
       String structure,
       String mlName,
@@ -6634,6 +6678,12 @@ public enum BuiltIn {
     DATE("date", 0),
     DECIMAL("decimal", 0),
     LIST("list", 1),
+    /**
+     * A query translated for a connection; see the {@code Spark} structure. The
+     * parameters are phantom: they record what the plan takes and computes, and
+     * a plan holds neither.
+     */
+    PLAN("plan", 2),
     TIME("time", 0),
     VECTOR("vector", 1);
 

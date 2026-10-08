@@ -353,18 +353,41 @@ public class SparkTranslator {
 
   /**
    * Returns the name of the table a collection reads, or null if it is not a
-   * table. A table is a field of a foreign value, so {@code scott.emps} is a
-   * record selector applied to a name, and Spark wants the two joined by a dot,
-   * as the user wrote them.
+   * table.
+   *
+   * <p>A table is a field of a field: {@code scott.emps} names the database and
+   * the table, and Spark wants the two joined by a dot, as the user wrote them.
+   * A catalog reached through a connection is deeper -- {@code
+   * spark.catalog.scott.emps} -- and the last two names are still the ones
+   * Spark knows the table by, so the chain is read from the end.
    */
   private static @Nullable String tableName(Core.Exp exp) {
-    if (exp.op == Op.APPLY) {
-      final Core.Apply apply = (Core.Apply) exp;
-      if (apply.fn.op == Op.RECORD_SELECTOR && apply.arg.op == Op.ID) {
-        return ((Core.Id) apply.arg).idPat.name + "." + selectedName(apply);
+    final List<String> names = new ArrayList<>();
+    for (Core.Exp e = exp; ; ) {
+      // A table read from a catalog arrives as a value, because inlining
+      // replaced the expression that read it with the rows it holds. The name
+      // is in the expression, which the value remembers, and not in the rows.
+      if (e.op == Op.VALUE_LITERAL) {
+        final Core.Exp source = ((Core.Literal) e).valueExp();
+        if (source != null && source != e) {
+          e = source;
+          continue;
+        }
       }
+      if (e.op == Op.APPLY && ((Core.Apply) e).fn.op == Op.RECORD_SELECTOR) {
+        final Core.Apply apply = (Core.Apply) e;
+        names.add(selectedName(apply));
+        e = apply.arg;
+        continue;
+      }
+      if (e.op == Op.ID) {
+        names.add(((Core.Id) e).idPat.name);
+      }
+      break;
     }
-    return null;
+    // The names came off the chain from the outside in, so the table is first
+    // and the database second; fewer than two names is not a table.
+    return names.size() < 2 ? null : names.get(1) + "." + names.get(0);
   }
 
   /** Translates a set operator. */

@@ -67,13 +67,19 @@ import org.jspecify.annotations.Nullable;
  */
 public class OutputMatcher {
   /**
-   * A top-level string value in a statement's output: {@code val name = "..." :
-   * string}, the literal and the type possibly wrapped onto following lines.
+   * The start of a top-level string value in a statement's output: {@code val
+   * name =}, the whitespace the printer left, and the literal's opening quote.
+   *
+   * <p>The literal itself is scanned rather than matched, because a pattern for
+   * a quoted literal recurses once per character of it -- Java's matcher calls
+   * itself for each turn of a group's loop -- and a string that holds a query
+   * plan is long enough to end the stack.
    */
-  private static final Pattern TOP_LEVEL_STRING =
-      Pattern.compile(
-          "^(val \\S+ =)(\\s+)(\"(?:[^\"\\\\]|\\\\.)*\")\\s+: string$",
-          Pattern.MULTILINE);
+  private static final Pattern TOP_LEVEL_STRING_START =
+      Pattern.compile("^(val \\S+ =)(\\s+)\"", Pattern.MULTILINE);
+
+  /** What follows the literal of a top-level string value. */
+  private static final String STRING_TYPE_SUFFIX = ": string";
 
   /** Separator used when the printer wrapped a value onto the next line. */
   private static final String WRAPPED_INDENT =
@@ -598,11 +604,23 @@ public class OutputMatcher {
    * and strings inside collections and records, are unchanged.
    */
   public static String toRawStrings(String output) {
-    final Matcher m = TOP_LEVEL_STRING.matcher(output);
+    final Matcher m = TOP_LEVEL_STRING_START.matcher(output);
     StringBuilder b = null;
     int last = 0;
     while (m.find()) {
-      final String content = Parsers.unquoteString(m.group(3));
+      // The match ends at the opening quote; find the closing one, and the type
+      // that must follow it.
+      final int quote = m.end() - 1;
+      final int closed = endOfLiteral(output, quote);
+      if (closed < 0) {
+        continue;
+      }
+      final int end = endOfType(output, closed);
+      if (end < 0) {
+        continue;
+      }
+      final String content =
+          Parsers.unquoteString(output.substring(quote, closed));
       if (!wantsRaw(content)) {
         continue;
       }
@@ -615,13 +633,51 @@ public class OutputMatcher {
           // line, the raw literal starts on the next line too.
           .append(m.group(2).indexOf('\n') < 0 ? " " : WRAPPED_INDENT)
           .append(rawLiteral(content))
-          .append(" : string");
-      last = m.end();
+          .append(" ")
+          .append(STRING_TYPE_SUFFIX);
+      last = end;
     }
     if (b == null) {
       return output;
     }
     return b.append(output, last, output.length()).toString();
+  }
+
+  /**
+   * Returns the index after the closing quote of the string literal whose
+   * opening quote is at {@code quote}, or -1 if it is not closed.
+   */
+  private static int endOfLiteral(String output, int quote) {
+    for (int i = quote + 1; i < output.length(); i++) {
+      switch (output.charAt(i)) {
+        case '\\':
+          // Whatever follows an escape is part of the literal, quote included.
+          ++i;
+          break;
+        case '"':
+          return i + 1;
+        default:
+          break;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Returns the index after the type that follows a top-level value, which must
+   * be {@code : string} and must end the line; or -1 if that is not what
+   * follows {@code i}.
+   */
+  private static int endOfType(String output, int i) {
+    int j = i;
+    while (j < output.length() && Character.isWhitespace(output.charAt(j))) {
+      ++j;
+    }
+    if (j == i || !output.startsWith(STRING_TYPE_SUFFIX, j)) {
+      return -1;
+    }
+    final int end = j + STRING_TYPE_SUFFIX.length();
+    return end == output.length() || output.charAt(end) == '\n' ? end : -1;
   }
 
   /**

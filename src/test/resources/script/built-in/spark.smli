@@ -20,11 +20,15 @@
  * catalog is the session's foreign data sets.
  *)
 Spark;
-> val it = {catalog=fn,close=fn,connect=fn,connectDefault=fn,using=fn}
+> val it =
+>   {catalog=fn,close=fn,connect=fn,connectDefault=fn,prepare=fn,toString=fn,
+>    using=fn}
 >   : {catalog:connection -> {...}, close:connection -> unit,
 >       connect:string -> {catalog:{...}, connection:connection},
 >       connectDefault:unit -> {catalog:{...}, connection:connection},
->       using:(connection * 'a -> 'b) -> 'a -> 'b}
+>       prepare:connection * ('a -> 'b) -> ('a,'b) plan,
+>       toString:('c,'d) plan -> string,
+>       using:(connection * 'e -> 'f) -> 'e -> 'f}
 
 (*) The offline connection. Its catalog has one database, scott.
 val spark = Spark.connect "mock:";

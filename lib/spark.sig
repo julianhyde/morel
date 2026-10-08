@@ -26,6 +26,14 @@ sig
   eqtype connection
 
   (**
+   * is a query translated for a connection: `prepare` makes one, `toString`
+   * prints it, and `execute` runs it. The parameters are phantom: they
+   * record what the plan takes and what it computes, and a plan holds
+   * neither. A plan of a query that takes no argument has `'a = unit`.
+   *)
+  type ('a, 'b) plan
+
+  (**
    * is raised by an operation that Spark, or the Spark adapter, rejects.
    * `errorClass` is Spark's error condition, such as `DIVIDE_BY_ZERO`
    * or `TABLE_OR_VIEW_NOT_FOUND`, or one of the adapter's own:
@@ -66,6 +74,27 @@ sig
    * closes connection `c`. Any later use of it raises `Spark`.
    *)
   val close : connection -> unit [@@method] [@@prototype "close c"]
+
+  (**
+   * translates `f` into a plan that computes the same function on
+   * connection `c`.
+   *
+   * It reads the parse tree of `f` rather than evaluating it, so `f` must be
+   * written out at the call: a function reached through a name is a closure
+   * by then, and its tree is gone. Everything the body reads other than its
+   * parameter is fixed when the plan is prepared; the argument is the only
+   * thing that varies from one execution to the next.
+   *)
+  val prepare : connection * ('a -> 'b) -> ('a, 'b) plan
+    [@@method] [@@prototype "prepare (c, f)"]
+
+  (**
+   * returns plan `p` as text, in Spark's protobuf text format, except that a
+   * local relation shows the number of rows it carries rather than the bytes
+   * that carry them.
+   *)
+  val toString : ('a, 'b) plan -> string
+    [@@method] [@@prototype "toString p"]
 
   (**
    * returns a function that opens the default connection, applies `f` to

@@ -23,6 +23,7 @@ import static java.util.Objects.requireNonNull;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.TextFormat;
 import java.util.List;
+import net.hydromatic.morel.foreign.SparkBackend;
 import org.apache.spark.connect.proto.Plan;
 
 /**
@@ -36,7 +37,7 @@ import org.apache.spark.connect.proto.Plan;
  * next -- and the row count is what a reader wants. {@code
  * spark/seed-plans.txt} records the plans in this form.
  */
-public class SparkPlan {
+public class SparkPlan implements SparkBackend.Plan {
   private final Plan plan;
   private final ImmutableList<Integer> localRowCounts;
 

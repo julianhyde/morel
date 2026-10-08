@@ -30,6 +30,7 @@ License.
 
 <pre>
 type <a id='connection' href="#connection-impl">connection</a>
+type ('a, 'b) <a id='plan' href="#plan-impl">plan</a>
 
 exception <a id='Spark' href="#Spark-impl">Spark</a> of {errorClass:string, message:string}
 
@@ -37,6 +38,8 @@ val <a id='connect' href="#connect-impl">connect</a> : string -> {catalog:{}, co
 val <a id='connectDefault' href="#connectDefault-impl">connectDefault</a> : unit -> {catalog:{}, connection:connection}
 val <a id='catalog' href="#catalog-impl">catalog</a> : connection -> {}
 val <a id='close' href="#close-impl">close</a> : connection -> unit
+val <a id='prepare' href="#prepare-impl">prepare</a> : connection * ('a -> 'b) -> ('a, 'b) plan
+val <a id='toString' href="#toString-impl">toString</a> : ('a, 'b) plan -> string
 val <a id='using' href="#using-impl">using</a> : (connection * 'a -> 'b) -> 'a -> 'b
 </pre>
 
@@ -45,6 +48,14 @@ val <a id='using' href="#using-impl">using</a> : (connection * 'a -> 'b) -> 'a -
 
 is a connection to a Spark Connect server, or the offline
 connection whose catalog is the session's foreign data sets.
+
+<a id="plan-impl"></a>
+<h3><code><strong>type</strong> ('a, 'b) plan</code></h3>
+
+is a query translated for a connection: `prepare` makes one, `toString`
+prints it, and `execute` runs it. The parameters are phantom: they
+record what the plan takes and what it computes, and a plan holds
+neither. A plan of a query that takes no argument has `'a = unit`.
 
 <a id="Spark-impl"></a>
 <h3><code><strong>exception</strong> Spark</code></h3>
@@ -85,6 +96,25 @@ it, since a name's type grows as fields are discovered.
 <h3><code>close</code></h3>
 
 `close c` (or `c.close ()`) closes connection `c`. Any later use of it raises `Spark`.
+
+<a id="prepare-impl"></a>
+<h3><code>prepare</code></h3>
+
+`prepare (c, f)` (or `c.prepare f`) translates `f` into a plan that computes the same function on
+connection `c`.
+
+It reads the parse tree of `f` rather than evaluating it, so `f` must be
+written out at the call: a function reached through a name is a closure
+by then, and its tree is gone. Everything the body reads other than its
+parameter is fixed when the plan is prepared; the argument is the only
+thing that varies from one execution to the next.
+
+<a id="toString-impl"></a>
+<h3><code>toString</code></h3>
+
+`toString p` (or `p.toString ()`) returns plan `p` as text, in Spark's protobuf text format, except that a
+local relation shows the number of rows it carries rather than the bytes
+that carry them.
 
 <a id="using-impl"></a>
 <h3><code>using</code></h3>

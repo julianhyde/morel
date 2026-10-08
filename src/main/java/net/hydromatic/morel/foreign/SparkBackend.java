@@ -20,6 +20,7 @@ package net.hydromatic.morel.foreign;
 
 import java.util.List;
 import java.util.Map;
+import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import org.jspecify.annotations.Nullable;
@@ -94,6 +95,37 @@ public interface SparkBackend {
               + " the 'spark' Maven profile");
     }
     return load().connect(typeSystem, uri);
+  }
+
+  /**
+   * Translates a query to a plan, loading the adapter.
+   *
+   * <p>Preparing needs the adapter even on the offline connection, because a
+   * plan is a protobuf message and the protobuf classes are the adapter's.
+   *
+   * @param typeSystem Type system that typed the query
+   * @param query Core of the query, which must be relational
+   */
+  static Plan translate(TypeSystem typeSystem, Core.Rel query) {
+    if (!isAvailable()) {
+      throw new SparkException(
+          "CONNECTION",
+          "The Spark adapter is not available; it needs JDK 17 or later and"
+              + " the 'spark' Maven profile");
+    }
+    return load().prepare(typeSystem, query);
+  }
+
+  /** Translates a query to a plan. */
+  Plan prepare(TypeSystem typeSystem, Core.Rel query);
+
+  /**
+   * A plan: a query translated for a connection, which {@code Spark.execute}
+   * runs and {@code Spark.toString} prints.
+   */
+  interface Plan {
+    /** The plan as text, in the rendering that {@code seed-plans.txt} fixes. */
+    String text();
   }
 
   /** A connection to a Spark Connect server. */
