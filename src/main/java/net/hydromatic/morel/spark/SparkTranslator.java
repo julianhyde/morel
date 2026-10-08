@@ -562,6 +562,12 @@ public class SparkTranslator {
                         .setPrecision(Math.max(d.precision(), d.scale() + 1))
                         .setScale(d.scale())));
 
+      case ID:
+        // A name that is not a column of the query: a plan's parameter, say,
+        // which phase 1 does not pass, or a value the resolver could not
+        // replace with what it holds. Naming it says which.
+        throw unsupported("the variable " + ((Core.Id) exp).idPat.name);
+
       default:
         throw unsupported("expression " + exp.op);
     }

@@ -1386,10 +1386,10 @@ public class Resolver {
     if (rels[0] == null) {
       // Phase 1 prepares a query and nothing else; a function whose body is
       // not relational has no plan.
-      throw Codes.sparkException(
-          new SparkBackend.SparkException(
-              "UNSUPPORTED", "Spark cannot do a function that is not a query"),
-          apply.pos());
+      // Raised as the translator raises its own refusals, so that every
+      // reason a plan cannot be prepared reads alike.
+      throw new SparkBackend.SparkException(
+          "UNSUPPORTED", "Spark cannot do a function that is not a query");
     }
     return core.valueLiteral(
         apply2, SparkBackend.translate(typeMap.typeSystem, rels[0]));

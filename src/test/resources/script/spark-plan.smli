@@ -1843,4 +1843,18 @@ val spark = Spark.connect "mock:";
 >   }
 > }|_} : string
 
+(* Phase 1 prepares a query and nothing else, and a plan is all Spark or it
+ * is an error. A function whose body is not a query has no plan; nor has one
+ * that reads a name the plan cannot carry, such as the function's own
+ * parameter, which crosses only at "execute". Either is refused where the
+ * plan is prepared, and the refusal says what it could not do. *)
+(spark.connection.prepare (fn () => 1 + 2)).toString ();
+> Spark {errorClass = "UNSUPPORTED", message = "Spark cannot do a function that is not a query"}
+(spark.connection.prepare (fn d =>
+  from e in spark.catalog.scott.emps
+    where e.deptno = d
+    yield e.ename
+)).toString ();
+> Spark {errorClass = "UNSUPPORTED", message = "Spark cannot do the variable d"}
+
 (*) End spark-plan.smli
