@@ -135,7 +135,7 @@ public class SparkTypesTest {
         rowType.moniker(),
         is(
             "{arr:int option list, arr2:string list, b:bool, big:int,"
-                + " bin:word list, d:date, dec:real, id:int, ntz:date,"
+                + " bin:word list, d:date, dec:decimal, id:int, ntz:date,"
                 + " s:string, st:{a:int option, b:string}, ts:time, x:real}"));
   }
 

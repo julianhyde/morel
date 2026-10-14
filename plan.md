@@ -425,6 +425,21 @@ workflow keeps its short timeout and never starts Docker.
 
 ## Phase 2 questions
 
+**A nullable catalog column and an optional local one are not the same
+type.** Spark's catalog keeps no NOT NULL for a table stored as files, so a
+column maps to the plain type and a null in one raises (spec.md section 1.2,
+decision B). Morel's own `scott` comes from Calcite, which does know
+nullability, so its `comm` is `decimal option` and its president has no
+manager. The container's `scott` therefore holds a zero where the data set
+holds NONE, or the table could not be read at all.
+
+The corpus mostly does not notice, since only the eighth query reads a whole
+row, but that query's live result and its local result differ: `comm` is
+`decimal` and zero there, `decimal option` and NONE here. Either the mapping
+learns nullability from somewhere (a declaration, as decision A wanted), or
+the triple tests of M11 must know that this column is one the two sides
+disagree about.
+
 **Should an uploaded collection be sent once and reused?** A catalog
 table costs nothing to refer to twice -- it is a name that Spark resolves
 -- but a local collection crosses as a `LocalRelation`, and since

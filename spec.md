@@ -41,7 +41,7 @@ why.
 | `int`                  | `int`          |                                          |
 | `bigint`               | `int`          | Raises `Overflow` if the value does not fit; phase 3 adds a 64-bit type |
 | `float`, `double`      | `real`         | `float` widened; Morel `real` is a Java `float`, so `double` is narrowed (see 1.4) |
-| `decimal(p, s)`        | `real`         | Until phase 3 adds `decimal`             |
+| `decimal(p, s)`        | `decimal`      | Rounded half-even to Morel's 34 digits; rejected if too large |
 | `string`, `char(n)`, `varchar(n)` | `string` | Trailing spaces of `char(n)` kept   |
 | `binary`               | `word list`    | One `word` per byte, 0 to 255            |
 | `date`                 | `Date.date`    | Midnight, no zone; see 1.3               |

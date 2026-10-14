@@ -57,9 +57,15 @@ if warehouse.startswith("file:"):
 # give the same values.
 sql("CREATE DATABASE IF NOT EXISTS scott")
 sql("DROP TABLE IF EXISTS scott.emps")
+# A salary is a decimal, as it is in Morel's data set, so that a query over
+# one answers as it does over the other. Where Morel's data set has NONE --
+# most commissions, and the president's manager -- this has a zero rather
+# than a null, because a catalog column maps to the plain type and a null in
+# one raises (spec.md section 1.2, decision B), which would make the table
+# unreadable. plan.md records what that costs.
 sql("""CREATE TABLE scott.emps (
   empno INT, ename STRING, job STRING, mgr INT, hiredate STRING,
-  sal DOUBLE, comm DOUBLE, deptno INT) USING parquet""")
+  sal DECIMAL(7, 2), comm DECIMAL(7, 2), deptno INT) USING parquet""")
 sql("""INSERT INTO scott.emps VALUES
   (7369, 'SMITH', 'CLERK', 7902, '1980-12-17', 800.0, 0.0, 20),
   (7499, 'ALLEN', 'SALESMAN', 7698, '1981-02-20', 1600.0, 300.0, 30),
@@ -86,11 +92,12 @@ sql("""INSERT INTO scott.depts VALUES
 
 sql("DROP TABLE IF EXISTS scott.bonuses")
 sql("""CREATE TABLE scott.bonuses (
-  ename STRING, job STRING, sal DOUBLE, comm DOUBLE) USING parquet""")
+  ename STRING, job STRING, sal DECIMAL(7, 2), comm DECIMAL(7, 2))
+  USING parquet""")
 
 sql("DROP TABLE IF EXISTS scott.salgrades")
 sql("""CREATE TABLE scott.salgrades (
-  grade INT, losal DOUBLE, hisal DOUBLE) USING parquet""")
+  grade INT, losal DECIMAL(7, 2), hisal DECIMAL(7, 2)) USING parquet""")
 sql("""INSERT INTO scott.salgrades VALUES
   (1, 700.0, 1200.0),
   (2, 1201.0, 1400.0),

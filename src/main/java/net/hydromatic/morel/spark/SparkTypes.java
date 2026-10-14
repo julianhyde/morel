@@ -78,8 +78,9 @@ public class SparkTypes {
         return PrimitiveType.INT;
       case FLOAT:
       case DOUBLE:
-      case DECIMAL:
         return PrimitiveType.REAL;
+      case DECIMAL:
+        return typeSystem.lookup(BuiltIn.Eqtype.DECIMAL);
       case STRING:
       case CHAR:
       case VAR_CHAR:

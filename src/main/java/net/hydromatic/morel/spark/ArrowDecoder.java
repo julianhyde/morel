@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.DataType;
@@ -206,6 +207,29 @@ public class ArrowDecoder {
     }
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
+      if (dataType.name.equals("decimal")) {
+        // Spark's decimal has the precision its column declares, and Morel's
+        // has 34 digits, so a value is rounded to those as half-even -- and
+        // one too large for them is no more a decimal than an overflowing
+        // bigint is an int.
+        final BigDecimal decimal =
+            o instanceof BigDecimal
+                ? (BigDecimal) o
+                : new BigDecimal(o.toString());
+        final BigDecimal canonical = Decimals.canonical(decimal);
+        if (canonical == null) {
+          throw new SparkBackend.SparkException(
+              "CAST_OVERFLOW",
+              "Value "
+                  + decimal
+                  + " in column "
+                  + column
+                  + " of row "
+                  + row
+                  + " is too large for a Morel decimal");
+        }
+        return canonical;
+      }
       if (dataType.name.equals("time")) {
         // timestamp: microseconds since epoch -> nanoseconds
         return Math.multiplyExact(((Number) o).longValue(), 1000L);
