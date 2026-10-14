@@ -3431,11 +3431,13 @@ public class TypeResolver {
     }
 
     // Desugar the postfix call to a regular application.
-    if (postfixApp.arg.op == Op.UNIT_LITERAL) {
-      // x.f () → f x  (curried, no extra argument)
-      return deduceExpType(e, ast.apply(fnExp, receiver2), v);
-    } else if (isTuple) {
+    if (isTuple) {
       // x.f y → f (x, y)  or  x.f (a, b) → f (x, a, b)
+      //
+      // A unit argument is an argument here, rather than the absence of one:
+      // a function whose parameter is a tuple has a place to put it, and
+      // nothing else would reach that place. So `p.execute ()` runs a plan
+      // that takes unit, where `c.close ()` merely closes a connection.
       final List<Ast.Exp> elems = new ArrayList<>();
       elems.add(receiver2);
       if (postfixApp.arg instanceof Ast.Tuple) {
@@ -3445,6 +3447,9 @@ public class TypeResolver {
       }
       final Ast.Tuple spliced = ast.tuple(pos, elems);
       return deduceExpType(e, ast.apply(fnExp, spliced), v);
+    } else if (postfixApp.arg.op == Op.UNIT_LITERAL) {
+      // x.f () → f x  (no extra argument)
+      return deduceExpType(e, ast.apply(fnExp, receiver2), v);
     } else {
       // x.f y → f x y  (curried with one extra argument)
       return deduceExpType(

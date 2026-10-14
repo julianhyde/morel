@@ -113,6 +113,14 @@ public class MockSparkConnection implements SparkBackend.Connection {
   }
 
   @Override
+  public List<Object> execute(SparkBackend.Plan plan, Type elementType) {
+    checkOpen();
+    throw new SparkBackend.SparkException(
+        "MOCK",
+        "The offline connection cannot execute a plan; connect to a server");
+  }
+
+  @Override
   public List<Object> rows(String database, String table) {
     final SortedMap<String, Type> tableTypes = tableTypes(database);
     final int index = ImmutableList.copyOf(tableTypes.keySet()).indexOf(table);

@@ -40,6 +40,8 @@ val <a id='catalog' href="#catalog-impl">catalog</a> : connection -> {}
 val <a id='close' href="#close-impl">close</a> : connection -> unit
 val <a id='prepare' href="#prepare-impl">prepare</a> : connection * ('a -> 'b) -> ('a, 'b) plan
 val <a id='toString' href="#toString-impl">toString</a> : ('a, 'b) plan -> string
+val <a id='execute' href="#execute-impl">execute</a> : ('a, 'b) plan * 'a -> 'b
+val <a id='remote' href="#remote-impl">remote</a> : connection * ('a -> 'b) -> 'a -> 'b
 val <a id='using' href="#using-impl">using</a> : (connection * 'a -> 'b) -> 'a -> 'b
 </pre>
 
@@ -115,6 +117,22 @@ thing that varies from one execution to the next.
 `toString p` (or `p.toString ()`) returns plan `p` as text, in Spark's protobuf text format, except that a
 local relation shows the number of rows it carries rather than the bytes
 that carry them.
+
+<a id="execute-impl"></a>
+<h3><code>execute</code></h3>
+
+`execute (p, a)` (or `p.execute a`) runs plan `p` on the connection it was prepared for, with argument `a`,
+and returns what it computes: the rows of a query, or the one value of a
+query that computes one. A plan of a function that takes no argument is
+run with `()`.
+
+<a id="remote-impl"></a>
+<h3><code>remote</code></h3>
+
+`remote (c, f)` (or `c.remote f`) returns `f` prepared on connection `c` and executed there: a function of
+the same type as `f` that computes what `f` computes, with the work done
+by Spark. It is `prepare` and `execute` in one step, and reads the parse
+tree of `f` as `prepare` does.
 
 <a id="using-impl"></a>
 <h3><code>using</code></h3>

@@ -4526,6 +4526,25 @@ public enum BuiltIn {
       "Spark", "connectDefault", ts -> ts.fnType(UNIT, connectionRecord(ts))),
 
   /**
+   * Function "Spark.execute", of type "(&alpha;, &beta;) plan * &alpha; &rarr;
+   * &beta;".
+   *
+   * <p>"execute (p, a)" runs plan p on its connection, with argument a, and
+   * returns what it computes.
+   */
+  SPARK_EXECUTE(
+      "Spark",
+      "execute",
+      true,
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(planType(ts, h.get(0), h.get(1)), h.get(0)),
+                      h.get(1)))),
+
+  /**
    * Function "Spark.prepare", of type "connection * (&alpha; &rarr; &beta;)
    * &rarr; (&alpha;, &beta;) plan".
    *
@@ -4549,6 +4568,30 @@ public enum BuiltIn {
                           ts.lookup(Eqtype.CONNECTION),
                           ts.fnType(h.get(0), h.get(1))),
                       planType(ts, h.get(0), h.get(1))))),
+
+  /**
+   * Function "Spark.remote", of type "connection * (&alpha; &rarr; &beta;)
+   * &rarr; &alpha; &rarr; &beta;".
+   *
+   * <p>"remote (c, f)" is f prepared on connection c and executed there: a
+   * function of the same type as f that computes what f computes.
+   *
+   * <p>Like {@link #SPARK_PREPARE}, which it is built on, it is an intrinsic,
+   * and reads the parse tree of f rather than evaluating it.
+   */
+  SPARK_REMOTE(
+      "Spark",
+      "remote",
+      true,
+      ts ->
+          ts.forallType(
+              2,
+              h ->
+                  ts.fnType(
+                      ts.tupleType(
+                          ts.lookup(Eqtype.CONNECTION),
+                          ts.fnType(h.get(0), h.get(1))),
+                      ts.fnType(h.get(0), h.get(1))))),
 
   /**
    * Function "Spark.toString", of type "(&alpha;, &beta;) plan &rarr; string".

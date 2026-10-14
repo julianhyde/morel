@@ -21,14 +21,16 @@
  *)
 Spark;
 > val it =
->   {catalog=fn,close=fn,connect=fn,connectDefault=fn,prepare=fn,toString=fn,
->    using=fn}
+>   {catalog=fn,close=fn,connect=fn,connectDefault=fn,execute=fn,prepare=fn,
+>    remote=fn,toString=fn,using=fn}
 >   : {catalog:connection -> {...}, close:connection -> unit,
 >       connect:string -> {catalog:{...}, connection:connection},
 >       connectDefault:unit -> {catalog:{...}, connection:connection},
->       prepare:connection * ('a -> 'b) -> ('a,'b) plan,
->       toString:('c,'d) plan -> string,
->       using:(connection * 'e -> 'f) -> 'e -> 'f}
+>       execute:('a,'b) plan * 'a -> 'b,
+>       prepare:connection * ('c -> 'd) -> ('c,'d) plan,
+>       remote:connection * ('e -> 'f) -> 'e -> 'f,
+>       toString:('g,'h) plan -> string,
+>       using:(connection * 'i -> 'j) -> 'i -> 'j}
 
 (*) The offline connection. Its catalog has one database, scott.
 val spark = Spark.connect "mock:";

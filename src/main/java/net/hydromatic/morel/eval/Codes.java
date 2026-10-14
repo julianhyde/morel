@@ -59,6 +59,7 @@ import net.hydromatic.morel.eval.code.StringCodes;
 import net.hydromatic.morel.eval.code.SysCodes;
 import net.hydromatic.morel.eval.code.VectorCodes;
 import net.hydromatic.morel.eval.code.WordCodes;
+import net.hydromatic.morel.foreign.PreparedPlan;
 import net.hydromatic.morel.foreign.RelList;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.foreign.SparkConnections;
@@ -618,6 +619,14 @@ public abstract class Codes {
 
   public static StringBuilder appendFloat(StringBuilder buf, float f) {
     return buf.append(realToString(f));
+  }
+
+  /**
+   * Returns the function that {@code Spark.remote} is: one that executes a
+   * prepared plan.
+   */
+  public static Applicable1 sparkRemote(PreparedPlan plan, Pos pos) {
+    return SparkCodes.remote(plan, pos);
   }
 
   /** Converts an error from Spark into the Morel exception {@code Spark}. */

@@ -75,6 +75,7 @@ import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Unit;
+import net.hydromatic.morel.foreign.PreparedPlan;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
@@ -1342,21 +1343,37 @@ public class Resolver {
     }
     final Core.Exp apply2 = core.apply(apply.pos(), type, coreFn, coreArg);
     if (isBuiltIn(coreFn, BuiltIn.SPARK_PREPARE)) {
-      return prepare(apply, apply2, coreArg);
+      return core.valueLiteral(apply2, prepare(apply, coreArg));
+    }
+    if (isBuiltIn(coreFn, BuiltIn.SPARK_REMOTE)) {
+      // `remote (c, f)` is `prepare` and `execute` in one step, so it is
+      // expanded here too, and its value is a function that runs the plan.
+      return core.valueLiteral(
+          apply2, Codes.sparkRemote(prepare(apply, coreArg), apply.pos()));
     }
     return apply2;
   }
 
-  /** Returns whether a type is "(&alpha;, &beta;) plan". */
-  private static boolean isPlanType(Type type) {
-    return type instanceof DataType
-        && ((DataType) type).name.equals(BuiltIn.Eqtype.PLAN.mlName());
+  /**
+   * Returns whether a function takes a connection and a function, which is what
+   * the two intrinsics of the {@code Spark} structure take.
+   */
+  private static boolean takesConnectionAndFunction(FnType fnType) {
+    if (!(fnType.paramType instanceof TupleType)) {
+      return false;
+    }
+    final List<Type> argTypes = ((TupleType) fnType.paramType).argTypes;
+    return argTypes.size() == 2
+        && argTypes.get(0) instanceof DataType
+        && ((DataType) argTypes.get(0))
+            .name.equals(BuiltIn.Eqtype.CONNECTION.mlName())
+        && argTypes.get(1) instanceof FnType;
   }
 
   /**
-   * Expands {@code prepare (c, f)} into the plan it makes of {@code f}: a
-   * literal whose value is the plan, so that the plan is translated once, here,
-   * rather than each time the value is used.
+   * Prepares {@code (c, f)}: translates f for connection c, and returns the
+   * plan, which becomes a literal, so that a query is translated once, here,
+   * rather than each time its plan is used.
    *
    * <p>Expanded here for the reason {@code Sys.planOf} is: the argument's Core
    * is to hand and is the tree the resolver built. The one thing the translator
@@ -1365,7 +1382,7 @@ public class Resolver {
    * call is to; one pass is enough, and is what the compiler would do first
    * anyway.
    */
-  private Core.Exp prepare(Ast.Apply apply, Core.Exp apply2, Core.Exp coreArg) {
+  private PreparedPlan prepare(Ast.Apply apply, Core.Exp coreArg) {
     if (coreArg.op != Op.TUPLE || ((Core.Tuple) coreArg).args.size() != 2) {
       throw new CompileException(
           "prepare expects a connection and a function", false, apply.pos());
@@ -1391,8 +1408,23 @@ public class Resolver {
       throw new SparkBackend.SparkException(
           "UNSUPPORTED", "Spark cannot do a function that is not a query");
     }
-    return core.valueLiteral(
-        apply2, SparkBackend.translate(typeMap.typeSystem, rels[0]));
+    // The plan runs on the connection it was prepared for, so the plan holds
+    // it; and it computes a value of the type the program was typed against,
+    // so it holds that too.
+    final Object connection = valueOf(env, ((Core.Tuple) coreArg).args.get(0));
+    if (!(connection instanceof SparkBackend.Connection)) {
+      throw new SparkBackend.SparkException(
+          "UNSUPPORTED",
+          "Spark cannot see which connection to prepare on; bind the"
+              + " connection to a name");
+    }
+    final Type resultType = ((FnType) fn.type).resultType;
+    final boolean collection = resultType.isCollection();
+    return new PreparedPlan(
+        (SparkBackend.Connection) connection,
+        SparkBackend.translate(typeMap.typeSystem, rels[0]),
+        collection ? resultType.arg(0) : resultType,
+        collection);
   }
 
   /**
@@ -1431,13 +1463,15 @@ public class Resolver {
     // Ask only where the answer could be yes. `valueOf` walks into a record
     // to read a field, and a query's binder has no value to read: `intFn.f 1`
     // is a selector application too, and looking that one up walks off the
-    // end of a placeholder row. The result type is enough of a filter,
-    // because the built-ins reached this way return a string or a plan.
+    // end of a placeholder row. The type is enough of a filter: the built-ins
+    // reached this way either return a string, as `Sys.planOf` does, or take a
+    // connection and a function, as `Spark.prepare` and `Spark.remote` do.
     if (!(exp.type instanceof FnType)) {
       return false;
     }
-    final Type resultType = ((FnType) exp.type).resultType;
-    if (resultType != PrimitiveType.STRING && !isPlanType(resultType)) {
+    final FnType fnType = (FnType) exp.type;
+    if (fnType.resultType != PrimitiveType.STRING
+        && !takesConnectionAndFunction(fnType)) {
       return false;
     }
     final @Nullable Object o = valueOf(env, exp);

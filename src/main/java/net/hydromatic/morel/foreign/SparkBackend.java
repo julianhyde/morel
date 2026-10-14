@@ -161,6 +161,19 @@ public interface SparkBackend {
     /** Returns the rows of a table, as Morel values (see {@link Result}). */
     List<Object> rows(String database, String table);
 
+    /**
+     * Executes a plan and returns its rows.
+     *
+     * <p>The rows are decoded as Morel values of {@code elementType}, which is
+     * the type the query has in Morel, rather than whatever Spark's schema
+     * says: the two agree where the mapping is faithful, and where they do not,
+     * Morel's type is the one the program was typed against.
+     *
+     * @throws SparkException if Spark reports an error, the connection is
+     *     closed, or the connection cannot execute
+     */
+    List<Object> execute(Plan plan, Type elementType);
+
     /** Closes the connection; any later use raises {@link SparkException}. */
     @Override
     void close();

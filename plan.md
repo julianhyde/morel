@@ -406,6 +406,14 @@ through a name; a table of the connection's catalog is a scan however it is
 reached, because the table says what Spark calls it, and only a value that
 cannot say becomes rows to send. `spark-plan.smli` holds both.
 
+**M8.** Done, but for a parameter. `Spark.execute` runs a prepared plan on
+the connection it was prepared for and decodes the rows as values of the
+type the program was typed against; `Spark.remote` is `prepare` and `execute`
+in one step, expanded like `prepare` and holding the function that runs the
+plan. The offline connection refuses to execute ("MOCK"). `spark-exec.smli`
+runs the whole corpus on the container: twenty-one of its twenty-three
+statements pass, and the two that do not are the parameterized plan above.
+
 **M10.** Three categories: runtime errors (e.g. divide by zero) must raise
 the same Morel exception as local evaluation, testable in the triple
 format; analysis errors are translator bugs and dump the offending plan —
@@ -422,6 +430,21 @@ is part of the contract. `ScriptTest` gains a simple way to skip a script
 (scripts needing a live server skip unless the gating property is set).
 The live tests run in a separate weekly GitHub workflow; the existing
 workflow keeps its short timeout and never starts Docker.
+
+## Open question, M8
+
+**A plan with a parameter has nowhere to keep it.** `prepare` is meant to
+translate a function "in which the parameter is a placeholder" (spec.md
+section 2.2), and Spark Connect has no such placeholder: a plan is a tree of
+relations, and its parameters are for SQL text (`SQL.named_arguments`), not
+for a tree. So either the argument is substituted into the query and the plan
+built again at each execution -- which is correct, but makes a plan a
+template rather than a plan, and leaves `toString` with nothing to print
+until one is supplied -- or the plan carries a literal that `execute`
+rewrites in the protobuf, which is a plan whose text is a lie about one
+column. Until this is decided, preparing a function with a parameter is
+refused, and `spark-exec.smli` records the refusal where its two executions
+of `byDept` should be.
 
 ## Phase 2 questions
 

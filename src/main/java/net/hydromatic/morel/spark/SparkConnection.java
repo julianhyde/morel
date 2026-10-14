@@ -119,8 +119,40 @@ class SparkConnection implements SparkBackend.Connection {
     return execute(relation);
   }
 
+  @Override
+  public List<Object> execute(SparkBackend.Plan plan, Type elementType) {
+    if (!(plan instanceof SparkPlan)) {
+      throw new SparkBackend.SparkException(
+          "UNSUPPORTED", "Not a Spark plan: " + plan);
+    }
+    return ArrowDecoder.decode(
+        batches(((SparkPlan) plan).proto().getRoot()).batches, elementType);
+  }
+
   /** Executes a plan whose root is the given relation. */
   SparkBackend.Result execute(Relation relation) {
+    final Batches batches = batches(relation);
+    final Type rowType = SparkTypes.rowType(typeSystem, batches.schema);
+    return new ResultImpl(
+        rowType, ArrowDecoder.decode(batches.batches, rowType));
+  }
+
+  /** The Arrow batches of a result, and the schema Spark gave for them. */
+  private static class Batches {
+    final DataType schema;
+    final List<ByteString> batches;
+
+    Batches(DataType schema, List<ByteString> batches) {
+      this.schema = schema;
+      this.batches = batches;
+    }
+  }
+
+  /**
+   * Runs a plan whose root is the given relation, and returns what comes back
+   * undecoded: a caller that knows what Morel type it wants decodes for itself.
+   */
+  private Batches batches(Relation relation) {
     checkOpen();
     final ExecutePlanRequest request =
         ExecutePlanRequest.newBuilder()
@@ -149,9 +181,7 @@ class SparkConnection implements SparkBackend.Connection {
       throw new SparkBackend.SparkException(
           "CONNECTION", "Spark returned no schema for the query");
     }
-    final Type rowType = SparkTypes.rowType(typeSystem, schema);
-    final List<Object> rows = ArrowDecoder.decode(batches, rowType);
-    return new ResultImpl(rowType, rows);
+    return new Batches(schema, batches);
   }
 
   /**

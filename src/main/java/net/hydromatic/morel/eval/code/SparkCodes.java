@@ -28,6 +28,7 @@ import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
+import net.hydromatic.morel.foreign.PreparedPlan;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.foreign.SparkConnections;
 
@@ -46,7 +47,9 @@ public final class SparkCodes {
     c.accept(BuiltIn.SPARK_CLOSE, SPARK_CLOSE);
     c.accept(BuiltIn.SPARK_CONNECT, SPARK_CONNECT);
     c.accept(BuiltIn.SPARK_CONNECT_DEFAULT, SPARK_CONNECT_DEFAULT);
+    c.accept(BuiltIn.SPARK_EXECUTE, SPARK_EXECUTE);
     c.accept(BuiltIn.SPARK_PREPARE, SPARK_PREPARE);
+    c.accept(BuiltIn.SPARK_REMOTE, SPARK_REMOTE);
     c.accept(BuiltIn.SPARK_TO_STRING, SPARK_TO_STRING);
     c.accept(BuiltIn.SPARK_USING, SPARK_USING);
   }
@@ -92,10 +95,76 @@ public final class SparkCodes {
 
   /** @see BuiltIn#SPARK_TO_STRING */
   private static final Applicable1 SPARK_TO_STRING =
-      new BaseApplicable1<String, SparkBackend.Plan>(BuiltIn.SPARK_TO_STRING) {
+      new BaseApplicable1<String, PreparedPlan>(BuiltIn.SPARK_TO_STRING) {
         @Override
-        public String apply(SparkBackend.Plan plan) {
+        public String apply(PreparedPlan plan) {
           return plan.text();
+        }
+      };
+
+  /** @see BuiltIn#SPARK_EXECUTE */
+  private static final Applicable SPARK_EXECUTE = new SparkExecute(Pos.ZERO);
+
+  /** Implements {@link #SPARK_EXECUTE}. */
+  private static class SparkExecute
+      extends BasePositionedApplicable2<Object, PreparedPlan, Object> {
+    SparkExecute(Pos pos) {
+      super(BuiltIn.SPARK_EXECUTE, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new SparkExecute(pos);
+    }
+
+    @Override
+    public Object apply(PreparedPlan plan, Object arg) {
+      // The argument is unit, because a plan with a parameter cannot yet be
+      // prepared; when one can, this is where it crosses.
+      try {
+        return plan.execute();
+      } catch (SparkBackend.SparkException e) {
+        throw Codes.sparkException(e, pos);
+      }
+    }
+  }
+
+  /**
+   * Returns a function that executes a plan, which is the value of {@code
+   * remote (c, f)}: a function of the same type as f, whose work is done on the
+   * connection.
+   *
+   * <p>It is identified as {@code execute} rather than as {@code remote},
+   * because executing is what it does; the resolver has already done the
+   * preparing.
+   */
+  public static Applicable1 remote(PreparedPlan plan, Pos pos) {
+    return new BaseApplicable1<Object, Object>(BuiltIn.SPARK_EXECUTE) {
+      @Override
+      public Object apply(Object arg) {
+        try {
+          return plan.execute();
+        } catch (SparkBackend.SparkException e) {
+          throw Codes.sparkException(e, pos);
+        }
+      }
+    };
+  }
+
+  /**
+   * The resolver replaces {@code remote (c, f)} with the plan of {@code f} and
+   * a call that executes it, so this runs only where {@code remote} is used as
+   * a value rather than applied to a function expression.
+   *
+   * @see BuiltIn#SPARK_REMOTE
+   */
+  private static final Applicable SPARK_REMOTE =
+      new ApplicableImpl(BuiltIn.SPARK_REMOTE) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          throw new SparkBackend.SparkException(
+              "UNSUPPORTED",
+              "Spark.remote must be applied to a function expression");
         }
       };
 

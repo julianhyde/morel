@@ -97,6 +97,24 @@ sig
     [@@method] [@@prototype "toString p"]
 
   (**
+   * runs plan `p` on the connection it was prepared for, with argument `a`,
+   * and returns what it computes: the rows of a query, or the one value of a
+   * query that computes one. A plan of a function that takes no argument is
+   * run with `()`.
+   *)
+  val execute : ('a, 'b) plan * 'a -> 'b
+    [@@method] [@@prototype "execute (p, a)"]
+
+  (**
+   * returns `f` prepared on connection `c` and executed there: a function of
+   * the same type as `f` that computes what `f` computes, with the work done
+   * by Spark. It is `prepare` and `execute` in one step, and reads the parse
+   * tree of `f` as `prepare` does.
+   *)
+  val remote : connection * ('a -> 'b) -> 'a -> 'b
+    [@@method] [@@prototype "remote (c, f)"]
+
+  (**
    * returns a function that opens the default connection, applies `f` to
    * the connection and its argument, and closes the connection afterwards,
    * whether or not `f` raised. So `using (fn (c, x) => x + 1)` is a

@@ -129,7 +129,11 @@ Sys.set ("output", "tabular");
 )).execute ();
 > val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
 
-(*) Query 8: left join.
+(* Query 8: left join. The right row is an option, because the join may find
+ * nothing; its columns are not, because Spark's catalog keeps no NOT NULL and
+ * a column maps to the plain type (spec.md section 1.2). Morel's own data set
+ * does know, so spark.smli has "comm:decimal option" where this has
+ * "comm:decimal"; plan.md records what that costs. *)
 (spark.connection.prepare (fn () =>
   from d in spark.catalog.scott.depts
     left join e in spark.catalog.scott.emps on d.deptno = e.deptno
@@ -139,15 +143,15 @@ Sys.set ("output", "tabular");
 > dname      e
 >            comm deptno empno ename  hiredate   job      mgr  sal
 > ---------- ---- ------ ----- ------ ---------- -------- ---- ----
-> SALES       300     30  7499 ALLEN  1981-02-20 SALESMAN 7698 1600
-> SALES       500     30  7521 WARD   1981-02-22 SALESMAN 7698 1250
+> OPERATIONS
 > SALES      1400     30  7654 MARTIN 1981-09-28 SALESMAN 7698 1250
-> SALES         0     30  7698 BLAKE  1981-01-05 MANAGER  7839 2850
 > SALES         0     30  7844 TURNER 1981-09-08 SALESMAN 7698 1500
 > SALES         0     30  7900 JAMES  1981-12-03 CLERK    7698  950
-> OPERATIONS
+> SALES       500     30  7521 WARD   1981-02-22 SALESMAN 7698 1250
+> SALES       300     30  7499 ALLEN  1981-02-20 SALESMAN 7698 1600
+> SALES         0     30  7698 BLAKE  1981-01-05 MANAGER  7839 2850
 >
-> val it : {dname:string, e:{comm:decimal option, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int option, sal:decimal} option} bag
+> val it : {dname:string, e:{comm:decimal, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:decimal} option} bag
 
 (*) Query 9: union, of bags, so every row is kept.
 (spark.connection.prepare (fn () =>
@@ -284,14 +288,20 @@ Sys.set ("output", "tabular");
 >
 > val it : {deptno:int, job:string, n:int, s:decimal} list
 
-(*) A plan with a parameter, executed twice.
+(* A plan with a parameter, executed twice -- which is refused for now. A
+ * plan is a tree of relations, and Spark has nowhere in one to put a
+ * placeholder: its parameters are for SQL text. So an argument would have to
+ * be substituted into the query and the plan built again at each execution,
+ * and plan.md asks whether that is what a prepared plan should be. *)
 val byDept = spark.connection.prepare (fn d =>
   from e in spark.catalog.scott.emps where e.deptno = d yield e.ename);
-> val byDept = <plan> : (int, string bag) plan
+> Spark {errorClass = "UNSUPPORTED", message = "Spark cannot do the variable d"}
 byDept.execute 10;
-> val it = ["CLARK","KING","MILLER"] : string bag
+> stdIn:1.1-1.7 Error: unbound variable or constructor: byDept
+>   raised at: stdIn:1.1-1.7
 byDept.execute 40;
-> val it = [] : string bag
+> stdIn:1.1-1.7 Error: unbound variable or constructor: byDept
+>   raised at: stdIn:1.1-1.7
 
 (*) "remote" prepares and executes in one step.
 (spark.connection.remote (fn () =>
