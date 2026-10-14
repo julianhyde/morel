@@ -218,7 +218,7 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
   }
 
   /** A table: a bag of records, fetched when first forced. */
-  class Table extends AbstractList<Object> implements TypedValue {
+  public class Table extends AbstractList<Object> implements TypedValue {
     final Database database;
     final String name;
     @Nullable Type type;
@@ -281,6 +281,14 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
     @Override
     public String toString() {
       return "<relation>";
+    }
+
+    /**
+     * Returns the name Spark knows this table by: the database and the table,
+     * joined by a dot.
+     */
+    public String qualifiedName() {
+      return database.name + "." + name;
     }
   }
 }

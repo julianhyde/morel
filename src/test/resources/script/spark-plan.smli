@@ -1843,6 +1843,131 @@ val spark = Spark.connect "mock:";
 >   }
 > }|_} : string
 
+(* A collection the query reaches through a name crosses as its rows, the
+ * same local relation that an inline collection becomes; query 1 fixes the
+ * encoding. *)
+val xs = [{i = 1, s = "one"}, {i = 2, s = "two"}];
+> val xs = [{i=1,s="one"},{i=2,s="two"}] : {i:int, s:string} list
+(spark.connection.prepare (fn () => from x in xs where x.i > 1)).toString ();
+> val it =
+>   {_|
+> root {
+>   common {
+>     plan_id: 0
+>   }
+>   filter {
+>     input {
+>       common {
+>         plan_id: 1
+>       }
+>       subquery_alias {
+>         input {
+>           common {
+>             plan_id: 2
+>           }
+>           local_relation {
+>             data: [2 rows]
+>             schema: "{\"fields\":[{\"metadata\":{},\"name\":\"i\",\"nullable\":false,\"type\":\"integer\"},{\"metadata\":{},\"name\":\"s\",\"nullable\":false,\"type\":\"string\"}],\"type\":\"struct\"}"
+>           }
+>         }
+>         alias: "x"
+>       }
+>     }
+>     condition {
+>       unresolved_function {
+>         function_name: ">"
+>         arguments {
+>           unresolved_attribute {
+>             unparsed_identifier: "x.i"
+>             is_metadata_column: false
+>           }
+>         }
+>         arguments {
+>           literal {
+>             integer: 1
+>           }
+>         }
+>       }
+>     }
+>   }
+> }|_} : string
+
+(* A table of the connection's catalog is a scan, however it is reached: the
+ * table says what Spark calls it, so binding it to a name does not turn it
+ * into rows to be sent. *)
+(*) Its rows are to hand as well, but only two of them need be seen here.
+Sys.set ("printLength", 2);
+> val it = () : unit
+val emps = spark.catalog.scott.emps;
+> val emps =
+>   [{comm=NONE,deptno=20,empno=7369,ename="SMITH",hiredate="1980-12-17",
+>     job="CLERK",mgr=SOME 7902,sal=800},
+>    {comm=SOME 300,deptno=30,empno=7499,ename="ALLEN",hiredate="1981-02-20",
+>     job="SALESMAN",mgr=SOME 7698,sal=1600},...]
+>   : {comm:decimal option, deptno:int, empno:int, ename:string,
+>       hiredate:string, job:string, mgr:int option, sal:decimal} bag
+(spark.connection.prepare (fn () =>
+  from e in emps
+    where e.deptno = 10
+    yield e.ename
+)).toString ();
+> val it =
+>   {_|
+> root {
+>   common {
+>     plan_id: 0
+>   }
+>   project {
+>     input {
+>       common {
+>         plan_id: 1
+>       }
+>       filter {
+>         input {
+>           common {
+>             plan_id: 2
+>           }
+>           subquery_alias {
+>             input {
+>               common {
+>                 plan_id: 3
+>               }
+>               read {
+>                 named_table {
+>                   unparsed_identifier: "scott.emps"
+>                 }
+>               }
+>             }
+>             alias: "e"
+>           }
+>         }
+>         condition {
+>           unresolved_function {
+>             function_name: "=="
+>             arguments {
+>               unresolved_attribute {
+>                 unparsed_identifier: "e.deptno"
+>                 is_metadata_column: false
+>               }
+>             }
+>             arguments {
+>               literal {
+>                 integer: 10
+>               }
+>             }
+>           }
+>         }
+>       }
+>     }
+>     expressions {
+>       unresolved_attribute {
+>         unparsed_identifier: "e.ename"
+>         is_metadata_column: false
+>       }
+>     }
+>   }
+> }|_} : string
+
 (* Phase 1 prepares a query and nothing else, and a plan is all Spark or it
  * is an error. A function whose body is not a query has no plan; nor has one
  * that reads a name the plan cannot carry, such as the function's own

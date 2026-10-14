@@ -987,6 +987,18 @@ public class Core {
     }
 
     /**
+     * Returns what a value literal holds, as it holds it, or null if this is
+     * not a value literal.
+     *
+     * <p>Unlike {@link #unwrap}, this converts nothing and fetches nothing: a
+     * caller that must know what kind of value it has, before asking the value
+     * for anything, can only ask this.
+     */
+    public @Nullable Object valueObject() {
+      return op == Op.VALUE_LITERAL ? ((Wrapper) value).o : null;
+    }
+
+    /**
      * Returns the value of this literal as a given class, or throws {@link
      * ClassCastException}. If the class is not {@link Comparable}, the value
      * will be in a wrapper.

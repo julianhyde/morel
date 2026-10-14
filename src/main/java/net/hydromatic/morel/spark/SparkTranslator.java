@@ -32,6 +32,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.foreign.SparkBackend;
+import net.hydromatic.morel.foreign.SparkCatalog;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -329,18 +330,9 @@ public class SparkTranslator {
   private Relation leaf(Core.Exp exp) {
     final int planId = nextPlanId++;
     if (exp.isCallTo(BuiltIn.Z_LIST)) {
-      final List<Core.Exp> rows = rows(exp);
       final List<Object> values = new ArrayList<>();
-      rows.forEach(row -> values.add(value(row)));
-      final Type elementType = elementType(exp.type);
-      localRowCounts.add(rows.size());
-      return Relation.newBuilder()
-          .setCommon(RelationCommon.newBuilder().setPlanId(planId))
-          .setLocalRelation(
-              LocalRelation.newBuilder()
-                  .setData(ArrowEncoder.encode(values, elementType))
-                  .setSchema(SparkSchema.schemaJson(elementType)))
-          .build();
+      rows(exp).forEach(row -> values.add(value(row)));
+      return localRelation(planId, values, exp.type);
     }
     if (tableName(exp) != null) {
       return Relation.newBuilder()
@@ -351,6 +343,15 @@ public class SparkTranslator {
                       Read.NamedTable.newBuilder()
                           .setUnparsedIdentifier(tableName(exp))))
           .build();
+    }
+    if (exp.op == Op.VALUE_LITERAL) {
+      // A collection the query reached through a name rather than writing out,
+      // and not a table of the catalog: its rows cross as a local relation,
+      // as an inline collection's do (spec.md section 1.6).
+      final Object value = ((Core.Literal) exp).valueObject();
+      if (value instanceof List) {
+        return localRelation(planId, (List<Object>) value, exp.type);
+      }
     }
     throw unsupported("collection " + exp.op);
   }
@@ -369,9 +370,15 @@ public class SparkTranslator {
     final List<String> names = new ArrayList<>();
     for (Core.Exp e = exp; ; ) {
       // A table read from a catalog arrives as a value, because inlining
-      // replaced the expression that read it with the rows it holds. The name
-      // is in the expression, which the value remembers, and not in the rows.
+      // replaced the expression that read it with the rows it holds. A table
+      // of the connection's own catalog says what Spark calls it; any other
+      // value says only what it came from, which the value remembers, and the
+      // name is in that expression rather than in the rows.
       if (e.op == Op.VALUE_LITERAL) {
+        final Object value = ((Core.Literal) e).valueObject();
+        if (value instanceof SparkCatalog.Table) {
+          return ((SparkCatalog.Table) value).qualifiedName();
+        }
         final Core.Exp source = ((Core.Literal) e).valueExp();
         if (source != null && source != e) {
           e = source;
@@ -445,6 +452,23 @@ public class SparkTranslator {
       return ((Core.Tuple) arg).args;
     }
     throw unsupported("inline collection whose rows are " + arg.op);
+  }
+
+  /**
+   * Translates a collection of rows as a local relation: the rows as an Arrow
+   * batch, and the schema that says what the bytes mean.
+   */
+  private Relation localRelation(
+      int planId, List<Object> rows, Type collectionType) {
+    final Type elementType = elementType(collectionType);
+    localRowCounts.add(rows.size());
+    return Relation.newBuilder()
+        .setCommon(RelationCommon.newBuilder().setPlanId(planId))
+        .setLocalRelation(
+            LocalRelation.newBuilder()
+                .setData(ArrowEncoder.encode(rows, elementType))
+                .setSchema(SparkSchema.schemaJson(elementType)))
+        .build();
   }
 
   /**
