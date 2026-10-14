@@ -119,10 +119,8 @@ public final class SparkCodes {
 
     @Override
     public Object apply(PreparedPlan plan, Object arg) {
-      // The argument is unit, because a plan with a parameter cannot yet be
-      // prepared; when one can, this is where it crosses.
       try {
-        return plan.execute();
+        return plan.execute(arg);
       } catch (SparkBackend.SparkException e) {
         throw Codes.sparkException(e, pos);
       }
@@ -143,7 +141,7 @@ public final class SparkCodes {
       @Override
       public Object apply(Object arg) {
         try {
-          return plan.execute();
+          return plan.execute(arg);
         } catch (SparkBackend.SparkException e) {
           throw Codes.sparkException(e, pos);
         }

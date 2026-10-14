@@ -406,13 +406,15 @@ through a name; a table of the connection's catalog is a scan however it is
 reached, because the table says what Spark calls it, and only a value that
 cannot say becomes rows to send. `spark-plan.smli` holds both.
 
-**M8.** Done, but for a parameter. `Spark.execute` runs a prepared plan on
-the connection it was prepared for and decodes the rows as values of the
-type the program was typed against; `Spark.remote` is `prepare` and `execute`
-in one step, expanded like `prepare` and holding the function that runs the
-plan. The offline connection refuses to execute ("MOCK"). `spark-exec.smli`
-runs the whole corpus on the container: twenty-one of its twenty-three
-statements pass, and the two that do not are the parameterized plan above.
+**M8.** Done. `Spark.execute` runs a prepared plan on the connection it was
+prepared for and decodes the rows as values of the type the program was typed
+against; `Spark.remote` is `prepare` and `execute` in one step, expanded like
+`prepare` and holding the function that runs the plan. A plan with one
+parameter is translated at each execution, with the argument in place of the
+parameter; see above for why, and for what is still missing. The offline
+connection refuses to execute ("MOCK"). `spark-exec.smli` runs the whole
+corpus on the container, and every query answers as the local corpus
+answers.
 
 **M10.** Three categories: runtime errors (e.g. divide by zero) must raise
 the same Morel exception as local evaluation, testable in the triple
@@ -431,20 +433,41 @@ is part of the contract. `ScriptTest` gains a simple way to skip a script
 The live tests run in a separate weekly GitHub workflow; the existing
 workflow keeps its short timeout and never starts Docker.
 
-## Open question, M8
+## A plan with a parameter
 
-**A plan with a parameter has nowhere to keep it.** `prepare` is meant to
-translate a function "in which the parameter is a placeholder" (spec.md
-section 2.2), and Spark Connect has no such placeholder: a plan is a tree of
-relations, and its parameters are for SQL text (`SQL.named_arguments`), not
-for a tree. So either the argument is substituted into the query and the plan
-built again at each execution -- which is correct, but makes a plan a
-template rather than a plan, and leaves `toString` with nothing to print
-until one is supplied -- or the plan carries a literal that `execute`
-rewrites in the protobuf, which is a plan whose text is a lie about one
-column. Until this is decided, preparing a function with a parameter is
-refused, and `spark-exec.smli` records the refusal where its two executions
-of `byDept` should be.
+Spark Connect has no placeholder in a plan: a plan is a tree of relations,
+and its parameters are for SQL text (`SQL.named_arguments`), not for a tree.
+So spec.md section 2.2, which says `prepare` leaves "the parameter as a
+placeholder", describes something the protocol cannot hold, and one of three
+things has to happen instead.
+
+**Decided: the query is translated again at each execution**, with the
+argument in place of the parameter. Measured against the container, that
+costs nothing worth counting: building and serializing a plan is 0.1 ms,
+against 33 ms for the smallest round trip, and Spark re-analyses on every
+request anyway -- a plan that was byte-identical to the last one ran only
+about 5 ms faster, so the server's analyzed-plan cache is not what decides
+this. The alternatives are no better: SQL text with a named argument ran the
+same (36 ms small, 105 ms over 200M rows, against 38 and 100 for a rebuilt
+plan), and it would mean generating SQL for whole queries rather than trees;
+passing the argument as a one-row local relation to join against was the only
+approach with a real cost (65 ms and 124 ms), because it turns a filter into
+a join.
+
+What this costs: a plan with a parameter has no text until it is given one,
+so `toString` on one is refused. The other way round -- a plan carrying a
+dummy literal that `execute` overwrites in the protobuf -- would print, but
+what it printed would be a lie about one column.
+
+**Only one parameter, and not a tuple of them.** A function of several
+arguments is one of a tuple, and Morel's core destructures it: `fn (d, j) =>
+e` is `fn v => case v of (d, j) => e`, so substituting the argument for `v`
+leaves `d` and `j` bound by a case the translator does not reduce, and the
+query is refused for naming a variable it cannot do. Supporting them means
+reducing that case while substituting. The calling syntax needs thought
+first: `p.execute (30, "SALESMAN")` splices into `execute (p, 30,
+"SALESMAN")`, a three-tuple, so even with substitution it would have to be
+written `Spark.execute (p, (30, "SALESMAN"))`.
 
 ## Phase 2 questions
 

@@ -1283,6 +1283,18 @@ public class Resolver {
       if (recordSelector.safe) {
         return toCoreSafeNav(apply, recordSelector, coreArg, type);
       }
+      if (!(coreArg.type instanceof RecordLikeType)) {
+        // A field of something whose record type was never settled: the
+        // parameter of `fn r => r.x`, where nothing says what else r has.
+        // Type resolution says so where it can; where it cannot, saying it
+        // here is better than casting and failing.
+        throw new CompileException(
+            "unresolved flex record (can't tell what fields there are besides #"
+                + recordSelector.name
+                + ")",
+            false,
+            apply.pos());
+      }
       RecordLikeType recordType = (RecordLikeType) coreArg.type;
       if (coreArg.type.isProgressive()) {
         Object o = valueOf(env, coreArg);
@@ -1422,9 +1434,26 @@ public class Resolver {
     final boolean collection = resultType.isCollection();
     return new PreparedPlan(
         (SparkBackend.Connection) connection,
-        SparkBackend.translate(typeMap.typeSystem, rels[0]),
+        typeMap.typeSystem,
+        rels[0],
+        parameter(inlined),
         collection ? resultType.arg(0) : resultType,
         collection);
+  }
+
+  /**
+   * Returns the parameter of the function a plan was prepared from, or null if
+   * it has none.
+   *
+   * <p>A function of unit has one in the tree but none to pass, which is the
+   * same thing as none.
+   */
+  private static Core.@Nullable IdPat parameter(Core.Exp fn) {
+    if (fn.op != Op.FN) {
+      return null;
+    }
+    final Core.IdPat idPat = ((Core.Fn) fn).idPat;
+    return idPat.type == PrimitiveType.UNIT ? null : idPat;
   }
 
   /**

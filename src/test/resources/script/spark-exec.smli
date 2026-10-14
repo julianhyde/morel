@@ -288,24 +288,26 @@ Sys.set ("output", "tabular");
 >
 > val it : {deptno:int, job:string, n:int, s:decimal} list
 
-(* A plan with a parameter, executed twice -- which is refused for now. A
- * plan is a tree of relations, and Spark has nowhere in one to put a
- * placeholder: its parameters are for SQL text. So an argument would have to
- * be substituted into the query and the plan built again at each execution,
- * and plan.md asks whether that is what a prepared plan should be. *)
+(* A plan with a parameter, executed twice. Spark has nowhere in a plan to
+ * keep a parameter -- its own parameters are for SQL text, not for a tree of
+ * relations -- so a query with one is translated again at each execution,
+ * with the argument in place of the parameter. The plan that goes out is the
+ * plan the same query written with that argument would have produced. *)
 val byDept = spark.connection.prepare (fn d =>
   from e in spark.catalog.scott.emps where e.deptno = d yield e.ename);
-> Spark {errorClass = "UNSUPPORTED", message = "Spark cannot do the variable d"}
+> val byDept = <plan> : (int,string bag) plan
 byDept.execute 10;
-> stdIn:1.1-1.7 Error: unbound variable or constructor: byDept
->   raised at: stdIn:1.1-1.7
+> val it = ["CLARK","KING","MILLER"] : string bag
 byDept.execute 40;
-> stdIn:1.1-1.7 Error: unbound variable or constructor: byDept
->   raised at: stdIn:1.1-1.7
+> val it = [] : string bag
+
+(*) Until it has an argument, such a plan has no text.
+byDept.toString ();
+> Spark {errorClass = "UNSUPPORTED", message = "A plan with a parameter has no text until it is given one; execute it instead"}
 
 (*) "remote" prepares and executes in one step.
 (spark.connection.remote (fn () =>
   from e in spark.catalog.scott.emps where e.job = "CLERK" yield e.ename)) ();
-> val it = ["SMITH","ADAMS","JAMES","MILLER"] : string bag
+> val it = ["ADAMS","JAMES","MILLER","SMITH"] : string bag
 
 (*) End spark-exec.smli

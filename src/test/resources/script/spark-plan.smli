@@ -1980,6 +1980,6 @@ val emps = spark.catalog.scott.emps;
     where e.deptno = d
     yield e.ename
 )).toString ();
-> Spark {errorClass = "UNSUPPORTED", message = "Spark cannot do the variable d"}
+> Spark {errorClass = "UNSUPPORTED", message = "A plan with a parameter has no text until it is given one; execute it instead"}
 
 (*) End spark-plan.smli
