@@ -397,6 +397,15 @@ field, is reported as the `Spark` exception (its position is unknown, so it
 prints as 0.0-0.0). Printing a catalog level shows a table as `<relation>`
 rather than fetching its rows; forcing the table fetches them once.
 
+**M9.** Half done. `spark.ArrowEncoder` writes the rows of a local
+collection as an Arrow record batch, so a prepared plan over an inline
+collection carries its rows rather than only a count of them, and
+`ArrowEncoderTest` round-trips them through `ArrowDecoder`. What remains is
+a collection reached through a name rather than written out -- `prepare`
+refuses one, where spec.md section 1.6 says it should become a local
+relation -- and forcing a query over local data to run remotely, which needs
+`execute`.
+
 **M10.** Three categories: runtime errors (e.g. divide by zero) must raise
 the same Morel exception as local evaluation, testable in the triple
 format; analysis errors are translator bugs and dump the offending plan —
