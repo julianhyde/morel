@@ -104,9 +104,10 @@ public interface SparkBackend {
    * plan is a protobuf message and the protobuf classes are the adapter's.
    *
    * @param typeSystem Type system that typed the query
-   * @param query Core of the query, which must be relational
+   * @param query Core of the query: a relational node, or the collection the
+   *     query reads if it reads one whole
    */
-  static Plan translate(TypeSystem typeSystem, Core.Rel query) {
+  static Plan translate(TypeSystem typeSystem, Core.Exp query) {
     if (!isAvailable()) {
       throw new SparkException(
           "CONNECTION",
@@ -117,7 +118,7 @@ public interface SparkBackend {
   }
 
   /** Translates a query to a plan. */
-  Plan prepare(TypeSystem typeSystem, Core.Rel query);
+  Plan prepare(TypeSystem typeSystem, Core.Exp query);
 
   /**
    * A plan: a query translated for a connection, which {@code Spark.execute}

@@ -499,6 +499,46 @@ has besides the ones the query reads, so its type is never settled, and
 reading a field of it is the "unresolved flex record" error that Morel gives
 anywhere else.
 
+## M11, as far as it has gone
+
+`triple.smli` is the triple format: seventeen queries, run three ways and
+required to answer alike. The ordinary run evaluates them locally;
+`testScriptTripleCalcite` pushes them to Calcite with the tracer that fails
+if one is not pushed down; `testScriptTripleSpark` wraps each query in
+`Spark.remote` and runs it on the container. The wrapping is the script
+runner's (`Main.pushDown`): a query is a `from` with at least one step, and
+everything else -- a declaration, a call to `Sys`, a bare `from` -- is left
+alone.
+
+Building it found four things, which is what it was for.
+
+**A bare scan had no plan.** `from e in emps`, with no step but the scan, has
+no relational node in its core, because it *is* the collection it reads, and
+`prepare` refused it. Such a query is now the collection, and its plan is the
+read.
+
+**Morel does not push a curried built-in down to Calcite.** `where
+String.isPrefix "S" e.ename` threw a ClassCastException from the Calcite
+bridge, which cast the function to `Applicable`; a curried built-in applied
+to one argument is an `Applicable1`, which is not one. Fixed, and the query
+is in the script.
+
+**Writing a query out and parsing it again is not faithful.** The runner used
+to wrap a statement by unparsing it into the text of a `Spark.remote` call; a
+nested query loses its parentheses that way, so `where (exists ...) yield
+d.dname` came back as a query whose `yield` belonged to the subquery, and the
+answer was whole rows rather than names. The wrapper is now built as a tree.
+Morel's own unparse is still ambiguous here, which is worth a look.
+
+**Two things Calcite will not push**, which keep queries out of the triple
+and into `spark-exec.smli`: decimal arithmetic (`e.sal * decimal "2"`), and
+unary minus (`~e.empno`), though it pushes `+`, `div` and `mod`.
+
+What remains of M11: the function table is not yet iterated through this
+format, so a divergence recorded against an operator is not yet proved by a
+test; and the two divergences already known -- `comm`, and integer overflow
+-- keep their queries out of the script rather than being expressed in it.
+
 ## Phase 2 questions
 
 **A nullable catalog column and an optional local one are not the same

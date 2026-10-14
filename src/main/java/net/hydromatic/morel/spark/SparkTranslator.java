@@ -102,6 +102,12 @@ public class SparkTranslator {
    * which is the order the text prints them.
    */
   private Relation rel(Core.Exp exp) {
+    if (!(exp instanceof Core.Rel)) {
+      // The query is the collection itself -- `from e in emps`, with no step
+      // but the scan -- so the plan is the read, and there is nothing above it
+      // to need a name for its rows.
+      return leaf(exp);
+    }
     if (isWholeOfInput(exp)) {
       // Morel distinguishes a bag of one-field records from a bag of values,
       // and a projection turns the one into the other. Spark does not: a

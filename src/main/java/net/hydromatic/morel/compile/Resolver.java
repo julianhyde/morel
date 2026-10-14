@@ -1412,7 +1412,14 @@ public class Resolver {
             }
           }
         });
-    if (rels[0] == null) {
+    // A query with no step but the scan -- `from e in emps` -- has no
+    // relational node in it, because it is the collection it reads; such a
+    // query is the collection.
+    final Core.Exp body =
+        inlined.op == Op.FN ? ((Core.Fn) inlined).exp : inlined;
+    final Core.Exp query =
+        rels[0] != null ? rels[0] : body.type.isCollection() ? body : null;
+    if (query == null) {
       // Phase 1 prepares a query and nothing else; a function whose body is
       // not relational has no plan.
       // Raised as the translator raises its own refusals, so that every
@@ -1435,7 +1442,7 @@ public class Resolver {
     return new PreparedPlan(
         (SparkBackend.Connection) connection,
         typeMap.typeSystem,
-        rels[0],
+        query,
         parameters(inlined),
         collection ? resultType.arg(0) : resultType,
         collection);

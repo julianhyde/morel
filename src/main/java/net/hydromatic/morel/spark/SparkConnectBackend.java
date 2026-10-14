@@ -36,7 +36,7 @@ public class SparkConnectBackend implements SparkBackend {
   }
 
   @Override
-  public Plan prepare(TypeSystem typeSystem, Core.Rel query) {
+  public Plan prepare(TypeSystem typeSystem, Core.Exp query) {
     return SparkTranslator.translate(typeSystem, query);
   }
 }

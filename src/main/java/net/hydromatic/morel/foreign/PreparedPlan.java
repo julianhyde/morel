@@ -55,7 +55,7 @@ import org.jspecify.annotations.Nullable;
 public class PreparedPlan {
   private final SparkBackend.Connection connection;
   private final TypeSystem typeSystem;
-  private final Core.Rel rel;
+  private final Core.Exp rel;
   private final ImmutableList<Core.IdPat> parameters;
   private final SparkBackend.@Nullable Plan plan;
   private final Type elementType;
@@ -78,7 +78,7 @@ public class PreparedPlan {
   public PreparedPlan(
       SparkBackend.Connection connection,
       TypeSystem typeSystem,
-      Core.Rel rel,
+      Core.Exp rel,
       List<Core.IdPat> parameters,
       Type elementType,
       boolean collection) {
@@ -140,7 +140,7 @@ public class PreparedPlan {
    * each, because an argument of several values is a tuple and a tuple is a
    * list of them.
    */
-  private Core.Rel substitute(Object arg) {
+  private Core.Exp substitute(Object arg) {
     final Map<Core.IdPat, Object> values = new LinkedHashMap<>();
     if (parameters.size() == 1) {
       values.put(parameters.get(0), arg);
@@ -148,15 +148,14 @@ public class PreparedPlan {
       final List<?> args = (List<?>) arg;
       forEach(parameters, args, values::put);
     }
-    return (Core.Rel)
-        rel.accept(
-            new Shuttle(typeSystem) {
-              @Override
-              protected Core.Exp visit(Core.Id id) {
-                final Object value = values.get(id.idPat);
-                return value == null ? id : literal(id, value);
-              }
-            });
+    return rel.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Id id) {
+            final Object value = values.get(id.idPat);
+            return value == null ? id : literal(id, value);
+          }
+        });
   }
 
   /** Returns a literal of the type of {@code id} whose value is {@code arg}. */

@@ -277,6 +277,44 @@ public class ScriptTest {
   }
 
   /**
+   * Runs {@code triple.smli} a second time, in Calcite ("hybrid") mode,
+   * asserting that each query is pushed down, as {@link #testScriptDual} does
+   * for the dual script.
+   */
+  @Test
+  void testScriptTripleCalcite() throws Exception {
+    Script.create(
+            "script/triple.smli",
+            null,
+            false,
+            ImmutableMap.of(Prop.HYBRID, true),
+            requireCalciteTracer())
+        .run();
+  }
+
+  /**
+   * Runs {@code triple.smli} a third time, with every query pushed down to
+   * Spark.
+   *
+   * <p>The same queries, the same expected answers, and a third way of
+   * computing them. A query that Spark cannot do, or answers differently, fails
+   * here.
+   */
+  @Test
+  void testScriptTripleSpark() throws Exception {
+    assumeTrue(holds("spark"), "requires spark");
+    assumeTrue(holds("spark-prepare"), "requires spark-prepare");
+    try (SparkConnectionValue spark =
+        new SparkConnectionValue(
+            requireNonNull(System.getenv("SPARK_REMOTE")))) {
+      Script.create("script/triple.smli")
+          .withValues(ImmutableMap.of("spark", spark))
+          .withSparkPushDown()
+          .run();
+    }
+  }
+
+  /**
    * Returns a tracer that fails if a statement's plan is not (even partly)
    * pushed down to Calcite. Statements that cannot be pushed down -- a call to
    * the {@code Sys} structure such as {@code Sys.set} -- are exempt (the "deny

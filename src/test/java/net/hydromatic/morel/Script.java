@@ -68,6 +68,9 @@ public class Script {
   /** Tracer installed on {@link Main} (e.g. to assert Calcite push-down). */
   private final Tracer tracer;
 
+  /** Whether to run every query on Spark; see {@link #withSparkPushDown}. */
+  private final boolean sparkPushDown;
+
   /** Internal constructor. */
   private Script(
       File inFile,
@@ -78,7 +81,8 @@ public class Script {
       boolean loadDictionary,
       Map<String, ForeignValue> extraValues,
       Map<Prop, Object> propOverrides,
-      Tracer tracer) {
+      Tracer tracer,
+      boolean sparkPushDown) {
     this.inFile = requireNonNull(inFile, "inFile");
     this.outFile = requireNonNull(outFile, "outFile");
     this.noInput = noInput;
@@ -88,6 +92,29 @@ public class Script {
     this.extraValues = ImmutableMap.copyOf(extraValues);
     this.propOverrides = ImmutableMap.copyOf(propOverrides);
     this.tracer = requireNonNull(tracer, "tracer");
+    this.sparkPushDown = sparkPushDown;
+  }
+
+  /**
+   * Returns a copy of this script that runs every query on Spark.
+   *
+   * <p>Each expression statement is wrapped in {@code Spark.remote}, so that
+   * the script answers the same way as it does locally, or fails. The
+   * connection comes from the value bound as {@code spark}, so a script run
+   * this way needs {@link #withValues} too.
+   */
+  public Script withSparkPushDown() {
+    return new Script(
+        inFile,
+        outFile,
+        noInput,
+        echo,
+        idempotent,
+        loadDictionary,
+        extraValues,
+        propOverrides,
+        tracer,
+        true);
   }
 
   /**
@@ -112,7 +139,8 @@ public class Script {
         loadDictionary,
         map,
         propOverrides,
-        tracer);
+        tracer,
+        sparkPushDown);
   }
 
   /** Creates a Script. */
@@ -159,7 +187,8 @@ public class Script {
                 .matches(
                     ".*/(blog|dual|dummy|dummy2|foreign|hybrid|logic|pretty"
                         + "|spark|spark-disabled|spark-error|spark-exec"
-                        + "|spark-live|spark-plan|such-that)\\.(sml|smli)");
+                        + "|spark-live|spark-plan|such-that|triple)"
+                        + "\\.(sml|smli)");
 
     return new Script(
         inFile,
@@ -170,7 +199,8 @@ public class Script {
         loadDictionary,
         ImmutableMap.of(),
         propOverrides,
-        tracer);
+        tracer,
+        false);
   }
 
   /**
@@ -263,7 +293,10 @@ public class Script {
                     TestUtils.printWriter(outFile),
                     new PrintWriter(System.out, true))
                 : TestUtils.printWriter(outFile)) {
-      final List<String> argList = ImmutableList.of("--echo");
+      final List<String> argList =
+          sparkPushDown
+              ? ImmutableList.of("--echo", "--spark-push-down")
+              : ImmutableList.of("--echo");
       final Main main =
           new Main(
               argList, reader, writer, dictionary, propMap, idempotent, tracer);

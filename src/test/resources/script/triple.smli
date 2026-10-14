@@ -1,0 +1,269 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Queries that must give the same answer whether they are evaluated
+ * locally, pushed down to Apache Calcite, or pushed down to Apache
+ * Spark. Morel-Java's suite runs this script three times: locally;
+ * in Calcite "hybrid" mode with a tracer that fails if a query is
+ * not pushed down (ScriptTest.testScriptTripleCalcite); and with
+ * every query wrapped in Spark.remote, against the container that
+ * start-spark.sh starts, whose scott database holds the same rows as
+ * the data set (ScriptTest.testScriptTripleSpark).
+ *
+ * So every query here must be one that all three can answer, and
+ * answer alike. dual.smli holds queries that only the first two can
+ * do; what keeps a query out of this file is recorded in plan.md,
+ * under M11. In particular:
+ *
+ *  - no query reads "comm" or a whole employee row, because the
+ *    catalog's "comm" is a decimal where the data set's is a decimal
+ *    option, and the two answer differently;
+ *  - no query yields unit, which Spark has no column for.
+ *
+ * Do not call Sys.plan, whose output differs between modes.
+ *)
+Sys.set ("printLength", 64);
+> val it = () : unit
+Sys.set ("stringDepth", NONE);
+> val it = () : unit
+Sys.set ("output", "tabular");
+> val it = () : unit
+
+(*) A scan, whose plan is just a read.
+from d in scott.depts;
+> deptno dname      loc
+> ------ ---------- --------
+>     10 ACCOUNTING NEW YORK
+>     20 RESEARCH   DALLAS
+>     30 SALES      CHICAGO
+>     40 OPERATIONS BOSTON
+>
+> val it : {deptno:int, dname:string, loc:string} bag
+
+(*) Filter and project.
+from e in scott.emps
+  where e.deptno = 10
+  yield {e.empno, e.ename};
+> empno ename
+> ----- ------
+>  7782 CLARK
+>  7839 KING
+>  7934 MILLER
+>
+> val it : {empno:int, ename:string} bag
+
+(*) Join.
+from e in scott.emps
+  join d in scott.depts on e.deptno = d.deptno
+  yield {e.ename, d.dname};
+> dname      ename
+> ---------- ------
+> RESEARCH   SMITH
+> SALES      ALLEN
+> SALES      WARD
+> RESEARCH   JONES
+> SALES      MARTIN
+> SALES      BLAKE
+> ACCOUNTING CLARK
+> RESEARCH   SCOTT
+> ACCOUNTING KING
+> SALES      TURNER
+> RESEARCH   ADAMS
+> SALES      JAMES
+> RESEARCH   FORD
+> ACCOUNTING MILLER
+>
+> val it : {dname:string, ename:string} bag
+
+(*) Group with aggregates.
+from e in scott.emps
+  group e.deptno
+    compute {c = count over (), total = sum over e.sal, top = max over e.sal};
+> c deptno top  total
+> - ------ ---- -----
+> 5     20 3000 10875
+> 6     30 2850  9400
+> 3     10 5000  8750
+>
+> val it : {c:int, deptno:int, top:decimal, total:decimal} bag
+
+(*) Group by two keys, then sort.
+from e in scott.emps
+  group {e.deptno, e.job}
+    compute {n = count over (), s = sum over e.sal}
+  order (deptno, job);
+> deptno job       n s
+> ------ --------- - ----
+>     10 CLERK     1 1300
+>     10 MANAGER   1 2450
+>     10 PRESIDENT 1 5000
+>     20 ANALYST   2 6000
+>     20 CLERK     2 1900
+>     20 MANAGER   1 2975
+>     30 CLERK     1  950
+>     30 MANAGER   1 2850
+>     30 SALESMAN  4 5600
+>
+> val it : {deptno:int, job:string, n:int, s:decimal} list
+
+(*) Sort and take.
+from e in scott.emps
+  yield {e.ename, e.sal}
+  order (DESC sal, ename)
+  take 3;
+> ename sal
+> ----- ----
+> KING  5000
+> FORD  3000
+> SCOTT 3000
+>
+> val it : {ename:string, sal:decimal} list
+
+(*) Order, skip, take, then project.
+from e in scott.emps
+  order e.empno
+  skip 2
+  take 3
+  yield {e.empno, e.ename};
+> empno ename
+> ----- ------
+>  7521 WARD
+>  7566 JONES
+>  7654 MARTIN
+>
+> val it : {empno:int, ename:string} list
+
+(*) Distinct, which is a group with no aggregates.
+from e in scott.emps group e.job;
+> val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
+
+(*) A correlated exists subquery.
+from d in scott.depts
+  where (exists e in scott.emps
+    where e.deptno = d.deptno andalso e.job = "CLERK")
+  yield d.dname;
+> val it = ["ACCOUNTING","RESEARCH","SALES"] : string bag
+
+(*) "elem", which Spark has to do as an exists.
+from e in scott.emps
+  where e.deptno elem (from d in scott.depts
+      where d.loc = "CHICAGO"
+      yield d.deptno)
+  yield e.ename;
+> val it = ["ALLEN","WARD","MARTIN","BLAKE","TURNER","JAMES"] : string bag
+
+(*) A correlated scalar subquery.
+from d in scott.depts
+  yield {d.dname,
+         n = (from e in scott.emps where e.deptno = d.deptno
+              compute count over ())};
+> dname      n
+> ---------- -
+> ACCOUNTING 3
+> RESEARCH   5
+> SALES      6
+> OPERATIONS 0
+>
+> val it : {dname:string, n:int} bag
+
+(*) A result that is not a collection.
+from e in scott.emps compute count over ();
+> val it = 14 : int
+
+(*) Union, of bags, so every row counts.
+from e in scott.emps where e.deptno = 10 yield {n = e.empno}
+  union (from d in scott.depts yield {n = d.deptno});
+> n
+> ----
+> 7782
+> 7839
+> 7934
+>   10
+>   20
+>   30
+>   40
+>
+> val it : {n:int} bag
+
+(*) Except and intersect, also of bags.
+from e in scott.emps yield {n = e.deptno}
+  except (from d in scott.depts where d.deptno > 20 yield {n = d.deptno});
+> n
+> --
+> 20
+> 30
+> 20
+> 30
+> 30
+> 10
+> 20
+> 10
+> 30
+> 20
+> 30
+> 20
+> 10
+>
+> val it : {n:int} bag
+from e in scott.emps yield {n = e.deptno}
+  intersect (from d in scott.depts where d.deptno > 20 yield {n = d.deptno});
+> n
+> --
+> 30
+>
+> val it : {n:int} bag
+
+(*) String functions.
+from e in scott.emps
+  where String.isPrefix "S" e.ename
+  yield {e.ename, n = size e.ename, s = String.substring (e.ename, 0, 2),
+         t = e.ename ^ "!"};
+> ename n s  t
+> ----- - -- ------
+> SMITH 5 SM SMITH!
+> SCOTT 5 SC SCOTT!
+>
+> val it : {ename:string, n:int, s:string, t:string} bag
+
+(* Addition. Negation is not here: Morel does not push "~" down to Calcite,
+ * though it pushes "+", "div" and "mod". *)
+from e in scott.emps where e.deptno = 10 yield {n = e.empno + 1};
+> n
+> ----
+> 7783
+> 7840
+> 7935
+>
+> val it : {n:int} bag
+
+(* Integer division and remainder, which Spark does with a template because
+ * its own operators round the other way. Decimal arithmetic is not here:
+ * Calcite does not push it down, so "e.sal * decimal 2" lives in
+ * spark-exec.smli, where only two of the three have to agree. *)
+from e in scott.emps
+  where e.deptno = 10
+  yield {y = e.empno div 7, z = e.empno mod 7};
+> y    z
+> ---- -
+> 1111 5
+> 1119 6
+> 1133 3
+>
+> val it : {y:int, z:int} bag
+
+(*) End triple.smli
