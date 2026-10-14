@@ -89,7 +89,7 @@ public class ArrowDecoder {
       VectorSchemaRoot root, Type rowType, List<Object> rows) {
     final List<FieldVector> vectors = root.getFieldVectors();
     final int rowCount = root.getRowCount();
-    if (rowType instanceof RecordLikeType) {
+    if (ArrowEncoder.hasColumns(rowType)) {
       final RecordLikeType recordType = (RecordLikeType) rowType;
       // Vectors are in Spark's column order; a record's fields are in
       // Morel's order (sorted by label). Map by name.

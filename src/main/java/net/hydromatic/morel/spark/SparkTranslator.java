@@ -330,12 +330,16 @@ public class SparkTranslator {
     final int planId = nextPlanId++;
     if (exp.isCallTo(BuiltIn.Z_LIST)) {
       final List<Core.Exp> rows = rows(exp);
+      final List<Object> values = new ArrayList<>();
+      rows.forEach(row -> values.add(value(row)));
+      final Type elementType = elementType(exp.type);
       localRowCounts.add(rows.size());
       return Relation.newBuilder()
           .setCommon(RelationCommon.newBuilder().setPlanId(planId))
           .setLocalRelation(
               LocalRelation.newBuilder()
-                  .setSchema(SparkSchema.schemaJson(elementType(exp.type))))
+                  .setData(ArrowEncoder.encode(values, elementType))
+                  .setSchema(SparkSchema.schemaJson(elementType)))
           .build();
     }
     if (tableName(exp) != null) {
@@ -441,6 +445,32 @@ public class SparkTranslator {
       return ((Core.Tuple) arg).args;
     }
     throw unsupported("inline collection whose rows are " + arg.op);
+  }
+
+  /**
+   * Returns the Morel value of a constant expression.
+   *
+   * <p>The rows of an inline collection are written out in the query, and Spark
+   * carries them as data rather than as expressions, so what it wants is their
+   * values.
+   */
+  private static Object value(Core.Exp exp) {
+    switch (exp.op) {
+      case BOOL_LITERAL:
+        return ((Core.Literal) exp).unwrap(Boolean.class);
+      case INT_LITERAL:
+        return ((Core.Literal) exp).unwrap(Integer.class);
+      case REAL_LITERAL:
+        return ((Core.Literal) exp).unwrap(Float.class);
+      case STRING_LITERAL:
+        return ((Core.Literal) exp).unwrap(String.class);
+      case TUPLE:
+        final ImmutableList.Builder<Object> fields = ImmutableList.builder();
+        ((Core.Tuple) exp).args.forEach(arg -> fields.add(value(arg)));
+        return fields.build();
+      default:
+        throw unsupported("a row that is " + exp.op);
+    }
   }
 
   /** Returns the element type of a collection type. */

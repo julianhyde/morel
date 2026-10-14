@@ -69,14 +69,11 @@ public class SparkPlan implements SparkBackend.Plan {
     final StringBuilder b = new StringBuilder();
     int i = 0;
     for (String line : text.split("\n", -1)) {
-      final int brace = line.indexOf("local_relation {");
-      if (brace >= 0 && line.trim().equals("local_relation {")) {
-        b.append(line).append('\n');
+      final int data = line.indexOf("data: \"");
+      if (data >= 0 && line.trim().startsWith("data: \"")) {
         final int rows = localRowCounts.get(i++);
-        for (int j = 0; j < brace + 2; j++) {
-          b.append(' ');
-        }
-        b.append("data: [")
+        b.append(line, 0, data)
+            .append("data: [")
             .append(rows)
             .append(rows == 1 ? " row]" : " rows]")
             .append('\n');
