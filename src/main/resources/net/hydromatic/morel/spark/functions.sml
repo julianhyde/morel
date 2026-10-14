@@ -69,9 +69,14 @@
    divergence = "NaN: Spark ignores it, SML returns it"},
 
   (* Arithmetic *)
-  {morel = "op +", kind = "direct", spark = "+", divergence = ""},
-  {morel = "op -", kind = "direct", spark = "-", divergence = ""},
-  {morel = "op *", kind = "direct", spark = "*", divergence = ""},
+  (* On int, Spark is in ANSI mode and raises where the value does not fit,
+   * which reaches the program as Overflow; Morel wraps. *)
+  {morel = "op +", kind = "direct", spark = "+",
+   divergence = "on int, Spark raises on overflow, Morel wraps"},
+  {morel = "op -", kind = "direct", spark = "-",
+   divergence = "on int, Spark raises on overflow, Morel wraps"},
+  {morel = "op *", kind = "direct", spark = "*",
+   divergence = "on int, Spark raises on overflow, Morel wraps"},
   {morel = "op ~", kind = "direct", spark = "negative", divergence = ""},
   {morel = "Real./", kind = "direct", spark = "/", divergence = ""},
   {morel = "op div", kind = "rewritten",

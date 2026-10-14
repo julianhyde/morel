@@ -1982,4 +1982,12 @@ val emps = spark.catalog.scott.emps;
 )).toString ();
 > Spark {errorClass = "UNSUPPORTED", message = "A plan with a parameter has no text until it is given one; execute it instead"}
 
+(* The offline connection translates a query but cannot run one, and says
+ * so rather than pretending to have no rows. *)
+(spark.connection.prepare (fn () =>
+  from e in spark.catalog.scott.emps where e.deptno = 10 yield e.ename
+)).execute ();
+> uncaught exception Spark [Spark: MOCK: The offline connection cannot execute a plan; connect to a server]
+>   raised at: stdIn:3.13
+
 (*) End spark-plan.smli

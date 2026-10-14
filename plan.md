@@ -416,7 +416,30 @@ connection refuses to execute ("MOCK"). `spark-exec.smli` runs the whole
 corpus on the container, and every query answers as the local corpus
 answers.
 
-**M10.** Three categories: runtime errors (e.g. divide by zero) must raise
+**M10.** Done. `spark-error.smli` holds it. A failure of the computation
+raises the exception Morel raises for it -- `DIVIDE_BY_ZERO` is `Div`,
+`ARITHMETIC_OVERFLOW` and `CAST_OVERFLOW` are `Overflow` -- and everything
+else raises `Spark` carrying Spark's own error class, which is what a failure
+with no local counterpart deserves: a database or a table the catalog has not
+got now says so (`SCHEMA_NOT_FOUND`, `TABLE_OR_VIEW_NOT_FOUND`) where it used
+to throw a Java NullPointerException. After each of them the connection still
+works, and the script shows it.
+
+Two things the script records rather than hides. A failure while a statement
+is being *compiled* -- reading a catalog is one, since discovering a field
+asks the server -- used to end an interactive session, because the shell
+caught only parse and compile errors; it now reports such a failure as the
+script runner always did, and goes on. And the overflow case is a divergence,
+not a match: Morel wraps where Spark raises, so the local query gives no rows
+while the remote one raises, and the function table says so against `+`, `-`
+and `*`.
+
+Schema drift (a table dropped between typechecking and execution) has no test
+yet: nothing in the `Spark` structure runs DDL, so a script cannot drop a
+table to provoke it.
+
+**M10 (original note).** Three categories: runtime errors (e.g. divide by
+zero) must raise
 the same Morel exception as local evaluation, testable in the triple
 format; analysis errors are translator bugs and dump the offending plan —
 except schema drift (table dropped after typechecking), which is a

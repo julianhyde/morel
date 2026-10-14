@@ -629,11 +629,44 @@ public abstract class Codes {
     return SparkCodes.remote(plan, pos);
   }
 
-  /** Converts an error from Spark into the Morel exception {@code Spark}. */
+  /**
+   * Converts an error from Spark into a Morel exception.
+   *
+   * <p>A failure that local evaluation has a name for raises the exception it
+   * raises locally, so that a query fails the same way wherever it ran; see
+   * {@link #morelExn}. Everything else raises {@code Spark}, carrying Spark's
+   * error class and message.
+   */
   public static MorelRuntimeException sparkException(
       SparkBackend.SparkException e, Pos pos) {
+    final @Nullable BuiltInExn exn = morelExn(e.errorClass);
+    if (exn != null) {
+      return new MorelRuntimeException(exn, pos);
+    }
     return new MorelRuntimeException(
         BuiltInExn.SPARK, SparkConnections.payload(e), pos);
+  }
+
+  /**
+   * Returns the Morel exception that a Spark error class means, or null if
+   * Morel has no name for it (spec.md section 2.4).
+   *
+   * <p>Only a failure of the computation maps: dividing by zero is `Div`
+   * whether Spark noticed it or Morel did. A failure of the connection, or of
+   * the catalog, has no local counterpart and stays `Spark`.
+   */
+  public static @Nullable BuiltInExn morelExn(String errorClass) {
+    switch (errorClass) {
+      case "DIVIDE_BY_ZERO":
+      case "INTERVAL_DIVIDED_BY_ZERO":
+        return BuiltInExn.DIV;
+      case "ARITHMETIC_OVERFLOW":
+      case "CAST_OVERFLOW":
+      case "BINARY_ARITHMETIC_OVERFLOW":
+        return BuiltInExn.OVERFLOW;
+      default:
+        return null;
+    }
   }
 
   /**

@@ -120,7 +120,20 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
 
   @Override
   public <V> V fieldValueAs(String fieldName, Class<V> clazz) {
-    return clazz.cast(requireNonNull(databases().get(fieldName), fieldName));
+    // Asking the catalog for a database it does not have is the user's
+    // mistake, not the adapter's, so it reads as Spark's own error for it,
+    // and reaches the program as the exception every Spark failure raises.
+    final Database database =
+        call(
+            () -> {
+              final Database d = databases().get(fieldName);
+              if (d == null) {
+                throw new SparkBackend.SparkException(
+                    "SCHEMA_NOT_FOUND", "Database " + fieldName + " not found");
+              }
+              return d;
+            });
+    return clazz.cast(database);
   }
 
   @Override
@@ -193,7 +206,18 @@ public class SparkCatalog extends AbstractList<Object> implements TypedValue {
 
     @Override
     public <V> V fieldValueAs(String fieldName, Class<V> clazz) {
-      return clazz.cast(requireNonNull(tables().get(fieldName), fieldName));
+      final Table table =
+          call(
+              () -> {
+                final Table t = tables().get(fieldName);
+                if (t == null) {
+                  throw new SparkBackend.SparkException(
+                      "TABLE_OR_VIEW_NOT_FOUND",
+                      "Table " + name + "." + fieldName + " not found");
+                }
+                return t;
+              });
+      return clazz.cast(table);
     }
 
     @Override

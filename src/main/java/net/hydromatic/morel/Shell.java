@@ -996,6 +996,14 @@ public class Shell {
                   }
                 } catch (MorelParseException | CompileException e) {
                   outLines.accept(e.description());
+                } catch (MorelRuntimeException e) {
+                  // A statement that fails while it is being compiled -- a
+                  // catalog that cannot be read, say -- fails as one that
+                  // fails while running does, and the session goes on. The
+                  // script runner has always done this; the shell had not.
+                  final StringBuilder buf2 = new StringBuilder();
+                  session.handle(e, buf2);
+                  outLines.accept(buf2.toString());
                 }
                 if (echo) {
                   outLines.accept(code);
