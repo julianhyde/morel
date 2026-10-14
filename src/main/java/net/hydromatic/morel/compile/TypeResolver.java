@@ -3415,6 +3415,7 @@ public class TypeResolver {
     // Pick a candidate and determine the calling form.
     final Ast.Exp fnExp;
     final boolean isTuple;
+    int paramCount = -1;
     if (!builtInCandidates.isEmpty()) {
       final BuiltIn builtIn =
           pickBuiltInCandidate(
@@ -3425,6 +3426,7 @@ public class TypeResolver {
               builtInCandidates);
       fnExp = postfixBuiltInFnExp(pos, builtIn);
       isTuple = isPostfixBuiltInTuple(builtIn);
+      paramCount = postfixBuiltInParamCount(builtIn);
     } else {
       fnExp = ast.id(pos, name);
       isTuple = methodTupleNames.contains(name);
@@ -3440,7 +3442,8 @@ public class TypeResolver {
       // that takes unit, where `c.close ()` merely closes a connection.
       final List<Ast.Exp> elems = new ArrayList<>();
       elems.add(receiver2);
-      if (postfixApp.arg instanceof Ast.Tuple) {
+      if (postfixApp.arg instanceof Ast.Tuple
+          && spliceTuple(paramCount, (Ast.Tuple) postfixApp.arg)) {
         elems.addAll(((Ast.Tuple) postfixApp.arg).args);
       } else {
         elems.add(postfixApp.arg);
@@ -3498,6 +3501,37 @@ public class TypeResolver {
     }
     return type instanceof FnType
         && ((FnType) type).paramType instanceof TupleType;
+  }
+
+  /**
+   * Returns whether a tuple argument of a postfix call is spliced into the
+   * call, or passed as one argument.
+   *
+   * <p>{@code x.f (a, b)} could be either, and the number of parameters says
+   * which: a function of three takes the receiver and both, as {@code
+   * String.substring} does; a function of two takes the receiver and the tuple,
+   * which is the only way to pass a tuple to a function such as {@code
+   * Spark.execute}. Where the count is not known -- a user's own method -- the
+   * argument is spliced, as it always was.
+   */
+  private static boolean spliceTuple(int paramCount, Ast.Tuple arg) {
+    return paramCount < 0 || paramCount == arg.args.size() + 1;
+  }
+
+  /**
+   * Returns how many parameters a postfix built-in takes, counting the
+   * receiver, or -1 if its parameter is not a tuple.
+   */
+  private int postfixBuiltInParamCount(BuiltIn builtIn) {
+    Type type = builtIn.typeFunction.apply(typeSystem);
+    if (type instanceof ForallType) {
+      type = ((ForallType) type).type;
+    }
+    if (type instanceof FnType
+        && ((FnType) type).paramType instanceof TupleType) {
+      return ((TupleType) ((FnType) type).paramType).argTypes.size();
+    }
+    return -1;
   }
 
   /**

@@ -301,6 +301,21 @@ byDept.execute 10;
 byDept.execute 40;
 > val it = [] : string bag
 
+(* Several parameters are one parameter that is a tuple, which the core
+ * destructures, and the argument's components answer to them one for one. A
+ * postfix call passes a tuple whole where the function's parameter count says
+ * it should: "execute" takes two, so it is given the plan and the pair, where
+ * "substring" takes three and is given its string and both numbers. *)
+val byBoth = spark.connection.prepare (fn (d, j) =>
+  from e in spark.catalog.scott.emps
+    where e.deptno = d andalso e.job = j
+    yield e.ename);
+> val byBoth = <plan> : (int * string,string bag) plan
+byBoth.execute (30, "SALESMAN");
+> val it = ["ALLEN","WARD","TURNER","MARTIN"] : string bag
+byBoth.execute (20, "CLERK");
+> val it = ["ADAMS","SMITH"] : string bag
+
 (*) Until it has an argument, such a plan has no text.
 byDept.toString ();
 > Spark {errorClass = "UNSUPPORTED", message = "A plan with a parameter has no text until it is given one; execute it instead"}

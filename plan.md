@@ -459,15 +459,22 @@ so `toString` on one is refused. The other way round -- a plan carrying a
 dummy literal that `execute` overwrites in the protobuf -- would print, but
 what it printed would be a lie about one column.
 
-**Only one parameter, and not a tuple of them.** A function of several
-arguments is one of a tuple, and Morel's core destructures it: `fn (d, j) =>
-e` is `fn v => case v of (d, j) => e`, so substituting the argument for `v`
-leaves `d` and `j` bound by a case the translator does not reduce, and the
-query is refused for naming a variable it cannot do. Supporting them means
-reducing that case while substituting. The calling syntax needs thought
-first: `p.execute (30, "SALESMAN")` splices into `execute (p, 30,
-"SALESMAN")`, a three-tuple, so even with substitution it would have to be
-written `Spark.execute (p, (30, "SALESMAN"))`.
+**Several parameters** are one parameter that is a tuple, which the core
+destructures: `fn (d, j) => e` is `fn v => case v of (d, j) => e`. So the
+parameters of a plan are the names that case binds, and the argument's
+components answer to them one for one.
+
+Passing them needed the postfix rule mended. `x.f (a, b)` could mean `f (x,
+a, b)` or `f (x, (a, b))`, and it always meant the first, which left no way
+to give a function a tuple. The number of parameters says which is meant:
+`String.substring` takes three and gets the string and both numbers;
+`Spark.execute` takes two and gets the plan and the pair. Where the count is
+not known -- a user's own method -- the argument is spliced, as before.
+
+A record parameter is a different matter: nothing says what fields the record
+has besides the ones the query reads, so its type is never settled, and
+reading a field of it is the "unresolved flex record" error that Morel gives
+anywhere else.
 
 ## Phase 2 questions
 

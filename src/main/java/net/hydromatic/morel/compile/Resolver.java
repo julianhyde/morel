@@ -1436,24 +1436,43 @@ public class Resolver {
         (SparkBackend.Connection) connection,
         typeMap.typeSystem,
         rels[0],
-        parameter(inlined),
+        parameters(inlined),
         collection ? resultType.arg(0) : resultType,
         collection);
   }
 
   /**
-   * Returns the parameter of the function a plan was prepared from, or null if
-   * it has none.
+   * Returns the parameters of the function a plan was prepared from, in the
+   * order the argument holds them; empty if it has none.
    *
-   * <p>A function of unit has one in the tree but none to pass, which is the
-   * same thing as none.
+   * <p>A function of unit has a parameter in the tree but none to pass, which
+   * is the same thing as none. A function of several arguments is a function of
+   * a tuple, which the core destructures -- {@code fn (d, j) => e} is {@code fn
+   * v => case v of (d, j) => e} -- so its parameters are the names that case
+   * binds, and the argument's components answer to them one for one.
    */
-  private static Core.@Nullable IdPat parameter(Core.Exp fn) {
+  private static List<Core.IdPat> parameters(Core.Exp fn) {
     if (fn.op != Op.FN) {
-      return null;
+      return ImmutableList.of();
     }
-    final Core.IdPat idPat = ((Core.Fn) fn).idPat;
-    return idPat.type == PrimitiveType.UNIT ? null : idPat;
+    final Core.Fn fn2 = (Core.Fn) fn;
+    if (fn2.idPat.type == PrimitiveType.UNIT) {
+      return ImmutableList.of();
+    }
+    if (fn2.exp.op == Op.CASE) {
+      final Core.Case case_ = (Core.Case) fn2.exp;
+      if (case_.exp.op == Op.ID
+          && ((Core.Id) case_.exp).idPat.equals(fn2.idPat)
+          && case_.matchList.size() == 1
+          && case_.matchList.get(0).pat.op == Op.TUPLE_PAT) {
+        final List<Core.Pat> pats =
+            ((Core.TuplePat) case_.matchList.get(0).pat).args;
+        if (pats.stream().allMatch(pat -> pat.op == Op.ID_PAT)) {
+          return transformEager(pats, pat -> (Core.IdPat) pat);
+        }
+      }
+    }
+    return ImmutableList.of(fn2.idPat);
   }
 
   /**
