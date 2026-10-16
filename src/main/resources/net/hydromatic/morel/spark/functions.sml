@@ -41,7 +41,9 @@
   (* Comparison and logic *)
   {morel = "op =", kind = "direct", spark = "==",
    divergence = "on real, Spark has NaN = NaN"},
-  {morel = "op <>", kind = "direct", spark = "!=",
+  (* Spark has no function called "!=" -- PySpark builds "not" of "==" -- but
+   * its parser knows "<>", so this crosses as SQL. *)
+  {morel = "op <>", kind = "rewritten", spark = "({0} <> {1})",
    divergence = "on real, Spark has NaN = NaN"},
   {morel = "op <", kind = "direct", spark = "<",
    divergence = "strings: Spark compares UTF-8 bytes, Morel UTF-16 units; reals: Spark orders NaN above all"},
@@ -84,7 +86,13 @@
    divergence = "SML rounds toward negative infinity, and Spark's div truncates, hence the template"},
   {morel = "op mod", kind = "rewritten", spark = "(({0} % {1} + {1}) % {1})",
    divergence = "the SML result has the divisor's sign, Spark's % the dividend's, hence the template"},
+  (* "abs" is overloaded, and a call resolves to the instance for its type,
+   * which is what the core carries; the overload itself is named too, so
+   * that the table reads as the program does. *)
   {morel = "abs", kind = "direct", spark = "abs", divergence = ""},
+  {morel = "Int.abs", kind = "direct", spark = "abs", divergence = ""},
+  {morel = "Real.abs", kind = "direct", spark = "abs", divergence = ""},
+  {morel = "Decimal.abs", kind = "direct", spark = "abs", divergence = ""},
   {morel = "Real.floor", kind = "rewritten", spark = "cast(floor({0}) as int)",
    divergence = ""},
   {morel = "Real.ceil", kind = "rewritten", spark = "cast(ceil({0}) as int)",

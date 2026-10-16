@@ -534,10 +534,44 @@ Morel's own unparse is still ambiguous here, which is worth a look.
 and into `spark-exec.smli`: decimal arithmetic (`e.sal * decimal "2"`), and
 unary minus (`~e.empno`), though it pushes `+`, `div` and `mod`.
 
-What remains of M11: the function table is not yet iterated through this
-format, so a divergence recorded against an operator is not yet proved by a
-test; and the two divergences already known -- `comm`, and integer overflow
--- keep their queries out of the script rather than being expressed in it.
+The table is now iterated through the format: every group of operators the
+table calls `direct` or `rewritten`, and that all three can do, has a query
+in `triple.smli` -- comparison and negation, `abs`, `Int.min` and `Int.max`,
+the string functions, `Int.toString`, the aggregates, `elem` and `notelem`,
+`empty` and `nonEmpty`, `only`, `Math.sqrt` and `Real.fromInt`, arithmetic.
+
+Two entries were wrong, and running them found it:
+
+* `op <>` was `!=`, which Spark does not resolve as a function: PySpark
+  builds `not` of `==`, and the SQL parser knows `<>`. It is now a template,
+  `({0} <> {1})`.
+* `abs` resolved to the overload, where a call in the core carries the
+  instance for its type, so the table omitted `Int.abs`, `Real.abs` and
+  `Decimal.abs`. All three are named now, as `op X` rows name type
+  instances.
+
+**What Calcite cannot do, which keeps queries out of the triple.** Each of
+these is a Morel-Calcite gap, found by asking Calcite to do what Spark can;
+none is about Spark.
+
+* Decimal arithmetic (`e.sal * decimal "2"`) and unary minus (`~e.empno`)
+  are not pushed down, though `+`, `div` and `mod` are.
+* A char that comes back fails to convert: `String.sub` yields one, and
+  Calcite raises "Cannot convert C to short". Morel maps `char` to SMALLINT
+  (Converters), so it is the value conversion that is missing, not the type.
+* `min` and `max` over an int or a string fail at execution, though they
+  work over a decimal.
+* `only` is pushed down and then fails.
+* `Real.floor` and `Real.trunc` fail; `Math.sqrt` and `Real.fromInt` work.
+
+A curried built-in in a `where` -- `String.isPrefix "S" e.ename` -- used to
+throw a ClassCastException from the Calcite bridge; that one is fixed, and
+the query is in the script.
+
+What remains of M11: the two divergences already known -- `comm`, and integer
+overflow -- keep their queries out of the script rather than being expressed
+in it, and the unsupported entries of the table have no test that they are
+refused.
 
 ## Phase 2 questions
 

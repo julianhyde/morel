@@ -106,7 +106,9 @@ public class Script {
   public Script withSparkPushDown() {
     return new Script(
         inFile,
-        outFile,
+        // A mode of its own writes a file of its own: the suite runs the modes
+        // of a script in parallel, and two that wrote one file would race.
+        suffixed(outFile, "spark"),
         noInput,
         echo,
         idempotent,
@@ -124,6 +126,14 @@ public class Script {
    */
   public static Script create(String path) throws IOException {
     return create(path, null, false, ImmutableMap.of(), Tracers.empty());
+  }
+
+  /**
+   * Returns a file beside {@code file} whose name carries a suffix, so that a
+   * second way of running one script does not write the first way's output.
+   */
+  private static File suffixed(File file, String suffix) {
+    return new File(file.getParentFile(), suffix + "-" + file.getName());
   }
 
   /** Returns a copy of this script with more foreign values bound. */
@@ -175,9 +185,12 @@ public class Script {
       inFile = urlToFile(inUrl);
       checkArgument(inFile != null, "file '%s' not found", inUrl);
       String outPath = idempotent ? path : path + ".out";
-      outFile =
+      final File out =
           new File(
               inFile.getAbsoluteFile().getParent(), u2n("surefire/") + outPath);
+      // As for Spark: a run in Calcite mode writes beside the local run's
+      // output rather than over it, because the suite runs them in parallel.
+      outFile = propOverrides.isEmpty() ? out : suffixed(out, "hybrid");
     }
 
     final boolean loadDictionary =

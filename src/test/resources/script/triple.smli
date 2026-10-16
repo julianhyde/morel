@@ -266,4 +266,96 @@ from e in scott.emps
 >
 > val it : {y:int, z:int} bag
 
+(* The rest of the function table, one query per group of operators, so that
+ * a function the table claims all three can do is one all three have done.
+ * What is missing from here is missing because one of the three cannot do
+ * it; plan.md says which. *)
+
+(*) Comparison, and negation of a condition.
+from e in scott.emps
+  where e.sal >= decimal "3000" andalso e.deptno <> 10
+  yield e.ename;
+> val it = ["SCOTT","FORD"] : string bag
+from e in scott.emps where not (e.job = "CLERK") yield e.ename;
+> val it =
+>   ["ALLEN","WARD","JONES","MARTIN","BLAKE","CLARK","SCOTT","KING","TURNER",
+>    "FORD"] : string bag
+from e in scott.emps where e.deptno = 10 orelse e.deptno = 20 yield e.ename;
+> val it = ["SMITH","JONES","CLARK","SCOTT","KING","ADAMS","FORD","MILLER"]
+>   : string bag
+
+(*) Absolute value, least and greatest.
+from e in scott.emps
+  where e.deptno = 10
+  yield {a = abs (e.empno - 7900), lo = Int.min (e.empno, 7900),
+         hi = Int.max (e.empno, 7900)};
+> a   hi   lo
+> --- ---- ----
+> 118 7900 7782
+>  61 7900 7839
+>  34 7934 7900
+>
+> val it : {a:int, hi:int, lo:int} bag
+
+(*) The rest of the string functions.
+from e in scott.emps where String.isSuffix "S" e.ename yield e.ename;
+> val it = ["JONES","ADAMS","JAMES"] : string bag
+from e in scott.emps where String.isSubstring "AR" e.ename yield e.ename;
+> val it = ["WARD","MARTIN","CLARK"] : string bag
+(* "String.sub" is not here: it yields a char, and a char that comes back
+ * from Calcite fails to convert (plan.md says more). *)
+from e in scott.emps
+  where e.deptno = 10
+  yield {s = Int.toString e.empno};
+> s
+> ----
+> 7782
+> 7839
+> 7934
+>
+> val it : {s:string} bag
+
+(* The rest of the aggregate functions. Only "sum" is here: Calcite pushes
+ * "min" and "max" over a decimal, which the group above does, but fails over
+ * an int or a string (plan.md says more). *)
+from e in scott.emps group e.deptno compute {s = sum over e.empno};
+> deptno s
+> ------ -----
+>     20 38501
+>     30 46116
+>     10 23555
+>
+> val it : {deptno:int, s:int} bag
+
+(* The rest of the subquery functions. "only" is not here; Calcite pushes it
+ * down and then fails. *)
+from e in scott.emps
+  where e.deptno notelem (from d in scott.depts
+      where d.loc = "CHICAGO"
+      yield d.deptno)
+  yield e.ename;
+> val it = ["SMITH","JONES","CLARK","SCOTT","KING","ADAMS","FORD","MILLER"]
+>   : string bag
+from d in scott.depts
+  where empty (from e in scott.emps where e.deptno = d.deptno)
+  yield d.dname;
+> val it = ["OPERATIONS"] : string bag
+from d in scott.depts
+  where nonEmpty (from e in scott.emps where e.deptno = d.deptno)
+  yield d.dname;
+> val it = ["ACCOUNTING","RESEARCH","SALES"] : string bag
+
+(* A real function, and the conversion into one. The conversions back --
+ * "Real.floor" and "Real.trunc" -- are not here; Calcite fails on them. *)
+from e in scott.emps
+  where e.deptno = 10
+  yield {r = Math.sqrt (Real.fromInt e.empno)};
+> r
+> ---------
+> 88.215645
+> 88.538124
+> 89.073006
+>
+> val it : {r:real} bag
+
 (*) End triple.smli
