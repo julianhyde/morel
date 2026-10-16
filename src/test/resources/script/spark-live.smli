@@ -37,17 +37,37 @@ spark.catalog.scott.depts;
 >    {deptno=20,dname="RESEARCH",loc="DALLAS"},
 >    {deptno=30,dname="SALES",loc="CHICAGO"}]
 >   : {deptno:int, dname:string, loc:string} bag
+(* Reading the whole table fails on the commission. Spark's catalog keeps no
+ * NOT NULL for a table stored as files, so every column maps to the plain
+ * type, and a null in one raises, naming the column (spec.md section 1.2,
+ * decision B). The data set has the same nulls; it knows they are nulls. *)
 from e in spark.catalog.scott.emps
   where e.sal > decimal "2500"
   yield {e.ename, e.sal};
-> val it =
->   [{ename="BLAKE",sal=2850},{ename="KING",sal=5000},{ename="FORD",sal=3000},
->    {ename="JONES",sal=2975},{ename="SCOTT",sal=3000}]
->   : {ename:string, sal:decimal} bag
+> uncaught exception Spark [Spark: NULL_VALUE: Null in column comm of row 0, whose type decimal has no room for it]
+>   raised at: 0.0-0.0
 from d in spark.catalog.scott.depts
   join e in spark.catalog.scott.emps on d.deptno = e.deptno
   group d.dname compute {c = count over ()}
   order dname;
+> uncaught exception Spark [Spark: NULL_VALUE: Null in column comm of row 0, whose type decimal has no room for it]
+>   raised at: 0.0-0.0
+
+(* Asking Spark the question works, because the plan asks only for the
+ * columns the query wants, and never reads the commission. *)
+(spark.connection.remote (fn () =>
+  from e in spark.catalog.scott.emps
+    where e.sal > decimal "2500"
+    yield {e.ename, e.sal})) ();
+> val it =
+>   [{ename="BLAKE",sal=2850},{ename="JONES",sal=2975},{ename="KING",sal=5000},
+>    {ename="SCOTT",sal=3000},{ename="FORD",sal=3000}]
+>   : {ename:string, sal:decimal} bag
+(spark.connection.remote (fn () =>
+  from d in spark.catalog.scott.depts
+    join e in spark.catalog.scott.emps on d.deptno = e.deptno
+    group d.dname compute {c = count over ()}
+    order dname)) ();
 > val it = [{c=3,dname="ACCOUNTING"},{c=5,dname="RESEARCH"},{c=6,dname="SALES"}]
 >   : {c:int, dname:string} list
 

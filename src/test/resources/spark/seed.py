@@ -57,30 +57,35 @@ if warehouse.startswith("file:"):
 # give the same values.
 sql("CREATE DATABASE IF NOT EXISTS scott")
 sql("DROP TABLE IF EXISTS scott.emps")
-# A salary is a decimal, as it is in Morel's data set, so that a query over
-# one answers as it does over the other. Where Morel's data set has NONE --
-# most commissions, and the president's manager -- this has a zero rather
-# than a null, because a catalog column maps to the plain type and a null in
-# one raises (spec.md section 1.2, decision B), which would make the table
-# unreadable. plan.md records what that costs.
+# The same rows as Morel's data set, so that a query over one answers as it
+# does over the other: a salary is a decimal, a commission the data set has
+# not got is a null, and so is the president's manager.
+#
+# A null costs something. Spark's catalog keeps no NOT NULL for a table
+# stored as files -- it accepts the declaration and reports the column
+# nullable anyway -- so a catalog column maps to the plain type, and a null
+# in one raises when it is read (spec.md section 1.2, decision B). Reading a
+# whole employee row through the catalog therefore fails; a query that does
+# not ask for the commission is unaffected, and so is every query whose type
+# comes from Morel's own data set. plan.md records the question.
 sql("""CREATE TABLE scott.emps (
   empno INT, ename STRING, job STRING, mgr INT, hiredate STRING,
   sal DECIMAL(7, 2), comm DECIMAL(7, 2), deptno INT) USING parquet""")
 sql("""INSERT INTO scott.emps VALUES
-  (7369, 'SMITH', 'CLERK', 7902, '1980-12-17', 800.0, 0.0, 20),
+  (7369, 'SMITH', 'CLERK', 7902, '1980-12-17', 800.0, NULL, 20),
   (7499, 'ALLEN', 'SALESMAN', 7698, '1981-02-20', 1600.0, 300.0, 30),
   (7521, 'WARD', 'SALESMAN', 7698, '1981-02-22', 1250.0, 500.0, 30),
-  (7566, 'JONES', 'MANAGER', 7839, '1981-02-04', 2975.0, 0.0, 20),
+  (7566, 'JONES', 'MANAGER', 7839, '1981-02-04', 2975.0, NULL, 20),
   (7654, 'MARTIN', 'SALESMAN', 7698, '1981-09-28', 1250.0, 1400.0, 30),
-  (7698, 'BLAKE', 'MANAGER', 7839, '1981-01-05', 2850.0, 0.0, 30),
-  (7782, 'CLARK', 'MANAGER', 7839, '1981-06-09', 2450.0, 0.0, 10),
-  (7788, 'SCOTT', 'ANALYST', 7566, '1987-04-19', 3000.0, 0.0, 20),
-  (7839, 'KING', 'PRESIDENT', 0, '1981-11-17', 5000.0, 0.0, 10),
+  (7698, 'BLAKE', 'MANAGER', 7839, '1981-01-05', 2850.0, NULL, 30),
+  (7782, 'CLARK', 'MANAGER', 7839, '1981-06-09', 2450.0, NULL, 10),
+  (7788, 'SCOTT', 'ANALYST', 7566, '1987-04-19', 3000.0, NULL, 20),
+  (7839, 'KING', 'PRESIDENT', NULL, '1981-11-17', 5000.0, NULL, 10),
   (7844, 'TURNER', 'SALESMAN', 7698, '1981-09-08', 1500.0, 0.0, 30),
-  (7876, 'ADAMS', 'CLERK', 7788, '1987-05-23', 1100.0, 0.0, 20),
-  (7900, 'JAMES', 'CLERK', 7698, '1981-12-03', 950.0, 0.0, 30),
-  (7902, 'FORD', 'ANALYST', 7566, '1981-12-03', 3000.0, 0.0, 20),
-  (7934, 'MILLER', 'CLERK', 7782, '1982-01-23', 1300.0, 0.0, 10)""")
+  (7876, 'ADAMS', 'CLERK', 7788, '1987-05-23', 1100.0, NULL, 20),
+  (7900, 'JAMES', 'CLERK', 7698, '1981-12-03', 950.0, NULL, 30),
+  (7902, 'FORD', 'ANALYST', 7566, '1981-12-03', 3000.0, NULL, 20),
+  (7934, 'MILLER', 'CLERK', 7782, '1982-01-23', 1300.0, NULL, 10)""")
 
 sql("DROP TABLE IF EXISTS scott.depts")
 sql("CREATE TABLE scott.depts (deptno INT, dname STRING, loc STRING) USING parquet")

@@ -358,4 +358,18 @@ from e in scott.emps
 >
 > val it : {r:real} bag
 
+(* A column the data set has nulls in. The plan decodes its rows as the type
+ * the program was typed against, which knows the column is optional, so the
+ * commission that is not there is NONE wherever the query ran. *)
+from e in scott.emps
+  where e.deptno = 10
+  yield {e.ename, e.comm};
+> comm ename
+> ---- ------
+>      CLARK
+>      KING
+>      MILLER
+>
+> val it : {comm:decimal option, ename:string} bag
+
 (*) End triple.smli

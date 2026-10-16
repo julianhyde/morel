@@ -590,19 +590,41 @@ question below.
 ## Phase 2 questions
 
 **A nullable catalog column and an optional local one are not the same
-type.** Spark's catalog keeps no NOT NULL for a table stored as files, so a
-column maps to the plain type and a null in one raises (spec.md section 1.2,
-decision B). Morel's own `scott` comes from Calcite, which does know
-nullability, so its `comm` is `decimal option` and its president has no
-manager. The container's `scott` therefore holds a zero where the data set
-holds NONE, or the table could not be read at all.
+type.** Settled, as far as the data goes: the container holds the nulls the
+data set holds, and what that costs is written into the scripts rather than
+papered over.
 
-The corpus mostly does not notice, since only the eighth query reads a whole
-row, but that query's live result and its local result differ: `comm` is
-`decimal` and zero there, `decimal option` and NONE here. Either the mapping
-learns nullability from somewhere (a declaration, as decision A wanted), or
-the triple tests of M11 must know that this column is one the two sides
-disagree about.
+Spark's catalog keeps no NOT NULL for a table stored as files -- it accepts
+the declaration and reports the column nullable anyway, which we measured --
+so there is no way to make the mapping honest from the fixture, and decision
+B stands: a catalog column maps to the plain type, and a null in one raises
+when it is read, naming the column. So:
+
+* a query that reads a whole employee row through the catalog fails
+  (`spark-exec.smli`'s eighth query, and the two in `spark-live.smli` that
+  browse the table as a value); the scripts hold the failure and say why;
+* a query that asks Spark for the columns it wants works, because the plan
+  never reads the commission; `spark-live.smli` shows that beside the
+  failure;
+* a query whose type comes from Morel's own data set agrees exactly, because
+  a plan decodes its rows as the type the program was typed against -- so
+  `comm` is a `decimal option` and the commission that is not there is NONE
+  wherever the query ran. `triple.smli` has such a query now.
+
+**It also found a wrong answer.** The witness of a left join -- the column
+whose nullness says whether the join found a row -- was the first field whose
+type is not an option. Under decision B no catalog column is an option, so
+the first field was chosen: the commission, which is null for most
+employees, and the join reported those rows as not found. Quietly. The
+witness is now a column of the join key, which cannot be null in a row that
+matched, because a null key matches nothing; a join whose condition offers no
+such column is refused. The captured plan is unchanged, because the key was
+the column it already named.
+
+What is left of the question is ergonomic, not factual: reading a whole row
+from the catalog cannot work while decision B stands, and decision A would
+make every query over a real table unwrap its columns. That is the trade
+spec.md section 1.2 records, and nothing here settles it.
 
 **Should an uploaded collection be sent once and reused?** A catalog
 table costs nothing to refer to twice -- it is a name that Spark resolves

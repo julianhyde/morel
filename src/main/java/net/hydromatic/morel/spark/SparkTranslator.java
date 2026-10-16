@@ -23,6 +23,7 @@ import static java.util.Objects.requireNonNull;
 import com.google.common.collect.ImmutableList;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -75,6 +76,12 @@ public class SparkTranslator {
   private final TypeSystem typeSystem;
   private final SparkFunctionTable functions = SparkFunctionTable.instance();
   private final List<Integer> localRowCounts = new ArrayList<>();
+
+  /**
+   * For a row that an outer join may not find, the column that says whether it
+   * was found, by the name the row goes by.
+   */
+  private final Map<String, String> witnesses = new HashMap<>();
 
   /**
    * The relations that expressions in the query refer to, which Spark carries
@@ -302,6 +309,12 @@ public class SparkTranslator {
 
       case JOIN:
         final Core.Join join = (Core.Join) exp;
+        if (join.joinType == JoinType.LEFT) {
+          final String key = keyColumn(join.condition, join.rightRow);
+          if (key != null) {
+            witnesses.put(join.rightRow.name, key);
+          }
+        }
         b.setJoin(
             Join.newBuilder()
                 .setLeft(input(join.left, join.leftRow))
@@ -918,7 +931,7 @@ public class SparkTranslator {
    * two cases are then the same bytes, so such a join is refused; `plan.md`
    * records what it would take to support it.
    */
-  private static Expression component(String alias, Type type) {
+  private Expression component(String alias, Type type) {
     final Type valueType = SparkSchema.optionValueType(type);
     final Type rowType = valueType != null ? valueType : type;
     if (!(rowType instanceof RecordLikeType)) {
@@ -941,7 +954,12 @@ public class SparkTranslator {
     if (valueType == null) {
       return structExp;
     }
-    final String witness = witness(fields);
+    final String witness = witnesses.get(alias);
+    if (witness == null) {
+      throw unsupported(
+          "a row of this join that may be absent, because nothing in the"
+              + " join's condition says whether a row was found");
+    }
     return Expression.newBuilder()
         .setUnresolvedFunction(
             Expression.UnresolvedFunction.newBuilder()
@@ -965,18 +983,66 @@ public class SparkTranslator {
   }
 
   /**
-   * Returns the column that says whether a row is there: the first whose type
-   * is not an option, in the order the row holds its fields.
+   * Returns a column of the right row's join key, or null if the condition has
+   * none.
+   *
+   * <p>This is the column that says whether a left join found the row: a key
+   * cannot be null in a row that matched, because a null key matches nothing,
+   * so asking whether it is null asks exactly the right question.
+   *
+   * <p>The types cannot answer it. A catalog column is a plain type whether or
+   * not it holds nulls (spec.md section 1.2), so a column that looks as though
+   * it could not be null may be null in a row that was found -- and a join that
+   * asked that column would report the row as not found, quietly. The
+   * commission of Morel's own `scott` is such a column.
    */
-  private static String witness(Map<String, Type> fields) {
-    for (Map.Entry<String, Type> field : fields.entrySet()) {
-      if (SparkSchema.optionValueType(field.getValue()) == null) {
-        return field.getKey();
+  private static @Nullable String keyColumn(
+      Core.Exp condition, Core.IdPat rightRow) {
+    if (condition.op != Op.APPLY) {
+      return null;
+    }
+    final Core.Apply apply = (Core.Apply) condition;
+    if (apply.fn.op != Op.FN_LITERAL) {
+      return null;
+    }
+    final List<Core.Exp> args = arguments(apply.arg);
+    switch ((BuiltIn) ((Core.Literal) apply.fn).value) {
+      case Z_ANDALSO:
+      case BOOL_ANDALSO:
+        // Any conjunct may hold the key.
+        for (Core.Exp arg : args) {
+          final String column = keyColumn(arg, rightRow);
+          if (column != null) {
+            return column;
+          }
+        }
+        return null;
+
+      case OP_EQ:
+        for (Core.Exp arg : args) {
+          final String column = columnOf(arg, rightRow);
+          if (column != null) {
+            return column;
+          }
+        }
+        return null;
+
+      default:
+        return null;
+    }
+  }
+
+  /** Returns the column that an expression reads of a row, or null. */
+  private static @Nullable String columnOf(Core.Exp exp, Core.IdPat row) {
+    if (exp.op == Op.APPLY) {
+      final Core.Apply apply = (Core.Apply) exp;
+      if (apply.fn.op == Op.RECORD_SELECTOR
+          && apply.arg.op == Op.ID
+          && ((Core.Id) apply.arg).idPat.equals(row)) {
+        return selectedName(apply);
       }
     }
-    throw unsupported(
-        "a left join whose right rows are all optional, which Spark cannot "
-            + "distinguish from no row at all");
+    return null;
   }
 
   /**

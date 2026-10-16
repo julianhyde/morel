@@ -78,25 +78,4 @@ from e in scott.emps where e.empno = 7782 yield {s = String.substring (e.ename, 
 >
 > val it : {s:string} bag
 
-(* A commission that the data set has not got. Calcite's catalog knows the
- * column is nullable, so Morel's "comm" is a decimal option and the
- * president's is NONE; Spark's catalog keeps no NOT NULL for a table stored
- * as files, so a column maps to the plain type and the container holds a
- * zero rather than a null (spec.md section 1.2, decision B). This is the
- * divergence that plan.md asks about, and it is a property of the data
- * rather than of an operator. *)
-from e in scott.emps where e.empno = 7839 yield {e.ename, e.comm};
-> comm ename
-> ---- -----
->      KING
->
-> val it : {comm:decimal option, ename:string} bag
-(spark.connection.remote (fn () =>
-  from e in scott.emps where e.empno = 7839 yield {e.ename, e.comm})) ();
-> comm ename
-> ---- -----
->    0 KING
->
-> val it : {comm:decimal option, ename:string} bag
-
 (*) End spark-divergence.smli
