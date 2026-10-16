@@ -1968,6 +1968,25 @@ val emps = spark.catalog.scott.emps;
 >   }
 > }|_} : string
 
+(* What the function table calls unsupported, it refuses, naming the function
+ * rather than the shape of the tree it met. A plan is all Spark or it is an
+ * error, so a query that uses one of these has no plan at all. *)
+(spark.connection.prepare (fn () =>
+  from e in spark.catalog.scott.emps
+    yield {s = Real.toString (Real.fromInt e.empno)}
+)).toString ();
+> Spark {errorClass = "UNSUPPORTED", message = "Spark cannot do Real.toString, which the table calls unsupported"}
+(spark.connection.prepare (fn () =>
+  from e in spark.catalog.scott.emps yield {cs = String.explode e.ename}
+)).toString ();
+> Spark {errorClass = "UNSUPPORTED", message = "Spark cannot do String.explode, which the table calls unsupported"}
+(spark.connection.prepare (fn () =>
+  from e in spark.catalog.scott.emps
+    where String.compare (e.ename, "KING") = LESS
+    yield e.ename
+)).toString ();
+> Spark {errorClass = "UNSUPPORTED", message = "Spark cannot do String.compare, which the table calls unsupported"}
+
 (* Phase 1 prepares a query and nothing else, and a plan is all Spark or it
  * is an error. A function whose body is not a query has no plan; nor has one
  * that reads a name the plan cannot carry, such as the function's own

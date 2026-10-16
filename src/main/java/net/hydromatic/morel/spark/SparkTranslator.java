@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableList;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
@@ -503,6 +504,15 @@ public class SparkTranslator {
     }
   }
 
+  /**
+   * Returns the name a built-in goes by: the table's name for it, which is the
+   * name a program writes, rather than the name of the constant that holds it.
+   */
+  private String name(BuiltIn builtIn) {
+    final SparkFunctionTable.Entry entry = functions.get(builtIn);
+    return entry != null ? entry.morel : builtIn.mlName;
+  }
+
   /** Returns the element type of a collection type. */
   private Type elementType(Type type) {
     return type.arg(0);
@@ -665,7 +675,8 @@ public class SparkTranslator {
       BuiltIn builtIn, List<Core.Exp> args, List<String> parts) {
     final SparkFunctionTable.Entry entry = functions.get(builtIn);
     if (entry == null) {
-      throw unsupported("built-in " + builtIn + ", which the table omits");
+      throw unsupported(
+          "built-in " + builtIn.mlName + ", which the table omits");
     }
     switch (entry.kind) {
       case REWRITTEN:
@@ -691,7 +702,10 @@ public class SparkTranslator {
         }
         return Expression.newBuilder().setUnresolvedFunction(b).build();
       default:
-        throw unsupported(builtIn + ", which the table calls " + entry.kind);
+        throw unsupported(
+            name(builtIn)
+                + ", which the table calls "
+                + entry.kind.name().toLowerCase(Locale.ROOT));
     }
   }
 
@@ -707,11 +721,14 @@ public class SparkTranslator {
     final BuiltIn builtIn = (BuiltIn) ((Core.Literal) agg.aggregate).value;
     final SparkFunctionTable.Entry entry = functions.get(builtIn);
     if (entry == null) {
-      throw unsupported("aggregate " + builtIn + ", which the table omits");
+      throw unsupported(
+          "aggregate " + builtIn.mlName + ", which the table omits");
     }
     if (entry.kind != SparkFunctionTable.Kind.AGGREGATE) {
       throw unsupported(
-          builtIn + " over a group, which the table calls " + entry.kind);
+          name(builtIn)
+              + " over a group, which the table calls "
+              + entry.kind.name().toLowerCase(Locale.ROOT));
     }
     final Expression.UnresolvedFunction.Builder b =
         Expression.UnresolvedFunction.newBuilder().setFunctionName(entry.spark);
@@ -817,7 +834,7 @@ public class SparkTranslator {
         break;
 
       default:
-        throw unsupported(builtIn + ", which the table calls a subquery");
+        throw unsupported(name(builtIn) + ", which the table calls a subquery");
     }
     // The expression quotes the plan id of the relation it asks about, which
     // the relation itself knows; a node the translation leaves out, such as a

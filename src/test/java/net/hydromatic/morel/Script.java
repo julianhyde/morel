@@ -199,9 +199,9 @@ public class Script {
                 .getPath()
                 .matches(
                     ".*/(blog|dual|dummy|dummy2|foreign|hybrid|logic|pretty"
-                        + "|spark|spark-disabled|spark-error|spark-exec"
-                        + "|spark-live|spark-plan|such-that|triple)"
-                        + "\\.(sml|smli)");
+                        + "|spark|spark-disabled|spark-divergence"
+                        + "|spark-error|spark-exec|spark-live|spark-plan"
+                        + "|such-that|triple)\\.(sml|smli)");
 
     return new Script(
         inFile,

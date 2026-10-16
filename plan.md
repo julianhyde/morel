@@ -568,10 +568,24 @@ A curried built-in in a `where` -- `String.isPrefix "S" e.ename` -- used to
 throw a ClassCastException from the Calcite bridge; that one is fixed, and
 the query is in the script.
 
-What remains of M11: the two divergences already known -- `comm`, and integer
-overflow -- keep their queries out of the script rather than being expressed
-in it, and the unsupported entries of the table have no test that they are
-refused.
+**Each divergence is now documented, not just recorded.**
+`spark-divergence.smli` asks the same question twice, once locally and once
+on the container, and keeps both answers: an int that does not fit (Morel
+wraps, Spark raises `Overflow`); a negative number written out (`~7782`
+against `-7782`); a substring that runs off the end (Morel raises
+`Subscript`, Spark clamps); and the president's commission (NONE here, zero
+there). The last of those is worth reading: in this path the *type* agrees,
+because a plan decodes its rows as the type the program was typed against, so
+`comm` is a `decimal option` on both sides and only the value differs. The
+fixture is what differs, and the question below is still the question.
+
+What the table calls unsupported is refused, naming the function as a program
+writes it -- "Spark cannot do Real.toString, which the table calls
+unsupported" -- and `spark-plan.smli` holds three of them, which needs no
+server.
+
+What remains of M11: nothing that can be done without deciding the `comm`
+question below.
 
 ## Phase 2 questions
 

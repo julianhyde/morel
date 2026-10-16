@@ -1,0 +1,102 @@
+(*
+ * Licensed to Julian Hyde under one or more contributor license
+ * agreements.  See the NOTICE file distributed with this work
+ * for additional information regarding copyright ownership.
+ * Julian Hyde licenses this file to you under the Apache
+ * License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License.  You may obtain a
+ * copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.  See the License for the specific
+ * language governing permissions and limitations under the
+ * License.
+ *
+ * Where Spark answers differently from local evaluation. The
+ * function table records each of these against the operator it
+ * belongs to, in the "divergence" column; this script is what makes
+ * the record true, by asking the same question twice -- once here and
+ * once on the container -- and keeping both answers.
+ *
+ * A query whose answers agree belongs in triple.smli, not here.
+ *)
+(*) requires: spark spark-prepare
+
+Sys.set ("printLength", 64);
+> val it = () : unit
+Sys.set ("output", "tabular");
+> val it = () : unit
+
+(* An int that does not fit. Morel wraps; Spark is in ANSI mode and raises,
+ * which reaches the program as Overflow. Recorded against "op +", "op -"
+ * and "op *". *)
+from e in scott.emps where e.deptno = 10 yield {n = e.empno * 1000000};
+> n
+> ----------
+> -807934592
+> -750934592
+> -655934592
+>
+> val it : {n:int} bag
+(spark.connection.remote (fn () =>
+  from e in scott.emps where e.deptno = 10 yield {n = e.empno * 1000000})) ();
+> uncaught exception Overflow [overflow]
+>   raised at: stdIn:1.1-2.75
+
+(* A negative number written out. Morel writes "~7782", Spark "-7782".
+ * Recorded against "Int.toString". *)
+from e in scott.emps where e.empno = 7782 yield {s = Int.toString (~e.empno)};
+> s
+> -----
+> ~7782
+>
+> val it : {s:string} bag
+(spark.connection.remote (fn () =>
+  from e in scott.emps where e.empno = 7782
+    yield {s = Int.toString (~e.empno)})) ();
+> s
+> -----
+> -7782
+>
+> val it : {s:string} bag
+
+(* A substring that runs off the end. Morel raises Subscript; Spark clamps.
+ * Recorded against "String.substring". *)
+from e in scott.emps where e.empno = 7782 yield {s = String.substring (e.ename, 2, 99)};
+> uncaught exception Subscript [subscript out of bounds]
+>   raised at: stdIn:1.54-1.87
+(spark.connection.remote (fn () =>
+  from e in scott.emps where e.empno = 7782
+    yield {s = String.substring (e.ename, 2, 99)})) ();
+> s
+> ---
+> ARK
+>
+> val it : {s:string} bag
+
+(* A commission that the data set has not got. Calcite's catalog knows the
+ * column is nullable, so Morel's "comm" is a decimal option and the
+ * president's is NONE; Spark's catalog keeps no NOT NULL for a table stored
+ * as files, so a column maps to the plain type and the container holds a
+ * zero rather than a null (spec.md section 1.2, decision B). This is the
+ * divergence that plan.md asks about, and it is a property of the data
+ * rather than of an operator. *)
+from e in scott.emps where e.empno = 7839 yield {e.ename, e.comm};
+> comm ename
+> ---- -----
+>      KING
+>
+> val it : {comm:decimal option, ename:string} bag
+(spark.connection.remote (fn () =>
+  from e in scott.emps where e.empno = 7839 yield {e.ename, e.comm})) ();
+> comm ename
+> ---- -----
+>    0 KING
+>
+> val it : {comm:decimal option, ename:string} bag
+
+(*) End spark-divergence.smli
