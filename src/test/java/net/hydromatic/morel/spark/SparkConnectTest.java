@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Runs only if system property {@code morel.spark} is set and environment
  * variable {@code SPARK_REMOTE} names the server, which must hold the seed
- * tables that {@code src/test/resources/spark/seed.py} creates. To run it:
+ * tables that {@code src/test/resources/spark/init.py} creates. To run it:
  *
  * <pre>{@code
  * export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)

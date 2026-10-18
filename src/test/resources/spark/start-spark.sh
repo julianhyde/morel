@@ -18,8 +18,8 @@
 # License.
 #
 # Starts a Spark Connect server in a Docker container, in ANSI mode
-# with the UTC time zone, seeds it with the tables that seed.py (in
-# this directory) creates, and prints its URI (for example
+# with the UTC time zone, holding the tables that init.py (in this
+# directory) creates, and prints its URI (for example
 # "sc://localhost:15002") on stdout once it accepts connections.
 # Everything else goes to stderr, so
 #
@@ -29,8 +29,9 @@
 #
 # Usage: start-spark.sh [OPTIONS]
 #
-#   --reuse         Use the container if it exists, starting it if it
-#                   is stopped (default).
+#   --reuse         Use the container if it exists and was created from
+#                   the current init.py, starting it if it is stopped;
+#                   otherwise create a fresh one (default).
 #   --new           Remove the container if it exists, and create a
 #                   fresh one.
 #   --stop          Stop and remove the container, and exit.
@@ -70,6 +71,21 @@ log() {
   echo "start-spark.sh: $*" >&2
 }
 
+dir=$(cd "$(dirname "$0")" && pwd)
+
+# Hash of the init script, which the container records when it is
+# created; "--reuse" recreates a container whose hash is not this one,
+# because such a container holds tables that init.py no longer creates.
+init_sha() {
+  shasum -a 256 "$dir/init.py" | cut -d' ' -f1
+}
+
+# The hash the container records, or empty if it has none.
+container_sha() {
+  docker inspect --format '{{index .Config.Labels "morel.init.sha"}}' \
+    "$name" 2>/dev/null || true
+}
+
 if ! docker info >/dev/null 2>&1; then
   log "the Docker daemon is not running"
   exit 1
@@ -99,6 +115,16 @@ case "$mode" in
     ;;
 esac
 
+# A container created from a different init.py holds different tables, so
+# reuse only one that was created from this init.py. Without this, editing
+# init.py and running this script again would look as though it had done
+# something, and the tables would be the old ones.
+if [ "$mode" = reuse ] && [ -n "$(state)" ] \
+    && [ "$(container_sha)" != "$(init_sha)" ]; then
+  log "removing container $name: it was created from a different init.py"
+  docker rm -f "$name" >/dev/null
+fi
+
 s=$(state)
 if [ "$s" = running ]; then
   log "container $name is already running"
@@ -107,20 +133,22 @@ elif [ -n "$s" ]; then
   docker start "$name" >/dev/null
 else
   log "creating container $name from $image on port $port"
-  # seed.py is the driver program; the Connect server runs inside it
-  # (spark.plugins), so clients see the tables it creates.
-  dir=$(cd "$(dirname "$0")" && pwd)
+  # init.py is the driver program; the Connect server runs inside it
+  # (spark.plugins), so clients see the tables it creates. The container
+  # carries the hash of the init.py it was created from, so that --reuse
+  # can tell whether it holds the tables this one would create.
   docker run -d --name "$name" -p "$port:15002" \
+    --label "morel.init.sha=$(init_sha)" \
     -v "$dir:/morel:ro" "$image" \
     /opt/spark/bin/spark-submit \
     --conf spark.plugins=org.apache.spark.sql.connect.SparkConnectPlugin \
     --conf spark.connect.grpc.binding.port=15002 \
     --conf spark.sql.ansi.enabled=true \
     --conf spark.sql.session.timeZone=UTC \
-    /morel/seed.py >/dev/null
+    /morel/init.py >/dev/null
 fi
 
-# Wait until the driver logs that the seed tables exist, which is
+# Wait until the driver logs that the tables exist, which is
 # after the server started listening. A restarted container appends to
 # its log, so count only lines since the last container start.
 started=$(docker inspect --format '{{.State.StartedAt}}' "$name")
@@ -129,7 +157,7 @@ ready() {
   # Not "grep -q": it would close the pipe early, and under pipefail
   # the pipeline would fail even when the line was found.
   [ "$(docker logs --since "$started" "$name" 2>&1 \
-      | grep -c "Morel seed tables created")" -gt 0 ]
+      | grep -c "Morel init tables created")" -gt 0 ]
 }
 until ready; do
   if [ "$(state)" != running ]; then

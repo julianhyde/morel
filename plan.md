@@ -137,7 +137,7 @@ plan by id and so can carry a correlated subquery (M1 query 5); against a 3.x
 server Morel would have to decorrelate first. Done:
 `src/test/resources/spark/start-spark.sh` creates the container (or reuses or
 restarts an existing one, or removes it with `--stop`) and prints the `sc://`
-URI once the server is ready. The container's driver program is `seed.py`,
+URI once the server is ready. The container's driver program is `init.py`,
 run by `spark-submit` with the Spark Connect plugin, so the server runs in
 the driver's context and clients see the tables it creates: a `scott`
 database holding the four tables of Morel's built-in `scott` data set with
