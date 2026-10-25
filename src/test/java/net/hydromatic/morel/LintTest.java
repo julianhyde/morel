@@ -420,6 +420,14 @@ public class LintTest {
               && f.lastJavadocEndLine == f.lastNonBlankLine) {
             f.message(line, "Dangling Javadoc comment");
           }
+          // A javadoc comment followed by the end of a block -- a class or
+          // a method -- documents nothing either; report it where it starts.
+          if (f.language == Language.JAVA
+              && line.matches("^ *}.*")
+              && f.lastJavadocEndLine > 0
+              && f.lastJavadocEndLine == f.lastNonBlankLine) {
+            f.message(line, f.javadocStartLine, "Orphaned Javadoc comment");
+          }
           f.lastNonBlankLine = line.fnr();
         });
 
@@ -1357,6 +1365,46 @@ public class LintTest {
             + "GuavaCharSource{memory}:40:"
             + "fully-qualified class name; use import\n";
     assertThat(programResult("Foo.java", code), is(expectedMessages));
+  }
+
+  /**
+   * Tests the rules that a Javadoc comment must document something: it must not
+   * be followed by another Javadoc comment (dangling), nor by the end of the
+   * class or method that contains it (orphaned).
+   */
+  @Test
+  void testDanglingAndOrphanedJavadoc() {
+    final String code =
+        "class MyClass {\n"
+            + "  /** Documents x. */\n"
+            + "  int x;\n"
+            + "\n"
+            + "  /** Dangling. */\n"
+            + "  /** Documents y. */\n"
+            + "  int y;\n"
+            + "\n"
+            + "  void foo() {\n"
+            + "    int z = 1;\n"
+            + "    /** Orphaned at the end of a method. */\n"
+            + "  }\n"
+            + "\n"
+            + "  /**\n"
+            + "   * Orphaned at the end of a class, with a blank line\n"
+            + "   * before the brace.\n"
+            + "   */\n"
+            + "\n"
+            + "}\n"
+            + "\n"
+            + "// End MyClass.java\n";
+    final String expectedMessages =
+        "["
+            + "GuavaCharSource{memory}:6:"
+            + "Dangling Javadoc comment\n"
+            + "GuavaCharSource{memory}:11:"
+            + "Orphaned Javadoc comment\n"
+            + "GuavaCharSource{memory}:14:"
+            + "Orphaned Javadoc comment\n";
+    assertThat(programResult("MyClass.java", code), is(expectedMessages));
   }
 
   @Test
