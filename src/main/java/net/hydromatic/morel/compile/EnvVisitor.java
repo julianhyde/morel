@@ -201,9 +201,9 @@ public abstract class EnvVisitor extends Visitor {
     join.left.accept(this);
     // The right input is evaluated once per left element, and may read it.
     final List<Binding> rightBindings = new ArrayList<>();
-    rightBindings.add(Binding.of(join.leftRow));
-    if (join.ordinal != null) {
-      rightBindings.add(Binding.of(join.ordinal));
+    rightBindings.add(Binding.of(join.leftId));
+    if (join.ordinalId != null) {
+      rightBindings.add(Binding.of(join.ordinalId));
     }
     join.right.accept(bind(rightBindings));
     join.condition.accept(bind(patternBindings(join)));
@@ -214,7 +214,7 @@ public abstract class EnvVisitor extends Visitor {
     group.input.accept(this);
     final EnvVisitor rowV = bind(patternBindings(group));
     group.keys.values().forEach(rowV::accept);
-    // The aggregate's argument reads the row; the aggregate function may name
+    // The aggregate's argument reads the id; the aggregate function may name
     // a key -- `fn list => List.size list + k` -- so bind the keys for it.
     final List<Binding> bindings = new ArrayList<>();
     group.keys.forEach(

@@ -873,7 +873,7 @@ public class Core {
         // A node's pattern: `$0`, `$1` or `$ordinal`. The writer decides
         // whether to print the name or, outside the node that binds it, a
         // generated one.
-        return w.rowRef((IdPat) idPat);
+        return w.idRef((IdPat) idPat);
       }
       return w.idQuoted(idPat.name, idPat.i);
     }
@@ -1798,9 +1798,9 @@ public class Core {
    * <p>A node carries no bindings. Its element type is derived from its inputs
    * and its expressions, and is exactly the type of the value that flows out of
    * it. A node binds patterns for its expressions, as {@code fn} and {@code
-   * case} do: the row, {@code $0} (and, in a {@link Join}, the right input's
-   * row {@code $1}), and optionally the row's ordinal, {@code $ordinal}. See
-   * {@link #patterns()}.
+   * case} do: the id by which it refers to the current element, {@code $0}
+   * (and, in a {@link Join}, the right input's id {@code $1}), and optionally
+   * the id of the element's ordinal, {@code $ordinal}. See {@link #patterns()}.
    */
   public abstract static class Rel extends Exp {
     Rel(Pos pos, Op op, Type type) {
@@ -1811,8 +1811,9 @@ public class Core {
     }
 
     /**
-     * Returns the patterns this node binds for its expressions: the row, and
-     * the ordinal if it has one. Empty for a node with no per-row expressions.
+     * Returns the patterns this node binds for its expressions: its id, and its
+     * ordinal id if it has one. Empty for a node with no per-element
+     * expressions.
      */
     public List<IdPat> patterns() {
       return ImmutableList.of();
@@ -1883,38 +1884,40 @@ public class Core {
 
   /**
    * A one-input node whose expressions run once per element of its input, and
-   * that binds patterns for them: the row, and optionally its ordinal.
+   * that binds patterns for them: {@link #id}, the id by which the node refers
+   * to the current element, and optionally {@link #ordinalId}, the id by which
+   * it refers to the element's ordinal.
    */
   public abstract static class RowRel extends SingleRel {
-    public final IdPat row;
-    public final @Nullable IdPat ordinal;
+    public final IdPat id;
+    public final @Nullable IdPat ordinalId;
 
     RowRel(
         Pos pos,
         Op op,
         Type type,
-        IdPat row,
-        @Nullable IdPat ordinal,
+        IdPat id,
+        @Nullable IdPat ordinalId,
         Exp input) {
       super(pos, op, type, input);
-      this.row = requireNonNull(row, "row");
-      this.ordinal = ordinal;
+      this.id = requireNonNull(id, "id");
+      this.ordinalId = ordinalId;
       checkArgument(
-          row.type.equals(input.type.elementType()),
-          "row %s must have the element type %s",
-          row,
+          id.type.equals(input.type.elementType()),
+          "id %s must have the element type %s",
+          id,
           input.type.elementType());
       checkArgument(
-          ordinal == null || ordinal.type == PrimitiveType.INT,
-          "ordinal %s must be int",
-          ordinal);
+          ordinalId == null || ordinalId.type == PrimitiveType.INT,
+          "ordinalId %s must be int",
+          ordinalId);
     }
 
     @Override
     public List<IdPat> patterns() {
-      return ordinal == null
-          ? ImmutableList.of(row)
-          : ImmutableList.of(row, ordinal);
+      return ordinalId == null
+          ? ImmutableList.of(id)
+          : ImmutableList.of(id, ordinalId);
     }
   }
 
@@ -1926,8 +1929,12 @@ public class Core {
     public final Exp condition;
 
     Filter(
-        Pos pos, IdPat row, @Nullable IdPat ordinal, Exp input, Exp condition) {
-      super(pos, Op.FILTER, input.type, row, ordinal, input);
+        Pos pos,
+        IdPat id,
+        @Nullable IdPat ordinalId,
+        Exp input,
+        Exp condition) {
+      super(pos, Op.FILTER, input.type, id, ordinalId, input);
       this.condition = requireNonNull(condition, "condition");
     }
 
@@ -1949,7 +1956,7 @@ public class Core {
     public Filter copy(Exp input, Exp condition) {
       return input == this.input && condition == this.condition
           ? this
-          : core.filter(pos, row, ordinal, input, condition);
+          : core.filter(pos, id, ordinalId, input, condition);
     }
   }
 
@@ -1960,11 +1967,11 @@ public class Core {
     Project(
         Pos pos,
         Type type,
-        IdPat row,
-        @Nullable IdPat ordinal,
+        IdPat id,
+        @Nullable IdPat ordinalId,
         Exp input,
         Exp exp) {
-      super(pos, Op.PROJECT, type, row, ordinal, input);
+      super(pos, Op.PROJECT, type, id, ordinalId, input);
       this.exp = requireNonNull(exp, "exp");
     }
 
@@ -1986,7 +1993,7 @@ public class Core {
     public Project copy(TypeSystem typeSystem, Exp input, Exp exp) {
       return input == this.input && exp == this.exp
           ? this
-          : core.project(pos, typeSystem, row, ordinal, input, exp);
+          : core.project(pos, typeSystem, id, ordinalId, input, exp);
     }
   }
 
@@ -1998,21 +2005,22 @@ public class Core {
     public final JoinType joinType;
 
     /**
-     * Pattern that names the left input's element, {@code $0}. It is in scope
-     * in the condition and in {@link #right}: the right input is evaluated once
-     * per left element, and a right input that reads it makes the join
-     * <em>dependent</em>. Dependence is a free occurrence, not a mode, and
-     * decorrelation is rewriting the right input until it no longer reads it.
+     * The id by which the join refers to the current element of its left input,
+     * {@code $0}. It is in scope in the condition and in {@link #right}: the
+     * right input is evaluated once per left element, and a right input that
+     * reads it makes the join <em>dependent</em>. Dependence is a free
+     * occurrence, not a mode, and decorrelation is rewriting the right input
+     * until it no longer reads it.
      */
-    public final IdPat leftRow;
+    public final IdPat leftId;
 
     /**
-     * Pattern that names the right input's element, {@code $1}, in scope in the
-     * condition only.
+     * The id by which the join refers to the current element of its right
+     * input, {@code $1}, in scope in the condition only.
      */
-    public final IdPat rightRow;
+    public final IdPat rightId;
 
-    public final @Nullable IdPat ordinal;
+    public final @Nullable IdPat ordinalId;
     public final Exp left;
     public final Exp right;
     public final Exp condition;
@@ -2021,49 +2029,49 @@ public class Core {
         Pos pos,
         Type type,
         JoinType joinType,
-        IdPat leftRow,
-        IdPat rightRow,
-        @Nullable IdPat ordinal,
+        IdPat leftId,
+        IdPat rightId,
+        @Nullable IdPat ordinalId,
         Exp left,
         Exp right,
         Exp condition) {
       super(pos, Op.JOIN, type);
       this.joinType = requireNonNull(joinType, "joinType");
-      this.leftRow = requireNonNull(leftRow, "leftRow");
-      this.rightRow = requireNonNull(rightRow, "rightRow");
-      this.ordinal = ordinal;
+      this.leftId = requireNonNull(leftId, "leftId");
+      this.rightId = requireNonNull(rightId, "rightId");
+      this.ordinalId = ordinalId;
       this.left = requireNonNull(left, "left");
       this.right = requireNonNull(right, "right");
       this.condition = requireNonNull(condition, "condition");
       checkArgument(
-          leftRow.type.equals(left.type.elementType()),
-          "left row %s must have the element type %s",
-          leftRow,
+          leftId.type.equals(left.type.elementType()),
+          "left id %s must have the element type %s",
+          leftId,
           left.type.elementType());
       checkArgument(
-          rightRow.type.equals(right.type.elementType()),
-          "right row %s must have the element type %s",
-          rightRow,
+          rightId.type.equals(right.type.elementType()),
+          "right id %s must have the element type %s",
+          rightId,
           right.type.elementType());
       checkArgument(
-          ordinal == null || ordinal.type == PrimitiveType.INT,
-          "ordinal %s must be int",
-          ordinal);
+          ordinalId == null || ordinalId.type == PrimitiveType.INT,
+          "ordinalId %s must be int",
+          ordinalId);
     }
 
     @Override
     public List<IdPat> patterns() {
-      return ordinal == null
-          ? ImmutableList.of(leftRow, rightRow)
-          : ImmutableList.of(leftRow, rightRow, ordinal);
+      return ordinalId == null
+          ? ImmutableList.of(leftId, rightId)
+          : ImmutableList.of(leftId, rightId, ordinalId);
     }
 
     /**
-     * Returns whether the right input reads the left row, which makes this a
+     * Returns whether the right input reads the left id, which makes this a
      * dependent join.
      */
     public boolean isDependent() {
-      return mentions(right, leftRow);
+      return mentions(right, leftId);
     }
 
     @Override
@@ -2079,7 +2087,7 @@ public class Core {
       if (isDependent()) {
         // Raw, because the name is renumbered already, and the writer
         // renumbers what it is asked to append.
-        w.append(" [").appendRaw(w.generatedName(leftRow)).append("]");
+        w.append(" [").appendRaw(w.generatedName(leftId)).append("]");
       }
       if (!condition.isBoolLiteral(true)) {
         w.arg(condition);
@@ -2111,9 +2119,9 @@ public class Core {
               pos,
               typeSystem,
               joinType,
-              leftRow,
-              rightRow,
-              ordinal,
+              leftId,
+              rightId,
+              ordinalId,
               left,
               right,
               condition);
@@ -2134,12 +2142,12 @@ public class Core {
     Group(
         Pos pos,
         Type type,
-        IdPat row,
-        @Nullable IdPat ordinal,
+        IdPat id,
+        @Nullable IdPat ordinalId,
         Exp input,
         ImmutableSortedMap<String, Exp> keys,
         ImmutableSortedMap<String, Aggregate> aggregates) {
-      super(pos, Op.GROUP, type, row, ordinal, input);
+      super(pos, Op.GROUP, type, id, ordinalId, input);
       this.keys = requireNonNull(keys, "keys");
       this.aggregates = requireNonNull(aggregates, "aggregates");
     }
@@ -2171,7 +2179,7 @@ public class Core {
               && keys.equals(this.keys)
               && aggregates.equals(this.aggregates)
           ? this
-          : core.group(pos, typeSystem, row, ordinal, input, keys, aggregates);
+          : core.group(pos, typeSystem, id, ordinalId, input, keys, aggregates);
     }
   }
 
@@ -2185,11 +2193,11 @@ public class Core {
     Sort(
         Pos pos,
         Type type,
-        IdPat row,
-        @Nullable IdPat ordinal,
+        IdPat id,
+        @Nullable IdPat ordinalId,
         Exp input,
         Exp exp) {
-      super(pos, Op.SORT, type, row, ordinal, input);
+      super(pos, Op.SORT, type, id, ordinalId, input);
       this.exp = requireNonNull(exp, "exp");
     }
 
@@ -2211,7 +2219,7 @@ public class Core {
     public Sort copy(TypeSystem typeSystem, Exp input, Exp exp) {
       return input == this.input && exp == this.exp
           ? this
-          : core.sort(pos, typeSystem, row, ordinal, input, exp);
+          : core.sort(pos, typeSystem, id, ordinalId, input, exp);
     }
   }
 

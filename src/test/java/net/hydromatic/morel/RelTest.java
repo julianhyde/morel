@@ -76,13 +76,13 @@ public class RelTest {
       return core.literal(intType, i);
     }
 
-    /** Mints the row pattern, {@code $0}, for a node over an input. */
-    Core.IdPat row(Core.Exp input) {
+    /** Mints the id, {@code $0}, for a node over an input. */
+    Core.IdPat elementPat(Core.Exp input) {
       return core.idPat(input.type.elementType(), "$0", nextOrdinal++);
     }
 
-    /** Mints the right row pattern, {@code $1}, for a join over an input. */
-    Core.IdPat rightRow(Core.Exp input) {
+    /** Mints the right id, {@code $1}, for a join over an input. */
+    Core.IdPat rightElementPat(Core.Exp input) {
       return core.idPat(input.type.elementType(), "$1", nextOrdinal++);
     }
 
@@ -91,42 +91,41 @@ public class RelTest {
       return core.idPat(intType, "$ordinal", nextOrdinal++);
     }
 
-    /** Builds a filter whose condition is given the row. */
+    /** Builds a filter whose condition is given the id. */
     Core.Filter filter(Core.Exp input, Function<Core.Id, Core.Exp> condition) {
-      final Core.IdPat row = row(input);
-      return core.filter(row, null, input, condition.apply(core.id(row)));
+      final Core.IdPat id = elementPat(input);
+      return core.filter(id, null, input, condition.apply(core.id(id)));
     }
 
-    /** Builds a projection whose expression is given the row. */
+    /** Builds a projection whose expression is given the id. */
     Core.Project project(Core.Exp input, Function<Core.Id, Core.Exp> exp) {
-      final Core.IdPat row = row(input);
-      return core.project(
-          typeSystem, row, null, input, exp.apply(core.id(row)));
+      final Core.IdPat id = elementPat(input);
+      return core.project(typeSystem, id, null, input, exp.apply(core.id(id)));
     }
 
-    /** Builds a sort whose key is given the row. */
+    /** Builds a sort whose key is given the id. */
     Core.Sort sort(Core.Exp input, Function<Core.Id, Core.Exp> exp) {
-      final Core.IdPat row = row(input);
-      return core.sort(typeSystem, row, null, input, exp.apply(core.id(row)));
+      final Core.IdPat id = elementPat(input);
+      return core.sort(typeSystem, id, null, input, exp.apply(core.id(id)));
     }
 
-    /** Builds a join whose condition is given the left and right rows. */
+    /** Builds a join whose condition is given the left and right ids. */
     Core.Join join(
         JoinType joinType,
         Core.Exp left,
         Core.Exp right,
         BiFunction<Core.Id, Core.Id, Core.Exp> condition) {
-      final Core.IdPat leftRow = row(left);
-      final Core.IdPat rightRow = rightRow(right);
+      final Core.IdPat leftId = elementPat(left);
+      final Core.IdPat rightId = rightElementPat(right);
       return core.join(
           typeSystem,
           joinType,
-          leftRow,
-          rightRow,
+          leftId,
+          rightId,
           null,
           left,
           right,
-          condition.apply(core.id(leftRow), core.id(rightRow)));
+          condition.apply(core.id(leftId), core.id(rightId)));
     }
 
     /**
@@ -249,24 +248,24 @@ public class RelTest {
   }
 
   /**
-   * Tests a dependent join: its right input reads its left row, which the
+   * Tests a dependent join: its right input reads its left id, which the
    * printer names and shows as the join's argument; its element is its inputs'
    * components; and it is ordered only if both inputs are.
    */
   @Test
   void testDependentJoin() {
     final Fixture f = new Fixture();
-    final Core.IdPat leftRow = f.row(f.list12);
+    final Core.IdPat leftId = f.elementPat(f.list12);
 
-    // The right input mentions the left row, so the join is dependent.
+    // The right input mentions the left id, so the join is dependent.
     final Core.Exp right =
-        core.list(f.typeSystem, core.id(leftRow), f.intLiteral(4));
+        core.list(f.typeSystem, core.id(leftId), f.intLiteral(4));
     final Core.Join join =
         core.join(
             f.typeSystem,
             JoinType.INNER,
-            leftRow,
-            f.rightRow(right),
+            leftId,
+            f.rightElementPat(right),
             null,
             f.list12,
             right,
@@ -285,13 +284,13 @@ public class RelTest {
 
     // A bag on either side makes the output a bag, as a dependent scan over a
     // bag does today.
-    final Core.IdPat leftRow2 = f.row(f.list12);
+    final Core.IdPat leftId2 = f.elementPat(f.list12);
     final Core.Join join2 =
         core.join(
             f.typeSystem,
             JoinType.INNER,
-            leftRow2,
-            f.rightRow(f.bag56),
+            leftId2,
+            f.rightElementPat(f.bag56),
             null,
             f.list12,
             f.bag56,
@@ -314,14 +313,14 @@ public class RelTest {
   void testGroup() {
     final Fixture f = new Fixture();
 
-    final Core.IdPat row1 = f.row(f.list12);
+    final Core.IdPat id1 = f.elementPat(f.list12);
     final Core.Rel group1 =
         core.group(
             f.typeSystem,
-            row1,
+            id1,
             null,
             f.list12,
-            ImmutableSortedMap.of("j", (Core.Exp) core.id(row1)),
+            ImmutableSortedMap.of("j", (Core.Exp) core.id(id1)),
             ImmutableSortedMap.of());
     // A record, though there is only one key: collapsing it would make the
     // element's shape depend on how many labels there are.
@@ -332,16 +331,16 @@ public class RelTest {
             "group [j = $0]\n" //
                 + "  [1, 2]\n"));
 
-    final Core.IdPat row2 = f.row(f.list12);
+    final Core.IdPat id2 = f.elementPat(f.list12);
     final Core.Rel group2 =
         core.group(
             f.typeSystem,
-            row2,
+            id2,
             null,
             f.list12,
             ImmutableSortedMap.<String, Core.Exp>orderedBy(RecordType.ORDERING)
-                .put("i", core.id(row2))
-                .put("j", core.id(row2))
+                .put("i", core.id(id2))
+                .put("j", core.id(id2))
                 .build(),
             ImmutableSortedMap.of());
     assertThat(group2.type.moniker(), is("{i:int, j:int} list"));
@@ -391,11 +390,11 @@ public class RelTest {
   @Test
   void testOrdinal() {
     final Fixture f = new Fixture();
-    final Core.IdPat row = f.row(f.list12);
+    final Core.IdPat id = f.elementPat(f.list12);
     final Core.IdPat ordinal = f.ordinal();
     final Core.Rel filter =
         core.filter(
-            row,
+            id,
             ordinal,
             f.list12,
             f.greaterThan(core.id(ordinal), f.intLiteral(0)));
@@ -406,11 +405,11 @@ public class RelTest {
                 + "  [1, 2]\n"));
     assertThat(f.violations(filter), empty());
 
-    final Core.IdPat row2 = f.row(f.bag56);
+    final Core.IdPat id2 = f.elementPat(f.bag56);
     final Core.IdPat ordinal2 = f.ordinal();
     final Core.Rel overBag =
         core.filter(
-            row2,
+            id2,
             ordinal2,
             f.bag56,
             f.greaterThan(core.id(ordinal2), f.intLiteral(0)));
@@ -444,9 +443,9 @@ public class RelTest {
             (l, r) -> core.equal(f.typeSystem, l, r));
     assertThat(f.violations(join), empty());
 
-    // A filter binds one row; a reference to another node's pattern is an
+    // A filter binds one id; a reference to another node's pattern is an
     // unbound name.
-    final Core.IdPat stray = f.rightRow(f.list34);
+    final Core.IdPat stray = f.rightElementPat(f.list34);
     final Core.Rel badFilter =
         f.filter(f.list12, r -> core.equal(f.typeSystem, r, core.id(stray)));
     assertThat(
@@ -455,81 +454,81 @@ public class RelTest {
 
     // 'skip' and 'take' counts are evaluated before the first element exists,
     // and the nodes bind nothing.
-    final Core.IdPat row = f.row(f.list12);
+    final Core.IdPat id = f.elementPat(f.list12);
     assertThat(
-        f.violations(core.take(f.list12, core.id(row))),
+        f.violations(core.take(f.list12, core.id(id))),
         is(Arrays.asList("take count cannot reference $0")));
     assertThat(
-        f.violations(core.skip(f.list12, core.id(row))),
+        f.violations(core.skip(f.list12, core.id(id))),
         is(Arrays.asList("skip count cannot reference $0")));
 
-    // A leaf cannot see the row of the node above it.
-    final Core.IdPat row2 = f.row(f.list12);
+    // A leaf cannot see the id of the node above it.
+    final Core.IdPat id2 = f.elementPat(f.list12);
     final Core.Rel badLeaf =
         core.filter(
-            row2,
+            id2,
             null,
-            core.list(f.typeSystem, core.id(row2)),
-            f.greaterThan(core.id(row2), f.intLiteral(1)));
+            core.list(f.typeSystem, core.id(id2)),
+            f.greaterThan(core.id(id2), f.intLiteral(1)));
     assertThat(
         f.violations(badLeaf), is(Arrays.asList("leaf cannot reference $0")));
 
-    // A nested node binds a row of its own.
+    // A nested node binds an id of its own.
     final Core.Rel nested =
         f.filter(
             f.filter(f.list12, r -> f.greaterThan(r, f.intLiteral(1))),
             r -> f.greaterThan(r, f.intLiteral(0)));
     assertThat(f.violations(nested), empty());
 
-    // A dependent join's right input binds its own row, and may read the
-    // join's left row.
-    final Core.IdPat leftRow = f.row(f.list12);
+    // A dependent join's right input binds its own id, and may read the
+    // join's left id.
+    final Core.IdPat leftId = f.elementPat(f.list12);
     final Core.Exp right =
         f.project(
-            core.list(f.typeSystem, core.id(leftRow)),
-            r -> f.record(core.id(leftRow), r));
+            core.list(f.typeSystem, core.id(leftId)),
+            r -> f.record(core.id(leftId), r));
     final Core.Rel dependent =
         core.join(
             f.typeSystem,
             JoinType.INNER,
-            leftRow,
-            f.rightRow(right),
+            leftId,
+            f.rightElementPat(right),
             null,
             f.list12,
             right,
             core.boolLiteral(true));
     assertThat(f.violations(dependent), empty());
 
-    // The right row is in scope in the condition only; the right input
+    // The right id is in scope in the condition only; the right input
     // cannot read it.
-    final Core.IdPat leftRow2 = f.row(f.list12);
-    final Core.IdPat rightRow2 = f.rightRow(f.list34);
+    final Core.IdPat leftId2 = f.elementPat(f.list12);
+    final Core.IdPat rightId2 = f.rightElementPat(f.list34);
     final Core.Rel badRight =
         core.join(
             f.typeSystem,
             JoinType.INNER,
-            leftRow2,
-            rightRow2,
+            leftId2,
+            rightId2,
             null,
             f.list12,
-            core.list(f.typeSystem, core.id(rightRow2)),
+            core.list(f.typeSystem, core.id(rightId2)),
             core.boolLiteral(true));
     assertThat(
         f.violations(badRight), is(Arrays.asList("leaf cannot reference $1")));
   }
 
   /**
-   * Tests that a node's row is a variable bound by the node, so that a pass
-   * that reasons about variables treats it as it treats a {@code fn}'s
-   * parameter: two nodes' rows are two variables, neither is free, and a name
-   * the query wrote still is.
+   * Tests that a node's id is a variable bound by the node, so that a pass that
+   * reasons about variables treats it as it treats a {@code fn}'s parameter:
+   * two nodes' ids are two variables, neither is free, and a name the query
+   * wrote still is.
    */
   @Test
   void testRowIsBound() {
     final Fixture f = new Fixture();
 
     // filter [#1 $0 = 1] over project [{...}] over a leaf: two nodes, each
-    // reading its own row, and the two rows are of different types.
+    // reading its own id, and the two ids are of different types.
     final Core.Project project = f.project(f.list12, r -> f.record(r, r));
     final Core.Filter filter =
         f.filter(
@@ -539,7 +538,7 @@ public class RelTest {
                     f.typeSystem,
                     core.field(f.typeSystem, r, 0),
                     f.intLiteral(1)));
-    assertThat(filter.row, not(is(project.row)));
+    assertThat(filter.id, not(is(project.id)));
     assertThat(filter.freePats(f.typeSystem), empty());
     assertThat(ids(filter), is(ImmutableList.of("$0", "$0", "$0")));
 
@@ -552,19 +551,19 @@ public class RelTest {
   }
 
   /**
-   * A tree nested in a node's expression may read the node's row; on its own it
+   * A tree nested in a node's expression may read the node's id; on its own it
    * may not, unless the node's patterns are given as the outer scope. A name
    * the expression binds itself is its own to read, whatever it is called.
    */
   @Test
   void testValidatorScope() {
     final Fixture f = new Fixture();
-    final Core.IdPat outerRow = f.row(f.list12);
+    final Core.IdPat outerId = f.elementPat(f.list12);
     final Core.Rel nested =
-        f.filter(f.list34, r -> core.equal(f.typeSystem, r, core.id(outerRow)));
+        f.filter(f.list34, r -> core.equal(f.typeSystem, r, core.id(outerId)));
     final Core.Rel outer =
         core.filter(
-            outerRow,
+            outerId,
             null,
             f.list12,
             core.nonEmpty(f.typeSystem, Pos.ZERO, nested));
@@ -573,7 +572,7 @@ public class RelTest {
         f.violations(nested),
         is(Arrays.asList("filter condition cannot reference $0")));
     assertThat(
-        RelValidator.violations(f.typeSystem, nested, outerRow::equals),
+        RelValidator.violations(f.typeSystem, nested, outerId::equals),
         empty());
 
     // The resolver names a composed aggregate's parameter '$col'.

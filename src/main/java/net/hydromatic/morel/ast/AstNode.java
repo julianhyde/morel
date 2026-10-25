@@ -361,9 +361,9 @@ public abstract class AstNode {
     }
 
     @Override
-    public AstWriter rowRef(Core.IdPat pat) {
+    public AstWriter idRef(Core.IdPat pat) {
       // Inside the node that binds it, a pattern prints as its own name. Read
-      // from outside -- a join's left row from its right input, a row from a
+      // from outside -- a join's left id from its right input, an id from a
       // tree nested in an expression -- it prints under a generated name, the
       // same one the node prints as its argument.
       if (!nodes.isEmpty() && nodes.peek().patterns().contains(pat)) {

@@ -178,7 +178,7 @@ public class RelBuilderTest {
     b.push("i", f.list12).push("j", f.list12).pair();
     nameExps.add("i", b.name(0, "i"));
     nameExps.add("j", b.name(1, "j"));
-    // Before the join, each name reads its own input's row.
+    // Before the join, each name reads its own input's id.
     assertThat(nameExps, hasToString("[<i, $0>, <j, $1>]"));
     final Core.Exp rel = b.join(JoinType.INNER, core.boolLiteral(true)).build();
     assertThat(
@@ -190,18 +190,18 @@ public class RelBuilderTest {
   }
 
   /**
-   * Tests a dependent join: the right input reads the left row, which the
+   * Tests a dependent join: the right input reads the left id, which the
    * printer names, because the right input is a tree of its own whose {@code
-   * $0} is its own row.
+   * $0} is its own id.
    */
   @Test
   void testDependentJoin() {
     final Fixture f = new Fixture();
     final RelBuilder b = f.builder();
     b.push("e", f.emps);
-    final Core.IdPat leftRow = b.binder();
-    // The right input reads the left element through the left row.
-    b.push(core.list(f.typeSystem, b.field(core.id(leftRow), "deptno")));
+    final Core.IdPat leftId = b.binder();
+    // The right input reads the left element through the left id.
+    b.push(core.list(f.typeSystem, b.field(core.id(leftId), "deptno")));
     b.pair();
     final Core.Exp rel = b.join(JoinType.INNER, core.boolLiteral(true)).build();
     assertThat(((Core.Join) rel).isDependent(), is(true));
@@ -214,7 +214,7 @@ public class RelBuilderTest {
   }
 
   /**
-   * Tests that a join whose right input does not read the left row is
+   * Tests that a join whose right input does not read the left id is
    * independent, and prints without an argument for it, whatever the caller
    * asked the builder for.
    */
@@ -238,7 +238,7 @@ public class RelBuilderTest {
   private static Core.Exp offeredBinder(Fixture f, Simplification... simps) {
     final RelBuilder b = f.builder(simps);
     b.push("i", f.list12);
-    // The left row is offered, and the right input reads nothing of it.
+    // The left id is offered, and the right input reads nothing of it.
     final Core.IdPat unused = b.binder();
     assertThat(unused, notNullValue());
     b.push(f.list12).pair();
@@ -250,7 +250,7 @@ public class RelBuilderTest {
   }
 
   /**
-   * Tests that the left row may be read from the condition, where it is {@code
+   * Tests that the left id may be read from the condition, where it is {@code
    * $0}, as well as from the right input.
    */
   @Test
@@ -258,15 +258,15 @@ public class RelBuilderTest {
     final Fixture f = new Fixture();
     final RelBuilder b = f.builder();
     b.push("e", f.emps);
-    final Core.IdPat leftRow = b.binder();
-    b.push(core.list(f.typeSystem, b.field(core.id(leftRow), "deptno")));
+    final Core.IdPat leftId = b.binder();
+    b.push(core.list(f.typeSystem, b.field(core.id(leftId), "deptno")));
     b.pair();
     final Core.Exp rel =
         b.join(
                 JoinType.INNER,
                 core.equal(
                     f.typeSystem,
-                    core.field(f.typeSystem, core.id(leftRow), 0),
+                    core.field(f.typeSystem, core.id(leftId), 0),
                     f.intLiteral(10)))
             .build();
     assertThat(

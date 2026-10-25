@@ -134,22 +134,22 @@ public class RelBuilder {
     } else if (exp instanceof Core.Join) {
       final Core.Join join = (Core.Join) exp;
       rebuild(join.left);
-      // The right input may read the left row; it reads the new one.
-      final Core.IdPat leftRow = frame(0).row;
+      // The right input may read the left id; it reads the new one.
+      final Core.IdPat leftId = frame(0).id;
       rebuild(
           core.substitute(
-              typeSystem, join.right, join.leftRow, core.id(leftRow)));
+              typeSystem, join.right, join.leftId, core.id(leftId)));
       pair();
-      final Core.IdPat rightRow = rightRow(frame(1));
+      final Core.IdPat rightId = rightId(frame(1));
       Core.Exp condition =
           core.substitute(
-              typeSystem, join.condition, join.leftRow, core.id(leftRow));
+              typeSystem, join.condition, join.leftId, core.id(leftId));
       condition =
           core.substitute(
-              typeSystem, condition, join.rightRow, core.id(rightRow));
-      if (join.ordinal != null) {
+              typeSystem, condition, join.rightId, core.id(rightId));
+      if (join.ordinalId != null) {
         condition =
-            core.substitute(typeSystem, condition, join.ordinal, ordinal());
+            core.substitute(typeSystem, condition, join.ordinalId, ordinal());
       }
       join(join.joinType, condition);
     } else if (exp instanceof Core.Group) {
@@ -209,10 +209,9 @@ public class RelBuilder {
    */
   private Core.Exp repattern(Core.RowRel rel, Core.Exp exp) {
     final Frame frame = frame(0);
-    Core.Exp exp2 =
-        core.substitute(typeSystem, exp, rel.row, core.id(frame.row));
-    if (rel.ordinal != null) {
-      exp2 = core.substitute(typeSystem, exp2, rel.ordinal, ordinal());
+    Core.Exp exp2 = core.substitute(typeSystem, exp, rel.id, core.id(frame.id));
+    if (rel.ordinalId != null) {
+      exp2 = core.substitute(typeSystem, exp2, rel.ordinalId, ordinal());
     }
     return exp2;
   }
@@ -235,8 +234,8 @@ public class RelBuilder {
 
   /** Pushes a relational expression, whose element has no name of its own. */
   public RelBuilder push(Core.Exp rel) {
-    final Core.IdPat row = rowPat(rel);
-    stack.push(new Frame(rel, row, elementNames(rel, row, ImmutableMap.of())));
+    final Core.IdPat id = elementPat(rel);
+    stack.push(new Frame(rel, id, elementNames(rel, id, ImmutableMap.of())));
     return this;
   }
 
@@ -245,12 +244,12 @@ public class RelBuilder {
    * emps} names the element {@code e}.
    */
   public RelBuilder push(String name, Core.Exp rel) {
-    final Core.IdPat row = rowPat(rel);
+    final Core.IdPat id = elementPat(rel);
     stack.push(
         new Frame(
             rel,
-            row,
-            elementNames(rel, row, ImmutableMap.of(name, core.id(row)))));
+            id,
+            elementNames(rel, id, ImmutableMap.of(name, core.id(id)))));
     return this;
   }
 
@@ -267,8 +266,8 @@ public class RelBuilder {
    */
   public RelBuilder push(Core.Pat pat, Core.Exp rel) {
     final Map<String, Core.Exp> names = new LinkedHashMap<>();
-    final Core.IdPat row = rowPat(rel);
-    final Core.Exp element = core.id(row);
+    final Core.IdPat id = elementPat(rel);
+    final Core.Exp element = core.id(id);
     if (!destructure(pat, element, names)) {
       throw new IllegalArgumentException(
           "pattern cannot be destructured, because it can fail to match: "
@@ -278,19 +277,19 @@ public class RelBuilder {
     // halves are separate nodes: the filter here, the binding in the names.
     final Core.@Nullable Exp test = test(typeSystem, pat, element);
     if (test == null) {
-      stack.push(new Frame(rel, row, elementNames(rel, row, names)));
+      stack.push(new Frame(rel, id, elementNames(rel, id, names)));
       return this;
     }
-    final Core.Exp rel2 = core.filter(pos, row, null, rel, test);
-    // The filter binds the row the names were written over; the node above
-    // the filter binds a row of its own, so the names move onto it.
-    final Core.IdPat row2 = rowPat(rel2);
+    final Core.Exp rel2 = core.filter(pos, id, null, rel, test);
+    // The filter binds the id the names were written over; the node above
+    // the filter binds an id of its own, so the names move onto it.
+    final Core.IdPat id2 = elementPat(rel2);
     final Map<String, Core.Exp> names2 = new LinkedHashMap<>();
     names.forEach(
         (name, exp) ->
             names2.put(
-                name, core.substitute(typeSystem, exp, row, core.id(row2))));
-    stack.push(new Frame(rel2, row2, elementNames(rel2, row2, names2)));
+                name, core.substitute(typeSystem, exp, id, core.id(id2))));
+    stack.push(new Frame(rel2, id2, elementNames(rel2, id2, names2)));
     return this;
   }
 
@@ -626,7 +625,7 @@ public class RelBuilder {
   /** Returns a reference to the element of the {@code i}th input. */
   public Core.Exp input(int i) {
     final Frame frame = frame(i);
-    return core.id(i == 0 ? frame.row : rightRow(frame));
+    return core.id(i == 0 ? frame.id : rightId(frame));
   }
 
   /**
@@ -635,10 +634,10 @@ public class RelBuilder {
    */
   public Core.Exp ordinal() {
     final Frame frame = frame(0);
-    if (frame.ordinal == null) {
-      frame.ordinal = core.ordinalPat(typeSystem.nameGenerator::inc);
+    if (frame.ordinalId == null) {
+      frame.ordinalId = core.ordinalPat(typeSystem.nameGenerator::inc);
     }
-    return core.id(frame.ordinal);
+    return core.id(frame.ordinalId);
   }
 
   /** Returns a field of an expression, by name. */
@@ -660,18 +659,17 @@ public class RelBuilder {
       return exp;
     }
     final Frame frame = frame(i);
-    return core.substitute(
-        typeSystem, exp, frame.row, core.id(rightRow(frame)));
+    return core.substitute(typeSystem, exp, frame.id, core.id(rightId(frame)));
   }
 
   /** Returns the pattern that names a frame's element as a right input. */
-  private Core.IdPat rightRow(Frame frame) {
-    if (frame.rightRow == null) {
-      frame.rightRow =
-          core.rightRowPat(
+  private Core.IdPat rightId(Frame frame) {
+    if (frame.rightId == null) {
+      frame.rightId =
+          core.rightElementPat(
               frame.rel.type.elementType(), typeSystem.nameGenerator::inc);
     }
-    return frame.rightRow;
+    return frame.rightId;
   }
 
   /**
@@ -681,10 +679,10 @@ public class RelBuilder {
    */
   private static Core.@Nullable IdPat ordinalIfRead(
       Frame frame, Core.Exp... exps) {
-    if (frame.ordinal != null) {
+    if (frame.ordinalId != null) {
       for (Core.Exp exp : exps) {
-        if (Core.mentions(exp, frame.ordinal)) {
-          return frame.ordinal;
+        if (Core.mentions(exp, frame.ordinalId)) {
+          return frame.ordinalId;
         }
       }
     }
@@ -692,23 +690,23 @@ public class RelBuilder {
   }
 
   /** Mints the pattern that names an expression's element. */
-  private Core.IdPat rowPat(Core.Exp rel) {
-    return core.rowPat(rel.type.elementType(), typeSystem.nameGenerator::inc);
+  private Core.IdPat elementPat(Core.Exp rel) {
+    return core.elementPat(
+        rel.type.elementType(), typeSystem.nameGenerator::inc);
   }
 
   /**
    * Returns the frame for a node built on another frame whose element is the
-   * same, so that it offers the same names, over a row of its own.
+   * same, so that it offers the same names, over an id of its own.
    */
   private Frame above(Frame frame, Core.Exp rel) {
-    final Core.IdPat row = rowPat(rel);
+    final Core.IdPat id = elementPat(rel);
     final ImmutableMap.Builder<String, Core.Exp> b = ImmutableMap.builder();
     frame.names.forEach(
         (name, exp) ->
             b.put(
-                name,
-                core.substitute(typeSystem, exp, frame.row, core.id(row))));
-    return new Frame(rel, row, b.build());
+                name, core.substitute(typeSystem, exp, frame.id, core.id(id))));
+    return new Frame(rel, id, b.build());
   }
 
   /**
@@ -716,13 +714,13 @@ public class RelBuilder {
    * record, plus any the caller supplied for the element itself.
    */
   private ImmutableMap<String, Core.Exp> elementNames(
-      Core.Exp rel, Core.IdPat row, Map<String, Core.Exp> extra) {
+      Core.Exp rel, Core.IdPat id, Map<String, Core.Exp> extra) {
     final ImmutableMap.Builder<String, Core.Exp> b = ImmutableMap.builder();
     b.putAll(extra);
     final Type elementType = rel.type.elementType();
     if (elementType instanceof RecordLikeType) {
       final RecordLikeType recordType = (RecordLikeType) elementType;
-      final Core.Exp element = core.id(row);
+      final Core.Exp element = core.id(id);
       int slot = 0;
       for (String fieldName : recordType.argNameTypes().keySet()) {
         if (!extra.containsKey(fieldName)) {
@@ -785,26 +783,25 @@ public class RelBuilder {
     if (on(Simplification.FILTER_MERGE)
         && frame.rel instanceof Core.Filter
         && ordinal == null) {
-      // A condition that reads the ordinal counts the rows the inner filter
+      // A condition that reads the ordinal counts the elements the inner filter
       // let through, which the merged filter does not have, so it stays a
       // filter of its own.
       final Core.Filter filter = (Core.Filter) frame.rel;
       final Core.Exp condition2 =
-          core.substitute(
-              typeSystem, condition, frame.row, core.id(filter.row));
+          core.substitute(typeSystem, condition, frame.id, core.id(filter.id));
       return push(
           above(
               frame,
               core.filter(
                   pos,
-                  filter.row,
-                  filter.ordinal,
+                  filter.id,
+                  filter.ordinalId,
                   filter.input,
                   core.andAlso(typeSystem, filter.condition, condition2))));
     }
     return push(
         above(
-            frame, core.filter(pos, frame.row, ordinal, frame.rel, condition)));
+            frame, core.filter(pos, frame.id, ordinal, frame.rel, condition)));
   }
 
   /** Projects the top of the stack; {@code exp} is over {@code $0}. */
@@ -812,7 +809,7 @@ public class RelBuilder {
     final Frame frame = pop();
     final Core.@Nullable IdPat frameOrdinal = ordinalIfRead(frame, exp);
     if (on(Simplification.PROJECT_IDENTITY)
-        && isRow(exp, frame.row)
+        && isId(exp, frame.id)
         && frameOrdinal == null) {
       return push(frame);
     }
@@ -820,7 +817,7 @@ public class RelBuilder {
       final Core.Project project = (Core.Project) frame.rel;
       // A projection keeps its input's positions, so an ordinal the outer
       // expression reads is the inner projection's input's.
-      Core.@Nullable IdPat ordinal = project.ordinal;
+      Core.@Nullable IdPat ordinal = project.ordinalId;
       Core.Exp exp2 = exp;
       if (frameOrdinal != null) {
         if (ordinal == null) {
@@ -834,13 +831,13 @@ public class RelBuilder {
           core.project(
               pos,
               typeSystem,
-              project.row,
+              project.id,
               ordinal,
               project.input,
-              merge(exp2, frame.row, project.exp)));
+              merge(exp2, frame.id, project.exp)));
     }
     return push(
-        core.project(pos, typeSystem, frame.row, frameOrdinal, frame.rel, exp));
+        core.project(pos, typeSystem, frame.id, frameOrdinal, frame.rel, exp));
   }
 
   /** Sorts the top of the stack; the result is a list. */
@@ -852,7 +849,7 @@ public class RelBuilder {
             core.sort(
                 pos,
                 typeSystem,
-                frame.row,
+                frame.id,
                 ordinalIfRead(frame, exp),
                 frame.rel,
                 exp)));
@@ -867,7 +864,7 @@ public class RelBuilder {
     return push(above(frame, core.unorder(pos, typeSystem, frame.rel)));
   }
 
-  /** Skips rows of the top of the stack. */
+  /** Skips elements of the top of the stack. */
   public RelBuilder skip(Core.Exp count) {
     final Frame frame = pop();
     if (on(Simplification.SKIP_ZERO) && isIntLiteral(count, 0)) {
@@ -876,7 +873,7 @@ public class RelBuilder {
     return push(above(frame, core.skip(pos, frame.rel, count)));
   }
 
-  /** Takes rows of the top of the stack. */
+  /** Takes elements of the top of the stack. */
   public RelBuilder take(Core.Exp count) {
     final Frame frame = pop();
     return push(above(frame, core.take(pos, frame.rel, count)));
@@ -901,7 +898,7 @@ public class RelBuilder {
         core.group(
             pos,
             typeSystem,
-            frame.row,
+            frame.id,
             ordinalIfRead(frame, exps.toArray(new Core.Exp[0])),
             frame.rel,
             keys,
@@ -924,11 +921,11 @@ public class RelBuilder {
     return push(
         new Frame(
             frame.rel,
-            frame.row,
+            frame.id,
             elementNames(
                 frame.rel,
-                frame.row,
-                ImmutableMap.of(name, core.id(frame.row)))));
+                frame.id,
+                ImmutableMap.of(name, core.id(frame.id)))));
   }
 
   /**
@@ -945,14 +942,14 @@ public class RelBuilder {
             pos,
             typeSystem,
             joinType,
-            left.row,
-            rightRow(right),
+            left.id,
+            rightId(right),
             ordinalIfRead(left, condition, right.rel),
             left.rel,
             right.rel,
             condition);
-    final Core.IdPat row = rowPat(rel);
-    return push(new Frame(rel, row, joinNames(rel, row, left, right)));
+    final Core.IdPat id = elementPat(rel);
+    return push(new Frame(rel, id, joinNames(rel, id, left, right)));
   }
 
   /**
@@ -966,9 +963,9 @@ public class RelBuilder {
    * {@code 3} -- true, and useless to anything that started from a query.
    */
   private ImmutableMap<String, Core.Exp> joinNames(
-      Core.Exp rel, Core.IdPat row, Frame left, Frame right) {
+      Core.Exp rel, Core.IdPat id, Frame left, Frame right) {
     final JoinType joinType = ((Core.Join) rel).joinType;
-    final Core.Exp element = core.id(row);
+    final Core.Exp element = core.id(id);
     final Map<String, Core.Exp> names = new LinkedHashMap<>();
     rebaseInto(names, left, 0, element, joinType.leftIsOption());
     rebaseInto(
@@ -995,15 +992,15 @@ public class RelBuilder {
     frame.names.forEach(
         (name, a) -> {
           if (n != 1) {
-            names.put(name, shift(a, frame.row, offset, element));
+            names.put(name, shift(a, frame.id, offset, element));
             return;
           }
           final Core.Exp component = core.field(typeSystem, element, offset);
           names.put(
               name,
               absent
-                  ? optionize(a, frame.row, component)
-                  : core.substitute(typeSystem, a, frame.row, component));
+                  ? optionize(a, frame.id, component)
+                  : core.substitute(typeSystem, a, frame.id, component));
         });
   }
 
@@ -1018,16 +1015,15 @@ public class RelBuilder {
    * option}, not {@code (int * int) option}.
    */
   private Core.Exp optionize(
-      Core.Exp access, Core.IdPat row, Core.Exp component) {
-    if (isRow(access, row)) {
+      Core.Exp access, Core.IdPat id, Core.Exp component) {
+    if (isId(access, id)) {
       return component;
     }
-    final Core.IdPat param =
-        core.idPat(row.type, typeSystem.nameGenerator::get);
+    final Core.IdPat param = core.idPat(id.type, typeSystem.nameGenerator::get);
     final Core.Exp body =
-        core.substitute(typeSystem, access, row, core.id(param));
+        core.substitute(typeSystem, access, id, core.id(param));
     final Core.Fn fn =
-        core.fn(typeSystem.fnType(row.type, body.type), param, body);
+        core.fn(typeSystem.fnType(id.type, body.type), param, body);
     final Type optionType = typeSystem.option(body.type);
     return core.apply(
         Pos.ZERO,
@@ -1042,13 +1038,13 @@ public class RelBuilder {
 
   /** Rewrites {@code #j $0} to {@code #(offset + j) $0}. */
   private Core.Exp shift(
-      Core.Exp exp, Core.IdPat row, int offset, Core.Exp element) {
+      Core.Exp exp, Core.IdPat id, int offset, Core.Exp element) {
     return exp.accept(
         new Shuttle(typeSystem) {
           @Override
           protected Core.Exp visit(Core.Apply apply) {
             if (apply.fn instanceof Core.RecordSelector
-                && isRow(apply.arg, row)) {
+                && isId(apply.arg, id)) {
               return core.field(
                   typeSystem,
                   element,
@@ -1065,7 +1061,7 @@ public class RelBuilder {
    * where it needs the left element.
    */
   public Core.IdPat binder() {
-    return frame(0).row;
+    return frame(0).id;
   }
 
   /** Combines the top {@code n} of the stack with a set operator. */
@@ -1113,8 +1109,8 @@ public class RelBuilder {
     return rel.type instanceof ListType;
   }
 
-  private static boolean isRow(Core.Exp exp, Core.IdPat row) {
-    return exp instanceof Core.Id && ((Core.Id) exp).idPat.equals(row);
+  private static boolean isId(Core.Exp exp, Core.IdPat id) {
+    return exp instanceof Core.Id && ((Core.Id) exp).idPat.equals(id);
   }
 
   private static boolean isIntLiteral(Core.Exp exp, int value) {
@@ -1131,29 +1127,29 @@ public class RelBuilder {
    *
    * <p>Merging two projections is substitution, and substitution duplicates:
    * {@code project [$0 + $0]} over {@code project [f $0]} would call {@code f}
-   * twice per row where the two nodes called it once. A {@code let} keeps the
-   * one evaluation that the two nodes had, so the merge is a simplification of
-   * the plan and never a pessimization of it.
+   * twice per element where the two nodes called it once. A {@code let} keeps
+   * the one evaluation that the two nodes had, so the merge is a simplification
+   * of the plan and never a pessimization of it.
    */
-  private Core.Exp merge(Core.Exp outer, Core.IdPat row, Core.Exp inner) {
-    if (count(outer, row) <= 1) {
-      return core.substitute(typeSystem, outer, row, inner);
+  private Core.Exp merge(Core.Exp outer, Core.IdPat id, Core.Exp inner) {
+    if (count(outer, id) <= 1) {
+      return core.substitute(typeSystem, outer, id, inner);
     }
     final Core.IdPat pat =
         core.idPat(inner.type, typeSystem.nameGenerator.getPrefixed("v"), 0);
     return core.let(
         core.nonRecValDecl(inner.pos, pat, null, inner),
-        core.substitute(typeSystem, outer, row, core.id(pat)));
+        core.substitute(typeSystem, outer, id, core.id(pat)));
   }
 
   /** Returns how many times an expression reads {@code $0}. */
-  private static int count(Core.Exp exp, Core.IdPat row) {
+  private static int count(Core.Exp exp, Core.IdPat pat) {
     final int[] n = {0};
     exp.accept(
         new Visitor() {
           @Override
           protected void visit(Core.Id id) {
-            if (id.idPat.equals(row)) {
+            if (id.idPat.equals(pat)) {
               ++n[0];
             }
           }
@@ -1165,17 +1161,17 @@ public class RelBuilder {
   private static class Frame {
     final Core.Exp rel;
     /** Pattern that the node built on this frame binds for its element. */
-    final Core.IdPat row;
+    final Core.IdPat id;
 
     final ImmutableMap<String, Core.Exp> names;
     /** Pattern for the element as a join's right input; minted when asked. */
-    Core.@Nullable IdPat rightRow;
+    Core.@Nullable IdPat rightId;
     /** Pattern for the element's ordinal; minted when asked. */
-    Core.@Nullable IdPat ordinal;
+    Core.@Nullable IdPat ordinalId;
 
-    Frame(Core.Exp rel, Core.IdPat row, ImmutableMap<String, Core.Exp> names) {
+    Frame(Core.Exp rel, Core.IdPat id, ImmutableMap<String, Core.Exp> names) {
       this.rel = requireNonNull(rel);
-      this.row = requireNonNull(row);
+      this.id = requireNonNull(id);
       this.names = requireNonNull(names);
     }
 

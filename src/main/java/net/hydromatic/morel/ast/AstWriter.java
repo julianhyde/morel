@@ -214,10 +214,10 @@ public class AstWriter {
   /**
    * Appends a reference to a node's pattern: {@code $0}, {@code $1} or {@code
    * $ordinal}. In tree mode, a pattern read outside the node that binds it -- a
-   * join's left row read from its right input -- prints under a generated name
+   * join's left id read from its right input -- prints under a generated name
    * instead; see {@link #generatedName}.
    */
-  public AstWriter rowRef(Core.IdPat pat) {
+  public AstWriter idRef(Core.IdPat pat) {
     return append(pat.name);
   }
 

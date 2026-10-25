@@ -266,7 +266,7 @@ public enum CoreBuilder {
    * <p>Use this where one expression is substituted for another, so that an
    * error is blamed on the occurrence that was replaced rather than on wherever
    * the replacement happened to be built. {@code from i in xs order i} becomes
-   * an order over the row, and it is the {@code i} the user wrote that
+   * an order over the id, and it is the {@code i} the user wrote that
    * "comparison not defined" should point at.
    */
   public Core.Exp at(Core.Exp exp, Pos pos) {
@@ -599,25 +599,27 @@ public enum CoreBuilder {
   // Relational tree (Core.Rel) nodes.
 
   /**
-   * Creates the pattern that names a node's input element, {@code $0}. The
-   * ordinal makes it distinct from every other node's, and comes from the
-   * counter that numbers generated binders, so that the printer can name the
-   * pattern {@code v$}-ordinal outside its node without naming a binder.
+   * Creates the id by which a node refers to the current element of its input,
+   * {@code $0}. The ordinal makes it distinct from every other node's, and
+   * comes from the counter that numbers generated binders, so that the printer
+   * can name the pattern {@code v$}-ordinal outside its node without naming a
+   * binder.
    */
-  public Core.IdPat rowPat(Type elementType, ToIntFunction<String> gen) {
+  public Core.IdPat elementPat(Type elementType, ToIntFunction<String> gen) {
     return idPat(elementType, "$0", gen.applyAsInt("v$"));
   }
 
   /**
    * Creates the pattern that names a join's right input element, {@code $1}.
    */
-  public Core.IdPat rightRowPat(Type elementType, ToIntFunction<String> gen) {
+  public Core.IdPat rightElementPat(
+      Type elementType, ToIntFunction<String> gen) {
     return idPat(elementType, "$1", gen.applyAsInt("v$"));
   }
 
   /**
-   * Creates the pattern that names the position of a node's input element,
-   * {@code $ordinal}.
+   * Creates the id by which a node refers to the position of the current
+   * element of its input, {@code $ordinal}.
    */
   public Core.IdPat ordinalPat(ToIntFunction<String> gen) {
     return idPat(PrimitiveType.INT, "$ordinal", gen.applyAsInt("v$"));
@@ -639,22 +641,22 @@ public enum CoreBuilder {
    * $0}.
    */
   public Core.Filter filter(
-      Core.IdPat row,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat id,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp input,
       Core.Exp condition) {
-    return filter(Pos.ZERO, row, ordinal, input, condition);
+    return filter(Pos.ZERO, id, ordinalId, input, condition);
   }
 
   public Core.Filter filter(
       Pos pos,
-      Core.IdPat row,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat id,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp input,
       Core.Exp condition) {
     checkCollection(input);
     checkBoolType(condition, "filter condition");
-    return new Core.Filter(pos, row, ordinal, input, condition);
+    return new Core.Filter(pos, id, ordinalId, input, condition);
   }
 
   /**
@@ -663,42 +665,41 @@ public enum CoreBuilder {
    */
   public Core.Project project(
       TypeSystem typeSystem,
-      Core.IdPat row,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat id,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp input,
       Core.Exp exp) {
-    return project(Pos.ZERO, typeSystem, row, ordinal, input, exp);
+    return project(Pos.ZERO, typeSystem, id, ordinalId, input, exp);
   }
 
   public Core.Project project(
       Pos pos,
       TypeSystem typeSystem,
-      Core.IdPat row,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat id,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp input,
       Core.Exp exp) {
     checkCollection(input);
     final Type type = collectionType(typeSystem, isOrdered(input), exp.type);
-    return new Core.Project(pos, type, row, ordinal, input, exp);
+    return new Core.Project(pos, type, id, ordinalId, input, exp);
   }
 
   /** Creates an inner join. */
   public Core.Join join(
       TypeSystem typeSystem,
-      Core.IdPat leftRow,
-      Core.IdPat rightRow,
+      Core.IdPat leftId,
+      Core.IdPat rightId,
       Core.Exp left,
       Core.Exp right,
       Core.Exp condition) {
-    return join(
-        Pos.ZERO, typeSystem, leftRow, rightRow, left, right, condition);
+    return join(Pos.ZERO, typeSystem, leftId, rightId, left, right, condition);
   }
 
   public Core.Join join(
       Pos pos,
       TypeSystem typeSystem,
-      Core.IdPat leftRow,
-      Core.IdPat rightRow,
+      Core.IdPat leftId,
+      Core.IdPat rightId,
       Core.Exp left,
       Core.Exp right,
       Core.Exp condition) {
@@ -706,8 +707,8 @@ public enum CoreBuilder {
         pos,
         typeSystem,
         JoinType.INNER,
-        leftRow,
-        rightRow,
+        leftId,
+        rightId,
         null,
         left,
         right,
@@ -715,16 +716,16 @@ public enum CoreBuilder {
   }
 
   /**
-   * Creates a join that may be dependent: {@code leftRow} is in scope in {@code
+   * Creates a join that may be dependent: {@code leftId} is in scope in {@code
    * right}, and a right input that reads it makes the join dependent, which is
    * how a scan whose collection reads an earlier binder is expressed.
    */
   public Core.Join join(
       TypeSystem typeSystem,
       JoinType joinType,
-      Core.IdPat leftRow,
-      Core.IdPat rightRow,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat leftId,
+      Core.IdPat rightId,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp left,
       Core.Exp right,
       Core.Exp condition) {
@@ -732,9 +733,9 @@ public enum CoreBuilder {
         Pos.ZERO,
         typeSystem,
         joinType,
-        leftRow,
-        rightRow,
-        ordinal,
+        leftId,
+        rightId,
+        ordinalId,
         left,
         right,
         condition);
@@ -744,9 +745,9 @@ public enum CoreBuilder {
       Pos pos,
       TypeSystem typeSystem,
       JoinType joinType,
-      Core.IdPat leftRow,
-      Core.IdPat rightRow,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat leftId,
+      Core.IdPat rightId,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp left,
       Core.Exp right,
       Core.Exp condition) {
@@ -760,7 +761,7 @@ public enum CoreBuilder {
             ordered,
             joinElementType(typeSystem, joinType, left, right));
     return new Core.Join(
-        pos, type, joinType, leftRow, rightRow, ordinal, left, right,
+        pos, type, joinType, leftId, rightId, ordinalId, left, right,
         condition);
   }
 
@@ -809,15 +810,15 @@ public enum CoreBuilder {
    * Returns the input whose components a node passes through, or null if the
    * node's element is its own.
    *
-   * <p>A filter emits its input's rows unchanged, so its element *is* its
+   * <p>A filter emits its input's elements unchanged, so its element *is* its
    * input's element and its components are its input's components. Saying
    * otherwise -- one component, because the node is not a join -- is invisible
    * until something removes the filter: {@code join(filter(join(a, b)), c)}
    * would have element {@code ((a, b), c)} where {@code join(join(a, b), c)}
    * has {@code (a, b, c)}. The rules remove and reorder filters constantly, so
    * this has to be the node's own answer rather than a caller's care. The same
-   * holds of every node that changes which rows there are, or in what order,
-   * but not what a row is.
+   * holds of every node that changes which elements there are, or in what
+   * order, but not what an element is.
    */
   private static Core.@Nullable Exp elementPreserved(Core.Exp node) {
     switch (node.op) {
@@ -893,19 +894,19 @@ public enum CoreBuilder {
    */
   public Core.Group group(
       TypeSystem typeSystem,
-      Core.IdPat row,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat id,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp input,
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
-    return group(Pos.ZERO, typeSystem, row, ordinal, input, keys, aggregates);
+    return group(Pos.ZERO, typeSystem, id, ordinalId, input, keys, aggregates);
   }
 
   public Core.Group group(
       Pos pos,
       TypeSystem typeSystem,
-      Core.IdPat row,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat id,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp input,
       SortedMap<String, Core.Exp> keys,
       SortedMap<String, Core.Aggregate> aggregates) {
@@ -931,8 +932,8 @@ public enum CoreBuilder {
     return new Core.Group(
         pos,
         type,
-        row,
-        ordinal,
+        id,
+        ordinalId,
         input,
         ImmutableSortedMap.copyOf(keys, ORDERING),
         ImmutableSortedMap.copyOf(aggregates, ORDERING));
@@ -941,23 +942,23 @@ public enum CoreBuilder {
   /** Creates a {@code sort}; the output is always a {@code list}. */
   public Core.Sort sort(
       TypeSystem typeSystem,
-      Core.IdPat row,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat id,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp input,
       Core.Exp exp) {
-    return sort(Pos.ZERO, typeSystem, row, ordinal, input, exp);
+    return sort(Pos.ZERO, typeSystem, id, ordinalId, input, exp);
   }
 
   public Core.Sort sort(
       Pos pos,
       TypeSystem typeSystem,
-      Core.IdPat row,
-      Core.@Nullable IdPat ordinal,
+      Core.IdPat id,
+      Core.@Nullable IdPat ordinalId,
       Core.Exp input,
       Core.Exp exp) {
     checkCollection(input);
     final Type type = typeSystem.listType(input.type.elementType());
-    return new Core.Sort(pos, type, row, ordinal, input, exp);
+    return new Core.Sort(pos, type, id, ordinalId, input, exp);
   }
 
   /** Creates an {@code unorder}; the output is always a {@code bag}. */

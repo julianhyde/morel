@@ -91,7 +91,7 @@ public class RelValidator {
 
   /**
    * Checks a node, given the patterns of enclosing nodes that its expressions
-   * may read: a join's left row inside its right input, and every enclosing
+   * may read: a join's left id inside its right input, and every enclosing
    * node's patterns inside a nested tree.
    */
   private void node(Core.Rel rel, Predicate<Core.NamedPat> outer) {
@@ -99,7 +99,8 @@ public class RelValidator {
     if (rel instanceof Core.RowRel) {
       final Core.RowRel rowRel = (Core.RowRel) rel;
       input(rowRel.input, outer);
-      if (rowRel.ordinal != null && !(rowRel.input.type instanceof ListType)) {
+      if (rowRel.ordinalId != null
+          && !(rowRel.input.type instanceof ListType)) {
         violation(
             "%s binds an ordinal but its input is a bag: %s",
             rel.op.lowerName, rowRel.input.type.moniker());
@@ -112,7 +113,7 @@ public class RelValidator {
       requireDerivedType(
           rel,
           core.filter(
-              filter.row, filter.ordinal, filter.input, filter.condition));
+              filter.id, filter.ordinalId, filter.input, filter.condition));
     } else if (rel instanceof Core.Project) {
       final Core.Project project = (Core.Project) rel;
       scope(project.exp, inner, "project expression");
@@ -120,8 +121,8 @@ public class RelValidator {
           rel,
           core.project(
               typeSystem,
-              project.row,
-              project.ordinal,
+              project.id,
+              project.ordinalId,
               project.input,
               project.exp));
     } else if (rel instanceof Core.Join) {
@@ -132,12 +133,12 @@ public class RelValidator {
           join.right,
           union(
               outer,
-              join.ordinal == null
-                  ? ImmutableList.of(join.leftRow)
-                  : ImmutableList.of(join.leftRow, join.ordinal)));
+              join.ordinalId == null
+                  ? ImmutableList.of(join.leftId)
+                  : ImmutableList.of(join.leftId, join.ordinalId)));
       requireType(join.condition, PrimitiveType.BOOL, "join condition");
       scope(join.condition, inner, "join condition");
-      if (join.ordinal != null
+      if (join.ordinalId != null
           && !(join.left.type instanceof ListType
               && join.right.type instanceof ListType)) {
         violation("join binds an ordinal but an input is a bag");
@@ -147,9 +148,9 @@ public class RelValidator {
           core.join(
               typeSystem,
               join.joinType,
-              join.leftRow,
-              join.rightRow,
-              join.ordinal,
+              join.leftId,
+              join.rightId,
+              join.ordinalId,
               join.left,
               join.right,
               join.condition));
@@ -167,8 +168,8 @@ public class RelValidator {
           rel,
           core.group(
               typeSystem,
-              group.row,
-              group.ordinal,
+              group.id,
+              group.ordinalId,
               group.input,
               group.keys,
               group.aggregates));
@@ -177,7 +178,7 @@ public class RelValidator {
       scope(sort.exp, inner, "sort key");
       requireDerivedType(
           rel,
-          core.sort(typeSystem, sort.row, sort.ordinal, sort.input, sort.exp));
+          core.sort(typeSystem, sort.id, sort.ordinalId, sort.input, sort.exp));
     } else if (rel instanceof Core.Unorder) {
       final Core.Unorder unorder = (Core.Unorder) rel;
       input(unorder.input, outer);
