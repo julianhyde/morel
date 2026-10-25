@@ -611,6 +611,27 @@ when it is read, naming the column. So:
   `comm` is a `decimal option` and the commission that is not there is NONE
   wherever the query ran. `triple.smli` has such a query now.
 
+**Asking Spark is not the answer, and here is the measurement.** The
+nullable flag is in the schema, and `SparkTypes` already reads it at every
+level; the question is what Spark puts in it. Against the container:
+
+| what | reported nullability |
+| ---- | -------------------- |
+| a DataFrame built with `nullable=False` | kept: `a False, b False, c True` |
+| the same data written to parquet and read back by path | all true |
+| a catalog table over those files | all true |
+| `saveAsTable` from that DataFrame | all true |
+| `ALTER TABLE ... ALTER COLUMN a SET NOT NULL` | `UNSUPPORTED_FEATURE.TABLE_OPERATION` |
+
+So the flag is live over Connect and carries information *within a session*,
+for a DataFrame the client constructs; it survives neither storage nor the
+metastore, and cannot be asserted afterwards. The flag is still worth
+trusting for **nested** values and for **computed** results -- a struct
+field's or array element's flag is real, and a left join's right-hand
+columns come back nullable, which is how the eighth query's `e` becomes an
+option. Decision B is therefore narrowly about top-level columns of stored
+tables, not about nullability in general.
+
 **It also found a wrong answer.** The witness of a left join -- the column
 whose nullness says whether the join found a row -- was the first field whose
 type is not an option. Under decision B no catalog column is an option, so
