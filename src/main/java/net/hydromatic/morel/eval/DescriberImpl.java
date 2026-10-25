@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
+import org.jspecify.annotations.Nullable;
 
 /** Implementation of {@link net.hydromatic.morel.eval.Describer}. */
 class DescriberImpl implements Describer {
@@ -62,6 +63,10 @@ class DescriberImpl implements Describer {
 
   @Override
   public String rename(String name) {
+    final @Nullable String idName = Core.NamedPat.idName(name);
+    if (idName != null) {
+      return idName;
+    }
     if (!Core.NamedPat.isGenerated(name)) {
       return name;
     }
