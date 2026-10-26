@@ -660,6 +660,22 @@ pins both halves. The suite passes the declaration from the data set
 itself, via `BuiltInDataSet.sparkNullableColumns`, so the fixture and the
 types agree by construction.
 
+**Every client gets the declaration, not just the suite.** At first only
+the harness appended it, so `./morel --spark` and `Spark.connectDefault
+()` still raised `NULL_VALUE` on the commission -- the error the
+declaration was built to stop. The URI that `start-spark.sh` prints now
+carries it, read from a `nullable` line that `ScottInit` generates into
+`init.py`, so what seeded the tables is what declares them and the two
+cannot drift; the suite appends only to a URI that declares nothing.
+`spark-error.smli` still has to show what an undeclared null does, and
+no scott column can show it any more, so the fixture has a `nulls`
+table for it -- two int columns and a null in one, mentioned by nobody.
+
+**And it found a wrong row number.** The `NULL_VALUE` message numbered
+rows within the Arrow batch rather than the result, and Spark sent the
+two-row `nulls` table as two batches, so the null in the second row was
+reported as row 0. Rows are now numbered within the result.
+
 **Could Spark's flag be made reliable instead?** No, not without changing
 what the container is. Restarting does not help -- a `--new` container
 reports all-true for tables created seconds earlier, so this is not

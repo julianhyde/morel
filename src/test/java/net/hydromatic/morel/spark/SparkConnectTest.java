@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.spark;
 
+import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -25,11 +26,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.google.common.collect.ImmutableList;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import net.hydromatic.morel.compile.BuiltIn;
+import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.foreign.SparkCatalog;
 import net.hydromatic.morel.type.TypeSystem;
@@ -55,6 +58,17 @@ public class SparkConnectTest {
     return ImmutableList.of("SOME", o);
   }
 
+  /**
+   * Returns a decimal in the form a decoded column has.
+   *
+   * <p>Morel's decimals are canonical -- trailing zeros stripped -- so that
+   * equality is numeric, and a literal such as {@code new BigDecimal("5000")}
+   * is not what a column of {@code DECIMAL(7, 2)} decodes to.
+   */
+  private static BigDecimal decimal(String s) {
+    return requireNonNull(Decimals.canonical(new BigDecimal(s)));
+  }
+
   private static SparkBackend.Connection connect() {
     final String uri = System.getenv("SPARK_REMOTE");
     assumeTrue(
@@ -72,14 +86,14 @@ public class SparkConnectTest {
       final SparkBackend.Result result =
           c.sql(
               "SELECT ename, sal FROM scott.emps ORDER BY sal DESC, ename LIMIT 3");
-      assertThat(result.rowType().moniker(), is("{ename:string, sal:real}"));
+      assertThat(result.rowType().moniker(), is("{ename:string, sal:decimal}"));
       assertThat(
           result.rows(),
           is(
               ImmutableList.of(
-                  ImmutableList.of("KING", 5000f),
-                  ImmutableList.of("FORD", 3000f),
-                  ImmutableList.of("SCOTT", 3000f))));
+                  ImmutableList.of("KING", decimal("5000")),
+                  ImmutableList.of("FORD", decimal("3000")),
+                  ImmutableList.of("SCOTT", decimal("3000")))));
       final SparkBackend.Result count =
           c.sql("SELECT COUNT(*) AS c FROM scott.emps");
       assertThat(count.rowType().moniker(), is("{c:int}"));
@@ -98,7 +112,8 @@ public class SparkConnectTest {
       assertThat(
           result.rowType().moniker(),
           is(
-              "{arr:int option list, b:bool, bin:word list, d:date, dec:real,"
+              "{arr:int option list, b:bool, bin:word list, d:date,"
+                  + " dec:decimal,"
                   + " f32:real, f64:real, i16:int, i32:int, i64:int, i8:int,"
                   + " id:int, s:string, st:{a:int option, b:string option},"
                   + " ts:time, ts_ntz:date}"));
@@ -114,7 +129,7 @@ public class SparkConnectTest {
                       true, // b
                       ImmutableList.of(1L, 2L), // bin
                       jan15, // d
-                      12.34f, // dec
+                      decimal("12.34"), // dec
                       1.5f, // f32
                       2.5f, // f64
                       2, // i16
@@ -141,7 +156,7 @@ public class SparkConnectTest {
       // Labels in order: arr, bin, dec, f32, f64, i16, i32, i8, s, st
       assertThat(row.get(0), is(ImmutableList.of())); // arr
       assertThat(row.get(1), is(ImmutableList.of())); // bin
-      assertThat(row.get(2), is(99999999.99f)); // dec
+      assertThat(row.get(2), is(decimal("99999999.99"))); // dec
       assertThat(Float.isNaN((Float) row.get(3)), is(true)); // f32
       assertThat(row.get(4), is(Float.NEGATIVE_INFINITY)); // f64
       assertThat(row.get(5), is(32767)); // i16
@@ -211,7 +226,7 @@ public class SparkConnectTest {
                   + " hiredate:string, job:string, mgr:int option,"
                   + " sal:decimal} bag"));
       assertThat(c.rows("scott", "depts").size(), is(4));
-      assertThat(c.tables("default"), is(ImmutableList.of("zoo")));
+      assertThat(c.tables("default"), is(ImmutableList.of("nulls", "zoo")));
       // The zoo has a map column, which has no Morel type
       final SparkBackend.SparkException e =
           assertThrows(

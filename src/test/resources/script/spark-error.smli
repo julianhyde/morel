@@ -72,19 +72,21 @@ spark.catalog.scott.nonesuch;
 )).execute ();
 > val it = ["ACCOUNTING"] : string bag
 
-(* A connection told nothing about nullability keeps the plain types and
- * raises when a null arrives, naming the column. "connectDefault" opens the
- * server named by SPARK_REMOTE without the declaration the harness adds, so
- * it is such a connection. This is what every connection did before the
- * declaration existed, and what one still does for a table whose nulls
- * nobody has mentioned. *)
-val bare = Spark.connectDefault ();
-> val bare = {catalog={},connection=<connection sc://localhost:15002>}
->   : {catalog:{...}, connection:connection, ...}
-bare.catalog.scott.emps;
-> uncaught exception Spark [Spark: NULL_VALUE: Null in column comm of row 0, whose type decimal has no room for it]
+(* A column nobody declared nullable keeps its plain type, and a null in it
+ * raises, naming the column. The "nulls" table is in the fixture for this:
+ * the URI declares the scott columns that hold nulls, and says nothing
+ * about this one. This is what every column did before the declaration
+ * existed, and what one still does for a table whose nulls nobody has
+ * mentioned. *)
+spark.catalog.default.nulls;
+> uncaught exception Spark [Spark: NULL_VALUE: Null in column n of row 1, whose type int has no room for it]
 >   raised at: 0.0-0.0
-bare.connection.close ();
-> val it = () : unit
+
+(* The row that has no null reads, which is the point: nothing is wrong with
+ * the table, only with what the connection was told about it. *)
+(spark.connection.prepare (fn () =>
+  from r in spark.catalog.default.nulls where r.id = 1 yield r.n
+)).execute ();
+> val it = [1] : int bag
 
 (*) End spark-error.smli

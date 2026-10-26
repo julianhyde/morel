@@ -20,7 +20,8 @@
 # Starts a Spark Connect server in a Docker container, in ANSI mode
 # with the UTC time zone, holding the tables that init.py (in this
 # directory) creates, and prints its URI (for example
-# "sc://localhost:15002") on stdout once it accepts connections.
+# "sc://localhost:15002/;nullable=scott.emps.comm,scott.emps.mgr") on
+# stdout once it accepts connections.
 # Everything else goes to stderr, so
 #
 #   export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
@@ -173,6 +174,15 @@ until ready; do
 done
 
 log "Spark Connect server is ready"
-echo "sc://localhost:$port"
+
+# The URI carries the columns of these tables that hold nulls. Spark's
+# catalog cannot report them -- it calls every column of a stored table
+# nullable, whatever the DDL said -- so a client has to be told, and what
+# knows is the data set the tables were generated from. The "nullable"
+# line of init.py is generated from it (ScottInit), and a container
+# created from a different init.py is not reused, so the declaration and
+# the tables always agree. Other clients ignore the parameter.
+nullable=$(sed -n 's/^nullable = "\(.*\)"$/\1/p' "$dir/init.py")
+echo "sc://localhost:$port/;nullable=$nullable"
 
 # End start-spark.sh

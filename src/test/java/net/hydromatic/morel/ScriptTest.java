@@ -169,9 +169,16 @@ public class ScriptTest {
    * truth is, and it names the columns it knows to be optional. Without this a
    * script could not read a whole employee row, because the commission that
    * Morel has as NONE is a null there.
+   *
+   * <p>A URI that declares its own columns is left alone: that is what {@code
+   * start-spark.sh} prints, and a real cluster's URI would say which of its
+   * columns are optional.
    */
   private static String sparkUri() {
     final String uri = requireNonNull(System.getenv("SPARK_REMOTE"));
+    if (uri.contains("nullable=")) {
+      return uri;
+    }
     final Set<String> nullable = BuiltInDataSet.SCOTT.sparkNullableColumns();
     return uri
         + (uri.contains("/;") ? ";" : "/;")

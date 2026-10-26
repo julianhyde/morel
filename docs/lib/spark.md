@@ -81,6 +81,26 @@ progressively typed record whose fields are databases, whose fields
 in turn are tables, each a bag of records. So `spark.catalog.scott.emps`
 reads a table.
 
+After the host, a URI may carry parameters, introduced by `/;` and
+separated by `;`. Morel reads one of them, `nullable`, a
+comma-separated list of `database.table.column` naming the columns
+that may be null:
+
+```
+sc://localhost:15002/;nullable=scott.emps.comm,scott.emps.mgr
+```
+
+A declared column has type `t option`, and a null in it arrives as
+`NONE`; an undeclared one has the plain type `t`, and a null in it
+raises `Spark` with error class `NULL_VALUE`. The declaration is
+needed because the catalog does not keep it: Spark reports every
+column of a stored table as nullable, whatever the DDL said, so
+believing it would make every column an option.
+
+The other parameter Morel reads is `user_id`, which names the user
+the server sees; it ignores any other, and other clients ignore
+`nullable` in turn.
+
 <a id="connectDefault-impl"></a>
 <h3><code>connectDefault</code></h3>
 

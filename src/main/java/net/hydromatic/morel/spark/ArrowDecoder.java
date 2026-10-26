@@ -90,6 +90,10 @@ public class ArrowDecoder {
       VectorSchemaRoot root, Type rowType, List<Object> rows) {
     final List<FieldVector> vectors = root.getFieldVectors();
     final int rowCount = root.getRowCount();
+    // Rows are numbered within the result, not within the batch: Spark
+    // decides how many batches to send, so a batch-relative number would
+    // name a different row depending on how the result arrived.
+    final int offset = rows.size();
     if (ArrowEncoder.hasColumns(rowType)) {
       final RecordLikeType recordType = (RecordLikeType) rowType;
       // Vectors are in Spark's column order; a record's fields are in
@@ -114,7 +118,8 @@ public class ArrowDecoder {
                 "CONNECTION", "Result has no column " + labels.get(c));
           }
           fields[c] =
-              toValue(vector.getObject(r), types.get(c), labels.get(c), r);
+              toValue(
+                  vector.getObject(r), types.get(c), labels.get(c), offset + r);
         }
         rows.add(ImmutableList.copyOf(fields));
       }
@@ -122,7 +127,9 @@ public class ArrowDecoder {
       // A single unnamed column
       final FieldVector vector = vectors.get(0);
       for (int r = 0; r < rowCount; r++) {
-        rows.add(toValue(vector.getObject(r), rowType, vector.getName(), r));
+        rows.add(
+            toValue(
+                vector.getObject(r), rowType, vector.getName(), offset + r));
       }
     }
   }

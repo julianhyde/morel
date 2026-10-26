@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableMap;
 import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -89,6 +90,28 @@ class ScottInit {
       final List<Object> rows = (List<Object>) tables.get(i++);
       writeTable(pw, table.getKey(), table.getValue(), rows);
     }
+    writeNullable(pw);
+  }
+
+  /**
+   * Writes the list of columns that hold nulls, in the form a connection URI
+   * wants.
+   *
+   * <p>Spark's catalog cannot report it -- every column of a stored table reads
+   * back as nullable, whatever the DDL said -- so whoever connects has to be
+   * told, and what knows is the data set these tables came from. {@code
+   * start-spark.sh} reads this line and puts it in the URI it prints, so an
+   * interactive session gets the declaration as the suite does.
+   */
+  private static void writeNullable(PrintWriter pw) {
+    final List<String> columns =
+        new ArrayList<>(BuiltInDataSet.SCOTT.sparkNullableColumns());
+    Collections.sort(columns);
+    pw.println();
+    pw.println("# The columns that hold nulls. Spark's catalog cannot report");
+    pw.println("# them, so whoever connects has to be told: start-spark.sh");
+    pw.println("# reads this line and puts it in the URI it prints.");
+    pw.printf("nullable = \"%s\"%n", String.join(",", columns));
   }
 
   /** Writes one call to the {@code table} function of {@code init.py}. */

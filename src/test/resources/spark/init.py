@@ -27,6 +27,8 @@
 #   zoo        In the default database. One column per Spark type. Row 1
 #              has typical values, row 2 edge values (extremes, NaN, empty,
 #              non-ASCII), and row 3 nulls in every column but id.
+#   nulls      In the default database. Two int columns, and a null in a
+#              column that the URI does not declare nullable.
 #
 # Nullability: Spark's built-in catalog does not keep NOT NULL for
 # tables stored as files, so every column of these tables reads back as
@@ -124,7 +126,25 @@ table(
     """
     (1, 1200, 700), (2, 1400, 1201), (3, 2000, 1401), (4, 3000, 2001),
     (5, 9999, 3001)""")
+
+# The columns that hold nulls. Spark's catalog cannot report
+# them, so whoever connects has to be told: start-spark.sh
+# reads this line and puts it in the URI it prints.
+nullable = "scott.emps.comm,scott.emps.mgr"
 # (end: scott)
+
+# A table with a null in a column that the URI does not declare, which
+# is what a table nobody has told Morel about looks like: its columns
+# keep their plain types, and reading the null raises NULL_VALUE. The
+# scott tables cannot show this, because the URI declares every column
+# of theirs that holds a null, and the zoo cannot, because it has a map
+# column that has no Morel type at all.
+table(
+    "nulls",
+    """
+    id INT, n INT""",
+    """
+    (1, 1), (2, NULL)""")
 
 # The zoo is hand-written: it has one column per Spark type, and no
 # counterpart in Morel's data set to generate it from. Row 1 holds
@@ -152,8 +172,9 @@ table(
     (3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
      NULL, NULL, NULL, NULL, NULL, NULL)""")
 
-print("Morel init tables created: scott.bonuses, scott.depts, scott.emps,"
-      " scott.salgrades, zoo", flush=True)
+print("Morel init tables created: nulls, scott.bonuses, scott.depts,"
+      " scott.emps, scott.salgrades, zoo", flush=True)
+print("Morel nullable columns: " + nullable, flush=True)
 
 while True:
     time.sleep(3600)
