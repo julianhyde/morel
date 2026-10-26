@@ -111,9 +111,18 @@ is 0, positive, or absent -- and would let an undeclared column be typed
 by what the data holds; it is not implemented, because a type that
 depends on the data changes when the data does.
 
-Spark's flag is still worth trusting where it is computed rather than
-stored: a struct field, an array element, and the columns of a query's
-result, which is how a left join's right row becomes an option.
+Spark's flag says whether a value *could* be null given the input schema,
+not whether a column holds nulls, and the analyze response reports it for
+any plan. So it is worth trusting for a value Spark manufactures -- a
+count, a literal, a struct are all reported non-nullable -- and for a
+struct field or an array element, where it is recorded rather than
+inferred. Anything derived from a stored column inherits that column's
+flag, which is to say nullable: `empno + 1` is reported nullable, and
+`where empno is not null` does not narrow it, because narrowing is the
+optimizer's inference and happens after the schema is reported. That is
+also why a plan's rows are decoded as the type the program was typed
+against rather than as Spark's schema: the schema would make every
+computed column an option.
 
 ### 1.3 Dates and times
 
