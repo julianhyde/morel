@@ -642,10 +642,43 @@ matched, because a null key matches nothing; a join whose condition offers no
 such column is refused. The captured plan is unchanged, because the key was
 the column it already named.
 
-What is left of the question is ergonomic, not factual: reading a whole row
-from the catalog cannot work while decision B stands, and decision A would
-make every query over a real table unwrap its columns. That is the trade
-spec.md section 1.2 records, and nothing here settles it.
+**What settles it is a declaration.** Neither side of the pipe knows what
+the data set knows. Spark reports every stored column nullable, whatever
+the DDL said; decision B believes none of them, so a query that reads a
+column the data really has nulls in raises `NULL_VALUE` -- which is what
+`spark.catalog.scott.emps` did, on the commission. Decision A would be
+wrong in the other direction, making every query over a real table unwrap
+columns that can never be absent.
+
+So the connection takes a `nullable=` parameter naming the columns that
+are optional (`;nullable=scott.emps.mgr,scott.emps.comm`), and each level
+of a row takes its nullability from whichever source knows it: at the top
+level the declaration, because Spark's flag says nothing there, and
+one level down the flag, because inside a struct, an array or a map it is
+recorded rather than inferred. `SparkTypesTest.testNullabilityPerLevel`
+pins both halves. The suite passes the declaration from the data set
+itself, via `BuiltInDataSet.sparkNullableColumns`, so the fixture and the
+types agree by construction.
+
+**Could Spark's flag be made reliable instead?** No, not without changing
+what the container is. Restarting does not help -- a `--new` container
+reports all-true for tables created seconds earlier, so this is not
+staleness; the constraint is discarded at CREATE time, because the
+parquet and Hive paths have nowhere to record it. `orc` behaves the same.
+Three sources would record it, each at a cost: Delta Lake, whose protocol
+enforces `NOT NULL` and whose schema reports it, and Iceberg, with
+required fields -- both absent from `apache/spark:4.0.0`, both needing a
+`--packages` download and extension configuration at container start --
+and a JDBC table, whose nullability Spark derives from the database's own
+metadata, which would mean a database in the container. All three would
+make the fixture *less* representative: the tables people point Morel at
+are plain parquet and Hive tables, where the flag is true regardless, so
+a Morel that only knew nullability for Delta tables would be wrong for
+most users in exactly the way the declaration fixes. (Spark is honest
+about values it manufactures -- `coalesce(mgr, -1)` reports
+`nullable=false` -- but every such form changes the data, and
+`assert_not_null` is not callable from SQL, so there is no wrapper that
+keeps the values and corrects the flag.)
 
 **Should an uploaded collection be sent once and reused?** A catalog
 table costs nothing to refer to twice -- it is a name that Spark resolves
