@@ -22,6 +22,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.foreign.SparkBackend;
@@ -174,6 +175,30 @@ public class SparkTypesTest {
                 SparkTypes.rowType(
                     ts, struct(field("a", INT, true), field("a", INT, true))));
     assertThat(e3.getMessage(), is("Duplicate field name a"));
+  }
+
+  /**
+   * Tests that a column declared nullable maps to an option, and that one not
+   * declared keeps the plain type.
+   *
+   * <p>Spark's own flag cannot tell them apart: it is true for every column of
+   * a stored table, whatever the DDL said, so the declaration is the only thing
+   * that distinguishes `mgr`, which may be null, from `empno`, which may not.
+   */
+  @Test
+  void testDeclaredNullableColumn() {
+    final TypeSystem ts = typeSystem();
+    final DataType schema =
+        struct(
+            field("empno", INT, true),
+            field("mgr", INT, true),
+            field("ename", STRING, true));
+    assertThat(
+        SparkTypes.rowType(ts, schema).moniker(),
+        is("{empno:int, ename:string, mgr:int}"));
+    assertThat(
+        SparkTypes.rowType(ts, schema, ImmutableSet.of("mgr")).moniker(),
+        is("{empno:int, ename:string, mgr:int option}"));
   }
 
   @Test

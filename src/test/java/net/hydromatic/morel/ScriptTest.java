@@ -91,9 +91,7 @@ public class ScriptTest {
     if (conditions.contains("spark")) {
       // The script assumes that "spark" is bound to a live connection, as
       // Spark.connect would return it; bind it, and close it afterwards.
-      try (SparkConnectionValue spark =
-          new SparkConnectionValue(
-              requireNonNull(System.getenv("SPARK_REMOTE")))) {
+      try (SparkConnectionValue spark = new SparkConnectionValue(sparkUri())) {
         Script.create(path).withValues(ImmutableMap.of("spark", spark)).run();
       }
       return;
@@ -160,6 +158,25 @@ public class ScriptTest {
               });
     }
     return conditions;
+  }
+
+  /**
+   * Returns the URI of the Spark server, telling it which columns of the
+   * container's tables may be null.
+   *
+   * <p>Spark reports every column of a stored table as nullable, whatever the
+   * DDL said, so the flag it sends carries nothing; the data set is where the
+   * truth is, and it names the columns it knows to be optional. Without this a
+   * script could not read a whole employee row, because the commission that
+   * Morel has as NONE is a null there.
+   */
+  private static String sparkUri() {
+    final String uri = requireNonNull(System.getenv("SPARK_REMOTE"));
+    final Set<String> nullable = BuiltInDataSet.SCOTT.sparkNullableColumns();
+    return uri
+        + (uri.contains("/;") ? ";" : "/;")
+        + "nullable="
+        + String.join(",", nullable);
   }
 
   /** Returns whether a {@code requires:} condition holds. */
@@ -304,9 +321,7 @@ public class ScriptTest {
   void testScriptTripleSpark() throws Exception {
     assumeTrue(holds("spark"), "requires spark");
     assumeTrue(holds("spark-prepare"), "requires spark-prepare");
-    try (SparkConnectionValue spark =
-        new SparkConnectionValue(
-            requireNonNull(System.getenv("SPARK_REMOTE")))) {
+    try (SparkConnectionValue spark = new SparkConnectionValue(sparkUri())) {
       Script.create("script/triple.smli")
           .withValues(ImmutableMap.of("spark", spark))
           .withSparkPushDown()

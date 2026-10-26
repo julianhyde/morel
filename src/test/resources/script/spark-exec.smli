@@ -129,21 +129,29 @@ Sys.set ("output", "tabular");
 )).execute ();
 > val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
 
-(* Query 8: left join, which asks for a whole employee row -- and cannot have
- * one. The right row is an option, because the join may find nothing; its
- * columns are not, because Spark's catalog keeps no NOT NULL for a table
- * stored as files, so a column maps to the plain type (spec.md section 1.2,
- * decision B). The commission is null for most employees, as it is in Morel's
- * data set, so reading the row raises and names the column. spark.smli does
- * the same query locally, where the data set knows the column is optional. *)
+(* Query 8: left join, which asks for a whole employee row. The right row is
+ * an option because the join may find nothing, and the commission and the
+ * manager are options because the connection was told they may be null --
+ * which Spark cannot say for itself (spec.md section 1.2). So the answer here
+ * is the answer spark.smli gets locally, type line and all. *)
 (spark.connection.prepare (fn () =>
   from d in spark.catalog.scott.depts
     left join e in spark.catalog.scott.emps on d.deptno = e.deptno
     where d.deptno >= 30
     yield {d.dname, e}
 )).execute ();
-> uncaught exception Spark [Spark: NULL_VALUE: Null in column e.comm of row 0, whose type decimal has no room for it]
->   raised at: stdIn:6.13
+> dname      e
+>            comm deptno empno ename  hiredate   job      mgr  sal
+> ---------- ---- ------ ----- ------ ---------- -------- ---- ----
+> OPERATIONS
+> SALES               30  7900 JAMES  1981-12-03 CLERK    7698  950
+> SALES         0     30  7844 TURNER 1981-09-08 SALESMAN 7698 1500
+> SALES      1400     30  7654 MARTIN 1981-09-28 SALESMAN 7698 1250
+> SALES               30  7698 BLAKE  1981-01-05 MANAGER  7839 2850
+> SALES       500     30  7521 WARD   1981-02-22 SALESMAN 7698 1250
+> SALES       300     30  7499 ALLEN  1981-02-20 SALESMAN 7698 1600
+>
+> val it : {dname:string, e:{comm:decimal option, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int option, sal:decimal} option} bag
 
 (*) Query 9: union, of bags, so every row is kept.
 (spark.connection.prepare (fn () =>

@@ -18,8 +18,10 @@
  */
 package net.hydromatic.morel.spark;
 
+import com.google.common.collect.ImmutableSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import net.hydromatic.morel.compile.BuiltIn;
@@ -36,17 +38,36 @@ import org.apache.spark.connect.proto.DataType;
  * option}, except at the top level of a row: a column maps to the plain type,
  * because Spark's catalog reports every column of a table stored as files as
  * nullable, and the decoder raises if a null actually arrives.
+ *
+ * <p>Unless the connection was told otherwise. Spark's flag says nothing about
+ * a stored table's columns -- it is true for all of them, whatever the DDL
+ * said, and cannot be asserted afterwards -- so the one place the truth is
+ * known is wherever the data came from, and a connection can carry a
+ * declaration of which columns are nullable. A declared column maps to {@code
+ * option} and its nulls arrive as {@code NONE}; an undeclared one keeps the
+ * plain type and the raise, because declaring nothing must go on meaning what
+ * it means today.
  */
 public class SparkTypes {
   private SparkTypes() {}
 
   /** Returns the Morel type of a row of the given struct type. */
   public static Type rowType(TypeSystem typeSystem, DataType schema) {
+    return rowType(typeSystem, schema, ImmutableSet.of());
+  }
+
+  /**
+   * Returns the Morel type of a row of the given struct type, where the columns
+   * named in {@code nullableColumns} are declared nullable and therefore map to
+   * {@code option}.
+   */
+  public static Type rowType(
+      TypeSystem typeSystem, DataType schema, Set<String> nullableColumns) {
     if (!schema.hasStruct()) {
       throw new SparkBackend.SparkException(
           "UNSUPPORTED_TYPE", "Expected a struct, got " + describe(schema));
     }
-    return struct(typeSystem, schema.getStruct(), false);
+    return struct(typeSystem, schema.getStruct(), false, nullableColumns);
   }
 
   /**
@@ -111,15 +132,28 @@ public class SparkTypes {
 
   private static Type struct(
       TypeSystem typeSystem, DataType.Struct struct, boolean strict) {
+    return struct(typeSystem, struct, strict, ImmutableSet.of());
+  }
+
+  private static Type struct(
+      TypeSystem typeSystem,
+      DataType.Struct struct,
+      boolean strict,
+      Set<String> nullableColumns) {
     final SortedMap<String, Type> fields = new TreeMap<>();
     for (DataType.StructField field : struct.getFieldsList()) {
       if (fields.containsKey(field.getName())) {
         throw new SparkBackend.SparkException(
             "UNSUPPORTED_TYPE", "Duplicate field name " + field.getName());
       }
+      // A column keeps the plain type unless it was declared nullable; the
+      // flag Spark sends is true for every column of a stored table, so on
+      // its own it says nothing.
+      final boolean option =
+          strict || nullableColumns.contains(field.getName());
       fields.put(
           field.getName(),
-          toType(typeSystem, field.getDataType(), field.getNullable(), strict));
+          toType(typeSystem, field.getDataType(), field.getNullable(), option));
     }
     return typeSystem.recordType(fields);
   }

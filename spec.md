@@ -89,6 +89,32 @@ be revisited when Morel has better `option` ergonomics. The pure
 mapping function (1.5) still takes the flag as an argument, so the
 strict mapping stays testable.
 
+**And B, plus a declaration.** Decision A asked for "a way to declare a
+column non-null"; what the connection takes is the other way round,
+because under B the useful thing to declare is which columns *may* be
+null. A connection's URI accepts a `nullable` parameter, a
+comma-separated list of `database.table.column`:
+
+```
+sc://localhost:15002/;nullable=scott.emps.comm,scott.emps.mgr
+```
+
+A declared column maps to `t option` and its nulls arrive as `NONE`; an
+undeclared one keeps the plain type and raises on a null, so declaring
+nothing means what it meant before. The declaration is the only source
+of this knowledge: Spark reports every column of a stored table as
+nullable whatever the DDL said, the flag cannot be asserted afterwards
+(`ALTER COLUMN ... SET NOT NULL` is refused for a file table), and
+nothing survives a write to storage. Statistics are a second source --
+`ANALYZE TABLE` then `DESCRIBE EXTENDED t col` reports `num_nulls`, which
+is 0, positive, or absent -- and would let an undeclared column be typed
+by what the data holds; it is not implemented, because a type that
+depends on the data changes when the data does.
+
+Spark's flag is still worth trusting where it is computed rather than
+stored: a struct field, an array element, and the columns of a query's
+result, which is how a left join's right row becomes an option.
+
 ### 1.3 Dates and times
 
 `Time.time` is an instant, measured from the epoch, and matches Spark's

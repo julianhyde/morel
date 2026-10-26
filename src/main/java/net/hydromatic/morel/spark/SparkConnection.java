@@ -21,6 +21,7 @@ package net.hydromatic.morel.spark;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -35,6 +36,8 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import net.hydromatic.morel.foreign.SparkBackend;
@@ -64,6 +67,13 @@ class SparkConnection implements SparkBackend.Connection {
   private final UserContext userContext;
   private final ManagedChannel channel;
   private final SparkConnectServiceGrpc.SparkConnectServiceBlockingStub stub;
+
+  /**
+   * Columns the connection was told may be null, as "database.table.column" in
+   * lower case; see {@link SparkTypes}.
+   */
+  private final ImmutableSet<String> nullableColumns;
+
   private boolean closed;
 
   SparkConnection(TypeSystem typeSystem, String uri) {
@@ -75,12 +85,30 @@ class SparkConnection implements SparkBackend.Connection {
     // Parameters follow the path, separated by ';', e.g.
     // "sc://host:port/;user_id=fred;token=...".
     final String path = u.getPath() == null ? "" : u.getPath();
+    final ImmutableSet.Builder<String> nullable = ImmutableSet.builder();
     for (String param : path.split(";")) {
       final int eq = param.indexOf('=');
-      if (eq > 0 && param.substring(0, eq).equals("user_id")) {
-        userId = param.substring(eq + 1);
+      if (eq <= 0) {
+        continue;
+      }
+      final String key = param.substring(0, eq);
+      final String value = param.substring(eq + 1);
+      if (key.equals("user_id")) {
+        userId = value;
+      } else if (key.equals("nullable")) {
+        // Which columns may be null, as "database.table.column", separated
+        // by commas. Spark cannot tell us -- it calls every column of a
+        // stored table nullable, whatever the DDL said -- so whoever knows
+        // the data says so here. Identifiers are matched without regard to
+        // case, as Spark compares them.
+        for (String column : value.split(",")) {
+          if (!column.isEmpty()) {
+            nullable.add(column.toLowerCase(Locale.ROOT));
+          }
+        }
       }
     }
+    this.nullableColumns = nullable.build();
     this.userContext = UserContext.newBuilder().setUserId(userId).build();
     this.channel =
         ManagedChannelBuilder.forAddress(u.getHost(), port)
@@ -241,18 +269,38 @@ class SparkConnection implements SparkBackend.Connection {
     return values;
   }
 
+  /** Returns a relation that reads a table. */
+  private static Relation read(String database, String table) {
+    return Relation.newBuilder()
+        .setRead(
+            Read.newBuilder()
+                .setNamedTable(
+                    Read.NamedTable.newBuilder()
+                        .setUnparsedIdentifier(
+                            quote(database) + "." + quote(table))))
+        .build();
+  }
+
+  /**
+   * Returns the columns of one table that were declared nullable, by their own
+   * names.
+   */
+  private Set<String> nullableColumnsOf(String database, String table) {
+    final String prefix =
+        (database + "." + table + ".").toLowerCase(Locale.ROOT);
+    final ImmutableSet.Builder<String> b = ImmutableSet.builder();
+    for (String column : nullableColumns) {
+      if (column.startsWith(prefix)) {
+        b.add(column.substring(prefix.length()));
+      }
+    }
+    return b.build();
+  }
+
   @Override
   public Type tableType(String database, String table) {
     checkOpen();
-    final Relation relation =
-        Relation.newBuilder()
-            .setRead(
-                Read.newBuilder()
-                    .setNamedTable(
-                        Read.NamedTable.newBuilder()
-                            .setUnparsedIdentifier(
-                                quote(database) + "." + quote(table))))
-            .build();
+    final Relation relation = read(database, table);
     final AnalyzePlanRequest request =
         AnalyzePlanRequest.newBuilder()
             .setSessionId(sessionId)
@@ -269,13 +317,21 @@ class SparkConnection implements SparkBackend.Connection {
       throw toException(e);
     }
     final Type rowType =
-        SparkTypes.rowType(typeSystem, response.getSchema().getSchema());
+        SparkTypes.rowType(
+            typeSystem,
+            response.getSchema().getSchema(),
+            nullableColumnsOf(database, table));
     return typeSystem.bagType(rowType);
   }
 
   @Override
   public List<Object> rows(String database, String table) {
-    return sql("SELECT * FROM " + quote(database) + "." + quote(table)).rows();
+    // Decoded as the type this connection says the table has, which is not
+    // always the type Spark's own schema would give: a declared column is an
+    // option here and a plain column there, and the rows must match what the
+    // program was typed against.
+    final Type rowType = tableType(database, table).arg(0);
+    return ArrowDecoder.decode(batches(read(database, table)).batches, rowType);
   }
 
   /** Quotes an identifier with back-ticks, as Spark SQL does. */

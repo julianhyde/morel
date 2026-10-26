@@ -72,4 +72,19 @@ spark.catalog.scott.nonesuch;
 )).execute ();
 > val it = ["ACCOUNTING"] : string bag
 
+(* A connection told nothing about nullability keeps the plain types and
+ * raises when a null arrives, naming the column. "connectDefault" opens the
+ * server named by SPARK_REMOTE without the declaration the harness adds, so
+ * it is such a connection. This is what every connection did before the
+ * declaration existed, and what one still does for a table whose nulls
+ * nobody has mentioned. *)
+val bare = Spark.connectDefault ();
+> val bare = {catalog={},connection=<connection sc://localhost:15002>}
+>   : {catalog:{...}, connection:connection, ...}
+bare.catalog.scott.emps;
+> uncaught exception Spark [Spark: NULL_VALUE: Null in column comm of row 0, whose type decimal has no room for it]
+>   raised at: 0.0-0.0
+bare.connection.close ();
+> val it = () : unit
+
 (*) End spark-error.smli
