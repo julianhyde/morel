@@ -146,14 +146,20 @@ public class SparkTypes {
         throw new SparkBackend.SparkException(
             "UNSUPPORTED_TYPE", "Duplicate field name " + field.getName());
       }
-      // A column keeps the plain type unless it was declared nullable; the
-      // flag Spark sends is true for every column of a stored table, so on
-      // its own it says nothing.
-      final boolean option =
-          strict || nullableColumns.contains(field.getName());
+      // Whether the value may be absent, from whichever source knows.
+      //
+      // At the top level of a row, Spark's flag says nothing: it is true for
+      // every column of a stored table, whatever the DDL said, so a column
+      // is optional if and only if the connection was told so. One level
+      // down -- inside a struct, an array or a map -- the flag is recorded
+      // rather than inferred, and it is the only thing that knows.
+      final boolean nullable =
+          strict
+              ? field.getNullable()
+              : nullableColumns.contains(field.getName());
       fields.put(
           field.getName(),
-          toType(typeSystem, field.getDataType(), field.getNullable(), option));
+          toType(typeSystem, field.getDataType(), nullable, true));
     }
     return typeSystem.recordType(fields);
   }

@@ -201,6 +201,34 @@ public class SparkTypesTest {
         is("{empno:int, ename:string, mgr:int option}"));
   }
 
+  /**
+   * Tests that each level takes its nullability from the source that knows it:
+   * a column from the declaration, a struct's field from Spark's flag.
+   *
+   * <p>So a nullable column that nobody declared is plain, while a nullable
+   * field of a struct in that same column is an option -- the flag being
+   * recorded one level down and merely assumed at the top.
+   */
+  @Test
+  void testNullabilityPerLevel() {
+    final TypeSystem ts = typeSystem();
+    final DataType schema =
+        struct(
+            field("a", INT, true),
+            field(
+                "st",
+                struct(field("x", INT, true), field("y", STRING, false)),
+                true));
+    assertThat(
+        SparkTypes.rowType(ts, schema).moniker(),
+        is("{a:int, st:{x:int option, y:string}}"));
+    // Declaring the column makes the column an option; its fields are
+    // unaffected, because the flag already decided them.
+    assertThat(
+        SparkTypes.rowType(ts, schema, ImmutableSet.of("a", "st")).moniker(),
+        is("{a:int option, st:{x:int option, y:string} option}"));
+  }
+
   @Test
   void testDescribe() {
     assertThat(SparkTypes.describe(DECIMAL), is("decimal(10,2)"));
