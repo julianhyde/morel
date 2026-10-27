@@ -174,7 +174,18 @@ widening it would invent digits), `string`, `bool`, `Time.time` to
 `timestamp`, `Date.date` to `timestamp_ntz`, `word list` to `binary`,
 `t list` to `array<t>`, records to structs, `t option` to nullable
 `t`. A `char` is a one-character `string`. `unit` is a struct with no
-fields. Tuples are structs with fields `1`, `2`, ... A datatype other
+fields.
+
+`decimal` is the one type whose image is not determined by 1.1: Morel's
+decimal is decimal128 and carries no precision or scale, where every
+Spark decimal column has both. A column of them is therefore
+`decimal(38, 18)`, which is the width Spark itself gives a column it
+infers from a `BigDecimal` (`DecimalType.SYSTEM_DEFAULT`), and each
+value is restated at that scale. A value that does not fit -- more
+fractional digits than the scale, or more digits than the precision --
+is refused with `UNSUPPORTED_TYPE` rather than rounded.
+
+Tuples are structs with fields `1`, `2`, ... A datatype other
 than `option` crosses as a tagged struct: `{tag: string, a: ..., b:
 ...}` with one nullable field per constructor that has an argument.
 Function types, and types containing them, are rejected.
@@ -287,8 +298,21 @@ variables of the body other than the parameter are bound in the
 environment at that point, and their values cross the boundary
 according to 1.6 when the plan is prepared: a table read from the
 catalog becomes a table scan, and any other collection becomes a
-LocalRelation. At `execute`, the argument crosses the same way, as a
-literal or a LocalRelation, and the plan runs.
+LocalRelation.
+
+What a collection *is* decides this, never what it is called. A query
+may name a table of the connection's catalog
+(`spark.catalog.scott.emps`), a data set of its own session that
+happens to have the same name (`scott.emps`), or a record of its own
+with a field that holds a collection (`db.t`); only the first is a
+table of the server, and the others cross as their rows. So a data-set
+name is not a table name: to read the server's table, reach it through
+a catalog. Deciding by the shape of the name instead would mean
+sending a query to a table that merely shares a name with the data it
+was written against, and answering from it without a word.
+
+At `execute`, the argument crosses the same way, as a literal or a
+LocalRelation, and the plan runs.
 
 A function bound to a name (`prepare (spark, f)`) is not accepted in
 phase 1, because the compiler has the name's value, a closure, and not

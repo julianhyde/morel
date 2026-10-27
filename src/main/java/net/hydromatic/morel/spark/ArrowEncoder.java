@@ -24,6 +24,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import net.hydromatic.morel.foreign.SparkBackend;
@@ -33,6 +35,7 @@ import net.hydromatic.morel.type.Type;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BitVector;
+import org.apache.arrow.vector.DecimalVector;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
@@ -147,6 +150,10 @@ public class ArrowEncoder {
 
   /** Returns the Arrow type of a Morel type. */
   private static ArrowType arrowType(Type type) {
+    if (type.moniker().equals("decimal")) {
+      return new ArrowType.Decimal(
+          SparkSchema.DECIMAL_PRECISION, SparkSchema.DECIMAL_SCALE, 128);
+    }
     if (type instanceof PrimitiveType) {
       switch ((PrimitiveType) type) {
         case BOOL:
@@ -163,6 +170,46 @@ public class ArrowEncoder {
     }
     throw new SparkBackend.SparkException(
         "UNSUPPORTED_TYPE", "Morel type " + type + " has no Spark equivalent");
+  }
+
+  /**
+   * Returns a decimal at the scale an uploaded column has.
+   *
+   * <p>A Morel decimal carries its own scale, and every value of a column has
+   * to carry the column's, so each is restated at that scale. A value that
+   * cannot be -- more fractional digits than the scale, or more digits than the
+   * precision -- is refused, because the alternative is to round it and send
+   * something the program did not say.
+   */
+  private static BigDecimal decimal(BigDecimal value) {
+    final BigDecimal scaled;
+    try {
+      scaled =
+          value.setScale(SparkSchema.DECIMAL_SCALE, RoundingMode.UNNECESSARY);
+    } catch (ArithmeticException e) {
+      throw new SparkBackend.SparkException(
+          "UNSUPPORTED_TYPE",
+          "Decimal "
+              + value
+              + " has more digits after the point than Spark's"
+              + " decimal("
+              + SparkSchema.DECIMAL_PRECISION
+              + ", "
+              + SparkSchema.DECIMAL_SCALE
+              + ") can hold");
+    }
+    if (scaled.precision() > SparkSchema.DECIMAL_PRECISION) {
+      throw new SparkBackend.SparkException(
+          "UNSUPPORTED_TYPE",
+          "Decimal "
+              + value
+              + " has more digits than Spark's decimal("
+              + SparkSchema.DECIMAL_PRECISION
+              + ", "
+              + SparkSchema.DECIMAL_SCALE
+              + ") can hold");
+    }
+    return scaled;
   }
 
   /** Writes one value into a vector. */
@@ -188,6 +235,8 @@ public class ArrowEncoder {
       ((IntVector) vector).setSafe(row, ((Number) v).intValue());
     } else if (vector instanceof Float8Vector) {
       ((Float8Vector) vector).setSafe(row, ((Number) v).doubleValue());
+    } else if (vector instanceof DecimalVector) {
+      ((DecimalVector) vector).setSafe(row, decimal((BigDecimal) v));
     } else if (vector instanceof VarCharVector) {
       ((VarCharVector) vector)
           .setSafe(row, v.toString().getBytes(StandardCharsets.UTF_8));

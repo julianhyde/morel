@@ -19,6 +19,7 @@
 package net.hydromatic.morel.spark;
 
 import static java.util.Objects.requireNonNull;
+import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -28,12 +29,15 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.function.Consumer;
 import net.hydromatic.morel.BuiltInDataSet;
 import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.compile.CompileException;
 import net.hydromatic.morel.compile.Compiles;
 import net.hydromatic.morel.compile.Environment;
@@ -42,8 +46,12 @@ import net.hydromatic.morel.compile.Inliner;
 import net.hydromatic.morel.compile.Resolver;
 import net.hydromatic.morel.compile.TypeResolver;
 import net.hydromatic.morel.foreign.Calcite;
+import net.hydromatic.morel.foreign.ForeignValue;
+import net.hydromatic.morel.foreign.MockSparkConnection;
+import net.hydromatic.morel.foreign.SparkCatalog;
 import net.hydromatic.morel.parse.MorelParserImpl;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -61,15 +69,36 @@ public class SparkTranslatorTest {
     final Core.Rel rel;
 
     Fixture(String ml) {
+      // The catalog types its tables as it discovers them, and a salary is a
+      // decimal, which is a built-in datatype: the type system has to know
+      // them before anything asks.
+      BuiltIn.dataTypes(typeSystem, new ArrayList<>());
       final MorelParserImpl parser = new MorelParserImpl(new StringReader(ml));
       final AstNode statement = parser.statementEofSafe();
-      final Environment env =
-          Environments.env(
-              typeSystem,
-              null,
-              Calcite.withDataSets(
-                      ImmutableMap.of("scott", BuiltInDataSet.SCOTT))
-                  .foreignValues());
+      final Map<String, ForeignValue> dataSets =
+          Calcite.withDataSets(ImmutableMap.of("scott", BuiltInDataSet.SCOTT))
+              .foreignValues();
+      // A query reaches a table of the server through a catalog, and the
+      // translator scans a table only if that is where the collection came
+      // from, so "scott" here is a database of the offline catalog rather
+      // than the data set itself. The offline catalog's databases are the
+      // session's data sets (spec.md section 2.5), so the query reads as it
+      // would in a script and the table it names is the one Spark knows.
+      final SparkCatalog catalog =
+          new SparkCatalog(new MockSparkConnection(typeSystem, dataSets));
+      Environment env = Environments.env(typeSystem, null, ImmutableMap.of());
+      for (String name : dataSets.keySet()) {
+        // Bound as a value rather than as a foreign value: a foreign value
+        // stays an expression, for Calcite to push down, where a value folds
+        // into the table it holds, which is what the translator reads.
+        catalog.discoverField(typeSystem, name);
+        final TypedValue database =
+            catalog.fieldValueAs(name, TypedValue.class);
+        env =
+            env.bind(
+                core.idPat(database.typeKey().toType(typeSystem), name, 0),
+                database);
+      }
       final Ast.ValDecl valDecl = Compiles.toValDecl(statement);
       final Consumer<CompileException> ignoreWarnings = w -> {};
       final TypeResolver.Resolved resolved =

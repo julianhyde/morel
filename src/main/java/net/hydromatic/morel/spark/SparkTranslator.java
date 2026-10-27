@@ -354,20 +354,21 @@ public class SparkTranslator {
       rows(exp).forEach(row -> values.add(value(row)));
       return localRelation(planId, values, exp.type);
     }
-    if (tableName(exp) != null) {
+    final String table = catalogTable(exp);
+    if (table != null) {
       return Relation.newBuilder()
           .setCommon(RelationCommon.newBuilder().setPlanId(planId))
           .setRead(
               Read.newBuilder()
                   .setNamedTable(
                       Read.NamedTable.newBuilder()
-                          .setUnparsedIdentifier(tableName(exp))))
+                          .setUnparsedIdentifier(table)))
           .build();
     }
     if (exp.op == Op.VALUE_LITERAL) {
       // A collection the query reached through a name rather than writing out,
-      // and not a table of the catalog: its rows cross as a local relation,
-      // as an inline collection's do (spec.md section 1.6).
+      // and not a table of a catalog: its rows cross as a local relation, as
+      // an inline collection's do (spec.md section 1.6).
       final Object value = ((Core.Literal) exp).valueObject();
       if (value instanceof List) {
         return localRelation(planId, (List<Object>) value, exp.type);
@@ -377,48 +378,29 @@ public class SparkTranslator {
   }
 
   /**
-   * Returns the name of the table a collection reads, or null if it is not a
-   * table.
+   * Returns what Spark calls the table a collection reads, or null if the
+   * collection is not a table of a connection's catalog.
    *
-   * <p>A table is a field of a field: {@code scott.emps} names the database and
-   * the table, and Spark wants the two joined by a dot, as the user wrote them.
-   * A catalog reached through a connection is deeper -- {@code
-   * spark.catalog.scott.emps} -- and the last two names are still the ones
-   * Spark knows the table by, so the chain is read from the end.
+   * <p>The name is no guide, so the value decides. A query that reads {@code
+   * scott.emps} may mean a table of the server, if it reached it through a
+   * connection's catalog; or a data set of its own session that happens to have
+   * that name; or a record of its own with a field that holds a collection.
+   * Only the first is a table on the server, and the others cross as their
+   * rows, however they are named (spec.md section 2.2).
+   *
+   * <p>A table arrives as a value, because inlining replaced the expression
+   * that read it with what it holds, and what a catalog holds is the table
+   * itself -- which knows the name Spark has for it. The offline connection's
+   * catalog answers the same way, so a plan can be prepared with no server.
    */
-  private static @Nullable String tableName(Core.Exp exp) {
-    final List<String> names = new ArrayList<>();
-    for (Core.Exp e = exp; ; ) {
-      // A table read from a catalog arrives as a value, because inlining
-      // replaced the expression that read it with the rows it holds. A table
-      // of the connection's own catalog says what Spark calls it; any other
-      // value says only what it came from, which the value remembers, and the
-      // name is in that expression rather than in the rows.
-      if (e.op == Op.VALUE_LITERAL) {
-        final Object value = ((Core.Literal) e).valueObject();
-        if (value instanceof SparkCatalog.Table) {
-          return ((SparkCatalog.Table) value).qualifiedName();
-        }
-        final Core.Exp source = ((Core.Literal) e).valueExp();
-        if (source != null && source != e) {
-          e = source;
-          continue;
-        }
+  private static @Nullable String catalogTable(Core.Exp exp) {
+    if (exp.op == Op.VALUE_LITERAL) {
+      final Object value = ((Core.Literal) exp).valueObject();
+      if (value instanceof SparkCatalog.Table) {
+        return ((SparkCatalog.Table) value).qualifiedName();
       }
-      if (e.op == Op.APPLY && ((Core.Apply) e).fn.op == Op.RECORD_SELECTOR) {
-        final Core.Apply apply = (Core.Apply) e;
-        names.add(selectedName(apply));
-        e = apply.arg;
-        continue;
-      }
-      if (e.op == Op.ID) {
-        names.add(((Core.Id) e).idPat.name);
-      }
-      break;
     }
-    // The names came off the chain from the outside in, so the table is first
-    // and the database second; fewer than two names is not a table.
-    return names.size() < 2 ? null : names.get(1) + "." + names.get(0);
+    return null;
   }
 
   /** Translates a set operator. */
@@ -512,6 +494,12 @@ public class SparkTranslator {
         final ImmutableList.Builder<Object> fields = ImmutableList.builder();
         ((Core.Tuple) exp).args.forEach(arg -> fields.add(value(arg)));
         return fields.build();
+      case VALUE_LITERAL:
+        // A row the compiler folded into a value. A decimal is written as a
+        // call -- "decimal \"1.5\"" -- which folds, and a record of such
+        // calls folds with it, so what is left is the value itself, in the
+        // form the encoder wants.
+        return requireNonNull(((Core.Literal) exp).valueObject(), "row value");
       default:
         throw unsupported("a row that is " + exp.op);
     }

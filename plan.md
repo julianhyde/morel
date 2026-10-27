@@ -696,6 +696,42 @@ about values it manufactures -- `coalesce(mgr, -1)` reports
 `assert_not_null` is not callable from SQL, so there is no wrapper that
 keeps the values and corrects the flag.)
 
+**What makes a collection a table?** The translator used to answer by
+the shape of the name: any two-part chain was a table of the server, so
+`scott.emps` scanned the server's table -- which the container has, by
+construction -- and a record of the session's own whose field holds a
+collection (`db.t`) was sent to the server as the table `db`.`t` and
+failed there. It also meant that a query written against a data set
+could be answered from a server table that merely shared its name,
+without a word.
+
+The name is no guide, so the value decides: a collection is a table
+scan if and only if it is a table of a connection's catalog, and every
+other collection crosses as its rows (spec.md sections 1.6 and 2.2).
+Morel already had the namespace this needs -- `spark.catalog.scott.emps`
+is how a query says it means the server -- and what was missing was
+requiring it.
+
+Three things that cost. A query names its sources but does not evaluate
+them, and in a script `spark.catalog.scott.emps` is still an expression
+when the translator sees it, so `prepare` now folds each source to the
+value it denotes first, using the environment it alone still has; the
+translator reads values, not names. The encoder had no decimal, so no
+collection holding one could cross at all -- a gap of its own, which
+the uploads exposed. And a row of constants is folded into a value by
+the time it arrives, which the inline-collection path did not expect.
+
+What moved: `triple.smli` names the data set, because its other two
+modes need it to, so its Spark mode now uploads those rows rather than
+scanning the container's copy. The answers are unchanged, and the test
+no longer depends on the container holding a copy of the data set --
+`spark-exec.smli` is where reading the server's tables is tested, and
+says `spark.catalog` when it means it. `SparkTranslatorTest` used to
+reach its tables as a bare data set, which is exactly what no longer
+scans, so it binds the offline catalog's databases instead: the
+seventeen captured plans are unchanged, and the fixture now names
+tables the way a program has to.
+
 **Should an uploaded collection be sent once and reused?** A catalog
 table costs nothing to refer to twice -- it is a name that Spark resolves
 -- but a local collection crosses as a `LocalRelation`, and since

@@ -97,6 +97,12 @@ public class SparkSchema {
     quote(primitive(type), b);
   }
 
+  /** Precision of an uploaded decimal column: Spark's own default, 38. */
+  static final int DECIMAL_PRECISION = 38;
+
+  /** Scale of an uploaded decimal column: Spark's own default, 18. */
+  static final int DECIMAL_SCALE = 18;
+
   /** Appends a JSON string literal. */
   private static void quote(String s, StringBuilder b) {
     b.append('"');
@@ -115,6 +121,15 @@ public class SparkSchema {
   }
 
   private static String primitive(Type type) {
+    if (type.moniker().equals("decimal")) {
+      // Morel's decimal has no precision or scale of its own -- it is
+      // decimal128, 34 significant digits, and each value carries its own
+      // scale -- so a column of them has to be given one. This is the width
+      // Spark itself gives a column it infers from a BigDecimal
+      // (DecimalType.SYSTEM_DEFAULT), and a value too wide for it is refused
+      // rather than rounded (spec.md section 1.6).
+      return "decimal(" + DECIMAL_PRECISION + "," + DECIMAL_SCALE + ")";
+    }
     if (type instanceof PrimitiveType) {
       switch ((PrimitiveType) type) {
         case BOOL:

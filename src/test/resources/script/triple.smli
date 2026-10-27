@@ -21,19 +21,23 @@
  * Spark. Morel-Java's suite runs this script three times: locally;
  * in Calcite "hybrid" mode with a tracer that fails if a query is
  * not pushed down (ScriptTest.testScriptTripleCalcite); and with
- * every query wrapped in Spark.remote, against the container that
- * start-spark.sh starts, whose scott database holds the same rows as
- * the data set (ScriptTest.testScriptTripleSpark).
+ * every query wrapped in Spark.remote, run on the container that
+ * start-spark.sh starts (ScriptTest.testScriptTripleSpark).
+ *
+ * The queries name the data set, as the other two modes need them to,
+ * and a data set is not a table of the server, so its rows cross to
+ * Spark and the query runs over them there. All three modes therefore
+ * answer from the same rows -- these answers do not depend on the
+ * container holding a copy of the data set -- and what the Spark mode
+ * tests is the translator and Spark's own evaluation. Reading the
+ * server's tables is spark-exec.smli's job, where a query says
+ * "spark.catalog.scott.emps" and means it.
  *
  * So every query here must be one that all three can answer, and
  * answer alike. dual.smli holds queries that only the first two can
  * do; what keeps a query out of this file is recorded in plan.md,
- * under M11. In particular:
- *
- *  - no query reads "comm" or a whole employee row, because the
- *    catalog's "comm" is a decimal where the data set's is a decimal
- *    option, and the two answer differently;
- *  - no query yields unit, which Spark has no column for.
+ * under M11. In particular, no query yields unit, which Spark has no
+ * column for.
  *
  * Do not call Sys.plan, whose output differs between modes.
  *)
@@ -358,9 +362,10 @@ from e in scott.emps
 >
 > val it : {r:real} bag
 
-(* A column the data set has nulls in. The plan decodes its rows as the type
- * the program was typed against, which knows the column is optional, so the
- * commission that is not there is NONE wherever the query ran. *)
+(* A column the data set has nulls in. The rows cross as the type the
+ * program was typed against, which knows the column is optional, so a
+ * commission that is not there is NONE on the way out and NONE on the way
+ * back, wherever the query ran. *)
 from e in scott.emps
   where e.deptno = 10
   yield {e.ename, e.comm};

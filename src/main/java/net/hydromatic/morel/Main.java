@@ -923,9 +923,10 @@ public class Main {
    *
    * <p>An expression statement becomes {@code (spark.connection.remote (fn ()
    * => e)) ()}, which prepares the query, runs it on the connection the harness
-   * bound as {@code spark}, and brings back the rows. The statement is written
-   * back out and parsed again rather than built by hand, because a statement
-   * knows how to write itself and the wrapper is three tokens.
+   * bound as {@code spark}, and brings back the rows. The query keeps the names
+   * it had, so a data set it reads crosses as its rows: the flag runs a query
+   * on Spark with the data it needs, and a query that means a table of the
+   * server says so, through the connection's catalog.
    *
    * <p>A declaration is left alone: it binds a name, and the names a script
    * binds are the script's own. So is a call to the {@code Sys} structure,

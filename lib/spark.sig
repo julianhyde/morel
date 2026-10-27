@@ -104,6 +104,13 @@ sig
    * by then, and its tree is gone. Everything the body reads other than its
    * parameter is fixed when the plan is prepared; the argument is the only
    * thing that varies from one execution to the next.
+   *
+   * What the query reads crosses when the plan is made: a table of `c`'s
+   * catalog becomes a scan of that table, and every other collection -- a
+   * list of the session's own, a data set, a value a query computed --
+   * becomes rows the plan carries. What a collection is decides which, not
+   * what it is named: a data set named `scott` is not the server's `scott`,
+   * so read the server's table through `c.catalog`.
    *)
   val prepare : connection * ('a -> 'b) -> ('a, 'b) plan
     [@@method] [@@prototype "prepare (c, f)"]
