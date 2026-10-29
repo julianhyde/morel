@@ -120,6 +120,10 @@ will add any missing data types, e.g. a `decimal` type.
   exceptions.
 * **M11 Edge cases.** Extend coverage to the tricky operators; repurpose the
   `dual` tests into a triple (local/Calcite/Spark) format.
+* **M12 The session.** Make a shell session a usable front end: bind
+  `spark` from the command line, push queries down from a session
+  property rather than a flag that only the harness reads, and make the
+  convenient form work outside a checkout. See "The session".
 
 ## Notes
 
@@ -586,6 +590,131 @@ server.
 
 What remains of M11: nothing that can be done without deciding the `comm`
 question below.
+
+## The session
+
+The API is small and composes, and browsing a catalog -- `spark.catalog;`,
+then `spark.catalog.scott;`, then `spark.catalog.scott.emps;`, the type
+growing as you look -- is better than a SQL client gives you. Getting to
+that point is not: a session's first ten minutes are an environment
+variable, a flag that appears to do nothing, a `Spark.connectDefault` that
+no help text mentions, and then thirty characters of `(spark.connection.remote
+(fn () => ...)) ()` wrapped around every query. M12 is about those ten
+minutes.
+
+### What `--spark` means
+
+It means **connect to a server, call it `spark`, and send queries to it**.
+It starts nothing and stops nothing: a server is started by running
+`src/test/resources/spark/start-spark.sh`, which is where the options for
+that already are, and no Morel invocation should be in that business.
+
+* `--spark` is `--spark=sc://localhost:15002`, the default Connect port,
+  overridden by `$SPARK_REMOTE` if that is set;
+* `--spark=URI` is that URI, whatever `$SPARK_REMOTE` says;
+* either form binds `spark` and sets `sparkPushDown`, so a query typed
+  into the session goes to Spark;
+* `--no-spark` is exactly what omitting `--spark` does -- nothing bound,
+  nothing pushed down, `$SPARK_REMOTE` not consulted -- and is there to
+  be able to say so.
+
+There is no `--spark-push-down`. One flag means one thing: connect, bind,
+push. The suite does not need the flag either, because `Main` already
+takes a `Map<Prop, Object>` and `Script` already builds one, so
+`withSparkPushDown` sets `Prop.SPARK_PUSH_DOWN` in that map rather than
+passing an argument -- which is also how it keeps the connection it
+opened, declaration and all, instead of one made from `$SPARK_REMOTE`.
+
+So the session is three lines, and the first of them is not Morel's
+business:
+
+```
+$ src/test/resources/spark/start-spark.sh     # or your own cluster
+$ ./morel --spark
+- from e in spark.catalog.scott.emps group e.deptno compute {c = count over ()};
+```
+
+The wrapper resolves the URI -- explicit flag, then `$SPARK_REMOTE`, then
+the default port -- and exports `SPARK_REMOTE`, so inside Java there is
+still exactly one place a default URI comes from, the
+`SparkConnections.defaultUri()` that `connectDefault` already reads. The
+Java-side flag stays bare `--spark`.
+
+Connecting is lazy, and that is worth keeping: gRPC's channel does not dial
+until an RPC, and a catalog asks the server nothing until a field is
+discovered. So `./morel --spark` with no server running starts a session and
+fails when you touch the catalog, which is the right moment, provided the
+error names the URI it could not reach.
+
+Two consequences of `--spark` implying push-down, both worth knowing rather
+than designing around:
+
+* Every query goes to Spark, including a query over a list the session
+  built, whose rows are uploaded to be queried there. That is what was
+  asked for; `Sys.set ("sparkPushDown", false)` turns it off for the rest
+  of the session, and there is no flag for binding without pushing because
+  the property is enough.
+* A query over a *foreign data set* uploads it, because a data set is not a
+  table of the server. For `scott` that is fourteen rows; for a large JDBC
+  data set it means materialising it locally and shipping it, which is
+  worse than not pushing down at all. The flag suits a session whose data
+  is in Spark; a session that mixes the two should name
+  `spark.catalog.<db>.<table>` for the Spark side and turn the property off
+  for the rest.
+
+More than one connection is a language matter, not a flag: `--spark` binds
+the default one, and `val b = Spark.connect "sc://other:15002/;nullable=..."`
+binds another. Each connection has its own catalog, its own declaration and
+its own plans, and a plan runs on the connection it was prepared for.
+
+### What M12 does
+
+1. **Bind `spark`.** Nothing binds that name outside `ScriptTest.withValues`
+   today, which is why the first step is undiscoverable and why the
+   push-down flag has nothing to name. `--spark[=URI]` puts the connect
+   record in the initial environment, as `--foreign=CLASS` puts a data set
+   there; `config.valueMap` holds `ForeignValue`s, and the record wraps in a
+   two-method one, the trick `SparkTranslatorTest` uses for catalog
+   databases.
+2. **Move the rewrite to the chokepoint.** Three paths parse a statement --
+   `Main.command`, `Shell.runEval` and `Shell.SubShell` -- and only the first
+   calls `pushDown`, which is why `--spark-push-down` does nothing in the
+   shell. All three call `Compiles.prepareStatement`, so the rewrite belongs
+   there, as a function rather than a method on `Main`.
+3. **A session property, not a flag.** `Prop.HYBRID` is the precedent, so
+   `Prop.SPARK_PUSH_DOWN` ("sparkPushDown", BOOL, false);
+   `prepareStatement` has the `Session` and can read it. `--spark` sets it,
+   a session can turn it on and off, and the suite sets it in the prop map
+   it already passes to `Main`, so `--spark-push-down` goes away rather
+   than becoming the property's initial value.
+4. **Take the container out of the wrapper.** `--spark` runs
+   `start-spark.sh` today, by a relative path, so the convenient form
+   works only from the repository root. It should not run it at all:
+   `--spark` resolves a URI and nothing else, which removes the relative
+   path, the Docker dependency and the `--help` text that promises to
+   start something. `--spark` then also sets `sparkPushDown`, so the flag
+   does what its name says in one step.
+
+Two things deliberately not in M12, so that they are not forgotten:
+
+* **What a refusal does.** Phase 1 is all or nothing, so a query the
+  translator cannot do raises where the plan is made. Strict is what the
+  suite needs, and what a session gets for now; falling back to local
+  evaluation with one line saying why (`sparkPushDown = "try"`) would be
+  kinder in a shell, and is a separate decision.
+* **Showing that a query was pushed down.** With Calcite, `Sys.plan ()`
+  reads `globalMarshal(globals [scott], body calcite(plan
+  LogicalProject(...)))`. The symmetric thing -- a pushed-down query's plan
+  reading `spark(plan root { ... })` -- is what a user would look at first,
+  and is worth doing once the property exists.
+
+### Nullability, which is not M12
+
+Declaring nullable columns one at a time in a URI is right for `scott` and
+unusable for a warehouse; the directions (wildcards, Spark's `num_nulls`
+statistics, a declaration outside the URI) are logged as their own issue,
+because the choice between them is a design decision and not part of making
+the shell work.
 
 ## Phase 2 questions
 
