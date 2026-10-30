@@ -152,6 +152,39 @@ public class ShellTest {
   }
 
   /**
+   * Tests that {@code --spark} binds a connection and pushes queries to it.
+   *
+   * <p>The offline connection ({@code mock:}) makes this a test that needs no
+   * server: it translates a query as a real connection does and refuses to
+   * execute one, so the error it raises is proof that the query was rewritten
+   * for Spark, the property was set, and the connection was bound -- the three
+   * things the flag has to do.
+   */
+  @Test
+  void testSparkOption() throws IOException {
+    final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    final ByteArrayInputStream bais = new ByteArrayInputStream(new byte[0]);
+    final Shell.Config config =
+        Shell.parse(
+            Shell.Config.DEFAULT,
+            ImmutableList.of(
+                "--system=false",
+                "--terminal=dumb",
+                "--banner=false",
+                "--spark=mock:",
+                "-e",
+                "from r in [{i = 1}, {i = 2}] where r.i > 1"));
+    final Shell shell = Shell.create(config, bais, baos);
+    shell.run();
+    final String outString = baos.toString(UTF_8.name()).replace("\r\n", "\n");
+    assertThat(
+        outString,
+        is(
+            "uncaught exception Spark [Spark: MOCK: The offline connection"
+                + " cannot execute a plan; connect to a server]\n"));
+  }
+
+  /**
    * Tests that {@code use} raises {@code Interact.EvalOnly} in eval mode.
    *
    * <p>Eval mode has no shell to read a file into, which is a different thing

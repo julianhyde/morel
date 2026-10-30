@@ -77,14 +77,79 @@ public abstract class Compiles {
       @Nullable Calcite calcite,
       Consumer<CompileException> warningConsumer,
       Tracer tracer) {
+    final AstNode statement2 = pushDown(session, env, statement);
     Ast.Decl decl;
-    if (statement instanceof Ast.Exp) {
-      decl = toValDecl((Ast.Exp) statement);
+    if (statement2 instanceof Ast.Exp) {
+      decl = toValDecl((Ast.Exp) statement2);
     } else {
-      decl = (Ast.Decl) statement;
+      decl = (Ast.Decl) statement2;
     }
     return prepareDecl(
         typeSystem, session, env, calcite, decl, warningConsumer, tracer);
+  }
+
+  /**
+   * Returns a statement with every query pushed down to Spark, or the statement
+   * itself if the session is not asking for that.
+   *
+   * <p>A query becomes {@code (spark.connection.remote (fn () => e)) ()}, which
+   * translates it for the connection the session has bound as {@code spark},
+   * runs it there, and brings back the rows. The query keeps the names it had,
+   * so a data set it reads crosses as its rows: the property runs a query on
+   * Spark with the data it needs, and a query that means a table of the server
+   * says so, through the connection's catalog.
+   *
+   * <p>A declaration is left alone: it binds a name, and the names a session
+   * binds are its own. So is a call to the {@code Sys} structure, which
+   * configures the session rather than asking a question, and which Spark could
+   * not answer.
+   *
+   * <p>This is where every statement passes, whichever way Morel was started --
+   * a shell, a script, {@code --eval} -- so the property means the same thing
+   * in all of them.
+   */
+  private static AstNode pushDown(
+      Session session, Environment env, AstNode statement) {
+    if (!Prop.SPARK_PUSH_DOWN.booleanValue(session.map)
+        || !isQuery(statement)) {
+      return statement;
+    }
+    final Ast.Exp query = (Ast.Exp) statement;
+    if (env.getTop("spark") == null) {
+      // Pushing down needs a connection, and the rewrite would name one that
+      // is not there; "unbound variable spark" would not say why.
+      throw new CompileException(
+          "sparkPushDown is set, but no connection is bound as 'spark';"
+              + " start Morel with --spark, or bind one with"
+              + " 'val spark = Spark.connect uri'",
+          false,
+          query.pos());
+    }
+    // Built as a tree rather than as text, because writing a query out and
+    // parsing it again is not faithful: a nested query loses its parentheses,
+    // and the step after it is read as the subquery's own.
+    final Pos pos = query.pos();
+    final Ast.Exp connection =
+        ast.apply(ast.recordSelector(pos, "connection"), ast.id(pos, "spark"));
+    final Ast.Exp remote =
+        ast.apply(ast.recordSelector(pos, "remote"), ast.id(pos, "Spark"));
+    final Ast.Exp fn = ast.fn(pos, ast.match(pos, ast.tuplePat(pos), query));
+    return ast.apply(
+        ast.apply(remote, ast.tuple(pos, ImmutableList.of(connection, fn))),
+        ast.unitLiteral(pos));
+  }
+
+  /**
+   * Returns whether a statement is a query that Spark could be asked to run: a
+   * {@code from} with at least one step.
+   *
+   * <p>Everything else is left alone -- a declaration binds a name, a call to
+   * {@code Sys} configures the session, and a bare {@code from} asks for one
+   * empty row, which is not a question for a cluster.
+   */
+  private static boolean isQuery(AstNode statement) {
+    return statement instanceof Ast.From
+        && !((Ast.From) statement).steps.isEmpty();
   }
 
   /**

@@ -260,4 +260,15 @@ from e in scott.emps
 >
 > val it : {deptno:int, job:string, n:int, s:decimal} list
 
+(* The "sparkPushDown" property sends each query to the connection bound as
+ * "spark"; with none bound, saying so is better than the "unbound variable
+ * spark" that the rewrite would otherwise raise. *)
+Sys.set ("sparkPushDown", true);
+> val it = () : unit
+from i in [1, 2] where i > 1;
+> stdIn:1.1-1.29 Error: sparkPushDown is set, but no connection is bound as 'spark'; start Morel with --spark, or bind one with 'val spark = Spark.connect uri'
+>   raised at: stdIn:1.1-1.29
+Sys.set ("sparkPushDown", false);
+> val it = () : unit
+
 (*) End spark.smli

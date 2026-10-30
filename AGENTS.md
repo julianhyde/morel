@@ -371,6 +371,13 @@ export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
 ./mvnw test -Dtest=SparkConnectTest -Dmorel.spark=true
 ```
 
+To use that server from a session, where `--spark` binds it as `spark` and
+sends each query to it:
+
+```bash
+./morel --spark
+```
+
 `plan.md` and `spec.md` at the root of the repository hold the plan and
 design for the Spark work.
 

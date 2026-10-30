@@ -19,7 +19,6 @@
 package net.hydromatic.morel;
 
 import static java.util.Objects.requireNonNull;
-import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.util.Static.str;
 
 import com.google.common.collect.ArrayListMultimap;
@@ -52,7 +51,6 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.function.Consumer;
-import net.hydromatic.morel.ast.Ast;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.compile.CompileException;
@@ -83,14 +81,6 @@ public class Main {
   private final BufferingReader in;
   private final PrintWriter out;
   private final boolean echo;
-
-  /**
-   * Whether to run every query on Spark: the script runner wraps each
-   * expression statement in {@code Spark.remote}, so that one script can run
-   * locally, on Calcite and on Spark, and must answer the same way each time.
-   * The harness sets it; a program cannot.
-   */
-  private final boolean sparkPushDown;
 
   private final Map<String, ForeignValue> valueMap;
   final TypeSystem typeSystem = new TypeSystem();
@@ -216,7 +206,6 @@ public class Main {
       Tracer tracer) {
     this.out = buffer(out);
     this.echo = argList.contains("--echo");
-    this.sparkPushDown = argList.contains("--spark-push-down");
     this.valueMap = ImmutableMap.copyOf(valueMap);
     this.session = new Session(propMap, typeSystem);
     this.idempotent = idempotent;
@@ -797,11 +786,10 @@ public class Main {
     }
 
     void command(
-        AstNode statement0,
+        AstNode statement,
         LineConsumer outLines,
         boolean typeOnly,
         @Nullable String expectedOutput) {
-      final AstNode statement = requireNonNull(main.pushDown(statement0));
       // In a script, buffer the output of every statement, and emit it below
       // whether or not the script gave the statement an expected output. (A
       // statement that has none must still be echoed; otherwise a script
@@ -915,55 +903,6 @@ public class Main {
       main.session.handle(e, buf);
       outLines.accept(buf.toString());
     }
-  }
-
-  /**
-   * Returns a statement with every query pushed down to Spark, or the statement
-   * itself if that is not what this run is for.
-   *
-   * <p>An expression statement becomes {@code (spark.connection.remote (fn ()
-   * => e)) ()}, which prepares the query, runs it on the connection the harness
-   * bound as {@code spark}, and brings back the rows. The query keeps the names
-   * it had, so a data set it reads crosses as its rows: the flag runs a query
-   * on Spark with the data it needs, and a query that means a table of the
-   * server says so, through the connection's catalog.
-   *
-   * <p>A declaration is left alone: it binds a name, and the names a script
-   * binds are the script's own. So is a call to the {@code Sys} structure,
-   * which configures the session rather than asking a question, and which Spark
-   * could not answer.
-   */
-  @Nullable
-  AstNode pushDown(AstNode statement) {
-    if (!sparkPushDown || !isQuery(statement)) {
-      return statement;
-    }
-    // Built as a tree rather than as text, because writing a query out and
-    // parsing it again is not faithful: a nested query loses its parentheses,
-    // and the step after it is read as the subquery's own.
-    final Ast.Exp query = (Ast.Exp) statement;
-    final Pos pos = query.pos();
-    final Ast.Exp connection =
-        ast.apply(ast.recordSelector(pos, "connection"), ast.id(pos, "spark"));
-    final Ast.Exp remote =
-        ast.apply(ast.recordSelector(pos, "remote"), ast.id(pos, "Spark"));
-    final Ast.Exp fn = ast.fn(pos, ast.match(pos, ast.tuplePat(pos), query));
-    return ast.apply(
-        ast.apply(remote, ast.tuple(pos, ImmutableList.of(connection, fn))),
-        ast.unitLiteral(pos));
-  }
-
-  /**
-   * Returns whether a statement is a query that Spark could be asked to run: a
-   * {@code from} with at least one step.
-   *
-   * <p>Everything else is left alone -- a declaration binds a name, a call to
-   * {@code Sys} configures the session, and a bare {@code from} asks for one
-   * empty row, which is not a question for a cluster.
-   */
-  private static boolean isQuery(AstNode statement) {
-    return statement instanceof Ast.From
-        && !((Ast.From) statement).steps.isEmpty();
   }
 
   /**

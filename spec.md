@@ -382,9 +382,27 @@ and skip when it is unset.
 
 ### 2.6 The `spark` value
 
-Nothing is opened at startup. A script or a shell session calls
-`connect` or `connectDefault`. When Morel runs inside Spark (phase 2),
-a `spark` value is bound to the enclosing session's connection.
+`--spark[=URI]` binds the connection as `spark` and sets the
+`sparkPushDown` property, so that a session can read
+`spark.catalog.scott.emps` on its first line and each query it types
+runs on the server. Without URI the server is the one `SPARK_REMOTE`
+names, or `sc://localhost:15002`. The flag starts no server and stops
+none.
+
+Nothing is dialled at startup: the channel waits for an RPC and the
+catalog asks nothing until a field of it is discovered, so a session
+begins whether or not the server is up and a server that is not there
+is reported where it is noticed. Without the flag nothing is bound, and
+a script or a session calls `connect` or `connectDefault` itself.
+
+`sparkPushDown` wraps each query in `remote` (2.2), so a query the
+translator cannot do is refused rather than evaluated locally;
+`Sys.set ("sparkPushDown", false)` stops that for the rest of the
+session. Setting it with no connection bound is an error that says so,
+rather than a query that cannot find `spark`.
+
+When Morel runs inside Spark (phase 2), `spark` is bound to the
+enclosing session's connection.
 
 ## 3. Functions and operators
 

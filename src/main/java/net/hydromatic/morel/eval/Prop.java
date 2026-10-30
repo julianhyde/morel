@@ -307,6 +307,22 @@ public enum Prop {
           + "contains the script."),
 
   /**
+   * Boolean property "sparkPushDown" controls whether each query is translated
+   * for Apache Spark and run there, on the connection that the session has
+   * bound as {@code spark}. Default is false.
+   *
+   * <p>It is the Spark counterpart of {@link #HYBRID}, with one difference that
+   * follows from Spark being another server rather than a library: a query
+   * Spark cannot do is refused where its plan is made, because a plan is all
+   * Spark or it is an error.
+   */
+  SPARK_PUSH_DOWN(
+      "sparkPushDown",
+      Kind.BOOL,
+      false,
+      "Whether to translate each query for Apache Spark and run it there."),
+
+  /**
    * Integer option property "stringDepth" is the length of strings at which
    * ellipsis begins.
    *

@@ -78,6 +78,37 @@ public class SparkConnections {
     return open(session, defaultUri());
   }
 
+  /**
+   * Opens a connection and returns it as a value to bind in an environment, so
+   * that a session can read {@code spark.catalog.scott.emps} on its first line
+   * rather than opening the connection itself.
+   *
+   * <p>An empty {@code uri} means the default server, from {@code
+   * SPARK_REMOTE}. Opening costs nothing until the connection is used: the
+   * channel does not dial until an RPC, and a catalog asks the server nothing
+   * until a field of it is discovered. So a session starts whether or not the
+   * server is up, and a server that is not there is reported where it is
+   * noticed.
+   */
+  public static ForeignValue binding(
+      TypeSystem typeSystem,
+      Map<String, ForeignValue> foreignValues,
+      String uri) {
+    final ConnectionRecord record =
+        open(typeSystem, foreignValues, uri.isEmpty() ? defaultUri() : uri);
+    return new ForeignValue() {
+      @Override
+      public Type type(TypeSystem typeSystem) {
+        return record.typeKey().toType(typeSystem);
+      }
+
+      @Override
+      public Object value() {
+        return record;
+      }
+    };
+  }
+
   /** Returns the URI of the default server, from {@code SPARK_REMOTE}. */
   public static String defaultUri() {
     final String uri = System.getenv(SPARK_REMOTE);

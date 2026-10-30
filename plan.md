@@ -122,8 +122,8 @@ will add any missing data types, e.g. a `decimal` type.
   `dual` tests into a triple (local/Calcite/Spark) format.
 * **M12 The session.** Make a shell session a usable front end: bind
   `spark` from the command line, push queries down from a session
-  property rather than a flag that only the harness reads, and make the
-  convenient form work outside a checkout. See "The session".
+  property rather than a flag that only the harness reads, and take the
+  container out of the wrapper. Done; see "The session".
 
 ## Notes
 
@@ -694,6 +694,27 @@ its own plans, and a plan runs on the connection it was prepared for.
    path, the Docker dependency and the `--help` text that promises to
    start something. `--spark` then also sets `sparkPushDown`, so the flag
    does what its name says in one step.
+
+### What M12 found
+
+Each piece landed as described. Three things turned up on the way:
+
+* **`-e` swallowed a Morel runtime exception.** The REPL catches one --
+  that is how a query the translator refuses stays a statement's answer
+  rather than the end of the session -- and `--eval` did not, so a
+  refusal reached the terminal as a Java stack trace. It catches one now,
+  which is what the `--spark=mock:` shell test exercises.
+* **A relation's rows must be records.** `from i in [1, 2] where i > 1`
+  cannot be a LocalRelation, because Spark has no column for a bare int,
+  so pushing it down is refused. Reasonable, and worth knowing: with the
+  property on, a query over a list of scalars fails where a query over a
+  list of records does not.
+* **The flag can be tested without a server.** `--spark=mock:` binds the
+  offline connection, which translates a query exactly as a real one does
+  and refuses to execute it, so the `MOCK` error it raises is proof that
+  the query was rewritten, the property was set and the connection was
+  bound. That is `ShellTest.testSparkOption`, and it runs in the ordinary
+  build.
 
 Two things deliberately not in M12, so that they are not forgotten:
 

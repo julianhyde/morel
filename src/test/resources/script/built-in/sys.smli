@@ -402,6 +402,7 @@ map
 > rangeMaxLength       16777215
 > relationalize        false
 > scriptDirectory      ?
+> sparkPushDown        false
 > stringDepth          NONE
 > stringFold           NONE
 > terminalBackground   NONE
@@ -409,9 +410,9 @@ map
 >
 > val it : (string * string) list
 List.length (Sys.showAll ());
-> val it = 23 : int
+> val it = 24 : int
 List.length (showAll ());
-> val it = 23 : int
+> val it = 24 : int
 Sys.plan ();
 > val it =
 >   "apply(fnValue List.length, argCode apply(fnValue Sys.showAll, argCode constant([])))"
