@@ -25,6 +25,7 @@ import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.eval.Applicable;
 import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Codes;
+import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
@@ -138,6 +139,15 @@ public final class SparkCodes {
    */
   public static Applicable1 remote(PreparedPlan plan, Pos pos) {
     return new BaseApplicable1<Object, Object>(BuiltIn.SPARK_EXECUTE) {
+      @Override
+      public Describer describe(Describer describer) {
+        // The plan a query was pushed down to is what a reader of a plan
+        // description wants to see, as the plan a query was pushed down to
+        // Calcite is; so this says "spark(plan ...)" where that says
+        // "calcite(plan ...)", rather than naming the function that runs it.
+        return describer.start("spark", plan::describe);
+      }
+
       @Override
       public Object apply(Object arg) {
         try {

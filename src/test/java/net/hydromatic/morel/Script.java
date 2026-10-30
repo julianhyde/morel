@@ -104,6 +104,10 @@ public class Script {
   public Script withSparkPushDown() {
     final Map<Prop, Object> map = new LinkedHashMap<>(propOverrides);
     Prop.SPARK_PUSH_DOWN.set(map, true);
+    // A query that stops being pushed down is a regression, so it fails here
+    // rather than answering locally with a warning, which is what a session
+    // would rather have.
+    Prop.SPARK_FALLBACK.set(map, false);
     return new Script(
         inFile,
         // A mode of its own writes a file of its own: the suite runs the modes

@@ -34,10 +34,12 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.eval.Session;
 import net.hydromatic.morel.foreign.Calcite;
 import net.hydromatic.morel.foreign.ForeignValue;
+import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.PrimitiveType;
@@ -77,15 +79,97 @@ public abstract class Compiles {
       @Nullable Calcite calcite,
       Consumer<CompileException> warningConsumer,
       Tracer tracer) {
+    try {
+      return prepareStatement_(
+          typeSystem,
+          session,
+          env,
+          statement,
+          calcite,
+          warningConsumer,
+          tracer);
+    } catch (SparkBackend.SparkException e) {
+      // "Every failure raises Spark" (spec.md section 2.4), and a refusal to
+      // translate is a failure like any other: it reaches the program as the
+      // exception that every Spark failure raises, rather than as whatever a
+      // Java exception's text happens to look like.
+      throw Codes.sparkException(
+          e,
+          statement instanceof Ast.Exp
+              ? ((Ast.Exp) statement).pos()
+              : Pos.ZERO);
+    }
+  }
+
+  /** Does the work of {@link #prepareStatement}. */
+  private static CompiledStatement prepareStatement_(
+      TypeSystem typeSystem,
+      Session session,
+      Environment env,
+      AstNode statement,
+      @Nullable Calcite calcite,
+      Consumer<CompileException> warningConsumer,
+      Tracer tracer) {
     final AstNode statement2 = pushDown(session, env, statement);
-    Ast.Decl decl;
-    if (statement2 instanceof Ast.Exp) {
-      decl = toValDecl((Ast.Exp) statement2);
-    } else {
-      decl = (Ast.Decl) statement2;
+    if (statement2 != statement) {
+      // Pushing down was asked for, and this is the query rewritten to run on
+      // Spark. A query Spark cannot do is refused where its plan is made, and
+      // what to do then is the session's choice.
+      final List<CompileException> warnings = new ArrayList<>();
+      try {
+        final CompiledStatement compiled =
+            prepareDecl(
+                typeSystem,
+                session,
+                env,
+                calcite,
+                decl(statement2),
+                warnings::add,
+                tracer);
+        warnings.forEach(warningConsumer);
+        return compiled;
+      } catch (SparkBackend.SparkException e) {
+        // The warnings of an attempt that came to nothing go with it.
+        if (!Prop.SPARK_FALLBACK.booleanValue(session.map) || !refusal(e)) {
+          throw e;
+        }
+        warningConsumer.accept(
+            new CompileException(
+                "not pushed down to Spark, so evaluated here: "
+                    + e.getMessage(),
+                true,
+                ((Ast.Exp) statement).pos()));
+      }
     }
     return prepareDecl(
-        typeSystem, session, env, calcite, decl, warningConsumer, tracer);
+        typeSystem,
+        session,
+        env,
+        calcite,
+        decl(statement),
+        warningConsumer,
+        tracer);
+  }
+
+  /** Returns a statement as a declaration, wrapping an expression in "val". */
+  private static Ast.Decl decl(AstNode statement) {
+    return statement instanceof Ast.Exp
+        ? toValDecl((Ast.Exp) statement)
+        : (Ast.Decl) statement;
+  }
+
+  /**
+   * Returns whether a Spark error is a refusal to translate, as against a
+   * failure of something else.
+   *
+   * <p>Only a refusal has a local answer that is the same answer. A query that
+   * reached the server and failed there, a connection that is not there, a null
+   * in a column that has no room for it -- none of those is an invitation to
+   * compute something else.
+   */
+  private static boolean refusal(SparkBackend.SparkException e) {
+    return e.errorClass.equals("UNSUPPORTED")
+        || e.errorClass.equals("UNSUPPORTED_TYPE");
   }
 
   /**

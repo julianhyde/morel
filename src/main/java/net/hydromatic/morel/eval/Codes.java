@@ -868,6 +868,12 @@ public abstract class Codes {
 
     @Override
     public Describer describe(Describer describer) {
+      if (value instanceof PreparedPlan) {
+        // A plan is a value like any other, but a description that said
+        // "constant" and left it at that would hide the only thing anyone
+        // reads a plan description for.
+        return describer.start("spark", ((PreparedPlan) value)::describe);
+      }
       return describer.start("constant", d -> d.arg("", value));
     }
 

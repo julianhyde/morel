@@ -736,6 +736,7 @@ and unset using `Sys.unset name`.
 | rangeMaxLength       | IntInf.int | 16777215 | Largest number of values that expanding a range may produce. Must be positive. |
 | relationalize        | bool   | false   | Whether to convert to relational algebra. |
 | scriptDirectory      | file   |         | Path of the directory where the 'use' command looks for scripts. When running a script, it is generally set to the directory that contains the script. |
+| sparkFallback        | bool   | true    | Whether a query that Spark cannot do is evaluated locally, with a warning, rather than failing. |
 | sparkPushDown        | bool   | false   | Whether to translate each query for Apache Spark and run it there. |
 | stringDepth          | int option | 70  | When printing, the length of strings at which ellipsis begins. Must not be negative; NONE means that strings are printed in full. |
 | stringFold           | int option | NONE | In tabular mode, the column width at which long strings are folded across multiple lines. Must be positive; NONE disables folding. |

@@ -716,18 +716,47 @@ Each piece landed as described. Three things turned up on the way:
   bound. That is `ShellTest.testSparkOption`, and it runs in the ordinary
   build.
 
-Two things deliberately not in M12, so that they are not forgotten:
+### The two that were parked, now done
 
-* **What a refusal does.** Phase 1 is all or nothing, so a query the
-  translator cannot do raises where the plan is made. Strict is what the
-  suite needs, and what a session gets for now; falling back to local
-  evaluation with one line saying why (`sparkPushDown = "try"`) would be
-  kinder in a shell, and is a separate decision.
-* **Showing that a query was pushed down.** With Calcite, `Sys.plan ()`
-  reads `globalMarshal(globals [scott], body calcite(plan
-  LogicalProject(...)))`. The symmetric thing -- a pushed-down query's plan
-  reading `spark(plan root { ... })` -- is what a user would look at first,
-  and is worth doing once the property exists.
+**What a refusal does** is `sparkFallback`, a second boolean rather than
+the tri-valued `sparkPushDown` the earlier note imagined: `Sys.set
+("sparkPushDown", true)` has to keep working, and Morel's one
+enum-valued property needs special-casing in three places. It defaults
+to true, so a session answers where it can, warning and naming what
+Spark could not do; the suite sets it false, because a query that stops
+being pushed down is a regression and an error says so more plainly than
+a diff of warnings.
+
+It governs refusals only -- `UNSUPPORTED` and `UNSUPPORTED_TYPE` -- and
+never a failure on the server. A query that reached Spark and failed
+there has an answer Morel must not invent, and a divergence makes that
+concrete: an overflow that Spark raises in ANSI mode would, computed
+here, wrap and look like a success. The offline connection's refusal to
+execute is the test of that boundary, in `spark-plan.smli`.
+
+Fallback has one cost worth stating, which is why the warning exists and
+why the property can be turned off: a query evaluated here reads
+whatever it reads through the connection, so a refusal that falls back
+unnoticed can turn a query over a large table into a download of it.
+
+**Showing that a query was pushed down** is `spark(plan root { ... })`
+in a plan description, where Calcite's reads `calcite(plan
+LogicalProject(...))`. Two renderings, because there are two ways a plan
+reaches the evaluator: pushed down or through `remote`, the applicable
+that holds the plan describes itself; prepared and kept as a value, the
+constant that holds it does. A plan with a parameter has no text until
+it is executed, so it reads `spark(parameters [d])`.
+
+### What the two found
+
+A compile-time refusal was not a Morel exception. Spec section 2.4 says
+every failure raises `Spark`, and a translation refusal is listed there,
+but the refusal escaped as a Java exception: a script printed its
+`toString` (`Spark {errorClass = "UNSUPPORTED", ...}`) and a shell
+session printed a stack trace. It is converted where every statement
+passes, so it now raises `Spark` like every other Spark failure, and a
+program can catch it. Six expected outputs changed to the form the spec
+asked for.
 
 ### Nullability, which is not M12
 

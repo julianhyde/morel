@@ -23,11 +23,13 @@ import static net.hydromatic.morel.ast.CoreBuilder.core;
 import static net.hydromatic.morel.util.Pair.forEach;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.eval.Describer;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -97,6 +99,21 @@ public class PreparedPlan {
   @Override
   public String toString() {
     return "<plan>";
+  }
+
+  /**
+   * Describes the plan where a plan description shows it, as {@code Sys.plan}
+   * does.
+   *
+   * <p>A plan with a parameter has no text until it is executed, so what it can
+   * say is which parameters it is waiting for.
+   */
+  public void describe(Describer.Detail detail) {
+    if (plan != null) {
+      detail.arg("plan", plan.text());
+    } else {
+      detail.arg("parameters", Lists.transform(parameters, p -> p.name));
+    }
   }
 
   /** Returns the plan as text. */

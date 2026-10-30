@@ -325,4 +325,85 @@ byDept.toString ();
   from e in spark.catalog.scott.emps where e.job = "CLERK" yield e.ename)) ();
 > val it = ["ADAMS","JAMES","MILLER","SMITH"] : string bag
 
+(* A plan description shows the plan a query was pushed down to, as it shows
+ * the plan a query pushed down to Calcite becomes: "spark(plan ...)" where
+ * that reads "calcite(plan ...)". So looking at the plan is how a session
+ * sees where its query ran. *)
+Sys.set ("stringDepth", NONE);
+> val it = () : unit
+(spark.connection.remote (fn () =>
+  from d in spark.catalog.scott.depts where d.deptno = 10 yield d.dname)) ();
+> val it = ["ACCOUNTING"] : string bag
+Sys.plan ();
+> val it =
+>   {_|
+> apply(fnValue spark(plan root {
+>   common {
+>     plan_id: 0
+>   }
+>   project {
+>     input {
+>       common {
+>         plan_id: 1
+>       }
+>       filter {
+>         input {
+>           common {
+>             plan_id: 2
+>           }
+>           subquery_alias {
+>             input {
+>               common {
+>                 plan_id: 3
+>               }
+>               read {
+>                 named_table {
+>                   unparsed_identifier: "scott.depts"
+>                 }
+>               }
+>             }
+>             alias: "d"
+>           }
+>         }
+>         condition {
+>           unresolved_function {
+>             function_name: "=="
+>             arguments {
+>               unresolved_attribute {
+>                 unparsed_identifier: "d.deptno"
+>                 is_metadata_column: false
+>               }
+>             }
+>             arguments {
+>               literal {
+>                 integer: 10
+>               }
+>             }
+>           }
+>         }
+>       }
+>     }
+>     expressions {
+>       unresolved_attribute {
+>         unparsed_identifier: "d.dname"
+>         is_metadata_column: false
+>       }
+>     }
+>   }
+> }), argCode constant([]))|_} : string
+
+(* A plan with a parameter has no text until it is executed -- each
+ * execution translates it afresh with the argument in place -- so what its
+ * description can say is which parameter it is waiting for. *)
+val p = spark.connection.prepare (fn d =>
+  from e in spark.catalog.scott.emps where e.deptno = d yield e.ename);
+> val p = <plan> : (int,string bag) plan
+p.execute 10;
+> val it = ["CLARK","KING","MILLER"] : string bag
+Sys.plan ();
+> val it = "apply2(fnValue Spark.execute, spark(parameters [d]), constant(10))"
+>   : string
+Sys.set ("stringDepth", SOME 70);
+> val it = () : unit
+
 (*) End spark-exec.smli

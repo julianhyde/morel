@@ -395,11 +395,29 @@ begins whether or not the server is up and a server that is not there
 is reported where it is noticed. Without the flag nothing is bound, and
 a script or a session calls `connect` or `connectDefault` itself.
 
-`sparkPushDown` wraps each query in `remote` (2.2), so a query the
-translator cannot do is refused rather than evaluated locally;
+`sparkPushDown` wraps each query in `remote` (2.2).
 `Sys.set ("sparkPushDown", false)` stops that for the rest of the
-session. Setting it with no connection bound is an error that says so,
-rather than a query that cannot find `spark`.
+session, and setting it with no connection bound is an error that says
+so, rather than a query that cannot find `spark`.
+
+A query the translator cannot do is refused where its plan is made, and
+`sparkFallback` says what happens then. By default it is evaluated here
+instead, with a warning naming what Spark could not do, so that a
+session answers where it can. `Sys.set ("sparkFallback", false)` makes
+the refusal the answer, which is what a test wants -- a query that
+stops being pushed down is a regression -- and what a session wants
+where the alternative is reading a large table through the connection
+to compute it locally.
+
+The fallback governs refusals only. A query that reached the server and
+failed there, a connection that is not there, a null in a column with
+no room for it: none of those is an invitation to compute something
+else, so each is raised.
+
+A plan description shows where a query ran. A query pushed down to
+Spark reads `spark(plan root { ... })`, as one pushed down to Calcite
+reads `calcite(plan LogicalProject(...))`; a plan with a parameter has
+no text until it is executed, and reads `spark(parameters [d])`.
 
 When Morel runs inside Spark (phase 2), `spark` is bound to the
 enclosing session's connection.
