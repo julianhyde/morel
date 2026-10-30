@@ -758,13 +758,49 @@ passes, so it now raises `Spark` like every other Spark failure, and a
 program can catch it. Six expected outputs changed to the form the spec
 asked for.
 
-### Nullability, which is not M12
+### Nullability: the table declares itself
 
-Declaring nullable columns one at a time in a URI is right for `scott` and
-unusable for a warehouse; the directions (wildcards, Spark's `num_nulls`
-statistics, a declaration outside the URI) are logged as their own issue,
-because the choice between them is a design decision and not part of making
-the shell work.
+Declaring nullable columns one at a time in a URI was right for `scott` and
+unusable for a warehouse. The fix is that **a table says which of its
+columns hold nulls, in its own `morel.nullable` property**, and a connection
+reads it when it asks for the table's type. The URI parameter stays, and
+wins where both speak, because whoever typed it is looking at this session;
+`nullable=*` is new, and is a connection asking to unwrap every column
+rather than have one raise.
+
+The research that settled it is worth keeping. Spark's losing a `NOT NULL`
+is documented behaviour, not a local accident -- "When reading Parquet
+files, all columns are automatically converted to be nullable for
+compatibility reasons" -- and the road has been tried: apache/spark#48321,
+which proposed respecting a non-nullable schema for file sources, was closed
+as stale after a committer noted that the earlier attempts broke things
+"pretty severe"ly. Nor is the constraint kept anywhere else for such a
+table: it is discarded where the table is made (`SHOW CREATE TABLE` shows
+the column plain), nothing enforces it (an `INSERT` of a null succeeds),
+`ALTER COLUMN ... SET NOT NULL` is refused, the table has no
+`spark.sql.sources.schema` property to read, and the constraint API Spark
+4.1 added (CHECK, UNIQUE, PRIMARY KEY, FOREIGN KEY) leaves nullability out,
+because it belongs to a column's type. Delta Lake and Iceberg do keep it,
+which is a change of file format rather than a declaration.
+
+A table property, measured on the container, round-trips: that is the place.
+
+What it buys, beyond scale: the container's URI is a plain
+`sc://localhost:15002` again, because `init.py` sets each table's property
+as it creates the table -- generated from the data set for the scott tables,
+so the fixture and the types cannot disagree -- and the suite adds nothing
+to the URI it is given. The whole live suite passed unchanged on the first
+run, which is the evidence that the property reproduces what the URI
+declaration did.
+
+Still open, and logged: statistics (`num_nulls`) as a third source, sound in
+one direction only, because 0 is a fact about the rows that were there when
+the table was analysed; and whether `absent` should mean "every column may
+be null" rather than "none may". That default was considered and not taken:
+an uncharacterized table would type every column as an option, so browsing
+a catalog -- the part of the front end that works best -- would become
+`where valOf e.deptno = 10`, and every value would print as `SOME 7782`.
+`nullable=*` is that behaviour for whoever wants it.
 
 ## Phase 2 questions
 

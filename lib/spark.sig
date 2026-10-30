@@ -64,10 +64,25 @@ sig
    *
    * A declared column has type `t option`, and a null in it arrives as
    * `NONE`; an undeclared one has the plain type `t`, and a null in it
-   * raises `Spark` with error class `NULL_VALUE`. The declaration is
-   * needed because the catalog does not keep it: Spark reports every
-   * column of a stored table as nullable, whatever the DDL said, so
-   * believing it would make every column an option.
+   * raises `Spark` with error class `NULL_VALUE`. A declaration of `*`
+   * covers every column of every table, for a connection that would
+   * rather unwrap a column than have one raise.
+   *
+   * A table can say it instead, and better, in its own `morel.nullable`
+   * property -- a comma-separated list of its column names, which a
+   * connection reads when it asks for the table's type:
+   *
+   * ```
+   * ALTER TABLE scott.emps SET TBLPROPERTIES ('morel.nullable' = 'comm,mgr')
+   * ```
+   *
+   * The property is the whole answer for its table: a column it names may
+   * be null, one it does not name may not, and an empty property says the
+   * table holds no nulls. Where a URI also speaks, the URI wins.
+   *
+   * Either is needed because Spark keeps nothing itself: it reports every
+   * column of a stored table as nullable whatever the DDL said, discards a
+   * `NOT NULL` where the table is made, and has no constraint for it.
    *
    * The other parameter Morel reads is `user_id`, which names the user
    * the server sees; it ignores any other, and other clients ignore

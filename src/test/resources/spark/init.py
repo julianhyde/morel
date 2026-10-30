@@ -27,12 +27,15 @@
 #   zoo        In the default database. One column per Spark type. Row 1
 #              has typical values, row 2 edge values (extremes, NaN, empty,
 #              non-ASCII), and row 3 nulls in every column but id.
-#   nulls      In the default database. Two int columns, and a null in a
-#              column that the URI does not declare nullable.
+#   nulls      In the default database. Two int columns, a null in one,
+#              and a property that says the table holds none.
 #
 # Nullability: Spark's built-in catalog does not keep NOT NULL for
 # tables stored as files, so every column of these tables reads back as
-# nullable, whatever the schema said when it was created.
+# nullable, whatever the schema said when it was created. Each table
+# therefore carries a "morel.nullable" property naming the columns that
+# hold nulls, which is what Morel reads; the scott tables' properties
+# are generated from Morel's own data set, so the two cannot disagree.
 
 import shutil
 import time
@@ -46,19 +49,32 @@ def sql(text):
     return spark.sql(text)
 
 
-def table(name, create, content):
-    """Creates a table and fills it.
+def table(name, create, content, nullable=""):
+    """Creates a table, fills it, and says which columns hold nulls.
 
     "create" is the body of the CREATE: the column list, without the
     parentheses. "content" is the body of the INSERT: the rows, each a
     parenthesized tuple, separated by commas; a table with no rows has "".
     Any previous table of the same name is dropped first, so that the
     script can be run again.
+
+    "nullable" is the columns that hold nulls, separated by commas, and
+    is written to the table's "morel.nullable" property. A NOT NULL in
+    the CREATE would be no use: Spark discards it where the table is
+    made, does not enforce it, and reports every column of a stored
+    table as nullable whatever the schema said. The property is a place
+    that survives, and that every client of the table can read. An
+    empty string says what it means -- this table holds no nulls -- and
+    is set rather than left off, so that a reader can tell a table that
+    has been characterized from one that has not.
     """
     sql("DROP TABLE IF EXISTS " + name)
     sql("CREATE TABLE %s (%s) USING parquet" % (name, create))
     if content:
         sql("INSERT INTO %s VALUES %s" % (name, content))
+    sql(
+        "ALTER TABLE %s SET TBLPROPERTIES ('morel.nullable' = '%s')"
+        % (name, nullable))
 
 
 # The catalog is in memory, but the warehouse is on disk and survives a
@@ -78,12 +94,12 @@ if warehouse.startswith("file:"):
 #
 # A null costs something. Spark's catalog keeps no NOT NULL for a table
 # stored as files -- it accepts the declaration and reports the column
-# nullable anyway -- so a catalog column maps to the plain type, and a
-# null in one raises when it is read (spec.md section 1.2, decision B).
-# Reading a whole employee row through the catalog therefore fails; a
-# query that does not ask for the commission is unaffected, and so is
-# every query whose type comes from Morel's own data set. plan.md
-# records the question.
+# nullable anyway -- so a catalog column maps to the plain type unless
+# something says otherwise, and a null in one raises when it is read
+# (spec.md section 1.2, decision B). What says otherwise is each
+# table's "morel.nullable" property, written above: the commission and
+# the manager are options, and the rest are not, so a whole employee
+# row reads.
 sql("CREATE DATABASE IF NOT EXISTS scott")
 
 # (start: scott)
@@ -118,7 +134,8 @@ table(
     (NULL, 20, 7876, 'ADAMS', '1987-05-23', 'CLERK', 7788, 1100),
     (NULL, 30, 7900, 'JAMES', '1981-12-03', 'CLERK', 7698, 950),
     (NULL, 20, 7902, 'FORD', '1981-12-03', 'ANALYST', 7566, 3000),
-    (NULL, 10, 7934, 'MILLER', '1982-01-23', 'CLERK', 7782, 1300)""")
+    (NULL, 10, 7934, 'MILLER', '1982-01-23', 'CLERK', 7782, 1300)""",
+    "comm,mgr")
 table(
     "scott.salgrades",
     """
@@ -126,19 +143,15 @@ table(
     """
     (1, 1200, 700), (2, 1400, 1201), (3, 2000, 1401), (4, 3000, 2001),
     (5, 9999, 3001)""")
-
-# The columns that hold nulls. Spark's catalog cannot report
-# them, so whoever connects has to be told: start-spark.sh
-# reads this line and puts it in the URI it prints.
-nullable = "scott.emps.comm,scott.emps.mgr"
 # (end: scott)
 
-# A table with a null in a column that the URI does not declare, which
-# is what a table nobody has told Morel about looks like: its columns
-# keep their plain types, and reading the null raises NULL_VALUE. The
-# scott tables cannot show this, because the URI declares every column
-# of theirs that holds a null, and the zoo cannot, because it has a map
-# column that has no Morel type at all.
+# A table that says it holds no nulls and holds one: its "morel.nullable"
+# property is empty, so both its columns keep their plain types, and
+# reading the null raises NULL_VALUE naming the column. That is what a
+# table whose characterization is wrong -- or missing, which reads the
+# same way -- looks like. The scott tables cannot show it, because each
+# of them declares what it holds, and the zoo cannot, because it has a
+# map column that has no Morel type at all.
 table(
     "nulls",
     """
@@ -170,11 +183,11 @@ table(
      named_struct('a', CAST(NULL AS INT), 'b', 'ü'),
      CAST(map() AS MAP<STRING, INT>)),
     (3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-     NULL, NULL, NULL, NULL, NULL, NULL)""")
+     NULL, NULL, NULL, NULL, NULL, NULL)""",
+    "b,i8,i16,i32,i64,f32,f64,dec,s,bin,d,ts,ts_ntz,arr,st,m")
 
 print("Morel init tables created: nulls, scott.bonuses, scott.depts,"
       " scott.emps, scott.salgrades, zoo", flush=True)
-print("Morel nullable columns: " + nullable, flush=True)
 
 while True:
     time.sleep(3600)

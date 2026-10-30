@@ -21,7 +21,6 @@ package net.hydromatic.morel;
 import static java.util.Objects.requireNonNull;
 import static net.hydromatic.morel.util.Static.last;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.AbstractMap;
 import java.util.List;
@@ -208,31 +207,6 @@ public enum BuiltInDataSet implements DataSet {
         nameConverter,
         (tablePath, field) ->
             nullableColumns.contains(last(tablePath) + "." + field.getName()));
-  }
-
-  /**
-   * Returns the columns this data set knows may be null, named as the Spark
-   * container names them: "database.table.column", converted by this data set's
-   * own name converter.
-   *
-   * <p>Spark cannot tell a client which columns of a stored table are nullable
-   * -- it calls them all nullable, whatever the DDL said -- so a connection has
-   * to be told, and this is the place that knows.
-   */
-  Set<String> sparkNullableColumns() {
-    final ImmutableSet.Builder<String> b = ImmutableSet.builder();
-    for (String column : nullableColumns) {
-      final int dot = column.indexOf('.');
-      final String table = column.substring(0, dot);
-      final String field = column.substring(dot + 1);
-      b.add(
-          schemaName
-              + "."
-              + nameConverter.convert(ImmutableList.of(table), table)
-              + "."
-              + nameConverter.convert(ImmutableList.of(table), field));
-    }
-    return b.build();
   }
 
   /** Creates a {@link NameConverter} for the "scott" database. */

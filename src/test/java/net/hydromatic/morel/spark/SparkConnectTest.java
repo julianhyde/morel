@@ -37,6 +37,7 @@ import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.foreign.SparkCatalog;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -69,8 +70,49 @@ public class SparkConnectTest {
     return requireNonNull(Decimals.canonical(new BigDecimal(s)));
   }
 
+  /**
+   * Tests the two ways a connection learns which columns may be null.
+   *
+   * <p>A table says it in its own {@code morel.nullable} property, which is
+   * where the container's tables say it, so a connection with nothing in its
+   * URI reads the commission and the manager as options and the rest plain. A
+   * URI can say it too, and overrides the table: {@code nullable=*} is a
+   * connection asking to unwrap every column rather than have one raise, which
+   * is what you want against tables nobody has characterized.
+   */
+  @Test
+  void testNullableSources() {
+    try (SparkBackend.Connection c = connect()) {
+      assertThat(
+          c.tableType("scott", "depts").moniker(),
+          is("{deptno:int, dname:string, loc:string} bag"));
+      assertThat(
+          c.tableType("scott", "emps").moniker(),
+          is(
+              "{comm:decimal option, deptno:int, empno:int, ename:string,"
+                  + " hiredate:string, job:string, mgr:int option,"
+                  + " sal:decimal} bag"));
+    }
+    try (SparkBackend.Connection c = connect("nullable=*")) {
+      assertThat(
+          c.tableType("scott", "depts").moniker(),
+          is(
+              "{deptno:int option, dname:string option, loc:string option}"
+                  + " bag"));
+    }
+  }
+
   private static SparkBackend.Connection connect() {
-    final String uri = System.getenv("SPARK_REMOTE");
+    return connect(null);
+  }
+
+  /** Opens a connection, with a parameter added to its URI. */
+  private static SparkBackend.Connection connect(@Nullable String parameter) {
+    final String uri0 = System.getenv("SPARK_REMOTE");
+    final String uri =
+        uri0 == null || parameter == null
+            ? uri0
+            : uri0 + (uri0.contains("/;") ? ";" : "/;") + parameter;
     assumeTrue(
         System.getProperty("morel.spark") != null && uri != null,
         "set -Dmorel.spark=true and SPARK_REMOTE to run");

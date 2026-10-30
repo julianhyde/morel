@@ -55,6 +55,7 @@ import org.apache.spark.connect.proto.Relation;
 import org.apache.spark.connect.proto.SQL;
 import org.apache.spark.connect.proto.SparkConnectServiceGrpc;
 import org.apache.spark.connect.proto.UserContext;
+import org.jspecify.annotations.Nullable;
 
 /** A connection to a Spark Connect server, over gRPC. */
 class SparkConnection implements SparkBackend.Connection {
@@ -282,10 +283,17 @@ class SparkConnection implements SparkBackend.Connection {
   }
 
   /**
-   * Returns the columns of one table that were declared nullable, by their own
-   * names.
+   * Returns the columns of one table that the URI declared nullable, by their
+   * own names.
+   *
+   * <p>A declaration of {@code *} means every column, of every table or of one,
+   * and is passed on as {@code *}: the mapper reads it as "every column of this
+   * row".
    */
-  private Set<String> nullableColumnsOf(String database, String table) {
+  private Set<String> uriNullableColumns(String database, String table) {
+    if (nullableColumns.contains("*")) {
+      return ImmutableSet.of("*");
+    }
     final String prefix =
         (database + "." + table + ".").toLowerCase(Locale.ROOT);
     final ImmutableSet.Builder<String> b = ImmutableSet.builder();
@@ -295,6 +303,72 @@ class SparkConnection implements SparkBackend.Connection {
       }
     }
     return b.build();
+  }
+
+  /**
+   * Name of the table property that says which of a table's columns may be
+   * null.
+   *
+   * <p>Spark has nowhere else to keep it. A {@code NOT NULL} in a {@code CREATE
+   * TABLE} is discarded where the table is made -- {@code SHOW CREATE TABLE}
+   * shows the column plain afterwards -- nothing enforces it, {@code ALTER
+   * TABLE ... SET NOT NULL} is refused, and the constraints that Spark 4.1
+   * added (CHECK, UNIQUE, PRIMARY KEY, FOREIGN KEY) do not include it, because
+   * nullability belongs to a column's type rather than to the constraint
+   * framework. A table property is a place that travels with the table, is
+   * visible to every session, and needs no change of file format.
+   */
+  public static final String NULLABLE_PROPERTY = "morel.nullable";
+
+  /**
+   * Returns the columns that a table's own metadata declares nullable, or null
+   * if it declares nothing.
+   *
+   * <p>The property is a complete answer for the table it is on: a column it
+   * names may be null, and a column it does not name may not. An empty property
+   * therefore says that the table has no nulls at all, which is a thing worth
+   * being able to say.
+   */
+  private @Nullable Set<String> propertyNullableColumns(
+      String database, String table) {
+    final SparkBackend.Result result =
+        sql("SHOW TBLPROPERTIES " + quote(database) + "." + quote(table));
+    for (Object row : result.rows()) {
+      final List<?> pair = (List<?>) row;
+      if (pair.size() == 2
+          && NULLABLE_PROPERTY.equals(pair.get(0))
+          && pair.get(1) instanceof String) {
+        final ImmutableSet.Builder<String> b = ImmutableSet.builder();
+        for (String column : ((String) pair.get(1)).split(",")) {
+          final String trimmed = column.trim().toLowerCase(Locale.ROOT);
+          if (!trimmed.isEmpty()) {
+            b.add(trimmed);
+          }
+        }
+        return b.build();
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Returns which of a table's columns may be null, from whichever source says.
+   *
+   * <p>The connection's own declaration comes first, because whoever wrote the
+   * URI is looking at this session; then the table's property, which is what
+   * the table says about itself; and if neither speaks, no column is optional,
+   * and a null in one is an error that names it. Saying nothing is therefore
+   * how it was before any of this existed, and the error is the prompt to write
+   * the property.
+   */
+  private Set<String> nullableColumnsOf(String database, String table) {
+    final Set<String> uriColumns = uriNullableColumns(database, table);
+    if (!uriColumns.isEmpty()) {
+      return uriColumns;
+    }
+    final @Nullable Set<String> columns =
+        propertyNullableColumns(database, table);
+    return columns == null ? ImmutableSet.of() : columns;
   }
 
   @Override

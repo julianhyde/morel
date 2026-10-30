@@ -84,4 +84,15 @@ spark.catalog.default.zoo;
 Spark.using (fn (c, x) => x + 1) 4;
 > val it = 5 : int
 
+(* Each table says which of its columns hold nulls, in its own
+ * "morel.nullable" property, so a connection needs no declaration: the
+ * commission and the manager are options here because the table says they
+ * are, and the rest are plain because it says they are not. *)
+from e in spark.catalog.scott.emps
+  where e.empno = 7839
+  yield {e.ename, e.comm, e.mgr, e.deptno};
+> val it = [{comm=NONE,deptno=10,ename="KING",mgr=NONE}]
+>   : {comm:decimal option, deptno:int, ename:string, mgr:int option} bag
+
+
 (*) End spark-live.smli

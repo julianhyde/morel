@@ -150,13 +150,15 @@ public class SparkTypes {
       //
       // At the top level of a row, Spark's flag says nothing: it is true for
       // every column of a stored table, whatever the DDL said, so a column
-      // is optional if and only if the connection was told so. One level
-      // down -- inside a struct, an array or a map -- the flag is recorded
-      // rather than inferred, and it is the only thing that knows.
+      // is optional if and only if something told us so -- the table itself,
+      // or the connection. "*" is how either says it means every column. One
+      // level down -- inside a struct, an array or a map -- the flag is
+      // recorded rather than inferred, and it is the only thing that knows.
       final boolean nullable =
           strict
               ? field.getNullable()
-              : nullableColumns.contains(field.getName());
+              : nullableColumns.contains("*")
+                  || nullableColumns.contains(field.getName());
       fields.put(
           field.getName(),
           toType(typeSystem, field.getDataType(), nullable, true));

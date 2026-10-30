@@ -161,29 +161,17 @@ public class ScriptTest {
   }
 
   /**
-   * Returns the URI of the Spark server, telling it which columns of the
-   * container's tables may be null.
+   * Returns the URI of the Spark server.
    *
-   * <p>Spark reports every column of a stored table as nullable, whatever the
-   * DDL said, so the flag it sends carries nothing; the data set is where the
-   * truth is, and it names the columns it knows to be optional. Without this a
-   * script could not read a whole employee row, because the commission that
-   * Morel has as NONE is a null there.
-   *
-   * <p>A URI that declares its own columns is left alone: that is what {@code
-   * start-spark.sh} prints, and a real cluster's URI would say which of its
-   * columns are optional.
+   * <p>Nothing is added to it: each table of the container says which of its
+   * columns hold nulls, in its own {@code morel.nullable} property, because
+   * Spark reports every column of a stored table as nullable whatever the
+   * schema said. The scott tables' properties are generated from the data set
+   * (ScottInit), so a script reads the same types here as it does from the data
+   * set itself.
    */
   private static String sparkUri() {
-    final String uri = requireNonNull(System.getenv("SPARK_REMOTE"));
-    if (uri.contains("nullable=")) {
-      return uri;
-    }
-    final Set<String> nullable = BuiltInDataSet.SCOTT.sparkNullableColumns();
-    return uri
-        + (uri.contains("/;") ? ";" : "/;")
-        + "nullable="
-        + String.join(",", nullable);
+    return requireNonNull(System.getenv("SPARK_REMOTE"));
   }
 
   /** Returns whether a {@code requires:} condition holds. */

@@ -229,6 +229,29 @@ public class SparkTypesTest {
         is("{a:int option, st:{x:int option, y:string} option}"));
   }
 
+  /**
+   * Tests that a declaration of {@code *} makes every column of the row an
+   * option.
+   *
+   * <p>It is what a connection says when it has been told nothing about the
+   * tables it is reading and would rather unwrap a column than have one raise:
+   * Spark's own flag says the same thing, and means nothing by it, so this is a
+   * choice the connection makes rather than a fact it learned.
+   */
+  @Test
+  void testDeclaredAll() {
+    final TypeSystem ts = typeSystem();
+    final DataType schema =
+        struct(field("a", INT, true), field("b", STRING, true));
+    assertThat(
+        SparkTypes.rowType(ts, schema, ImmutableSet.of("*")).moniker(),
+        is("{a:int option, b:string option}"));
+    // A column named in a declaration that also has "*" is an option once.
+    assertThat(
+        SparkTypes.rowType(ts, schema, ImmutableSet.of("*", "a")).moniker(),
+        is("{a:int option, b:string option}"));
+  }
+
   @Test
   void testDescribe() {
     assertThat(SparkTypes.describe(DECIMAL), is("decimal(10,2)"));

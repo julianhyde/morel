@@ -101,15 +101,40 @@ sc://localhost:15002/;nullable=scott.emps.comm,scott.emps.mgr
 
 A declared column maps to `t option` and its nulls arrive as `NONE`; an
 undeclared one keeps the plain type and raises on a null, so declaring
-nothing means what it meant before. The declaration is the only source
-of this knowledge: Spark reports every column of a stored table as
-nullable whatever the DDL said, the flag cannot be asserted afterwards
-(`ALTER COLUMN ... SET NOT NULL` is refused for a file table), and
-nothing survives a write to storage. Statistics are a second source --
-`ANALYZE TABLE` then `DESCRIBE EXTENDED t col` reports `num_nulls`, which
-is 0, positive, or absent -- and would let an undeclared column be typed
-by what the data holds; it is not implemented, because a type that
-depends on the data changes when the data does.
+nothing means what it meant before. `nullable=*` declares every column
+of every table, which is a connection choosing to unwrap rather than to
+raise where nothing has been characterized.
+
+**Better, the table declares itself.** A URI is the wrong place for a
+hundred columns, and there is a place that travels with the table: the
+`morel.nullable` table property, a comma-separated list of column names.
+
+```
+ALTER TABLE scott.emps SET TBLPROPERTIES ('morel.nullable' = 'comm,mgr')
+```
+
+A connection reads it when it asks for a table's type. The property is
+the whole answer for the table it is on -- a column it names may be
+null, one it does not name may not -- so an empty property says that the
+table holds no nulls, which is a thing worth being able to say and
+different from saying nothing. Where both speak, the URI wins, because
+whoever wrote it is looking at this session.
+
+Spark has nowhere else to keep it. A `NOT NULL` in a `CREATE TABLE` is
+accepted and discarded: `SHOW CREATE TABLE` shows the column plain
+afterwards, nothing enforces it, `ALTER COLUMN ... SET NOT NULL` is
+refused for a file table, and the constraints Spark 4.1 added (CHECK,
+UNIQUE, PRIMARY KEY, FOREIGN KEY) do not include it, because nullability
+belongs to a column's type rather than to the constraint framework. The
+formats that do keep it are Delta Lake and Iceberg, which is a change of
+file format, not a declaration.
+
+Statistics are a third source -- `ANALYZE TABLE` then `DESCRIBE EXTENDED
+t col` reports `num_nulls`, which is 0, positive, or absent -- and could
+type an undeclared column by what the data holds. It is not implemented,
+and would be sound in one direction only: `num_nulls > 0` proves a
+column optional, where 0 is a fact about the rows that were there when
+the table was analysed.
 
 Spark's flag says whether a value *could* be null given the input schema,
 not whether a column holds nulls, and the analyze response reports it for
