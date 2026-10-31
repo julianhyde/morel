@@ -364,6 +364,16 @@ through `foreign.SparkBackend`, which loads it by name. Protobuf messages and
 gRPC stubs are generated from `src/main/protobuf/spark/connect/*.proto`
 (vendored from Spark 4.0.0) into `target/generated-sources/protobuf`.
 
+The adapter is absent below JDK 17, so a test that touches it must say so --
+`assumeTrue(SparkBackend.isAvailable(), ...)` -- or it will fail on the JDK 8
+and 11 configurations of CI, where even the offline (`mock:`) connection
+cannot be opened. `fullMake` cannot see that, because it runs on one JDK
+with the profile on; this reproduces it on any JDK:
+
+```bash
+./mvnw verify -P '!spark'
+```
+
 To run the tests that need a Spark Connect server (Docker required):
 
 ```bash

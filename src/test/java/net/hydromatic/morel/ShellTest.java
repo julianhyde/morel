@@ -27,6 +27,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.StringContains.containsString;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -46,6 +47,7 @@ import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.ForeignValue;
+import net.hydromatic.morel.foreign.SparkBackend;
 import org.hamcrest.Matcher;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
@@ -159,9 +161,16 @@ public class ShellTest {
    * execute one, so the error it raises is proof that the query was rewritten
    * for Spark, the property was set, and the connection was bound -- the three
    * things the flag has to do.
+   *
+   * <p>It does need the adapter, which is built only on JDK 17 and later, where
+   * the {@code spark} Maven profile activates. Below that, even the offline
+   * connection cannot be opened, and the flag has nothing to bind.
    */
   @Test
   void testSparkOption() throws IOException {
+    assumeTrue(
+        SparkBackend.isAvailable(),
+        "requires the Spark adapter, which needs JDK 17 or later");
     final ByteArrayOutputStream baos = new ByteArrayOutputStream();
     final ByteArrayInputStream bais = new ByteArrayInputStream(new byte[0]);
     final Shell.Config config =
