@@ -129,12 +129,16 @@ belongs to a column's type rather than to the constraint framework. The
 formats that do keep it are Delta Lake and Iceberg, which is a change of
 file format, not a declaration.
 
-Statistics are a third source -- `ANALYZE TABLE` then `DESCRIBE EXTENDED
-t col` reports `num_nulls`, which is 0, positive, or absent -- and could
-type an undeclared column by what the data holds. It is not implemented,
-and would be sound in one direction only: `num_nulls > 0` proves a
-column optional, where 0 is a fact about the rows that were there when
-the table was analysed.
+Statistics are not a third source. Spark can report them -- `ANALYZE
+TABLE` and then `DESCRIBE EXTENDED t col` gives `num_nulls`, and on the
+test container's `scott.emps` it gives 10 for the commission and 0 for
+the employee number -- and Morel does not read them. A type deduced from
+the rows a table happens to hold is not a type: it would change when the
+data changed, two sessions would disagree about the same query, and a
+column with no nulls today says nothing about the next insert.
+`num_nulls` is a fact about the rows that were there when the table was
+analysed, which is history, where a type is a promise about what may
+arrive.
 
 Spark's flag says whether a value *could* be null given the input schema,
 not whether a column holds nulls, and the analyze response reports it for

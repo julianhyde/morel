@@ -793,10 +793,19 @@ to the URI it is given. The whole live suite passed unchanged on the first
 run, which is the evidence that the property reproduces what the URI
 declaration did.
 
-Still open, and logged: statistics (`num_nulls`) as a third source, sound in
-one direction only, because 0 is a fact about the rows that were there when
-the table was analysed; and whether `absent` should mean "every column may
-be null" rather than "none may". That default was considered and not taken:
+**Statistics are not a third source** (Julian, 2026-10-31: "deducing
+nullability by analyzing a table is a dubious practice"). Spark will report
+them -- `ANALYZE TABLE`, then `DESCRIBE EXTENDED t col` gives `num_nulls`,
+which on the container's `scott.emps` is 10 for the commission and 0 for
+the employee number -- and Morel will not read them. A type deduced from
+the rows a table happens to hold is not a type: it changes when the data
+changes, two sessions disagree about the same query, and a column with no
+nulls today says nothing about the next insert. The measurement is kept
+because it is worth knowing that Spark can answer the question; the answer
+is not a type.
+
+The other question, whether `absent` should mean "every column may be null"
+rather than "none may", was considered and not taken:
 an uncharacterized table would type every column as an option, so browsing
 a catalog -- the part of the front end that works best -- would become
 `where valOf e.deptno = 10`, and every value would print as `SOME 7782`.
