@@ -25,6 +25,13 @@ cluster. You write the same `from` expression you would write over a list,
 Morel translates it to a Spark plan, Spark runs it, and the rows come back
 as Morel values.
 
+**You need JDK 17 or later.** The adapter is built only there -- that is
+where the `spark` Maven profile activates, and where the protobuf and Arrow
+libraries it needs are supported. On an earlier JDK, Morel builds and runs
+without the adapter, and `Spark.connect` raises `Spark` with error class
+`CONNECTION`, saying so. You also need a Spark Connect server, which the
+next section starts.
+
 ## Why
 
 * **One language for a laptop and a cluster.** A query over a list, over a
@@ -164,9 +171,13 @@ Iceberg do record it -- at the price of changing file format.
 
 ### Building and testing
 
-The adapter needs JDK 17 or later, where the `spark` Maven profile
-activates; on an older JDK, Morel builds without it. Tests that need a
-server are skipped unless you ask for them:
+The adapter is compiled by the `spark` Maven profile, which activates on
+JDK 17 and later, so a build on JDK 8 or 11 leaves it out -- and a test
+that touches it must say `assumeTrue(SparkBackend.isAvailable(), ...)`, or
+it will fail there. `./mvnw verify -P '!spark'` reproduces such a build on
+any JDK.
+
+Tests that need a server are skipped unless you ask for them:
 
 ```bash
 export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
