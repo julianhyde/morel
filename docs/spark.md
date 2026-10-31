@@ -196,7 +196,9 @@ spark.catalog.scott.emps;
 ```
 
 Two columns are options because the property names them; the rest are
-plain because it does not. The property is the whole answer for its table,
+plain because it does not. A property of `*` makes every column of that
+table an option, which is what to say about a table whose nulls nobody has
+mapped. The property is the whole answer for its table,
 so an empty property says "this table holds no nulls", which is a useful
 thing to be able to say and different from saying nothing. For the
 container's `scott` tables the property is generated from Morel's own
@@ -321,6 +323,10 @@ travels with the table, and the next person does not have to know.
 * **a column list** is for a table you cannot `ALTER`, because it is
   someone else's, or whose property you have reason to disbelieve. It
   overrides the property for the tables it names.
+
+A property can say `*` for its own table, so that is not a reason to reach
+for the URI; what the URI does that a property cannot is cover tables you
+have not seen, or cannot change.
 
 It is part of the URI, rather than a session property like
 `sparkPushDown`, because a connection caches the type of each table as it
