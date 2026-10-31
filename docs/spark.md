@@ -228,36 +228,55 @@ So a data set that happens to be named `scott` is not the server's
 `Sys.plan ()` prints the plan of the statement just run. Morel's own plan
 is what you see, with a node naming any engine that did part of the work:
 `calcite(...)` where Apache Calcite did, and `spark(...)` where Spark did.
+A plan is a multi-line string, which prints as a raw literal, `{|...|}`;
+`Sys.set ("rawStrings", false)` gives the escaped single-line form instead.
 
 With `Sys.set ("hybrid", true)`, a query over a JDBC data set goes to
 Calcite:
 
-```
-"globalMarshal(globals [scott], body calcite(plan
-  LogicalProject(dname=[$1])
-    LogicalFilter(condition=[=($0, 20)])
-      LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
-        JdbcTableScan(table=[[scott, DEPT]])
-))"
+```sml
+- from d in scott.depts where d.deptno = 20 yield d.dname;
+val it = ["RESEARCH"] : string bag
+- Sys.plan ();
+val it = {|globalMarshal(globals [scott], body calcite(plan LogicalProject(dname=[$1])
+  LogicalFilter(condition=[=($0, 20)])
+    LogicalProject(deptno=[$0], dname=[$1], loc=[$2])
+      JdbcTableScan(table=[[scott, DEPT]])
+))|} : string
 ```
 
 With `sparkPushDown`, a query over a catalog table goes to Spark, and the
-plan node holds the plan that was sent:
+plan node holds the plan that was sent -- Spark's own text format, which is
+what you would see in `spark.sql(...).explain()` on the other side:
 
-```
-"apply(fnValue spark(plan root {
-  common { plan_id: 0 }
-  project {
-    input { ... filter { ... read { named_table {
-      unparsed_identifier: "scott.depts" } } ... } }
-    expressions { unresolved_attribute {
-      unparsed_identifier: "d.dname" } }
+```sml
+- from d in spark.catalog.scott.depts take 1;
+val it = [{deptno=10,dname="ACCOUNTING",loc="NEW YORK"}]
+  : {deptno:int, dname:string, loc:string} bag
+- Sys.plan ();
+val it = {|apply(fnValue spark(plan root {
+  common {
+    plan_id: 0
   }
-}), argCode constant([]))"
+  limit {
+    input {
+      common {
+        plan_id: 1
+      }
+      read {
+        named_table {
+          unparsed_identifier: "scott.depts"
+        }
+      }
+    }
+    limit: 1
+  }
+}), argCode constant([]))|} : string
 ```
 
-(Both are one long line in reality; they are laid out here to be read, and
-the Spark plan is elided in the middle.)
+A real query's plan is longer, for the same reasons a SQL plan is: one
+protobuf field to a line, and a `subquery_alias` around each scan to carry
+the range variable's name.
 
 Three things to look for:
 

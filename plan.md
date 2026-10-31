@@ -994,8 +994,15 @@ cached with `docker save`, not a quieter test.
 
 ### Loose ends
 
-Three small things found while doing other work, none of them urgent and
-none of them recorded anywhere else.
+**`docs/spark.md` is written ahead of #500.** Its plan examples show what
+`Sys.plan ()` prints once a multi-line string prints as a raw literal
+(`{|...|}`, as #471 already does in script output) rather than as one
+escaped line. Until #500 lands, the shell prints those plans on a single
+line, and the document is a promise. Logging it here so that the two are
+landed in the right order: #500 first, or the document is briefly wrong.
+
+Three more small things found while doing other work, none of them urgent
+and none of them recorded anywhere else.
 
 * **`real` crosses as `double`, and section 1.6 says `float`.** The spec
   says "`real` to `float` (not `double`: the value is a float, and widening
