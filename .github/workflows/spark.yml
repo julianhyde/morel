@@ -15,8 +15,14 @@
 # language governing permissions and limitations under the
 # License.
 #
-# Tests against a live Spark Connect server, weekly. The regular CI
-# (main.yml) never starts Spark; it runs the translation-only tests.
+# Tests against a live Spark Connect server, weekly, and everything that
+# is too slow or too fragile to ask of every push: a container made
+# afresh, and the seed queries run through the PySpark client, which is
+# what makes the captured plans in seed-plans.txt trustworthy.
+#
+# One configuration of the regular CI (main.yml) also starts a server, so
+# that a change that breaks the adapter is caught on the push that breaks
+# it. This workflow is the slower, more thorough one.
 name: Spark
 
 on:

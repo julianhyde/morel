@@ -956,6 +956,32 @@ scans, so it binds the offline catalog's databases instead: the
 seventeen captured plans are unchanged, and the fixture now names
 tables the way a program has to.
 
+### CI
+
+Two workflows start a server, for two different purposes.
+
+`spark.yml` runs weekly and on demand: a container made afresh, and the
+seed queries run through the PySpark client, which is what makes the
+captured plans of `seed-plans.txt` trustworthy rather than circular. That
+is too slow, and depends on too much (a pip install, a Docker Hub pull), to
+ask of every push.
+
+`main.yml` has one configuration of its matrix -- JDK 21, `spark: true` --
+that starts a server and runs `verify -Dmorel.spark=true`, so a change that
+breaks the adapter is caught on the push that breaks it rather than the
+following Monday. One configuration is enough: what the adapter does with a
+server does not depend on which JDK asked it, and the matrix already covers
+the JDKs. It must be 17 or later, because that is where the `spark` Maven
+profile activates, and it has its own timeout (`${{ matrix.spark && 15 || 3
+}}`), because an image to pull and a server to wait for do not fit in the
+three minutes the other configurations need.
+
+Neither has ever run: this branch has not been pushed, so the first push is
+also the first evidence that the workflows work. The likeliest thing to go
+wrong is the Docker Hub pull -- an anonymous pull from a shared runner IP is
+rate-limited -- and the answer if it does is a registry mirror or an image
+cached with `docker save`, not a quieter test.
+
 ### Loose ends
 
 Three small things found while doing other work, none of them urgent and
