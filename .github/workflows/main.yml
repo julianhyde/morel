@@ -65,6 +65,13 @@ jobs:
           # the same whichever JDK asked, and this is the JDK that the
           # weekly Spark workflow uses. It must be 17 or later, because
           # that is where the "spark" Maven profile activates.
+          #
+          # This is here while the adapter is new and the workflow itself
+          # is unproven, so that a push that breaks either is caught by the
+          # push. Once it has been green for a month of pushes, delete this
+          # entry and let the weekly workflow (spark.yml) cover Spark: a
+          # test that starts a server on every push is worth its minutes
+          # only while it is still finding things.
           - java-version: "21"
             spark: true
           - java-version: "25"

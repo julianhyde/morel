@@ -976,6 +976,16 @@ profile activates, and it has its own timeout (`${{ matrix.spark && 15 || 3
 }}`), because an image to pull and a server to wait for do not fit in the
 three minutes the other configurations need.
 
+That configuration is **provisional** (Julian, 2026-10-31: "enable it for pr
+pushes for now ... and step back to weekly when it's been working for a
+while"). It is there while both the adapter and the workflow are new and
+neither has CI evidence; when it has been green for a month of pushes, the
+entry comes out and `spark.yml` covers Spark alone. A test that starts a
+server on every push earns its minutes only while it is still finding
+things. The trigger is `push`, which is what a branch under review gets in
+this repository; `pull_request` is not added, because for a branch in the
+same repository it would only run everything twice.
+
 Neither has ever run: this branch has not been pushed, so the first push is
 also the first evidence that the workflows work. The likeliest thing to go
 wrong is the Docker Hub pull -- an anonymous pull from a shared runner IP is
