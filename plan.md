@@ -994,12 +994,12 @@ cached with `docker save`, not a quieter test.
 
 ### Loose ends
 
-**`docs/spark.md` is written ahead of #500.** Its plan examples show what
-`Sys.plan ()` prints once a multi-line string prints as a raw literal
-(`{|...|}`, as #471 already does in script output) rather than as one
-escaped line. Until #500 lands, the shell prints those plans on a single
-line, and the document is a promise. Logging it here so that the two are
-landed in the right order: #500 first, or the document is briefly wrong.
+**`docs/spark.md` is written for #500, which has landed on main**
+(`a0df6783`, 2026-10-31). Its plan examples show a multi-line string as a
+raw literal, which is what the shell prints once this branch is rebased;
+until then the shell prints those plans on one line and the document is a
+promise. The rebase also regenerates the `Sys.plan` expectations in
+`spark-exec.smli`.
 
 **A live script's query must define its own order.** CI found this the
 first time it ran: `spark-exec.smli`'s left join printed its `SALES` rows
