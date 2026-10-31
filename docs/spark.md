@@ -101,6 +101,118 @@ from e in spark.catalog.scott.emps
 The `rates` rows are sent with the plan; the employees never leave the
 cluster.
 
+## Types
+
+A query's type comes from Spark's schema, mapped column by column:
+
+| Spark | Morel | Notes |
+| --- | --- | --- |
+| `boolean` | `bool` | |
+| `tinyint`, `smallint`, `int` | `int` | widened on read |
+| `bigint` | `int` | raises `Overflow` if the value does not fit |
+| `float`, `double` | `real` | Morel's `real` is 32-bit, so a `double` is narrowed |
+| `decimal(p, s)` | `decimal` | rounded half-even to Morel's 34 digits |
+| `string`, `char(n)`, `varchar(n)` | `string` | a `char(n)` keeps its trailing spaces |
+| `binary` | `word list` | one `word` per byte |
+| `date` | `Date.date` | midnight, no zone |
+| `timestamp` | `Time.time` | an instant, microsecond precision |
+| `timestamp_ntz` | `Date.date` | wall-clock time, no zone |
+| `array<t>` | `t list` | |
+| `struct<f: t, ...>` | `{f: t, ...}` | fields matched by name; Morel sorts the labels |
+| a table | `{...} bag` | a bag, because rows are unordered |
+| `map<k, v>` | *rejected* | |
+| `interval ...`, `void` | *rejected* | |
+
+A rejected column makes its table unreadable, and says why -- which is
+what the container's `zoo` table, one column per Spark type, is for:
+
+```sml
+spark.catalog.default.zoo;
+> uncaught exception Spark [Spark: UNSUPPORTED_TYPE: Spark type map<string,integer> has no Morel equivalent]
+```
+
+### Nulls, and why a column is an option
+
+A column that may be null maps to `t option` -- `int option`, `decimal
+option` -- and its nulls arrive as `NONE`. A column that may not maps to
+plain `t`. So the question is which columns may be null, and Spark cannot
+answer it.
+
+Watch what happens to a `NOT NULL`. The test container is created by
+`src/test/resources/spark/init.py`, which for each table runs a `CREATE
+TABLE ... USING parquet`, an `INSERT`, and nothing else exotic:
+
+```sql
+CREATE TABLE scott.emps (comm DECIMAL(7, 2), deptno INT, empno INT, ...)
+  USING parquet
+```
+
+Suppose it said `empno INT NOT NULL`. Spark accepts the statement, and
+then:
+
+```sql
+SHOW CREATE TABLE scott.emps
+-- CREATE TABLE spark_catalog.scott.emps (empno INT, ...) USING parquet
+INSERT INTO scott.emps VALUES (NULL, ...)   -- succeeds
+```
+
+The constraint is gone -- not hidden, gone: the DDL no longer mentions it
+and nothing enforces it. Spark's own documentation says why: "When reading
+Parquet files, all columns are automatically converted to be nullable for
+compatibility reasons." Asking for the schema confirms it; every column of
+every stored table comes back nullable, including a primary key and
+including the three columns of `scott.depts`, which hold no nulls at all:
+
+```
+comm      decimal(7,2)   nullable=true
+deptno    integer        nullable=true
+empno     integer        nullable=true
+...
+```
+
+A flag that is true for every column says nothing, so Morel does not
+believe it at the top level of a stored table. (One level down it is a
+different flag: the nullability of a field inside a `struct`, or of an
+array's elements, is recorded rather than inferred, and Morel does believe
+that.) Nor is the constraint kept anywhere else: `ALTER COLUMN ... SET NOT
+NULL` is refused for a table stored as files, and Spark's constraints
+(CHECK, UNIQUE, PRIMARY KEY, FOREIGN KEY) do not include nullability,
+because nullability belongs to a column's type. Delta Lake and Iceberg
+record it -- at the price of changing file format.
+
+**So the table is given a property.** `init.py` ends each table with:
+
+```sql
+ALTER TABLE scott.emps SET TBLPROPERTIES ('morel.nullable' = 'comm,mgr')
+```
+
+Morel reads `morel.nullable` when it asks for a table's type, and that is
+where `scott.emps` gets its shape:
+
+```sml
+spark.catalog.scott.emps;
+> val it : {comm:decimal option, deptno:int, empno:int, ename:string,
+>           hiredate:string, job:string, mgr:int option, sal:decimal} bag
+```
+
+Two columns are options because the property names them; the rest are
+plain because it does not. The property is the whole answer for its table,
+so an empty property says "this table holds no nulls", which is a useful
+thing to be able to say and different from saying nothing. For the
+container's `scott` tables the property is generated from Morel's own
+`scott` data set, so the fixture and the types cannot drift apart.
+
+A column that nothing declares keeps its plain type, and a null in it
+raises where it is read:
+
+```sml
+spark.catalog.default.nulls;
+> uncaught exception Spark [Spark: NULL_VALUE: Null in column n of row 1, whose type int has no room for it]
+```
+
+That error names the column, and the fix is the property. A connection can
+also be told directly, which is the next section.
+
 ## Configuration
 
 ### Command line and environment
@@ -133,29 +245,6 @@ translator cannot express. A query that reached the cluster and failed
 there is raised, never recomputed locally: its answer is not ours to
 invent.
 
-### Which columns may be null
-
-Spark keeps nothing itself: a `NOT NULL` in a `CREATE TABLE` is accepted
-and discarded, nothing enforces it, `ALTER COLUMN ... SET NOT NULL` is
-refused for a table stored as files, and Spark's own constraints (CHECK,
-UNIQUE, PRIMARY KEY, FOREIGN KEY) do not include nullability, which belongs
-to a column's type. Delta Lake and Iceberg do record it -- at the price of
-changing file format. So Morel has to be told, and the normal way is that
-**the table tells it**:
-
-```sql
-ALTER TABLE scott.emps SET TBLPROPERTIES ('morel.nullable' = 'comm,mgr')
-```
-
-Morel reads `morel.nullable` when it asks for a table's type. The property
-is the whole answer for its table -- a column it names may be null, one it
-does not name may not -- so an empty property says the table holds no
-nulls, which is different from saying nothing. Set it once and every
-session, and every other client, can read it.
-
-A column that nothing declares keeps its plain type `t`, and a null in it
-raises `Spark` with error class `NULL_VALUE`, naming the column.
-
 ### Connection URI parameters
 
 A URI may carry parameters after `/;`, separated by `;`:
@@ -169,7 +258,9 @@ sc://localhost:15002/;user_id=fred;nullable=*
 | `user_id` | The user the server sees |
 | `nullable` | Columns that may be null, as `database.table.column`; `*` means every column of every table |
 
-`nullable` is for what a table property cannot do, and it overrides one:
+`nullable` is for what a [table
+property](#nulls-and-why-a-column-is-an-option) cannot do, and it
+overrides one:
 
 * **`nullable=*`** is a whole-connection choice -- unwrap every column
   rather than have one raise -- which no table can make on its own. It is
