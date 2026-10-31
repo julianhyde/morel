@@ -388,8 +388,11 @@ sends each query to it:
 ./morel --spark
 ```
 
-`plan.md` and `spec.md` at the root of the repository hold the plan and
-design for the Spark work.
+The plan and design for the Spark work are `plan.md` and `spec.md` on the
+[`467-spark`](https://github.com/julianhyde/morel/tree/467-spark) branch,
+which are not merged to main: the design and the diary of the work, not
+reference material. The reference material is
+[docs/spark.md](docs/spark.md).
 
 ### Adding a Language Feature
 

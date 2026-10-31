@@ -327,5 +327,10 @@ Three things to look for:
 ## See also
 
 * [`Spark` structure reference](lib/spark.md)
-* `spec.md` and `plan.md` in the repository root: the design, the
-  decisions, and what is not done
+* [spec.md](https://github.com/julianhyde/morel/blob/467-spark/spec.md) --
+  the design: the type mapping, the `Spark` structure, the function table
+* [plan.md](https://github.com/julianhyde/morel/blob/467-spark/plan.md) --
+  the decisions, what each measurement showed, and what is not done
+
+Those two live on the `467-spark` branch and are not merged: they are the
+working design and diary, not reference material.
