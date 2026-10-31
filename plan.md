@@ -1001,6 +1001,25 @@ escaped line. Until #500 lands, the shell prints those plans on a single
 line, and the document is a promise. Logging it here so that the two are
 landed in the right order: #500 first, or the document is briefly wrong.
 
+**A live script's query must define its own order.** CI found this the
+first time it ran: `spark-exec.smli`'s left join printed its `SALES` rows
+in a different order on a runner than on a laptop, because a shuffle gives
+Spark no reason to keep an order and the runner had different parallelism.
+Every query in a live script that compares more than one row as text now
+ends in an `order` -- joins, groups, set operators and the semi-joins of
+`exists`, `elem`, `notelem`, `empty` and `nonEmpty`. For `triple.smli`
+that is not only a flake fix: a query whose order the language does not
+define has no business being compared across three engines, and now all
+three produce byte-identical output rather than agreeing by luck.
+
+**Ordering a collection of scalars is not translated.** `from e in
+scott.emps group e.job order job` sorts a bag of strings, whose sort key
+is the element itself, and the translator refuses: "Spark cannot do the
+variable $0". The fix needs the Spark column name of a scalar relation's
+single column, which `parts()` does not track, so it is not a one-line
+change. `triple.smli` groups by a record (`group {e.job}`) to get the same
+distinct with an order that does translate.
+
 Three more small things found while doing other work, none of them urgent
 and none of them recorded anywhere else.
 

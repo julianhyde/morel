@@ -49,39 +49,41 @@ Sys.set ("output", "tabular");
   from e in spark.catalog.scott.emps
     join d in spark.catalog.scott.depts on e.deptno = d.deptno
     yield {e.ename, d.dname}
+    order ename
 )).execute ();
 > dname      ename
 > ---------- ------
-> RESEARCH   SMITH
+> RESEARCH   ADAMS
 > SALES      ALLEN
-> SALES      WARD
-> RESEARCH   JONES
-> SALES      MARTIN
 > SALES      BLAKE
 > ACCOUNTING CLARK
-> RESEARCH   SCOTT
-> ACCOUNTING KING
-> SALES      TURNER
-> RESEARCH   ADAMS
-> SALES      JAMES
 > RESEARCH   FORD
+> SALES      JAMES
+> RESEARCH   JONES
+> ACCOUNTING KING
+> SALES      MARTIN
 > ACCOUNTING MILLER
+> RESEARCH   SCOTT
+> RESEARCH   SMITH
+> SALES      TURNER
+> SALES      WARD
 >
-> val it : {dname:string, ename:string} bag
+> val it : {dname:string, ename:string} list
 
 (*) Query 3: group by with aggregates.
 (spark.connection.prepare (fn () =>
   from e in spark.catalog.scott.emps
     group e.deptno
       compute {c = count over (), total = sum over e.sal, top = max over e.sal}
+    order deptno
 )).execute ();
 > c deptno top  total
 > - ------ ---- -----
+> 3     10 5000  8750
 > 5     20 3000 10875
 > 6     30 2850  9400
-> 3     10 5000  8750
 >
-> val it : {c:int, deptno:int, top:decimal, total:decimal} bag
+> val it : {c:int, deptno:int, top:decimal, total:decimal} list
 
 (*) Query 4: sort and limit.
 (spark.connection.prepare (fn () =>
@@ -125,9 +127,10 @@ Sys.set ("output", "tabular");
 
 (*) Query 7: distinct, a group with no aggregates.
 (spark.connection.prepare (fn () =>
-  from e in spark.catalog.scott.emps group e.job
+  from e in spark.catalog.scott.emps group e.job order job
 )).execute ();
-> val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
+> uncaught exception Spark [Spark: UNSUPPORTED: Spark cannot do the variable $0]
+>   raised at: stdIn:3.13
 
 (* Query 8: left join, which asks for a whole employee row. The right row is
  * an option because the join may find nothing, and the commission and the
@@ -138,37 +141,39 @@ Sys.set ("output", "tabular");
   from d in spark.catalog.scott.depts
     left join e in spark.catalog.scott.emps on d.deptno = e.deptno
     where d.deptno >= 30
+    order (d.dname, e)
     yield {d.dname, e}
 )).execute ();
 > dname      e
 >            comm deptno empno ename  hiredate   job      mgr  sal
 > ---------- ---- ------ ----- ------ ---------- -------- ---- ----
 > OPERATIONS
+> SALES               30  7698 BLAKE  1981-01-05 MANAGER  7839 2850
 > SALES               30  7900 JAMES  1981-12-03 CLERK    7698  950
 > SALES         0     30  7844 TURNER 1981-09-08 SALESMAN 7698 1500
-> SALES      1400     30  7654 MARTIN 1981-09-28 SALESMAN 7698 1250
-> SALES               30  7698 BLAKE  1981-01-05 MANAGER  7839 2850
-> SALES       500     30  7521 WARD   1981-02-22 SALESMAN 7698 1250
 > SALES       300     30  7499 ALLEN  1981-02-20 SALESMAN 7698 1600
+> SALES       500     30  7521 WARD   1981-02-22 SALESMAN 7698 1250
+> SALES      1400     30  7654 MARTIN 1981-09-28 SALESMAN 7698 1250
 >
-> val it : {dname:string, e:{comm:decimal option, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int option, sal:decimal} option} bag
+> val it : {dname:string, e:{comm:decimal option, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int option, sal:decimal} option} list
 
 (*) Query 9: union, of bags, so every row is kept.
 (spark.connection.prepare (fn () =>
   from e in spark.catalog.scott.emps where e.deptno = 10 yield {n = e.empno}
     union (from d in spark.catalog.scott.depts yield {n = d.deptno})
+    order n
 )).execute ();
 > n
 > ----
-> 7782
-> 7839
-> 7934
 >   10
 >   20
 >   30
 >   40
+> 7782
+> 7839
+> 7934
 >
-> val it : {n:int} bag
+> val it : {n:int} list
 
 (*) Query 10: arithmetic, including div and mod.
 (spark.connection.prepare (fn () =>
@@ -236,36 +241,38 @@ Sys.set ("output", "tabular");
   from e in spark.catalog.scott.emps yield {n = e.deptno}
     except (from d in spark.catalog.scott.depts
             where d.deptno > 20 yield {n = d.deptno})
+    order n
 )).execute ();
 > n
 > --
-> 20
-> 30
-> 20
-> 30
-> 30
+> 10
+> 10
 > 10
 > 20
-> 10
-> 30
+> 20
+> 20
+> 20
 > 20
 > 30
-> 20
-> 10
+> 30
+> 30
+> 30
+> 30
 >
-> val it : {n:int} bag
+> val it : {n:int} list
 
 (*) Query 15: except and intersect, of bags.
 (spark.connection.prepare (fn () =>
   from e in spark.catalog.scott.emps yield {n = e.deptno}
     intersect (from d in spark.catalog.scott.depts
                where d.deptno > 20 yield {n = d.deptno})
+    order n
 )).execute ();
 > n
 > --
 > 30
 >
-> val it : {n:int} bag
+> val it : {n:int} list
 
 (*) Query 16: group by two keys with two aggregates, then sort.
 (spark.connection.prepare (fn () =>

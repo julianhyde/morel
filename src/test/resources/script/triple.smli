@@ -74,37 +74,39 @@ from e in scott.emps
 (*) Join.
 from e in scott.emps
   join d in scott.depts on e.deptno = d.deptno
-  yield {e.ename, d.dname};
+  yield {e.ename, d.dname}
+  order ename;
 > dname      ename
 > ---------- ------
-> RESEARCH   SMITH
+> RESEARCH   ADAMS
 > SALES      ALLEN
-> SALES      WARD
-> RESEARCH   JONES
-> SALES      MARTIN
 > SALES      BLAKE
 > ACCOUNTING CLARK
-> RESEARCH   SCOTT
-> ACCOUNTING KING
-> SALES      TURNER
-> RESEARCH   ADAMS
-> SALES      JAMES
 > RESEARCH   FORD
+> SALES      JAMES
+> RESEARCH   JONES
+> ACCOUNTING KING
+> SALES      MARTIN
 > ACCOUNTING MILLER
+> RESEARCH   SCOTT
+> RESEARCH   SMITH
+> SALES      TURNER
+> SALES      WARD
 >
-> val it : {dname:string, ename:string} bag
+> val it : {dname:string, ename:string} list
 
 (*) Group with aggregates.
 from e in scott.emps
   group e.deptno
-    compute {c = count over (), total = sum over e.sal, top = max over e.sal};
+    compute {c = count over (), total = sum over e.sal, top = max over e.sal}
+  order deptno;
 > c deptno top  total
 > - ------ ---- -----
+> 3     10 5000  8750
 > 5     20 3000 10875
 > 6     30 2850  9400
-> 3     10 5000  8750
 >
-> val it : {c:int, deptno:int, top:decimal, total:decimal} bag
+> val it : {c:int, deptno:int, top:decimal, total:decimal} list
 
 (*) Group by two keys, then sort.
 from e in scott.emps
@@ -152,24 +154,37 @@ from e in scott.emps
 >
 > val it : {empno:int, ename:string} list
 
-(*) Distinct, which is a group with no aggregates.
-from e in scott.emps group e.job;
-> val it = ["CLERK","SALESMAN","MANAGER","ANALYST","PRESIDENT"] : string bag
+(* Distinct, which is a group with no aggregates. The key is a record, so
+ * that the result can be ordered: ordering a collection of scalars means
+ * sorting by the element itself, which the Spark translator cannot name
+ * (plan.md says more). *)
+from e in scott.emps group {e.job} order job;
+> job
+> ---------
+> ANALYST
+> CLERK
+> MANAGER
+> PRESIDENT
+> SALESMAN
+>
+> val it : {job:string} list
 
 (*) A correlated exists subquery.
 from d in scott.depts
   where (exists e in scott.emps
     where e.deptno = d.deptno andalso e.job = "CLERK")
+  order d.dname
   yield d.dname;
-> val it = ["ACCOUNTING","RESEARCH","SALES"] : string bag
+> val it = ["ACCOUNTING","RESEARCH","SALES"] : string list
 
 (*) "elem", which Spark has to do as an exists.
 from e in scott.emps
   where e.deptno elem (from d in scott.depts
       where d.loc = "CHICAGO"
       yield d.deptno)
+  order e.ename
   yield e.ename;
-> val it = ["ALLEN","WARD","MARTIN","BLAKE","TURNER","JAMES"] : string bag
+> val it = ["ALLEN","BLAKE","JAMES","MARTIN","TURNER","WARD"] : string list
 
 (*) A correlated scalar subquery.
 from d in scott.depts
@@ -191,46 +206,49 @@ from e in scott.emps compute count over ();
 
 (*) Union, of bags, so every row counts.
 from e in scott.emps where e.deptno = 10 yield {n = e.empno}
-  union (from d in scott.depts yield {n = d.deptno});
+  union (from d in scott.depts yield {n = d.deptno})
+  order n;
 > n
 > ----
-> 7782
-> 7839
-> 7934
 >   10
 >   20
 >   30
 >   40
+> 7782
+> 7839
+> 7934
 >
-> val it : {n:int} bag
+> val it : {n:int} list
 
 (*) Except and intersect, also of bags.
 from e in scott.emps yield {n = e.deptno}
-  except (from d in scott.depts where d.deptno > 20 yield {n = d.deptno});
+  except (from d in scott.depts where d.deptno > 20 yield {n = d.deptno})
+  order n;
 > n
 > --
-> 20
-> 30
-> 20
-> 30
-> 30
+> 10
+> 10
 > 10
 > 20
-> 10
-> 30
+> 20
+> 20
+> 20
 > 20
 > 30
-> 20
-> 10
+> 30
+> 30
+> 30
+> 30
 >
-> val it : {n:int} bag
+> val it : {n:int} list
 from e in scott.emps yield {n = e.deptno}
-  intersect (from d in scott.depts where d.deptno > 20 yield {n = d.deptno});
+  intersect (from d in scott.depts where d.deptno > 20 yield {n = d.deptno})
+  order n;
 > n
 > --
 > 30
 >
-> val it : {n:int} bag
+> val it : {n:int} list
 
 (*) String functions.
 from e in scott.emps
@@ -322,14 +340,14 @@ from e in scott.emps
 (* The rest of the aggregate functions. Only "sum" is here: Calcite pushes
  * "min" and "max" over a decimal, which the group above does, but fails over
  * an int or a string (plan.md says more). *)
-from e in scott.emps group e.deptno compute {s = sum over e.empno};
+from e in scott.emps group e.deptno compute {s = sum over e.empno} order deptno;
 > deptno s
 > ------ -----
+>     10 23555
 >     20 38501
 >     30 46116
->     10 23555
 >
-> val it : {deptno:int, s:int} bag
+> val it : {deptno:int, s:int} list
 
 (* The rest of the subquery functions. "only" is not here; Calcite pushes it
  * down and then fails. *)
@@ -337,17 +355,20 @@ from e in scott.emps
   where e.deptno notelem (from d in scott.depts
       where d.loc = "CHICAGO"
       yield d.deptno)
+  order e.ename
   yield e.ename;
-> val it = ["SMITH","JONES","CLARK","SCOTT","KING","ADAMS","FORD","MILLER"]
->   : string bag
+> val it = ["ADAMS","CLARK","FORD","JONES","KING","MILLER","SCOTT","SMITH"]
+>   : string list
 from d in scott.depts
   where empty (from e in scott.emps where e.deptno = d.deptno)
+  order d.dname
   yield d.dname;
-> val it = ["OPERATIONS"] : string bag
+> val it = ["OPERATIONS"] : string list
 from d in scott.depts
   where nonEmpty (from e in scott.emps where e.deptno = d.deptno)
+  order d.dname
   yield d.dname;
-> val it = ["ACCOUNTING","RESEARCH","SALES"] : string bag
+> val it = ["ACCOUNTING","RESEARCH","SALES"] : string list
 
 (* A real function, and the conversion into one. The conversions back --
  * "Real.floor" and "Real.trunc" -- are not here; Calcite fails on them. *)
