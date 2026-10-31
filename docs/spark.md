@@ -213,6 +213,48 @@ spark.catalog.default.nulls;
 That error names the column, and the fix is the property. A connection can
 also be told directly, which is the next section.
 
+### Morel to Spark
+
+The reverse mapping is needed when Morel sends data -- a list of its own,
+a literal in a plan -- and is the inverse of the table above on its image:
+`int` to `int`, `real` to `float`, `string`, `bool`, `Time.time` to
+`timestamp`, `Date.date` to `timestamp_ntz`, `word list` to `binary`, `t
+list` to `array<t>`, a record to a struct, `t option` to a nullable
+column. A `char` is a one-character `string`, `unit` is a struct with no
+fields, and a tuple is a struct whose fields are `1`, `2`, ... A datatype
+other than `option` crosses as a tagged struct, with one nullable field
+per constructor that takes an argument. Function types are rejected.
+
+`decimal` is the one type the table above does not decide, because Morel's
+decimal carries no precision or scale and every Spark decimal column has
+both. A column of them is `decimal(38, 18)` -- the width Spark itself
+gives a column it infers from a `BigDecimal` -- and each value is restated
+at that scale. A value that does not fit is refused rather than rounded.
+
+A row must be a record, because Spark has no column for a bare value:
+`from i in [1, 2]` cannot be sent, and nothing has a column for `unit`.
+
+### Errors
+
+Every failure raises `Spark {errorClass, message}`. The error class is
+Spark's own, taken from the error it returned, or one of the adapter's:
+`CONNECTION` (the server could not be reached, or the adapter is not
+built), `CLOSED`, `NULL_VALUE`, `UNSUPPORTED_TYPE`, `UNSUPPORTED` (the
+translator refused), `MOCK` (the offline connection cannot execute). After
+any error the connection is still usable.
+
+Where Spark's error is one Morel has a name for, Morel's exception is
+raised instead, so that a query fails the same way wherever it ran:
+`DIVIDE_BY_ZERO` becomes `Div`, and `ARITHMETIC_OVERFLOW` and
+`CAST_OVERFLOW` become `Overflow`.
+
+```sml
+(spark.connection.prepare (fn () =>
+  from e in spark.catalog.scott.emps where e.deptno div 0 = 1 yield e.ename
+)).execute ();
+> uncaught exception Div [divide by zero]
+```
+
 ## Configuration
 
 ### Command line and environment
