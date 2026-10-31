@@ -649,7 +649,7 @@ public abstract class Codes {
 
   /**
    * Returns the Morel exception that a Spark error class means, or null if
-   * Morel has no name for it (docs/spark.md, "Errors").
+   * Morel has no name for it.
    *
    * <p>Only a failure of the computation maps: dividing by zero is `Div`
    * whether Spark noticed it or Morel did. A failure of the connection, or of

@@ -368,7 +368,7 @@ public class SparkTranslator {
     if (exp.op == Op.VALUE_LITERAL) {
       // A collection the query reached through a name rather than writing out,
       // and not a table of a catalog: its rows cross as a local relation, as
-      // an inline collection's do (docs/spark.md, "Morel to Spark").
+      // an inline collection's do.
       final Object value = ((Core.Literal) exp).valueObject();
       if (value instanceof List) {
         return localRelation(planId, (List<Object>) value, exp.type);
@@ -381,17 +381,13 @@ public class SparkTranslator {
    * Returns what Spark calls the table a collection reads, or null if the
    * collection is not a table of a connection's catalog.
    *
-   * <p>The name is no guide, so the value decides. A query that reads {@code
-   * scott.emps} may mean a table of the server, if it reached it through a
-   * connection's catalog; or a data set of its own session that happens to have
-   * that name; or a record of its own with a field that holds a collection.
-   * Only the first is a table on the server, and the others cross as their
-   * rows, however they are named (docs/spark.md, "Architecture").
+   * <p>The name is no guide, so the value decides: {@code scott.emps} may be a
+   * table of the server, a data set of this session with the same name, or a
+   * record whose field holds a collection, and only the first is a scan.
    *
    * <p>A table arrives as a value, because inlining replaced the expression
    * that read it with what it holds, and what a catalog holds is the table
-   * itself -- which knows the name Spark has for it. The offline connection's
-   * catalog answers the same way, so a plan can be prepared with no server.
+   * itself -- which knows the name Spark has for it.
    */
   private static @Nullable String catalogTable(Core.Exp exp) {
     if (exp.op == Op.VALUE_LITERAL) {
@@ -979,10 +975,10 @@ public class SparkTranslator {
    * so asking whether it is null asks exactly the right question.
    *
    * <p>The types cannot answer it. A catalog column is a plain type whether or
-   * not it holds nulls (docs/spark.md, "Nulls"), so a column that looks as
-   * though it could not be null may be null in a row that was found -- and a
-   * join that asked that column would report the row as not found, quietly. The
-   * commission of Morel's own `scott` is such a column.
+   * not it holds nulls, so a column that looks as though it could not be null
+   * may be null in a row that was found -- and a join that asked that column
+   * would report the row as not found, quietly. The commission of Morel's own
+   * `scott` is such a column.
    */
   private static @Nullable String keyColumn(
       Core.Exp condition, Core.IdPat rightRow) {

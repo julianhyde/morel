@@ -17,8 +17,8 @@
  * License.
  *
  * The Morel functions and operators that the Spark translator
- * pushes down: one record per built-in. See #467 for how the table
- * was decided. The file is a Morel expression, a list of records, so
+ * pushes down: one record per built-in. The file is a Morel
+ * expression, a list of records, so
  * that every implementation of Morel can read it.
  *
  *   morel       The built-in: "op +" for a top-level operator, or

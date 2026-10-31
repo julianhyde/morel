@@ -1455,10 +1455,9 @@ public class Resolver {
    * <p>A query names its sources -- {@code spark.catalog.scott.emps}, {@code
    * scott.emps}, {@code rates} -- and what crosses to Spark depends on what
    * each one is, not on what it is called: a table of a connection's catalog is
-   * a table scan, and every other collection is rows to send (docs/spark.md,
-   * "Architecture"). Only the environment knows which, and this is where the
-   * environment still reaches the plan; by the time the translator runs, the
-   * names are all it would have.
+   * a table scan, and every other collection is rows to send. Only the
+   * environment knows which, and this is where the environment still reaches
+   * the plan; by the time the translator runs, the names are all it would have.
    *
    * <p>A name the environment cannot value is left as it is -- a plan's own
    * parameter, for one, which has no value until it is executed -- and the

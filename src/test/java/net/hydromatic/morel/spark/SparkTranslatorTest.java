@@ -82,7 +82,7 @@ public class SparkTranslatorTest {
       // translator scans a table only if that is where the collection came
       // from, so "scott" here is a database of the offline catalog rather
       // than the data set itself. The offline catalog's databases are the
-      // session's data sets (docs/spark.md, "Architecture"), so the query reads
+      // session's data sets, so the query reads
       // as it
       // would in a script and the table it names is the one Spark knows.
       final SparkCatalog catalog =

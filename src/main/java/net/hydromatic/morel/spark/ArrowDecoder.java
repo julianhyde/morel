@@ -52,9 +52,8 @@ import org.jspecify.annotations.Nullable;
  * <p>Decoding is driven by the Morel type: an {@code option} type admits a null
  * (as {@code NONE}), any other type does not, and a null there raises {@link
  * SparkBackend.SparkException} with class "NULL_VALUE". Values are converted
- * per docs/spark.md, "Types": integers of every width to {@code int} (raising
- * if a {@code bigint} does not fit), floats, doubles and decimals to {@code
- * real}, and so on.
+ * thus: integers of every width to {@code int} (raising if a {@code bigint}
+ * does not fit), floats, doubles and decimals to {@code real}, and so on.
  */
 public class ArrowDecoder {
   private ArrowDecoder() {}

@@ -89,7 +89,7 @@ public abstract class Compiles {
           warningConsumer,
           tracer);
     } catch (SparkBackend.SparkException e) {
-      // "Every failure raises Spark" (docs/spark.md, "Errors"), and a refusal
+      // Every failure raises Spark, and a refusal
       // to
       // translate is a failure like any other: it reaches the program as the
       // exception that every Spark failure raises, rather than as whatever a
@@ -177,21 +177,13 @@ public abstract class Compiles {
    * Returns a statement with every query pushed down to Spark, or the statement
    * itself if the session is not asking for that.
    *
-   * <p>A query becomes {@code (spark.connection.remote (fn () => e)) ()}, which
-   * translates it for the connection the session has bound as {@code spark},
-   * runs it there, and brings back the rows. The query keeps the names it had,
-   * so a data set it reads crosses as its rows: the property runs a query on
-   * Spark with the data it needs, and a query that means a table of the server
-   * says so, through the connection's catalog.
+   * <p>A query becomes {@code (spark.connection.remote (fn () => e)) ()}. A
+   * declaration is left alone, because the names a session binds are its own,
+   * and so is a call to {@code Sys}, which configures the session rather than
+   * asking a question.
    *
-   * <p>A declaration is left alone: it binds a name, and the names a session
-   * binds are its own. So is a call to the {@code Sys} structure, which
-   * configures the session rather than asking a question, and which Spark could
-   * not answer.
-   *
-   * <p>This is where every statement passes, whichever way Morel was started --
-   * a shell, a script, {@code --eval} -- so the property means the same thing
-   * in all of them.
+   * <p>Every statement passes here, whichever way Morel was started, so the
+   * property means the same in a shell, a script and {@code --eval}.
    */
   private static AstNode pushDown(
       Session session, Environment env, AstNode statement) {

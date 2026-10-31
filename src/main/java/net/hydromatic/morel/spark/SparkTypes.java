@@ -34,19 +34,9 @@ import org.apache.spark.connect.proto.DataType;
 /**
  * Maps Spark types to Morel types.
  *
- * <p>The rules are in docs/spark.md, "Types". A nullable type maps to {@code
- * option}, except at the top level of a row: a column maps to the plain type,
- * because Spark's catalog reports every column of a table stored as files as
- * nullable, and the decoder raises if a null actually arrives.
- *
- * <p>Unless the connection was told otherwise. Spark's flag says nothing about
- * a stored table's columns -- it is true for all of them, whatever the DDL
- * said, and cannot be asserted afterwards -- so the one place the truth is
- * known is wherever the data came from, and a connection can carry a
- * declaration of which columns are nullable. A declared column maps to {@code
- * option} and its nulls arrive as {@code NONE}; an undeclared one keeps the
- * plain type and the raise, because declaring nothing must go on meaning what
- * it means today.
+ * <p>A nullable type maps to {@code option}, except at the top level of a row,
+ * where Spark's flag is true of every column of a stored table and therefore
+ * says nothing; there, a column is an option only if something declared it so.
  */
 public class SparkTypes {
   private SparkTypes() {}
@@ -146,14 +136,10 @@ public class SparkTypes {
         throw new SparkBackend.SparkException(
             "UNSUPPORTED_TYPE", "Duplicate field name " + field.getName());
       }
-      // Whether the value may be absent, from whichever source knows.
-      //
-      // At the top level of a row, Spark's flag says nothing: it is true for
-      // every column of a stored table, whatever the DDL said, so a column
-      // is optional if and only if something told us so -- the table itself,
-      // or the connection. "*" is how either says it means every column. One
-      // level down -- inside a struct, an array or a map -- the flag is
-      // recorded rather than inferred, and it is the only thing that knows.
+      // One level down -- inside a struct, an array or a map -- Spark's flag
+      // is recorded rather than inferred, so believe it; at the top level of
+      // a row it is true of everything, so believe the declaration instead.
+      // "*" is a declaration of every column.
       final boolean nullable =
           strict
               ? field.getNullable()

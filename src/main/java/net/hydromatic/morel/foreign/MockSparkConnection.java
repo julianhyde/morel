@@ -36,8 +36,7 @@ import net.hydromatic.morel.type.TypeSystem;
  * <p>Each data set is a database, and each of its tables a table, so {@code
  * spark.catalog.scott.emps} is the environment's {@code scott.emps}. The test
  * container seeds a {@code scott} database with the same tables and rows, so a
- * real connection gives the same type and values. See docs/spark.md,
- * "Architecture".
+ * real connection gives the same type and values.
  */
 public class MockSparkConnection implements SparkBackend.Connection {
   /** The URI that opens the offline connection. */

@@ -307,16 +307,7 @@ class SparkConnection implements SparkBackend.Connection {
 
   /**
    * Name of the table property that says which of a table's columns may be
-   * null.
-   *
-   * <p>Spark has nowhere else to keep it. A {@code NOT NULL} in a {@code CREATE
-   * TABLE} is discarded where the table is made -- {@code SHOW CREATE TABLE}
-   * shows the column plain afterwards -- nothing enforces it, {@code ALTER
-   * TABLE ... SET NOT NULL} is refused, and the constraints that Spark 4.1
-   * added (CHECK, UNIQUE, PRIMARY KEY, FOREIGN KEY) do not include it, because
-   * nullability belongs to a column's type rather than to the constraint
-   * framework. A table property is a place that travels with the table, is
-   * visible to every session, and needs no change of file format.
+   * null, because Spark keeps no such constraint of its own.
    */
   public static final String NULLABLE_PROPERTY = "morel.nullable";
 

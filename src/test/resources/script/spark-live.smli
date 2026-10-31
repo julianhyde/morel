@@ -40,8 +40,8 @@ spark.catalog.scott.depts;
 (* Reading the whole table works, commission and all, because the harness
  * told the connection which columns may be null. Spark could not: it reports
  * every column of a stored table as nullable whatever the DDL said, so the
- * flag carries nothing, and the table is where the truth is (docs/spark.md,
- * "Nulls"). A connection told nothing keeps the plain types and raises
+ * flag carries nothing, and the table is where the truth is. A
+ * connection told nothing keeps the plain types and raises
  * on a null, which spark-error.smli shows. *)
 from e in spark.catalog.scott.emps
   where e.sal > decimal "2500"
