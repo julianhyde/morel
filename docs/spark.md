@@ -300,18 +300,34 @@ sc://localhost:15002/;user_id=fred;nullable=*
 | `user_id` | The user the server sees |
 | `nullable` | Columns that may be null, as `database.table.column`; `*` means every column of every table |
 
-`nullable` is for what a [table
-property](#nulls-and-why-a-column-is-an-option) cannot do, and it
-overrides one:
+A [table property](#nulls-and-why-a-column-is-an-option) is the normal way
+to say which columns may be null, and is better where you can set one: it
+travels with the table, and the next person does not have to know.
+`nullable` is for the two things a property cannot do.
 
 * **`nullable=*`** is a whole-connection choice -- unwrap every column
-  rather than have one raise -- which no table can make on its own. It is
-  what you want against a warehouse nobody has characterized.
-* **a column list** is for a table you cannot `ALTER`, because it is
-  someone else's, or whose property you have reason to disbelieve.
+  rather than have one raise -- which no single table can make. It is what
+  you want against a warehouse nobody has characterized:
 
-Setting the property is better where you can: it travels with the table,
-and the next person does not have to know.
+  ```bash
+  ./morel --spark='sc://localhost:15002/;nullable=*'
+  ```
+
+  ```sml
+  spark.catalog.scott.depts;
+  > val it : {deptno:int option, dname:string option, loc:string option} bag
+  ```
+
+* **a column list** is for a table you cannot `ALTER`, because it is
+  someone else's, or whose property you have reason to disbelieve. It
+  overrides the property for the tables it names.
+
+It is part of the URI, rather than a session property like
+`sparkPushDown`, because a connection caches the type of each table as it
+discovers it. Nullability decided after a table has been read could not
+change the type that was already given out, so it is decided when the
+connection is opened, and a connection that needs a different answer is a
+different connection.
 
 ### Building and testing
 
