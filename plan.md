@@ -947,6 +947,34 @@ scans, so it binds the offline catalog's databases instead: the
 seventeen captured plans are unchanged, and the fixture now names
 tables the way a program has to.
 
+### Loose ends
+
+Three small things found while doing other work, none of them urgent and
+none of them recorded anywhere else.
+
+* **`real` crosses as `double`, and section 1.6 says `float`.** The spec
+  says "`real` to `float` (not `double`: the value is a float, and widening
+  it would invent digits)", and both `ArrowEncoder` and `SparkSchema` emit
+  `double`. The spec's reason is wrong -- float to double is exact -- and
+  the implementation agrees with section 1.4, where a pushed-down query
+  computes in `double` and narrows once at the end. So the sentence is
+  probably what should change, but one of the two must.
+* **`sql()` cannot run a statement with no result columns.** An `INSERT`,
+  `ANALYZE` or `DROP` comes back with no columns and the decoder asks for
+  the first one: "Index 0 out of bounds for length 0". Only tests and
+  probes use `sql()` today, which is why nothing has noticed.
+* **A query result's nullability is nobody's.** For a stored table's
+  columns the declaration decides, and for a field inside a struct Spark's
+  flag decides, but for the columns of a `sql()` result both overloads of
+  `SparkTypes.rowType` pass `strict=false`, so Spark's flag is ignored --
+  and there it is computed and honest. `DESCRIBE TABLE EXTENDED t` is
+  therefore unreadable: its `comment` column holds nulls, Spark says so,
+  and Morel maps it to plain `string` and raises. Believing the flag would
+  be decision A for query results, because a column selected from a stored
+  table inherits that column's flag; it is a decision, not an oversight,
+  and `sql()` is not exposed in the language yet, so it is cheap to make
+  now and awkward later.
+
 **Should an uploaded collection be sent once and reused?** A catalog
 table costs nothing to refer to twice -- it is a name that Spark resolves
 -- but a local collection crosses as a `LocalRelation`, and since
