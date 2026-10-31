@@ -26,8 +26,9 @@ Morel translates it to a Spark plan, Spark runs it, and the rows come back
 as Morel values.
 
 **You need JDK 17 or later.** The adapter is built only there -- that is
-where the `spark` Maven profile activates, and where the protobuf and Arrow
-libraries it needs are supported. On an earlier JDK, Morel builds and runs
+where the `spark` Maven profile activates, and where the protobuf and
+[Apache Arrow](https://arrow.apache.org) libraries it needs are
+supported. On an earlier JDK, Morel builds and runs
 without the adapter, and `Spark.connect` raises `Spark` with error class
 `CONNECTION`, saying so. You also need a Spark Connect server, which the
 next section starts.
