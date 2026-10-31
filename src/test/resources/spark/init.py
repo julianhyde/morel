@@ -96,7 +96,7 @@ if warehouse.startswith("file:"):
 # stored as files -- it accepts the declaration and reports the column
 # nullable anyway -- so a catalog column maps to the plain type unless
 # something says otherwise, and a null in one raises when it is read
-# (spec.md section 1.2, decision B). What says otherwise is each
+# (docs/spark.md, "Nulls"). What says otherwise is each
 # table's "morel.nullable" property, written above: the commission and
 # the manager are options, and the rest are not, so a whole employee
 # row reads.

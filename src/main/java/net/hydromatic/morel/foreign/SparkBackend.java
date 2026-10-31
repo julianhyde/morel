@@ -78,8 +78,8 @@ public interface SparkBackend {
   /**
    * Opens a connection: to a Spark Connect server if {@code uri} has scheme
    * "sc", loading the adapter; or, if it is "mock:", the offline connection
-   * whose catalog is the session's foreign data sets (see spec.md section 2.5),
-   * which needs no adapter.
+   * whose catalog is the session's foreign data sets (see docs/spark.md,
+   * "Architecture"), which needs no adapter.
    */
   static Connection open(
       TypeSystem typeSystem,
@@ -155,7 +155,7 @@ public interface SparkBackend {
 
     /**
      * Returns the Morel type of a table: a bag of records, per the mapping of
-     * spec.md section 1.
+     * docs/spark.md, "Types".
      */
     Type tableType(String database, String table);
 

@@ -127,7 +127,7 @@ public class SparkSchema {
       // scale -- so a column of them has to be given one. This is the width
       // Spark itself gives a column it infers from a BigDecimal
       // (DecimalType.SYSTEM_DEFAULT), and a value too wide for it is refused
-      // rather than rounded (spec.md section 1.6).
+      // rather than rounded (docs/spark.md, "Morel to Spark").
       return "decimal(" + DECIMAL_PRECISION + "," + DECIMAL_SCALE + ")";
     }
     if (type instanceof PrimitiveType) {

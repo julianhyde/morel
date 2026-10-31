@@ -89,7 +89,8 @@ public abstract class Compiles {
           warningConsumer,
           tracer);
     } catch (SparkBackend.SparkException e) {
-      // "Every failure raises Spark" (spec.md section 2.4), and a refusal to
+      // "Every failure raises Spark" (docs/spark.md, "Errors"), and a refusal
+      // to
       // translate is a failure like any other: it reaches the program as the
       // exception that every Spark failure raises, rather than as whatever a
       // Java exception's text happens to look like.

@@ -16,10 +16,10 @@
  * language governing permissions and limitations under the
  * License.
  *
- * How a failure on Spark reaches a Morel program (spec.md section
- * 2.4). A computation that fails raises the exception it would have
- * raised locally; everything else raises Spark, carrying Spark's own
- * error class. After any of them the connection still works.
+ * How a failure on Spark reaches a Morel program (docs/spark.md,
+ * "Errors"). A computation that fails raises the exception it
+ * would have raised locally; everything else raises Spark, with
+ * Spark's own error class. After any of them the connection works.
  *)
 (*) requires: spark spark-prepare
 

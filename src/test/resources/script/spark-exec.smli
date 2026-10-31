@@ -135,7 +135,7 @@ Sys.set ("output", "tabular");
 (* Query 8: left join, which asks for a whole employee row. The right row is
  * an option because the join may find nothing, and the commission and the
  * manager are options because the connection was told they may be null --
- * which Spark cannot say for itself (spec.md section 1.2). So the answer here
+ * which Spark cannot say for itself (docs/spark.md, "Nulls"). So the answer here
  * is the answer spark.smli gets locally, type line and all. *)
 (spark.connection.prepare (fn () =>
   from d in spark.catalog.scott.depts

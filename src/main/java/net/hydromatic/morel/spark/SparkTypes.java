@@ -34,7 +34,7 @@ import org.apache.spark.connect.proto.DataType;
 /**
  * Maps Spark types to Morel types.
  *
- * <p>The rules are in spec.md, section 1. A nullable type maps to {@code
+ * <p>The rules are in docs/spark.md, "Types". A nullable type maps to {@code
  * option}, except at the top level of a row: a column maps to the plain type,
  * because Spark's catalog reports every column of a table stored as files as
  * nullable, and the decoder raises if a null actually arrives.
