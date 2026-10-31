@@ -132,25 +132,15 @@ translator cannot express. A query that reached the cluster and failed
 there is raised, never recomputed locally: its answer is not ours to
 invent.
 
-### Connection URI parameters
+### Which columns may be null
 
-A URI may carry parameters after `/;`, separated by `;`:
-
-```
-sc://localhost:15002/;user_id=fred;nullable=scott.emps.comm
-```
-
-| Parameter | Means |
-| --- | --- |
-| `user_id` | The user the server sees |
-| `nullable` | Columns that may be null, as `database.table.column`; `*` means every column |
-
-A declared column has type `t option`; an undeclared one has the plain
-type `t`, and a null in it raises `Spark` with error class `NULL_VALUE`.
-
-### Table properties
-
-Better than a URI, a table can say which of its own columns hold nulls:
+Spark keeps nothing itself: a `NOT NULL` in a `CREATE TABLE` is accepted
+and discarded, nothing enforces it, `ALTER COLUMN ... SET NOT NULL` is
+refused for a table stored as files, and Spark's own constraints (CHECK,
+UNIQUE, PRIMARY KEY, FOREIGN KEY) do not include nullability, which belongs
+to a column's type. Delta Lake and Iceberg do record it -- at the price of
+changing file format. So Morel has to be told, and the normal way is that
+**the table tells it**:
 
 ```sql
 ALTER TABLE scott.emps SET TBLPROPERTIES ('morel.nullable' = 'comm,mgr')
@@ -159,15 +149,35 @@ ALTER TABLE scott.emps SET TBLPROPERTIES ('morel.nullable' = 'comm,mgr')
 Morel reads `morel.nullable` when it asks for a table's type. The property
 is the whole answer for its table -- a column it names may be null, one it
 does not name may not -- so an empty property says the table holds no
-nulls, which is different from saying nothing. A URI wins where both
-speak.
+nulls, which is different from saying nothing. Set it once and every
+session, and every other client, can read it.
 
-This is needed because Spark keeps nothing itself: a `NOT NULL` in a
-`CREATE TABLE` is accepted and discarded, nothing enforces it, `ALTER
-COLUMN ... SET NOT NULL` is refused for a table stored as files, and
-Spark's own constraints (CHECK, UNIQUE, PRIMARY KEY, FOREIGN KEY) do not
-include nullability, which belongs to a column's type. Delta Lake and
-Iceberg do record it -- at the price of changing file format.
+A column that nothing declares keeps its plain type `t`, and a null in it
+raises `Spark` with error class `NULL_VALUE`, naming the column.
+
+### Connection URI parameters
+
+A URI may carry parameters after `/;`, separated by `;`:
+
+```
+sc://localhost:15002/;user_id=fred;nullable=*
+```
+
+| Parameter | Means |
+| --- | --- |
+| `user_id` | The user the server sees |
+| `nullable` | Columns that may be null, as `database.table.column`; `*` means every column of every table |
+
+`nullable` is for what a table property cannot do, and it overrides one:
+
+* **`nullable=*`** is a whole-connection choice -- unwrap every column
+  rather than have one raise -- which no table can make on its own. It is
+  what you want against a warehouse nobody has characterized.
+* **a column list** is for a table you cannot `ALTER`, because it is
+  someone else's, or whose property you have reason to disbelieve.
+
+Setting the property is better where you can: it travels with the table,
+and the next person does not have to know.
 
 ### Building and testing
 
