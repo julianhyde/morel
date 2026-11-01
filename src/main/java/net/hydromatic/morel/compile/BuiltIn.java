@@ -4596,8 +4596,7 @@ public enum BuiltIn {
   /**
    * Function "Spark.toString", of type "(&alpha;, &beta;) plan &rarr; string".
    *
-   * <p>"toString p" is the plan as text, in the rendering that {@code
-   * spark/seed-plans.txt} fixes.
+   * <p>"toString p" is the plan as text, in Spark's protobuf text format.
    */
   SPARK_TO_STRING(
       "Spark",

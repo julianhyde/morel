@@ -124,7 +124,7 @@ public interface SparkBackend {
    * runs and {@code Spark.toString} prints.
    */
   interface Plan {
-    /** The plan as text, in the rendering that {@code seed-plans.txt} fixes. */
+    /** The plan as text, in Spark's protobuf text format. */
     String text();
   }
 

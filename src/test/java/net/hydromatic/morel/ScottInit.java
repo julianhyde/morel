@@ -49,8 +49,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>The file is committed rather than generated as the container starts. A
  * fixture that nothing reviews is a fixture that can change under you, and the
- * captured plans of {@code seed-plans.txt} are trustworthy for the same reason:
- * something states them independently of the code that has to match them.
+ * plans of {@code script/spark-plan-generated.smli} are trustworthy for the
+ * same reason: something states them independently of the code that has to
+ * match them.
  */
 class ScottInit {
   private ScottInit() {}
@@ -216,7 +217,7 @@ class ScottInit {
       return value.toString();
     }
     if (value instanceof Boolean) {
-      return (Boolean) value ? "true" : "false";
+      return ((Boolean) value).toString();
     }
     throw new IllegalArgumentException(
         "no SQL literal for " + value + " of type " + type.moniker());

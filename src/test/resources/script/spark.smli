@@ -19,10 +19,9 @@
  * Seed queries for the Spark backend.
  *
  * Each query pins one translation decision, and its expected Spark
- * plan is recorded in src/test/resources/spark/seed-plans.txt. The
- * queries currently run locally; when the Spark structure exists,
- * each will also be prepared, its plan printed, and its result
- * executed remotely.
+ * plan is in script/spark-plan-generated.smli. The queries currently
+ * run locally; when the Spark structure exists, each will also be
+ * prepared, its plan printed, and its result executed remotely.
  *
  * The queries read the scott data set, which the Spark test container
  * holds as a database of the same name with the same rows, so a query
@@ -107,10 +106,11 @@ from d in scott.depts
 > val it = ["ACCOUNTING","RESEARCH","SALES"] : string bag
 
 
-(* The remaining queries extend the corpus: each has an expected Spark plan
- * in spark/seed-plans.txt and, when the translator exists, is prepared and
- * executed by spark-plan.smli and spark-exec.smli. Here they run locally,
- * which gives the expected results. *)
+(* The remaining queries extend the corpus: each has an expected Spark
+ * plan in spark-plan-generated.smli and, when the translator exists, is
+ * prepared and executed by spark-plan-generated.smli and
+ * spark-exec.smli. Here they run locally, which gives the expected
+ * results. *)
 
 (*) Query 6: order, skip, take, then project.
 from e in scott.emps

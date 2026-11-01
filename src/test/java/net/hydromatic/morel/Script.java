@@ -203,7 +203,7 @@ public class Script {
                     ".*/(blog|dual|dummy|dummy2|foreign|hybrid|logic|pretty"
                         + "|spark|spark-disabled|spark-divergence"
                         + "|spark-error|spark-exec|spark-live|spark-plan"
-                        + "|such-that|triple)\\.(sml|smli)");
+                        + "|spark-plan-generated|such-that|triple)\\.(sml|smli)");
 
     return new Script(
         inFile,

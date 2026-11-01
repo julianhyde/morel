@@ -34,8 +34,7 @@ import org.apache.spark.connect.proto.Plan;
  * difference: a {@code LocalRelation} shows the number of rows it carries
  * rather than the Arrow bytes that carry them. The bytes are neither readable
  * nor stable -- the same rows encode differently from one Arrow version to the
- * next -- and the row count is what a reader wants. {@code
- * spark/seed-plans.txt} records the plans in this form.
+ * next -- and the row count is what a reader wants.
  */
 public class SparkPlan implements SparkBackend.Plan {
   private final Plan plan;

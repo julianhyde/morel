@@ -56,9 +56,10 @@ public class SparkSchemaTest {
 
   /**
    * The row type of the first seed query's inline relation. Its schema is fixed
-   * by {@code spark/seed-plans.txt}, captured from Spark itself, so this is the
-   * authority on the format: field keys in alphabetical order, and fields in
-   * the record type's order, which is by name.
+   * by {@code script/spark-plan-generated.smli}, which the PySpark client
+   * writes too, so this is the authority on the format: field keys in
+   * alphabetical order, and fields in the record type's order, which is by
+   * name.
    */
   @Test
   void testSeedQueryRow() {
