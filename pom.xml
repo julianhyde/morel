@@ -343,6 +343,14 @@ License.
         <configuration>
           <source>8</source>
           <target>8</target>
+          <!-- A call to a deprecated API fails the build. '-Xlint:-options'
+               silences the warning that source 8 is obsolete, which would
+               otherwise fail it too. -->
+          <showDeprecation>true</showDeprecation>
+          <failOnWarning>true</failOnWarning>
+          <compilerArgs>
+            <arg>-Xlint:-options</arg>
+          </compilerArgs>
           <!-- The Spark adapter needs JDK 17 and libraries that the rest
                of Morel does not; the 'spark' profile, active on JDK 17
                and later, includes it. -->
@@ -608,6 +616,7 @@ License.
             <configuration>
               <fork>true</fork>
               <compilerArgs>
+                <arg>-Xlint:-options</arg>
                 <arg>-XDcompilePolicy=simple</arg>
                 <!-- Error Prone requires this option on JDK 21 and lower;
                      later JDKs ignore it. -->
