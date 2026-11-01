@@ -2652,7 +2652,7 @@ public class Core {
       if (o instanceof Code) {
         return false;
       }
-      if (o instanceof Closure) {
+      if (o instanceof Closure.StackClosure) {
         return false;
       }
       if (o instanceof Id) {
