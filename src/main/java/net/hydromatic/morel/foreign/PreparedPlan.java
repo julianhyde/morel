@@ -112,7 +112,7 @@ public class PreparedPlan {
     if (plan != null) {
       detail.arg("plan", plan.text());
     } else {
-      detail.arg("parameters", Lists.transform(parameters, p -> p.name));
+      detail.args("parameters", Lists.transform(parameters, p -> p.name));
     }
   }
 

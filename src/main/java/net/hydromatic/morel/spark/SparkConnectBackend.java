@@ -27,6 +27,7 @@ import net.hydromatic.morel.type.TypeSystem;
  *
  * <p>Loaded by name; see {@link SparkBackend#load()}.
  */
+@SuppressWarnings("unused") // loaded by name
 public class SparkConnectBackend implements SparkBackend {
   public SparkConnectBackend() {}
 

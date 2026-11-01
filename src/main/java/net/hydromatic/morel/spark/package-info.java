@@ -25,6 +25,9 @@
  * profile is active, and the rest of Morel refers to it only through {@link
  * net.hydromatic.morel.foreign.SparkBackend}, which loads it by name.
  */
+@NullMarked
 package net.hydromatic.morel.spark;
+
+import org.jspecify.annotations.NullMarked;
 
 // End package-info.java
