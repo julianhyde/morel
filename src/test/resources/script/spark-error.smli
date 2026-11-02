@@ -59,12 +59,12 @@ from e in scott.emps where e.empno * 1000000 > 0 yield e.ename;
  * catalog for a database it has not got is one. *)
 spark.catalog.nonesuch;
 > uncaught exception Spark [Spark: SCHEMA_NOT_FOUND: Database nonesuch not found]
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.23
 
 (*) So is asking a database for a table it has not got.
 spark.catalog.scott.nonesuch;
 > uncaught exception Spark [Spark: TABLE_OR_VIEW_NOT_FOUND: Table scott.nonesuch not found]
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.29
 
 (*) And the connection is still usable after those.
 (spark.connection.prepare (fn () =>

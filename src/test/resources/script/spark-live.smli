@@ -78,7 +78,7 @@ from d in spark.catalog.scott.depts
 (*) The zoo table has a map column, which has no Morel type.
 spark.catalog.default.zoo;
 > uncaught exception Spark [Spark: UNSUPPORTED_TYPE: Spark type map<string,integer> has no Morel equivalent]
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.26
 
 (*) "using" opens the default connection for one call, and closes it.
 Spark.using (fn (c, x) => x + 1) 4;

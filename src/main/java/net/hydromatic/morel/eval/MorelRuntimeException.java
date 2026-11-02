@@ -44,6 +44,19 @@ public class MorelRuntimeException extends RuntimeException
     this.pos = requireNonNull(pos);
   }
 
+  /**
+   * Returns this exception raised at a given position, or this exception if it
+   * is already raised there.
+   */
+  public MorelRuntimeException withPos(Pos pos) {
+    if (pos.equals(this.pos)) {
+      return this;
+    }
+    final MorelRuntimeException e2 = new MorelRuntimeException(e, payload, pos);
+    e2.setStackTrace(getStackTrace());
+    return e2;
+  }
+
   /** Returns which built-in exception this is. */
   public BuiltInExn builtInExn() {
     return e;

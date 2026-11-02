@@ -82,6 +82,7 @@ import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.eval.MorelRuntimeException;
 import net.hydromatic.morel.type.AliasType;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Binding.Kind;
@@ -6766,13 +6767,19 @@ public class TypeResolver {
             final Ast.RecordSelector selector = (Ast.RecordSelector) apply.fn;
             final TypedValue typedValue = expandField(env, apply.arg);
             if (typedValue != null) {
-              typedValue.discoverField(typeSystem, selector.name);
-              // Only a field that is itself a typed value continues the walk.
-              // A connection is not one: there is nothing in it to discover,
-              // and `c.prepare f` names a method of a connection, not a field
-              // of one.
-              final Object field =
-                  typedValue.fieldValueAs(selector.name, Object.class);
+              final Object field;
+              try {
+                typedValue.discoverField(typeSystem, selector.name);
+                // Only a field that is itself a typed value continues the
+                // walk. A connection is not one: there is nothing in it to
+                // discover, and `c.prepare f` names a method of a connection,
+                // not a field of one.
+                field = typedValue.fieldValueAs(selector.name, Object.class);
+              } catch (MorelRuntimeException e) {
+                // A value discovers its fields with no idea where in the
+                // program it is read; the field reference knows.
+                throw e.pos().equals(Pos.ZERO) ? e.withPos(apply.pos()) : e;
+              }
               return field instanceof TypedValue ? (TypedValue) field : null;
             }
           }

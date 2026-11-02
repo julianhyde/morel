@@ -98,6 +98,6 @@ c.close ();
 > val it = () : unit
 catalog.foodmart.sales_fact_1997;
 > uncaught exception Spark [Spark: CLOSED: Connection to mock: is closed]
->   raised at: 0.0-0.0
+>   raised at: stdIn:1.1-1.17
 
 (*) End spark.smli
