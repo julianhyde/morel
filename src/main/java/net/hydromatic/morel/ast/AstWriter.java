@@ -650,8 +650,21 @@ public class AstWriter {
    * that differ only in their binders' ordinals print alike.
    */
   private int suffix(String name, int i) {
-    return suffixes.computeIfAbsent(
-        Pair.of(name, i), k -> nextSuffix.merge(name, 1, Integer::sum) - 1);
+    final Pair<String, Integer> key = Pair.of(name, i);
+    final Integer existing = suffixes.get(key);
+    if (existing != null) {
+      return existing;
+    }
+    // A suffix whose name an id in scope already prints under is skipped, so
+    // that a variable never prints as the id: in "filter d_1 [(fn d => ...)
+    // andalso (fn d_2 => ...) d_1]" the second "d" is not "d_1".
+    int j = nextSuffix.getOrDefault(name, 0);
+    while (visibleIds.contains(j == 0 ? name : name + "_" + j)) {
+      ++j;
+    }
+    nextSuffix.put(name, j + 1);
+    suffixes.put(key, j);
+    return j;
   }
 
   /**

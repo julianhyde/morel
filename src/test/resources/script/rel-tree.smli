@@ -234,6 +234,22 @@ Sys.planOf (from x in [1, 2], y in [3, 4] yield x + y + r);
 >     [3, 4] : int list
 > |_} : string
 
+(* Nor the same as what a variable prints under. Two variables called
+ * `d` occur in the filter, so the filter's id is `d_1`; the second
+ * variable, which would print as `d_1`, prints as `d_2`. *)
+Sys.planOf (fn (l : int list) =>
+  from d in [1, 2]
+    where List.all (fn d => d > 0) l
+      andalso List.all (fn d => d < 5) [d, d]);
+> val it =
+>   {|fn l => r$0[l]
+>
+> r$0[l] =
+>   filter d_1 [#all List (fn d => d > 0) l
+>       andalso #all List (fn d_2 => d_2 < 5) ([d_1, d_1])] : int list
+>     [1, 2] : int list
+> |} : string
+
 (* ---------------------------------------------------------------- *)
 (* Outer joins.
  *
