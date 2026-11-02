@@ -608,6 +608,37 @@ public class AstWriter {
   }
 
   /**
+   * Appends an identifier with a suffix that the caller has already chosen,
+   * without renumbering it: "v" for {@code numberedId("v", 0)}, "v_2" for
+   * {@code numberedId("v", 2)}.
+   *
+   * <p>A writer that numbers identifiers across more than one expression, as a
+   * plan does, calls this, because the order in which this writer meets them is
+   * not the order that numbering counts.
+   */
+  protected AstWriter numberedId(String name, int j) {
+    raw(name);
+    if (j > 0) {
+      raw("_" + j);
+    }
+    return this;
+  }
+
+  /**
+   * As {@link #numberedId(String, int)}, quoting the identifier if it is a
+   * reserved word.
+   */
+  protected AstWriter numberedIdQuoted(String name, int j) {
+    if (j == 0) {
+      appendQuoted(name);
+    } else {
+      // "name_j" is never a reserved word, so it does not need quoting.
+      raw(name + "_" + j);
+    }
+    return this;
+  }
+
+  /**
    * Returns the suffix under which the {@code i}th pattern called {@code name}
    * prints: 0, meaning no suffix, for the first one this writer meets, 1 for
    * the next, and so on.

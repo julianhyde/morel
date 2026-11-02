@@ -138,24 +138,26 @@ public class Core {
     public String describe(Describer describer) {
       final AstWriter w =
           new AstWriter() {
+            // The describer numbers patterns across the whole plan, so its
+            // suffix is printed as it is, not renumbered by this writer.
             @Override
             public AstWriter id(String name, int i) {
               final String generated = generated(name, i);
               if (generated != null) {
-                return super.id(generated, 0);
+                return numberedId(generated, 0);
               }
               int j = describer.register(name, i);
-              return super.id(name, j);
+              return numberedId(name, j);
             }
 
             @Override
             public AstWriter idQuoted(String name, int i) {
               final String generated = generated(name, i);
               if (generated != null) {
-                return super.id(generated, 0);
+                return numberedId(generated, 0);
               }
               int j = describer.register(name, i);
-              return super.idQuoted(name, j);
+              return numberedIdQuoted(name, j);
             }
 
             /**

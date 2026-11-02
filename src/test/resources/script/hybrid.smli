@@ -274,7 +274,7 @@ Bag.map (fn e => (#empno e))
 Sys.plan();
 > val it =
 >   {_|
-> globalMarshal(globals [scott], body apply2(fnValue Bag.map, match(e, tailApply(fnValue nth:2, argCode stack(offset 1, name e))), apply2(fnValue Bag.filter, match(e, apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 1, name e)), constant(30))), calcite(plan LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+> globalMarshal(globals [scott], body apply2(fnValue Bag.map, match(e, tailApply(fnValue nth:2, argCode stack(offset 1, name e))), apply2(fnValue Bag.filter, match(e_1, apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 1, name e)), constant(30))), calcite(plan LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >   JdbcTableScan(table=[[scott, EMP]])
 > ))))|_} : string
 
