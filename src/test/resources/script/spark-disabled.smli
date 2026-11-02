@@ -23,7 +23,7 @@
 (*) requires: no-spark-adapter
 
 Spark.connect "sc://localhost:15002";
-> uncaught exception Spark [Spark: CONNECTION: The Spark adapter is not available; it needs JDK 17 or later and the 'spark' Maven profile]
+> uncaught exception Spark [Spark: CONNECTION: The Spark adapter is not available in this build]
 >   raised at: stdIn:1.1-1.37
 
 (*) The offline connection needs no adapter.

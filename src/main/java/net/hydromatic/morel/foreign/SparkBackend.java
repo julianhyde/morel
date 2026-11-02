@@ -89,9 +89,7 @@ public interface SparkBackend {
     }
     if (!isAvailable()) {
       throw new SparkException(
-          "CONNECTION",
-          "The Spark adapter is not available; it needs JDK 17 or later and"
-              + " the 'spark' Maven profile");
+          "CONNECTION", "The Spark adapter is not available in this build");
     }
     return load().connect(typeSystem, uri);
   }
@@ -109,9 +107,7 @@ public interface SparkBackend {
   static Plan translate(TypeSystem typeSystem, Core.Exp query) {
     if (!isAvailable()) {
       throw new SparkException(
-          "CONNECTION",
-          "The Spark adapter is not available; it needs JDK 17 or later and"
-              + " the 'spark' Maven profile");
+          "CONNECTION", "The Spark adapter is not available in this build");
     }
     return load().prepare(typeSystem, query);
   }
