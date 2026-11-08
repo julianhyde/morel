@@ -521,9 +521,9 @@ public class Shell {
    * @see #queryTerminalBackground(Terminal, String, String, String)
    */
   private static @Nullable String queryTerminalBackground(Terminal terminal) {
-    final @Nullable String noColor = System.getenv("NO_COLOR");
-    final @Nullable String term = System.getenv("TERM");
-    final @Nullable String colorFgBg = System.getenv("COLORFGBG");
+    final String noColor = System.getenv("NO_COLOR");
+    final String term = System.getenv("TERM");
+    final String colorFgBg = System.getenv("COLORFGBG");
     return queryTerminalBackground(terminal, noColor, term, colorFgBg);
   }
 

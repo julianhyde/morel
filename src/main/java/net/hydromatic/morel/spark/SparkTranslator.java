@@ -1258,7 +1258,7 @@ public class SparkTranslator {
    * its own and have no name a plan can use.
    */
   private static String elementName(Core.NamedPat pat) {
-    final @Nullable String name = Core.NamedPat.idName(pat.name);
+    final String name = Core.NamedPat.idName(pat.name);
     if (name != null) {
       return name;
     }

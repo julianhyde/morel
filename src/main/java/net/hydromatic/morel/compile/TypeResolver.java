@@ -938,7 +938,7 @@ public class TypeResolver {
       return null;
     }
     final Ast.Scan scan = (Ast.Scan) query.steps.get(0);
-    final @Nullable String name = scannedName(scan.pat);
+    final String name = scannedName(scan.pat);
     final Type writtenType = scanWrittenType(scan, expKeys);
     if (writtenType == null || !writtenType.containsAlias()) {
       return null;
@@ -2833,7 +2833,7 @@ public class TypeResolver {
       // Solve the constraints accumulated so far. As in bindDeclGeneralized,
       // the solve is local and side-effect free, so we can run it as often as
       // we like.
-      final @Nullable Substitution substitution = solve();
+      final Substitution substitution = solve();
       unknown.forEach(
           (exp, variable) -> {
             final Term resolved =
@@ -3202,14 +3202,14 @@ public class TypeResolver {
       // If either group or compute is an atom, check that a label can be
       // derived.
       if (!(group.group instanceof Ast.Record)) {
-        @Nullable String label = ast.implicitLabelOpt(group.group);
+        String label = ast.implicitLabelOpt(group.group);
         if (label == null) {
           throw new TypeException(
               "cannot derive label for group expression", group.group.pos());
         }
       }
       if (group.aggregate != null && !(group.aggregate instanceof Ast.Record)) {
-        @Nullable String label = ast.implicitLabelOpt(group.aggregate);
+        String label = ast.implicitLabelOpt(group.aggregate);
         if (label == null) {
           throw new TypeException(
               "cannot derive label for compute expression",
@@ -4019,7 +4019,7 @@ public class TypeResolver {
    */
   private Ast.Exp deduceApplyFnType(
       TypeEnv e, Ast.Exp fn, Variable vFn, Variable vArg, Variable vResult) {
-    @Nullable Type type = getType(e, fn);
+    Type type = getType(e, fn);
     if (type instanceof MultiType) {
       final MultiType multiType = (MultiType) type;
       final PairList<Term, Term> argResults = PairList.of();
@@ -4104,7 +4104,7 @@ public class TypeResolver {
       Variable vArg,
       Variable vResult,
       AtomicBoolean overloaded) {
-    @Nullable Type type = getType(e, fn);
+    Type type = getType(e, fn);
     if (type instanceof MultiType) {
       final MultiType multiType = (MultiType) type;
       final PairList<Term, Term> argResults = PairList.of();
@@ -5655,7 +5655,7 @@ public class TypeResolver {
 
       case ID_PAT:
         final Ast.IdPat idPat = (Ast.IdPat) pat;
-        final @Nullable TypeCon typeCon = typeSystem.lookupTyCon(idPat.name);
+        final TypeCon typeCon = typeSystem.lookupTyCon(idPat.name);
         if (typeCon != null) {
           // It is a zero argument constructor, e.g. the LESS constructor of the
           // 'order' type.
@@ -5764,8 +5764,7 @@ public class TypeResolver {
       case CON_PAT:
         final Ast.ConPat conPat = (Ast.ConPat) pat;
         // e.g. "SOME x" has type "int option"; "x" has type "int".
-        final @Nullable TypeCon typeCon1 =
-            typeSystem.lookupTyCon(conPat.tyCon.name);
+        final TypeCon typeCon1 = typeSystem.lookupTyCon(conPat.tyCon.name);
         if (typeCon1 == null) {
           // The parser reads "Foo x" in a pattern as a constructor applied to
           // an argument, whatever "Foo" turns out to be, so an unbound name

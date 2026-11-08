@@ -39,7 +39,6 @@ import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeCon;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Sat;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Checks whether patterns are exhaustive and/or redundant.
@@ -229,8 +228,7 @@ class PatternCoverageChecker {
   }
 
   private Sat.Variable typeConstructorTerm(Path path, String con) {
-    final @Nullable TypeCon typeCon =
-        requireNonNull(typeSystem.lookupTyCon(con));
+    final TypeCon typeCon = requireNonNull(typeSystem.lookupTyCon(con));
     DataTypeSlot slot =
         pathSlots.computeIfAbsent(
             path, p -> new DataTypeSlot(typeCon.dataType, p, sat));

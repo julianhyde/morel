@@ -488,7 +488,7 @@ public enum Prop {
    */
   public boolean isValid(Object value, boolean lenient) {
     if (!kind.javaType.isInstance(value)) {
-      final @Nullable Object converted = lenient ? convert(value) : null;
+      final Object converted = lenient ? convert(value) : null;
       if (converted == null) {
         return false;
       }
@@ -634,7 +634,7 @@ public enum Prop {
 
   /** Converts a value to this property's type, or returns {@link #MISMATCH}. */
   private Object convertOrMismatch(Object value) {
-    final @Nullable Object converted = convert(value);
+    final Object converted = convert(value);
     return converted == null ? MISMATCH : converted;
   }
 
@@ -672,7 +672,7 @@ public enum Prop {
    * {@code NONE}.
    */
   public int optionalIntValue(Map<Prop, Object> map, int ifNone) {
-    final @Nullable Integer value = optionalIntValue(map);
+    final Integer value = optionalIntValue(map);
     return value == null ? ifNone : value;
   }
 
@@ -684,7 +684,7 @@ public enum Prop {
    * @see #typeName()
    */
   public String showValue(Map<Prop, Object> map) {
-    final @Nullable Object value = get(map);
+    final Object value = get(map);
     if (!kind.option) {
       return requireNonNull(value, camelName).toString();
     }
@@ -781,7 +781,7 @@ public enum Prop {
     if (matched == MISMATCH) {
       return invalidValueMessage();
     }
-    final @Nullable Object v = matched == NONE_VALUE ? null : matched;
+    final Object v = matched == NONE_VALUE ? null : matched;
     if (!kind.checks(v)) {
       return invalidValueMessage();
     }
@@ -793,7 +793,7 @@ public enum Prop {
 
   /** Sets the value of a property. Checks that its type is valid. */
   public void set(Map<Prop, Object> map, @Nullable Object value) {
-    final @Nullable String message = setLenient(map, value);
+    final String message = setLenient(map, value);
     if (message != null) {
       throw new RuntimeException(message);
     }
@@ -818,7 +818,7 @@ public enum Prop {
       set(map, null);
       return;
     }
-    final @Nullable Object parsed = parse(value);
+    final Object parsed = parse(value);
     if (parsed == null) {
       throw new RuntimeException(invalidValueMessage());
     }
@@ -847,7 +847,7 @@ public enum Prop {
    * a value prints the value alone, without the {@code SOME}.
    */
   public Object defaultValue() {
-    final @Nullable Object value = rawDefaultValue();
+    final Object value = rawDefaultValue();
     return value == null ? "NONE" : value;
   }
 

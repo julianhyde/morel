@@ -639,7 +639,7 @@ public abstract class Codes {
    */
   public static MorelRuntimeException sparkException(
       SparkBackend.SparkException e, Pos pos) {
-    final @Nullable BuiltInExn exn = morelExn(e.errorClass);
+    final BuiltInExn exn = morelExn(e.errorClass);
     if (exn != null) {
       return new MorelRuntimeException(exn, pos);
     }

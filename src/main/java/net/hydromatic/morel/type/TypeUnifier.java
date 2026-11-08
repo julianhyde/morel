@@ -59,7 +59,7 @@ public class TypeUnifier {
     switch (type1.op()) {
       case TY_VAR:
         var1 = (TypeVar) type1;
-        @Nullable Type type1b = variables.get(var1.ordinal);
+        Type type1b = variables.get(var1.ordinal);
         if (type1b == null) {
           variables.put(var1.ordinal, type2);
           return true;

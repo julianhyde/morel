@@ -635,10 +635,10 @@ public class Compiler {
     if (gather != null) {
       // If we have a gather, we can compile the argument and return the
       // gather code.
-      final @Nullable Applicable1 applicable1;
-      final @Nullable Applicable2 applicable2;
-      final @Nullable Applicable3 applicable3;
-      final @Nullable Applicable4 applicable4;
+      final Applicable1 applicable1;
+      final Applicable2 applicable2;
+      final Applicable3 applicable3;
+      final Applicable4 applicable4;
       switch (gather.args.size()) {
         case 1:
           if (gather.argIsTuple(0, 2)) {

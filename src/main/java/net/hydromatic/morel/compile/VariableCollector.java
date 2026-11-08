@@ -27,7 +27,6 @@ import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.Pair;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Shuttle that identifies variables that are defined outside the scope of a
@@ -188,7 +187,7 @@ abstract class VariableCollector extends EnvVisitor {
      */
     @Override
     void visitX(Core.Id id) {
-      final @Nullable Pair<Binding, Environment> pair = env.getOpt2(id.idPat);
+      final Pair<Binding, Environment> pair = env.getOpt2(id.idPat);
       if (pair != null && !lambdaEnvStack.isEmpty()) {
         final Environment lambdaBoundary = lambdaEnvStack.peek();
         // A variable is free if it was declared before (or at) the innermost

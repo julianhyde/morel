@@ -294,7 +294,7 @@ public enum CoreBuilder {
 
   public Core.RecordSelector recordSelector(
       TypeSystem typeSystem, RecordLikeType recordType, String fieldName) {
-    final @Nullable TypedValue typedValue = recordType.asTypedValue();
+    final TypedValue typedValue = recordType.asTypedValue();
     if (typedValue != null) {
       TypedValue typedValue2 = typedValue.discoverField(typeSystem, fieldName);
       recordType = (RecordLikeType) typedValue2.typeKey().toType(typeSystem);
