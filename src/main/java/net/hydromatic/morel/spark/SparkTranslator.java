@@ -317,25 +317,28 @@ public class SparkTranslator {
                 .setOffset(count(skip.count, "skip")));
         break;
 
+      case UNORDER:
+        // A Spark relation has no order to forget.
+        return rel(((Core.Unorder) exp).input);
+
       case UNION:
       case INTERSECT:
       case EXCEPT:
         final Core.SetRel setRel = (Core.SetRel) exp;
-        if (setRel.inputs.size() != 2) {
-          // Spark's set operation takes two inputs; Morel's takes any
-          // number, and nothing yet folds the one into the other.
-          throw unsupported(exp.op + " of " + setRel.inputs.size() + " inputs");
+        // Spark's set operation takes two inputs and Morel's takes any
+        // number, so the inputs fold from the left: "a union b union c" is
+        // "(a union b) union c", which is what Morel means by it.
+        final int last = setRel.inputs.size() - 1;
+        Relation left = rel(setRel.inputs.get(0));
+        for (int i = 1; i < last; i++) {
+          left =
+              Relation.newBuilder()
+                  .setCommon(
+                      RelationCommon.newBuilder().setPlanId(nextPlanId++))
+                  .setSetOp(setOp(setRel, left, rel(setRel.inputs.get(i))))
+                  .build();
         }
-        b.setSetOp(
-            SetOperation.newBuilder()
-                .setLeftInput(rel(setRel.inputs.get(0)))
-                .setRightInput(rel(setRel.inputs.get(1)))
-                .setSetOpType(setOpType(exp.op))
-                // Morel's set operators are over bags and keep every row,
-                // unless the query asked for distinct.
-                .setIsAll(!setRel.distinct)
-                .setByName(false)
-                .setAllowMissingColumns(false));
+        b.setSetOp(setOp(setRel, left, rel(setRel.inputs.get(last))));
         break;
 
       case JOIN:
@@ -381,6 +384,11 @@ public class SparkTranslator {
 
   /** Translates the collection a query scans. */
   private Relation leaf(Core.Exp exp) {
+    if (exp.isCallTo(BuiltIn.BAG_FROM_LIST)) {
+      // "bag xs" is xs: the only difference is an order, and a Spark
+      // relation does not have one.
+      return leaf(((Core.Apply) exp).arg);
+    }
     final int planId = nextPlanId++;
     if (exp.isCallTo(BuiltIn.Z_LIST)) {
       final List<Object> values = new ArrayList<>();
@@ -430,6 +438,20 @@ public class SparkTranslator {
       }
     }
     return null;
+  }
+
+  /** Builds one of Spark's two-input set operations. */
+  private static SetOperation.Builder setOp(
+      Core.SetRel setRel, Relation left, Relation right) {
+    return SetOperation.newBuilder()
+        .setLeftInput(left)
+        .setRightInput(right)
+        .setSetOpType(setOpType(setRel.op))
+        // Morel's set operators are over bags and keep every row, unless
+        // the query asked for distinct.
+        .setIsAll(!setRel.distinct)
+        .setByName(false)
+        .setAllowMissingColumns(false);
   }
 
   /** Translates a set operator. */
