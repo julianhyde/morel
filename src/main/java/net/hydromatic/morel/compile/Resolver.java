@@ -1470,7 +1470,7 @@ public class Resolver {
           protected Core.Exp visit(Core.Apply apply) {
             if (apply.type.isCollection()
                 && apply.fn.op == Op.RECORD_SELECTOR) {
-              final @Nullable Object value = valueOf(env, apply);
+              final Object value = valueOf(env, apply);
               if (value != null) {
                 return core.valueLiteral(apply, value);
               }
@@ -1561,7 +1561,7 @@ public class Resolver {
         && !takesConnectionAndFunction(fnType)) {
       return false;
     }
-    final @Nullable Object o = valueOf(env, exp);
+    final Object o = valueOf(env, exp);
     return o instanceof Applicable && ((Applicable) o).builtIn() == builtIn;
   }
 
@@ -1764,7 +1764,6 @@ public class Resolver {
         return core.functionLiteral(typeMap.typeSystem, op.toWord());
       }
     }
-    @Nullable
     Binding top = fn.op == Op.ID ? env.getTop(((Ast.Id) fn).name) : null;
     if (fn.op == Op.ID // TODO: change to 'top != null'
         && resolvedOverloads.containsKey(((Ast.Id) fn).name)) {
@@ -2261,7 +2260,7 @@ public class Resolver {
     if (type instanceof DataType) {
       final DataType dataType = (DataType) type;
       if (dataType.arguments.stream().noneMatch(TypeSystem::hasTypeVar)) {
-        final @Nullable Type argType =
+        final Type argType =
             dataType.typeConstructors(typeMap.typeSystem).get(tyCon);
         if (argType != null) {
           return argType;
@@ -2273,7 +2272,7 @@ public class Resolver {
       // every field name, which is what a record pattern with an ellipsis
       // needs; where a field's type is a type variable, the field pattern's
       // own type serves.
-      final @Nullable TypeCon typeCon = typeMap.typeSystem.lookupTyCon(tyCon);
+      final TypeCon typeCon = typeMap.typeSystem.lookupTyCon(tyCon);
       if (typeCon != null) {
         return typeCon.argTypeKey.toType(typeMap.typeSystem);
       }
@@ -2821,7 +2820,7 @@ public class Resolver {
       if (scan.pat.op != Op.ANNOTATED_PAT) {
         return;
       }
-      final @Nullable Type type =
+      final Type type =
           enforcer.claimedType(((Ast.AnnotatedPat) scan.pat).type);
       if (type == null) {
         return;
@@ -3130,7 +3129,7 @@ public class Resolver {
             group.group instanceof Ast.Record
                 && ((Ast.Record) group.group).args.isEmpty();
         final Core.Exp exp;
-        final @Nullable String label;
+        final String label;
         if (emptyKey) {
           // No group keys, so compute is a singleton.
           requireNonNull(group.aggregate);
@@ -3279,7 +3278,7 @@ public class Resolver {
         rowIsElement = true;
         return;
       }
-      final @Nullable String name = atomName(yield.exp);
+      final String name = atomName(yield.exp);
       // 'record' is what the user wrote, not what the expression turned out to
       // be: a record with modifiers is a record, and yet it is a 'let' by the
       // time it gets here, so only the Ast can say.

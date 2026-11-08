@@ -327,7 +327,7 @@ public class Core {
 
     @Override
     AstWriter unparse(AstWriter w, int left, int right) {
-      final @Nullable String idName = idName(name);
+      final String idName = idName(name);
       return w.idQuoted(idName != null ? idName : name, i);
     }
 

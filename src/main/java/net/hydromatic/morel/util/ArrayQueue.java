@@ -103,8 +103,7 @@ public class ArrayQueue<E> {
   private void grow() {
     int oldCapacity = elements.length;
     int newCapacity = oldCapacity * 2;
-    final @Nullable Object[] es =
-        elements = Arrays.copyOf(elements, newCapacity);
+    final Object[] es = elements = Arrays.copyOf(elements, newCapacity);
     if (end < start || end == start && es[start] != null) {
       int newSpace = newCapacity - oldCapacity;
       System.arraycopy(es, start, es, start + newSpace, oldCapacity - start);

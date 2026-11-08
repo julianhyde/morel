@@ -669,7 +669,6 @@ class Ml {
 
   private <T extends @Nullable Throwable> Consumer<T> exceptionConsumer(
       @Nullable Function<Pos, Matcher<T>> exceptionMatcherFactory) {
-    @Nullable
     Matcher<T> matcher =
         exceptionMatcherFactory == null
             ? null
