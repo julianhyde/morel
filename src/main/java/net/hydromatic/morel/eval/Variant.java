@@ -234,7 +234,7 @@ public class Variant extends AbstractImmutableList<Object> {
    */
   public static Variant ofConstructor(
       TypeSystem typeSystem, String conName, Variant conVariant) {
-    @Nullable TypeCon typeCon = typeSystem.lookupTyCon(conName);
+    TypeCon typeCon = typeSystem.lookupTyCon(conName);
     if (typeCon == null) {
       throw new IllegalArgumentException("Unknown constructor: " + conName);
     }

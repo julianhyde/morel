@@ -259,7 +259,7 @@ public class RelExpander {
     }
     final ImmutableList.Builder<Core.Pat> pats = ImmutableList.builder();
     for (int i = 0; i < leaves.size(); i++) {
-      final @Nullable String name = names.get(i);
+      final String name = names.get(i);
       if (name == null) {
         return ImmutableList.of();
       }
@@ -682,7 +682,7 @@ public class RelExpander {
         });
     final List<Generator> generators = new ArrayList<>();
     for (Core.NamedPat name : names) {
-      final @Nullable Generator generator = cache.bestGenerator(name);
+      final Generator generator = cache.bestGenerator(name);
       if (generator == null
           || generator.cardinality == Generator.Cardinality.INFINITE) {
         return null;
@@ -896,13 +896,12 @@ public class RelExpander {
         return survivor;
       }
     }
-    final @Nullable Generator common =
-        commonGenerator(join, frame, cache, bound);
+    final Generator common = commonGenerator(join, frame, cache, bound);
     if (common != null) {
       return fromCommon(join, frame, common, bound);
     }
     final Core.Exp right = join.right;
-    final @Nullable Generator rightGenerator =
+    final Generator rightGenerator =
         right.isExtent()
             ? generator(requireNonNull(frame.leaves.get(right)), cache)
             : null;
@@ -1123,7 +1122,7 @@ public class RelExpander {
         continue;
       }
       for (Core.NamedPat name : entry.getValue().expand()) {
-        final @Nullable Generator generator = cache.bestGenerator(name);
+        final Generator generator = cache.bestGenerator(name);
         if (generator != null
             && free(generator, bound).stream().anyMatch(names::contains)) {
           return true;
@@ -1146,7 +1145,7 @@ public class RelExpander {
       Frame frame,
       Generators.Cache cache,
       Map<Core.NamedPat, Core.Exp> bound) {
-    @Nullable Generator common = null;
+    Generator common = null;
     for (Map.Entry<Core.Exp, Core.Pat> entry : frame.leaves.entrySet()) {
       if (!contains(node, entry.getKey())) {
         continue;
@@ -1155,7 +1154,7 @@ public class RelExpander {
         return null;
       }
       for (Core.NamedPat name : entry.getValue().expand()) {
-        final @Nullable Generator generator = cache.bestGenerator(name);
+        final Generator generator = cache.bestGenerator(name);
         if (generator == null
             || generator.cardinality == Generator.Cardinality.INFINITE
             || !free(generator, bound).isEmpty()) {
@@ -1278,7 +1277,7 @@ public class RelExpander {
         && frame.leaves.containsKey(node)) {
       for (Core.NamedPat name :
           requireNonNull(frame.leaves.get(node)).expand()) {
-        final @Nullable Generator best = cache.bestGenerator(name);
+        final Generator best = cache.bestGenerator(name);
         if (best != null
             && best.cardinality != Generator.Cardinality.INFINITE) {
           // Something bounds it after all.
@@ -1315,7 +1314,7 @@ public class RelExpander {
       Map<Core.NamedPat, Core.Exp> bound) {
     final List<Core.NamedPat> names = pat.expand();
     if (names.size() == 1) {
-      final @Nullable Generator generator = cache.bestGenerator(names.get(0));
+      final Generator generator = cache.bestGenerator(names.get(0));
       if (generator == null || !free(generator, bound).isEmpty()) {
         // Either nothing bounds this name, or what bounds it reads something
         // that is not bound yet -- `from x, y where x < y andalso y < x + 10`
@@ -1329,7 +1328,7 @@ public class RelExpander {
     }
     Core.@Nullable Exp product = null;
     for (Core.NamedPat name : names) {
-      final @Nullable Generator generator = cache.bestGenerator(name);
+      final Generator generator = cache.bestGenerator(name);
       if (generator == null || !free(generator, bound).isEmpty()) {
         // Either nothing bounds this component, or something that another
         // component binds does, which would need the product to be a
@@ -1756,7 +1755,7 @@ public class RelExpander {
     pat.expand()
         .forEach(
             name -> {
-              final @Nullable Generator generator = cache.bestGenerator(name);
+              final Generator generator = cache.bestGenerator(name);
               if (generator == null) {
                 return;
               }

@@ -327,7 +327,7 @@ public abstract class Compiles {
       final Inliner inliner = Inliner.of(typeSystem, env, null);
       coreDecl = coreDecl0.accept(inliner);
     } else {
-      final @Nullable Relationalizer relationalizer =
+      final Relationalizer relationalizer =
           relationalize ? Relationalizer.of(typeSystem, env) : null;
 
       // Inline few times, or until we reach fixed point, whichever is sooner.
@@ -417,7 +417,7 @@ public abstract class Compiles {
       return coreDecl0.accept(inliner);
     }
 
-    final @Nullable Relationalizer relationalizer =
+    final Relationalizer relationalizer =
         relationalize ? Relationalizer.of(typeSystem, env) : null;
 
     // Run inlining passes

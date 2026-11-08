@@ -572,7 +572,7 @@ public final class SysCodes {
    *     example "set"; it appears in the error message
    */
   private static Prop lookupProp(String fnName, String propName, Pos pos) {
-    final @Nullable Prop prop = Prop.lookup(propName);
+    final Prop prop = Prop.lookup(propName);
     if (prop == null) {
       throw new MorelRuntimeException(
           BuiltInExn.FAIL,
@@ -602,8 +602,7 @@ public final class SysCodes {
       final String propName = (String) list.get(0);
       final Object value = list.get(1);
       final Prop prop = lookupProp("set", propName, pos);
-      final @Nullable String message =
-          prop.setLenient(stack.session.map, value);
+      final String message = prop.setLenient(stack.session.map, value);
       if (message != null) {
         throw new MorelRuntimeException(BuiltInExn.FAIL, message, pos);
       }

@@ -243,7 +243,7 @@ public class Inliner extends EnvShuttle {
     // Only do this when analysis is available (full inlining mode),
     // and when there is more than one branch.
     if (analysis != null && matchList.size() > 1) {
-      final @Nullable Object value = expToValue(exp);
+      final Object value = expToValue(exp);
       if (value != null) {
         for (Core.Match match : matchList) {
           final PairList<Core.NamedPat, Object> binds = PairList.of();
@@ -273,7 +273,7 @@ public class Inliner extends EnvShuttle {
       // has type 'alpha list' but when we substitute 'SOME 1' for x, it becomes
       //   case SOME 1 of NONE => [] | SOME y => [y]
       // with type 'int list'
-      @Nullable Map<Integer, Type> sub = caseOf.exp.type.unifyWith(exp.type);
+      Map<Integer, Type> sub = caseOf.exp.type.unifyWith(exp.type);
       if (sub == null) {
         throw new AssertionError(
             format("cannot unify %s with %s", exp.type, caseOf.exp.type));

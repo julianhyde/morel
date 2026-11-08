@@ -587,7 +587,7 @@ public class Main {
           parser.zero("stdIn");
           final AstNode statement = parser.statementSemicolonOrEofSafe();
           String code = in2.flush();
-          final @Nullable String expectedOutput = in2.expectedOutput();
+          final String expectedOutput = in2.expectedOutput();
           if (main.idempotent) {
             if (code.startsWith("\n")) {
               code = code.substring(1);

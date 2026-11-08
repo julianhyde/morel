@@ -251,11 +251,11 @@ class RelCompiler {
     final ImmutableList.Builder<Applicable> aggregateCodes =
         ImmutableList.builder();
     for (Core.Aggregate aggregate : group.aggregates.values()) {
-      final @Nullable Code argumentCode =
+      final Code argumentCode =
           aggregate.argument == null ? null : row.code(aggregate.argument);
       final FnType fnType = FnType.of(aggregate.aggregate.type);
       final Core.Exp aggregateExp = row.resolve(aggregate.aggregate);
-      final @Nullable Applicable applicable =
+      final Applicable applicable =
           compiler.compileApplicable(
               row.cx, aggregateExp, fnType.paramType, aggregate.pos());
       // An aggregate function runs when the elements have been read and the

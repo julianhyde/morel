@@ -1058,7 +1058,7 @@ class PairLists {
 
     @Override
     public List<T> leftList() {
-      final @Nullable List<T> result = leftList;
+      final List<T> result = leftList;
       if (result != null) {
         return result;
       }
@@ -1067,7 +1067,7 @@ class PairLists {
 
     @Override
     public List<U> rightList() {
-      final @Nullable List<U> result = rightList;
+      final List<U> result = rightList;
       if (result != null) {
         return result;
       }

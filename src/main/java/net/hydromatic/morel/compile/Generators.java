@@ -172,10 +172,10 @@ class Generators {
       return true;
     }
     if (hasBounds && pat.type.isDiscrete(cache.typeSystem)) {
-      final @Nullable Bound lower =
+      final Bound lower =
           lowerBound(
               cache.typeSystem, pat, context.constraints, cache.ungrounded);
-      final @Nullable Bound upper =
+      final Bound upper =
           upperBound(
               cache.typeSystem, pat, context.constraints, cache.ungrounded);
       if (lower != null && upper != null) {
@@ -763,7 +763,7 @@ class Generators {
 
       // Step 3a: Try to analyze as a bounded recursive pattern (with depth
       // limit)
-      final @Nullable BoundedRecursivePattern boundedPattern =
+      final BoundedRecursivePattern boundedPattern =
           analyzeBoundedRecursive(cache, fn, apply.arg, fnName);
       if (boundedPattern != null) {
         // Step 4a: Generate bounded iterate expression
@@ -887,7 +887,7 @@ class Generators {
       Core.Pat goalPat,
       boolean ordered) {
     final String fnName = ((Core.Id) apply.fn).idPat.name;
-    final @Nullable TransitiveClosurePattern tcPattern =
+    final TransitiveClosurePattern tcPattern =
         analyzeTransitiveClosure(cache, fn, apply.arg, fnName);
     if (tcPattern != null) {
       final Core.Exp iterateExp =
@@ -942,7 +942,7 @@ class Generators {
     }
 
     final String fnName = ((Core.Id) apply.fn).idPat.name;
-    final @Nullable TransitiveClosurePattern tcPattern =
+    final TransitiveClosurePattern tcPattern =
         analyzeTransitiveClosure(cache, fn, apply.arg, fnName);
     if (tcPattern != null) {
       final Core.Exp iterateExp =
@@ -1004,7 +1004,7 @@ class Generators {
 
     // Analyze the transitive closure using fresh callArgs
     final String fnName = ((Core.Id) apply.fn).idPat.name;
-    final @Nullable TransitiveClosurePattern tcPattern =
+    final TransitiveClosurePattern tcPattern =
         analyzeTransitiveClosure(cache, fn, freshCallArgs, fnName);
     if (tcPattern == null) {
       return false;
@@ -1103,7 +1103,7 @@ class Generators {
 
     // Analyze the transitive closure using fresh callArgs
     final String fnName = ((Core.Id) apply.fn).idPat.name;
-    final @Nullable TransitiveClosurePattern tcPattern =
+    final TransitiveClosurePattern tcPattern =
         analyzeTransitiveClosure(cache, fn, freshCallArgs, fnName);
     if (tcPattern == null) {
       return false;

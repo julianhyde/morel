@@ -357,8 +357,7 @@ class SparkConnection implements SparkBackend.Connection {
     if (!uriColumns.isEmpty()) {
       return uriColumns;
     }
-    final @Nullable Set<String> columns =
-        propertyNullableColumns(database, table);
+    final Set<String> columns = propertyNullableColumns(database, table);
     return columns == null ? ImmutableSet.of() : columns;
   }
 

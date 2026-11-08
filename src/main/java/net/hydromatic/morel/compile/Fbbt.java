@@ -200,7 +200,7 @@ class Fbbt {
       // A real bound with no exact decimal form, such as 10/3, is rounded
       // outwards, so that the bound we state is never tighter than the
       // one we deduced.
-      final @Nullable BigDecimal exact = value.exactBigDecimal();
+      final BigDecimal exact = value.exactBigDecimal();
       constant =
           exact != null
               ? exact
@@ -522,8 +522,7 @@ class Fbbt {
         if (entry.getKey().equals(atom)) {
           continue;
         }
-        final @Nullable Range<BigRational> span =
-            span(interval(state, entry.getKey()));
+        final Range<BigRational> span = span(interval(state, entry.getKey()));
         if (span == null) {
           return false;
         }
@@ -531,8 +530,8 @@ class Fbbt {
         // A positive coefficient takes its minimum at the atom's lower
         // endpoint, a negative one at its upper endpoint.
         final boolean minAtLower = c.signum() > 0;
-        final @Nullable BigRational min = endpoint(span, minAtLower);
-        final @Nullable BigRational max = endpoint(span, !minAtLower);
+        final BigRational min = endpoint(span, minAtLower);
+        final BigRational max = endpoint(span, !minAtLower);
         restMin =
             restMin == null || min == null
                 ? null
@@ -637,8 +636,7 @@ class Fbbt {
       if (atom.op == Op.ID) {
         return state.tighten(((Core.Id) atom).idPat, rangeSet);
       }
-      final @Nullable Pair<Core.NamedPat, BigRational> inner =
-          innerVariable(atom, state);
+      final Pair<Core.NamedPat, BigRational> inner = innerVariable(atom, state);
       if (inner == null) {
         return false;
       }
@@ -893,7 +891,7 @@ class Fbbt {
         BuiltIn op,
         BigRational c) {
       final Core.NamedPat selfVar = requireNonNull(self.var);
-      final @Nullable Range<BigRational> otherRange =
+      final Range<BigRational> otherRange =
           span(state.get(requireNonNull(other.var)));
       if (otherRange == null) {
         return false;

@@ -179,7 +179,7 @@ public class CalciteFunctions {
     // lint:skip 1
     public MorelTableFunction(org.apache.calcite.plan.Context context) {
       @SuppressWarnings("unchecked")
-      final @Nullable List<Object> args = context.unwrap(List.class);
+      final List<Object> args = context.unwrap(List.class);
       if (args != null) {
         String ml = (String) args.get(0);
         String typeJson = (String) args.get(1);
@@ -318,7 +318,7 @@ public class CalciteFunctions {
     // lint:skip 1
     public MorelScalarFunction(org.apache.calcite.plan.Context context) {
       @SuppressWarnings("unchecked")
-      final @Nullable List<Object> args = context.unwrap(List.class);
+      final List<Object> args = context.unwrap(List.class);
       if (args != null) {
         final String ml = (String) args.get(0);
         final String typeJson = (String) args.get(1);
@@ -392,7 +392,7 @@ public class CalciteFunctions {
     // lint:skip 1
     public MorelApplyFunction(org.apache.calcite.plan.Context context) {
       @SuppressWarnings("unchecked")
-      final @Nullable List<Object> args = context.unwrap(List.class);
+      final List<Object> args = context.unwrap(List.class);
       if (args != null) {
         final String morelArgTypeJson = (String) args.get(0);
         compiled = new Compiled(morelArgTypeJson, typeFactory, cx.typeSystem);

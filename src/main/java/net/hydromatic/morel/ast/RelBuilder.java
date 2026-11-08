@@ -692,7 +692,7 @@ public class RelBuilder {
    */
   private Core.IdPat rightId(Frame frame) {
     if (frame.rightId == null) {
-      final @Nullable String name = Core.NamedPat.idName(frame.id.name);
+      final String name = Core.NamedPat.idName(frame.id.name);
       frame.rightId =
           name == null
               ? core.rightElementPat(
@@ -741,7 +741,7 @@ public class RelBuilder {
 
   /** Returns a fresh id for a collection's element, named as another id is. */
   private Core.IdPat elementPatLike(Core.Exp rel, Core.IdPat id) {
-    final @Nullable String name = Core.NamedPat.idName(id.name);
+    final String name = Core.NamedPat.idName(id.name);
     return name == null ? elementPat(rel) : elementPat(rel, name);
   }
 
