@@ -117,12 +117,24 @@ public class SparkSchemaTest {
                 + "],\"type\":\"struct\"}"));
   }
 
-  /** Tests that rows must be records. */
+  /**
+   * Tests a row that is a single value: Spark has no column for a bare {@code
+   * int}, so the relation has one column, named "it".
+   */
   @Test
-  void testRowMustBeRecord() {
-    assertThrows(
-        SparkBackend.SparkException.class,
-        () -> SparkSchema.schemaJson(PrimitiveType.INT));
+  void testScalarRow() {
+    assertThat(
+        SparkSchema.schemaJson(PrimitiveType.INT),
+        is(
+            "{\"fields\":[{\"metadata\":{},\"name\":\"it\","
+                + "\"nullable\":false,\"type\":\"integer\"}],"
+                + "\"type\":\"struct\"}"));
+    assertThat(
+        SparkSchema.schemaJson(typeSystem.option(PrimitiveType.STRING)),
+        is(
+            "{\"fields\":[{\"metadata\":{},\"name\":\"it\","
+                + "\"nullable\":true,\"type\":\"string\"}],"
+                + "\"type\":\"struct\"}"));
   }
 
   /** Tests that a type with no Spark equivalent is rejected. */

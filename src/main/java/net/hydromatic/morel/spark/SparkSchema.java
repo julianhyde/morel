@@ -23,7 +23,7 @@ import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.ListType;
 import net.hydromatic.morel.type.PrimitiveType;
-import net.hydromatic.morel.type.RecordType;
+import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import org.jspecify.annotations.Nullable;
 
@@ -46,42 +46,62 @@ public class SparkSchema {
   private SparkSchema() {}
 
   /**
+   * The name of the one column of a relation whose rows are single values
+   * rather than records.
+   *
+   * <p>Spark has no column for a bare {@code int}, so a collection of them
+   * crosses as a relation of one column, and the column needs a name. This is
+   * the name Spark itself gives the one column of a scalar result.
+   */
+  public static final String IT = "it";
+
+  /**
    * Returns the JSON schema of a row type, as {@code LocalRelation.schema}
    * wants it: an object whose {@code fields} are the record's fields, in the
    * order the record type holds them, which is sorted by name.
+   *
+   * <p>A tuple is a struct whose fields are "1", "2", and so on, because that
+   * is what a tuple's fields are called in Morel. A row that is a single value
+   * has one field, named {@link #IT}.
    */
   public static String schemaJson(Type rowType) {
-    if (!(rowType instanceof RecordType)) {
-      throw new SparkBackend.SparkException(
-          "UNSUPPORTED_TYPE",
-          "A relation's rows must be records, and these are " + rowType);
-    }
     final StringBuilder b = new StringBuilder();
-    struct((RecordType) rowType, b);
+    if (ArrowEncoder.hasColumns(rowType)) {
+      struct((RecordLikeType) rowType, b);
+    } else {
+      b.append("{\"fields\":[");
+      field(IT, rowType, b);
+      b.append("],\"type\":\"struct\"}");
+    }
     return b.toString();
   }
 
-  private static void struct(RecordType recordType, StringBuilder b) {
+  private static void struct(RecordLikeType recordType, StringBuilder b) {
     b.append("{\"fields\":[");
     int i = 0;
-    for (Map.Entry<String, Type> field : recordType.argNameTypes.entrySet()) {
+    for (Map.Entry<String, Type> field : recordType.argNameTypes().entrySet()) {
       if (i++ > 0) {
         b.append(',');
       }
-      b.append("{\"metadata\":{},\"name\":");
-      quote(field.getKey(), b);
-      final Type type = field.getValue();
-      final Type valueType = optionValueType(type);
-      b.append(",\"nullable\":").append(valueType != null).append(",\"type\":");
-      type(valueType != null ? valueType : type, b);
-      b.append('}');
+      field(field.getKey(), field.getValue(), b);
     }
     b.append("],\"type\":\"struct\"}");
   }
 
+  /** Writes the JSON of one column. */
+  private static void field(String label, Type type, StringBuilder b) {
+    b.append("{\"metadata\":{},\"name\":");
+    quote(label, b);
+    final Type valueType = optionValueType(type);
+    b.append(",\"nullable\":").append(valueType != null).append(",\"type\":");
+    type(valueType != null ? valueType : type, b);
+    b.append('}');
+  }
+
   private static void type(Type type, StringBuilder b) {
-    if (type instanceof RecordType) {
-      struct((RecordType) type, b);
+    if (ArrowEncoder.hasColumns(type)) {
+      // A record or a tuple; a tuple's fields are "1", "2", and so on.
+      struct((RecordLikeType) type, b);
       return;
     }
     if (type instanceof ListType) {

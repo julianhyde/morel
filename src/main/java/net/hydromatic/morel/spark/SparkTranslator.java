@@ -37,6 +37,7 @@ import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.foreign.SparkBackend;
 import net.hydromatic.morel.foreign.SparkCatalog;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -93,6 +94,17 @@ public class SparkTranslator {
 
   private int nextPlanId;
 
+  /**
+   * The element of the relation whose expressions are being translated, if a
+   * row of that relation is a single value rather than a record; null if a row
+   * has columns of its own.
+   *
+   * <p>Such a row crosses as one column, named {@link SparkSchema#IT}, so a use
+   * of the element is a use of that column. Set as a node's input is
+   * translated, which is before the expressions beside it.
+   */
+  private Core.@Nullable NamedPat scalarElement;
+
   private SparkTranslator(TypeSystem typeSystem) {
     this.typeSystem = typeSystem;
   }
@@ -128,6 +140,12 @@ public class SparkTranslator {
 
   /** Translates a query to a plan. */
   public static SparkPlan translate(TypeSystem typeSystem, Core.Exp query) {
+    if (query.type.isCollection() && query.type.arg(0) == PrimitiveType.UNIT) {
+      // A relation of unit has no column, and a result of no columns is one
+      // the decoder cannot read: it asks each row for its first column.
+      // "from" and "group {}" are such queries.
+      throw unsupported("a relation whose rows are unit");
+    }
     final SparkTranslator translator = new SparkTranslator(typeSystem);
     final Relation root = translator.rel(translator.unlet(query));
     return new SparkPlan(
@@ -370,8 +388,16 @@ public class SparkTranslator {
    */
   private Relation input(Core.Exp exp, Core.IdPat row) {
     if (exp instanceof Core.Rel) {
-      return rel(exp);
+      final Relation relation = rel(exp);
+      // The element of a relation that another relation produced is not a
+      // column we named: Spark named it, after the expression it projected
+      // or the key it grouped by, so a use of the element is refused rather
+      // than guessed at. (The input was translated first and may have set
+      // this for a node of its own.)
+      scalarElement = null;
+      return relation;
     }
+    scalarElement = ArrowEncoder.hasColumns(row.type) ? null : row;
     final int planId = nextPlanId++;
     return Relation.newBuilder()
         .setCommon(RelationCommon.newBuilder().setPlanId(planId))
@@ -685,6 +711,14 @@ public class SparkTranslator {
                         .setScale(d.scale())));
 
       case ID:
+        final Core.NamedPat element = scalarElement;
+        if (element != null && ((Core.Id) exp).idPat.equals(element)) {
+          // A row that is a single value has one column, so the element is
+          // that column.
+          final String alias = elementName(element);
+          return attribute(
+              alias.isEmpty() ? SparkSchema.IT : alias + "." + SparkSchema.IT);
+        }
         // A name that is not a column of the query: a plan's parameter, say,
         // which phase 1 does not pass, or a value the resolver could not
         // replace with what it holds. Naming it says which.
@@ -973,7 +1007,11 @@ public class SparkTranslator {
   private Expression component(String alias, Type type) {
     final Type valueType = SparkSchema.optionValueType(type);
     final Type rowType = valueType != null ? valueType : type;
-    if (!(rowType instanceof RecordLikeType)) {
+    if (!ArrowEncoder.hasColumns(rowType)) {
+      // A primitive answers "argNameTypes" as a record of no fields would, so
+      // asking whether it is record-like is not enough: a whole input whose
+      // rows are single values would become a struct of nothing. Which column
+      // such an input has is for its own producer to say, so refuse.
       throw unsupported("a whole input of type " + rowType);
     }
     final Map<String, Type> fields = ((RecordLikeType) rowType).argNameTypes();
