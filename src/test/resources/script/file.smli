@@ -22,8 +22,8 @@
 (* The "file" value represents the file system, starting in the current
  * directory. *)
 file;
-> val it = {map={},scott={},wordle={}}
->   : {map:{...}, scott:{...}, wordle:{...}, ...}
+> val it = {map={},scott={},types={},wordle={}}
+>   : {map:{...}, scott:{...}, types:{...}, wordle:{...}, ...}
 
 (*) A subdirectory.
 file.wordle;
@@ -32,8 +32,9 @@ file.wordle;
 
 (*) Now we've gone into the directory, the type of 'file' has widened.
 file;
-> val it = {map={},scott={},wordle={answers=<relation>,words=<relation>}}
->   : {map:{...}, scott:{...},
+> val it =
+>   {map={},scott={},types={},wordle={answers=<relation>,words=<relation>}}
+>   : {map:{...}, scott:{...}, types:{...},
 >       wordle:{answers:{...} list, words:{...} list, ...}, ...}
 
 (*) A variable via which we can access relations.
@@ -77,31 +78,78 @@ val scott = file.scott;
 > val scott =
 >   {bonuses=<relation>,depts=<relation>,emps=<relation>,salgrades=<relation>}
 >   : {bonuses:{...} list, depts:{deptno:int, dname:string, loc:string} list,
->       emps:{comm:real, deptno:int, empno:int, ename:string, hiredate:string,
->              job:string, mgrno:int, sal:real} list, salgrades:{...} list, ...}
+>       emps:{comm:decimal option, deptno:int, empno:int, ename:string,
+>              hiredate:date, job:string, mgrno:int option, sal:decimal} list,
+>       salgrades:{...} list, ...}
 from b in scott.bonuses;
-> val it = [] : {bonus:real, ename:string, job:string, sal:real} list
+> val it = [] : {bonus:decimal, ename:string, job:string, sal:decimal} list
 
 (*) The type of 'file' has widened further.
 file;
 > val it =
 >   {map={},
 >    scott={bonuses=<relation>,depts=<relation>,emps=<relation>,
->           salgrades=<relation>},wordle={answers=<relation>,words=<relation>}}
+>           salgrades=<relation>},types={},
+>    wordle={answers=<relation>,words=<relation>}}
 >   : {map:{...},
->       scott:{bonuses:{bonus:real, ename:string, job:string, sal:real} list,
->               depts:{deptno:int, dname:string, loc:string} list,
->               emps:{comm:real, deptno:int, empno:int, ename:string,
->                      hiredate:string, job:string, mgrno:int, sal:real} list,
->               salgrades:{...} list, ...},
+>       scott:{bonuses:{bonus:decimal, ename:string, job:string, sal:decimal}
+>                      list, depts:{deptno:int, dname:string, loc:string} list,
+>               emps:{comm:decimal option, deptno:int, empno:int, ename:string,
+>                      hiredate:date, job:string, mgrno:int option, sal:decimal}
+>                    list, salgrades:{...} list, ...}, types:{...},
 >       wordle:{answers:{...} list, words:{...} list, ...}, ...}
 
 file.scott;
 > val it =
 >   {bonuses=<relation>,depts=<relation>,emps=<relation>,salgrades=<relation>}
->   : {bonuses:{bonus:real, ename:string, job:string, sal:real} list,
+>   : {bonuses:{bonus:decimal, ename:string, job:string, sal:decimal} list,
 >       depts:{deptno:int, dname:string, loc:string} list,
->       emps:{comm:real, deptno:int, empno:int, ename:string, hiredate:string,
->              job:string, mgrno:int, sal:real} list, salgrades:{...} list, ...}
+>       emps:{comm:decimal option, deptno:int, empno:int, ename:string,
+>              hiredate:date, job:string, mgrno:int option, sal:decimal} list,
+>       salgrades:{...} list, ...}
+
+(* A header gives each column a type: bool, int, real, decimal, date or
+ * string, and "option" after any of them. A quoted field may hold commas,
+ * and a doubled quote; in an option column, NULL or an empty field is
+ * NONE. *)
+file.types.all;
+> val it =
+>   [{b=true,dec=12.34,dt=2024-01-15T00:00Z,i=1,od=SOME 0.1,oi=SOME 7,
+>     os=SOME "x",r=1.5,s="hello, world"},
+>    {b=false,dec=99999999.99,dt=1970-01-01T00:00Z,i=~2,od=NONE,oi=NONE,
+>     os=SOME "",r=0.25,s="it's"},
+>    {b=true,dec=0,dt=1999-12-31T00:00Z,i=0,od=NONE,oi=NONE,os=NONE,r=~3,
+>     s="plain"}]
+>   : {b:bool, dec:decimal, dt:date, i:int, od:decimal option, oi:int option,
+>       os:string option, r:real, s:string} list
+
+(*) Values of each type behave as values of that type.
+from t in file.types.all
+  yield {t.s, t.oi, d = t.dec + decimal "0.01", year = Date.year t.dt};
+> val it =
+>   [{d=12.35,oi=SOME 7,s="hello, world",year=2024},
+>    {d=100000000,oi=NONE,s="it's",year=1970},
+>    {d=0.01,oi=NONE,s="plain",year=1999}]
+>   : {d:decimal, oi:int option, s:string, year:int} list
+
+from t in file.types.all
+  compute sum over t.dec;
+> val it = 100000012.33 : decimal
+
+(* A NULL in a column whose type is not an option is an error, not a
+ * zero. *)
+file.types.nulls;
+> uncaught exception Fail [Fail: null in column n, whose type int has no room for it]
+>   raised at: 0.0-0.0
+
+(*) The employees' commissions and managers are options.
+from e in file.scott.emps
+  where e.deptno = 10
+  yield {e.ename, e.mgrno, e.comm, e.sal};
+> val it =
+>   [{comm=NONE,ename="CLARK",mgrno=SOME 7839,sal=2450},
+>    {comm=NONE,ename="KING",mgrno=NONE,sal=5000},
+>    {comm=NONE,ename="MILLER",mgrno=SOME 7782,sal=1300}]
+>   : {comm:decimal option, ename:string, mgrno:int option, sal:decimal} list
 
 (*) End file.smli

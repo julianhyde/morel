@@ -1,0 +1,4 @@
+b:bool,i:int,r:real,dec:decimal,dt:date,s:string,oi:int option,os:string option,od:decimal option
+true,1,1.5,12.34,'2024-01-15','hello, world',7,'x',0.10
+false,-2,0.25,99999999.99,1970-01-01,'it''s',NULL,'',NULL
+true,0,-3.0,0,'1999-12-31',plain,,NULL,

@@ -18,6 +18,7 @@
  */
 package net.hydromatic.morel.eval;
 
+import static java.lang.String.format;
 import static java.nio.file.Files.newInputStream;
 import static java.util.Objects.requireNonNull;
 import static org.apache.calcite.util.Util.first;
@@ -28,6 +29,10 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,14 +41,14 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.zip.GZIPInputStream;
+import net.hydromatic.morel.ast.Pos;
 import net.hydromatic.morel.type.Keys;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.type.TypedValue;
-import net.hydromatic.morel.util.ImmutablePairList;
-import net.hydromatic.morel.util.PairList;
+import net.hydromatic.morel.util.Ord;
 import org.apache.calcite.util.Util;
 import org.jspecify.annotations.Nullable;
 
@@ -89,58 +94,116 @@ public class Files {
     return s.substring(0, s.length() - suffix.length());
   }
 
-  private static PairList<String, Type.Key> deduceFieldsCsv(BufferedReader r)
+  private static List<Column> deduceFieldsCsv(BufferedReader r)
       throws IOException {
     String firstLine = r.readLine();
     if (firstLine == null) {
       // File is empty. There will be no fields, and row type will be unit.
-      return ImmutablePairList.of();
+      return ImmutableList.of();
     }
 
-    final PairList<String, Type.Key> nameTypes = PairList.of();
+    final ImmutableList.Builder<Column> columns = ImmutableList.builder();
     for (String field : firstLine.split(",")) {
       final String[] split = field.split(":");
-      final String subFieldName = split[0];
-      final String subFieldType = split.length > 1 ? split[1] : "string";
-      Type.Key subType;
-      switch (subFieldType) {
-        case "bool":
-          subType = PrimitiveType.BOOL.key();
-          break;
-        case "decimal":
-        case "double":
-          subType = PrimitiveType.REAL.key();
-          break;
-        case "int":
-          subType = PrimitiveType.INT.key();
-          break;
-        default:
-          subType = PrimitiveType.STRING.key();
-          break;
-      }
-      nameTypes.add(subFieldName, subType);
+      final String name = split[0];
+      final String type = split.length > 1 ? split[1] : "string";
+      columns.add(Column.of(name, type));
     }
-    return nameTypes;
+    return columns.build();
   }
 
   /**
-   * Creates a function that converts a string field value to the desired type.
+   * Parses lines of a CSV file into values.
+   *
+   * <p>Fields are separated by commas. A field that starts with a single quote
+   * runs to the next single quote that is not doubled, and may contain commas;
+   * a doubled quote inside it stands for one quote. The quotes stay in the
+   * field that is given to the column's parser, so that a quoted empty string,
+   * {@code ''}, can be told from an empty field; {@link #unquoteString} removes
+   * them. A trailing empty field is a field, so that "1," has two.
+   *
+   * <p>Each field is converted as soon as it is found, by its column's parser,
+   * and the value goes straight into the row's array of values; there is no
+   * intermediate list of fields. A field is a substring of the line, without
+   * copying through a buffer, unless it contains a doubled quote. Because it
+   * re-uses its buffer, a parser must not be shared between threads.
    */
-  static Function<String, Object> parser(Type.Key type) {
-    switch (type.op) {
-      case DATA_TYPE:
-        switch (type.toString()) {
-          case "int":
-            return s -> s.equals("NULL") ? 0 : Integer.parseInt(s);
-          case "real":
-            return s -> s.equals("NULL") ? 0f : Float.parseFloat(s);
-          case "string":
-            return Files::unquoteString;
-          default:
-            throw new IllegalArgumentException("unknown type " + type);
+  static class LineParser {
+    /** The columns of the file, in the order they occur in a line. */
+    private final Column[] columns;
+
+    private final StringBuilder b = new StringBuilder();
+
+    LineParser(List<Column> columns) {
+      this.columns = columns.toArray(new Column[0]);
+    }
+
+    /**
+     * Parses a line, putting the value of column {@code c} of the file into
+     * {@code values[targets[c]]}.
+     *
+     * <p>Fields beyond the last column are ignored. A line with fewer fields
+     * than there are columns raises {@code Fail}.
+     */
+    void parse(String line, int[] targets, Object[] values) {
+      final int n = line.length();
+      int i = 0;
+      for (int c = 0; c < columns.length; c++) {
+        if (i > n) {
+          throw new MorelRuntimeException(
+              BuiltInExn.FAIL,
+              format(
+                  "line has %d fields, but the header has %d: %s",
+                  c, columns.length, line),
+              Pos.ZERO);
         }
-      default:
-        throw new IllegalArgumentException("unknown type " + type);
+        final int start = i;
+        final String field;
+        if (i < n && line.charAt(i) == '\'') {
+          // A quoted field. Find the closing quote, skipping doubled quotes.
+          boolean doubled = false;
+          ++i;
+          while (i < n) {
+            if (line.charAt(i++) == '\'') {
+              if (i < n && line.charAt(i) == '\'') {
+                doubled = true;
+                ++i;
+                continue;
+              }
+              break;
+            }
+          }
+          // Anything between the closing quote and the comma is part of the
+          // field.
+          while (i < n && line.charAt(i) != ',') {
+            ++i;
+          }
+          field = doubled ? undouble(line, start, i) : line.substring(start, i);
+        } else {
+          final int comma = line.indexOf(',', i);
+          i = comma < 0 ? n : comma;
+          field = line.substring(start, i);
+        }
+        values[targets[c]] = columns[c].parser.apply(field);
+        ++i; // skip the comma; beyond the end of the line if there was none
+      }
+    }
+
+    /**
+     * Returns the quoted field that runs from {@code start} to {@code end} of a
+     * line, with each doubled quote after the opening quote made single.
+     */
+    private String undouble(String line, int start, int end) {
+      b.setLength(0);
+      b.append('\'');
+      for (int k = start + 1; k < end; k++) {
+        final char c = line.charAt(k);
+        b.append(c);
+        if (c == '\'' && k + 1 < end && line.charAt(k + 1) == '\'') {
+          ++k;
+        }
+      }
+      return b.toString();
     }
   }
 
@@ -150,6 +213,151 @@ public class Files {
       return s.substring(1, s.length() - 1);
     }
     return s;
+  }
+
+  /**
+   * Whether a field holds no value: {@code NULL}, or nothing at all. (A quoted
+   * empty string, {@code ''}, is a value.)
+   */
+  private static boolean isNull(String s) {
+    return s.isEmpty() || s.equals("NULL");
+  }
+
+  /**
+   * A column of a CSV file: its name, its type, and how to convert a field to a
+   * value of that type.
+   *
+   * <p>The header of a file declares each column as {@code name:type}, where
+   * type is {@code bool}, {@code int}, {@code real} (or its synonym {@code
+   * double}), {@code decimal}, {@code date} or {@code string}, optionally
+   * followed by {@code option}; a missing or unknown type is {@code string}. In
+   * an option column, an empty field or {@code NULL} is {@code NONE}; in any
+   * other column, it raises {@code Fail} when the file is read, because the
+   * column's type has no room for it.
+   */
+  static class Column {
+    final String name;
+    final Type.Key typeKey;
+    final Function<String, Object> parser;
+
+    Column(String name, Type.Key typeKey, Function<String, Object> parser) {
+      this.name = requireNonNull(name, "name");
+      this.typeKey = requireNonNull(typeKey, "typeKey");
+      this.parser = requireNonNull(parser, "parser");
+    }
+
+    /** Creates a column from its name and type, as the header gives them. */
+    static Column of(String name, String type) {
+      final String[] words = type.trim().split(" +");
+      if (words.length == 2 && words[1].equals("option")) {
+        final Column column = of(name, words[0]);
+        return new Column(
+            name,
+            Keys.apply(Keys.name("option"), ImmutableList.of(column.typeKey)),
+            s ->
+                isNull(s)
+                    ? Codes.OPTION_NONE
+                    : Codes.optionSome(column.parser.apply(s)));
+      }
+      final Type.Key typeKey;
+      final Function<String, Object> parser;
+      switch (words[0]) {
+        case "bool":
+          typeKey = PrimitiveType.BOOL.key();
+          parser = Boolean::parseBoolean;
+          break;
+        case "date":
+          typeKey = Keys.name("date");
+          parser = Files::parseDate;
+          break;
+        case "decimal":
+          typeKey = Keys.name("decimal");
+          parser = s -> parseDecimal(name, s);
+          break;
+        case "double":
+        case "real":
+          typeKey = PrimitiveType.REAL.key();
+          parser = Float::parseFloat;
+          break;
+        case "int":
+          typeKey = PrimitiveType.INT.key();
+          parser = Integer::parseInt;
+          break;
+        default:
+          typeKey = PrimitiveType.STRING.key();
+          parser = Files::unquoteString;
+          break;
+      }
+      return new Column(
+          name,
+          typeKey,
+          s -> {
+            if (isNull(s)) {
+              throw new MorelRuntimeException(
+                  BuiltInExn.FAIL,
+                  format(
+                      "null in column %s, whose type %s has no room for it",
+                      name, words[0]),
+                  Pos.ZERO);
+            }
+            return parser.apply(s);
+          });
+    }
+  }
+
+  /**
+   * Parses a date, such as "1980-12-17" or "'1980-12-17'", as midnight UTC on
+   * that day; that is also how a Spark {@code date} is read.
+   */
+  private static Object parseDate(String s) {
+    final String s2 = (String) unquoteString(s);
+    return OffsetDateTime.of(localDate(s2).atStartOfDay(), ZoneOffset.UTC);
+  }
+
+  /**
+   * Parses a date in ISO format. Handles "yyyy-mm-dd" directly, because {@link
+   * LocalDate#parse} goes through a general-purpose formatter and is several
+   * times slower; anything else (a year beyond four digits, a malformed date)
+   * goes to {@link LocalDate#parse}, which accepts or rejects it.
+   */
+  private static LocalDate localDate(String s) {
+    if (s.length() == 10 && s.charAt(4) == '-' && s.charAt(7) == '-') {
+      final int y = digits(s, 0, 4);
+      final int m = digits(s, 5, 7);
+      final int d = digits(s, 8, 10);
+      if (y >= 0 && m >= 0 && d >= 0) {
+        return LocalDate.of(y, m, d);
+      }
+    }
+    return LocalDate.parse(s);
+  }
+
+  /**
+   * Returns the value of the decimal digits from {@code start} to {@code end}
+   * of a string, or -1 if any of them is not a digit.
+   */
+  private static int digits(String s, int start, int end) {
+    int v = 0;
+    for (int i = start; i < end; i++) {
+      final char c = s.charAt(i);
+      if (c < '0' || c > '9') {
+        return -1;
+      }
+      v = v * 10 + (c - '0');
+    }
+    return v;
+  }
+
+  /** Parses a decimal, such as "800.00", in canonical form. */
+  private static Object parseDecimal(String name, String s) {
+    final BigDecimal d = Decimals.canonical(new BigDecimal(s));
+    if (d == null) {
+      throw new MorelRuntimeException(
+          BuiltInExn.OVERFLOW,
+          format("value %s in column %s is too large for a decimal", s, name),
+          Pos.ZERO);
+    }
+    return d;
   }
 
   /** Abstract implementation of File. */
@@ -242,16 +450,18 @@ public class Files {
   /** File that is not a directory, and can be parsed into a set of records. */
   private static class DataFile extends AbstractFile {
     final Type.Key typeKey;
-    final PairList<Integer, Function<String, Object>> parsers;
+
+    /** The columns of the file, in the order they occur in a line. */
+    final ImmutableList<Column> columns;
 
     DataFile(
         java.io.File file, // lint:skip
         FileType fileType,
         Type.Key typeKey,
-        PairList<Integer, Function<String, Object>> parsers) {
+        List<Column> columns) {
       super(file, fileType);
       this.typeKey = requireNonNull(typeKey, "typeKey");
-      this.parsers = parsers.immutable();
+      this.columns = ImmutableList.copyOf(columns);
     }
 
     @Override
@@ -263,16 +473,25 @@ public class Files {
           // that has only a header line has none.
           return clazz.cast(ImmutableList.of());
         }
-        final Object[] values = new Object[parsers.size()];
+        // A record's fields are sorted by name, so the target of a column
+        // (the ordinal of its field in the record) is the position of its
+        // name in sorted order. Sort (ordinal, column) pairs by name, and
+        // number them.
+        final int[] targets = new int[columns.size()];
+        Ord.forEach(
+            RecordType.ORDERING
+                .onResultOf((Ord<Column> o) -> o.e.name)
+                .sortedCopy(Ord.zip(columns)),
+            (o, k) -> targets[o.i] = k);
+        final Object[] values = new Object[columns.size()];
         final List<List<Object>> list = new ArrayList<>();
+        final LineParser parser = new LineParser(columns);
         for (; ; ) {
           String line = r.readLine();
           if (line == null) {
             return clazz.cast(list);
           }
-          String[] fields = line.split(",");
-          parsers.forEachIndexed(
-              (i, j, parser) -> values[j] = parser.apply(fields[i]));
+          parser.parse(line, targets, values);
           list.add(ImmutableList.copyOf(values));
         }
       } catch (IOException e) {
@@ -336,23 +555,12 @@ public class Files {
 
         default:
           try (BufferedReader r = fileType.open(ioFile)) {
-            final PairList<String, Type.Key> nameTypes =
-                fileType.deduceFields(r);
-            final ImmutableSortedMap<String, Type.Key> sortedNameTypes =
-                ImmutableSortedMap.<String, Type.Key>orderedBy(
-                        RecordType.ORDERING)
-                    .putAll(nameTypes)
-                    .build();
-            final PairList<Integer, Function<String, Object>> fieldParsers =
-                PairList.of();
-            nameTypes.forEach(
-                (name, typeKey) -> {
-                  final int j = sortedNameTypes.keySet().asList().indexOf(name);
-                  fieldParsers.add(j, parser(typeKey));
-                });
-
-            final Type.Key listType = Keys.list(Keys.record(sortedNameTypes));
-            return new DataFile(ioFile, fileType, listType, fieldParsers);
+            final List<Column> columns = fileType.deduceFields(r);
+            final ImmutableSortedMap.Builder<String, Type.Key> builder =
+                ImmutableSortedMap.orderedBy(RecordType.ORDERING);
+            columns.forEach(column -> builder.put(column.name, column.typeKey));
+            final Type.Key listType = Keys.list(Keys.record(builder.build()));
+            return new DataFile(ioFile, fileType, listType, columns);
           } catch (IOException e) {
             // ignore, and skip file
             return this;
@@ -428,12 +636,11 @@ public class Files {
               new GZIPInputStream(newInputStream(file.toPath())));
         default:
           throw new IllegalArgumentException(
-              "cannot open file " + file + " of type " + this);
+              format("cannot open file %s of type %s", file, this));
       }
     }
 
-    PairList<String, Type.Key> deduceFields(BufferedReader r)
-        throws IOException {
+    List<Column> deduceFields(BufferedReader r) throws IOException {
       return deduceFieldsCsv(r);
     }
   }
