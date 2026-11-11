@@ -531,10 +531,9 @@ Sys.planEx "3";
 >
 > r$0 =
 >   project r [{x = #1 r, y = #2 r}] : {x:int, y:int} list
->     filter r [#1 r < #2 r] : (int * int) list
->       join x y : (int * int) list
->         #flatten Range ([OPEN (0, 10)]) : int list
->         #flatten Range ([OPEN (0, 10)]) : int list
+>     join x y [x < y] : (int * int) list
+>       #flatten Range ([OPEN (0, 10)]) : int list
+>       #flatten Range ([OPEN (0, 10)]) : int list
 > |} : string
 List.length (from x, y where y > 0 andalso y < x andalso x < 10);
 > val it = 36 : int
@@ -888,5 +887,196 @@ from x in xs join y in ys on 1 div (y.d - 8) < 1 andalso x.b = y.c
   yield {x.a, y.d};
 > val it = [{a=1,d=5},{a=1,d=7},{a=2,d=6},{a=3,d=5},{a=3,d=7}]
 >   : {a:int, d:int} list
+
+(* --- A where into the joins below it ---------------------------- *)
+
+(* In a query of comma-separated scans, each conjunct of the "where"
+ * moves into the join that first reads both its sides, or into the
+ * input that it reads alone, so that the join is a hash join rather
+ * than a filter over a cross product. "Sys.planEx" shows the tree
+ * after the rules; "Sys.plan" what is executed. *)
+val zs = [{e=5,f="five"},{e=7,f="seven"}];
+> val zs = [{e=5,f="five"},{e=7,f="seven"}] : {e:int, f:string} list
+from x in xs, y in ys where x.b = y.c yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=2,d=6},{a=3,d=5},{a=3,d=7}]
+>   : {a:int, d:int} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink hashJoin(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), leftKey apply(fnValue nth:1, argCode stack(offset 1, name x)), rightKey apply(fnValue nth:0, argCode stack(offset 1, name y)), condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 1, name y)))))))"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{a = #a (#1 r), d = #d (#2 r)}] : {a:int, d:int} list
+>     join x y [#b x = #c y] : t$0
+>       xs : {a:int, b:int} list
+>       ys : {c:int, d:int} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int}) list
+> |_} : string
+
+(* Three scans. "x.a > 1" reads only "x", so it filters "xs";
+ * "z.f <> "q"" reads only "z", so it filters "zs" before it is
+ * hashed; each equality goes into the join that reads both its
+ * sides. *)
+from x in xs, y in ys, z in zs
+  where x.b = y.c andalso y.d = z.e andalso x.a > 1
+    andalso z.f <> "q"
+  yield {x.a, z.f};
+> val it = [{a=3,f="five"},{a=3,f="seven"}] : {a:int, f:string} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink where(condition apply2(fnValue >, apply(fnValue nth:0, argCode stack(offset 1, name x)), constant(1)), sink hashJoin(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), leftKey apply(fnValue nth:1, argCode stack(offset 1, name x)), rightKey apply(fnValue nth:0, argCode stack(offset 1, name y)), condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), sink hashJoin(pat z, exp from(sink join(pat z, exp constant([[5, five], [7, seven]]), sink where(condition apply2(fnValue <>, apply(fnValue nth:1, argCode stack(offset 1, name z)), constant(q)), sink collect(stack(offset 1, name z))))), leftKey apply(fnValue nth:1, argCode stack(offset 1, name y)), rightKey apply(fnValue nth:0, argCode stack(offset 1, name z)), condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name y)), apply(fnValue nth:0, argCode stack(offset 1, name z))), sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 3, name x)), apply(fnValue nth:1, argCode stack(offset 1, name z)))))))))"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{a = #a (#1 r), f = #f (#3 r)}] : {a:int, f:string} list
+>     join r z [#d (#2 r) = #e z] : t$0
+>       join x y [#b x = #c y] : t$1
+>         filter x [#a x > 1] : {a:int, b:int} list
+>           xs : {a:int, b:int} list
+>         ys : {c:int, d:int} list
+>       filter z [#f z <> "q"] : {e:int, f:string} list
+>         zs : {e:int, f:string} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int} * {e:int, f:string}) list
+> t$1 ({a:int, b:int} * {c:int, d:int}) list
+> |_} : string
+
+(* A conjunct that might raise -- here "10 div x.a" -- stays where it
+ * was written; the others move. *)
+from x in xs, y in ys where x.b = y.c andalso 10 div x.a > 1
+  yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=2,d=6},{a=3,d=5},{a=3,d=7}]
+>   : {a:int, d:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{a = #a (#1 r), d = #d (#2 r)}] : {a:int, d:int} list
+>     filter r [#div Int (10, #a (#1 r)) > 1] : t$0
+>       join x y [#b x = #c y] : t$0
+>         xs : {a:int, b:int} list
+>         ys : {c:int, d:int} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int}) list
+> |_} : string
+
+(* The conjuncts of a "where" join those of an "on". *)
+from x in xs join y in ys on x.b = y.c where x.a < y.c
+  yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=2,d=6}] : {a:int, d:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{a = #a (#1 r), d = #d (#2 r)}] : {a:int, d:int} list
+>     join x y [#b x = #c y andalso #a x < #c y] : t$0
+>       xs : {a:int, b:int} list
+>       ys : {c:int, d:int} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int}) list
+> |_} : string
+
+(* Consecutive "where" steps are merged, then moved. *)
+from x in xs, y in ys where x.b = y.c where x.a > 1 yield {x.a, y.d};
+> val it = [{a=2,d=6},{a=3,d=5},{a=3,d=7}] : {a:int, d:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{a = #a (#1 r), d = #d (#2 r)}] : {a:int, d:int} list
+>     join x y [#b x = #c y] : t$0
+>       filter x [#a x > 1] : {a:int, b:int} list
+>         xs : {a:int, b:int} list
+>       ys : {c:int, d:int} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int}) list
+> |_} : string
+
+(* Over a left join, a part of the "where" that reads only the left
+ * side filters the left input: each of its elements is in the
+ * output, padded or not. A part that reads the right side, whose
+ * fields are options, stays; moving it into the "on" would keep the
+ * rows that it removes. *)
+from x in xs left join y in ys on x.b = y.c
+  where x.a > 1 andalso Option.isSome y
+  yield x.a;
+> val it = [2,3,3] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [#a (#1 r)] : int list
+>     filter r [#isSome Option (#2 r)] : t$0
+>       join x y [left] [#b x = #c y] : t$0
+>         filter x [#a x > 1] : {a:int, b:int} list
+>           xs : {a:int, b:int} list
+>         ys : {c:int, d:int} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int} option) list
+> |_} : string
+
+(* Over a right join, likewise, a part that reads only the right
+ * side filters the right input. *)
+from x in xs right join y in ys on x.b = y.c
+  where y.d > 5 andalso Option.isSome x
+  yield y.d;
+> val it = [7,6,7] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [#d (#2 r)] : int list
+>     filter r [#isSome Option (#1 r)] : t$0
+>       join x y [right] [#b x = #c y] : t$0
+>         xs : {a:int, b:int} list
+>         filter y [#d y > 5] : {c:int, d:int} list
+>           ys : {c:int, d:int} list
+>
+> t$0 ({a:int, b:int} option * {c:int, d:int}) list
+> |_} : string
+
+(* Over a full join, both sides are padded, and nothing moves. *)
+from x in xs full join y in ys on x.b = y.c
+  where Option.isSome x andalso Option.isSome y
+  yield {x, y};
+> val it =
+>   [{x=SOME {a=1,b=2},y=SOME {c=2,d=5}},{x=SOME {a=1,b=2},y=SOME {c=2,d=7}},
+>    {x=SOME {a=2,b=3},y=SOME {c=3,d=6}},{x=SOME {a=3,b=2},y=SOME {c=2,d=5}},
+>    {x=SOME {a=3,b=2},y=SOME {c=2,d=7}}]
+>   : {x:{a:int, b:int} option, y:{c:int, d:int} option} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{x = #1 r, y = #2 r}] : t$0
+>     filter r [#isSome Option (#1 r) andalso #isSome Option (#2 r)] : t$1
+>       join x y [full] [#b x = #c y] : t$1
+>         xs : {a:int, b:int} list
+>         ys : {c:int, d:int} list
+>
+> t$0 {x:{a:int, b:int} option, y:{c:int, d:int} option} list
+> t$1 ({a:int, b:int} option * {c:int, d:int} option) list
+> |_} : string
+
+(* Nor does a "where" that reads "ordinal" move. *)
+from x in xs, y in ys where x.b = y.c andalso ordinal < 2 yield {x.a, y.d};
+> val it = [{a=1,d=5}] : {a:int, d:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{a = #a (#1 r), d = #d (#2 r)}] : {a:int, d:int} list
+>     filter r $ordinal [#b (#1 r) = #c (#2 r) andalso $ordinal < 2] : t$0
+>       join x y : t$0
+>         xs : {a:int, b:int} list
+>         ys : {c:int, d:int} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int}) list
+> |_} : string
 
 (*) End optimize.smli

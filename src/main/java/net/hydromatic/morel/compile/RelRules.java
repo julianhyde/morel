@@ -24,15 +24,21 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Exps;
+import net.hydromatic.morel.ast.JoinType;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
 import net.hydromatic.morel.ast.Visitor;
+import net.hydromatic.morel.type.RecordLikeType;
+import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import org.jspecify.annotations.Nullable;
 
@@ -115,6 +121,164 @@ public class RelRules {
               inner.ordinalId,
               inner.input,
               core.andAlso(typeSystem, inner.condition, condition));
+        }
+      };
+
+  /**
+   * Moves the conjuncts of a {@code filter} over a {@code join} into the join,
+   * as far down as each can go: into the left input, if it reads only the left
+   * element; into the right input, if it reads only the right element and the
+   * right input does not read the left element; into the join's condition, if
+   * it reads both. (Issue #505.)
+   *
+   * <p>So {@code from x in xs, y in ys where x.b = y.c andalso y.d > 0}, whose
+   * join is a cross product, becomes a join on {@code x.b = y.c} of {@code xs}
+   * with {@code ys} filtered by {@code y.d > 0}, and the join can be a hash
+   * join. The rule applies again to a filter it puts over a join, so a conjunct
+   * reaches the lowest join that reads both its sides.
+   *
+   * <p>Over a {@code left join}, only a conjunct that reads only the left
+   * element moves, into the left input; over a {@code right join}, only one
+   * that reads only the right element, into the right input. Every element of
+   * that input is in the output, so filtering it before the join removes the
+   * same rows. A conjunct that reads the side padded with {@code NONE} stays,
+   * and nothing moves over a {@code full join}.
+   *
+   * <p>Filtering an input of an inner join, or its pairs, before the join
+   * rather than after gives the same rows in the same order. A conjunct moves
+   * only if it can neither raise nor have an effect (see {@link Exps#isSafe}),
+   * so a conjunct that stays is evaluated on no row that it was not evaluated
+   * on before, though perhaps on fewer. Neither a filter nor a join that reads
+   * its ordinal is changed, because moving a conjunct changes what is counted.
+   */
+  public static final RelRule FILTER_INTO_JOIN =
+      new RelRule() {
+        @Override
+        public String name() {
+          return "FilterIntoJoin";
+        }
+
+        @Override
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          if (!(rel instanceof Core.Filter)) {
+            return null;
+          }
+          final Core.Filter filter = (Core.Filter) rel;
+          if (filter.ordinalId != null
+              || !(filter.input instanceof Core.Join)) {
+            return null;
+          }
+          final Core.Join join = (Core.Join) filter.input;
+          if (join.joinType == JoinType.FULL || join.ordinalId != null) {
+            return null;
+          }
+          final TypeSystem typeSystem = cx.typeSystem();
+          // The element, over the join's own ids. The components of a side
+          // that an outer join pads with NONE are options, which the ids are
+          // not, so they are placeholders; a conjunct that reads one stays.
+          final List<Type> types =
+              ((RecordLikeType) join.type.elementType()).argTypes();
+          final List<Core.Exp> components = new ArrayList<>();
+          final Set<Core.IdPat> padded = new HashSet<>();
+          final List<Core.Exp> leftComponents =
+              core.components(typeSystem, join.left, core.id(join.leftId));
+          final List<Core.Exp> rightComponents =
+              core.components(typeSystem, join.right, core.id(join.rightId));
+          for (int i = 0; i < types.size(); i++) {
+            final boolean isLeft = i < leftComponents.size();
+            if (isLeft
+                ? join.joinType.leftIsOption()
+                : join.joinType.rightIsOption()) {
+              final Core.IdPat pad =
+                  core.idPat(
+                      types.get(i), "$pad", typeSystem.nameGenerator::inc);
+              padded.add(pad);
+              components.add(core.id(pad));
+            } else {
+              components.add(
+                  isLeft
+                      ? leftComponents.get(i)
+                      : rightComponents.get(i - leftComponents.size()));
+            }
+          }
+          final Core.Exp element = core.tuple(typeSystem, null, components);
+          final List<Core.Exp> toLeft = new ArrayList<>();
+          final List<Core.Exp> toRight = new ArrayList<>();
+          final List<Core.Exp> toCondition = new ArrayList<>();
+          final List<Core.Exp> remaining = new ArrayList<>();
+          for (Core.Exp conjunct : core.decomposeAnd(filter.condition)) {
+            if (!conjunct.isSafe()) {
+              remaining.add(conjunct);
+              continue;
+            }
+            final Core.Exp e =
+                readFields(
+                    typeSystem,
+                    core.substitute(typeSystem, conjunct, filter.id, element));
+            final boolean readsLeft = Core.mentions(e, join.leftId);
+            final boolean readsRight = Core.mentions(e, join.rightId);
+            if (padded.stream().anyMatch(pad -> Core.mentions(e, pad))) {
+              // It reads a side that is padded with NONE.
+              remaining.add(conjunct);
+            } else if (join.joinType != JoinType.INNER) {
+              // Over an outer join, a conjunct may filter the side whose every
+              // element is in the output, but may not join the condition: a
+              // pair that fails it would be padded with NONE, not removed.
+              if (readsLeft && !readsRight) {
+                toLeft.add(e);
+              } else if (readsRight && !readsLeft) {
+                toRight.add(e);
+              } else {
+                remaining.add(conjunct);
+              }
+            } else if (readsLeft && readsRight) {
+              toCondition.add(e);
+            } else if (readsLeft) {
+              toLeft.add(e);
+            } else if (readsRight && !join.isDependent()) {
+              toRight.add(e);
+            } else if (readsRight) {
+              toCondition.add(e);
+            } else {
+              remaining.add(conjunct);
+            }
+          }
+          if (toLeft.isEmpty() && toRight.isEmpty() && toCondition.isEmpty()) {
+            return null;
+          }
+          final Core.Exp left =
+              toLeft.isEmpty()
+                  ? join.left
+                  : filterOver(typeSystem, join.left, join.leftId, toLeft);
+          final Core.Exp right =
+              toRight.isEmpty()
+                  ? join.right
+                  : filterOver(typeSystem, join.right, join.rightId, toRight);
+          final List<Core.Exp> conditions = new ArrayList<>();
+          if (!join.condition.isBoolLiteral(true)) {
+            conditions.add(join.condition);
+          }
+          conditions.addAll(toCondition);
+          final Core.Join join2 =
+              core.join(
+                  join.pos(),
+                  typeSystem,
+                  join.joinType,
+                  join.leftId,
+                  join.rightId,
+                  null,
+                  left,
+                  right,
+                  core.andAlso(typeSystem, conditions));
+          if (remaining.isEmpty()) {
+            return join2;
+          }
+          return core.filter(
+              filter.pos(),
+              filter.id,
+              null,
+              join2,
+              core.andAlso(typeSystem, remaining));
         }
       };
 
@@ -320,11 +484,45 @@ public class RelRules {
           GROUND,
           FILTER_TRUE,
           FILTER_MERGE,
+          FILTER_INTO_JOIN,
           PROJECT_IDENTITY,
           PROJECT_MERGE,
           SKIP_ZERO);
 
   private RelRules() {}
+
+  /**
+   * Returns a filter over {@code input} whose condition is the conjunction of
+   * {@code conditions}, which read the input's element as {@code id}.
+   */
+  private static Core.Exp filterOver(
+      TypeSystem typeSystem,
+      Core.Exp input,
+      Core.IdPat id,
+      List<Core.Exp> conditions) {
+    // Named after the id it replaces, so that the plan reads as the query.
+    final Core.IdPat id2 =
+        core.idPat(
+            input.type.elementType(), id.name, typeSystem.nameGenerator::inc);
+    final Core.Exp condition =
+        core.substitute(
+            typeSystem, core.andAlso(typeSystem, conditions), id, core.id(id2));
+    return core.filter(id2, null, input, condition);
+  }
+
+  /**
+   * Reads each field of a tuple that is constructed in an expression off the
+   * tuple: {@code #2 (x, y)} becomes {@code y}.
+   */
+  private static Core.Exp readFields(TypeSystem typeSystem, Core.Exp exp) {
+    return exp.accept(
+        new Shuttle(typeSystem) {
+          @Override
+          protected Core.Exp visit(Core.Apply apply) {
+            return RelCompiler.readField(super.visit(apply));
+          }
+        });
+  }
 
   private static boolean isId(Core.Exp exp, Core.IdPat id) {
     return exp instanceof Core.Id && ((Core.Id) exp).idPat.equals(id);

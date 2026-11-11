@@ -836,6 +836,17 @@ public class Core {
     }
 
     /**
+     * Returns whether this expression is safe: simple, or a comparison or
+     * boolean operator applied to safe expressions. Evaluating it can neither
+     * raise nor have an effect.
+     *
+     * @see Exps#isSafe
+     */
+    public final boolean isSafe() {
+      return Exps.isSafe(this);
+    }
+
+    /**
      * Returns the {@link BuiltIn} that this is a call to, or {@link
      * BuiltIn#Z_VOID} if not a call.
      */

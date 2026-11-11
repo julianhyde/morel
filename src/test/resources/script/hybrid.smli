@@ -549,10 +549,11 @@ Sys.plan ();
 > val it =
 >   {_|
 > globalMarshal(globals [scott], body calcite(plan LogicalProject(ename=[$3], sal=[$7], x=[$8])
->   LogicalFilter(condition=[AND(<($7, $8), =($1, 30))])
+>   LogicalFilter(condition=[<($7, $8)])
 >     LogicalJoin(condition=[true], joinType=[inner])
->       LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
->         JdbcTableScan(table=[[scott, EMP]])
+>       LogicalFilter(condition=[=($1, 30)])
+>         LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
+>           JdbcTableScan(table=[[scott, EMP]])
 >       LogicalValues(tuples=[[{ 1250.50 }, { 2975.25 }]])
 > ))|_} : string
 (* A call to an operator in a structure, such as 'Decimal.*', is sent to

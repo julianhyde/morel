@@ -18,6 +18,9 @@
  */
 package net.hydromatic.morel.ast;
 
+import com.google.common.collect.ImmutableSet;
+import java.util.Set;
+import net.hydromatic.morel.compile.BuiltIn;
 import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.Type;
@@ -37,6 +40,10 @@ import net.hydromatic.morel.type.Type;
  *       SOME} applied to simple expressions. Evaluating one can neither raise
  *       nor have an effect, so it may be evaluated eagerly, or on rows where it
  *       was not written to be.
+ *   <li>{@link #isSafe}: simple expressions, and comparisons, {@code elem},
+ *       {@code andalso}, {@code orelse} and {@code not} of safe expressions.
+ *       Like a simple expression, it can neither raise nor have an effect; it
+ *       is a condition that may be moved to where it filters earlier.
  * </ol>
  *
  * <p>{@link Core.Exp} has an instance method for each, which calls the method
@@ -101,6 +108,57 @@ public class Exps {
         return isAtom(exp);
     }
   }
+
+  /**
+   * Returns whether an expression is safe: a simple expression, or a
+   * comparison, {@code elem}, {@code andalso}, {@code orelse} or {@code not} of
+   * safe expressions, or a tuple, record, field selection or constructor
+   * application of safe expressions. Evaluating one can neither raise nor have
+   * an effect, so a condition that is safe may be evaluated earlier, or on
+   * fewer rows, than it was written to be.
+   */
+  public static boolean isSafe(Core.Exp exp) {
+    switch (exp.op) {
+      case TUPLE:
+        return ((Core.Tuple) exp).args.stream().allMatch(Exps::isSafe);
+      case APPLY:
+        final Core.Apply apply = (Core.Apply) exp;
+        return (apply.fn.op == Op.RECORD_SELECTOR
+                || apply.fn instanceof Core.Id
+                    && isConstructor((Core.Id) apply.fn)
+                || SAFE_FUNCTIONS.contains(apply.builtIn())
+                || COMPARISONS.contains(apply.builtIn().mlName))
+            && isSafe(apply.arg);
+      default:
+        return isAtom(exp);
+    }
+  }
+
+  /**
+   * Names of the comparison operators. Every built-in of one of these names,
+   * such as {@code Decimal.<}, can neither raise nor have an effect.
+   */
+  private static final Set<String> COMPARISONS =
+      ImmutableSet.of("<", "<=", "<>", "=", ">", ">=");
+
+  /**
+   * Built-in functions that can neither raise nor have an effect, besides those
+   * that {@link #COMPARISONS} names. (The polymorphic comparisons, such as
+   * {@code op <}, are here because their names have the "op" prefix.)
+   */
+  private static final Set<BuiltIn> SAFE_FUNCTIONS =
+      ImmutableSet.of(
+          BuiltIn.BOOL_NOT,
+          BuiltIn.OP_ELEM,
+          BuiltIn.OP_EQ,
+          BuiltIn.OP_GE,
+          BuiltIn.OP_GT,
+          BuiltIn.OP_LE,
+          BuiltIn.OP_LT,
+          BuiltIn.OP_NE,
+          BuiltIn.OP_NOT_ELEM,
+          BuiltIn.Z_ANDALSO,
+          BuiltIn.Z_ORELSE);
 
   /**
    * Returns whether an identifier is a constructor of a datatype, such as

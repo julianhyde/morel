@@ -40,13 +40,13 @@ class ExpsTest {
       "(x : {a:int, b:int}, n : int, r : real, s : string, opt : int option)";
 
   /**
-   * Returns the {@link Core.Exp} that the resolver makes of an expression, in
-   * the scope of {@link #PARAMS}.
+   * Returns the {@link Core.Exp} that an expression becomes, after inlining and
+   * the rules, in the scope of {@link #PARAMS}.
    */
   private static Core.Exp core(String exp) {
     final AtomicReference<Core.Decl> decl = new AtomicReference<>();
     ml("fn " + PARAMS + " => " + exp)
-        .withTracer(Tracers.withOnCore(Tracers.empty(), 0, decl::set))
+        .withTracer(Tracers.withOnCore(Tracers.empty(), -1, decl::set))
         .assertEval();
     // The resolver makes "fn (x, n, ...) => e" into "fn v => case v of (x,
     // n, ...) => e"; the expression under test is "e".
@@ -65,20 +65,22 @@ class ExpsTest {
 
   /**
    * Checks the predicates on an expression. {@code rung} is the lowest rung of
-   * the ladder that accepts it: 0 for an atom, 1 for cheap, 2 for simple, and
-   * {@code Integer.MAX_VALUE} for none. Every rung above that one must accept
-   * it too, and every rung below must not.
+   * the ladder that accepts it: 0 for an atom, 1 for cheap, 2 for simple, 3 for
+   * safe, and {@code Integer.MAX_VALUE} for none. Every rung above that one
+   * must accept it too, and every rung below must not.
    */
   private static void check(String exp, int rung) {
     final Core.Exp e = core(exp);
     assertThat(exp + " isAtom", e.isAtom(), is(rung <= 0));
     assertThat(exp + " isCheap", e.isCheap(), is(rung <= 1));
     assertThat(exp + " isSimple", e.isSimple(), is(rung <= 2));
+    assertThat(exp + " isSafe", e.isSafe(), is(rung <= 3));
   }
 
   private static final int ATOM = 0;
   private static final int CHEAP = 1;
   private static final int SIMPLE = 2;
+  private static final int SAFE = 3;
   private static final int NONE = Integer.MAX_VALUE;
 
   @Test
@@ -114,17 +116,33 @@ class ExpsTest {
   }
 
   @Test
+  void testSafe() {
+    check("n < 3", SAFE);
+    check("x.a = n", SAFE);
+    check("opt = SOME n", SAFE);
+    check("s <> \"a\"", SAFE);
+    // A real comparison is safe; NaN compares, but does not raise.
+    check("r < 1.5", SAFE);
+    check("not (n > 3)", SAFE);
+    check("n < 3 andalso x.a >= n orelse s = \"z\"", SAFE);
+    check("SOME (n < 3)", SAFE);
+    // A list is not simple, so neither is "elem" over one.
+    check("n elem [1, 2]", NONE);
+    // An operand that might raise makes the comparison unsafe.
+    check("10 div n > 1", NONE);
+    check("n + 1 < 3", NONE);
+  }
+
+  @Test
   void testNeither() {
     // Arithmetic, which can overflow.
     check("n + 1", NONE);
     check("10 div n", NONE);
-    // A comparison.
-    check("n < 3", NONE);
     // A function call.
     check("String.size s", NONE);
     // A tuple with an expensive component.
     check("(n, n + 1)", NONE);
-    check("let val y = n in y end", NONE);
+    check("let val y = n + 1 in y * y end", NONE);
     check("if n > 0 then 1 else 2", NONE);
   }
 }
