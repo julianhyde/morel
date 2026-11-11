@@ -190,7 +190,7 @@ public class RelRules {
             }
           }
           final Core.Exp exp2;
-          if (count(exp, outer.id) <= 1 || isCheap(inner.exp)) {
+          if (count(exp, outer.id) <= 1 || inner.exp.isCheap()) {
             exp2 =
                 foldSelectors(
                     typeSystem,
@@ -325,30 +325,6 @@ public class RelRules {
           SKIP_ZERO);
 
   private RelRules() {}
-
-  /**
-   * Returns whether an expression only reads: a variable, a literal, a field of
-   * such, or a record of such. Duplicating one evaluates nothing twice.
-   */
-  private static boolean isCheap(Core.Exp exp) {
-    switch (exp.op) {
-      case ID:
-      case BOOL_LITERAL:
-      case CHAR_LITERAL:
-      case INT_LITERAL:
-      case REAL_LITERAL:
-      case STRING_LITERAL:
-      case UNIT_LITERAL:
-        return true;
-      case TUPLE:
-        return ((Core.Tuple) exp).args.stream().allMatch(RelRules::isCheap);
-      case APPLY:
-        final Core.Apply apply = (Core.Apply) exp;
-        return apply.fn.op == Op.RECORD_SELECTOR && isCheap(apply.arg);
-      default:
-        return false;
-    }
-  }
 
   private static boolean isId(Core.Exp exp, Core.IdPat id) {
     return exp instanceof Core.Id && ((Core.Id) exp).idPat.equals(id);
