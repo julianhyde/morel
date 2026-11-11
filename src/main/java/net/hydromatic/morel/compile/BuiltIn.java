@@ -4215,6 +4215,51 @@ public enum BuiltIn {
       ts -> ts.fnType(ts.tupleType(REAL, REAL), BOOL)),
 
   /**
+   * Function "Relational.avg", aka "avg", whose type is overloaded: "int
+   * collection &rarr; real", "real collection &rarr; real", "decimal collection
+   * &rarr; decimal", and each of those over options, such as "int option
+   * collection &rarr; real option"; the collection is a list or a bag,
+   * whichever the argument is.
+   *
+   * <p>Returns the mean of the elements. Over options, ignores {@code NONE} and
+   * returns {@code NONE} if there is no {@code SOME}, as SQL's {@code AVG}
+   * ignores nulls; over other types, raises {@link BuiltInExn#EMPTY Empty} if
+   * the collection is empty, as {@code min} and {@code max} do.
+   *
+   * <p>Often used with {@code group}:
+   *
+   * <pre>{@code
+   * from e in emps
+   *   group {deptno = #deptno e}
+   *     compute {avgSal = avg over e.sal}
+   * }</pre>
+   */
+  RELATIONAL_AVG(
+      "Relational",
+      "avg",
+      true,
+      ts -> {
+        // One variant for each element type and each kind of collection,
+        // because an overload is chosen by matching the argument's type,
+        // which is a list or a bag, never the internal collection type.
+        final Type decimal = ts.lookup(Eqtype.DECIMAL);
+        final List<Type> types = new ArrayList<>();
+        for (Type[] t :
+            new Type[][] {
+              {INT, REAL},
+              {REAL, REAL},
+              {decimal, decimal},
+              {ts.option(INT), ts.option(REAL)},
+              {ts.option(REAL), ts.option(REAL)},
+              {ts.option(decimal), ts.option(decimal)}
+            }) {
+          types.add(ts.fnType(ts.bag(t[0]), t[1]));
+          types.add(ts.fnType(ts.listType(t[0]), t[1]));
+        }
+        return ts.multi(types);
+      }),
+
+  /**
    * Function "Relational.compare", of type "&alpha; * &alpha; &rarr; order".
    *
    * <p>Returns the result of comparing the two values. Comparison is defined
@@ -4243,6 +4288,9 @@ public enum BuiltIn {
   /**
    * Function "Relational.count", aka "count", of type "&alpha; collection
    * &rarr; int"; the collection is a list or a bag, whichever the argument is.
+   *
+   * <p>Returns the number of elements; if the elements are options, the number
+   * that are {@code SOME}, as SQL's {@code COUNT(x)} ignores nulls.
    *
    * <p>Often used with {@code group}:
    *
@@ -4319,6 +4367,11 @@ public enum BuiltIn {
    * Function "Relational.max", aka "max", of type "&alpha; collection &rarr;
    * &alpha;" (where &alpha; must be comparable); the collection is a list or a
    * bag, whichever the argument is.
+   *
+   * <p>Returns the greatest element, raising {@link BuiltInExn#EMPTY Empty} if
+   * the collection is empty. If the elements are options, ignores {@code NONE}
+   * and returns the greatest {@code SOME}, or {@code NONE} if there is none, as
+   * SQL's {@code MAX} ignores nulls.
    */
   RELATIONAL_MAX(
       "Relational",
@@ -4369,6 +4422,11 @@ public enum BuiltIn {
    * Function "Relational.min", aka "min", of type "&alpha; collection &rarr;
    * &alpha;" (where &alpha; must be comparable); the collection is a list or a
    * bag, whichever the argument is.
+   *
+   * <p>Returns the least element, raising {@link BuiltInExn#EMPTY Empty} if the
+   * collection is empty. If the elements are options, ignores {@code NONE} and
+   * returns the least {@code SOME}, or {@code NONE} if there is none, as SQL's
+   * {@code MIN} ignores nulls.
    */
   RELATIONAL_MIN(
       "Relational",
@@ -4461,8 +4519,11 @@ public enum BuiltIn {
 
   /**
    * Function "Relational.sum", aka "sum", of type "&alpha; collection &rarr;
-   * &alpha;" (where &alpha; must be numeric); the collection is a list or a
-   * bag, whichever the argument is.
+   * &alpha;" (where &alpha; must be numeric, or an option of a numeric type);
+   * the collection is a list or a bag, whichever the argument is.
+   *
+   * <p>Over options, ignores {@code NONE} and returns {@code NONE} if there is
+   * no {@code SOME}, as SQL's {@code SUM} ignores nulls.
    *
    * <p>Often used with {@code group}:
    *
@@ -5972,13 +6033,49 @@ public enum BuiltIn {
                   ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
               ts.lookup(Eqtype.DECIMAL))),
 
+  /**
+   * Internal relational sum operator "sum" over options, of type "decimal
+   * option * decimal option &rarr; decimal option".
+   */
+  Z_SUM_DECIMAL_OPTION(
+      "$",
+      "sum:decimal option",
+      ts ->
+          ts.fnType(
+              ts.tupleType(
+                  ts.option(ts.lookup(Eqtype.DECIMAL)),
+                  ts.option(ts.lookup(Eqtype.DECIMAL))),
+              ts.option(ts.lookup(Eqtype.DECIMAL)))),
+
   /** Internal relational sum operator "sum", of type "int * int &rarr; int". */
   Z_SUM_INT("$", "sum:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
+
+  /**
+   * Internal relational sum operator "sum" over options, of type "int option *
+   * int option &rarr; int option".
+   */
+  Z_SUM_INT_OPTION(
+      "$",
+      "sum:int option",
+      ts ->
+          ts.fnType(
+              ts.tupleType(ts.option(INT), ts.option(INT)), ts.option(INT))),
 
   /**
    * Internal relational sum operator "sum", of type "real * real &rarr; real".
    */
   Z_SUM_REAL("$", "sum:real", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
+
+  /**
+   * Internal relational sum operator "sum" over options, of type "real option *
+   * real option &rarr; real option".
+   */
+  Z_SUM_REAL_OPTION(
+      "$",
+      "sum:real option",
+      ts ->
+          ts.fnType(
+              ts.tupleType(ts.option(REAL), ts.option(REAL)), ts.option(REAL))),
 
   /**
    * Internal implementation of the bag variant of "Test.testOverCount". Returns
@@ -6209,6 +6306,7 @@ public enum BuiltIn {
     consumer.accept("real", REAL_FROM_INT);
     consumer.accept("round", REAL_ROUND);
     consumer.accept("trunc", REAL_TRUNC);
+    consumer.accept("avg", RELATIONAL_AVG);
     consumer.accept("compare", RELATIONAL_COMPARE);
     consumer.accept("count", RELATIONAL_COUNT);
     consumer.accept("empty", RELATIONAL_EMPTY);

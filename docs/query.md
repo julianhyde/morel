@@ -734,6 +734,14 @@ typically an aggregate function such as `count` or `sum` but may be an
 expression such as `min 0` or `fn x => x`. The right operand of `over`
 is an expression that is evaluated for each element in the group.
 
+The built-in aggregate functions are `count`, `sum`, `avg`, `min` and
+`max`. `avg` of `int` values is a `real`; of `real` values, a `real`;
+of `decimal` values, a `decimal`. Over options, an aggregate ignores
+`NONE`, as SQL's aggregate functions ignore nulls: `count over e.comm`
+is the number of employees that have a commission, and `sum`, `avg`,
+`min` and `max over e.comm` combine the commissions there are, and are
+`NONE` for a group that has none.
+
 An `over` expression is just an expression (albeit one that can only
 be used in a `compute` clause), and that means that it can be part of
 a larger expression. That larger expression can include other `over`

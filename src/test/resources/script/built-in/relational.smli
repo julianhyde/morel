@@ -27,9 +27,10 @@ Sys.set ("stringDepth", NONE);
 
 Relational;
 > val it =
->   {compare=fn,count=fn,empty=fn,iterate=fn,max=fn,maxBy=fn,min=fn,minBy=fn,
->    nonEmpty=fn,only=fn,sum=fn}
->   : {compare:'a * 'a -> order, count:'b bag -> int, empty:'c bag -> bool,
+>   {avg=fn,compare=fn,count=fn,empty=fn,iterate=fn,max=fn,maxBy=fn,min=fn,
+>    minBy=fn,nonEmpty=fn,only=fn,sum=fn}
+>   : {avg:int bag -> real, compare:'a * 'a -> order, count:'b bag -> int,
+>       empty:'c bag -> bool,
 >       iterate:'d bag -> ('d bag * 'd bag -> 'd bag) -> 'd bag,
 >       max:'e bag -> 'e, maxBy:('f -> 'g) -> 'f bag -> 'f, min:'h bag -> 'h,
 >       minBy:('i -> 'j) -> 'i bag -> 'i, nonEmpty:'k bag -> bool,
@@ -45,6 +46,57 @@ DESC "a";
 DESC (DESC "a");
 > val it = DESC (DESC "a") : string descending descending
 
+(* "avg" returns the mean. Its type is overloaded: the mean of int values is
+ * a real; of real values, a real; of decimal values, a decimal. *)
+Relational.avg [1, 2, 4];
+> val it = 2.3333333 : real
+Sys.plan ();
+> val it =
+>   "apply(fnValue Relational.avg, argCode tuple(constant(1), constant(2), constant(4)))"
+>   : string
+Relational.avg (bag [1, 2, 4]);
+> val it = 2.3333333 : real
+Relational.avg [1.0, 2.5, 4.5];
+> val it = 2.6666667 : real
+Relational.avg [decimal "1.5", decimal "2.25"];
+> val it = 1.875 : decimal
+Relational.avg [decimal "1", decimal "2", decimal "2"];
+> val it = 1.666666666666666666666666666666667 : decimal
+[1, 2, 6].avg ();
+> val it = 3 : real
+avg [1, 2];
+> val it = 1.5 : real
+(*) The mean of an int is computed exactly, and then rounded to a real.
+Relational.avg [valOf Int.maxInt, valOf Int.maxInt];
+> val it = 2.1474836E9 : real
+(*) "avg" of an empty collection raises Empty, as "min" and "max" do.
+Relational.avg ([] : int list);
+> uncaught exception Empty
+>   raised at: stdIn:1.1-1.31
+Relational.avg (bag [] : decimal bag);
+> uncaught exception Empty
+>   raised at: stdIn:1.1-1.38
+(*) There is no mean of strings.
+Relational.avg ["a", "b"];
+> stdIn:1.1-1.26 Error: Cannot deduce type: no valid overloads
+>   raised at: stdIn:1.1-1.26
+(* Over options, "avg" ignores NONE, as SQL's AVG ignores nulls, and is NONE
+ * if there is no SOME. *)
+Relational.avg [SOME 1, NONE, SOME 4];
+> val it = SOME 2.5 : real option
+Relational.avg [SOME 1.5, NONE];
+> val it = SOME 1.5 : real option
+Relational.avg (bag [NONE, SOME (decimal "1.5"), SOME (decimal "2.5")]);
+> val it = SOME 2 : decimal option
+Relational.avg ([NONE, NONE] : int option list);
+> val it = NONE : real option
+Relational.avg ([] : real option list);
+> val it = NONE : real option
+from i in [1, 2] compute avg over i;
+> val it = 1.5 : real
+from i in [SOME 1, NONE, SOME 2] compute avg over i;
+> val it = SOME 1.5 : real option
+
 Relational.count (bag [1, 2, 3]);
 > val it = 3 : int
 Relational.count (bag []);
@@ -55,6 +107,16 @@ Sys.plan ();
 > val it =
 >   "apply(fnValue Relational.count, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false))))"
 >   : string
+(* Over options, "count" counts the SOMEs, as SQL's COUNT(x) ignores nulls.
+ * "count over ()" counts rows whatever they hold. *)
+Relational.count [SOME 1, NONE, SOME 3];
+> val it = 2 : int
+Relational.count (bag [NONE] : int option bag);
+> val it = 0 : int
+Relational.count [SOME NONE, NONE];
+> val it = 1 : int
+from i in [SOME 1, NONE, SOME 3] compute {c = count over i, n = count over ()};
+> val it = {c=2,n=3} : {c:int, n:int}
 
 Relational.nonEmpty (bag [1, 2, 3]);
 > val it = true : bool
@@ -152,6 +214,25 @@ Relational.sum (bag [Decimal.maxFinite, Decimal.maxFinite]);
 >   raised at: stdIn:1.1-1.60
 from d in [decimal "1.5", decimal "2.25"] compute sum over d;
 > val it = 3.75 : decimal
+(* Over options, "sum" ignores NONE, as SQL's SUM ignores nulls, and is NONE
+ * if there is no SOME. *)
+Relational.sum [SOME 1, NONE, SOME 3];
+> val it = SOME 4 : int option
+Sys.plan ();
+> val it =
+>   "globalMarshal(globals [SOME], body apply(fnValue Relational.sum$int option, argCode tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3)))))"
+>   : string
+Relational.sum (bag [SOME 1.5, NONE]);
+> val it = SOME 1.5 : real option
+Relational.sum [NONE, SOME (decimal "0.1"), SOME (decimal "0.2")];
+> val it = SOME 0.3 : decimal option
+Relational.sum ([NONE] : int option list);
+> val it = NONE : int option
+Relational.sum ([] : decimal option list);
+> val it = NONE : decimal option
+Relational.sum [SOME Decimal.maxFinite, SOME Decimal.maxFinite];
+> uncaught exception Overflow [overflow]
+>   raised at: stdIn:1.1-1.64
 
 Relational.max (bag [1, 2, 3]);
 > val it = 3 : int
@@ -168,8 +249,16 @@ Relational.max (bag [0w1, 0wxFFFFFFFFFFFFFFFF]);
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Relational.max (bag [(1, 2), (2, 1), (1, 9)]);
 > val it = (2,1) : int * int
+(* Over options, "max" ignores NONE, as SQL's MAX ignores nulls, and is NONE
+ * if there is no SOME, including if the collection is empty. *)
 Relational.max (bag [SOME 1, NONE, SOME 3]);
 > val it = SOME 3 : int option
+Relational.max [NONE, SOME "b", SOME "a"];
+> val it = SOME "b" : string option
+Relational.max ([NONE] : int option list);
+> val it = NONE : int option
+Relational.max ([] : int option list);
+> val it = NONE : int option
 Relational.max (bag [INL 1, INR "a", INL 2]);
 > val it = INR "a" : (int,string) either
 Relational.max (bag [false, true]);
@@ -224,7 +313,15 @@ Relational.min (bag [0w1, 0wxFFFFFFFFFFFFFFFF]);
 > val it = 0wx1 : word
 Relational.min (bag [(1, 2), (2, 1), (1, 9)]);
 > val it = (1,2) : int * int
+(* Over options, "min" ignores NONE, as SQL's MIN ignores nulls, and is NONE
+ * if there is no SOME, including if the collection is empty. *)
 Relational.min (bag [SOME 1, NONE, SOME 3]);
+> val it = SOME 1 : int option
+Relational.min [NONE, SOME "b", SOME "a"];
+> val it = SOME "a" : string option
+Relational.min ([NONE] : int option list);
+> val it = NONE : int option
+Relational.min ([] : int option list);
 > val it = NONE : int option
 Relational.min (bag [INL 1, INR "a", INL 2]);
 > val it = INL 1 : (int,string) either

@@ -1642,12 +1642,20 @@ from i in ([] : int list) compute min over i;
 > uncaught exception Empty
 >   raised at: stdIn:1.35-1.45
 
-(* The same holds when the element type is a datatype ('int option') and the
- * 'int option bag' is emptied by a filter: the empty check happens before any
- * comparison, so the datatype value is never compared. *)
-from x in (Bag.fromList [SOME 1, NONE, SOME 3]) where false compute max over x;
+(* The same holds when the element type is a datatype ('(int, string)
+ * either') and the bag is emptied by a filter: the empty check happens before
+ * any comparison, so the datatype value is never compared. *)
+from x in (Bag.fromList [INL 1, INR "a"]) where false compute max over x;
 > uncaught exception Empty
->   raised at: stdIn:1.69-1.79
+>   raised at: stdIn:1.63-1.73
+
+(* But over options, 'max' and 'min' ignore NONE, as SQL's MAX and MIN ignore
+ * nulls, and are NONE if there is no SOME, including if the collection is
+ * empty. *)
+from x in (Bag.fromList [SOME 1, NONE, SOME 3]) where false compute max over x;
+> val it = NONE : int option
+from x in (Bag.fromList [SOME 1, NONE, SOME 3]) compute {hi = max over x, lo = min over x};
+> val it = {hi=SOME 3,lo=SOME 1} : {hi:int option, lo:int option}
 
 from i in [2, 1, 2]
   compute 1;

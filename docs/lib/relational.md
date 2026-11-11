@@ -33,6 +33,7 @@ extend Standard ML with relational-algebra capabilities.
 <pre>
 datatype 'a <a id='descending' href="#descending-impl">descending</a> = DESC of 'a
 
+val <a id='avg' href="#avg-impl">avg</a> : int bag -> real
 val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 val <a id='count' href="#count-impl">count</a> : 'a bag -> int
 val <a id='empty' href="#empty-impl">empty</a> : 'a bag -> bool
@@ -51,6 +52,19 @@ val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
 
 wraps a value so that it sorts in descending order when used with
 `Relational.compare`.
+
+<a id="avg-impl"></a>
+<h3><code>avg</code></h3>
+
+`avg list` (or `list.avg ()`) returns the mean of the elements of `list`. Often used with `group`, for
+example `from e in emps group e.deptno compute avgSal = avg over e.sal`.
+
+The type is overloaded: the mean of `int` values is a `real`, of `real`
+values a `real`, and of `decimal` values a `decimal`. Over options, such
+as `int option`, ignores `NONE`, as SQL's `AVG` ignores nulls, and returns
+`NONE` if there is no `SOME`.
+
+Raises `Empty` if `list` is empty and its elements are not options.
 
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>
@@ -77,6 +91,9 @@ particular value.
 `group`, for example `from e in emps group e.deptno compute countId =
 count`.
 
+If the elements are options, returns the number that are `SOME`, as
+SQL's `COUNT(x)` ignores nulls.
+
 <a id="empty-impl"></a>
 <h3><code>empty</code></h3>
 
@@ -96,6 +113,10 @@ iteration when it returns `newList`.
 `max list` (or `list.max ()`) returns the greatest element of `list`. Often used with
 `group`, for example `from e in emps group e.deptno compute maxId =
 max of e.id`.
+
+Raises `Empty` if `list` is empty. If the elements are options, ignores
+`NONE`, as SQL's `MAX` ignores nulls, and returns the greatest `SOME`, or
+`NONE` if there is none.
 
 <a id="maxBy-impl"></a>
 <h3><code>maxBy</code></h3>
@@ -119,6 +140,10 @@ Raises `Empty` if `list` is empty.
 `min list` (or `list.min ()`) returns the least element of `list`. Often used with
 `group`, for example `from e in emps group e.deptno compute minId =
 min of e.id`.
+
+Raises `Empty` if `list` is empty. If the elements are options, ignores
+`NONE`, as SQL's `MIN` ignores nulls, and returns the least `SOME`, or
+`NONE` if there is none.
 
 <a id="minBy-impl"></a>
 <h3><code>minBy</code></h3>
@@ -151,5 +176,9 @@ emps yield only (from d where d.deptno = e.deptno)`.
 `sum list` (or `list.sum ()`) returns the sum of the elements of `list`. Often used with
 `group`, for example `from e in emps group e.deptno compute sumId =
 sum of e.id`.
+
+The elements may be `int`, `real` or `decimal`, or options of them. Over
+options, ignores `NONE`, as SQL's `SUM` ignores nulls, and returns `NONE`
+if there is no `SOME`.
 
 [//]: # (end:lib/relational)

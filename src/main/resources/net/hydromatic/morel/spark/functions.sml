@@ -150,15 +150,25 @@
    divergence = "char list"},
 
   (* Collections and queries; the translator handles the structure *)
+  {morel = "Relational.avg", kind = "aggregate", spark = "avg",
+   divergence = ""},
   {morel = "Relational.count", kind = "aggregate", spark = "count",
    divergence = ""},
   {morel = "Relational.sum", kind = "aggregate", spark = "sum", divergence = ""},
-  (* `sum` resolves to an internal operator, one per summable type;
-   * Spark picks the type itself, so all three reach one function. *)
+  (* `sum` resolves to an internal operator, one per summable type, and one
+   * per option of a summable type; Spark picks the type itself, and its
+   * sum ignores nulls as Morel's ignores NONE, so all six reach one
+   * function. *)
   {morel = "$.sum:int", kind = "aggregate", spark = "sum", divergence = ""},
+  {morel = "$.sum:int option", kind = "aggregate", spark = "sum",
+   divergence = ""},
   {morel = "$.sum:real", kind = "aggregate", spark = "sum",
    divergence = ""},
+  {morel = "$.sum:real option", kind = "aggregate", spark = "sum",
+   divergence = ""},
   {morel = "$.sum:decimal", kind = "aggregate", spark = "sum",
+   divergence = ""},
+  {morel = "$.sum:decimal option", kind = "aggregate", spark = "sum",
    divergence = ""},
   {morel = "Relational.min", kind = "aggregate", spark = "min", divergence = ""},
   {morel = "Relational.max", kind = "aggregate", spark = "max", divergence = ""},
