@@ -806,6 +806,25 @@ public class Core {
     }
 
     /**
+     * Returns whether this expression is an atom: an identifier or a literal.
+     *
+     * @see Exps#isAtom
+     */
+    public final boolean isAtom() {
+      return Exps.isAtom(this);
+    }
+
+    /**
+     * Returns whether this expression only reads: an atom, or a tuple, record
+     * or field selection of such.
+     *
+     * @see Exps#isCheap
+     */
+    public final boolean isCheap() {
+      return Exps.isCheap(this);
+    }
+
+    /**
      * Returns the {@link BuiltIn} that this is a call to, or {@link
      * BuiltIn#Z_VOID} if not a call.
      */
