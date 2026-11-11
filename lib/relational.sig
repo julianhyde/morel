@@ -33,6 +33,19 @@ sig
   datatype 'a descending = DESC of 'a
 
   (**
+   * returns the mean of the elements of `list`. Often used with `group`, for
+   * example `from e in emps group e.deptno compute avgSal = avg over e.sal`.
+   *
+   * The type is overloaded: the mean of `int` values is a `real`, of `real`
+   * values a `real`, and of `decimal` values a `decimal`. Over options, such
+   * as `int option`, ignores `NONE`, as SQL's `AVG` ignores nulls, and returns
+   * `NONE` if there is no `SOME`.
+   *
+   * Raises `Empty` if `list` is empty and its elements are not options.
+   *)
+  val avg : int bag -> real [@@method] [@@prototype "avg list"]
+
+  (**
    * returns `LESS`, `EQUAL`, or `GREATER` according to
    * whether its first argument is less than, equal to, or greater than the
    * second.
@@ -54,6 +67,9 @@ sig
    * returns the number of elements in `list`. Often used with
    * `group`, for example `from e in emps group e.deptno compute countId =
    * count`.
+   *
+   * If the elements are options, returns the number that are `SOME`, as
+   * SQL's `COUNT(x)` ignores nulls.
    *)
   val count : 'a bag -> int [@@method] [@@prototype "count list"]
 
@@ -75,6 +91,10 @@ sig
    * returns the greatest element of `list`. Often used with
    * `group`, for example `from e in emps group e.deptno compute maxId =
    * max of e.id`.
+   *
+   * Raises `Empty` if `list` is empty. If the elements are options, ignores
+   * `NONE`, as SQL's `MAX` ignores nulls, and returns the greatest `SOME`, or
+   * `NONE` if there is none.
    *)
   val max : 'a bag -> 'a [@@method] [@@prototype "max list"]
 
@@ -98,6 +118,10 @@ sig
    * returns the least element of `list`. Often used with
    * `group`, for example `from e in emps group e.deptno compute minId =
    * min of e.id`.
+   *
+   * Raises `Empty` if `list` is empty. If the elements are options, ignores
+   * `NONE`, as SQL's `MIN` ignores nulls, and returns the least `SOME`, or
+   * `NONE` if there is none.
    *)
   val min : 'a bag -> 'a [@@method] [@@prototype "min list"]
 
@@ -130,6 +154,10 @@ sig
    * returns the sum of the elements of `list`. Often used with
    * `group`, for example `from e in emps group e.deptno compute sumId =
    * sum of e.id`.
+   *
+   * The elements may be `int`, `real` or `decimal`, or options of them. Over
+   * options, ignores `NONE`, as SQL's `SUM` ignores nulls, and returns `NONE`
+   * if there is no `SOME`.
    *)
   val sum : 'a bag -> 'a [@@method] [@@prototype "sum list"]
 end

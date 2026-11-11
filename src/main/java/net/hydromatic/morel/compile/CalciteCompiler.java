@@ -816,6 +816,13 @@ public class CalciteCompiler extends Compiler {
     if (group.ordinalId != null) {
       return null;
     }
+    // An aggregate over options ignores NONE, and "avg" of an int is a real
+    // where Calcite's AVG of an INTEGER is an INTEGER; evaluate those here.
+    for (Core.Aggregate aggregate : group.aggregates.values()) {
+      if (!calciteAggregates(aggregate)) {
+        return null;
+      }
+    }
     // Calcite's MIN and MAX do not order every type the way Morel does; see
     // {@link #calciteOrders}.
     for (Core.Aggregate aggregate : group.aggregates.values()) {
@@ -1364,6 +1371,23 @@ public class CalciteCompiler extends Compiler {
       }
     }
     throw new AssertionError("unknown aggregate function: " + aggregate);
+  }
+
+  /**
+   * Returns whether Calcite computes an aggregate as Morel does. False for
+   * {@code avg}, whose result over {@code int} is a {@code real} where
+   * Calcite's {@code AVG} of an {@code INTEGER} is an {@code INTEGER}, and for
+   * any aggregate whose argument is an option, which ignores {@code NONE}.
+   */
+  private static boolean calciteAggregates(Core.Aggregate aggregate) {
+    if (aggregate.argument != null
+        && aggregate.argument.type instanceof DataType
+        && ((DataType) aggregate.argument.type).name.equals("option")) {
+      return false;
+    }
+    return !(aggregate.aggregate.op == Op.FN_LITERAL
+        && ((Core.Literal) aggregate.aggregate).unwrap(BuiltIn.class)
+            == BuiltIn.RELATIONAL_AVG);
   }
 
   /**

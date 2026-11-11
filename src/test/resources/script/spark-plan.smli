@@ -301,4 +301,97 @@ from e in scott.emps where e.deptno = 10 yield e.ename;
 Sys.set ("sparkPushDown", false);
 > val it = () : unit
 
+(* Aggregates over a nullable column. Spark's "avg", "count", "sum", "min" and
+ * "max" ignore nulls, as Morel's ignore NONE over an option, so each becomes
+ * Spark's own function; "avg" of an int column is a double in Spark, which
+ * reads back as a real. This is
+ *   SELECT deptno, AVG(mgr), COUNT(mgr), SUM(comm) FROM emp GROUP BY deptno *)
+(spark.connection.prepare (fn () =>
+  from e in emps
+    group e.deptno
+    compute {a = avg over e.mgr, c = count over e.mgr, s = sum over e.comm}
+)).toString ();
+> val it =
+>   {_|
+> root {
+>   common {
+>     plan_id: 0
+>   }
+>   aggregate {
+>     input {
+>       common {
+>         plan_id: 1
+>       }
+>       subquery_alias {
+>         input {
+>           common {
+>             plan_id: 2
+>           }
+>           read {
+>             named_table {
+>               unparsed_identifier: "scott.emps"
+>             }
+>           }
+>         }
+>         alias: "e"
+>       }
+>     }
+>     group_type: GROUP_TYPE_GROUPBY
+>     grouping_expressions {
+>       unresolved_attribute {
+>         unparsed_identifier: "e.deptno"
+>         is_metadata_column: false
+>       }
+>     }
+>     aggregate_expressions {
+>       alias {
+>         expr {
+>           unresolved_function {
+>             function_name: "avg"
+>             arguments {
+>               unresolved_attribute {
+>                 unparsed_identifier: "e.mgr"
+>                 is_metadata_column: false
+>               }
+>             }
+>           }
+>         }
+>         name: "a"
+>       }
+>     }
+>     aggregate_expressions {
+>       alias {
+>         expr {
+>           unresolved_function {
+>             function_name: "count"
+>             arguments {
+>               unresolved_attribute {
+>                 unparsed_identifier: "e.mgr"
+>                 is_metadata_column: false
+>               }
+>             }
+>           }
+>         }
+>         name: "c"
+>       }
+>     }
+>     aggregate_expressions {
+>       alias {
+>         expr {
+>           unresolved_function {
+>             function_name: "sum"
+>             arguments {
+>               unresolved_attribute {
+>                 unparsed_identifier: "e.comm"
+>                 is_metadata_column: false
+>               }
+>             }
+>           }
+>         }
+>         name: "s"
+>       }
+>     }
+>   }
+> }|_} : string
+
 (*) End spark-plan.smli
