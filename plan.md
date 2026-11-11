@@ -358,6 +358,26 @@ express is written around (D7), or, failing that, left with its SQL and
 a comment naming what is missing -- never dropped. Done when all 99 are
 present and the checker agrees on every one that runs.
 
+*In progress 2026-11-11.* `script/tpcds-10m.smli`, `requires: tpcds`:
+the system property `morel.tpcds` names the data directory, and
+`ScriptTest.testScriptTpcds` (its own method, 30-minute timeout) runs
+the script with `directory` set to it, so `val tpcds = file`. Queries
+in numeric order, each `fun qN () = ...;` then `val rN = qN ();`, with
+the SQL in a comment above. `TpcdsChecker` (test scope) watches each
+`rN` through a new `Tracer.onBinding` hook and compares it with
+`answers/qN.csv` as a multiset: columns by name ignoring case (one
+leftover column pairs with one leftover field, for Spark's `count(1)`),
+`NONE` as an empty field, decimals exactly, reals within 1e-5. So the
+oracle check is part of the test, not a separate Python step. 18 tier-A
+queries pass (q3 q15 q19 q38 q42 q45 q46 q52 q55 q68 q73 q79 q84 q87 q91
+q93 q96, and q90, which raises `Div` as Spark raises
+`DIVIDE_BY_ZERO`); the script runs in about 4s. D10 is answered by
+hand, with no helpers: `col = SOME c`, `>`, `>=` and `between` drop
+`NONE` as SQL does; a lone
+`<`, `<=`, `<>` or a function of a column gets a guard. No schema
+check yet: ascribing a type to `file`'s progressive record fails
+("conflict ... vs {z$dummy:unit}").
+
 **M4. Local pass.** Fix what M3 found in Morel itself (wrong answers,
 crashes, performance -- a nested-loop join over `store_sales` at SF 0.01
 is about 29K rows, so a cross product of three fact tables is not
@@ -602,6 +622,24 @@ three, which it cannot do directly. Every tier needs D10.
   `TpcdsData` prints the same counts. It also showed that the
   library's iterator yields parent and child rows together, which
   `ExploreTest` would have miscounted.
+* 2026-11-10: M3's first query, q96 (a four-way join, `count(*)`),
+  does not finish locally: over 10 minutes, killed. The local evaluator
+  joins by nested loops (store_sales 120K x household_demographics 7,200
+  x time_dim 86,400 x store 2), and has no hash join. `hybrid=true` does
+  not help: the file adapter's tables are constants, not Calcite
+  relations, so the plan stays Morel's. Also found: options are ordered
+  (`NONE < SOME x`), so `x >= SOME 30` has SQL's meaning but `x < SOME
+  30` keeps the nulls. Blocked on a decision about local joins (M4
+  brought forward); asked Julian.
+* 2026-11-11: #504 (hash join) and #505 (`where` into joins)
+  cherry-picked; q96 runs in about 5s and agrees with Spark (0). M3
+  started; see M3. Two Morel fixes, each with a test in `file.smli`:
+  `?.` on the right of a `left join` now learns a file table's fields,
+  as `.` does (it raised "no field" if nothing had read the table
+  before); and a file table is read when the code that scans it runs,
+  not when it is compiled, with the rows kept behind a soft reference
+  and shared. Before that, each `fun qN` held its own copy of every
+  table it scans, and 14 of them ran out of heap.
 * (Superseded: M0's part is done, M1's is now Julian running it.)
   Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied

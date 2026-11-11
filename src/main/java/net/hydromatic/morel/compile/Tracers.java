@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.Code;
+import net.hydromatic.morel.type.Binding;
 import org.jspecify.annotations.Nullable;
 
 /** Utilities for {@link Tracer}. */
@@ -60,6 +61,21 @@ public abstract class Tracers {
       public void onPlan(Code code) {
         consumer.accept(code);
         super.onPlan(code);
+      }
+    };
+  }
+
+  /**
+   * Returns a tracer that performs the given action on each value that a
+   * statement binds, then calls the underlying tracer.
+   */
+  public static Tracer withOnBinding(
+      Tracer tracer, Consumer<Binding> consumer) {
+    return new DelegatingTracer(tracer) {
+      @Override
+      public void onBinding(Binding binding) {
+        consumer.accept(binding);
+        super.onBinding(binding);
       }
     };
   }
@@ -139,6 +155,9 @@ public abstract class Tracers {
     public void onResult(Object o) {}
 
     @Override
+    public void onBinding(Binding binding) {}
+
+    @Override
     public void onWarnings(List<? extends Throwable> warningList) {}
 
     @Override
@@ -178,6 +197,11 @@ public abstract class Tracers {
     @Override
     public void onResult(Object o) {
       tracer.onResult(o);
+    }
+
+    @Override
+    public void onBinding(Binding binding) {
+      tracer.onBinding(binding);
     }
 
     @Override

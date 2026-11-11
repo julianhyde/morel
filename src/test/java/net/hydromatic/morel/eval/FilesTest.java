@@ -18,15 +18,19 @@
  */
 package net.hydromatic.morel.eval;
 
+import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.TypeSystem;
 import org.junit.jupiter.api.Test;
 
 /** Tests for {@link Files}. */
@@ -107,6 +111,22 @@ class FilesTest {
             "uncaught exception Fail [Fail: line has 2 fields, "
                 + "but the header has 3: a,b]"));
     assertThrows(MorelRuntimeException.class, () -> split("a", 2));
+  }
+
+  /**
+   * Reading a table twice gives the same rows, so that the queries that scan it
+   * share one copy, rather than each holding its own.
+   */
+  @Test
+  void testRowsShared() {
+    final URL url =
+        requireNonNull(FilesTest.class.getResource("/data/scott/depts.csv"));
+    final java.io.File depts0 = new java.io.File(url.getFile()); // lint:skip
+    final File dir = Files.create(depts0.getParentFile());
+    final File depts = dir.discoverField(new TypeSystem(), "depts");
+    final List<?> rows = depts.valueAs(List.class);
+    assertThat(rows.size(), is(4));
+    assertThat(depts.valueAs(List.class), sameInstance(rows));
   }
 }
 

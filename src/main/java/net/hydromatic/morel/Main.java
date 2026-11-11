@@ -829,6 +829,7 @@ public class Main {
           if (main.session.code != null) {
             tracer.onPlan(main.session.code);
           }
+          bindings.forEach(tracer::onBinding);
         }
 
         if (buffered) {

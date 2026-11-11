@@ -66,6 +66,7 @@ import net.hydromatic.morel.foreign.SparkConnections;
 import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
+import net.hydromatic.morel.type.TypedValue;
 import net.hydromatic.morel.util.ImmutablePairList;
 import net.hydromatic.morel.util.Ord;
 import net.hydromatic.morel.util.PairList;
@@ -238,6 +239,14 @@ public abstract class Codes {
   /** Returns a Code that evaluates to the same value in all environments. */
   public static Code constant(Object value) {
     return new ConstantCode(value);
+  }
+
+  /**
+   * Returns a Code that evaluates to the value of a {@link TypedValue}, such as
+   * a table in a file, reading it each time the code runs.
+   */
+  public static Code typedValue(TypedValue typedValue) {
+    return new TypedValueCode(typedValue);
   }
 
   /** Returns a Code that evaluates "andalso". */
@@ -885,6 +894,25 @@ public abstract class Codes {
     @Override
     public boolean isConstant() {
       return true;
+    }
+  }
+
+  /** Code that implements {@link #typedValue(TypedValue)}. */
+  private static class TypedValueCode implements Code {
+    private final TypedValue typedValue;
+
+    TypedValueCode(TypedValue typedValue) {
+      this.typedValue = typedValue;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start("constant", d -> d.arg("", "<relation>"));
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return typedValue.valueAs(Object.class);
     }
   }
 

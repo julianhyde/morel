@@ -29,6 +29,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.lang.ref.SoftReference;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -36,6 +37,7 @@ import java.time.ZoneOffset;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -464,14 +466,32 @@ public class Files {
       this.columns = ImmutableList.copyOf(columns);
     }
 
+    /**
+     * The rows, once read. Every query that scans the file shares them; if
+     * memory runs short, the collector may drop them, and the next scan reads
+     * the file again.
+     */
+    private volatile SoftReference<List<List<Object>>> rows =
+        new SoftReference<>(null);
+
     @Override
     public <V> V valueAs(Class<V> clazz) {
+      List<List<Object>> list = rows.get();
+      if (list == null) {
+        list = read();
+        rows = new SoftReference<>(list);
+      }
+      return clazz.cast(list);
+    }
+
+    /** Reads the rows of the file. */
+    private List<List<Object>> read() {
       try (BufferedReader r = fileType.open(ioFile)) {
         String firstLine = r.readLine();
         if (firstLine == null) {
           // The file is empty, and therefore has no records, just as a file
           // that has only a header line has none.
-          return clazz.cast(ImmutableList.of());
+          return ImmutableList.of();
         }
         // A record's fields are sorted by name, so the target of a column
         // (the ordinal of its field in the record) is the position of its
@@ -489,14 +509,14 @@ public class Files {
         for (; ; ) {
           String line = r.readLine();
           if (line == null) {
-            return clazz.cast(list);
+            return Collections.unmodifiableList(list);
           }
           parser.parse(line, targets, values);
           list.add(ImmutableList.copyOf(values));
         }
       } catch (IOException e) {
         // The file cannot be read; treat it as if it had no records.
-        return clazz.cast(ImmutableList.of());
+        return ImmutableList.of();
       }
     }
 

@@ -152,4 +152,23 @@ from e in file.scott.emps
 >    {comm=NONE,ename="MILLER",mgrno=SOME 7782,sal=1300}]
 >   : {comm:decimal option, ename:string, mgrno:int option, sal:decimal} list
 
+(* A field of a table on the right of a left join, read with "?.",
+ * tells Morel the table's fields, as "." does. *)
+from e in file.scott.emps
+  left join g in file.scott.salgrades on e.ename = "KING"
+  where e.deptno = 10
+  yield {e.ename, grade = g?.grade};
+> val it =
+>   [{ename="CLARK",grade=NONE},{ename="KING",grade=SOME 1},
+>    {ename="KING",grade=SOME 2},{ename="KING",grade=SOME 3},
+>    {ename="KING",grade=SOME 4},{ename="KING",grade=SOME 5},
+>    {ename="MILLER",grade=NONE}] : {ename:string, grade:int option} list
+
+(* A function that scans a table reads it each time it is called,
+ * rather than holding the rows from when it was defined. *)
+fun deptNames () = from d in file.scott.depts yield d.dname;
+> val deptNames = fn : unit -> string list
+deptNames ();
+> val it = ["ACCOUNTING","RESEARCH","SALES","OPERATIONS"] : string list
+
 (*) End file.smli

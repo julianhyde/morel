@@ -384,6 +384,11 @@ public class Compiler {
       case INTERNAL_LITERAL:
       case VALUE_LITERAL:
         literal = (Core.Literal) expression;
+        if (literal.valueObject() instanceof TypedValue) {
+          // A table, such as a file; read it when the code runs, not now, so
+          // that a function that scans it does not hold its rows.
+          return Codes.typedValue((TypedValue) literal.valueObject());
+        }
         return Codes.constant(literal.unwrap(Object.class));
 
       case LET:

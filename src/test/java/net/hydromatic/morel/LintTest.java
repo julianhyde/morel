@@ -628,7 +628,7 @@ public class LintTest {
         line -> line.isLast(),
         line -> {
           int expectedVersionCount =
-              filenameIs(line, "README.md")
+              isProjectReadme(line)
                   ? 2
                   : filenameIs(line, "README")
                           || filenameIs(line, "reference.md")
@@ -1223,6 +1223,23 @@ public class LintTest {
    */
   private static boolean lintSkip(Puffin.Line<GlobalState, FileState> line) {
     return line.fnr() < line.state().lintEnableLine;
+  }
+
+  /**
+   * Returns whether a line is in the project's own {@code README.md}, at the
+   * top of the tree, rather than in a {@code README.md} that describes a
+   * directory.
+   */
+  private static boolean isProjectReadme(
+      Puffin.Line<GlobalState, FileState> line) {
+    return line.source()
+        .fileOpt()
+        .filter(
+            f ->
+                f.getName().equals("README.md")
+                    && new File(f.getAbsoluteFile().getParentFile(), "pom.xml")
+                        .exists())
+        .isPresent();
   }
 
   private static boolean filenameIs(

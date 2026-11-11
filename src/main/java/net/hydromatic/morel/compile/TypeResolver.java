@@ -495,7 +495,7 @@ public class TypeResolver {
           node2,
           typeMap,
           apply -> {
-            final Type type = typeMap.getType(apply.arg);
+            final Type type = safeNavTarget(typeMap.getType(apply.arg));
             if (type.isProgressive()) {
               progressive.set(true);
             }
@@ -748,7 +748,14 @@ public class TypeResolver {
               if (typeMap.typeIsVariable(apply.arg)) {
                 variableConsumer.accept(apply);
               } else if (recordSelector.safe) {
-                checkSafeNav(apply, recordSelector, typeMap);
+                if (safeNavTarget(typeMap.getType(apply.arg)).isProgressive()) {
+                  // "r?.f", where "r" is an option of a progressive record
+                  // (say a table on the right of a left join) whose fields
+                  // are not known yet.
+                  variableConsumer.accept(apply);
+                } else {
+                  checkSafeNav(apply, recordSelector, typeMap);
+                }
               } else {
                 final Collection<String> fieldNames =
                     typeMap.typeFieldNames(apply.arg);
@@ -803,6 +810,17 @@ public class TypeResolver {
           "no field '" + recordSelector.name + "' in type '" + type + "'",
           apply.fn.pos());
     }
+  }
+
+  /**
+   * Returns the type that {@code ?.} reads a field of, given the type of its
+   * receiver: the element type, through any number of option and list layers.
+   */
+  private static Type safeNavTarget(Type type) {
+    for (Type element; (element = safeNavElement(type)) != null; ) {
+      type = element;
+    }
+    return type;
   }
 
   /**
