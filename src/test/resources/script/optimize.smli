@@ -717,4 +717,176 @@ from i in List.rev xs;
 Sys.planEx "~1";
 > val it = "val it = #rev List xs" : string
 
+(* --- Hash join -------------------------------------------------- *)
+
+(* A join whose condition has an equality between a key over the
+ * left element and a key over the right element is a hash join
+ * ("hashJoin" in the plan): the right side is put into buckets by
+ * its key, once, and each left element reads only its own bucket.
+ * The answer, and its order, are those of a nested loop: here, the
+ * two "ys" elements whose "c" is 2 are joined, in order, with each
+ * "xs" element whose "b" is 2. *)
+val xs = [{a=1,b=2},{a=2,b=3},{a=3,b=2},{a=4,b=9}];
+> val xs = [{a=1,b=2},{a=2,b=3},{a=3,b=2},{a=4,b=9}] : {a:int, b:int} list
+val ys = [{c=2,d=5},{c=3,d=6},{c=2,d=7},{c=8,d=8}];
+> val ys = [{c=2,d=5},{c=3,d=6},{c=2,d=7},{c=8,d=8}] : {c:int, d:int} list
+from x in xs join y in ys on x.b = y.c yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=2,d=6},{a=3,d=5},{a=3,d=7}]
+>   : {a:int, d:int} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink hashJoin(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), leftKey apply(fnValue nth:1, argCode stack(offset 1, name x)), rightKey apply(fnValue nth:0, argCode stack(offset 1, name y)), condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 1, name y)))))))"
+>   : string
+
+(* A key that calls a function might raise, so it is not evaluated
+ * eagerly; the join stays a nested loop ("join" in the plan), and
+ * gives the same answer. *)
+from x in xs join y in ys on x.b + 0 = y.c yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=2,d=6},{a=3,d=5},{a=3,d=7}]
+>   : {a:int, d:int} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink join(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), condition apply2(fnValue =, apply2(fnValue Int.+, apply(fnValue nth:1, argCode stack(offset 2, name x)), constant(0)), apply(fnValue nth:0, argCode stack(offset 1, name y))), sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 1, name y)))))))"
+>   : string
+
+(*) A left join keeps a left element whose bucket is empty.
+from x in xs left join y in ys on x.b = y.c yield {x.a, y};
+> val it =
+>   [{a=1,y=SOME {c=2,d=5}},{a=1,y=SOME {c=2,d=7}},{a=2,y=SOME {c=3,d=6}},
+>    {a=3,y=SOME {c=2,d=5}},{a=3,y=SOME {c=2,d=7}},{a=4,y=NONE}]
+>   : {a:int, y:{c:int, d:int} option} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink hashJoin(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), leftKey apply(fnValue nth:1, argCode stack(offset 1, name x)), rightKey apply(fnValue nth:0, argCode stack(offset 1, name y)), condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), sink collect(tuple(apply(fnValue nth:0, argCode apply(fnValue nth:0, argCode tuple(stack(offset 2, name x), stack(offset 1, name y)))), apply(fnValue nth:1, argCode tuple(stack(offset 2, name x), stack(offset 1, name y))))))))"
+>   : string
+
+(* Conjuncts other than the equality are evaluated for each element
+ * of the bucket. *)
+from x in xs join y in ys on x.b = y.c andalso x.a < y.d - 4
+  yield {x.a, y.d};
+> val it = [{a=1,d=7}] : {a:int, d:int} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink hashJoin(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), leftKey apply(fnValue nth:1, argCode stack(offset 1, name x)), rightKey apply(fnValue nth:0, argCode stack(offset 1, name y)), condition andalso(apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), apply2(fnValue <, apply(fnValue nth:0, argCode stack(offset 2, name x)), apply2(fnValue Int.-, apply(fnValue nth:1, argCode stack(offset 1, name y)), constant(4)))), sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 1, name y)))))))"
+>   : string
+
+(* Two equalities make a key that is a tuple. A key may be a
+ * constant, if the other side reads the right element. *)
+from x in xs join y in ys on x.b = y.c andalso 7 = y.d yield {x.a, y.d};
+> val it = [{a=1,d=7},{a=3,d=7}] : {a:int, d:int} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink hashJoin(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), leftKey tuple(apply(fnValue nth:1, argCode stack(offset 1, name x)), constant(7)), rightKey tuple(apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 1, name y))), condition andalso(apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), apply2(fnValue =, constant(7), apply(fnValue nth:1, argCode stack(offset 1, name y)))), sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 1, name y)))))))"
+>   : string
+
+(* Keys may be options, built with constructors such as SOME. As
+ * everywhere in Morel, NONE = NONE. *)
+val ps = [{k=SOME 1,v="a"},{k=NONE,v="b"},{k=SOME 2,v="c"}];
+> val ps = [{k=SOME 1,v="a"},{k=NONE,v="b"},{k=SOME 2,v="c"}]
+>   : {k:int option, v:string} list
+val qs = [{k=SOME 1,w=10},{k=NONE,w=20},{k=SOME 3,w=30}];
+> val qs = [{k=SOME 1,w=10},{k=NONE,w=20},{k=SOME 3,w=30}]
+>   : {k:int option, w:int} list
+from p in ps join q in qs on p.k = q.k yield {p.v, q.w};
+> val it = [{v="a",w=10},{v="b",w=20}] : {v:string, w:int} list
+from p in ps join q in qs on p.k = SOME q.w yield {p.v, q.w};
+> val it = [] : {v:string, w:int} list
+Sys.plan ();
+> val it =
+>   "globalMarshal(globals [SOME], body from(sink join(pat p, exp constant([[[SOME, 1], a], [[NONE], b], [[SOME, 2], c]]), sink hashJoin(pat q, exp constant([[[SOME, 1], 10], [[NONE], 20], [[SOME, 3], 30]]), leftKey apply(fnValue nth:0, argCode stack(offset 1, name p)), rightKey apply(fnValue tyCon, argCode apply(fnValue nth:1, argCode stack(offset 1, name q))), condition apply2(fnValue =, apply(fnValue nth:0, argCode stack(offset 2, name p)), apply(fnValue tyCon, argCode apply(fnValue nth:1, argCode stack(offset 1, name q)))), sink collect(tuple(apply(fnValue nth:1, argCode stack(offset 2, name p)), apply(fnValue nth:1, argCode stack(offset 1, name q))))))))"
+>   : string
+
+(* Keys may be records, strings and decimals. Equal decimals are
+ * equal however they are written. *)
+from x in [{s="a",n=decimal "1.50"},{s="b",n=decimal "2"}]
+  join y in [{s="a",n=decimal "1.5"},{s="b",n=decimal "2.00"}]
+    on {s=x.s,n=x.n} = {s=y.s,n=y.n}
+  yield x.s;
+> val it = ["a","b"] : string list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp tuple(tuple(constant(1.5), constant(a)), tuple(constant(2), constant(b))), sink hashJoin(pat y, exp tuple(tuple(constant(1.5), constant(a)), tuple(constant(2), constant(b))), leftKey tuple(apply(fnValue nth:0, argCode stack(offset 1, name x)), apply(fnValue nth:1, argCode stack(offset 1, name x))), rightKey tuple(apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 1, name y))), condition apply2(fnValue =, tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 2, name x))), tuple(apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 1, name y)))), sink collect(apply(fnValue nth:1, argCode stack(offset 2, name x))))))"
+>   : string
+
+(*) Empty inputs.
+from x in [] : {a:int, b:int} list join y in ys on x.b = y.c
+  yield y.d;
+> val it = [] : int list
+from x in xs join y in [] : {c:int, d:int} list on x.b = y.c
+  yield x.a;
+> val it = [] : int list
+from x in xs left join y in [] : {c:int, d:int} list on x.b = y.c
+  yield {x.a, y};
+> val it = [{a=1,y=NONE},{a=2,y=NONE},{a=3,y=NONE},{a=4,y=NONE}]
+>   : {a:int, y:{c:int, d:int} option} list
+
+(* Real keys are not hashed: NaN and ~0.0 make Java's equality
+ * differ from Morel's. *)
+from x in [1.5, 2.5] join y in [2.5, 3.5] on x = y yield x;
+> val it = [2.5] : real list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp tuple(constant(1.5), constant(2.5)), sink join(pat y, exp tuple(constant(2.5), constant(3.5)), condition apply2(fnValue =, stack(offset 2, name x), stack(offset 1, name y)), sink collect(stack(offset 2, name x)))))"
+>   : string
+
+(* Nor is a right side that reads the left element; nor a condition
+ * that reads the ordinal; nor a condition with no equality. *)
+from x in xs join y in (from y in ys where y.c = x.b) on x.b = y.c
+  yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=2,d=6},{a=3,d=5},{a=3,d=7}]
+>   : {a:int, d:int} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink join(pat y, exp from(sink join(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), sink where(condition apply2(fnValue =, apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 2, name x))), sink collect(stack(offset 1, name y))))), condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 1, name y)))))))"
+>   : string
+from x in xs join y in ys on x.b = y.c andalso ordinal < 3
+  yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7}] : {a:int, d:int} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink join(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), condition ordinal, sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 1, name y)))))))"
+>   : string
+from x in xs join y in ys on x.b < y.c yield {x.a, y.d};
+> val it = [{a=1,d=6},{a=1,d=8},{a=2,d=8},{a=3,d=6},{a=3,d=8}]
+>   : {a:int, d:int} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink join(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), condition apply2(fnValue <, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), sink collect(tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 1, name y)))))))"
+>   : string
+
+(*) A right join is evaluated differently, and is not hashed.
+from x in xs right join y in ys on x.b = y.c yield {x, y.d};
+> val it =
+>   [{d=5,x=SOME {a=1,b=2}},{d=7,x=SOME {a=1,b=2}},{d=6,x=SOME {a=2,b=3}},
+>    {d=5,x=SOME {a=3,b=2}},{d=7,x=SOME {a=3,b=2}},{d=8,x=NONE}]
+>   : {d:int, x:{a:int, b:int} option} list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink buildJoin(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), condition apply2(fnValue =, apply(fnValue nth:1, argCode stack(offset 2, name x)), apply(fnValue nth:0, argCode stack(offset 1, name y))), sink collect(tuple(apply(fnValue nth:1, argCode apply(fnValue nth:1, argCode tuple(stack(offset 2, name x), stack(offset 1, name y)))), apply(fnValue nth:0, argCode tuple(stack(offset 2, name x), stack(offset 1, name y))))))))"
+>   : string
+
+(* In a function, whose argument is on the stack. The right key reads
+ * only the right element; the left key may read the argument. *)
+fun f n = from x in xs join y in ys on x.b = y.c andalso n = y.d
+  yield {x.a, y.d};
+> val f = fn : int -> {a:int, d:int} list
+f 7;
+> val it = [{a=1,d=7},{a=3,d=7}] : {a:int, d:int} list
+fun g n = from x in xs join y in ys on (x.b, n) = (y.c, 5) yield x.a;
+> val g = fn : int -> int list
+g 5;
+> val it = [1,1,2,3,3] : int list
+g 6;
+> val it = [] : int list
+
+(* The condition is evaluated only for the elements of a bucket. So
+ * a condition that would raise for a pair whose keys differ does
+ * not raise: here "1 div (y.d - 8)" raises Div for the "ys" element
+ * whose "d" is 8, which no "xs" element matches. (The order in which
+ * a join evaluates its condition over pairs is not specified.) *)
+from x in xs join y in ys on 1 div (y.d - 8) < 1 andalso x.b = y.c
+  yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=2,d=6},{a=3,d=5},{a=3,d=7}]
+>   : {a:int, d:int} list
+
 (*) End optimize.smli

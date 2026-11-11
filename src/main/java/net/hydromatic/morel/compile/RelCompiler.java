@@ -25,12 +25,17 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Exps;
 import net.hydromatic.morel.ast.JoinType;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.ast.Shuttle;
+import net.hydromatic.morel.ast.Visitor;
 import net.hydromatic.morel.compile.Compiler.Context;
 import net.hydromatic.morel.compile.Compiler.RowSinkFactory;
 import net.hydromatic.morel.eval.Applicable;
@@ -41,7 +46,10 @@ import net.hydromatic.morel.eval.RowSink;
 import net.hydromatic.morel.eval.RowSinks;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.DataType;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ListType;
+import net.hydromatic.morel.type.PrimitiveType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
@@ -481,6 +489,26 @@ class RelCompiler {
     final RowSinkFactory nf =
         next.sink(rowScan.defer(target, core.tuple(typeSystem, null, exps)));
     final Code conditionCode2 = conditionCode;
+    if (!build && !dependent && liveSlots == null) {
+      // An equality between a key over the input row and a key over the
+      // element: hash the elements by the one, and probe with the other.
+      final Core.@Nullable Exp[] keys =
+          equiKeys(rowScan.resolve(condition), rightPats);
+      if (keys != null) {
+        final Code leftKeyCode = compiler.compile(row.cx, keys[0]);
+        final Code rightKeyCode = compiler.compile(rowScan.cx, keys[1]);
+        return () ->
+            RowSinks.hashScan(
+                op(join.joinType),
+                rightPat,
+                rightPats.size(),
+                rightCode,
+                conditionCode2,
+                leftKeyCode,
+                rightKeyCode,
+                nf.get());
+      }
+    }
     if (build) {
       final int leftSlotCount = row.slots.size();
       return () ->
@@ -504,6 +532,114 @@ class RelCompiler {
             conditionCode2,
             liveSlots,
             nf.get());
+  }
+
+  /**
+   * Returns the keys of a join condition that a hash join can use: a pair
+   * {@code (leftKey, rightKey)} such that the condition implies {@code leftKey
+   * = rightKey}, the right key reads only the patterns of the element ({@code
+   * rightPats}), the left key reads none of them, both are simple (see {@link
+   * Exps#isSimple}), and their type's equality is Java's (see {@link
+   * #isHashable}). If the condition has several such equalities, the keys are
+   * tuples. Returns null if it has none.
+   */
+  private Core.@Nullable Exp @Nullable [] equiKeys(
+      Core.Exp condition, List<Core.NamedPat> rightPats) {
+    final List<Core.Exp> leftKeys = new ArrayList<>();
+    final List<Core.Exp> rightKeys = new ArrayList<>();
+    for (Core.Exp conjunct : core.decomposeAnd(condition)) {
+      if (!conjunct.isCallTo(BuiltIn.OP_EQ)
+          || !isHashable(conjunct.arg(0).type)) {
+        continue;
+      }
+      final Core.Exp e0 = conjunct.arg(0);
+      final Core.Exp e1 = conjunct.arg(1);
+      if (!e0.isSimple() || !e1.isSimple()) {
+        continue;
+      }
+      final Set<Core.NamedPat> pats0 = variables(e0);
+      final Set<Core.NamedPat> pats1 = variables(e1);
+      final boolean left0 = Collections.disjoint(pats0, rightPats);
+      final boolean left1 = Collections.disjoint(pats1, rightPats);
+      final boolean right0 = !pats0.isEmpty() && rightPats.containsAll(pats0);
+      final boolean right1 = !pats1.isEmpty() && rightPats.containsAll(pats1);
+      if (left0 && right1) {
+        leftKeys.add(e0);
+        rightKeys.add(e1);
+      } else if (right0 && left1) {
+        leftKeys.add(e1);
+        rightKeys.add(e0);
+      }
+    }
+    if (leftKeys.isEmpty()) {
+      return null;
+    }
+    if (leftKeys.size() == 1) {
+      return new Core.Exp[] {leftKeys.get(0), rightKeys.get(0)};
+    }
+    return new Core.Exp[] {
+      core.tuple(typeSystem, null, leftKeys),
+      core.tuple(typeSystem, null, rightKeys)
+    };
+  }
+
+  /**
+   * Returns the variables that an expression reads; not the constructors it
+   * applies.
+   */
+  private static Set<Core.NamedPat> variables(Core.Exp exp) {
+    final Set<Core.NamedPat> pats = new HashSet<>();
+    exp.accept(
+        new Visitor() {
+          @Override
+          protected void visit(Core.Id id) {
+            if (!Exps.isConstructor(id)) {
+              pats.add(id.idPat);
+            }
+          }
+        });
+    return pats;
+  }
+
+  /**
+   * Returns whether values of a type can be hashed: whether two are equal, by
+   * Morel's {@code =}, exactly when their Java values are equal. Not {@code
+   * real}, whose {@code NaN} and {@code -0.0} differ.
+   */
+  private static boolean isHashable(Type type) {
+    type = type.unalias();
+    if (type instanceof PrimitiveType) {
+      switch ((PrimitiveType) type) {
+        case BOOL:
+        case CHAR:
+        case INT:
+        case STRING:
+        case UNIT:
+          return true;
+        default:
+          return false;
+      }
+    }
+    if (type instanceof RecordLikeType) {
+      return ((RecordLikeType) type)
+          .argTypes().stream().allMatch(RelCompiler::isHashable);
+    }
+    if (type instanceof ListType) {
+      return isHashable(type.elementType());
+    }
+    if (type instanceof DataType) {
+      final DataType dataType = (DataType) type;
+      switch (dataType.name) {
+        case "date":
+        case "decimal":
+          return true;
+        case "option":
+          return isHashable(dataType.arguments.get(0));
+        default:
+          return false;
+      }
+    }
+    return false;
   }
 
   private static Op op(JoinType joinType) {
