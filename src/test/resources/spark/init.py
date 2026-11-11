@@ -37,6 +37,8 @@
 # hold nulls, which is what Morel reads; the scott tables' properties
 # are generated from Morel's own data set, so the two cannot disagree.
 
+import os
+import runpy
 import shutil
 import time
 
@@ -188,6 +190,14 @@ table(
 
 print("Morel init tables created: nulls, scott.bonuses, scott.depts,"
       " scott.emps, scott.salgrades, zoo", flush=True)
+
+# With "start-spark.sh --tpcds DIR", which mounts DIR at /tpcds, the
+# TPC-DS tables and the answers to the TPC-DS queries; see init-tpcds.py.
+# They come after the line above, so that a client that wants only the
+# tables above can start without waiting for them.
+if os.path.isdir("/tpcds"):
+    runpy.run_path(
+        "/morel/init-tpcds.py", init_globals={"spark": spark, "sql": sql})
 
 while True:
     time.sleep(3600)

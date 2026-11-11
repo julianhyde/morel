@@ -27,6 +27,11 @@
 #
 # is enough to point the tests at it.
 #
+# With "--tpcds DIR" the container also holds database "tpcds", loaded
+# from DIR (the output of ../tpcds/generate.sh) by init-tpcds.py, which
+# runs each TPC-DS query too; this script waits for the answers, and
+# copies them to DIR/answers.
+#
 # Usage: start-spark.sh [OPTIONS]
 #
 #   --reuse         Use the container if it exists and was created from
@@ -38,7 +43,10 @@
 #   --name NAME     Container name (default: morel-spark).
 #   --port PORT     Host port for Spark Connect (default: 15002).
 #   --image IMAGE   Docker image (default: apache/spark:4.0.0).
-#   --timeout SECS  How long to wait for the server (default: 120).
+#   --tpcds DIR     Load the TPC-DS data set in DIR, and capture the
+#                   answers to the TPC-DS queries into DIR/answers.
+#   --timeout SECS  How long to wait for the server (default: 120, or
+#                   900 with --tpcds).
 #   --help          Show this message and exit.
 
 set -euo pipefail
@@ -46,8 +54,9 @@ set -euo pipefail
 name=morel-spark
 port=15002
 image=apache/spark:4.0.0
-timeout=120
+timeout=
 mode=reuse
+tpcds=
 
 usage() {
   sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2
@@ -61,23 +70,46 @@ while [ $# -gt 0 ]; do
     (--name) name=$2; shift 2 ;;
     (--port) port=$2; shift 2 ;;
     (--image) image=$2; shift 2 ;;
+    (--tpcds) tpcds=$2; shift 2 ;;
     (--timeout) timeout=$2; shift 2 ;;
     (--help) usage; exit 0 ;;
     (*) echo "start-spark.sh: unknown option '$1'" >&2; usage; exit 2 ;;
   esac
 done
 
+if [ -z "$timeout" ]; then
+  if [ -n "$tpcds" ]; then timeout=900; else timeout=120; fi
+fi
+
 log() {
   echo "start-spark.sh: $*" >&2
 }
 
 dir=$(cd "$(dirname "$0")" && pwd)
+tpcds_res=$(cd "$dir/../tpcds" && pwd)
+
+if [ -n "$tpcds" ]; then
+  if [ ! -f "$tpcds/VERSION" ]; then
+    log "$tpcds holds no TPC-DS data set; run ../tpcds/generate.sh"
+    exit 1
+  fi
+  tpcds=$(cd "$tpcds" && pwd)
+fi
 
 # Hash of the init script, which the container records when it is
 # created; "--reuse" recreates a container whose hash is not this one,
 # because such a container holds tables that init.py no longer creates.
+# With --tpcds, the hash covers the TPC-DS scripts, schema, queries and
+# data set too, so a container with TPC-DS and one without differ.
 init_sha() {
-  shasum -a 256 "$dir/init.py" | cut -d' ' -f1
+  {
+    cat "$dir/init.py"
+    if [ -n "$tpcds" ]; then
+      echo "tpcds=$tpcds"
+      cat "$tpcds/VERSION" "$dir/init-tpcds.py" "$tpcds_res/schema.sql" \
+          "$tpcds_res"/queries/*.sql
+    fi
+  } | shasum -a 256 | cut -d' ' -f1
 }
 
 # The hash the container records, or empty if it has none.
@@ -137,9 +169,15 @@ else
   # (spark.plugins), so clients see the tables it creates. The container
   # carries the hash of the init.py it was created from, so that --reuse
   # can tell whether it holds the tables this one would create.
+  # With --tpcds, the data set and the TPC-DS resources are mounted too,
+  # and init.py loads them.
+  mounts=(-v "$dir:/morel:ro")
+  if [ -n "$tpcds" ]; then
+    mounts+=(-v "$tpcds:/tpcds:ro" -v "$tpcds_res:/morel-tpcds:ro")
+  fi
   docker run -d --name "$name" -p "$port:15002" \
     --label "morel.init.sha=$(init_sha)" \
-    -v "$dir:/morel:ro" "$image" \
+    "${mounts[@]}" "$image" \
     /opt/spark/bin/spark-submit \
     --conf spark.plugins=org.apache.spark.sql.connect.SparkConnectPlugin \
     --conf spark.connect.grpc.binding.port=15002 \
@@ -153,11 +191,17 @@ fi
 # its log, so count only lines since the last container start.
 started=$(docker inspect --format '{{.State.StartedAt}}' "$name")
 deadline=$((SECONDS + timeout))
+# With --tpcds, the marker is the one init-tpcds.py prints after the
+# answers, which is the last thing it does.
+marker="Morel init tables created"
+if [ -n "$tpcds" ]; then
+  marker="Morel TPC-DS answers captured"
+fi
 ready() {
   # Not "grep -q": it would close the pipe early, and under pipefail
   # the pipeline would fail even when the line was found.
   [ "$(docker logs --since "$started" "$name" 2>&1 \
-      | grep -c "Morel init tables created")" -gt 0 ]
+      | grep -c "$marker")" -gt 0 ]
 }
 until ready; do
   if [ "$(state)" != running ]; then
@@ -173,6 +217,17 @@ until ready; do
 done
 
 log "Spark Connect server is ready"
+
+# Copy the answers out. Every start of a reused container captures them
+# again, into the container's /tmp, so copy them each time.
+if [ -n "$tpcds" ]; then
+  rm -rf "$tpcds/answers"
+  mkdir -p "$tpcds/answers"
+  docker cp "$name:/tmp/morel-tpcds/answers/." "$tpcds/answers" >/dev/null
+  docker logs --since "$started" "$name" 2>&1 \
+    | grep "Morel TPC-DS answers captured" | tail -1 >&2
+  log "answers are in $tpcds/answers"
+fi
 
 # The URI needs nothing but the address: each table says which of its
 # columns hold nulls, in its own "morel.nullable" property, which

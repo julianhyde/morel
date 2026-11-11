@@ -285,6 +285,64 @@ types the DDL implies, and every query has a captured answer. M1's
 `.csv.gz` headers need M2's adapter types to be readable locally, so M2
 can go first or alongside.
 
+*Written 2026-11-10, uncommitted, not yet run* (running the generator
+needs Julian; see the log):
+
+* `src/test/resources/tpcds/schema.sql`: 24 tables, 425 columns,
+  generated from Spark's `TPCDSSchema.scala`, with 46 `not null`s: each
+  dimension's `_sk` and, if it has one, its `_id`; each fact table's
+  primary key (`ss_item_sk, ss_ticket_number`, ...; `inventory`'s three
+  keys). From the spec's DDL as remembered, not read; the generator
+  checks it, failing on a null in a `not null` column.
+* Its column lists agree with the generator's (`io.trino.tpcds.column`,
+  read from the sources jar) except three names, which `TpcdsData`
+  maps: `c_last_review_date_sk` (the queries, q30, say
+  `c_last_review_date`), `p_response_targe` and `s_tax_precentage`
+  (`dsdgen`'s spellings).
+* `tpcds/TpcdsData.java` (test scope): writes `TABLE.csv.gz` (header
+  `name:type[ option]`, null as an empty field, a string in single
+  quotes if empty or holding `,` `'` `"` or a line ending) and
+  `VERSION`; prints each table's rows and per-column nulls. A child
+  table (`store_returns`, ...) is written while its parent is generated,
+  as the library's own `TableGenerator` does. `TpcdsDataTest` checks
+  the schema parse (in the default suite; runs no generator code).
+* `tpcds/generate.sh [--dir DIR] [--scale S] [--force]`: default
+  `~/.cache/morel/tpcds/sf0.01`; skips if `VERSION` matches; prints
+  the directory. Calls `./mvnw test-compile exec:java`.
+* `tpcds/queries/`: the 103 files from Spark `v4.0.0` (`fa33ea00`),
+  unchanged, with a `README.md` giving provenance.
+* `spark/init-tpcds.py`, run by `init.py` (via `runpy`) when `/tpcds`
+  is mounted, after `init.py`'s own marker line: creates `tpcds.*` as
+  Parquet from the CSVs, with `morel.nullable`; prints rows and nulls
+  per table; runs each query and writes
+  `/tmp/morel-tpcds/answers/qN.csv` (typed header, `option` on a
+  column with a null; names with non-word characters made `_`) or
+  `qN.error`. **char/varchar become STRING** in Spark, because Spark
+  pads `CHAR(n)` on read and the local reader does not.
+* `start-spark.sh --tpcds DIR`: mounts DIR and `src/test/resources/tpcds`,
+  includes the TPC-DS files and DIR's `VERSION` in the container hash,
+  waits (900s default) for "Morel TPC-DS answers captured", then copies
+  the answers to `DIR/answers`.
+* *Run 2026-11-10 by Julian.* Generated 24 files, 23MB compressed;
+  Spark loaded them (row and null counts in its log). Rows: store_sales
+  120,527, catalog_sales 89,807, web_sales 11,876, inventory 261,261,
+  date_dim 73,049, time_dim 86,400, and customer_demographics 1,920,800
+  (fixed at every scale, so the biggest table locally). Null rates about
+  4% in store_sales, 0.03% in web_sales. 99 answers, 20 of them empty
+  (q8 q10 q23b q24a q24b q31 q37 q39b q41 q44 q54 q58 q64 q78 q82 q83
+  q84 q85 q91 q93), which check little; 4 failed. q35 and q69 ran out of
+  memory broadcasting customer_demographics: now `ANALYZE TABLE` after
+  each load, and a retry without broadcast joins. q12 and q90 divide by
+  zero under ANSI: the error is the answer (Morel's `/` raises too), and
+  the non-ANSI answer is kept as `qN.ansi-off.csv`. Rerun the same
+  day: q35 (100 rows) and q69 (31) pass, so 101 answers and 2 errors.
+  **M1 done**, uncommitted.
+  Locally, `./morel --directory=DIR` reads every table; counts agree
+  with Spark's (store_sales 120,527 rows, 5,450 null `ss_quantity`).
+* Locally, `file` over the data directory (`Sys.set ("directory",
+  ...)`) gives `file.store_sales` and so on; D5's `requires: tpcds`
+  binding is M3's.
+
 **M2. Local data (D4).** *Done; committed 2026-11-10 as `3a7f5f03`.*
 The file-adapter change, with its own tests
 and docs, independent of TPC-DS; then `file.data` over the cache
@@ -537,7 +595,15 @@ three, which it cannot do directly. Every tier needs D10.
   connection; only the filter-then-sum form plans on Spark, and it
   drops all-null groups. Julian filed the result as #503 (`avg`, and
   aggregates over options).
-* Blocked for M0 and M1: fetching Spark's TPC-DS query files
+* 2026-11-10: #503 cherry-picked onto this branch (`efb28eb9`). M1
+  written (see M1), not run: the session may not run the downloaded
+  generator, so Julian runs `generate.sh`, then `start-spark.sh --tpcds
+  ~/.cache/morel/tpcds/sf0.01`. The temporary `ExploreTest` was dropped:
+  `TpcdsData` prints the same counts. It also showed that the
+  library's iterator yields parent and child rows together, which
+  `ExploreTest` would have miscounted.
+* (Superseded: M0's part is done, M1's is now Julian running it.)
+  Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied
   by the session's permission checks. Next session needs permission to
   read `apache/spark` on GitHub, and to add `io.trino.tpcds:tpcds:1.4`
