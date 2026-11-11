@@ -825,6 +825,17 @@ public class Core {
     }
 
     /**
+     * Returns whether this expression is simple: cheap, or a constructor
+     * applied to a simple expression. Evaluating it can neither raise nor have
+     * an effect.
+     *
+     * @see Exps#isSimple
+     */
+    public final boolean isSimple() {
+      return Exps.isSimple(this);
+    }
+
+    /**
      * Returns the {@link BuiltIn} that this is a call to, or {@link
      * BuiltIn#Z_VOID} if not a call.
      */

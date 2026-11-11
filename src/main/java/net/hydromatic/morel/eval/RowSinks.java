@@ -133,6 +133,36 @@ public abstract class RowSinks {
   }
 
   /**
+   * Creates a {@link RowSink} for an inner {@code join} or {@code left join}
+   * step whose condition has an equality between a key over the input row and a
+   * key over the scanned element, evaluated as a hash join.
+   *
+   * <p>The collection must not read the current row, and the condition must not
+   * read the ordinal. {@code leftKeyCode} reads the input row; {@code
+   * rightKeyCode} reads only the element's bindings, which are at the top of
+   * the stack. The output, and its order, are those of {@link #scan}.
+   */
+  public static RowSink hashScan(
+      Op op,
+      Core.Pat pat,
+      int varCount,
+      Code code,
+      Code conditionCode,
+      Code leftKeyCode,
+      Code rightKeyCode,
+      RowSink rowSink) {
+    return new HashScanRowSink(
+        op,
+        pat,
+        varCount,
+        code,
+        conditionCode,
+        leftKeyCode,
+        rightKeyCode,
+        rowSink);
+  }
+
+  /**
    * As {@link #scan(Op, Core.Pat, int, Code, Code, int[], RowSink)}, but {@code
    * dependent} says whether the collection reads the current row. One that does
    * not is evaluated once per execution rather than once per row.
@@ -396,8 +426,15 @@ public abstract class RowSinks {
 
     @Override
     public void accept(Stack stack) {
-      final Iterable<Object> elements =
-          dependent ? elements(stack) : requireNonNull(this.elements);
+      scan(stack, dependent ? elements(stack) : requireNonNull(this.elements));
+    }
+
+    /**
+     * Joins the input row with each of {@code elements} that matches the
+     * condition, and passes each pair on; for a {@code left join}, passes the
+     * input row on with {@code NONE}s if none matches.
+     */
+    void scan(Stack stack, Iterable<Object> elements) {
       // Grow slots if needed for scan variable slots.
       Stack s = stack.ensureSize(varCount);
       final int savedTop = s.save();
@@ -430,6 +467,82 @@ public abstract class RowSinks {
         rowSink.accept(s);
         s.restore(savedTop);
       }
+    }
+  }
+
+  /**
+   * Implementation of {@link RowSink} for an inner {@code join} or {@code left
+   * join} step that is evaluated as a hash join.
+   *
+   * <p>The collection is evaluated once, in {@link #start}, and each element is
+   * put in a bucket by its key. Each input row evaluates its key, and is
+   * joined, as {@link ScanRowSink} would join it, with only the elements in
+   * that bucket. A bucket holds its elements in the collection's order, so the
+   * output is the same as a nested loop's, in the same order. The whole
+   * condition is evaluated for each element in the bucket, so conjuncts other
+   * than the equality are checked.
+   */
+  private static class HashScanRowSink extends ScanRowSink {
+    final Code leftKeyCode;
+    final Code rightKeyCode;
+
+    /** The elements, by key; set in {@link #start}. */
+    final Map<Object, List<Object>> buckets = new HashMap<>();
+
+    HashScanRowSink(
+        Op op,
+        Core.Pat pat,
+        int varCount,
+        Code code,
+        Code conditionCode,
+        Code leftKeyCode,
+        Code rightKeyCode,
+        RowSink rowSink) {
+      super(op, pat, varCount, false, code, conditionCode, null, rowSink);
+      this.leftKeyCode = requireNonNull(leftKeyCode);
+      this.rightKeyCode = requireNonNull(rightKeyCode);
+    }
+
+    @Override
+    public void start(Stack stack) {
+      super.start(stack);
+      buckets.clear();
+      final Stack s = stack.ensureSize(varCount);
+      final int savedTop = s.save();
+      for (Object element : requireNonNull(elements)) {
+        s.restore(savedTop);
+        // An element that does not match the pattern matches no row.
+        if (Closure.StackClosure.pushBindings(pat, element, s)) {
+          final Object key = rightKeyCode.eval(s);
+          buckets.computeIfAbsent(key, k -> new ArrayList<>()).add(element);
+        }
+      }
+      s.restore(savedTop);
+      // The buckets hold every element that the scan will read.
+      elements = null;
+    }
+
+    @Override
+    public void accept(Stack stack) {
+      final Object key = leftKeyCode.eval(stack);
+      final List<Object> bucket = buckets.get(key);
+      scan(stack, bucket == null ? ImmutableList.of() : bucket);
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          "hashJoin",
+          d ->
+              d.arg("pat", pat.describe(describer))
+                  .arg("exp", code)
+                  .arg("leftKey", leftKeyCode)
+                  .arg("rightKey", rightKeyCode)
+                  .argIf(
+                      "condition",
+                      conditionCode,
+                      !isConstantTrue(conditionCode))
+                  .arg("sink", rowSink));
     }
   }
 

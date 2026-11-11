@@ -65,18 +65,20 @@ class ExpsTest {
 
   /**
    * Checks the predicates on an expression. {@code rung} is the lowest rung of
-   * the ladder that accepts it: 0 for an atom, 1 for cheap, and {@code
-   * Integer.MAX_VALUE} for none. Every rung above that one must accept it too,
-   * and every rung below must not.
+   * the ladder that accepts it: 0 for an atom, 1 for cheap, 2 for simple, and
+   * {@code Integer.MAX_VALUE} for none. Every rung above that one must accept
+   * it too, and every rung below must not.
    */
   private static void check(String exp, int rung) {
     final Core.Exp e = core(exp);
     assertThat(exp + " isAtom", e.isAtom(), is(rung <= 0));
     assertThat(exp + " isCheap", e.isCheap(), is(rung <= 1));
+    assertThat(exp + " isSimple", e.isSimple(), is(rung <= 2));
   }
 
   private static final int ATOM = 0;
   private static final int CHEAP = 1;
+  private static final int SIMPLE = 2;
   private static final int NONE = Integer.MAX_VALUE;
 
   @Test
@@ -102,9 +104,17 @@ class ExpsTest {
   }
 
   @Test
-  void testNeither() {
+  void testSimple() {
     // A constructor applied to an argument.
-    check("SOME n", NONE);
+    check("SOME n", SIMPLE);
+    check("SOME (x.a, n)", SIMPLE);
+    check("(SOME n, s)", SIMPLE);
+    check("[n, x.a]", NONE);
+    check("SOME (n + 1)", NONE);
+  }
+
+  @Test
+  void testNeither() {
     // Arithmetic, which can overflow.
     check("n + 1", NONE);
     check("10 div n", NONE);

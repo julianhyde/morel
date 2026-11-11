@@ -884,6 +884,11 @@ query's input: it may not reference the variables of earlier steps, nor
 `current` or `ordinal`. (A `left join` source is evaluated for each
 input row, so it may be correlated.)
 
+The order in which a query evaluates its `on` and `where` conditions,
+and the rows on which it evaluates them, are not specified, beyond
+giving the same result. A condition that would raise an exception for
+some pair of rows may therefore not raise it.
+
 #### Example
 
 <pre>
