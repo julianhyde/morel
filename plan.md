@@ -94,9 +94,9 @@ under "Survey"):
 
 | SQL | Queries | Morel today |
 | --- | ---: | --- |
-| `sum`, `min`, `max` over a nullable column | nearly all | **not defined**: `sum over x` with `x : decimal option` is a type error ("operator 'sum' not defined for type 'decimal option bag'"). SQL ignores nulls, and is null over an all-null group |
+| `sum`, `min`, `max` over a nullable column | nearly all | **not defined**: `sum over x` with `x : decimal option` is a type error ("operator 'sum' not defined for type 'decimal option bag'"). SQL ignores nulls, and is null over an all-null group. #503 |
 | comparison of a nullable column (`ss_quantity between 1 and 20`) | nearly all | an `int option` cannot be compared with `int`; each needs a `case`, or a helper. SQL's three-valued `where` drops the row |
-| `avg` | 30 | **none**: no `avg` aggregate for `int`, `real` or `decimal`. By hand as sum and count, but Spark's `avg` of `decimal(7,2)` is `decimal(11,6)` and of `int` is `double` |
+| `avg` | 30 | **none**: no `avg` aggregate for `int`, `real` or `decimal`. By hand as sum and count, but Spark's `avg` of `decimal(7,2)` is `decimal(11,6)` and of `int` is `double`. #503 |
 | `rollup`, `grouping()` | 11 | **none**; a union of groupings by hand |
 | window functions (`rank() over`, `sum() over`, `avg() over`) | 15 | **none**; `ordinal` only |
 | `stddev_samp` | 3 (q17, q39a, q39b) | **none** in `Relational`; by hand from sums of squares, in 32-bit `real` |
@@ -233,7 +233,14 @@ needs the generator in CI, which D1 makes a Maven step rather than an
 external tool.
 
 **D10. How nulls are handled in the queries** (open; found by the
-survey). Three choices:
+survey). *Choice 3's aggregate half is now
+[#503](https://github.com/hydromatic/morel/issues/503), filed
+2026-11-10: `Relational.avg`, and `sum`, `avg`, `count`, `min`, `max`
+over options with SQL's semantics -- `count` over an option skips
+`NONE`; `avg` of an empty collection raises `Empty`, as `min` and `max`
+do. Comparisons of an option column are not in #503 and still need an
+answer here. Whether the queries use helpers until #503 lands, or wait
+for it, is the open part.* Three choices:
 
 1. *By hand.* Each aggregate and comparison over an option column
    written out: `sum over (getOpt (x, 0))` (wrong for an all-null group,
@@ -525,6 +532,11 @@ three, which it cannot do directly. Every tier needs D10.
 * 2026-11-10: M0 survey done from Julian's clone of Spark
   (`~/dev/spark`); see "Survey". Found that Morel has no `avg`, cannot
   `sum` or compare an option, and has no `stddev`; opened D10.
+* 2026-11-10: worked `select deptno, avg(mgr) from emp group by
+  deptno` five ways against `scott.emps` and the offline Spark
+  connection; only the filter-then-sum form plans on Spark, and it
+  drops all-null groups. Julian filed the result as #503 (`avg`, and
+  aggregates over options).
 * Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied
   by the session's permission checks. Next session needs permission to
