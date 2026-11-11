@@ -90,29 +90,8 @@ public class Analyzer extends EnvVisitor {
   @Override
   protected void visit(Core.NonRecValDecl valDecl) {
     super.visit(valDecl);
-    if (isAtom(valDecl.exp)) {
+    if (valDecl.exp.isAtom()) {
       use(valDecl.pat).atomic = true;
-    }
-  }
-
-  private static boolean isAtom(Core.Exp exp) {
-    switch (exp.op) {
-      case ID:
-        // A reference to a node's row, `$0`, is an identifier like any other,
-        // and as cheap to duplicate. A binding whose value is the row -- what
-        // beta-reducing a call in a query leaves -- must be substituted
-        // however often it is read, or the grounding engine cannot see the
-        // constraint behind it. `Inliner` still declines where the use is
-        // inside a nested tree, which is the one place moving it is unsound.
-      case BOOL_LITERAL:
-      case CHAR_LITERAL:
-      case INT_LITERAL:
-      case REAL_LITERAL:
-      case STRING_LITERAL:
-      case UNIT_LITERAL:
-        return true;
-      default:
-        return false;
     }
   }
 

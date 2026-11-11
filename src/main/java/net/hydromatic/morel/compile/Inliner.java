@@ -105,7 +105,7 @@ public class Inliner extends EnvShuttle {
           //    - don't contain nested recursive definitions
           //    - don't have free variables (other than the parameter)
           // Polymorphic functions are inlined with type unification.
-          if (isAtomic(binding.exp)) {
+          if (binding.exp.isAtom()) {
             return binding.exp.accept(this);
           }
           if (binding.exp.op == Op.FN
@@ -288,7 +288,7 @@ public class Inliner extends EnvShuttle {
 
   private @Nullable Map<Core.NamedPat, Core.Exp> getSub(
       Core.Exp exp, Core.Match match) {
-    if (match.pat.op == Op.ID_PAT && isAtomic(exp)) {
+    if (match.pat.op == Op.ID_PAT && exp.isAtom()) {
       if (carriesInputIntoRel(exp, (Core.IdPat) match.pat, match.exp)) {
         return null;
       }
@@ -297,7 +297,7 @@ public class Inliner extends EnvShuttle {
     if (exp.op == Op.TUPLE && match.pat.op == Op.TUPLE_PAT) {
       final Core.Tuple tuple = (Core.Tuple) exp;
       final Core.TuplePat tuplePat = (Core.TuplePat) match.pat;
-      if (allMatch(tuple.args, Inliner::isAtomic)
+      if (allMatch(tuple.args, Core.Exp::isAtom)
           && allMatch(tuplePat.args, arg -> arg.op == Op.ID_PAT)) {
         final ImmutableMap.Builder<Core.NamedPat, Core.Exp> builder =
             ImmutableMap.builder();
@@ -315,20 +315,6 @@ public class Inliner extends EnvShuttle {
       }
     }
     return null;
-  }
-
-  /**
-   * Returns whether an expression can be inlined without expansion.
-   *
-   * <p>{@code $0} counts. It is a node and not a variable, but it is as cheap
-   * to duplicate as an id, and a {@code case} over a tuple of the row's
-   * components is what beta-reducing a call in a query leaves: {@code case (x,
-   * $0) of (x, y) => (x, y) elem edges}. Leaving that unreduced hides the
-   * constraint from the grounding engine, which matches on {@code elem} over
-   * the query's variables.
-   */
-  static boolean isAtomic(Core.Exp exp) {
-    return exp instanceof Core.Literal || exp instanceof Core.Id;
   }
 
   /**

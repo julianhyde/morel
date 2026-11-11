@@ -806,6 +806,47 @@ public class Core {
     }
 
     /**
+     * Returns whether this expression is an atom: an identifier or a literal.
+     *
+     * @see Exps#isAtom
+     */
+    public final boolean isAtom() {
+      return Exps.isAtom(this);
+    }
+
+    /**
+     * Returns whether this expression only reads: an atom, or a tuple, record
+     * or field selection of such.
+     *
+     * @see Exps#isCheap
+     */
+    public final boolean isCheap() {
+      return Exps.isCheap(this);
+    }
+
+    /**
+     * Returns whether this expression is simple: cheap, or a constructor
+     * applied to a simple expression. Evaluating it can neither raise nor have
+     * an effect.
+     *
+     * @see Exps#isSimple
+     */
+    public final boolean isSimple() {
+      return Exps.isSimple(this);
+    }
+
+    /**
+     * Returns whether this expression is safe: simple, or a comparison or
+     * boolean operator applied to safe expressions. Evaluating it can neither
+     * raise nor have an effect.
+     *
+     * @see Exps#isSafe
+     */
+    public final boolean isSafe() {
+      return Exps.isSafe(this);
+    }
+
+    /**
      * Returns the {@link BuiltIn} that this is a call to, or {@link
      * BuiltIn#Z_VOID} if not a call.
      */
