@@ -736,11 +736,16 @@ is an expression that is evaluated for each element in the group.
 
 The built-in aggregate functions are `count`, `sum`, `avg`, `min` and
 `max`. `avg` of `int` values is a `real`; of `real` values, a `real`;
-of `decimal` values, a `decimal`. Over options, an aggregate ignores
-`NONE`, as SQL's aggregate functions ignore nulls: `count over e.comm`
-is the number of employees that have a commission, and `sum`, `avg`,
-`min` and `max over e.comm` combine the commissions there are, and are
-`NONE` for a group that has none.
+of `decimal` values, a `decimal`. `avg`, `min` and `max` raise `Empty`
+over an empty collection; `sumOpt`, `avgOpt`, `minOpt` and `maxOpt`
+return `NONE` instead, and otherwise `SOME` of the result.
+
+SQL's aggregate functions ignore nulls. To aggregate an option that
+way, ignoring `NONE`, use `countSome`, `sumSome`, `avgSome`, `minSome`
+or `maxSome`: `countSome over e.comm` is the number of employees that
+have a commission, and `sumSome over e.comm` is the total of the
+commissions there are, `NONE` for a group that has none. (`somes`
+keeps the values of the `SOME`s, so `sumSome` is `sumOpt o somes`.)
 
 An `over` expression is just an expression (albeit one that can only
 be used in a `compute` clause), and that means that it can be part of

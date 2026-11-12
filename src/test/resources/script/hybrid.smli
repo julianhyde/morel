@@ -419,7 +419,7 @@ Sys.plan ();
 >   "apply(fnValue Relational.only, argCode from(sink join(pat p, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from ox in [SOME 1, NONE, SOME 3] compute min over ox;
-> val it = SOME 1 : int option
+> val it = NONE : int option
 Sys.plan ();
 > val it =
 >   "globalMarshal(globals [SOME], body apply(fnValue Relational.only, argCode from(sink join(pat ox, exp tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name min))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0)))))))))"
@@ -487,20 +487,20 @@ from e in scott.emps
 > val it =
 >   [{c=5,deptno=20,s=10875},{c=3,deptno=10,s=8750},{c=6,deptno=30,s=9400}]
 >   : {c:int, deptno:int, s:decimal} bag
-(* Over a nullable column, "avg", "count", "sum", "min" and "max" ignore NONE,
- * as SQL's aggregates ignore nulls. KING has no manager, and only salesmen
- * have commissions; so in department 10 the managers are two of three, and in
- * departments 10 and 20 there is no commission at all. This is
+(* Over a nullable column, "avgSome", "countSome", "sumSome", "minSome"
+ * and "maxSome" ignore NONE, as SQL's aggregates ignore nulls. KING has no
+ * manager, and only salesmen have commissions; so in department 10 the
+ * managers are two of three, and in departments 10 and 20 there is no
+ * commission at all. This is
  *   SELECT deptno, AVG(mgr), COUNT(mgr), COUNT(*), SUM(comm), MIN(comm),
  *     MAX(comm)
  *   FROM emp GROUP BY deptno
- * An aggregate over an option ignores NONE, and "avg" of an int is a real
- * where Calcite's AVG of an INTEGER is an INTEGER, so the group is evaluated
- * here rather than in Calcite. *)
+ * The aggregates are not Calcite's, so the group is evaluated here. *)
 from e in scott.emps
   group e.deptno
-  compute {a = avg over e.mgr, c = count over e.mgr, n = count over (),
-           s = sum over e.comm, lo = min over e.comm, hi = max over e.comm}
+  compute {a = avgSome over e.mgr, c = countSome over e.mgr,
+           n = count over (), s = sumSome over e.comm,
+           lo = minSome over e.comm, hi = maxSome over e.comm}
   order deptno;
 > val it =
 >   [{a=SOME 7810.5,c=2,deptno=10,hi=NONE,lo=NONE,n=3,s=NONE},

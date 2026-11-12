@@ -25,6 +25,7 @@ import static net.hydromatic.morel.eval.code.DateCodes.order;
 import static net.hydromatic.morel.eval.code.DecimalCodes.decimalChecked;
 import static net.hydromatic.morel.eval.code.GeneralCodes.notDefined;
 import static net.hydromatic.morel.eval.code.ListCodes.empty;
+import static net.hydromatic.morel.eval.code.ListCodes.length;
 import static net.hydromatic.morel.eval.code.WordCodes.identity;
 
 import com.google.common.collect.ImmutableList;
@@ -72,25 +73,35 @@ public final class RelationalCodes {
   public static void register(BiConsumer<BuiltIn, Object> c) {
     // lint: sort until '#}' where '##c\.accept\(BuiltIn' erase 'c\.'
     c.accept(BuiltIn.RELATIONAL_AVG, RELATIONAL_AVG);
+    c.accept(BuiltIn.RELATIONAL_AVG_OPT, RELATIONAL_AVG_OPT);
+    c.accept(BuiltIn.RELATIONAL_AVG_SOME, RELATIONAL_AVG_SOME);
     c.accept(BuiltIn.RELATIONAL_COMPARE, RELATIONAL_COMPARE);
     c.accept(BuiltIn.RELATIONAL_COUNT, RELATIONAL_COUNT);
+    c.accept(BuiltIn.RELATIONAL_COUNT_SOME, RELATIONAL_COUNT_SOME);
     c.accept(BuiltIn.RELATIONAL_EMPTY, RELATIONAL_EMPTY);
     c.accept(BuiltIn.RELATIONAL_ITERATE, RELATIONAL_ITERATE);
     c.accept(BuiltIn.RELATIONAL_MAX, RELATIONAL_MAX);
     c.accept(BuiltIn.RELATIONAL_MAX_BY, RELATIONAL_MAX_BY);
+    c.accept(BuiltIn.RELATIONAL_MAX_OPT, RELATIONAL_MAX_OPT);
+    c.accept(BuiltIn.RELATIONAL_MAX_SOME, RELATIONAL_MAX_SOME);
     c.accept(BuiltIn.RELATIONAL_MIN, RELATIONAL_MIN);
     c.accept(BuiltIn.RELATIONAL_MIN_BY, RELATIONAL_MIN_BY);
+    c.accept(BuiltIn.RELATIONAL_MIN_OPT, RELATIONAL_MIN_OPT);
+    c.accept(BuiltIn.RELATIONAL_MIN_SOME, RELATIONAL_MIN_SOME);
     c.accept(BuiltIn.RELATIONAL_NON_EMPTY, RELATIONAL_NON_EMPTY);
     c.accept(BuiltIn.RELATIONAL_ONLY, RELATIONAL_ONLY);
+    c.accept(BuiltIn.RELATIONAL_SOMES, RELATIONAL_SOMES);
     c.accept(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM);
+    c.accept(BuiltIn.RELATIONAL_SUM_OPT, RELATIONAL_SUM_OPT);
+    c.accept(BuiltIn.RELATIONAL_SUM_SOME, RELATIONAL_SUM_SOME);
     c.accept(BuiltIn.Z_EXTENT, Z_EXTENT);
     c.accept(BuiltIn.Z_LIST, Z_LIST);
     c.accept(BuiltIn.Z_SUM_DECIMAL, Z_SUM_DECIMAL);
-    c.accept(BuiltIn.Z_SUM_DECIMAL_OPTION, Z_SUM_DECIMAL_OPTION);
     c.accept(BuiltIn.Z_SUM_INT, Z_SUM_INT);
-    c.accept(BuiltIn.Z_SUM_INT_OPTION, Z_SUM_INT_OPTION);
+    c.accept(BuiltIn.Z_SUM_OPT_DECIMAL, Z_SUM_OPT_DECIMAL);
+    c.accept(BuiltIn.Z_SUM_OPT_INT, Z_SUM_OPT_INT);
+    c.accept(BuiltIn.Z_SUM_OPT_REAL, Z_SUM_OPT_REAL);
     c.accept(BuiltIn.Z_SUM_REAL, Z_SUM_REAL);
-    c.accept(BuiltIn.Z_SUM_REAL_OPTION, Z_SUM_REAL_OPTION);
   }
 
   // lint: sort until '#}' \
@@ -99,13 +110,31 @@ public final class RelationalCodes {
 
   /** @see BuiltIn#RELATIONAL_AVG */
   private static final Applicable RELATIONAL_AVG =
-      new RelationalAvg(Pos.ZERO, null, false);
+      new RelationalAvg(BuiltIn.RELATIONAL_AVG, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_AVG_OPT */
+  private static final Applicable RELATIONAL_AVG_OPT =
+      new RelationalAvg(BuiltIn.RELATIONAL_AVG_OPT, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_AVG_SOME */
+  private static final Applicable RELATIONAL_AVG_SOME =
+      new RelationalAvg(BuiltIn.RELATIONAL_AVG_SOME, Pos.ZERO, null);
 
   /** @see BuiltIn#RELATIONAL_COMPARE */
   private static final Applicable RELATIONAL_COMPARE = Comparer.INITIAL;
 
   /** @see BuiltIn#RELATIONAL_COUNT */
-  private static final Applicable RELATIONAL_COUNT = new RelationalCount(false);
+  private static final Applicable1 RELATIONAL_COUNT =
+      length(BuiltIn.RELATIONAL_COUNT);
+
+  /** @see BuiltIn#RELATIONAL_COUNT_SOME */
+  private static final Applicable1 RELATIONAL_COUNT_SOME =
+      new BaseApplicable1<Integer, List>(BuiltIn.RELATIONAL_COUNT_SOME) {
+        @Override
+        public Integer apply(List options) {
+          return someValues(options).size();
+        }
+      };
 
   /** @see BuiltIn#RELATIONAL_EMPTY */
   private static final Applicable1 RELATIONAL_EMPTY =
@@ -147,81 +176,93 @@ public final class RelationalCodes {
 
   /** @see BuiltIn#RELATIONAL_MAX */
   private static final Applicable RELATIONAL_MAX =
-      new RelationalMinMax(BuiltIn.RELATIONAL_MAX, Pos.ZERO, null, false);
+      new RelationalMinMax(BuiltIn.RELATIONAL_MAX, Pos.ZERO, null);
 
   /** @see BuiltIn#RELATIONAL_MAX_BY */
   private static final Applicable RELATIONAL_MAX_BY =
       new RelationalMinMaxBy(BuiltIn.RELATIONAL_MAX_BY, Pos.ZERO, null);
 
+  /** @see BuiltIn#RELATIONAL_MAX_OPT */
+  private static final Applicable RELATIONAL_MAX_OPT =
+      new RelationalMinMax(BuiltIn.RELATIONAL_MAX_OPT, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_MAX_SOME */
+  private static final Applicable RELATIONAL_MAX_SOME =
+      new RelationalMinMax(BuiltIn.RELATIONAL_MAX_SOME, Pos.ZERO, null);
+
   /** @see BuiltIn#RELATIONAL_MIN */
   private static final Applicable RELATIONAL_MIN =
-      new RelationalMinMax(BuiltIn.RELATIONAL_MIN, Pos.ZERO, null, false);
+      new RelationalMinMax(BuiltIn.RELATIONAL_MIN, Pos.ZERO, null);
 
   /** @see BuiltIn#RELATIONAL_MIN_BY */
   private static final Applicable RELATIONAL_MIN_BY =
       new RelationalMinMaxBy(BuiltIn.RELATIONAL_MIN_BY, Pos.ZERO, null);
 
+  /** @see BuiltIn#RELATIONAL_MIN_OPT */
+  private static final Applicable RELATIONAL_MIN_OPT =
+      new RelationalMinMax(BuiltIn.RELATIONAL_MIN_OPT, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_MIN_SOME */
+  private static final Applicable RELATIONAL_MIN_SOME =
+      new RelationalMinMax(BuiltIn.RELATIONAL_MIN_SOME, Pos.ZERO, null);
+
   /**
-   * Implements {@link #RELATIONAL_MAX} and {@link #RELATIONAL_MIN}.
+   * Implements {@link #RELATIONAL_MAX}, {@link #RELATIONAL_MIN}, {@link
+   * #RELATIONAL_MAX_OPT}, {@link #RELATIONAL_MIN_OPT}, {@link
+   * #RELATIONAL_MAX_SOME} and {@link #RELATIONAL_MIN_SOME}: the greatest or
+   * least element, by the comparator for the element type; for {@code maxSome}
+   * and {@code minSome}, the greatest or least value of the {@code SOME}
+   * elements, ignoring {@code NONE}, or {@code NONE} if there are none.
    *
-   * <p>Compares elements with {@link Comparators#comparatorFor} (as {@code
-   * order} and {@code distinct} do), rather than Java's {@link
-   * Ordering#natural}. Thus ordered types that Java would compare wrongly
-   * ({@code word}, which is unsigned; {@code real}, whose {@code NaN} and
-   * {@code ~0.0} differ) or not at all (tuples, records, lists, datatypes --
-   * represented as Java lists that are not {@code Comparable}) are compared
-   * correctly.
-   *
-   * <p>Raises {@link BuiltInExn#EMPTY} on an empty collection, like {@code
-   * List.hd}.
-   *
-   * <p>If the elements are options, ignores {@code NONE}, as SQL's {@code MIN}
-   * and {@code MAX} ignore nulls: compares the values of the {@code SOME}
-   * elements, and returns {@code NONE} if there are none (including if the
-   * collection is empty).
+   * <p>On an empty collection, {@code max} and {@code min} raise {@link
+   * BuiltInExn#EMPTY}, like {@code List.hd}; {@code maxOpt} and {@code minOpt}
+   * return {@code NONE}, and otherwise {@code SOME} of the element.
    */
   private static class RelationalMinMax
       extends BasePositionedApplicable1<Object, List> implements Typed {
     /** Comparator for the element type; null until {@link #withType} is run. */
     private final @Nullable Comparator comparator;
 
-    /** Whether the elements are options, whose {@code NONE}s are ignored. */
-    private final boolean option;
-
     RelationalMinMax(
-        BuiltIn builtIn,
-        Pos pos,
-        @Nullable Comparator comparator,
-        boolean option) {
+        BuiltIn builtIn, Pos pos, @Nullable Comparator comparator) {
       super(builtIn, pos);
       this.comparator = comparator;
-      this.option = option;
     }
 
     @Override
     public Applicable withPos(Pos pos) {
-      return new RelationalMinMax(builtIn, pos, comparator, option);
+      return new RelationalMinMax(builtIn, pos, comparator);
     }
 
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type, Pos pos) {
-      // 'type' is 'elementType bag -> elementType' (perhaps wrapped in a
-      // ForallType if the function is used as a value); its result type is the
-      // element type.
-      final FnType fnType = FnType.of(type);
-      final Type elementType = fnType.resultType;
-      final @Nullable Type optionType = optionElementType(elementType);
+      // The comparator is chosen from the element type of the argument, a
+      // list or bag; for "maxSome" and "minSome", from the type of the
+      // options' values.
+      final Type elementType = FnType.of(type).paramType.elementType();
+      final Type valueType = some() ? elementType.arg(0) : elementType;
       final Comparator comparator =
-          Comparators.comparatorFor(
-              typeSystem, optionType != null ? optionType : elementType, pos);
-      return new RelationalMinMax(builtIn, pos, comparator, optionType != null);
+          Comparators.comparatorFor(typeSystem, valueType, pos);
+      return new RelationalMinMax(builtIn, pos, comparator);
+    }
+
+    /** Whether this is {@code maxOpt} or {@code minOpt}. */
+    private boolean opt() {
+      return builtIn == BuiltIn.RELATIONAL_MAX_OPT
+          || builtIn == BuiltIn.RELATIONAL_MIN_OPT;
+    }
+
+    /** Whether this is {@code maxSome} or {@code minSome}. */
+    private boolean some() {
+      return builtIn == BuiltIn.RELATIONAL_MAX_SOME
+          || builtIn == BuiltIn.RELATIONAL_MIN_SOME;
     }
 
     @Override
     public Object apply(List list) {
-      final List values = option ? someValues(list) : list;
+      final List values = some() ? someValues(list) : list;
       if (values.isEmpty()) {
-        if (option) {
+        if (opt() || some()) {
           return Codes.OPTION_NONE;
         }
         throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
@@ -231,9 +272,11 @@ public final class RelationalCodes {
       final Object result =
           requireNonNull(
               builtIn == BuiltIn.RELATIONAL_MAX
+                      || builtIn == BuiltIn.RELATIONAL_MAX_OPT
+                      || builtIn == BuiltIn.RELATIONAL_MAX_SOME
                   ? ordering.max(values)
                   : ordering.min(values));
-      return option ? Codes.optionSome(result) : result;
+      return opt() || some() ? Codes.optionSome(result) : result;
     }
   }
 
@@ -316,6 +359,15 @@ public final class RelationalCodes {
   private static final Applicable RELATIONAL_ONLY =
       new RelationalOnly(BuiltIn.RELATIONAL_ONLY, Pos.ZERO);
 
+  /** @see BuiltIn#RELATIONAL_SOMES */
+  private static final Applicable1 RELATIONAL_SOMES =
+      new BaseApplicable1<List, List>(BuiltIn.RELATIONAL_SOMES) {
+        @Override
+        public List apply(List options) {
+          return someValues(options);
+        }
+      };
+
   /** @see BuiltIn#RELATIONAL_SUM */
   static final Macro RELATIONAL_SUM =
       (typeSystem, env, argType, pos) -> {
@@ -334,20 +386,30 @@ public final class RelationalCodes {
           if (isDecimal(resultType)) {
             return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_DECIMAL);
           }
-          // Over options, a sum ignores NONE, as SQL's SUM ignores nulls.
-          final @Nullable Type valueType = optionElementType(resultType);
-          if (valueType == PrimitiveType.INT) {
-            return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_INT_OPTION);
-          }
-          if (valueType == PrimitiveType.REAL) {
-            return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_REAL_OPTION);
-          }
-          if (valueType != null && isDecimal(valueType)) {
-            return core.functionLiteral(
-                typeSystem, BuiltIn.Z_SUM_DECIMAL_OPTION);
-          }
         }
         throw notDefined(BuiltIn.RELATIONAL_SUM, argType, pos);
+      };
+
+  /** @see BuiltIn#RELATIONAL_SUM_SOME */
+  private static final Applicable RELATIONAL_SUM_SOME =
+      new RelationalSumSome(Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_SUM_OPT */
+  static final Macro RELATIONAL_SUM_OPT =
+      (typeSystem, env, argType, pos) -> {
+        if (argType.isCollection()) {
+          final Type elementType = argType.elementType();
+          if (elementType == PrimitiveType.INT) {
+            return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_OPT_INT);
+          }
+          if (elementType == PrimitiveType.REAL) {
+            return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_OPT_REAL);
+          }
+          if (isDecimal(elementType)) {
+            return core.functionLiteral(typeSystem, BuiltIn.Z_SUM_OPT_DECIMAL);
+          }
+        }
+        throw notDefined(BuiltIn.RELATIONAL_SUM_OPT, argType, pos);
       };
 
   /** @see BuiltIn#Z_EXTENT */
@@ -398,12 +460,6 @@ public final class RelationalCodes {
     }
   }
 
-  /**
-   * Implements {@link #RELATIONAL_SUM} for type {@code decimal option list}.
-   */
-  private static final Applicable Z_SUM_DECIMAL_OPTION =
-      new ZSumOption(BuiltIn.Z_SUM_DECIMAL_OPTION, Pos.ZERO);
-
   /** Implements {@link #RELATIONAL_SUM} for type {@code int list}. */
   private static final Applicable Z_SUM_INT =
       new BaseApplicable1<Integer, List<? extends Number>>(BuiltIn.Z_SUM_INT) {
@@ -422,9 +478,17 @@ public final class RelationalCodes {
         }
       };
 
-  /** Implements {@link #RELATIONAL_SUM} for type {@code int option list}. */
-  private static final Applicable Z_SUM_INT_OPTION =
-      new ZSumOption(BuiltIn.Z_SUM_INT_OPTION, Pos.ZERO);
+  /** Implements {@link #RELATIONAL_SUM_OPT} for type {@code decimal list}. */
+  private static final Applicable Z_SUM_OPT_DECIMAL =
+      new ZSumOpt(BuiltIn.Z_SUM_OPT_DECIMAL, Pos.ZERO);
+
+  /** Implements {@link #RELATIONAL_SUM_OPT} for type {@code int list}. */
+  private static final Applicable Z_SUM_OPT_INT =
+      new ZSumOpt(BuiltIn.Z_SUM_OPT_INT, Pos.ZERO);
+
+  /** Implements {@link #RELATIONAL_SUM_OPT} for type {@code real list}. */
+  private static final Applicable Z_SUM_OPT_REAL =
+      new ZSumOpt(BuiltIn.Z_SUM_OPT_REAL, Pos.ZERO);
 
   /** Implements {@link #RELATIONAL_SUM} for type {@code real list}. */
   private static final Applicable Z_SUM_REAL =
@@ -444,21 +508,7 @@ public final class RelationalCodes {
         }
       };
 
-  /** Implements {@link #RELATIONAL_SUM} for type {@code real option list}. */
-  private static final Applicable Z_SUM_REAL_OPTION =
-      new ZSumOption(BuiltIn.Z_SUM_REAL_OPTION, Pos.ZERO);
-
   // -----------------------------------------------------------------------
-
-  /**
-   * Returns the element type of an option type, or null if {@code type} is not
-   * an option type.
-   */
-  static @Nullable Type optionElementType(Type type) {
-    return type instanceof DataType && ((DataType) type).name.equals("option")
-        ? ((DataType) type).arg(0)
-        : null;
-  }
 
   /** Returns whether a type is {@code decimal}. */
   private static boolean isDecimal(Type type) {
@@ -481,39 +531,82 @@ public final class RelationalCodes {
   }
 
   /**
-   * Implements {@link #Z_SUM_DECIMAL_OPTION}, {@link #Z_SUM_INT_OPTION} and
-   * {@link #Z_SUM_REAL_OPTION}: sums the values of the {@code SOME} elements,
-   * as the corresponding sum over values does, and returns {@code NONE} if
-   * there are none.
+   * Implements {@link #RELATIONAL_SUM_SOME}: {@code SOME} of the sum of the
+   * values of the {@code SOME} elements, ignoring {@code NONE}, as {@code
+   * sumOpt} would sum them, or {@code NONE} if there are none.
    */
-  private static class ZSumOption
-      extends BasePositionedApplicable1<List, List> {
-    ZSumOption(BuiltIn builtIn, Pos pos) {
+  private static class RelationalSumSome
+      extends BasePositionedApplicable1<List, List> implements Typed {
+    /** The internal "sumOpt" for the values' type; null until typed. */
+    private final @Nullable Applicable1 sumOpt;
+
+    RelationalSumSome(Pos pos, @Nullable Applicable1 sumOpt) {
+      super(BuiltIn.RELATIONAL_SUM_SOME, pos);
+      this.sumOpt = sumOpt;
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new RelationalSumSome(pos, sumOpt);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type, Pos pos) {
+      final Type paramType = FnType.of(type).paramType;
+      if (paramType.isCollection()) {
+        final Type valueType = paramType.elementType().arg(0);
+        if (valueType == PrimitiveType.INT) {
+          return new RelationalSumSome(pos, (Applicable1) Z_SUM_OPT_INT);
+        }
+        if (valueType == PrimitiveType.REAL) {
+          return new RelationalSumSome(pos, (Applicable1) Z_SUM_OPT_REAL);
+        }
+        if (isDecimal(valueType)) {
+          return new RelationalSumSome(
+              pos, new ZSumOpt(BuiltIn.Z_SUM_OPT_DECIMAL, pos));
+        }
+      }
+      throw notDefined(BuiltIn.RELATIONAL_SUM_SOME, paramType, pos);
+    }
+
+    @Override
+    public List apply(List options) {
+      return (List) requireNonNull(sumOpt, "sumOpt").apply(someValues(options));
+    }
+  }
+
+  /**
+   * Implements {@link #Z_SUM_OPT_DECIMAL}, {@link #Z_SUM_OPT_INT} and {@link
+   * #Z_SUM_OPT_REAL}: {@code SOME} of the sum, as the corresponding sum
+   * computes it, or {@code NONE} if the collection is empty.
+   */
+  private static class ZSumOpt extends BasePositionedApplicable1<List, List> {
+    ZSumOpt(BuiltIn builtIn, Pos pos) {
       super(builtIn, pos);
     }
 
     @Override
     public Applicable withPos(Pos pos) {
-      return new ZSumOption(builtIn, pos);
+      return new ZSumOpt(builtIn, pos);
     }
 
     @Override
     protected String name() {
-      return "Relational.sum$" + builtIn.mlName.substring("sum:".length());
+      return "Relational.sumOpt$"
+          + builtIn.mlName.substring("sumOpt:".length());
     }
 
     @Override
-    public List apply(List options) {
-      final List values = someValues(options);
+    public List apply(List values) {
       if (values.isEmpty()) {
         return Codes.OPTION_NONE;
       }
       final Object sum;
       switch (builtIn) {
-        case Z_SUM_DECIMAL_OPTION:
+        case Z_SUM_OPT_DECIMAL:
           sum = new ZSumDecimal(pos).apply((List<BigDecimal>) values);
           break;
-        case Z_SUM_INT_OPTION:
+        case Z_SUM_OPT_INT:
           sum = ((Applicable1) Z_SUM_INT).apply(values);
           break;
         default:
@@ -525,62 +618,63 @@ public final class RelationalCodes {
   }
 
   /**
-   * Implements {@link #RELATIONAL_AVG}.
+   * Implements {@link #RELATIONAL_AVG}, {@link #RELATIONAL_AVG_OPT} and {@link
+   * #RELATIONAL_AVG_SOME}.
    *
    * <p>Its type is overloaded, and {@link #withType} chooses the arithmetic:
    * the mean of {@code int} values is a {@code real}, computed in {@code
    * double}; of {@code real} values, a {@code real}; of {@code decimal} values,
    * a {@code decimal}, the exact sum divided by the count and rounded to 34
-   * digits. Over options, ignores {@code NONE} and returns {@code NONE} if
-   * there is no {@code SOME}; over other types, raises {@link BuiltInExn#EMPTY}
-   * on an empty collection.
+   * digits. On an empty collection, {@code avg} raises {@link BuiltInExn#EMPTY}
+   * and {@code avgOpt} returns {@code NONE}; {@code avgOpt} otherwise returns
+   * {@code SOME} of the mean. {@code avgSome} averages the values of the {@code
+   * SOME} elements, ignoring {@code NONE}, as {@code avgOpt} would.
    */
   private static class RelationalAvg
       extends BasePositionedApplicable1<Object, List> implements Typed {
     /** Type of the values averaged; null until {@link #withType} is run. */
     private final @Nullable Type valueType;
 
-    /** Whether the elements are options, whose {@code NONE}s are ignored. */
-    private final boolean option;
-
-    RelationalAvg(Pos pos, @Nullable Type valueType, boolean option) {
-      super(BuiltIn.RELATIONAL_AVG, pos);
+    RelationalAvg(BuiltIn builtIn, Pos pos, @Nullable Type valueType) {
+      super(builtIn, pos);
       this.valueType = valueType;
-      this.option = option;
     }
 
     @Override
     public Applicable withPos(Pos pos) {
-      return new RelationalAvg(pos, valueType, option);
+      return new RelationalAvg(builtIn, pos, valueType);
     }
 
     @Override
     public Applicable withType(TypeSystem typeSystem, Type type, Pos pos) {
       final Type paramType = FnType.of(type).paramType;
       if (paramType.isCollection()) {
-        final Type elementType = paramType.elementType();
-        final @Nullable Type optionType = optionElementType(elementType);
-        final Type valueType = optionType != null ? optionType : elementType;
+        final Type valueType =
+            builtIn == BuiltIn.RELATIONAL_AVG_SOME
+                ? paramType.elementType().arg(0)
+                : paramType.elementType();
         if (valueType == PrimitiveType.INT
             || valueType == PrimitiveType.REAL
             || isDecimal(valueType)) {
-          return new RelationalAvg(pos, valueType, optionType != null);
+          return new RelationalAvg(builtIn, pos, valueType);
         }
       }
-      throw notDefined(BuiltIn.RELATIONAL_AVG, paramType, pos);
+      throw notDefined(builtIn, paramType, pos);
     }
 
     @Override
     public Object apply(List list) {
-      final List values = option ? someValues(list) : list;
+      final boolean some = builtIn == BuiltIn.RELATIONAL_AVG_SOME;
+      final boolean opt = some || builtIn == BuiltIn.RELATIONAL_AVG_OPT;
+      final List values = some ? someValues(list) : list;
       if (values.isEmpty()) {
-        if (option) {
+        if (opt) {
           return Codes.OPTION_NONE;
         }
         throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
       }
       final Object avg = mean(values);
-      return option ? Codes.optionSome(avg) : avg;
+      return opt ? Codes.optionSome(avg) : avg;
     }
 
     private Object mean(List values) {
@@ -609,36 +703,6 @@ public final class RelationalCodes {
             pos);
       }
       throw new IllegalStateException("avg has no type: " + valueType);
-    }
-  }
-
-  /**
-   * Implements {@link #RELATIONAL_COUNT}: the number of elements; if the
-   * elements are options, the number that are {@code SOME}, as SQL's {@code
-   * COUNT(x)} ignores nulls.
-   */
-  private static class RelationalCount extends BaseApplicable1<Integer, List>
-      implements Typed {
-    /** Whether the elements are options, whose {@code NONE}s are ignored. */
-    private final boolean option;
-
-    RelationalCount(boolean option) {
-      super(BuiltIn.RELATIONAL_COUNT);
-      this.option = option;
-    }
-
-    @Override
-    public Applicable withType(TypeSystem typeSystem, Type type, Pos pos) {
-      final Type paramType = FnType.of(type).paramType;
-      final boolean option =
-          paramType.isCollection()
-              && optionElementType(paramType.elementType()) != null;
-      return option == this.option ? this : new RelationalCount(option);
-    }
-
-    @Override
-    public Integer apply(List list) {
-      return option ? someValues(list).size() : list.size();
     }
   }
 

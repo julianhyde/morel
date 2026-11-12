@@ -27,14 +27,21 @@ Sys.set ("stringDepth", NONE);
 
 Relational;
 > val it =
->   {avg=fn,compare=fn,count=fn,empty=fn,iterate=fn,max=fn,maxBy=fn,min=fn,
->    minBy=fn,nonEmpty=fn,only=fn,sum=fn}
->   : {avg:int bag -> real, compare:'a * 'a -> order, count:'b bag -> int,
->       empty:'c bag -> bool,
->       iterate:'d bag -> ('d bag * 'd bag -> 'd bag) -> 'd bag,
->       max:'e bag -> 'e, maxBy:('f -> 'g) -> 'f bag -> 'f, min:'h bag -> 'h,
->       minBy:('i -> 'j) -> 'i bag -> 'i, nonEmpty:'k bag -> bool,
->       only:'l bag -> 'l, sum:'m bag -> 'm}
+>   {avg=fn,avgOpt=fn,avgSome=fn,compare=fn,count=fn,countSome=fn,empty=fn,
+>    iterate=fn,max=fn,maxBy=fn,maxOpt=fn,maxSome=fn,min=fn,minBy=fn,minOpt=fn,
+>    minSome=fn,nonEmpty=fn,only=fn,somes=fn,sum=fn,sumOpt=fn,sumSome=fn}
+>   : {avg:int bag -> real, avgOpt:int bag -> real option,
+>       avgSome:int option bag -> real option, compare:'a * 'a -> order,
+>       count:'b bag -> int, countSome:'c option bag -> int,
+>       empty:'d bag -> bool,
+>       iterate:'e bag -> ('e bag * 'e bag -> 'e bag) -> 'e bag,
+>       max:'f bag -> 'f, maxBy:('g -> 'h) -> 'g bag -> 'g,
+>       maxOpt:'i bag -> 'i option, maxSome:'j option bag -> 'j option,
+>       min:'k bag -> 'k, minBy:('l -> 'm) -> 'l bag -> 'l,
+>       minOpt:'n bag -> 'n option, minSome:'o option bag -> 'o option,
+>       nonEmpty:'p bag -> bool, only:'q bag -> 'q,
+>       somes:'r option bag -> 'r bag, sum:'s bag -> 's,
+>       sumOpt:'t bag -> 't option, sumSome:'u option bag -> 'u option}
 
 (* Descending:
  *   datatype descending = DESC of 'a
@@ -80,22 +87,39 @@ Relational.avg (bag [] : decimal bag);
 Relational.avg ["a", "b"];
 > stdIn:1.1-1.26 Error: Cannot deduce type: no valid overloads
 >   raised at: stdIn:1.1-1.26
-(* Over options, "avg" ignores NONE, as SQL's AVG ignores nulls, and is NONE
- * if there is no SOME. *)
+(* "avg" over options is not defined; "avgSome" (below) is SQL's AVG,
+ * which ignores nulls. *)
 Relational.avg [SOME 1, NONE, SOME 4];
-> val it = SOME 2.5 : real option
-Relational.avg [SOME 1.5, NONE];
-> val it = SOME 1.5 : real option
-Relational.avg (bag [NONE, SOME (decimal "1.5"), SOME (decimal "2.5")]);
-> val it = SOME 2 : decimal option
-Relational.avg ([NONE, NONE] : int option list);
-> val it = NONE : real option
-Relational.avg ([] : real option list);
-> val it = NONE : real option
+> stdIn:1.1-1.38 Error: Cannot deduce type: no valid overloads
+>   raised at: stdIn:1.1-1.38
 from i in [1, 2] compute avg over i;
 > val it = 1.5 : real
-from i in [SOME 1, NONE, SOME 2] compute avg over i;
+
+(* "avgOpt" is "avg", but NONE on an empty collection rather than raising
+ * Empty, and otherwise SOME of the mean. *)
+Relational.avgOpt [1, 2, 6];
+> val it = SOME 3 : real option
+Relational.avgOpt ([] : int list);
+> val it = NONE : real option
+Relational.avgOpt (bag [decimal "1.5", decimal "2.25"]);
+> val it = SOME 1.875 : decimal option
+avgOpt [1.5];
 > val it = SOME 1.5 : real option
+(* "avgSome" is SQL's AVG: the mean of the values of the SOMEs, ignoring
+ * NONE, or NONE if there are none. *)
+Relational.avgSome [SOME 1, NONE, SOME 4];
+> val it = SOME 2.5 : real option
+avgSome (bag [NONE, SOME (decimal "1.5"), SOME (decimal "2.5")]);
+> val it = SOME 2 : decimal option
+avgSome ([NONE, NONE] : real option list);
+> val it = NONE : real option
+avgSome ([] : int option list);
+> val it = NONE : real option
+from i in [SOME 1, NONE, SOME 4] compute avgSome over i;
+> val it = SOME 2.5 : real option
+(*) "avgSome" is "avgOpt" of "somes".
+avgOpt (somes [SOME 1, NONE, SOME 4]);
+> val it = SOME 2.5 : real option
 
 Relational.count (bag [1, 2, 3]);
 > val it = 3 : int
@@ -107,15 +131,20 @@ Sys.plan ();
 > val it =
 >   "apply(fnValue Relational.count, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false))))"
 >   : string
-(* Over options, "count" counts the SOMEs, as SQL's COUNT(x) ignores nulls.
- * "count over ()" counts rows whatever they hold. *)
+(* "count" counts elements, whatever they are, NONE among them;
+ * "countSome" counts the SOMEs, as SQL's COUNT(x) ignores nulls. *)
 Relational.count [SOME 1, NONE, SOME 3];
-> val it = 2 : int
-Relational.count (bag [NONE] : int option bag);
-> val it = 0 : int
+> val it = 3 : int
 Relational.count [SOME NONE, NONE];
+> val it = 2 : int
+Relational.countSome [SOME 1, NONE, SOME 3];
+> val it = 2 : int
+countSome [SOME NONE, NONE];
 > val it = 1 : int
-from i in [SOME 1, NONE, SOME 3] compute {c = count over i, n = count over ()};
+countSome ([] : int option list);
+> val it = 0 : int
+from i in [SOME 1, NONE, SOME 3]
+  compute {c = countSome over i, n = count over ()};
 > val it = {c=2,n=3} : {c:int, n:int}
 
 Relational.nonEmpty (bag [1, 2, 3]);
@@ -214,25 +243,89 @@ Relational.sum (bag [Decimal.maxFinite, Decimal.maxFinite]);
 >   raised at: stdIn:1.1-1.60
 from d in [decimal "1.5", decimal "2.25"] compute sum over d;
 > val it = 3.75 : decimal
-(* Over options, "sum" ignores NONE, as SQL's SUM ignores nulls, and is NONE
- * if there is no SOME. *)
+(* "sum" over options is not defined. *)
 Relational.sum [SOME 1, NONE, SOME 3];
-> val it = SOME 4 : int option
+> stdIn:1.1-1.38 Error: operator 'sum' not defined for type 'int option list'
+>   raised at: stdIn:1.1-1.38
+
+(* "sumOpt" is SOME of the sum, or NONE on an empty collection. *)
+Relational.sumOpt [1, 2, 3];
+> val it = SOME 6 : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply(fnValue Relational.sum$int option, argCode tuple(apply(fnValue tyCon, argCode constant(1)), constant([NONE]), apply(fnValue tyCon, argCode constant(3)))))"
+>   "apply(fnValue Relational.sumOpt$int, argCode tuple(constant(1), constant(2), constant(3)))"
 >   : string
-Relational.sum (bag [SOME 1.5, NONE]);
-> val it = SOME 1.5 : real option
-Relational.sum [NONE, SOME (decimal "0.1"), SOME (decimal "0.2")];
-> val it = SOME 0.3 : decimal option
-Relational.sum ([NONE] : int option list);
+Relational.sumOpt ([] : int list);
 > val it = NONE : int option
-Relational.sum ([] : decimal option list);
+Relational.sumOpt (bag [1.5, 2.5]);
+> val it = SOME 4 : real option
+Relational.sumOpt [decimal "0.1", decimal "0.2"];
+> val it = SOME 0.3 : decimal option
+sumOpt ([] : decimal list);
 > val it = NONE : decimal option
-Relational.sum [SOME Decimal.maxFinite, SOME Decimal.maxFinite];
+Relational.sumOpt [Decimal.maxFinite, Decimal.maxFinite];
 > uncaught exception Overflow [overflow]
->   raised at: stdIn:1.1-1.64
+>   raised at: stdIn:1.1-1.57
+(*) It is "sumOpt o somes"; "sumSome" is SQL's SUM.
+from i in [SOME 1, NONE, SOME 3] compute (sumOpt o somes) over i;
+> val it = SOME 4 : int option
+
+(* "sumSome" is SQL's SUM: the sum of the values of the SOMEs, ignoring
+ * NONE, or NONE if there are none. *)
+Relational.sumSome [SOME 1, NONE, SOME 3];
+> val it = SOME 4 : int option
+sumSome (bag [SOME 1.5, NONE]);
+> val it = SOME 1.5 : real option
+sumSome [NONE, SOME (decimal "0.1"), SOME (decimal "0.2")];
+> val it = SOME 0.3 : decimal option
+sumSome ([NONE] : int option list);
+> val it = NONE : int option
+sumSome ([] : decimal option list);
+> val it = NONE : decimal option
+from i in [SOME 1, NONE, SOME 3] compute sumSome over i;
+> val it = SOME 4 : int option
+
+(* "somes" drops each NONE, and gives the values of the SOMEs. *)
+Relational.somes [SOME 1, NONE, SOME 3];
+> val it = [1,3] : int bag
+somes (bag [NONE, SOME "a"]);
+> val it = ["a"] : string bag
+somes ([] : int option list);
+> val it = [] : int bag
+somes [SOME NONE, NONE, SOME (SOME 2)];
+> val it = [NONE,SOME 2] : int option bag
+
+(* "maxOpt" and "minOpt" are "max" and "min", but NONE on an empty
+ * collection rather than raising Empty. *)
+Relational.maxOpt [1, 3, 2];
+> val it = SOME 3 : int option
+Relational.minOpt (bag ["b", "a"]);
+> val it = SOME "a" : string option
+maxOpt ([] : int list);
+> val it = NONE : int option
+minOpt ([] : string list);
+> val it = NONE : string option
+(*) Over options, NONE is the least, as "compare" says.
+Relational.minOpt [SOME 1, NONE];
+> val it = SOME NONE : int option option
+(*) With "somes", they are SQL's MAX and MIN; so are "maxSome", "minSome".
+from i in [SOME 2, NONE, SOME 1]
+  compute {lo = (minOpt o somes) over i, hi = (maxOpt o somes) over i};
+> val it = {hi=SOME 2,lo=SOME 1} : {hi:int option, lo:int option}
+
+(* "maxSome" and "minSome" are SQL's MAX and MIN: the greatest and least
+ * values of the SOMEs, ignoring NONE, or NONE if there are none. *)
+Relational.maxSome [SOME 1, NONE, SOME 3];
+> val it = SOME 3 : int option
+minSome (bag [NONE, SOME "b", SOME "a"]);
+> val it = SOME "a" : string option
+maxSome ([NONE] : int option list);
+> val it = NONE : int option
+minSome ([] : int option list);
+> val it = NONE : int option
+from i in [SOME 2, NONE, SOME 1]
+  compute {lo = minSome over i, hi = maxSome over i};
+> val it = {hi=SOME 2,lo=SOME 1} : {hi:int option, lo:int option}
 
 Relational.max (bag [1, 2, 3]);
 > val it = 3 : int
@@ -249,8 +342,9 @@ Relational.max (bag [0w1, 0wxFFFFFFFFFFFFFFFF]);
 > val it = 0wxFFFFFFFFFFFFFFFF : word
 Relational.max (bag [(1, 2), (2, 1), (1, 9)]);
 > val it = (2,1) : int * int
-(* Over options, "max" ignores NONE, as SQL's MAX ignores nulls, and is NONE
- * if there is no SOME, including if the collection is empty. *)
+(* Over options, "max" orders by "compare", in which NONE is less than any
+ * SOME, and raises Empty on an empty collection; "maxSome" is SQL's MAX,
+ * which ignores nulls. *)
 Relational.max (bag [SOME 1, NONE, SOME 3]);
 > val it = SOME 3 : int option
 Relational.max [NONE, SOME "b", SOME "a"];
@@ -258,7 +352,8 @@ Relational.max [NONE, SOME "b", SOME "a"];
 Relational.max ([NONE] : int option list);
 > val it = NONE : int option
 Relational.max ([] : int option list);
-> val it = NONE : int option
+> uncaught exception Empty
+>   raised at: stdIn:1.1-1.38
 Relational.max (bag [INL 1, INR "a", INL 2]);
 > val it = INR "a" : (int,string) either
 Relational.max (bag [false, true]);
@@ -313,16 +408,18 @@ Relational.min (bag [0w1, 0wxFFFFFFFFFFFFFFFF]);
 > val it = 0wx1 : word
 Relational.min (bag [(1, 2), (2, 1), (1, 9)]);
 > val it = (1,2) : int * int
-(* Over options, "min" ignores NONE, as SQL's MIN ignores nulls, and is NONE
- * if there is no SOME, including if the collection is empty. *)
+(* Over options, "min" orders by "compare", in which NONE is less than any
+ * SOME, and raises Empty on an empty collection; "minSome" is SQL's MIN,
+ * which ignores nulls. *)
 Relational.min (bag [SOME 1, NONE, SOME 3]);
-> val it = SOME 1 : int option
+> val it = NONE : int option
 Relational.min [NONE, SOME "b", SOME "a"];
-> val it = SOME "a" : string option
+> val it = NONE : string option
 Relational.min ([NONE] : int option list);
 > val it = NONE : int option
 Relational.min ([] : int option list);
-> val it = NONE : int option
+> uncaught exception Empty
+>   raised at: stdIn:1.1-1.38
 Relational.min (bag [INL 1, INR "a", INL 2]);
 > val it = INL 1 : (int,string) either
 Relational.min (bag [false, true]);
