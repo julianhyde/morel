@@ -412,6 +412,66 @@ public class ShellTest {
   }
 
   /**
+   * Tests that inside a block comment, {@code (*)} begins a line comment, as it
+   * does in the lexer, so a {@code *)} later on that line does not end the
+   * block. Comments that hold SQL, such as {@code count(*)}, do this.
+   */
+  @Test
+  void testLineCommentInBlockComment() {
+    final String in =
+        "(* x 'select count(*)' y *)\n" //
+            + "1;\n"
+            + "*)\n"
+            + "2;\n";
+    final String expected =
+        "- (* x 'select count(*)' y *)\r\n" //
+            + "= 1;\r\n"
+            + "= *)\r\n"
+            + "= 2;\r\n"
+            + "val it = 2 : int\n"
+            + "- \r\n";
+    fixture().withInputString(in).assertOutput(is(expected));
+    // A quote inside the comment does not open a literal.
+    final String in2 =
+        "(* x \"select count(*)\" y *)\n" //
+            + "1;\n"
+            + "*)\n"
+            + "3;\n";
+    final String expected2 =
+        "- (* x \"select count(*)\" y *)\r\n" //
+            + "= 1;\r\n"
+            + "= *)\r\n"
+            + "= 3;\r\n"
+            + "val it = 3 : int\n"
+            + "- \r\n";
+    fixture().withInputString(in2).assertOutput(is(expected2));
+    // The block continues on the next line, and ends there.
+    final String in3 =
+        "(* x count(*)\n" //
+            + " *)\n"
+            + "4;\n";
+    final String expected3 =
+        "- (* x count(*)\r\n" //
+            + "=  *)\r\n"
+            + "= 4;\r\n"
+            + "val it = 4 : int\n"
+            + "- \r\n";
+    fixture().withInputString(in3).assertOutput(is(expected3));
+    // A quote on a line that continues a comment does not open a literal.
+    final String in4 =
+        "(* a\n" //
+            + " * b \" c *)\n"
+            + "5;\n";
+    final String expected4 =
+        "- (* a\r\n" //
+            + "=  * b \" c *)\r\n"
+            + "= 5;\r\n"
+            + "val it = 5 : int\n"
+            + "- \r\n";
+    fixture().withInputString(in4).assertOutput(is(expected4));
+  }
+
+  /**
    * Tests that a semicolon inside a comment does not end the statement. If it
    * did, the parser would be given a comment that is not yet closed, and would
    * report an unterminated comment at end of input.
