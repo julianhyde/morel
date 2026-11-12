@@ -43,6 +43,36 @@ let val x = 5 in x + x end;
 Sys.plan ();
 > val it = "apply2(fnValue Int.+, constant(5), constant(5))" : string
 
+(* A variable used once, but in an expression that a query evaluates
+ * for each row, is not inlined: that would evaluate it once per row,
+ * not once. Here "ys" would be computed for each element of "xs". *)
+let
+  val n = 2
+  val ys = from i in [1, 2, 3] where i > n yield i * 10
+in
+  from x in [10, 20, 30] where x elem ys
+end;
+> val it = [30] : int list
+Sys.planEx "-1";
+> val it =
+>   "val it =\n  let\n    val ys =\n      project i [#`*` Int (i, 10)] : int list\n        filter i [i > 2] : int list\n          [1, 2, 3] : int list\n    \n  in\n    r$0[ys]\n  end\n\nr$0[ys] =\n  filter x [op elem (x, ys)] : int list\n    [10, 20, 30] : int list\n"
+>   : string
+
+(*) A function used once in a query is inlined, because it is a value.
+let
+  fun big x = x > 15
+in
+  from x in [10, 20, 30] where big x
+end;
+> val it = [20,30] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   filter x [x > 15] : int list
+>     [10, 20, 30] : int list
+> |_} : string
+
 (*) A dead variable (not used) is removed.
 let val x = 1 val y = 2 in y end;
 > val it = 2 : int
@@ -1075,6 +1105,31 @@ Sys.planEx "-1";
 >       join x y : t$0
 >         xs : {a:int, b:int} list
 >         ys : {c:int, d:int} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int}) list
+> |_} : string
+
+(* A conjunct that refers to the row from inside a query, here an
+ * "exists", makes the resolver name the row, in a "let" around the
+ * whole condition. The other conjuncts still move; the "exists" stays,
+ * in its "let". *)
+from x in xs, y in ys
+  where x.b = y.c andalso (exists z in zs where z.e = y.d)
+  yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=3,d=5},{a=3,d=7}] : {a:int, d:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{a = #a (#1 r), d = #d (#2 r)}] : {a:int, d:int} list
+>     filter r [let val v$0 = r in #nonEmpty Relational (r$0[v$0]) end] : t$0
+>       join x y [#b x = #c y] : t$0
+>         xs : {a:int, b:int} list
+>         ys : {c:int, d:int} list
+>
+> r$0[v$0] =
+>   filter z [#e z = #d (#2 v$0)] : {e:int, f:string} list
+>     zs : {e:int, f:string} list
 >
 > t$0 ({a:int, b:int} * {c:int, d:int}) list
 > |_} : string

@@ -138,18 +138,18 @@ end;
 > val it = [7372,7569,7791,7879,7905] : int bag
 Sys.plan();
 > val it =
->   {_|
-> globalMarshal(globals [scott], body let1(expCode apply2(fnValue Int.+, constant(7), constant(3)), resultCode calcite(plan LogicalProject($f0=[+($2, MOD(13, morelScalar('ten', '{
+>   {|globalMarshal(globals [scott], body let1(expCode apply2(fnValue Int.+, constant(7), constant(3)), resultCode let1(expCode apply2(fnValue ::, stack(offset 1, name ten), apply2(fnValue ::, constant(20), apply2(fnValue ::, constant(30), calcite(plan LogicalValues(tuples=[[{ 40 }]])
+> )))), resultCode calcite(plan LogicalProject($f0=[+($2, MOD(13, morelScalar('ten', '{
 >   "type": "INTEGER",
 >   "nullable": false
 > }')))])
->   LogicalFilter(condition=[=($1, morelScalar('#nth List (ten :: 20 :: 30 :: [40], 1)', '{
+>   LogicalFilter(condition=[=($1, morelScalar('#nth List (deptNos, 1)', '{
 >   "type": "INTEGER",
 >   "nullable": false
 > }'))])
 >     LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
 >       JdbcTableScan(table=[[scott, EMP]])
-> )))|_} : string
+> ))))|} : string
 
 (* Query in Hybrid mode (90% Calcite; Calcite code references a function
  * from the enclosing environment) *)

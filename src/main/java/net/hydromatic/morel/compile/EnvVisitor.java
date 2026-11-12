@@ -95,7 +95,7 @@ public abstract class EnvVisitor extends Visitor {
   }
 
   /** Returns the bindings of a node's patterns. */
-  private static List<Binding> patternBindings(Core.Rel rel) {
+  protected static List<Binding> patternBindings(Core.Rel rel) {
     final List<Binding> bindings = new ArrayList<>();
     rel.patterns().forEach(pat -> bindings.add(Binding.of(pat)));
     return bindings;

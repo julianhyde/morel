@@ -26,6 +26,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.OffsetDateTime;
@@ -34,12 +35,15 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.type.Binding;
+import net.hydromatic.morel.type.FnType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -55,15 +59,19 @@ import org.jspecify.annotations.Nullable;
  * reads {@code qN.csv} from the answers directory, which {@code init-tpcds.py}
  * wrote, and compares the two as multisets of rows (the {@code order} of a
  * TPC-DS query is often by a key that is not unique). A column of the answer
- * matches the field of the same name, ignoring case; if one field and one
- * column are left over, they match each other, which covers a column that Spark
- * named, such as {@code count(1)}.
+ * matches the field of the same name, ignoring case, and with each character
+ * that is not a letter, digit or underscore as an underscore, as {@code
+ * init-tpcds.py} writes it (so {@code `30 days `} matches {@code 30_days_}); if
+ * one field and one column are left over, they match each other, which covers a
+ * column that Spark named, such as {@code count(1)}.
  *
  * <p>Values are compared as text, except numbers: a decimal must equal a
- * decimal exactly, and a {@code real} (Morel's is 32 bits, Spark's {@code
- * double} 64) need only agree to {@link #REAL_TOLERANCE}. {@code NONE} and an
- * empty field are null, and {@code SOME v} is {@code v}; so an answer column
- * that happens to hold no null matches a Morel option.
+ * decimal exactly (unless Morel's has more digits after the point, as after a
+ * division, when they need only agree to 15 digits), and a {@code real}
+ * (Morel's is 32 bits, Spark's {@code double} 64) need only agree to {@link
+ * #REAL_TOLERANCE}. {@code NONE} and an empty field are null, and {@code SOME
+ * v} is {@code v}; so an answer column that happens to hold no null matches a
+ * Morel option.
  *
  * <p>Where Spark's answer is an error ({@code qN.error}, such as a division by
  * zero), {@code val rN = qN ()} raises, binds nothing, and is not checked here;
@@ -73,10 +81,22 @@ public class TpcdsChecker {
   /** Relative tolerance for comparing reals. */
   static final double REAL_TOLERANCE = 1e-5;
 
+  /**
+   * Digits to which a decimal must agree with Spark's, if Morel's has more
+   * digits after the point than Spark's.
+   */
+  static final MathContext DECIMAL_PRECISION = new MathContext(15);
+
   private static final Pattern QUERY_NAME = Pattern.compile("r([0-9]+[ab]?)");
+
+  private static final Pattern FUNCTION_NAME =
+      Pattern.compile("q([0-9]+[ab]?)");
 
   private final File answerDirectory;
   private final Map<String, String> results = new TreeMap<>();
+
+  /** The queries that the script defines as functions. */
+  private final Set<String> defined = new TreeSet<>();
 
   public TpcdsChecker(File answerDirectory) {
     this.answerDirectory = requireNonNull(answerDirectory);
@@ -95,9 +115,19 @@ public class TpcdsChecker {
     return results;
   }
 
-  /** Returns the failures, one per line; empty if every query agreed. */
+  /**
+   * Returns the failures, one per line; empty if every query agreed. A query
+   * that is defined but whose value was never bound fails too, unless Spark's
+   * answer is an error.
+   */
   public String failures() {
     final StringBuilder b = new StringBuilder();
+    for (String query : defined) {
+      if (!results.containsKey(query)
+          && !new File(answerDirectory, query + ".error").exists()) {
+        b.append(query).append(": defined, but its value was not checked\n");
+      }
+    }
     results.forEach(
         (name, result) -> {
           if (!result.equals("ok")) {
@@ -109,6 +139,11 @@ public class TpcdsChecker {
 
   private void onBinding(Binding binding) {
     final String name = binding.id.name;
+    final Matcher fnMatcher = FUNCTION_NAME.matcher(name);
+    if (fnMatcher.matches() && binding.id.type instanceof FnType) {
+      defined.add(name);
+      return;
+    }
     final Matcher matcher = QUERY_NAME.matcher(name);
     if (!matcher.matches()) {
       return;
@@ -149,7 +184,7 @@ public class TpcdsChecker {
           .argNameTypes()
           .forEach(
               (n, t) -> {
-                names.add(n.toLowerCase(Locale.ROOT));
+                names.add(n.toLowerCase(Locale.ROOT).replaceAll("\\W", "_"));
                 types.add(t);
               });
       for (Object v : values) {
@@ -286,7 +321,7 @@ public class TpcdsChecker {
     }
     if (o instanceof Real) {
       return new BigDecimal(
-          format("%.4e", ((Real) o).value), java.math.MathContext.DECIMAL64);
+          format("%.4e", ((Real) o).value), MathContext.DECIMAL64);
     }
     return null;
   }
@@ -311,7 +346,18 @@ public class TpcdsChecker {
           <= REAL_TOLERANCE * Math.max(Math.abs(d0), Math.abs(d1));
     }
     if (o0 instanceof BigDecimal && o1 instanceof BigDecimal) {
-      return ((BigDecimal) o0).compareTo((BigDecimal) o1) == 0;
+      final BigDecimal actual = (BigDecimal) o0;
+      final BigDecimal expected = (BigDecimal) o1;
+      if (actual.stripTrailingZeros().scale()
+          > expected.stripTrailingZeros().scale()) {
+        // Morel kept more digits than Spark, as after a division; they
+        // need only agree to Spark's precision.
+        return actual
+                .round(DECIMAL_PRECISION)
+                .compareTo(expected.round(DECIMAL_PRECISION))
+            == 0;
+      }
+      return actual.compareTo(expected) == 0;
     }
     return o0.toString().equals(o1.toString());
   }

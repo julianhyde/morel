@@ -206,7 +206,7 @@ public class RelRules {
           final List<Core.Exp> toRight = new ArrayList<>();
           final List<Core.Exp> toCondition = new ArrayList<>();
           final List<Core.Exp> remaining = new ArrayList<>();
-          for (Core.Exp conjunct : core.decomposeAnd(filter.condition)) {
+          for (Core.Exp conjunct : conjuncts(filter.condition)) {
             if (!conjunct.isSafe()) {
               remaining.add(conjunct);
               continue;
@@ -490,6 +490,34 @@ public class RelRules {
           SKIP_ZERO);
 
   private RelRules() {}
+
+  /**
+   * Returns the conjuncts of a condition.
+   *
+   * <p>When a conjunct refers to the row from inside a query, as in {@code
+   * where x.a = y.b andalso (exists z in zs where z.c = x.a)}, the resolver
+   * names the row, and the condition becomes {@code let val v = r in ... end}.
+   * Such a condition is split too: each conjunct of its body that does not
+   * mention {@code v} is a conjunct on its own, and each that does is wrapped
+   * in the {@code let}.
+   */
+  private static List<Core.Exp> conjuncts(Core.Exp condition) {
+    final List<Core.Exp> list = new ArrayList<>();
+    for (Core.Exp e : core.decomposeAnd(condition)) {
+      if (e instanceof Core.Let
+          && ((Core.Let) e).decl instanceof Core.NonRecValDecl
+          && ((Core.NonRecValDecl) ((Core.Let) e).decl).exp.isAtom()) {
+        final Core.Let let = (Core.Let) e;
+        final Core.NonRecValDecl decl = (Core.NonRecValDecl) let.decl;
+        for (Core.Exp c : conjuncts(let.exp)) {
+          list.add(Core.mentions(c, decl.pat) ? core.let(decl, c) : c);
+        }
+      } else {
+        list.add(e);
+      }
+    }
+    return list;
+  }
 
   /**
    * Returns a filter over {@code input} whose condition is the conjunction of

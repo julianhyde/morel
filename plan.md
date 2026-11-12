@@ -640,6 +640,41 @@ three, which it cannot do directly. Every tier needs D10.
   not when it is compiled, with the rows kept behind a soft reference
   and shared. Before that, each `fun qN` held its own copy of every
   table it scans, and 14 of them ran out of heap.
+* 2026-11-11: part 3 committed (`8de37f32`). Tier A continued: 39
+  queries agree (35s). Found and fixed, each with an `optimize.smli`
+  test: (1) a `where` with a correlated `exists` was wrapped by the
+  resolver in `let val v = r in ... end`, so `FILTER_INTO_JOIN` saw one
+  unsafe conjunct and left q69 and q10 a cross product of customer,
+  address and customer_demographics; it now splits the conjuncts under
+  such a `let`; (2) the inliner substituted a `let` value used once
+  into a query's per-row expression, so q83's `weeks` query ran once
+  per `date_dim` row; `Analyzer` now tracks depth (lambdas, and
+  filter/project/sort/join/group expressions) and makes such a use
+  `ONCE_UNSAFE` unless the value is a lambda, simple or constant. That
+  changed one plan in `hybrid.smli` and `AlgebraTest
+  .testCalciteWithVariable` (both now compute the value once). Still
+  open for M4: factoring a conjunct common to the arms of an `orelse`
+  (q48 is written factored by hand). The checker now also fails a
+  query that is defined but never checked (a stray `(*` in a comment
+  had silently hidden 29 of them). Decimals that Morel computes to
+  more places than Spark (after a division) must agree to 15 digits.
+  Dates are compared with values built by `Date.date`, not by
+  formatting the column.
+* 2026-11-11: 45 queries agree (42s); 8 of tier A left (q23a q23b q58
+  q64 q66 q75 q78 q88). More for M4: (1) in a `let`, `fun divide (a, b)
+  = ... SOME (x / y)` takes `/` as `real`, yet type-checks when called
+  with `decimal option`s and then fails at run time
+  (`ClassCastException`, BigDecimal to Float); q31 and q59 annotate
+  `a : decimal option`. (2) `(*` inside a block comment is lexed
+  unlike SML: `(* ... count(*) ... *)` ends on that line, which
+  neither SML '97 (comments nest) nor SML/NJ and MLton (a `(*)` line
+  comment runs to the end of the line) would do, and a double quote
+  in the comment changes the result. (3) `exists` (compiled as
+  `Relational.nonEmpty` of a correlated query) runs the subquery
+  once per outer row; when its correlation is equalities between
+  inner and outer columns it could be a semi-join (`not exists`: an
+  anti-join) that evaluates the subquery once and probes a hash set.
+  q69 takes 13s, most of it in three such subqueries.
 * (Superseded: M0's part is done, M1's is now Julian running it.)
   Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied

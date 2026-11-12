@@ -286,28 +286,30 @@ public class AlgebraTest {
   /**
    * Tests a query that is executed in Calcite except for a variable, 'five',
    * whose value happens to always be '2 + 3'.
+   *
+   * <p>A pass of inlining does not put 'ten' (that is, 'five + five') into the
+   * filter, because the filter evaluates it once per row; so the plan is the
+   * same as with no inlining.
    */
   @Test
   void testCalciteWithVariable() {
     final String plan =
         "let1(expCode apply2(fnValue Int.+, constant(2), constant(3)), "
+            + "resultCode let1(expCode apply2(fnValue Int.+, "
+            + "stack(offset 1, name five), stack(offset 1, name five)), "
             + "resultCode calcite(plan "
             + "LogicalProject(d5=[+($1, morelScalar('five', '{\n"
             + "  \"type\": \"INTEGER\",\n"
             + "  \"nullable\": false\n"
             + "}'))], deptno=[$1], empno=[$2])\n"
-            + "  LogicalFilter(condition=[<($2, +(7500,"
-            + " +(morelScalar('five', '{\n"
+            + "  LogicalFilter(condition=[<($2, +(7500, morelScalar('ten', '{\n"
             + "  \"type\": \"INTEGER\",\n"
             + "  \"nullable\": false\n"
-            + "}'), morelScalar('five', '{\n"
-            + "  \"type\": \"INTEGER\",\n"
-            + "  \"nullable\": false\n"
-            + "}'))))])\n"
+            + "}')))])\n"
             + "    LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], "
             + "hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n"
             + "      JdbcTableScan(table=[[scott, EMP]])\n"
-            + "))";
+            + ")))";
     final int inlinePassCount = 1; // limit inlining
     checkCalciteWithVariable(inlinePassCount, plan);
   }
