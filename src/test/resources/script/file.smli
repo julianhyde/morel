@@ -108,10 +108,10 @@ file.scott;
 >              hiredate:date, job:string, mgrno:int option, sal:decimal} list,
 >       salgrades:{...} list, ...}
 
-(* An overloaded function, here "avg", over a column of a table that no
- * earlier statement has read. Its type is learned as the statement is
+(* An overloaded function, here "avgSome", over a column of a table that
+ * no earlier statement has read. Its type is learned as the statement is
  * type-checked, and the overload is chosen once it is known. *)
-from t in file.types.all compute avg over t.od;
+from t in file.types.all compute avgSome over t.od;
 > val it = SOME 0.1 : decimal option
 
 (* A header gives each column a type: bool, int, real, decimal, date or

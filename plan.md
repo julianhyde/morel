@@ -260,8 +260,9 @@ Recommend 2 for this branch, with 3 logged as an issue: the helpers are
 the prototype of the built-ins, and the queries written with them will
 not change shape when the built-ins arrive.
 
-**D11. Aggregates over options** (open, 2026-11-11; revisits #503,
-which is not yet on `main`). #503 made `count`, `sum`, `min`, `max`
+**D11. Aggregates over options** (decided 2026-11-12, as proposed with
+the named `Some` forms; see the log. Revisits #503, which is not yet on
+`main`). #503 made `count`, `sum`, `min`, `max`
 and `avg` behave differently when their elements are options, so
 their answers depend on a type rather than on their definition:
 
@@ -766,6 +767,15 @@ three, which it cannot do directly. Every tier needs D10.
   list per row; q14b writes it as `exists`, which is a semi-join; (10)
   q72's joins are reordered by hand, as q64's. Next: tier C, which
   needs `rollup` or window functions.
+* 2026-11-12: D11 decided and done, on `503-avg` (`c2e75c71`) and
+  cherry-picked here: plain aggregates do not look at whether their
+  elements are options; `sumOpt`, `avgOpt`, `minOpt`, `maxOpt` return
+  NONE on an empty collection (#256); `countSome`, `sumSome`,
+  `avgSome`, `minSome`, `maxSome` are SQL's aggregates, and map to
+  Spark's; `somes` drops NONE. The named `Some` forms, rather than
+  compositions such as `sumOpt o somes`, because an overloaded function
+  (`avgOpt`) cannot yet be composed with `o`. The TPC-DS queries now
+  use the `Some` forms; all 78 still agree.
 * (Superseded: M0's part is done, M1's is now Julian running it.)
   Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied
