@@ -74,6 +74,7 @@ import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.Type;
 import net.hydromatic.morel.type.TypeSystem;
 import net.hydromatic.morel.util.MorelException;
+import net.hydromatic.morel.util.MorelHighlighter;
 import org.jspecify.annotations.Nullable;
 
 /** Standard ML REPL. */
@@ -349,9 +350,10 @@ public class Main {
         b.append(s, i, k);
         i = k;
       } else if (j == j5) {
-        // If a line contains "(*", skip the block comment (accounting for
-        // nesting) and continue searching after it.
-        int k = skipBlockComment(s, j + "(*".length(), n);
+        // If a line contains "(*", skip the block comment, by the lexer's
+        // rules, and continue searching after it.
+        final int end = MorelHighlighter.commentEnd(s, j, n);
+        int k = end < 0 ? n : end;
         b.append(s, i, k);
         i = k;
       } else {
@@ -393,44 +395,6 @@ public class Main {
       }
     }
     return pos;
-  }
-
-  /**
-   * Skips a block comment in the input string, accounting for nested comments.
-   *
-   * @param s Input string
-   * @param pos Position after the opening "(*"
-   * @param n Length of the string
-   * @return Position after the closing "*)" or end of string if no closing
-   *     found
-   */
-  private static int skipBlockComment(String s, int pos, int n) {
-    while (pos < n) {
-      // Check for nested "(*" (but not "(*)").
-      int nextOpen = s.indexOf("(*", pos);
-      int nextClose = s.indexOf("*)", pos);
-
-      if (nextClose < 0) {
-        // No closing "*)" found.
-        return n;
-      }
-
-      if (nextOpen >= 0 && nextOpen < nextClose) {
-        // Found a nested "(*" before the closing "*)".
-        // Check if it's actually "(*)" which is not a nested comment.
-        if (nextOpen + 2 < n && s.charAt(nextOpen + 2) == ')') {
-          // It's "(*)", skip it and continue searching.
-          pos = nextOpen + 3;
-        } else {
-          // It's a nested comment, recursively skip it.
-          pos = skipBlockComment(s, nextOpen + 2, n);
-        }
-      } else {
-        // Found the closing "*)".
-        return nextClose + 2;
-      }
-    }
-    return n;
   }
 
   /**

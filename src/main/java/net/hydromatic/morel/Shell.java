@@ -338,16 +338,17 @@ public class Shell {
 
   /**
    * Returns whether we can ignore a line. We can ignore a line if it consists
-   * only of comments, spaces, and optionally semicolon, and if we are not on a
-   * continuation line.
+   * only of comments, spaces, and optionally semicolon, if it does not end
+   * inside a block comment (which the next line continues), and if we are not
+   * on a continuation line.
    */
-  private static boolean canIgnoreLine(StringBuilder buf, String line) {
+  static boolean canIgnoreLine(StringBuilder buf, String line) {
+    if (buf.length() > 0 || MorelHighlighter.endsInComment(line)) {
+      return false;
+    }
     final String trimmedLine =
-        line.replaceAll("\\(\\*.*\\*\\)", "")
-            .replaceAll("\\(\\*\\) .*$", "")
-            .trim();
-    return buf.length() == 0
-        && (trimmedLine.isEmpty() || trimmedLine.equals(";"));
+        MorelHighlighter.DEFAULT.blankComments(line).trim();
+    return trimmedLine.isEmpty() || trimmedLine.equals(";");
   }
 
   /**
@@ -405,11 +406,12 @@ public class Shell {
           @Override
           public ParsedLine parse(
               String line, int cursor, ParseContext context) {
-            // Remove from "(*)" to end of line, if present
-            if (line.matches(".*\\(\\*\\).*")) {
-              line = line.replaceAll("\\(\\*\\).*$", "");
-            }
-            return super.parse(line, cursor, context);
+            // Blank out comments, so that a quote inside one does not open a
+            // literal. The comments are kept in the line that the shell
+            // evaluates; this parse only decides whether the line is complete,
+            // and what its first word is.
+            return super.parse(
+                MorelHighlighter.DEFAULT.blankComments(line), cursor, context);
           }
 
           /**
@@ -1255,7 +1257,7 @@ public class Shell {
       if ("help".equals(pl.word()) || "?".equals(pl.word())) {
         return Pair.of(LineType.HELP, "");
       }
-      return Pair.of(LineType.REGULAR, pl.line());
+      return Pair.of(LineType.REGULAR, line);
     }
   }
 }
