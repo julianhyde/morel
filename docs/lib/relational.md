@@ -34,17 +34,27 @@ extend Standard ML with relational-algebra capabilities.
 datatype 'a <a id='descending' href="#descending-impl">descending</a> = DESC of 'a
 
 val <a id='avg' href="#avg-impl">avg</a> : int bag -> real
+val <a id='avgOpt' href="#avgOpt-impl">avgOpt</a> : int bag -> real option
+val <a id='avgSome' href="#avgSome-impl">avgSome</a> : int option bag -> real option
 val <a id='compare' href="#compare-impl">compare</a> : 'a * 'a -> order
 val <a id='count' href="#count-impl">count</a> : 'a bag -> int
+val <a id='countSome' href="#countSome-impl">countSome</a> : 'a option bag -> int
 val <a id='empty' href="#empty-impl">empty</a> : 'a bag -> bool
 val <a id='iterate' href="#iterate-impl">iterate</a> : 'a bag -> ('a bag * 'a bag -> 'a bag) -> 'a bag
 val <a id='max' href="#max-impl">max</a> : 'a bag -> 'a
 val <a id='maxBy' href="#maxBy-impl">maxBy</a> : ('a -> 'b) -> 'a bag -> 'a
+val <a id='maxOpt' href="#maxOpt-impl">maxOpt</a> : 'a bag -> 'a option
+val <a id='maxSome' href="#maxSome-impl">maxSome</a> : 'a option bag -> 'a option
 val <a id='min' href="#min-impl">min</a> : 'a bag -> 'a
 val <a id='minBy' href="#minBy-impl">minBy</a> : ('a -> 'b) -> 'a bag -> 'a
+val <a id='minOpt' href="#minOpt-impl">minOpt</a> : 'a bag -> 'a option
+val <a id='minSome' href="#minSome-impl">minSome</a> : 'a option bag -> 'a option
 val <a id='nonEmpty' href="#nonEmpty-impl">nonEmpty</a> : 'a bag -> bool
 val <a id='only' href="#only-impl">only</a> : 'a bag -> 'a
+val <a id='somes' href="#somes-impl">somes</a> : 'a option bag -> 'a bag
 val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
+val <a id='sumOpt' href="#sumOpt-impl">sumOpt</a> : 'a bag -> 'a option
+val <a id='sumSome' href="#sumSome-impl">sumSome</a> : 'a option bag -> 'a option
 </pre>
 
 <a id="descending-impl"></a>
@@ -60,11 +70,26 @@ wraps a value so that it sorts in descending order when used with
 example `from e in emps group e.deptno compute avgSal = avg over e.sal`.
 
 The type is overloaded: the mean of `int` values is a `real`, of `real`
-values a `real`, and of `decimal` values a `decimal`. Over options, such
-as `int option`, ignores `NONE`, as SQL's `AVG` ignores nulls, and returns
-`NONE` if there is no `SOME`.
+values a `real`, and of `decimal` values a `decimal`.
 
-Raises `Empty` if `list` is empty and its elements are not options.
+Raises `Empty` if `list` is empty.
+
+<a id="avgOpt-impl"></a>
+<h3><code>avgOpt</code></h3>
+
+`avgOpt list` (or `list.avgOpt ()`) returns `SOME` of the mean of the elements of `list`, as `avg` does, or
+`NONE` if `list` is empty.
+
+To ignore `NONE`, as SQL's `AVG` ignores nulls, use `avgSome`.
+
+<a id="avgSome-impl"></a>
+<h3><code>avgSome</code></h3>
+
+`avgSome list` (or `list.avgSome ()`) returns `SOME` of the mean of the values of the `SOME` elements of
+`list`, ignoring `NONE`, or `NONE` if there are none. It is SQL's `AVG`,
+which ignores nulls.
+
+The type is overloaded, as `avg`'s is.
 
 <a id="compare-impl"></a>
 <h3><code>compare</code></h3>
@@ -91,8 +116,13 @@ particular value.
 `group`, for example `from e in emps group e.deptno compute countId =
 count`.
 
-If the elements are options, returns the number that are `SOME`, as
-SQL's `COUNT(x)` ignores nulls.
+Counts every element, including `NONE`; `countSome` counts the `SOME`s.
+
+<a id="countSome-impl"></a>
+<h3><code>countSome</code></h3>
+
+`countSome list` (or `list.countSome ()`) returns the number of `SOME` elements of `list`. It is SQL's `COUNT(x)`,
+which ignores nulls.
 
 <a id="empty-impl"></a>
 <h3><code>empty</code></h3>
@@ -114,9 +144,8 @@ iteration when it returns `newList`.
 `group`, for example `from e in emps group e.deptno compute maxId =
 max of e.id`.
 
-Raises `Empty` if `list` is empty. If the elements are options, ignores
-`NONE`, as SQL's `MAX` ignores nulls, and returns the greatest `SOME`, or
-`NONE` if there is none.
+Elements are compared as `compare` compares them, so `NONE` is less than
+any `SOME`. Raises `Empty` if `list` is empty.
 
 <a id="maxBy-impl"></a>
 <h3><code>maxBy</code></h3>
@@ -134,6 +163,21 @@ unordered, it is not specified which of them is returned.
 
 Raises `Empty` if `list` is empty.
 
+<a id="maxOpt-impl"></a>
+<h3><code>maxOpt</code></h3>
+
+`maxOpt list` (or `list.maxOpt ()`) returns `SOME` of the greatest element of `list`, as `max` does, or `NONE`
+if `list` is empty.
+
+To ignore `NONE`, as SQL's `MAX` ignores nulls, use `maxSome`.
+
+<a id="maxSome-impl"></a>
+<h3><code>maxSome</code></h3>
+
+`maxSome list` (or `list.maxSome ()`) returns `SOME` of the greatest value of the `SOME` elements of `list`,
+ignoring `NONE`, or `NONE` if there are none. It is SQL's `MAX`, which
+ignores nulls.
+
 <a id="min-impl"></a>
 <h3><code>min</code></h3>
 
@@ -141,9 +185,8 @@ Raises `Empty` if `list` is empty.
 `group`, for example `from e in emps group e.deptno compute minId =
 min of e.id`.
 
-Raises `Empty` if `list` is empty. If the elements are options, ignores
-`NONE`, as SQL's `MIN` ignores nulls, and returns the least `SOME`, or
-`NONE` if there is none.
+Elements are compared as `compare` compares them, so `NONE` is less than
+any `SOME`. Raises `Empty` if `list` is empty.
 
 <a id="minBy-impl"></a>
 <h3><code>minBy</code></h3>
@@ -156,6 +199,21 @@ If several elements are tied for the least key, and the input is
 unordered, it is not specified which of them is returned.
 
 Raises `Empty` if `list` is empty.
+
+<a id="minOpt-impl"></a>
+<h3><code>minOpt</code></h3>
+
+`minOpt list` (or `list.minOpt ()`) returns `SOME` of the least element of `list`, as `min` does, or `NONE`
+if `list` is empty.
+
+To ignore `NONE`, as SQL's `MIN` ignores nulls, use `minSome`.
+
+<a id="minSome-impl"></a>
+<h3><code>minSome</code></h3>
+
+`minSome list` (or `list.minSome ()`) returns `SOME` of the least value of the `SOME` elements of `list`,
+ignoring `NONE`, or `NONE` if there are none. It is SQL's `MIN`, which
+ignores nulls.
 
 <a id="nonEmpty-impl"></a>
 <h3><code>nonEmpty</code></h3>
@@ -170,6 +228,16 @@ d.deptno)`.
 `only list` (or `list.only ()`) returns the sole element of list, for example `from e in
 emps yield only (from d where d.deptno = e.deptno)`.
 
+<a id="somes-impl"></a>
+<h3><code>somes</code></h3>
+
+`somes list` (or `list.somes ()`) returns the values of the `SOME` elements of `list`, dropping each
+`NONE`; for example, `somes [SOME 1, NONE, SOME 3]` returns `[1, 3]`.
+The result is a bag; for a list, `List.mapPartial (fn x => x)` keeps
+the order.
+
+`sumOpt (somes list)` is `sumSome list`, and so on.
+
 <a id="sum-impl"></a>
 <h3><code>sum</code></h3>
 
@@ -177,8 +245,22 @@ emps yield only (from d where d.deptno = e.deptno)`.
 `group`, for example `from e in emps group e.deptno compute sumId =
 sum of e.id`.
 
-The elements may be `int`, `real` or `decimal`, or options of them. Over
-options, ignores `NONE`, as SQL's `SUM` ignores nulls, and returns `NONE`
-if there is no `SOME`.
+The elements may be `int`, `real` or `decimal`. Returns 0 if `list` is
+empty.
+
+<a id="sumOpt-impl"></a>
+<h3><code>sumOpt</code></h3>
+
+`sumOpt list` (or `list.sumOpt ()`) returns `SOME` of the sum of the elements of `list`, or `NONE` if `list`
+is empty.
+
+To ignore `NONE`, as SQL's `SUM` ignores nulls, use `sumSome`.
+
+<a id="sumSome-impl"></a>
+<h3><code>sumSome</code></h3>
+
+`sumSome list` (or `list.sumSome ()`) returns `SOME` of the sum of the values of the `SOME` elements of
+`list`, ignoring `NONE`, or `NONE` if there are none. It is SQL's `SUM`,
+which ignores nulls.
 
 [//]: # (end:lib/relational)

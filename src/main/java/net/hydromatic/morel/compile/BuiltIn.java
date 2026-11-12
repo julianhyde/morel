@@ -4217,14 +4217,11 @@ public enum BuiltIn {
   /**
    * Function "Relational.avg", aka "avg", whose type is overloaded: "int
    * collection &rarr; real", "real collection &rarr; real", "decimal collection
-   * &rarr; decimal", and each of those over options, such as "int option
-   * collection &rarr; real option"; the collection is a list or a bag,
-   * whichever the argument is.
+   * &rarr; decimal"; the collection is a list or a bag, whichever the argument
+   * is.
    *
-   * <p>Returns the mean of the elements. Over options, ignores {@code NONE} and
-   * returns {@code NONE} if there is no {@code SOME}, as SQL's {@code AVG}
-   * ignores nulls; over other types, raises {@link BuiltInExn#EMPTY Empty} if
-   * the collection is empty, as {@code min} and {@code max} do.
+   * <p>Returns the mean of the elements, raising {@link BuiltInExn#EMPTY Empty}
+   * if the collection is empty, as {@code min} and {@code max} do.
    *
    * <p>Often used with {@code group}:
    *
@@ -4234,30 +4231,26 @@ public enum BuiltIn {
    *     compute {avgSal = avg over e.sal}
    * }</pre>
    */
-  RELATIONAL_AVG(
-      "Relational",
-      "avg",
-      true,
-      ts -> {
-        // One variant for each element type and each kind of collection,
-        // because an overload is chosen by matching the argument's type,
-        // which is a list or a bag, never the internal collection type.
-        final Type decimal = ts.lookup(Eqtype.DECIMAL);
-        final List<Type> types = new ArrayList<>();
-        for (Type[] t :
-            new Type[][] {
-              {INT, REAL},
-              {REAL, REAL},
-              {decimal, decimal},
-              {ts.option(INT), ts.option(REAL)},
-              {ts.option(REAL), ts.option(REAL)},
-              {ts.option(decimal), ts.option(decimal)}
-            }) {
-          types.add(ts.fnType(ts.bag(t[0]), t[1]));
-          types.add(ts.fnType(ts.listType(t[0]), t[1]));
-        }
-        return ts.multi(types);
-      }),
+  RELATIONAL_AVG("Relational", "avg", true, ts -> avgType(ts, false)),
+
+  /**
+   * Function "Relational.avgOpt", aka "avgOpt", of type "int collection &rarr;
+   * real option" (overloaded as {@code avg} is).
+   *
+   * <p>Returns {@code SOME} of the mean of the elements, as {@code avg} does,
+   * or {@code NONE} if the collection is empty.
+   */
+  RELATIONAL_AVG_OPT("Relational", "avgOpt", true, ts -> avgType(ts, true)),
+
+  /**
+   * Function "Relational.avgSome", aka "avgSome", of type "int option
+   * collection &rarr; real option" (overloaded as {@code avg} is).
+   *
+   * <p>Returns {@code SOME} of the mean of the values of the {@code SOME}
+   * elements, ignoring {@code NONE}, or {@code NONE} if there are none; SQL's
+   * {@code AVG}.
+   */
+  RELATIONAL_AVG_SOME("Relational", "avgSome", true, ts -> avgSomeType(ts)),
 
   /**
    * Function "Relational.compare", of type "&alpha; * &alpha; &rarr; order".
@@ -4289,8 +4282,7 @@ public enum BuiltIn {
    * Function "Relational.count", aka "count", of type "&alpha; collection
    * &rarr; int"; the collection is a list or a bag, whichever the argument is.
    *
-   * <p>Returns the number of elements; if the elements are options, the number
-   * that are {@code SOME}, as SQL's {@code COUNT(x)} ignores nulls.
+   * <p>Returns the number of elements, whatever they are.
    *
    * <p>Often used with {@code group}:
    *
@@ -4305,6 +4297,20 @@ public enum BuiltIn {
       "count",
       true,
       ts -> ts.forallType(1, h -> ts.fnType(h.collection(0), INT))),
+
+  /**
+   * Function "Relational.countSome", aka "countSome", of type "&alpha; option
+   * collection &rarr; int".
+   *
+   * <p>Returns the number of {@code SOME} elements; SQL's {@code COUNT(x)}.
+   */
+  RELATIONAL_COUNT_SOME(
+      "Relational",
+      "countSome",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.collectionType(h.option(0)), INT))),
 
   /**
    * Function "Relational.empty", aka "empty", of type "&alpha; collection
@@ -4368,10 +4374,8 @@ public enum BuiltIn {
    * &alpha;" (where &alpha; must be comparable); the collection is a list or a
    * bag, whichever the argument is.
    *
-   * <p>Returns the greatest element, raising {@link BuiltInExn#EMPTY Empty} if
-   * the collection is empty. If the elements are options, ignores {@code NONE}
-   * and returns the greatest {@code SOME}, or {@code NONE} if there is none, as
-   * SQL's {@code MAX} ignores nulls.
+   * <p>Returns the greatest element, by {@code Relational.compare}, raising
+   * {@link BuiltInExn#EMPTY Empty} if the collection is empty.
    */
   RELATIONAL_MAX(
       "Relational",
@@ -4419,14 +4423,40 @@ public enum BuiltIn {
                       h.get(0)))),
 
   /**
+   * Function "Relational.maxOpt", aka "maxOpt", of type "&alpha; collection
+   * &rarr; &alpha; option" (where &alpha; must be comparable).
+   *
+   * <p>Returns {@code SOME} of the greatest element, or {@code NONE} if the
+   * collection is empty.
+   */
+  RELATIONAL_MAX_OPT(
+      "Relational",
+      "maxOpt",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.collection(0), h.option(0)))),
+
+  /**
+   * Function "Relational.maxSome", aka "maxSome", of type "&alpha; option
+   * collection &rarr; &alpha; option" (where &alpha; must be comparable).
+   *
+   * <p>Returns the greatest value of the {@code SOME} elements, ignoring {@code
+   * NONE}, or {@code NONE} if there are none; SQL's {@code MAX}.
+   */
+  RELATIONAL_MAX_SOME(
+      "Relational",
+      "maxSome",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.collectionType(h.option(0)), h.option(0)))),
+
+  /**
    * Function "Relational.min", aka "min", of type "&alpha; collection &rarr;
    * &alpha;" (where &alpha; must be comparable); the collection is a list or a
    * bag, whichever the argument is.
    *
-   * <p>Returns the least element, raising {@link BuiltInExn#EMPTY Empty} if the
-   * collection is empty. If the elements are options, ignores {@code NONE} and
-   * returns the least {@code SOME}, or {@code NONE} if there is none, as SQL's
-   * {@code MIN} ignores nulls.
+   * <p>Returns the least element, by {@code Relational.compare}, raising {@link
+   * BuiltInExn#EMPTY Empty} if the collection is empty.
    */
   RELATIONAL_MIN(
       "Relational",
@@ -4464,6 +4494,34 @@ public enum BuiltIn {
                       ts.fnType(h.get(0), h.get(1)),
                       h.collection(0),
                       h.get(0)))),
+
+  /**
+   * Function "Relational.minOpt", aka "minOpt", of type "&alpha; collection
+   * &rarr; &alpha; option" (where &alpha; must be comparable).
+   *
+   * <p>Returns {@code SOME} of the least element, or {@code NONE} if the
+   * collection is empty.
+   */
+  RELATIONAL_MIN_OPT(
+      "Relational",
+      "minOpt",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.collection(0), h.option(0)))),
+
+  /**
+   * Function "Relational.minSome", aka "minSome", of type "&alpha; option
+   * collection &rarr; &alpha; option" (where &alpha; must be comparable).
+   *
+   * <p>Returns the least value of the {@code SOME} elements, ignoring {@code
+   * NONE}, or {@code NONE} if there are none; SQL's {@code MIN}.
+   */
+  RELATIONAL_MIN_SOME(
+      "Relational",
+      "minSome",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.collectionType(h.option(0)), h.option(0)))),
 
   /**
    * Function "Relational.nonEmpty", of type "&alpha; collection &rarr; bool";
@@ -4518,12 +4576,27 @@ public enum BuiltIn {
       ts -> ts.forallType(1, h -> ts.fnType(h.collection(0), h.get(0)))),
 
   /**
-   * Function "Relational.sum", aka "sum", of type "&alpha; collection &rarr;
-   * &alpha;" (where &alpha; must be numeric, or an option of a numeric type);
-   * the collection is a list or a bag, whichever the argument is.
+   * Function "Relational.somes", aka "somes", of type "&alpha; option
+   * collection &rarr; &alpha; bag".
    *
-   * <p>Over options, ignores {@code NONE} and returns {@code NONE} if there is
-   * no {@code SOME}, as SQL's {@code SUM} ignores nulls.
+   * <p>Returns the values of the {@code SOME} elements, dropping each {@code
+   * NONE}. With an aggregate, it gives SQL's aggregate over a nullable column:
+   * {@code (sumOpt o somes) over x} is SQL's {@code SUM(x)}.
+   */
+  RELATIONAL_SOMES(
+      "Relational",
+      "somes",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.collectionType(h.option(0)), h.bag(0)))),
+
+  /**
+   * Function "Relational.sum", aka "sum", of type "&alpha; collection &rarr;
+   * &alpha;" (where &alpha; must be numeric); the collection is a list or a
+   * bag, whichever the argument is.
+   *
+   * <p>Returns 0 if the collection is empty.
    *
    * <p>Often used with {@code group}:
    *
@@ -4538,6 +4611,35 @@ public enum BuiltIn {
       "sum",
       true,
       ts -> ts.forallType(1, h -> ts.fnType(h.collection(0), h.get(0)))),
+
+  /**
+   * Function "Relational.sumOpt", aka "sumOpt", of type "&alpha; collection
+   * &rarr; &alpha; option" (where &alpha; is int, real or decimal).
+   *
+   * <p>Returns {@code SOME} of the sum of the elements, or {@code NONE} if the
+   * collection is empty.
+   */
+  RELATIONAL_SUM_OPT(
+      "Relational",
+      "sumOpt",
+      true,
+      ts -> ts.forallType(1, h -> ts.fnType(h.collection(0), h.option(0)))),
+
+  /**
+   * Function "Relational.sumSome", aka "sumSome", of type "&alpha; option
+   * collection &rarr; &alpha; option" (where &alpha; is int, real or decimal).
+   *
+   * <p>Returns {@code SOME} of the sum of the values of the {@code SOME}
+   * elements, ignoring {@code NONE}, or {@code NONE} if there are none; SQL's
+   * {@code SUM}.
+   */
+  RELATIONAL_SUM_SOME(
+      "Relational",
+      "sumSome",
+      true,
+      ts ->
+          ts.forallType(
+              1, h -> ts.fnType(ts.collectionType(h.option(0)), h.option(0)))),
 
   /**
    * Function "Spark.catalog", of type "connection &rarr; {...}".
@@ -6033,49 +6135,39 @@ public enum BuiltIn {
                   ts.lookup(Eqtype.DECIMAL), ts.lookup(Eqtype.DECIMAL)),
               ts.lookup(Eqtype.DECIMAL))),
 
-  /**
-   * Internal relational sum operator "sum" over options, of type "decimal
-   * option * decimal option &rarr; decimal option".
-   */
-  Z_SUM_DECIMAL_OPTION(
-      "$",
-      "sum:decimal option",
-      ts ->
-          ts.fnType(
-              ts.tupleType(
-                  ts.option(ts.lookup(Eqtype.DECIMAL)),
-                  ts.option(ts.lookup(Eqtype.DECIMAL))),
-              ts.option(ts.lookup(Eqtype.DECIMAL)))),
-
   /** Internal relational sum operator "sum", of type "int * int &rarr; int". */
   Z_SUM_INT("$", "sum:int", ts -> ts.fnType(ts.tupleType(INT, INT), INT)),
 
   /**
-   * Internal relational sum operator "sum" over options, of type "int option *
-   * int option &rarr; int option".
+   * Internal relational operator "sumOpt", of type "decimal list &rarr; decimal
+   * option".
    */
-  Z_SUM_INT_OPTION(
+  Z_SUM_OPT_DECIMAL(
       "$",
-      "sum:int option",
+      "sumOpt:decimal",
       ts ->
           ts.fnType(
-              ts.tupleType(ts.option(INT), ts.option(INT)), ts.option(INT))),
+              ts.listType(ts.lookup(Eqtype.DECIMAL)),
+              ts.option(ts.lookup(Eqtype.DECIMAL)))),
+
+  /**
+   * Internal relational operator "sumOpt", of type "int list &rarr; int
+   * option".
+   */
+  Z_SUM_OPT_INT(
+      "$", "sumOpt:int", ts -> ts.fnType(ts.listType(INT), ts.option(INT))),
+
+  /**
+   * Internal relational operator "sumOpt", of type "real list &rarr; real
+   * option".
+   */
+  Z_SUM_OPT_REAL(
+      "$", "sumOpt:real", ts -> ts.fnType(ts.listType(REAL), ts.option(REAL))),
 
   /**
    * Internal relational sum operator "sum", of type "real * real &rarr; real".
    */
   Z_SUM_REAL("$", "sum:real", ts -> ts.fnType(ts.tupleType(REAL, REAL), REAL)),
-
-  /**
-   * Internal relational sum operator "sum" over options, of type "real option *
-   * real option &rarr; real option".
-   */
-  Z_SUM_REAL_OPTION(
-      "$",
-      "sum:real option",
-      ts ->
-          ts.fnType(
-              ts.tupleType(ts.option(REAL), ts.option(REAL)), ts.option(REAL))),
 
   /**
    * Internal implementation of the bag variant of "Test.testOverCount". Returns
@@ -6186,6 +6278,42 @@ public enum BuiltIn {
         ImmutableListMultimap.builder();
     forEachAlias((alias, builtIn) -> aliasBuilder.put(builtIn, alias));
     ALIASES = aliasBuilder.build();
+  }
+
+  /**
+   * Returns the type of "avg" or, if {@code opt}, "avgOpt": the mean of {@code
+   * int} values is a {@code real}, of {@code real} values a {@code real}, of
+   * {@code decimal} values a {@code decimal}, and "avgOpt" wraps it in {@code
+   * option}. One variant for each element type and each kind of collection,
+   * because an overload is chosen by matching the argument's type, which is a
+   * list or a bag, never the internal collection type.
+   */
+  private static Type avgType(TypeSystem ts, boolean opt) {
+    final Type decimal = ts.lookup(Eqtype.DECIMAL);
+    final List<Type> types = new ArrayList<>();
+    for (Type[] t :
+        new Type[][] {{INT, REAL}, {REAL, REAL}, {decimal, decimal}}) {
+      final Type result = opt ? ts.option(t[1]) : t[1];
+      types.add(ts.fnType(ts.bag(t[0]), result));
+      types.add(ts.fnType(ts.listType(t[0]), result));
+    }
+    return ts.multi(types);
+  }
+
+  /**
+   * Returns the type of "avgSome": as {@link #avgType} for "avgOpt", but the
+   * elements are options.
+   */
+  private static Type avgSomeType(TypeSystem ts) {
+    final Type decimal = ts.lookup(Eqtype.DECIMAL);
+    final List<Type> types = new ArrayList<>();
+    for (Type[] t :
+        new Type[][] {{INT, REAL}, {REAL, REAL}, {decimal, decimal}}) {
+      final Type result = ts.option(t[1]);
+      types.add(ts.fnType(ts.bag(ts.option(t[0])), result));
+      types.add(ts.fnType(ts.listType(ts.option(t[0])), result));
+    }
+    return ts.multi(types);
   }
 
   /** Returns the type "{...}", a progressive record with no known fields. */
@@ -6307,17 +6435,27 @@ public enum BuiltIn {
     consumer.accept("round", REAL_ROUND);
     consumer.accept("trunc", REAL_TRUNC);
     consumer.accept("avg", RELATIONAL_AVG);
+    consumer.accept("avgOpt", RELATIONAL_AVG_OPT);
+    consumer.accept("avgSome", RELATIONAL_AVG_SOME);
     consumer.accept("compare", RELATIONAL_COMPARE);
     consumer.accept("count", RELATIONAL_COUNT);
+    consumer.accept("countSome", RELATIONAL_COUNT_SOME);
     consumer.accept("empty", RELATIONAL_EMPTY);
     consumer.accept("iterate", RELATIONAL_ITERATE);
     consumer.accept("max", RELATIONAL_MAX);
     consumer.accept("maxBy", RELATIONAL_MAX_BY);
+    consumer.accept("maxOpt", RELATIONAL_MAX_OPT);
+    consumer.accept("maxSome", RELATIONAL_MAX_SOME);
     consumer.accept("min", RELATIONAL_MIN);
     consumer.accept("minBy", RELATIONAL_MIN_BY);
+    consumer.accept("minOpt", RELATIONAL_MIN_OPT);
+    consumer.accept("minSome", RELATIONAL_MIN_SOME);
     consumer.accept("nonEmpty", RELATIONAL_NON_EMPTY);
     consumer.accept("only", RELATIONAL_ONLY);
+    consumer.accept("somes", RELATIONAL_SOMES);
     consumer.accept("sum", RELATIONAL_SUM);
+    consumer.accept("sumOpt", RELATIONAL_SUM_OPT);
+    consumer.accept("sumSome", RELATIONAL_SUM_SOME);
     consumer.accept("concat", STRING_CONCAT);
     consumer.accept("explode", STRING_EXPLODE);
     consumer.accept("fields", STRING_FIELDS);

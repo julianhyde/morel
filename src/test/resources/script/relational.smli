@@ -1649,13 +1649,25 @@ from x in (Bag.fromList [INL 1, INR "a"]) where false compute max over x;
 > uncaught exception Empty
 >   raised at: stdIn:1.63-1.73
 
-(* But over options, 'max' and 'min' ignore NONE, as SQL's MAX and MIN ignore
- * nulls, and are NONE if there is no SOME, including if the collection is
- * empty. *)
+(* Over options too: 'max' and 'min' order by 'compare', in which NONE is
+ * less than any SOME, and raise Empty on an empty collection. *)
 from x in (Bag.fromList [SOME 1, NONE, SOME 3]) where false compute max over x;
-> val it = NONE : int option
+> uncaught exception Empty
+>   raised at: stdIn:1.69-1.79
 from x in (Bag.fromList [SOME 1, NONE, SOME 3]) compute {hi = max over x, lo = min over x};
+> val it = {hi=SOME 3,lo=NONE} : {hi:int option, lo:int option}
+
+(* 'maxOpt' and 'minOpt' return NONE on an empty collection. With
+ * 'somes', which drops each NONE, they are SQL's MAX and MIN, which
+ * ignore nulls. *)
+from x in (Bag.fromList [SOME 1, NONE, SOME 3]) where false compute maxOpt over x;
+> val it = NONE : int option option
+from x in (Bag.fromList [SOME 1, NONE, SOME 3])
+  compute {hi = (maxOpt o somes) over x, lo = (minOpt o somes) over x};
 > val it = {hi=SOME 3,lo=SOME 1} : {hi:int option, lo:int option}
+from x in (Bag.fromList [NONE, NONE : int option])
+  compute {hi = (maxOpt o somes) over x, n = (count o somes) over x};
+> val it = {hi=NONE,n=0} : {hi:int option, n:int}
 
 from i in [2, 1, 2]
   compute 1;

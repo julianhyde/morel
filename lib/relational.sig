@@ -37,13 +37,29 @@ sig
    * example `from e in emps group e.deptno compute avgSal = avg over e.sal`.
    *
    * The type is overloaded: the mean of `int` values is a `real`, of `real`
-   * values a `real`, and of `decimal` values a `decimal`. Over options, such
-   * as `int option`, ignores `NONE`, as SQL's `AVG` ignores nulls, and returns
-   * `NONE` if there is no `SOME`.
+   * values a `real`, and of `decimal` values a `decimal`.
    *
-   * Raises `Empty` if `list` is empty and its elements are not options.
+   * Raises `Empty` if `list` is empty.
    *)
   val avg : int bag -> real [@@method] [@@prototype "avg list"]
+
+  (**
+   * returns `SOME` of the mean of the elements of `list`, as `avg` does, or
+   * `NONE` if `list` is empty.
+   *
+   * To ignore `NONE`, as SQL's `AVG` ignores nulls, use `avgSome`.
+   *)
+  val avgOpt : int bag -> real option [@@method] [@@prototype "avgOpt list"]
+
+  (**
+   * returns `SOME` of the mean of the values of the `SOME` elements of
+   * `list`, ignoring `NONE`, or `NONE` if there are none. It is SQL's `AVG`,
+   * which ignores nulls.
+   *
+   * The type is overloaded, as `avg`'s is.
+   *)
+  val avgSome : int option bag -> real option
+      [@@method] [@@prototype "avgSome list"]
 
   (**
    * returns `LESS`, `EQUAL`, or `GREATER` according to
@@ -68,10 +84,16 @@ sig
    * `group`, for example `from e in emps group e.deptno compute countId =
    * count`.
    *
-   * If the elements are options, returns the number that are `SOME`, as
-   * SQL's `COUNT(x)` ignores nulls.
+   * Counts every element, including `NONE`; `countSome` counts the `SOME`s.
    *)
   val count : 'a bag -> int [@@method] [@@prototype "count list"]
+
+  (**
+   * returns the number of `SOME` elements of `list`. It is SQL's `COUNT(x)`,
+   * which ignores nulls.
+   *)
+  val countSome : 'a option bag -> int
+      [@@method] [@@prototype "countSome list"]
 
   (**
    * returns whether the list is empty, for example `from d in
@@ -92,9 +114,8 @@ sig
    * `group`, for example `from e in emps group e.deptno compute maxId =
    * max of e.id`.
    *
-   * Raises `Empty` if `list` is empty. If the elements are options, ignores
-   * `NONE`, as SQL's `MAX` ignores nulls, and returns the greatest `SOME`, or
-   * `NONE` if there is none.
+   * Elements are compared as `compare` compares them, so `NONE` is less than
+   * any `SOME`. Raises `Empty` if `list` is empty.
    *)
   val max : 'a bag -> 'a [@@method] [@@prototype "max list"]
 
@@ -115,13 +136,28 @@ sig
   val maxBy : ('a -> 'b) -> 'a bag -> 'a [@@prototype "maxBy keyFn list"]
 
   (**
+   * returns `SOME` of the greatest element of `list`, as `max` does, or `NONE`
+   * if `list` is empty.
+   *
+   * To ignore `NONE`, as SQL's `MAX` ignores nulls, use `maxSome`.
+   *)
+  val maxOpt : 'a bag -> 'a option [@@method] [@@prototype "maxOpt list"]
+
+  (**
+   * returns `SOME` of the greatest value of the `SOME` elements of `list`,
+   * ignoring `NONE`, or `NONE` if there are none. It is SQL's `MAX`, which
+   * ignores nulls.
+   *)
+  val maxSome : 'a option bag -> 'a option
+      [@@method] [@@prototype "maxSome list"]
+
+  (**
    * returns the least element of `list`. Often used with
    * `group`, for example `from e in emps group e.deptno compute minId =
    * min of e.id`.
    *
-   * Raises `Empty` if `list` is empty. If the elements are options, ignores
-   * `NONE`, as SQL's `MIN` ignores nulls, and returns the least `SOME`, or
-   * `NONE` if there is none.
+   * Elements are compared as `compare` compares them, so `NONE` is less than
+   * any `SOME`. Raises `Empty` if `list` is empty.
    *)
   val min : 'a bag -> 'a [@@method] [@@prototype "min list"]
 
@@ -138,6 +174,22 @@ sig
   val minBy : ('a -> 'b) -> 'a bag -> 'a [@@prototype "minBy keyFn list"]
 
   (**
+   * returns `SOME` of the least element of `list`, as `min` does, or `NONE`
+   * if `list` is empty.
+   *
+   * To ignore `NONE`, as SQL's `MIN` ignores nulls, use `minSome`.
+   *)
+  val minOpt : 'a bag -> 'a option [@@method] [@@prototype "minOpt list"]
+
+  (**
+   * returns `SOME` of the least value of the `SOME` elements of `list`,
+   * ignoring `NONE`, or `NONE` if there are none. It is SQL's `MIN`, which
+   * ignores nulls.
+   *)
+  val minSome : 'a option bag -> 'a option
+      [@@method] [@@prototype "minSome list"]
+
+  (**
    * returns whether the list has at least one element, for
    * example `from d in depts where nonEmpty (from e where e.deptno =
    * d.deptno)`.
@@ -151,15 +203,40 @@ sig
   val only : 'a bag -> 'a [@@method] [@@prototype "only list"]
 
   (**
+   * returns the values of the `SOME` elements of `list`, dropping each
+   * `NONE`; for example, `somes [SOME 1, NONE, SOME 3]` returns `[1, 3]`.
+   * The result is a bag; for a list, `List.mapPartial (fn x => x)` keeps
+   * the order.
+   *
+   * `sumOpt (somes list)` is `sumSome list`, and so on.
+   *)
+  val somes : 'a option bag -> 'a bag [@@method] [@@prototype "somes list"]
+
+  (**
    * returns the sum of the elements of `list`. Often used with
    * `group`, for example `from e in emps group e.deptno compute sumId =
    * sum of e.id`.
    *
-   * The elements may be `int`, `real` or `decimal`, or options of them. Over
-   * options, ignores `NONE`, as SQL's `SUM` ignores nulls, and returns `NONE`
-   * if there is no `SOME`.
+   * The elements may be `int`, `real` or `decimal`. Returns 0 if `list` is
+   * empty.
    *)
   val sum : 'a bag -> 'a [@@method] [@@prototype "sum list"]
+
+  (**
+   * returns `SOME` of the sum of the elements of `list`, or `NONE` if `list`
+   * is empty.
+   *
+   * To ignore `NONE`, as SQL's `SUM` ignores nulls, use `sumSome`.
+   *)
+  val sumOpt : 'a bag -> 'a option [@@method] [@@prototype "sumOpt list"]
+
+  (**
+   * returns `SOME` of the sum of the values of the `SOME` elements of
+   * `list`, ignoring `NONE`, or `NONE` if there are none. It is SQL's `SUM`,
+   * which ignores nulls.
+   *)
+  val sumSome : 'a option bag -> 'a option
+      [@@method] [@@prototype "sumSome list"]
 end
 [@@description "Relational algebra operations for Morel queries."]
 [@@specified "morel"]

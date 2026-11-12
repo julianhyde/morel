@@ -301,15 +301,16 @@ from e in scott.emps where e.deptno = 10 yield e.ename;
 Sys.set ("sparkPushDown", false);
 > val it = () : unit
 
-(* Aggregates over a nullable column. Spark's "avg", "count", "sum", "min" and
- * "max" ignore nulls, as Morel's ignore NONE over an option, so each becomes
- * Spark's own function; "avg" of an int column is a double in Spark, which
- * reads back as a real. This is
+(* Aggregates over a nullable column. Spark's "avg", "count" and "sum"
+ * ignore nulls, as "avgSome", "countSome" and "sumSome" ignore NONE, so
+ * each becomes Spark's own function; "avg" of an int column is a double in
+ * Spark, which reads back as a real. This is
  *   SELECT deptno, AVG(mgr), COUNT(mgr), SUM(comm) FROM emp GROUP BY deptno *)
 (spark.connection.prepare (fn () =>
   from e in emps
     group e.deptno
-    compute {a = avg over e.mgr, c = count over e.mgr, s = sum over e.comm}
+    compute {a = avgSome over e.mgr, c = countSome over e.mgr,
+             s = sumSome over e.comm}
 )).toString ();
 > val it =
 >   {_|
