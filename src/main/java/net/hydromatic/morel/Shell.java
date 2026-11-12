@@ -41,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Pos;
@@ -381,6 +382,9 @@ public class Shell {
       return;
     }
 
+    // The text of the statement so far, before the line being read; the
+    // parser needs it to know whether the line starts inside a comment.
+    final AtomicReference<CharSequence> before = new AtomicReference<>("");
     final Parser parser =
         new DefaultParser() {
           {
@@ -409,9 +413,19 @@ public class Shell {
             // Blank out comments, so that a quote inside one does not open a
             // literal. The comments are kept in the line that the shell
             // evaluates; this parse only decides whether the line is complete,
-            // and what its first word is.
+            // and what its first word is. A comment may have begun on an
+            // earlier line of the statement, so blank the whole statement,
+            // and parse the part of it that is this line.
+            final String prefix = String.valueOf(before.get());
+            final String text =
+                prefix.isEmpty() || prefix.endsWith("\n")
+                    ? prefix + line
+                    : prefix + "\n" + line;
+            final String blanked = MorelHighlighter.DEFAULT.blankComments(text);
             return super.parse(
-                MorelHighlighter.DEFAULT.blankComments(line), cursor, context);
+                blanked.substring(blanked.length() - line.length()),
+                cursor,
+                context);
           }
 
           /**
@@ -492,7 +506,7 @@ public class Shell {
     Environment env =
         Environments.env(typeSystem, session, valueMap(config, typeSystem));
     final LineFn lineFn =
-        new TerminalLineFn(minusPrompt, equalsPrompt, lineReader);
+        new TerminalLineFn(minusPrompt, equalsPrompt, lineReader, before);
     final SubShell subShell =
         new SubShell(
             1,
@@ -1212,16 +1226,23 @@ public class Shell {
     private final String minusPrompt;
     private final String equalsPrompt;
     private final LineReader lineReader;
+    /** Where the parser reads the statement so far. */
+    private final AtomicReference<CharSequence> before;
 
     TerminalLineFn(
-        String minusPrompt, String equalsPrompt, LineReader lineReader) {
+        String minusPrompt,
+        String equalsPrompt,
+        LineReader lineReader,
+        AtomicReference<CharSequence> before) {
       this.minusPrompt = minusPrompt;
       this.equalsPrompt = equalsPrompt;
       this.lineReader = lineReader;
+      this.before = before;
     }
 
     @Override
     public Pair<LineType, String> read(StringBuilder buf) {
+      before.set(buf);
       final String line;
       try {
         final String prompt = buf.length() == 0 ? minusPrompt : equalsPrompt;

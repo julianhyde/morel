@@ -64,6 +64,64 @@ Sys.set ("output", "tabular");
 Sys.set ("printLength", 10);
 > val it = () : unit
 
+(* --- q1 --------------------------------------------------------- *)
+(*
+WITH customer_total_return AS
+( SELECT
+    sr_customer_sk AS ctr_customer_sk,
+    sr_store_sk AS ctr_store_sk,
+    sum(sr_return_amt) AS ctr_total_return
+  FROM store_returns, date_dim
+  WHERE sr_returned_date_sk = d_date_sk AND d_year = 2000
+  GROUP BY sr_customer_sk, sr_store_sk)
+SELECT c_customer_id
+FROM customer_total_return ctr1, store, customer
+WHERE ctr1.ctr_total_return >
+  (SELECT avg(ctr_total_return) * 1.2
+  FROM customer_total_return ctr2
+  WHERE ctr1.ctr_store_sk = ctr2.ctr_store_sk)
+  AND s_store_sk = ctr1.ctr_store_sk
+  AND s_state = 'TN'
+  AND ctr1.ctr_customer_sk = c_customer_sk
+ORDER BY c_customer_id
+LIMIT 100
+*)
+fun q1 () =
+  let
+    val customer_total_return =
+      from sr in tpcds.store_returns,
+          d in tpcds.date_dim
+        where sr.sr_returned_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME 2000
+        group {ctr_customer_sk = sr.sr_customer_sk,
+            ctr_store_sk = sr.sr_store_sk}
+          compute {ctr_total_return = sum over sr.sr_return_amt}
+  in
+    from ctr1 in customer_total_return,
+        s in tpcds.store,
+        c in tpcds.customer
+      where (case (ctr1.ctr_total_return,
+              from ctr2 in customer_total_return
+                where ctr2.ctr_store_sk <> NONE
+                  andalso ctr1.ctr_store_sk = ctr2.ctr_store_sk
+                compute avg over ctr2.ctr_total_return) of
+            (SOME total, SOME average) => total > average * decimal "1.2"
+          | _ => false)
+        andalso ctr1.ctr_store_sk = SOME s.s_store_sk
+        andalso s.s_state = SOME "TN"
+        andalso ctr1.ctr_customer_sk = SOME c.c_customer_sk
+      yield c.c_customer_id
+      order current
+      take 100
+  end;
+> val q1 = fn : unit -> string list
+val r1 = q1 ();
+> val r1 =
+>   ["AAAAAAAAAACAAAAA","AAAAAAAAAADAAAAA","AAAAAAAAACCAAAAA",
+>    "AAAAAAAAADDAAAAA","AAAAAAAAAEAAAAAA","AAAAAAAAAHCAAAAA",
+>    "AAAAAAAAAIDAAAAA","AAAAAAAAAJBAAAAA","AAAAAAAAAJCAAAAA",
+>    "AAAAAAAAAKBAAAAA",...] : string list
+
 (* --- q2 --------------------------------------------------------- *)
 (*
 WITH wscs AS
@@ -555,6 +613,136 @@ val r4 = q4 ();
 >
 > val r4 : {customer_birth_country:string option, customer_email_address:string option, customer_first_name:string option, customer_id:string, customer_last_name:string option, customer_login:string option, customer_preferred_cust_flag:string option} list
 
+(* --- q6 --------------------------------------------------------- *)
+(*
+SELECT
+  a.ca_state state,
+  count(*) cnt
+FROM
+  customer_address a, customer c, store_sales s, date_dim d, item i
+WHERE a.ca_address_sk = c.c_current_addr_sk
+  AND c.c_customer_sk = s.ss_customer_sk
+  AND s.ss_sold_date_sk = d.d_date_sk
+  AND s.ss_item_sk = i.i_item_sk
+  AND d.d_month_seq =
+  (SELECT DISTINCT (d_month_seq)
+  FROM date_dim
+  WHERE d_year = 2000 AND d_moy = 1)
+  AND i.i_current_price > 1.2 *
+  (SELECT avg(j.i_current_price)
+  FROM item j
+  WHERE j.i_category = i.i_category)
+GROUP BY a.ca_state
+HAVING count(*) >= 10
+ORDER BY cnt
+LIMIT 100
+*)
+fun q6 () =
+  let
+    val month_seq =
+      Relational.only
+        (from d in tpcds.date_dim
+          where d.d_year = SOME 2000 andalso d.d_moy = SOME 1
+          yield d.d_month_seq
+          distinct)
+  in
+    from a in tpcds.customer_address,
+        c in tpcds.customer,
+        s in tpcds.store_sales,
+        d in tpcds.date_dim,
+        i in tpcds.item
+      where c.c_current_addr_sk = SOME a.ca_address_sk
+        andalso s.ss_customer_sk = SOME c.c_customer_sk
+        andalso s.ss_sold_date_sk = SOME d.d_date_sk
+        andalso s.ss_item_sk = i.i_item_sk
+        andalso month_seq <> NONE
+        andalso d.d_month_seq = month_seq
+        andalso (case (i.i_current_price,
+                from j in tpcds.item
+                  where j.i_category <> NONE
+                    andalso j.i_category = i.i_category
+                  compute avg over j.i_current_price) of
+              (SOME price, SOME average) => price > decimal "1.2" * average
+            | _ => false)
+      group {state = a.ca_state} compute {cnt = count over ()}
+      where cnt >= 10
+      order cnt
+      take 100
+  end;
+> val q6 = fn : unit -> {cnt:int, state:string option} list
+val r6 = q6 ();
+> cnt state
+> --- -----
+>  10 VA
+>
+> val r6 : {cnt:int, state:string option} list
+
+(* --- q7 --------------------------------------------------------- *)
+(*
+SELECT
+  i_item_id,
+  avg(ss_quantity) agg1,
+  avg(ss_list_price) agg2,
+  avg(ss_coupon_amt) agg3,
+  avg(ss_sales_price) agg4
+FROM store_sales, customer_demographics, date_dim, item, promotion
+WHERE ss_sold_date_sk = d_date_sk AND
+  ss_item_sk = i_item_sk AND
+  ss_cdemo_sk = cd_demo_sk AND
+  ss_promo_sk = p_promo_sk AND
+  cd_gender = 'M' AND
+  cd_marital_status = 'S' AND
+  cd_education_status = 'College' AND
+  (p_channel_email = 'N' OR p_channel_event = 'N') AND
+  d_year = 2000
+GROUP BY i_item_id
+ORDER BY i_item_id
+LIMIT 100
+*)
+fun q7 () =
+  from ss in tpcds.store_sales,
+      cd in tpcds.customer_demographics,
+      d in tpcds.date_dim,
+      i in tpcds.item,
+      p in tpcds.promotion
+    where ss.ss_sold_date_sk = SOME d.d_date_sk
+      andalso ss.ss_item_sk = i.i_item_sk
+      andalso ss.ss_cdemo_sk = SOME cd.cd_demo_sk
+      andalso ss.ss_promo_sk = SOME p.p_promo_sk
+      andalso cd.cd_gender = SOME "M"
+      andalso cd.cd_marital_status = SOME "S"
+      andalso cd.cd_education_status = SOME "College"
+      andalso (p.p_channel_email = SOME "N"
+        orelse p.p_channel_event = SOME "N")
+      andalso d.d_year = SOME 2000
+    group i.i_item_id
+      compute {agg1 = avg over ss.ss_quantity,
+        agg2 = avg over ss.ss_list_price,
+        agg3 = avg over ss.ss_coupon_amt,
+        agg4 = avg over ss.ss_sales_price}
+    order i_item_id
+    take 100;
+> val q7 = fn
+>   : unit
+>      -> {agg1:real option, agg2:decimal option, agg3:decimal option,
+>           agg4:decimal option, i_item_id:string} list
+val r7 = q7 ();
+> agg1 agg2   agg3    agg4   i_item_id
+> ---- ------ ------- ------ ----------------
+>   71 49.335       0 35.935 AAAAAAAAAAFAAAAA
+> 78.5  41.97   0.205 16.695 AAAAAAAAABEAAAAA
+>   47   4.34       0   0.78 AAAAAAAAABGAAAAA
+>   56 122.37       0  83.21 AAAAAAAAACCAAAAA
+>    5   92.8       0   56.6 AAAAAAAAADFAAAAA
+>   80    122       0   97.6 AAAAAAAAADHAAAAA
+>   48 10.905       0   4.55 AAAAAAAAAEEAAAAA
+>   93 112.05 1313.94 108.68 AAAAAAAAAEHAAAAA
+>   21   86.7  540.72  85.83 AAAAAAAAAFCAAAAA
+>   78 167.49 6923.28  88.76 AAAAAAAAAFDAAAAA
+> ...
+>
+> val r7 : {agg1:real option, agg2:decimal option, agg3:decimal option, agg4:decimal option, i_item_id:string} list
+
 (* --- q8 --------------------------------------------------------- *)
 (*
 SELECT
@@ -749,6 +937,91 @@ val r8 = q8 ();
 > ------------ ---
 >
 > val r8 : {s_store_name:string option, sum:decimal option} list
+
+(* --- q9 --------------------------------------------------------- *)
+(*
+SELECT
+  CASE WHEN (SELECT count(*)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 1 AND 20) > 62316685
+    THEN (SELECT avg(ss_ext_discount_amt)
+    FROM store_sales
+    WHERE ss_quantity BETWEEN 1 AND 20)
+  ELSE (SELECT avg(ss_net_paid)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 1 AND 20) END bucket1,
+  CASE WHEN (SELECT count(*)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 21 AND 40) > 19045798
+    THEN (SELECT avg(ss_ext_discount_amt)
+    FROM store_sales
+    WHERE ss_quantity BETWEEN 21 AND 40)
+  ELSE (SELECT avg(ss_net_paid)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 21 AND 40) END bucket2,
+  CASE WHEN (SELECT count(*)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 41 AND 60) > 365541424
+    THEN (SELECT avg(ss_ext_discount_amt)
+    FROM store_sales
+    WHERE ss_quantity BETWEEN 41 AND 60)
+  ELSE (SELECT avg(ss_net_paid)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 41 AND 60) END bucket3,
+  CASE WHEN (SELECT count(*)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 61 AND 80) > 216357808
+    THEN (SELECT avg(ss_ext_discount_amt)
+    FROM store_sales
+    WHERE ss_quantity BETWEEN 61 AND 80)
+  ELSE (SELECT avg(ss_net_paid)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 61 AND 80) END bucket4,
+  CASE WHEN (SELECT count(*)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 81 AND 100) > 184483884
+    THEN (SELECT avg(ss_ext_discount_amt)
+    FROM store_sales
+    WHERE ss_quantity BETWEEN 81 AND 100)
+  ELSE (SELECT avg(ss_net_paid)
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 81 AND 100) END bucket5
+FROM reason
+WHERE r_reason_sk = 1
+*)
+fun q9 () =
+  let
+    fun inRange (lo, hi) =
+      from ss in tpcds.store_sales
+        where ss.ss_quantity >= SOME lo andalso ss.ss_quantity <= SOME hi
+    (* If more rows than "threshold" have a quantity in the range, the
+     * average discount of those rows, else their average net paid. *)
+    fun bucket (lo, hi, threshold) =
+      if (from ss in inRange (lo, hi) compute count over ()) > threshold
+      then from ss in inRange (lo, hi) compute avg over ss.ss_ext_discount_amt
+      else from ss in inRange (lo, hi) compute avg over ss.ss_net_paid
+  in
+    {
+      bucket1 = bucket (1, 20, 62316685),
+      bucket2 = bucket (21, 40, 19045798),
+      bucket3 = bucket (41, 60, 365541424),
+      bucket4 = bucket (61, 80, 216357808),
+      bucket5 = bucket (81, 100, 184483884)}
+  end;
+> val q9 = fn
+>   : unit
+>      -> {bucket1:decimal option, bucket2:decimal option,
+>           bucket3:decimal option, bucket4:decimal option,
+>           bucket5:decimal option}
+val r9 = q9 ();
+> val r9 =
+>   {bucket1=SOME 357.5101458091063601395473655962072,
+>    bucket2=SOME 1022.507364016736401673640167364017,
+>    bucket3=SOME 1733.56394073478144274604451595602,
+>    bucket4=SOME 2390.126369615112994350282485875706,
+>    bucket5=SOME 3077.374826869499845221775085128024}
+>   : {bucket1:decimal option, bucket2:decimal option, bucket3:decimal option,
+>       bucket4:decimal option, bucket5:decimal option}
 
 (* --- q10 -------------------------------------------------------- *)
 (*
@@ -1014,6 +1287,358 @@ val r11 = q11 ();
 >   [SOME "N",SOME "N",SOME "N",SOME "N",SOME "N",SOME "N",SOME "N",SOME "Y",
 >    SOME "Y"] : string option list
 
+(* --- q13 -------------------------------------------------------- *)
+(*
+SELECT
+  avg(ss_quantity),
+  avg(ss_ext_sales_price),
+  avg(ss_ext_wholesale_cost),
+  sum(ss_ext_wholesale_cost)
+FROM store_sales
+  , store
+  , customer_demographics
+  , household_demographics
+  , customer_address
+  , date_dim
+WHERE s_store_sk = ss_store_sk
+  AND ss_sold_date_sk = d_date_sk AND d_year = 2001
+  AND ((ss_hdemo_sk = hd_demo_sk
+  AND cd_demo_sk = ss_cdemo_sk
+  AND cd_marital_status = 'M'
+  AND cd_education_status = 'Advanced Degree'
+  AND ss_sales_price BETWEEN 100.00 AND 150.00
+  AND hd_dep_count = 3
+) OR
+  (ss_hdemo_sk = hd_demo_sk
+    AND cd_demo_sk = ss_cdemo_sk
+    AND cd_marital_status = 'S'
+    AND cd_education_status = 'College'
+    AND ss_sales_price BETWEEN 50.00 AND 100.00
+    AND hd_dep_count = 1
+  ) OR
+  (ss_hdemo_sk = hd_demo_sk
+    AND cd_demo_sk = ss_cdemo_sk
+    AND cd_marital_status = 'W'
+    AND cd_education_status = '2 yr Degree'
+    AND ss_sales_price BETWEEN 150.00 AND 200.00
+    AND hd_dep_count = 1
+  ))
+  AND ((ss_addr_sk = ca_address_sk
+  AND ca_country = 'United States'
+  AND ca_state IN ('TX', 'OH', 'TX')
+  AND ss_net_profit BETWEEN 100 AND 200
+) OR
+  (ss_addr_sk = ca_address_sk
+    AND ca_country = 'United States'
+    AND ca_state IN ('OR', 'NM', 'KY')
+    AND ss_net_profit BETWEEN 150 AND 300
+  ) OR
+  (ss_addr_sk = ca_address_sk
+    AND ca_country = 'United States'
+    AND ca_state IN ('VA', 'TX', 'MS')
+    AND ss_net_profit BETWEEN 50 AND 250
+  ))
+*)
+(* As in q48, each disjunct of the SQL's "OR"s repeats a join
+ * condition; the conditions are factored by hand. *)
+fun q13 () =
+  from ss in tpcds.store_sales,
+      s in tpcds.store,
+      cd in tpcds.customer_demographics,
+      hd in tpcds.household_demographics,
+      ca in tpcds.customer_address,
+      d in tpcds.date_dim
+    where ss.ss_store_sk = SOME s.s_store_sk
+      andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+      andalso d.d_year = SOME 2001
+      andalso ss.ss_hdemo_sk = SOME hd.hd_demo_sk
+      andalso ss.ss_cdemo_sk = SOME cd.cd_demo_sk
+      andalso (cd.cd_marital_status = SOME "M"
+          andalso cd.cd_education_status = SOME "Advanced Degree"
+          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 100)
+          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 150)
+          andalso hd.hd_dep_count = SOME 3
+        orelse cd.cd_marital_status = SOME "S"
+          andalso cd.cd_education_status = SOME "College"
+          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 50)
+          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 100)
+          andalso hd.hd_dep_count = SOME 1
+        orelse cd.cd_marital_status = SOME "W"
+          andalso cd.cd_education_status = SOME "2 yr Degree"
+          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 150)
+          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 200)
+          andalso hd.hd_dep_count = SOME 1)
+      andalso ss.ss_addr_sk = SOME ca.ca_address_sk
+      andalso ca.ca_country = SOME "United States"
+      andalso (ca.ca_state elem [SOME "TX", SOME "OH", SOME "TX"]
+          andalso ss.ss_net_profit >= SOME (Decimal.fromInt 100)
+          andalso ss.ss_net_profit <= SOME (Decimal.fromInt 200)
+        orelse ca.ca_state elem [SOME "OR", SOME "NM", SOME "KY"]
+          andalso ss.ss_net_profit >= SOME (Decimal.fromInt 150)
+          andalso ss.ss_net_profit <= SOME (Decimal.fromInt 300)
+        orelse ca.ca_state elem [SOME "VA", SOME "TX", SOME "MS"]
+          andalso ss.ss_net_profit >= SOME (Decimal.fromInt 50)
+          andalso ss.ss_net_profit <= SOME (Decimal.fromInt 250))
+    compute {`avg(ss_quantity)` = avg over ss.ss_quantity,
+      `avg(ss_ext_sales_price)` = avg over ss.ss_ext_sales_price,
+      `avg(ss_ext_wholesale_cost)` = avg over ss.ss_ext_wholesale_cost,
+      `sum(ss_ext_wholesale_cost)` = sum over ss.ss_ext_wholesale_cost};
+> val q13 = fn
+>   : unit
+>      -> {avg(ss_ext_sales_price):decimal option,
+>           avg(ss_ext_wholesale_cost):decimal option,
+>           avg(ss_quantity):real option,
+>           sum(ss_ext_wholesale_cost):decimal option}
+val r13 = q13 ();
+> val r13 =
+>   {avg(ss_ext_sales_price)=SOME 3582.7,
+>    avg(ss_ext_wholesale_cost)=SOME 3466.65,avg(ss_quantity)=SOME 55,
+>    sum(ss_ext_wholesale_cost)=SOME 3466.65}
+>   : {avg(ss_ext_sales_price):decimal option,
+>       avg(ss_ext_wholesale_cost):decimal option, avg(ss_quantity):real option,
+>       sum(ss_ext_wholesale_cost):decimal option}
+
+(* --- q14b ------------------------------------------------------- *)
+(*
+WITH cross_items AS
+(SELECT i_item_sk ss_item_sk
+  FROM item,
+    (SELECT
+      iss.i_brand_id brand_id,
+      iss.i_class_id class_id,
+      iss.i_category_id category_id
+    FROM store_sales, item iss, date_dim d1
+    WHERE ss_item_sk = iss.i_item_sk
+      AND ss_sold_date_sk = d1.d_date_sk
+      AND d1.d_year BETWEEN 1999 AND 1999 + 2
+    INTERSECT
+    SELECT
+      ics.i_brand_id,
+      ics.i_class_id,
+      ics.i_category_id
+    FROM catalog_sales, item ics, date_dim d2
+    WHERE cs_item_sk = ics.i_item_sk
+      AND cs_sold_date_sk = d2.d_date_sk
+      AND d2.d_year BETWEEN 1999 AND 1999 + 2
+    INTERSECT
+    SELECT
+      iws.i_brand_id,
+      iws.i_class_id,
+      iws.i_category_id
+    FROM web_sales, item iws, date_dim d3
+    WHERE ws_item_sk = iws.i_item_sk
+      AND ws_sold_date_sk = d3.d_date_sk
+      AND d3.d_year BETWEEN 1999 AND 1999 + 2) x
+  WHERE i_brand_id = brand_id
+    AND i_class_id = class_id
+    AND i_category_id = category_id
+),
+    avg_sales AS
+  (SELECT avg(quantity * list_price) average_sales
+  FROM (SELECT
+          ss_quantity quantity,
+          ss_list_price list_price
+        FROM store_sales, date_dim
+        WHERE ss_sold_date_sk = d_date_sk AND d_year BETWEEN 1999 AND 1999 + 2
+        UNION ALL
+        SELECT
+          cs_quantity quantity,
+          cs_list_price list_price
+        FROM catalog_sales, date_dim
+        WHERE cs_sold_date_sk = d_date_sk AND d_year BETWEEN 1999 AND 1999 + 2
+        UNION ALL
+        SELECT
+          ws_quantity quantity,
+          ws_list_price list_price
+        FROM web_sales, date_dim
+        WHERE ws_sold_date_sk = d_date_sk AND d_year BETWEEN 1999 AND 1999 + 2) x)
+SELECT *
+FROM
+  (SELECT
+    'store' channel,
+    i_brand_id,
+    i_class_id,
+    i_category_id,
+    sum(ss_quantity * ss_list_price) sales,
+    count(*) number_sales
+  FROM store_sales, item, date_dim
+  WHERE ss_item_sk IN (SELECT ss_item_sk
+  FROM cross_items)
+    AND ss_item_sk = i_item_sk
+    AND ss_sold_date_sk = d_date_sk
+    AND d_week_seq = (SELECT d_week_seq
+  FROM date_dim
+  WHERE d_year = 1999 + 1 AND d_moy = 12 AND d_dom = 11)
+  GROUP BY i_brand_id, i_class_id, i_category_id
+  HAVING sum(ss_quantity * ss_list_price) > (SELECT average_sales
+  FROM avg_sales)) this_year,
+  (SELECT
+    'store' channel,
+    i_brand_id,
+    i_class_id,
+    i_category_id,
+    sum(ss_quantity * ss_list_price) sales,
+    count(*) number_sales
+  FROM store_sales, item, date_dim
+  WHERE ss_item_sk IN (SELECT ss_item_sk
+  FROM cross_items)
+    AND ss_item_sk = i_item_sk
+    AND ss_sold_date_sk = d_date_sk
+    AND d_week_seq = (SELECT d_week_seq
+  FROM date_dim
+  WHERE d_year = 1999 AND d_moy = 12 AND d_dom = 11)
+  GROUP BY i_brand_id, i_class_id, i_category_id
+  HAVING sum(ss_quantity * ss_list_price) > (SELECT average_sales
+  FROM avg_sales)) last_year
+WHERE this_year.i_brand_id = last_year.i_brand_id
+  AND this_year.i_class_id = last_year.i_class_id
+  AND this_year.i_category_id = last_year.i_category_id
+ORDER BY this_year.channel, this_year.i_brand_id, this_year.i_class_id, this_year.i_category_id
+LIMIT 100
+*)
+fun q14b () =
+  let
+    (* "quantity * price" *)
+    fun times (quantity, price) =
+      case (quantity, price) of
+          (SOME q, SOME p) => SOME (Decimal.fromInt q * p)
+        | _ => NONE
+    val years = [SOME 1999, SOME (1999 + 1), SOME (1999 + 2)]
+    val cross_items =
+      from i in tpcds.item,
+          x in (
+            from x in (
+                from ss in tpcds.store_sales,
+                    iss in tpcds.item,
+                    d1 in tpcds.date_dim
+                  where ss.ss_item_sk = iss.i_item_sk
+                    andalso ss.ss_sold_date_sk = SOME d1.d_date_sk
+                    andalso d1.d_year elem years
+                  yield {brand_id = iss.i_brand_id,
+                    class_id = iss.i_class_id,
+                    category_id = iss.i_category_id})
+              intersect distinct
+                (from cs in tpcds.catalog_sales,
+                    ics in tpcds.item,
+                    d2 in tpcds.date_dim
+                  where cs.cs_item_sk = ics.i_item_sk
+                    andalso cs.cs_sold_date_sk = SOME d2.d_date_sk
+                    andalso d2.d_year elem years
+                  yield {brand_id = ics.i_brand_id,
+                    class_id = ics.i_class_id,
+                    category_id = ics.i_category_id}),
+                (from ws in tpcds.web_sales,
+                    iws in tpcds.item,
+                    d3 in tpcds.date_dim
+                  where ws.ws_item_sk = iws.i_item_sk
+                    andalso ws.ws_sold_date_sk = SOME d3.d_date_sk
+                    andalso d3.d_year elem years
+                  yield {brand_id = iws.i_brand_id,
+                    class_id = iws.i_class_id,
+                    category_id = iws.i_category_id}))
+        where i.i_brand_id <> NONE
+          andalso i.i_brand_id = x.brand_id
+          andalso i.i_class_id <> NONE
+          andalso i.i_class_id = x.class_id
+          andalso i.i_category_id <> NONE
+          andalso i.i_category_id = x.category_id
+        yield i.i_item_sk
+    val average_sales =
+      from x in (
+          from ss in tpcds.store_sales,
+              d in tpcds.date_dim
+            where ss.ss_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem years
+            yield {quantity = ss.ss_quantity, list_price = ss.ss_list_price})
+        union
+          (from cs in tpcds.catalog_sales,
+              d in tpcds.date_dim
+            where cs.cs_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem years
+            yield {quantity = cs.cs_quantity, list_price = cs.cs_list_price}),
+          (from ws in tpcds.web_sales,
+              d in tpcds.date_dim
+            where ws.ws_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem years
+            yield {quantity = ws.ws_quantity, list_price = ws.ws_list_price})
+        compute avg over times (x.quantity, x.list_price)
+    (* The week that holds December 11 of "year". *)
+    fun week year =
+      Relational.only
+        (from d in tpcds.date_dim
+          where d.d_year = SOME year
+            andalso d.d_moy = SOME 12
+            andalso d.d_dom = SOME 11
+          yield d.d_week_seq)
+    (* "ss_item_sk IN (SELECT ss_item_sk FROM cross_items)" is written
+     * as "exists", which is the same for a key that is never NONE, and
+     * which Morel evaluates as a semi-join; it searches the list for
+     * "elem" once per row. *)
+    fun sales year =
+      let
+        val w = week year
+      in
+        from ss in tpcds.store_sales,
+            i in tpcds.item,
+            d in tpcds.date_dim
+          where (exists ci in cross_items where ci = ss.ss_item_sk)
+            andalso ss.ss_item_sk = i.i_item_sk
+            andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+            andalso w <> NONE
+            andalso d.d_week_seq = w
+          group {i.i_brand_id, i.i_class_id, i.i_category_id}
+            compute {
+              sales = sum over times (ss.ss_quantity, ss.ss_list_price),
+              number_sales = count over ()}
+          where (case (sales, average_sales) of
+                    (SOME s, SOME a) => s > a
+                  | _ => false)
+          yield {channel = "store", i_brand_id, i_class_id, i_category_id,
+            sales, number_sales}
+      end
+  in
+    from this_year in sales (1999 + 1),
+        last_year in sales 1999
+      where this_year.i_brand_id <> NONE
+        andalso this_year.i_brand_id = last_year.i_brand_id
+        andalso this_year.i_class_id <> NONE
+        andalso this_year.i_class_id = last_year.i_class_id
+        andalso this_year.i_category_id <> NONE
+        andalso this_year.i_category_id = last_year.i_category_id
+      order (this_year.channel, this_year.i_brand_id, this_year.i_class_id,
+        this_year.i_category_id)
+      yield {this_year.channel, this_year.i_brand_id, this_year.i_class_id,
+        this_year.i_category_id, this_year.sales, this_year.number_sales,
+        channel_2 = last_year.channel, i_brand_id_2 = last_year.i_brand_id,
+        i_class_id_2 = last_year.i_class_id,
+        i_category_id_2 = last_year.i_category_id,
+        sales_2 = last_year.sales, number_sales_2 = last_year.number_sales}
+      take 100
+  end;
+> val q14b = fn
+>   : unit
+>      -> {channel:string, channel_2:string, i_brand_id:int option,
+>           i_brand_id_2:int option, i_category_id:int option,
+>           i_category_id_2:int option, i_class_id:int option,
+>           i_class_id_2:int option, number_sales:int, number_sales_2:int,
+>           sales:decimal option, sales_2:decimal option} list
+val r14b = q14b ();
+> channel channel_2 i_brand_id i_brand_id_2 i_category_id i_category_id_2 i_class_id i_class_id_2 number_sales number_sales_2 sales    sales_2
+> ------- --------- ---------- ------------ ------------- --------------- ---------- ------------ ------------ -------------- -------- --------
+> store   store        1001001      1001001             1               1          1            1            6             21  21153.4 66330.36
+> store   store        1001002      1001002             1               1          1            1            9              9 51720.98 23645.98
+> store   store        1002001      1002001             1               1          2            2            7             17 21807.26 72820.44
+> store   store        1002002      1002002             1               1          2            2           24             11 77160.97 43957.64
+> store   store        1003001      1003001             1               1          3            3            5             15 12908.23 66030.07
+> store   store        1003002      1003002             1               1          3            3           11              7 18000.25 34455.48
+> store   store        1004001      1004001             1               1          4            4           10             20 54238.48 64552.38
+> store   store        1004002      1004002             1               1          4            4            8              8 36513.39 28810.65
+> store   store        2001001      2001001             2               2          1            1            9             13 43099.22 66890.69
+> store   store        2002001      2002001             2               2          2            2           10             21 32840.14  91890.3
+> ...
+>
+> val r14b : {channel:string, channel_2:string, i_brand_id:int option, i_brand_id_2:int option, i_category_id:int option, i_category_id_2:int option, i_class_id:int option, i_class_id_2:int option, number_sales:int, number_sales_2:int, sales:decimal option, sales_2:decimal option} list
+
 (* --- q15 -------------------------------------------------------- *)
 (*
 SELECT
@@ -1068,6 +1693,73 @@ val r15 = q15 ();
 > ...
 >
 > val r15 : {ca_zip:string option, sum:decimal option} list
+
+(* --- q16 -------------------------------------------------------- *)
+(*
+SELECT
+  count(DISTINCT cs_order_number) AS `order count `,
+  sum(cs_ext_ship_cost) AS `total shipping cost `,
+  sum(cs_net_profit) AS `total net profit `
+FROM
+  catalog_sales cs1, date_dim, customer_address, call_center
+WHERE
+  d_date BETWEEN '2002-02-01' AND (CAST('2002-02-01' AS DATE) + INTERVAL 60 days)
+    AND cs1.cs_ship_date_sk = d_date_sk
+    AND cs1.cs_ship_addr_sk = ca_address_sk
+    AND ca_state = 'GA'
+    AND cs1.cs_call_center_sk = cc_call_center_sk
+    AND cc_county IN
+    ('Williamson County', 'Williamson County', 'Williamson County', 'Williamson County', 'Williamson County')
+    AND EXISTS(SELECT *
+               FROM catalog_sales cs2
+               WHERE cs1.cs_order_number = cs2.cs_order_number
+                 AND cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk)
+    AND NOT EXISTS(SELECT *
+                   FROM catalog_returns cr1
+                   WHERE cs1.cs_order_number = cr1.cr_order_number)
+ORDER BY count(DISTINCT cs_order_number)
+LIMIT 100
+*)
+fun q16 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+  in
+    from cs1 in tpcds.catalog_sales,
+        d in tpcds.date_dim,
+        ca in tpcds.customer_address,
+        cc in tpcds.call_center
+      where d.d_date >= SOME (day (2002, Feb, 1))
+        andalso d.d_date <= SOME (day (2002, Feb, 1 + 60))
+        andalso cs1.cs_ship_date_sk = SOME d.d_date_sk
+        andalso cs1.cs_ship_addr_sk = SOME ca.ca_address_sk
+        andalso ca.ca_state = SOME "GA"
+        andalso cs1.cs_call_center_sk = SOME cc.cc_call_center_sk
+        andalso cc.cc_county elem [SOME "Williamson County"]
+        andalso (exists cs2 in tpcds.catalog_sales
+          where cs1.cs_order_number = cs2.cs_order_number
+            andalso cs1.cs_warehouse_sk <> NONE
+            andalso cs2.cs_warehouse_sk <> NONE
+            andalso cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk)
+        andalso not (exists cr1 in tpcds.catalog_returns
+          where cs1.cs_order_number = cr1.cr_order_number)
+      compute {
+        `order count ` =
+          (fn orders => List.length (from n in orders distinct))
+            over cs1.cs_order_number,
+        `total shipping cost ` = sum over cs1.cs_ext_ship_cost,
+        `total net profit ` = sum over cs1.cs_net_profit}
+  end;
+> val q16 = fn
+>   : unit
+>      -> {`order count `:int, `total net profit `:decimal option,
+>           `total shipping cost `:decimal option}
+val r16 = q16 ();
+> val r16 =
+>   {`order count `=0,`total net profit `=NONE,`total shipping cost `=NONE}
+>   : {`order count `:int, `total net profit `:decimal option,
+>       `total shipping cost `:decimal option}
 
 (* --- q19 -------------------------------------------------------- *)
 (*
@@ -1135,6 +1827,96 @@ val r19 = q19 ();
 > ...
 >
 > val r19 : {brand:string option, brand_id:int option, ext_price:decimal option, i_manufact:string option, i_manufact_id:int option} list
+
+(* --- q21 -------------------------------------------------------- *)
+(*
+SELECT *
+FROM (
+       SELECT
+         w_warehouse_name,
+         i_item_id,
+         sum(CASE WHEN (cast(d_date AS DATE) < cast('2000-03-11' AS DATE))
+           THEN inv_quantity_on_hand
+             ELSE 0 END) AS inv_before,
+         sum(CASE WHEN (cast(d_date AS DATE) >= cast('2000-03-11' AS DATE))
+           THEN inv_quantity_on_hand
+             ELSE 0 END) AS inv_after
+       FROM inventory, warehouse, item, date_dim
+       WHERE i_current_price BETWEEN 0.99 AND 1.49
+         AND i_item_sk = inv_item_sk
+         AND inv_warehouse_sk = w_warehouse_sk
+         AND inv_date_sk = d_date_sk
+         AND d_date BETWEEN (cast('2000-03-11' AS DATE) - INTERVAL 30 days)
+       AND (cast('2000-03-11' AS DATE) + INTERVAL 30 days)
+       GROUP BY w_warehouse_name, i_item_id) x
+WHERE (CASE WHEN inv_before > 0
+  THEN inv_after / inv_before
+       ELSE NULL
+       END) BETWEEN 2.0 / 3.0 AND 3.0 / 2.0
+ORDER BY w_warehouse_name, i_item_id
+LIMIT 100
+*)
+fun q21 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    (* "CASE WHEN b > 0 THEN a / b ELSE NULL END BETWEEN 2/3 AND 3/2" *)
+    fun steady (after, before) =
+      case (after, before) of
+          (SOME a, SOME b) =>
+            b > 0
+            andalso Real.fromInt a / Real.fromInt b >= 2.0 / 3.0
+            andalso Real.fromInt a / Real.fromInt b <= 3.0 / 2.0
+        | _ => false
+  in
+    from x in (
+        from inv in tpcds.inventory,
+            w in tpcds.warehouse,
+            i in tpcds.item,
+            d in tpcds.date_dim
+          where i.i_current_price >= SOME (decimal "0.99")
+            andalso i.i_current_price <= SOME (decimal "1.49")
+            andalso inv.inv_item_sk = i.i_item_sk
+            andalso inv.inv_warehouse_sk = w.w_warehouse_sk
+            andalso inv.inv_date_sk = d.d_date_sk
+            andalso d.d_date >= SOME (day (2000, Mar, 11 - 30))
+            andalso d.d_date <= SOME (day (2000, Mar, 11 + 30))
+          group {w.w_warehouse_name, i.i_item_id}
+            compute {
+              inv_before = sum over
+                (if d.d_date <> NONE
+                    andalso d.d_date < SOME (day (2000, Mar, 11))
+                  then inv.inv_quantity_on_hand
+                  else SOME 0),
+              inv_after = sum over
+                (if d.d_date >= SOME (day (2000, Mar, 11))
+                  then inv.inv_quantity_on_hand
+                  else SOME 0)})
+      where steady (x.inv_after, x.inv_before)
+      order (x.w_warehouse_name, x.i_item_id)
+      take 100
+  end;
+> val q21 = fn
+>   : unit
+>      -> {i_item_id:string, inv_after:int option, inv_before:int option,
+>           w_warehouse_name:string option} list
+val r21 = q21 ();
+> i_item_id        inv_after inv_before w_warehouse_name
+> ---------------- --------- ---------- -------------------
+> AAAAAAAAAHHAAAAA      3097       2366 Conventional childr
+> AAAAAAAAAJCAAAAA      1697       2523 Conventional childr
+> AAAAAAAABKFAAAAA      2127       1798 Conventional childr
+> AAAAAAAACAAAAAAA      1593       1660 Conventional childr
+> AAAAAAAACBFAAAAA      2661       1794 Conventional childr
+> AAAAAAAACEEAAAAA      2229       2475 Conventional childr
+> AAAAAAAADMBAAAAA      3215       2927 Conventional childr
+> AAAAAAAAEMEAAAAA      2124       2333 Conventional childr
+> AAAAAAAAENDAAAAA      2706       1900 Conventional childr
+> AAAAAAAAFCGAAAAA      2540       2290 Conventional childr
+> ...
+>
+> val r21 : {i_item_id:string, inv_after:int option, inv_before:int option, w_warehouse_name:string option} list
 
 (* --- q23a ------------------------------------------------------- *)
 (*
@@ -1416,6 +2198,174 @@ val r23b = q23b ();
 >
 > val r23b : {c_first_name:string option, c_last_name:string option, sales:decimal option} list
 
+(* --- q24a ------------------------------------------------------- *)
+(*
+WITH ssales AS
+(SELECT
+    c_last_name,
+    c_first_name,
+    s_store_name,
+    ca_state,
+    s_state,
+    i_color,
+    i_current_price,
+    i_manager_id,
+    i_units,
+    i_size,
+    sum(ss_net_paid) netpaid
+  FROM store_sales, store_returns, store, item, customer, customer_address
+  WHERE ss_ticket_number = sr_ticket_number
+    AND ss_item_sk = sr_item_sk
+    AND ss_customer_sk = c_customer_sk
+    AND ss_item_sk = i_item_sk
+    AND ss_store_sk = s_store_sk
+    AND c_birth_country = upper(ca_country)
+    AND s_zip = ca_zip
+    AND s_market_id = 8
+  GROUP BY c_last_name, c_first_name, s_store_name, ca_state, s_state, i_color,
+    i_current_price, i_manager_id, i_units, i_size)
+SELECT
+  c_last_name,
+  c_first_name,
+  s_store_name,
+  sum(netpaid) paid
+FROM ssales
+WHERE i_color = 'pale'
+GROUP BY c_last_name, c_first_name, s_store_name
+HAVING sum(netpaid) > (SELECT 0.05 * avg(netpaid)
+FROM ssales)
+*)
+fun q24a () =
+  let
+    val ssales =
+      from ss in tpcds.store_sales,
+          sr in tpcds.store_returns,
+          s in tpcds.store,
+          i in tpcds.item,
+          c in tpcds.customer,
+          ca in tpcds.customer_address
+        where ss.ss_ticket_number = sr.sr_ticket_number
+          andalso ss.ss_item_sk = sr.sr_item_sk
+          andalso ss.ss_customer_sk = SOME c.c_customer_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso (case (c.c_birth_country, ca.ca_country) of
+                      (SOME birth, SOME country) =>
+                        birth = String.map Char.toUpper country
+                    | _ => false)
+          andalso s.s_zip <> NONE
+          andalso s.s_zip = ca.ca_zip
+          andalso s.s_market_id = SOME 8
+        group {c.c_last_name, c.c_first_name, s.s_store_name, ca.ca_state,
+            s.s_state, i.i_color, i.i_current_price, i.i_manager_id,
+            i.i_units, i.i_size}
+          compute {netpaid = sum over ss.ss_net_paid}
+    val threshold =
+      Option.map (fn a => decimal "0.05" * a)
+        (from s in ssales compute avg over s.netpaid)
+  in
+    from s in ssales
+      where s.i_color = SOME "pale"
+      group {s.c_last_name, s.c_first_name, s.s_store_name}
+        compute {paid = sum over s.netpaid}
+      where (case (paid, threshold) of
+                (SOME p, SOME t) => p > t
+              | _ => false)
+  end;
+> val q24a = fn
+>   : unit
+>      -> {c_first_name:string option, c_last_name:string option,
+>           paid:decimal option, s_store_name:string option} list
+val r24a = q24a ();
+> c_first_name c_last_name paid s_store_name
+> ------------ ----------- ---- ------------
+>
+> val r24a : {c_first_name:string option, c_last_name:string option, paid:decimal option, s_store_name:string option} list
+
+(* --- q24b ------------------------------------------------------- *)
+(*
+WITH ssales AS
+(SELECT
+    c_last_name,
+    c_first_name,
+    s_store_name,
+    ca_state,
+    s_state,
+    i_color,
+    i_current_price,
+    i_manager_id,
+    i_units,
+    i_size,
+    sum(ss_net_paid) netpaid
+  FROM store_sales, store_returns, store, item, customer, customer_address
+  WHERE ss_ticket_number = sr_ticket_number
+    AND ss_item_sk = sr_item_sk
+    AND ss_customer_sk = c_customer_sk
+    AND ss_item_sk = i_item_sk
+    AND ss_store_sk = s_store_sk
+    AND c_birth_country = upper(ca_country)
+    AND s_zip = ca_zip
+    AND s_market_id = 8
+  GROUP BY c_last_name, c_first_name, s_store_name, ca_state, s_state,
+    i_color, i_current_price, i_manager_id, i_units, i_size)
+SELECT
+  c_last_name,
+  c_first_name,
+  s_store_name,
+  sum(netpaid) paid
+FROM ssales
+WHERE i_color = 'chiffon'
+GROUP BY c_last_name, c_first_name, s_store_name
+HAVING sum(netpaid) > (SELECT 0.05 * avg(netpaid)
+FROM ssales)
+*)
+fun q24b () =
+  let
+    val ssales =
+      from ss in tpcds.store_sales,
+          sr in tpcds.store_returns,
+          s in tpcds.store,
+          i in tpcds.item,
+          c in tpcds.customer,
+          ca in tpcds.customer_address
+        where ss.ss_ticket_number = sr.sr_ticket_number
+          andalso ss.ss_item_sk = sr.sr_item_sk
+          andalso ss.ss_customer_sk = SOME c.c_customer_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso (case (c.c_birth_country, ca.ca_country) of
+                      (SOME birth, SOME country) =>
+                        birth = String.map Char.toUpper country
+                    | _ => false)
+          andalso s.s_zip <> NONE
+          andalso s.s_zip = ca.ca_zip
+          andalso s.s_market_id = SOME 8
+        group {c.c_last_name, c.c_first_name, s.s_store_name, ca.ca_state,
+            s.s_state, i.i_color, i.i_current_price, i.i_manager_id,
+            i.i_units, i.i_size}
+          compute {netpaid = sum over ss.ss_net_paid}
+    val threshold =
+      Option.map (fn a => decimal "0.05" * a)
+        (from s in ssales compute avg over s.netpaid)
+  in
+    from s in ssales
+      where s.i_color = SOME "chiffon"
+      group {s.c_last_name, s.c_first_name, s.s_store_name}
+        compute {paid = sum over s.netpaid}
+      where (case (paid, threshold) of
+                (SOME p, SOME t) => p > t
+              | _ => false)
+  end;
+> val q24b = fn
+>   : unit
+>      -> {c_first_name:string option, c_last_name:string option,
+>           paid:decimal option, s_store_name:string option} list
+val r24b = q24b ();
+> c_first_name c_last_name paid s_store_name
+> ------------ ----------- ---- ------------
+>
+> val r24b : {c_first_name:string option, c_last_name:string option, paid:decimal option, s_store_name:string option} list
+
 (* --- q25 -------------------------------------------------------- *)
 (*
 SELECT
@@ -1499,6 +2449,228 @@ val r25 = q25 ();
 >
 > val r25 : {catalog_sales_profit:decimal option, i_item_desc:string option, i_item_id:string, s_store_id:string, s_store_name:string option, store_returns_loss:decimal option, store_sales_profit:decimal option} list
 
+(* --- q26 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_id,
+  avg(cs_quantity) agg1,
+  avg(cs_list_price) agg2,
+  avg(cs_coupon_amt) agg3,
+  avg(cs_sales_price) agg4
+FROM catalog_sales, customer_demographics, date_dim, item, promotion
+WHERE cs_sold_date_sk = d_date_sk AND
+  cs_item_sk = i_item_sk AND
+  cs_bill_cdemo_sk = cd_demo_sk AND
+  cs_promo_sk = p_promo_sk AND
+  cd_gender = 'M' AND
+  cd_marital_status = 'S' AND
+  cd_education_status = 'College' AND
+  (p_channel_email = 'N' OR p_channel_event = 'N') AND
+  d_year = 2000
+GROUP BY i_item_id
+ORDER BY i_item_id
+LIMIT 100
+*)
+fun q26 () =
+  from cs in tpcds.catalog_sales,
+      cd in tpcds.customer_demographics,
+      d in tpcds.date_dim,
+      i in tpcds.item,
+      p in tpcds.promotion
+    where cs.cs_sold_date_sk = SOME d.d_date_sk
+      andalso cs.cs_item_sk = i.i_item_sk
+      andalso cs.cs_bill_cdemo_sk = SOME cd.cd_demo_sk
+      andalso cs.cs_promo_sk = SOME p.p_promo_sk
+      andalso cd.cd_gender = SOME "M"
+      andalso cd.cd_marital_status = SOME "S"
+      andalso cd.cd_education_status = SOME "College"
+      andalso (p.p_channel_email = SOME "N"
+        orelse p.p_channel_event = SOME "N")
+      andalso d.d_year = SOME 2000
+    group i.i_item_id
+      compute {agg1 = avg over cs.cs_quantity,
+        agg2 = avg over cs.cs_list_price,
+        agg3 = avg over cs.cs_coupon_amt,
+        agg4 = avg over cs.cs_sales_price}
+    order i_item_id
+    take 100;
+> val q26 = fn
+>   : unit
+>      -> {agg1:real option, agg2:decimal option, agg3:decimal option,
+>           agg4:decimal option, i_item_id:string} list
+val r26 = q26 ();
+> agg1 agg2    agg3     agg4   i_item_id
+> ---- ------- -------- ------ ----------------
+>   92  94.925 1086.575  92.73 AAAAAAAAAAEAAAAA
+>   80   155.9        0 143.42 AAAAAAAAABDAAAAA
+>   69   32.57        0  10.74 AAAAAAAAABEAAAAA
+>   43   35.23        0   7.39 AAAAAAAAABGAAAAA
+>    1  126.38        0  60.66 AAAAAAAAACAAAAAA
+> 41.5 147.065        0 55.905 AAAAAAAAADFAAAAA
+>   84   95.88        0  43.14 AAAAAAAAAEHAAAAA
+>   26  189.89  1193.78 117.73 AAAAAAAAAFAAAAAA
+>   45   98.79  386.305 86.645 AAAAAAAAAGCAAAAA
+>   47  125.38        0      0 AAAAAAAAAGEAAAAA
+> ...
+>
+> val r26 : {agg1:real option, agg2:decimal option, agg3:decimal option, agg4:decimal option, i_item_id:string} list
+
+(* --- q28 -------------------------------------------------------- *)
+(*
+SELECT *
+FROM (SELECT
+  avg(ss_list_price) B1_LP,
+  count(ss_list_price) B1_CNT,
+  count(DISTINCT ss_list_price) B1_CNTD
+FROM store_sales
+WHERE ss_quantity BETWEEN 0 AND 5
+  AND (ss_list_price BETWEEN 8 AND 8 + 10
+  OR ss_coupon_amt BETWEEN 459 AND 459 + 1000
+  OR ss_wholesale_cost BETWEEN 57 AND 57 + 20)) B1,
+  (SELECT
+    avg(ss_list_price) B2_LP,
+    count(ss_list_price) B2_CNT,
+    count(DISTINCT ss_list_price) B2_CNTD
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 6 AND 10
+    AND (ss_list_price BETWEEN 90 AND 90 + 10
+    OR ss_coupon_amt BETWEEN 2323 AND 2323 + 1000
+    OR ss_wholesale_cost BETWEEN 31 AND 31 + 20)) B2,
+  (SELECT
+    avg(ss_list_price) B3_LP,
+    count(ss_list_price) B3_CNT,
+    count(DISTINCT ss_list_price) B3_CNTD
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 11 AND 15
+    AND (ss_list_price BETWEEN 142 AND 142 + 10
+    OR ss_coupon_amt BETWEEN 12214 AND 12214 + 1000
+    OR ss_wholesale_cost BETWEEN 79 AND 79 + 20)) B3,
+  (SELECT
+    avg(ss_list_price) B4_LP,
+    count(ss_list_price) B4_CNT,
+    count(DISTINCT ss_list_price) B4_CNTD
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 16 AND 20
+    AND (ss_list_price BETWEEN 135 AND 135 + 10
+    OR ss_coupon_amt BETWEEN 6071 AND 6071 + 1000
+    OR ss_wholesale_cost BETWEEN 38 AND 38 + 20)) B4,
+  (SELECT
+    avg(ss_list_price) B5_LP,
+    count(ss_list_price) B5_CNT,
+    count(DISTINCT ss_list_price) B5_CNTD
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 21 AND 25
+    AND (ss_list_price BETWEEN 122 AND 122 + 10
+    OR ss_coupon_amt BETWEEN 836 AND 836 + 1000
+    OR ss_wholesale_cost BETWEEN 17 AND 17 + 20)) B5,
+  (SELECT
+    avg(ss_list_price) B6_LP,
+    count(ss_list_price) B6_CNT,
+    count(DISTINCT ss_list_price) B6_CNTD
+  FROM store_sales
+  WHERE ss_quantity BETWEEN 26 AND 30
+    AND (ss_list_price BETWEEN 154 AND 154 + 10
+    OR ss_coupon_amt BETWEEN 7326 AND 7326 + 1000
+    OR ss_wholesale_cost BETWEEN 7 AND 7 + 20)) B6
+LIMIT 100
+*)
+fun q28 () =
+  let
+    (* "x BETWEEN lo AND hi" *)
+    fun between (x, lo, hi) =
+      x >= SOME (Decimal.fromInt lo) andalso x <= SOME (Decimal.fromInt hi)
+    (* "count(DISTINCT x)", which ignores nulls *)
+    fun countDistinct xs =
+      List.length (from x in xs where Option.isSome x distinct)
+    val b1 =
+      from ss in tpcds.store_sales
+        where ss.ss_quantity >= SOME 0
+          andalso ss.ss_quantity <= SOME 5
+          andalso (between (ss.ss_list_price, 8, 8 + 10)
+            orelse between (ss.ss_coupon_amt, 459, 459 + 1000)
+            orelse between (ss.ss_wholesale_cost, 57, 57 + 20))
+        compute {b1_lp = avg over ss.ss_list_price,
+          b1_cnt = count over ss.ss_list_price,
+          b1_cntd = countDistinct over ss.ss_list_price}
+    val b2 =
+      from ss in tpcds.store_sales
+        where ss.ss_quantity >= SOME 6
+          andalso ss.ss_quantity <= SOME 10
+          andalso (between (ss.ss_list_price, 90, 90 + 10)
+            orelse between (ss.ss_coupon_amt, 2323, 2323 + 1000)
+            orelse between (ss.ss_wholesale_cost, 31, 31 + 20))
+        compute {b2_lp = avg over ss.ss_list_price,
+          b2_cnt = count over ss.ss_list_price,
+          b2_cntd = countDistinct over ss.ss_list_price}
+    val b3 =
+      from ss in tpcds.store_sales
+        where ss.ss_quantity >= SOME 11
+          andalso ss.ss_quantity <= SOME 15
+          andalso (between (ss.ss_list_price, 142, 142 + 10)
+            orelse between (ss.ss_coupon_amt, 12214, 12214 + 1000)
+            orelse between (ss.ss_wholesale_cost, 79, 79 + 20))
+        compute {b3_lp = avg over ss.ss_list_price,
+          b3_cnt = count over ss.ss_list_price,
+          b3_cntd = countDistinct over ss.ss_list_price}
+    val b4 =
+      from ss in tpcds.store_sales
+        where ss.ss_quantity >= SOME 16
+          andalso ss.ss_quantity <= SOME 20
+          andalso (between (ss.ss_list_price, 135, 135 + 10)
+            orelse between (ss.ss_coupon_amt, 6071, 6071 + 1000)
+            orelse between (ss.ss_wholesale_cost, 38, 38 + 20))
+        compute {b4_lp = avg over ss.ss_list_price,
+          b4_cnt = count over ss.ss_list_price,
+          b4_cntd = countDistinct over ss.ss_list_price}
+    val b5 =
+      from ss in tpcds.store_sales
+        where ss.ss_quantity >= SOME 21
+          andalso ss.ss_quantity <= SOME 25
+          andalso (between (ss.ss_list_price, 122, 122 + 10)
+            orelse between (ss.ss_coupon_amt, 836, 836 + 1000)
+            orelse between (ss.ss_wholesale_cost, 17, 17 + 20))
+        compute {b5_lp = avg over ss.ss_list_price,
+          b5_cnt = count over ss.ss_list_price,
+          b5_cntd = countDistinct over ss.ss_list_price}
+    val b6 =
+      from ss in tpcds.store_sales
+        where ss.ss_quantity >= SOME 26
+          andalso ss.ss_quantity <= SOME 30
+          andalso (between (ss.ss_list_price, 154, 154 + 10)
+            orelse between (ss.ss_coupon_amt, 7326, 7326 + 1000)
+            orelse between (ss.ss_wholesale_cost, 7, 7 + 20))
+        compute {b6_lp = avg over ss.ss_list_price,
+          b6_cnt = count over ss.ss_list_price,
+          b6_cntd = countDistinct over ss.ss_list_price}
+  in
+    {
+      b1.b1_lp, b1.b1_cnt, b1.b1_cntd,
+      b2.b2_lp, b2.b2_cnt, b2.b2_cntd,
+      b3.b3_lp, b3.b3_cnt, b3.b3_cntd,
+      b4.b4_lp, b4.b4_cnt, b4.b4_cntd,
+      b5.b5_lp, b5.b5_cnt, b5.b5_cntd,
+      b6.b6_lp, b6.b6_cnt, b6.b6_cntd}
+  end;
+> val q28 = fn
+>   : unit
+>      -> {b1_cnt:int, b1_cntd:int, b1_lp:decimal option, b2_cnt:int,
+>           b2_cntd:int, b2_lp:decimal option, b3_cnt:int, b3_cntd:int,
+>           b3_lp:decimal option, b4_cnt:int, b4_cntd:int, b4_lp:decimal option,
+>           b5_cnt:int, b5_cntd:int, b5_lp:decimal option, b6_cnt:int,
+>           b6_cntd:int, b6_lp:decimal option}
+val r28 = q28 ();
+> val r28 =
+>   {b1_cnt=1468,b1_cntd=1345,b1_lp=SOME 77.93489782016348773841961852861035,
+>    b2_cnt=1518,b2_cntd=1331,b2_lp=SOME 69.54723978919631093544137022397892,
+>    b3_cnt=1167,b3_cntd=1107,b3_lp=SOME 134.0644130248500428449014567266495,
+>    b4_cnt=1258,b4_cntd=1158,b4_lp=SOME 81.56253577106518282988871224165342,
+>    b5_cnt=1523,b5_cntd=1342,b5_lp=SOME 60.27474720945502298095863427445831,
+>    b6_cnt=1322,b6_cntd=1152,b6_lp=SOME 38.98695158850226928895612708018154}
+>   : {b1_cnt:int, b1_cntd:int, b1_lp:decimal option, b2_cnt:int, b2_cntd:int,
+>       b2_lp:decimal option, b3_cnt:int, b3_cntd:int, b3_lp:decimal option,
+>       b4_cnt:int, b4_cntd:int, b4_lp:decimal option, b5_cnt:int, b5_cntd:int,
+>       b5_lp:decimal option, b6_cnt:int, b6_cntd:int, b6_lp:decimal option}
+
 (* --- q29 -------------------------------------------------------- *)
 (*
 SELECT
@@ -1579,6 +2751,100 @@ val r29 = q29 ();
 >                     75 Long, fine teachers should not occur. Particular, monetary children or# AAAAAAAAKAHAAAAA AAAAAAAABAAAAAAA ought                             1                   34
 >
 > val r29 : {catalog_sales_quantity:int option, i_item_desc:string option, i_item_id:string, s_store_id:string, s_store_name:string option, store_returns_quantity:int option, store_sales_quantity:int option} list
+
+(* --- q30 -------------------------------------------------------- *)
+(*
+WITH customer_total_return AS
+(SELECT
+    wr_returning_customer_sk AS ctr_customer_sk,
+    ca_state AS ctr_state,
+    sum(wr_return_amt) AS ctr_total_return
+  FROM web_returns, date_dim, customer_address
+  WHERE wr_returned_date_sk = d_date_sk
+    AND d_year = 2002
+    AND wr_returning_addr_sk = ca_address_sk
+  GROUP BY wr_returning_customer_sk, ca_state)
+SELECT
+  c_customer_id,
+  c_salutation,
+  c_first_name,
+  c_last_name,
+  c_preferred_cust_flag,
+  c_birth_day,
+  c_birth_month,
+  c_birth_year,
+  c_birth_country,
+  c_login,
+  c_email_address,
+  c_last_review_date,
+  ctr_total_return
+FROM customer_total_return ctr1, customer_address, customer
+WHERE ctr1.ctr_total_return > (SELECT avg(ctr_total_return) * 1.2
+FROM customer_total_return ctr2
+WHERE ctr1.ctr_state = ctr2.ctr_state)
+  AND ca_address_sk = c_current_addr_sk
+  AND ca_state = 'GA'
+  AND ctr1.ctr_customer_sk = c_customer_sk
+ORDER BY c_customer_id, c_salutation, c_first_name, c_last_name, c_preferred_cust_flag
+  , c_birth_day, c_birth_month, c_birth_year, c_birth_country, c_login, c_email_address
+  , c_last_review_date, ctr_total_return
+LIMIT 100
+*)
+fun q30 () =
+  let
+    val customer_total_return =
+      from wr in tpcds.web_returns,
+          d in tpcds.date_dim,
+          ca in tpcds.customer_address
+        where wr.wr_returned_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME 2002
+          andalso wr.wr_returning_addr_sk = SOME ca.ca_address_sk
+        group {ctr_customer_sk = wr.wr_returning_customer_sk,
+            ctr_state = ca.ca_state}
+          compute {ctr_total_return = sum over wr.wr_return_amt}
+  in
+    from ctr1 in customer_total_return,
+        ca in tpcds.customer_address,
+        c in tpcds.customer
+      where (case (ctr1.ctr_total_return,
+              from ctr2 in customer_total_return
+                where ctr2.ctr_state <> NONE
+                  andalso ctr1.ctr_state = ctr2.ctr_state
+                compute avg over ctr2.ctr_total_return) of
+            (SOME total, SOME average) => total > average * decimal "1.2"
+          | _ => false)
+        andalso c.c_current_addr_sk = SOME ca.ca_address_sk
+        andalso ca.ca_state = SOME "GA"
+        andalso ctr1.ctr_customer_sk = SOME c.c_customer_sk
+      yield {c.c_customer_id, c.c_salutation, c.c_first_name, c.c_last_name,
+        c.c_preferred_cust_flag, c.c_birth_day, c.c_birth_month,
+        c.c_birth_year, c.c_birth_country, c.c_login, c.c_email_address,
+        c.c_last_review_date,
+        ctr1.ctr_total_return}
+      order (c_customer_id, c_salutation, c_first_name, c_last_name,
+        c_preferred_cust_flag, c_birth_day, c_birth_month, c_birth_year,
+        c_birth_country, c_login, c_email_address, c_last_review_date,
+        ctr_total_return)
+      take 100
+  end;
+> val q30 = fn
+>   : unit
+>      -> {c_birth_country:string option, c_birth_day:int option,
+>           c_birth_month:int option, c_birth_year:int option,
+>           c_customer_id:string, c_email_address:string option,
+>           c_first_name:string option, c_last_name:string option,
+>           c_last_review_date:int option, c_login:string option,
+>           c_preferred_cust_flag:string option, c_salutation:string option,
+>           ctr_total_return:decimal option} list
+val r30 = q30 ();
+> c_birth_country c_birth_day c_birth_month c_birth_year c_customer_id    c_email_address                 c_first_name c_last_name c_last_review_date c_login c_preferred_cust_flag c_salutation ctr_total_return
+> --------------- ----------- ------------- ------------ ---------------- ------------------------------- ------------ ----------- ------------------ ------- --------------------- ------------ ----------------
+> AMERICAN SAMOA           20             9         1932 AAAAAAAABBCAAAAA Michael.Herring@jl5PTAS.com     Michael      Herring                2452300         Y                     Sir                   2306.71
+> ALBANIA                  17             7         1940 AAAAAAAABFAAAAAA Jessica.Levesque@06mGqI9mHG.org Jessica      Levesque               2452414         Y                     Ms.                  10628.66
+> UNITED STATES            18             4         1952 AAAAAAAAIOCAAAAA Julio.Mcdaniel@2Hc.edu          Julio        Mcdaniel               2452455         Y                     Dr.                   3140.58
+> PARAGUAY                  8             5         1979 AAAAAAAAKIBAAAAA Brenda.Miner@8L.edu             Brenda       Miner                  2452440         N                     Ms.                    834.48
+>
+> val r30 : {c_birth_country:string option, c_birth_day:int option, c_birth_month:int option, c_birth_year:int option, c_customer_id:string, c_email_address:string option, c_first_name:string option, c_last_name:string option, c_last_review_date:int option, c_login:string option, c_preferred_cust_flag:string option, c_salutation:string option, ctr_total_return:decimal option} list
 
 (* --- q31 -------------------------------------------------------- *)
 (*
@@ -1717,6 +2983,55 @@ val r31 = q31 ();
 > --------- ------ -------------------- -------------------- ------------------ ------------------
 >
 > val r31 : {ca_county:string option, d_year:int option, store_q1_q2_increase:decimal option, store_q2_q3_increase:decimal option, web_q1_q2_increase:decimal option, web_q2_q3_increase:decimal option} list
+
+(* --- q32 -------------------------------------------------------- *)
+(*
+SELECT sum(cs_ext_discount_amt) AS `excess discount amount`
+FROM
+  catalog_sales, item, date_dim
+WHERE
+  i_manufact_id = 977
+    AND i_item_sk = cs_item_sk
+    AND d_date BETWEEN '2000-01-27' AND (cast('2000-01-27' AS DATE) + interval 90 days)
+    AND d_date_sk = cs_sold_date_sk
+    AND cs_ext_discount_amt > (
+    SELECT 1.3 * avg(cs_ext_discount_amt)
+    FROM catalog_sales, date_dim
+    WHERE cs_item_sk = i_item_sk
+      AND d_date BETWEEN '2000-01-27' AND (cast('2000-01-27' AS DATE) + interval 90 days)
+      AND d_date_sk = cs_sold_date_sk)
+LIMIT 100
+*)
+fun q32 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+  in
+    from cs in tpcds.catalog_sales,
+        i in tpcds.item,
+        d in tpcds.date_dim
+      where i.i_manufact_id = SOME 977
+        andalso cs.cs_item_sk = i.i_item_sk
+        andalso d.d_date >= SOME (day (2000, Jan, 27))
+        andalso d.d_date <= SOME (day (2000, Jan, 27 + 90))
+        andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+        andalso (case (cs.cs_ext_discount_amt,
+                from cs2 in tpcds.catalog_sales,
+                    d2 in tpcds.date_dim
+                  where cs2.cs_item_sk = i.i_item_sk
+                    andalso d2.d_date >= SOME (day (2000, Jan, 27))
+                    andalso d2.d_date <= SOME (day (2000, Jan, 27 + 90))
+                    andalso cs2.cs_sold_date_sk = SOME d2.d_date_sk
+                  compute avg over cs2.cs_ext_discount_amt) of
+              (SOME amt, SOME average) => amt > decimal "1.3" * average
+            | _ => false)
+      compute {`excess discount amount` = sum over cs.cs_ext_discount_amt}
+  end;
+> val q32 = fn : unit -> {`excess discount amount`:decimal option}
+val r32 = q32 ();
+> val r32 = {`excess discount amount`=NONE}
+>   : {`excess discount amount`:decimal option}
 
 (* --- q33 -------------------------------------------------------- *)
 (*
@@ -1947,6 +3262,182 @@ val r34 = q34 ();
 >
 > val r34 : {c_first_name:string option, c_last_name:string option, c_preferred_cust_flag:string option, c_salutation:string option, cnt:int, ss_ticket_number:int} list
 
+(* --- q35 -------------------------------------------------------- *)
+(*
+SELECT
+  ca_state,
+  cd_gender,
+  cd_marital_status,
+  count(*) cnt1,
+  min(cd_dep_count),
+  max(cd_dep_count),
+  avg(cd_dep_count),
+  cd_dep_employed_count,
+  count(*) cnt2,
+  min(cd_dep_employed_count),
+  max(cd_dep_employed_count),
+  avg(cd_dep_employed_count),
+  cd_dep_college_count,
+  count(*) cnt3,
+  min(cd_dep_college_count),
+  max(cd_dep_college_count),
+  avg(cd_dep_college_count)
+FROM
+  customer c, customer_address ca, customer_demographics
+WHERE
+  c.c_current_addr_sk = ca.ca_address_sk AND
+    cd_demo_sk = c.c_current_cdemo_sk AND
+    exists(SELECT *
+           FROM store_sales, date_dim
+           WHERE c.c_customer_sk = ss_customer_sk AND
+             ss_sold_date_sk = d_date_sk AND
+             d_year = 2002 AND
+             d_qoy < 4) AND
+    (exists(SELECT *
+            FROM web_sales, date_dim
+            WHERE c.c_customer_sk = ws_bill_customer_sk AND
+              ws_sold_date_sk = d_date_sk AND
+              d_year = 2002 AND
+              d_qoy < 4) OR
+      exists(SELECT *
+             FROM catalog_sales, date_dim
+             WHERE c.c_customer_sk = cs_ship_customer_sk AND
+               cs_sold_date_sk = d_date_sk AND
+               d_year = 2002 AND
+               d_qoy < 4))
+GROUP BY ca_state, cd_gender, cd_marital_status, cd_dep_count,
+  cd_dep_employed_count, cd_dep_college_count
+ORDER BY ca_state, cd_gender, cd_marital_status, cd_dep_count,
+  cd_dep_employed_count, cd_dep_college_count
+LIMIT 100
+*)
+fun q35 () =
+  from c in tpcds.customer,
+      ca in tpcds.customer_address,
+      cd in tpcds.customer_demographics
+    where c.c_current_addr_sk = SOME ca.ca_address_sk
+      andalso c.c_current_cdemo_sk = SOME cd.cd_demo_sk
+      andalso (exists ss in tpcds.store_sales, d in tpcds.date_dim
+          where ss.ss_customer_sk = SOME c.c_customer_sk
+            andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+            andalso d.d_year = SOME 2002
+            andalso d.d_qoy <> NONE
+            andalso d.d_qoy < SOME 4)
+      andalso ((exists ws in tpcds.web_sales, d in tpcds.date_dim
+            where ws.ws_bill_customer_sk = SOME c.c_customer_sk
+              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year = SOME 2002
+              andalso d.d_qoy <> NONE
+              andalso d.d_qoy < SOME 4)
+        orelse (exists cs in tpcds.catalog_sales, d in tpcds.date_dim
+            where cs.cs_ship_customer_sk = SOME c.c_customer_sk
+              andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year = SOME 2002
+              andalso d.d_qoy <> NONE
+              andalso d.d_qoy < SOME 4))
+    group {ca.ca_state, cd.cd_gender, cd.cd_marital_status, cd.cd_dep_count,
+        cd.cd_dep_employed_count, cd.cd_dep_college_count}
+      compute {cnt1 = count over (),
+          `min(cd_dep_count)` = min over cd.cd_dep_count,
+          `max(cd_dep_count)` = max over cd.cd_dep_count,
+          `avg(cd_dep_count)` = avg over cd.cd_dep_count,
+          cnt2 = count over (),
+          `min(cd_dep_employed_count)` = min over cd.cd_dep_employed_count,
+          `max(cd_dep_employed_count)` = max over cd.cd_dep_employed_count,
+          `avg(cd_dep_employed_count)` = avg over cd.cd_dep_employed_count,
+          cnt3 = count over (),
+          `min(cd_dep_college_count)` = min over cd.cd_dep_college_count,
+          `max(cd_dep_college_count)` = max over cd.cd_dep_college_count,
+          `avg(cd_dep_college_count)` = avg over cd.cd_dep_college_count}
+    order (ca_state, cd_gender, cd_marital_status, cd_dep_count,
+      cd_dep_employed_count, cd_dep_college_count)
+    (* The query groups by "cd_dep_count", but does not select it. *)
+    yield {ca_state, cd_gender, cd_marital_status, cnt1,
+      `min(cd_dep_count)`, `max(cd_dep_count)`, `avg(cd_dep_count)`,
+      cd_dep_employed_count, cnt2, `min(cd_dep_employed_count)`,
+      `max(cd_dep_employed_count)`, `avg(cd_dep_employed_count)`,
+      cd_dep_college_count, cnt3, `min(cd_dep_college_count)`,
+      `max(cd_dep_college_count)`, `avg(cd_dep_college_count)`}
+    take 100;
+> val q35 = fn
+>   : unit
+>      -> {avg(cd_dep_college_count):real option, avg(cd_dep_count):real option,
+>           avg(cd_dep_employed_count):real option, ca_state:string option,
+>           cd_dep_college_count:int option, cd_dep_employed_count:int option,
+>           cd_gender:string option, cd_marital_status:string option, cnt1:int,
+>           cnt2:int, cnt3:int, max(cd_dep_college_count):int option,
+>           max(cd_dep_count):int option, max(cd_dep_employed_count):int option,
+>           min(cd_dep_college_count):int option, min(cd_dep_count):int option,
+>           min(cd_dep_employed_count):int option} list
+val r35 = q35 ();
+> avg(cd_dep_college_count) avg(cd_dep_count) avg(cd_dep_employed_count) ca_state cd_dep_college_count cd_dep_employed_count cd_gender cd_marital_status cnt1 cnt2 cnt3 max(cd_dep_college_count) max(cd_dep_count) max(cd_dep_employed_count) min(cd_dep_college_count) min(cd_dep_count) min(cd_dep_employed_count)
+> ------------------------- ----------------- -------------------------- -------- -------------------- --------------------- --------- ----------------- ---- ---- ---- ------------------------- ----------------- -------------------------- ------------------------- ----------------- --------------------------
+>                         5                 4                          2                             5                     2 F         D                    1    1    1                         5                 4                          2                         5                 4                          2
+>                         2                 5                          6                             2                     6 F         D                    1    1    1                         2                 5                          6                         2                 5                          6
+>                         6                 2                          1                             6                     1 F         M                    1    1    1                         6                 2                          1                         6                 2                          1
+>                         1                 4                          2                             1                     2 F         M                    1    1    1                         1                 4                          2                         1                 4                          2
+>                         6                 1                          5                             6                     5 F         W                    1    1    1                         6                 1                          5                         6                 1                          5
+>                         5                 4                          1                             5                     1 F         W                    1    1    1                         5                 4                          1                         5                 4                          1
+>                         2                 5                          2                             2                     2 F         W                    1    1    1                         2                 5                          2                         2                 5                          2
+>                         4                 5                          2                             4                     2 F         W                    1    1    1                         4                 5                          2                         4                 5                          2
+>                         1                 5                          3                             1                     3 M         D                    1    1    1                         1                 5                          3                         1                 5                          3
+>                         0                 3                          2                             0                     2 M         U                    1    1    1                         0                 3                          2                         0                 3                          2
+> ...
+>
+> val r35 : {avg(cd_dep_college_count):real option, avg(cd_dep_count):real option, avg(cd_dep_employed_count):real option, ca_state:string option, cd_dep_college_count:int option, cd_dep_employed_count:int option, cd_gender:string option, cd_marital_status:string option, cnt1:int, cnt2:int, cnt3:int, max(cd_dep_college_count):int option, max(cd_dep_count):int option, max(cd_dep_employed_count):int option, min(cd_dep_college_count):int option, min(cd_dep_count):int option, min(cd_dep_employed_count):int option} list
+
+(* --- q37 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_id,
+  i_item_desc,
+  i_current_price
+FROM item, inventory, date_dim, catalog_sales
+WHERE i_current_price BETWEEN 68 AND 68 + 30
+  AND inv_item_sk = i_item_sk
+  AND d_date_sk = inv_date_sk
+  AND d_date BETWEEN cast('2000-02-01' AS DATE) AND (cast('2000-02-01' AS DATE) + INTERVAL 60 days)
+  AND i_manufact_id IN (677, 940, 694, 808)
+  AND inv_quantity_on_hand BETWEEN 100 AND 500
+  AND cs_item_sk = i_item_sk
+GROUP BY i_item_id, i_item_desc, i_current_price
+ORDER BY i_item_id
+LIMIT 100
+*)
+fun q37 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+  in
+    from i in tpcds.item,
+        inv in tpcds.inventory,
+        d in tpcds.date_dim,
+        cs in tpcds.catalog_sales
+      where i.i_current_price >= SOME (Decimal.fromInt 68)
+        andalso i.i_current_price <= SOME (Decimal.fromInt (68 + 30))
+        andalso inv.inv_item_sk = i.i_item_sk
+        andalso inv.inv_date_sk = d.d_date_sk
+        andalso d.d_date >= SOME (day (2000, Feb, 1))
+        andalso d.d_date <= SOME (day (2000, Feb, 1 + 60))
+        andalso i.i_manufact_id elem [SOME 677, SOME 940, SOME 694, SOME 808]
+        andalso inv.inv_quantity_on_hand >= SOME 100
+        andalso inv.inv_quantity_on_hand <= SOME 500
+        andalso cs.cs_item_sk = i.i_item_sk
+      group {i.i_item_id, i.i_item_desc, i.i_current_price}
+      order i_item_id
+      take 100
+  end;
+> val q37 = fn
+>   : unit
+>      -> {i_current_price:decimal option, i_item_desc:string option,
+>           i_item_id:string} list
+val r37 = q37 ();
+> i_current_price i_item_desc i_item_id
+> --------------- ----------- ---------
+>
+> val r37 : {i_current_price:decimal option, i_item_desc:string option, i_item_id:string} list
+
 (* --- q38 -------------------------------------------------------- *)
 (*
 SELECT count(*)
@@ -2011,6 +3502,92 @@ fun q38 () =
 > val q38 = fn : unit -> int
 val r38 = q38 ();
 > val r38 = 0 : int
+
+(* --- q40 -------------------------------------------------------- *)
+(*
+SELECT
+  w_state,
+  i_item_id,
+  sum(CASE WHEN (cast(d_date AS DATE) < cast('2000-03-11' AS DATE))
+    THEN cs_sales_price - coalesce(cr_refunded_cash, 0)
+      ELSE 0 END) AS sales_before,
+  sum(CASE WHEN (cast(d_date AS DATE) >= cast('2000-03-11' AS DATE))
+    THEN cs_sales_price - coalesce(cr_refunded_cash, 0)
+      ELSE 0 END) AS sales_after
+FROM
+  catalog_sales
+  LEFT OUTER JOIN catalog_returns ON
+                                    (cs_order_number = cr_order_number
+                                      AND cs_item_sk = cr_item_sk)
+  , warehouse, item, date_dim
+WHERE
+  i_current_price BETWEEN 0.99 AND 1.49
+    AND i_item_sk = cs_item_sk
+    AND cs_warehouse_sk = w_warehouse_sk
+    AND cs_sold_date_sk = d_date_sk
+    AND d_date BETWEEN (cast('2000-03-11' AS DATE) - INTERVAL 30 days)
+  AND (cast('2000-03-11' AS DATE) + INTERVAL 30 days)
+GROUP BY w_state, i_item_id
+ORDER BY w_state, i_item_id
+LIMIT 100
+*)
+fun q40 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    val zero = Decimal.fromInt 0
+    (* "cs_sales_price - coalesce(cr_refunded_cash, 0)" *)
+    fun net (price, refunded) =
+      Option.map (fn p => p - getOpt (refunded, zero)) price
+  in
+    from cs in tpcds.catalog_sales
+      left join cr in tpcds.catalog_returns
+        on cs.cs_order_number = cr.cr_order_number
+          andalso cs.cs_item_sk = cr.cr_item_sk,
+      w in tpcds.warehouse,
+      i in tpcds.item,
+      d in tpcds.date_dim
+      where i.i_current_price >= SOME (decimal "0.99")
+        andalso i.i_current_price <= SOME (decimal "1.49")
+        andalso cs.cs_item_sk = i.i_item_sk
+        andalso cs.cs_warehouse_sk = SOME w.w_warehouse_sk
+        andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+        andalso d.d_date >= SOME (day (2000, Mar, 11 - 30))
+        andalso d.d_date <= SOME (day (2000, Mar, 11 + 30))
+      group {w.w_state, i.i_item_id}
+        compute {
+          sales_before = sum over
+            (if d.d_date <> NONE andalso d.d_date < SOME (day (2000, Mar, 11))
+              then net (cs.cs_sales_price, Option.`join` cr?.cr_refunded_cash)
+              else SOME zero),
+          sales_after = sum over
+            (if d.d_date >= SOME (day (2000, Mar, 11))
+              then net (cs.cs_sales_price, Option.`join` cr?.cr_refunded_cash)
+              else SOME zero)}
+      order (w_state, i_item_id)
+      take 100
+  end;
+> val q40 = fn
+>   : unit
+>      -> {i_item_id:string, sales_after:decimal option,
+>           sales_before:decimal option, w_state:string option} list
+val r40 = q40 ();
+> i_item_id        sales_after sales_before w_state
+> ---------------- ----------- ------------ -------
+> AAAAAAAAABDAAAAA      143.42       124.37 TN
+> AAAAAAAAAHHAAAAA     -408.96            0 TN
+> AAAAAAAAAJCAAAAA       28.49        18.77 TN
+> AAAAAAAAAPBAAAAA      156.54            0 TN
+> AAAAAAAABKFAAAAA           0        39.96 TN
+> AAAAAAAACBFAAAAA           0         69.4 TN
+> AAAAAAAACEEAAAAA        3.22            0 TN
+> AAAAAAAACFEAAAAA           0       177.89 TN
+> AAAAAAAACKHAAAAA       79.27            0 TN
+> AAAAAAAACLGAAAAA       51.58         5.75 TN
+> ...
+>
+> val r40 : {i_item_id:string, sales_after:decimal option, sales_before:decimal option, w_state:string option} list
 
 (* --- q41 -------------------------------------------------------- *)
 (*
@@ -3829,6 +5406,86 @@ val r64 = q64 ();
 >
 > val r64 : {b_city:string option, b_streen_name:string option, b_street_number:string option, b_zip:string option, c_city:string option, c_street_name:string option, c_street_number:string option, c_zip:string option, cnt:int, cnt_2:int, product_name:string option, s1:decimal option, s1_2:decimal option, s2:decimal option, s2_2:decimal option, s3:decimal option, s3_2:decimal option, store_name:string option, store_zip:string option, syear:int option, syear_2:int option} list
 
+(* --- q65 -------------------------------------------------------- *)
+(*
+SELECT
+  s_store_name,
+  i_item_desc,
+  sc.revenue,
+  i_current_price,
+  i_wholesale_cost,
+  i_brand
+FROM store, item,
+  (SELECT
+    ss_store_sk,
+    avg(revenue) AS ave
+  FROM
+    (SELECT
+      ss_store_sk,
+      ss_item_sk,
+      sum(ss_sales_price) AS revenue
+    FROM store_sales, date_dim
+    WHERE ss_sold_date_sk = d_date_sk AND d_month_seq BETWEEN 1176 AND 1176 + 11
+    GROUP BY ss_store_sk, ss_item_sk) sa
+  GROUP BY ss_store_sk) sb,
+  (SELECT
+    ss_store_sk,
+    ss_item_sk,
+    sum(ss_sales_price) AS revenue
+  FROM store_sales, date_dim
+  WHERE ss_sold_date_sk = d_date_sk AND d_month_seq BETWEEN 1176 AND 1176 + 11
+  GROUP BY ss_store_sk, ss_item_sk) sc
+WHERE sb.ss_store_sk = sc.ss_store_sk AND
+  sc.revenue <= 0.1 * sb.ave AND
+  s_store_sk = sc.ss_store_sk AND
+  i_item_sk = sc.ss_item_sk
+ORDER BY s_store_name, i_item_desc
+LIMIT 100
+*)
+fun q65 () =
+  let
+    val sa =
+      from ss in tpcds.store_sales,
+          d in tpcds.date_dim
+        where ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_month_seq >= SOME 1176
+          andalso d.d_month_seq <= SOME (1176 + 11)
+        group {ss.ss_store_sk, ss.ss_item_sk}
+          compute {revenue = sum over ss.ss_sales_price}
+    val sb =
+      from s in sa
+        group s.ss_store_sk compute {ave = avg over s.revenue}
+  in
+    from s in tpcds.store,
+        i in tpcds.item,
+        sb in sb,
+        sc in sa
+      where sb.ss_store_sk <> NONE
+        andalso sb.ss_store_sk = sc.ss_store_sk
+        andalso (case (sc.revenue, sb.ave) of
+                    (SOME r, SOME a) => r <= decimal "0.1" * a
+                  | _ => false)
+        andalso sc.ss_store_sk = SOME s.s_store_sk
+        andalso sc.ss_item_sk = i.i_item_sk
+      yield {s.s_store_name, i.i_item_desc, sc.revenue, i.i_current_price,
+        i.i_wholesale_cost, i.i_brand}
+      order (s_store_name, i_item_desc)
+      take 100
+  end;
+> val q65 = fn
+>   : unit
+>      -> {i_brand:string option, i_current_price:decimal option,
+>           i_item_desc:string option, i_wholesale_cost:decimal option,
+>           revenue:decimal option, s_store_name:string option} list
+val r65 = q65 ();
+> i_brand            i_current_price i_item_desc                                                             i_wholesale_cost revenue s_store_name
+> ------------------ --------------- ----------------------------------------------------------------------- ---------------- ------- ------------
+> edu packscholar #1             2.4 Everyday strings might wash for example about a pp.. Right physical sp#             1.99   36.59 ought
+> scholarbrand #3               8.74 Grounds freeze previously then full rises. Familiar, big activities re#             6.64   38.35 ought
+> maxibrand #10                 9.27 Voters cause already urban, formal children. Medieval shares must not #             3.98   30.42 ought
+>
+> val r65 : {i_brand:string option, i_current_price:decimal option, i_item_desc:string option, i_wholesale_cost:decimal option, revenue:decimal option, s_store_name:string option} list
+
 (* --- q66 -------------------------------------------------------- *)
 (*
 SELECT
@@ -4764,6 +6421,109 @@ val r71 = q71 ();
 >
 > val r71 : {brand:string option, brand_id:int option, ext_price:decimal option, t_hour:int option, t_minute:int option} list
 
+(* --- q72 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_desc,
+  w_warehouse_name,
+  d1.d_week_seq,
+  count(CASE WHEN p_promo_sk IS NULL
+    THEN 1
+        ELSE 0 END) no_promo,
+  count(CASE WHEN p_promo_sk IS NOT NULL
+    THEN 1
+        ELSE 0 END) promo,
+  count(*) total_cnt
+FROM catalog_sales
+  JOIN inventory ON (cs_item_sk = inv_item_sk)
+  JOIN warehouse ON (w_warehouse_sk = inv_warehouse_sk)
+  JOIN item ON (i_item_sk = cs_item_sk)
+  JOIN customer_demographics ON (cs_bill_cdemo_sk = cd_demo_sk)
+  JOIN household_demographics ON (cs_bill_hdemo_sk = hd_demo_sk)
+  JOIN date_dim d1 ON (cs_sold_date_sk = d1.d_date_sk)
+  JOIN date_dim d2 ON (inv_date_sk = d2.d_date_sk)
+  JOIN date_dim d3 ON (cs_ship_date_sk = d3.d_date_sk)
+  LEFT OUTER JOIN promotion ON (cs_promo_sk = p_promo_sk)
+  LEFT OUTER JOIN catalog_returns ON (cr_item_sk = cs_item_sk AND cr_order_number = cs_order_number)
+WHERE d1.d_week_seq = d2.d_week_seq
+  AND inv_quantity_on_hand < cs_quantity
+  AND d3.d_date > (cast(d1.d_date AS DATE) + interval 5 days)
+  AND hd_buy_potential = '>10000'
+  AND d1.d_year = 1999
+  AND hd_buy_potential = '>10000'
+  AND cd_marital_status = 'D'
+  AND d1.d_year = 1999
+GROUP BY i_item_desc, w_warehouse_name, d1.d_week_seq
+ORDER BY total_cnt DESC, i_item_desc, w_warehouse_name, d_week_seq
+LIMIT 100
+*)
+(* The joins are in another order than the SQL's: Morel joins in the
+ * order written, and the SQL joins "catalog_sales" to "inventory",
+ * on the item alone, before the dimensions that filter them. *)
+fun q72 () =
+  let
+    (* "d + interval n days" *)
+    fun plusDays (d, n) =
+      Date.fromTimeUniv
+        (Time.`+` (Date.toTime d, Time.fromSeconds (n * 24 * 60 * 60)))
+  in
+    from cs in tpcds.catalog_sales
+      join cd in tpcds.customer_demographics
+        on cs.cs_bill_cdemo_sk = SOME cd.cd_demo_sk
+      join hd in tpcds.household_demographics
+        on cs.cs_bill_hdemo_sk = SOME hd.hd_demo_sk
+      join d1 in tpcds.date_dim on cs.cs_sold_date_sk = SOME d1.d_date_sk
+      join i in tpcds.item on i.i_item_sk = cs.cs_item_sk
+      join inv in tpcds.inventory on cs.cs_item_sk = inv.inv_item_sk
+      join w in tpcds.warehouse on w.w_warehouse_sk = inv.inv_warehouse_sk
+      join d2 in tpcds.date_dim on inv.inv_date_sk = d2.d_date_sk
+      join d3 in tpcds.date_dim on cs.cs_ship_date_sk = SOME d3.d_date_sk
+      left join p in tpcds.promotion on cs.cs_promo_sk = SOME p.p_promo_sk
+      left join cr in tpcds.catalog_returns
+        on cr.cr_item_sk = cs.cs_item_sk
+          andalso cr.cr_order_number = cs.cs_order_number
+      where d1.d_week_seq <> NONE
+        andalso d1.d_week_seq = d2.d_week_seq
+        andalso inv.inv_quantity_on_hand <> NONE
+        andalso inv.inv_quantity_on_hand < cs.cs_quantity
+        andalso (case (d3.d_date, d1.d_date) of
+                    (SOME shipped, SOME sold) =>
+                      Date.compare (shipped, plusDays (sold, 5)) = GREATER
+                  | _ => false)
+        andalso hd.hd_buy_potential = SOME ">10000"
+        andalso d1.d_year = SOME 1999
+        andalso hd.hd_buy_potential = SOME ">10000"
+        andalso cd.cd_marital_status = SOME "D"
+        andalso d1.d_year = SOME 1999
+      group {i.i_item_desc, w.w_warehouse_name, d1.d_week_seq}
+        compute {
+          no_promo = count over (if Option.isSome p then 0 else 1),
+          promo = count over (if Option.isSome p then 1 else 0),
+          total_cnt = count over ()}
+      order (DESC total_cnt, i_item_desc, w_warehouse_name, d_week_seq)
+      take 100
+  end;
+> val q72 = fn
+>   : unit
+>      -> {d_week_seq:int option, i_item_desc:string option, no_promo:int,
+>           promo:int, total_cnt:int, w_warehouse_name:string option} list
+val r72 = q72 ();
+> d_week_seq i_item_desc                                                             no_promo promo total_cnt w_warehouse_name
+> ---------- ----------------------------------------------------------------------- -------- ----- --------- -------------------
+>       5214                                                                                1     1         1 Conventional childr
+>       5214 Activities used to get firms. Positive resources would need too across#        1     1         1 Conventional childr
+>       5201 Agencies shall not ignore detailed costs. About small others cann              1     1         1 Conventional childr
+>       5212 Also poor relations take equal, metropolitan courses. Peculiar, popula#        1     1         1 Conventional childr
+>       5199 Children may close necessary dates. Short opportunities improve. Han           1     1         1 Conventional childr
+>       5206 English, public guards enter for a friends. Others must accept physica#        1     1         1 Conventional childr
+>       5168 Exactl                                                                         1     1         1 Conventional childr
+>       5209 Fears obtain still blind, active others. Forever numerous signs last e#        1     1         1 Conventional childr
+>       5207 Full-time, lovely miles employ home. Regular assets may not protect mu#        1     1         1 Conventional childr
+>       5211 Girls replace far chosen factories; other adults see very with the tax#        1     1         1 Conventional childr
+> ...
+>
+> val r72 : {d_week_seq:int option, i_item_desc:string option, no_promo:int, promo:int, total_cnt:int, w_warehouse_name:string option} list
+
 (* --- q73 -------------------------------------------------------- *)
 (*
 SELECT
@@ -5543,6 +7303,163 @@ val r79 = q79 ();
 >
 > val r79 : {amt:decimal option, c_first_name:string option, c_last_name:string option, city:string option, profit:decimal option, ss_ticket_number:int} list
 
+(* --- q81 -------------------------------------------------------- *)
+(*
+WITH customer_total_return AS
+(SELECT
+    cr_returning_customer_sk AS ctr_customer_sk,
+    ca_state AS ctr_state,
+    sum(cr_return_amt_inc_tax) AS ctr_total_return
+  FROM catalog_returns, date_dim, customer_address
+  WHERE cr_returned_date_sk = d_date_sk
+    AND d_year = 2000
+    AND cr_returning_addr_sk = ca_address_sk
+  GROUP BY cr_returning_customer_sk, ca_state )
+SELECT
+  c_customer_id,
+  c_salutation,
+  c_first_name,
+  c_last_name,
+  ca_street_number,
+  ca_street_name,
+  ca_street_type,
+  ca_suite_number,
+  ca_city,
+  ca_county,
+  ca_state,
+  ca_zip,
+  ca_country,
+  ca_gmt_offset,
+  ca_location_type,
+  ctr_total_return
+FROM customer_total_return ctr1, customer_address, customer
+WHERE ctr1.ctr_total_return > (SELECT avg(ctr_total_return) * 1.2
+FROM customer_total_return ctr2
+WHERE ctr1.ctr_state = ctr2.ctr_state)
+  AND ca_address_sk = c_current_addr_sk
+  AND ca_state = 'GA'
+  AND ctr1.ctr_customer_sk = c_customer_sk
+ORDER BY c_customer_id, c_salutation, c_first_name, c_last_name, ca_street_number, ca_street_name
+  , ca_street_type, ca_suite_number, ca_city, ca_county, ca_state, ca_zip, ca_country, ca_gmt_offset
+  , ca_location_type, ctr_total_return
+LIMIT 100
+*)
+fun q81 () =
+  let
+    val customer_total_return =
+      from cr in tpcds.catalog_returns,
+          d in tpcds.date_dim,
+          ca in tpcds.customer_address
+        where cr.cr_returned_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME 2000
+          andalso cr.cr_returning_addr_sk = SOME ca.ca_address_sk
+        group {ctr_customer_sk = cr.cr_returning_customer_sk,
+            ctr_state = ca.ca_state}
+          compute {ctr_total_return = sum over cr.cr_return_amt_inc_tax}
+  in
+    from ctr1 in customer_total_return,
+        ca in tpcds.customer_address,
+        c in tpcds.customer
+      where (case (ctr1.ctr_total_return,
+              from ctr2 in customer_total_return
+                where ctr2.ctr_state <> NONE
+                  andalso ctr1.ctr_state = ctr2.ctr_state
+                compute avg over ctr2.ctr_total_return) of
+            (SOME total, SOME average) => total > average * decimal "1.2"
+          | _ => false)
+        andalso c.c_current_addr_sk = SOME ca.ca_address_sk
+        andalso ca.ca_state = SOME "GA"
+        andalso ctr1.ctr_customer_sk = SOME c.c_customer_sk
+      yield {c.c_customer_id, c.c_salutation, c.c_first_name, c.c_last_name,
+        ca.ca_street_number, ca.ca_street_name, ca.ca_street_type,
+        ca.ca_suite_number, ca.ca_city, ca.ca_county, ca.ca_state,
+        ca.ca_zip, ca.ca_country, ca.ca_gmt_offset, ca.ca_location_type,
+        ctr1.ctr_total_return}
+      order (c_customer_id, c_salutation, c_first_name, c_last_name,
+        ca_street_number, ca_street_name, ca_street_type, ca_suite_number,
+        ca_city, ca_county, ca_state, ca_zip, ca_country, ca_gmt_offset,
+        ca_location_type, ctr_total_return)
+      take 100
+  end;
+> val q81 = fn
+>   : unit
+>      -> {c_customer_id:string, c_first_name:string option,
+>           c_last_name:string option, c_salutation:string option,
+>           ca_city:string option, ca_country:string option,
+>           ca_county:string option, ca_gmt_offset:decimal option,
+>           ca_location_type:string option, ca_state:string option,
+>           ca_street_name:string option, ca_street_number:string option,
+>           ca_street_type:string option, ca_suite_number:string option,
+>           ca_zip:string option, ctr_total_return:decimal option} list
+val r81 = q81 ();
+> c_customer_id    c_first_name c_last_name c_salutation ca_city        ca_country    ca_county        ca_gmt_offset ca_location_type ca_state ca_street_name ca_street_number ca_street_type ca_suite_number ca_zip ctr_total_return
+> ---------------- ------------ ----------- ------------ -------------- ------------- ---------------- ------------- ---------------- -------- -------------- ---------------- -------------- --------------- ------ ----------------
+> AAAAAAAABKCAAAAA Terrence     Albright    Dr.          Pleasant Grove United States Cobb County                 -5 single family    GA       View Miller    419              Wy             Suite 360       34136            5079.6
+> AAAAAAAACKBAAAAA Maurice      Morales     Dr.          Marion         United States Glascock County             -5 condo            GA       2nd Eigth      313              Avenue         Suite 40        30399           3038.84
+> AAAAAAAACNAAAAAA Diane        Blount      Ms.          Spring Hill    United States Worth County                -5 single family    GA       4th            780              Ave            Suite T         36787            5614.2
+> AAAAAAAADADAAAAA Charles      Loveless    Mr.          Crossroads     United States Brooks County               -5 single family    GA       Central        24               Blvd           Suite 490       30534           1429.42
+> AAAAAAAADGDAAAAA Alberto      Mccreary    Mr.          Cedar Grove    United States Wilcox County               -5 single family    GA       Spring Eigth   379              Street         Suite R         30411            544.12
+> AAAAAAAADGDAAAAA Alberto      Mccreary    Mr.          Cedar Grove    United States Wilcox County               -5 single family    GA       Spring Eigth   379              Street         Suite R         30411           2712.19
+> AAAAAAAAEMDAAAAA Aline        Ramos       Dr.          Calhoun        United States Miller County               -5 condo            GA       10th           416              Boulevard      Suite R         36909           2204.66
+> AAAAAAAAEMDAAAAA Aline        Ramos       Dr.          Calhoun        United States Miller County               -5 condo            GA       10th           416              Boulevard      Suite R         36909           4518.97
+> AAAAAAAAENDAAAAA Richard      Bell        Sir          Pleasant Grove United States Cobb County                 -5 single family    GA       View Miller    419              Wy             Suite 360       34136           14670.2
+> AAAAAAAAFBCAAAAA Douglas      Scott       Mr.          Spring Valley  United States Habersham County            -5 single family    GA       Lake           498              Way            Suite 490       36060           6745.16
+> ...
+>
+> val r81 : {c_customer_id:string, c_first_name:string option, c_last_name:string option, c_salutation:string option, ca_city:string option, ca_country:string option, ca_county:string option, ca_gmt_offset:decimal option, ca_location_type:string option, ca_state:string option, ca_street_name:string option, ca_street_number:string option, ca_street_type:string option, ca_suite_number:string option, ca_zip:string option, ctr_total_return:decimal option} list
+
+(* --- q82 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_id,
+  i_item_desc,
+  i_current_price
+FROM item, inventory, date_dim, store_sales
+WHERE i_current_price BETWEEN 62 AND 62 + 30
+  AND inv_item_sk = i_item_sk
+  AND d_date_sk = inv_date_sk
+  AND d_date BETWEEN cast('2000-05-25' AS DATE) AND (cast('2000-05-25' AS DATE) + INTERVAL 60 days)
+  AND i_manufact_id IN (129, 270, 821, 423)
+  AND inv_quantity_on_hand BETWEEN 100 AND 500
+  AND ss_item_sk = i_item_sk
+GROUP BY i_item_id, i_item_desc, i_current_price
+ORDER BY i_item_id
+LIMIT 100
+*)
+fun q82 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+  in
+    from i in tpcds.item,
+        inv in tpcds.inventory,
+        d in tpcds.date_dim,
+        ss in tpcds.store_sales
+      where i.i_current_price >= SOME (Decimal.fromInt 62)
+        andalso i.i_current_price <= SOME (Decimal.fromInt (62 + 30))
+        andalso inv.inv_item_sk = i.i_item_sk
+        andalso inv.inv_date_sk = d.d_date_sk
+        andalso d.d_date >= SOME (day (2000, May, 25))
+        andalso d.d_date <= SOME (day (2000, May, 25 + 60))
+        andalso i.i_manufact_id elem [SOME 129, SOME 270, SOME 821, SOME 423]
+        andalso inv.inv_quantity_on_hand >= SOME 100
+        andalso inv.inv_quantity_on_hand <= SOME 500
+        andalso ss.ss_item_sk = i.i_item_sk
+      group {i.i_item_id, i.i_item_desc, i.i_current_price}
+      order i_item_id
+      take 100
+  end;
+> val q82 = fn
+>   : unit
+>      -> {i_current_price:decimal option, i_item_desc:string option,
+>           i_item_id:string} list
+val r82 = q82 ();
+> i_current_price i_item_desc i_item_id
+> --------------- ----------- ---------
+>
+> val r82 : {i_current_price:decimal option, i_item_desc:string option, i_item_id:string} list
+
 (* --- q83 -------------------------------------------------------- *)
 (*
 WITH sr_items AS
@@ -5732,6 +7649,157 @@ val r84 = q84 ();
 > ----------- ------------
 >
 > val r84 : {customer_id:string, customername:string option} list
+
+(* --- q85 -------------------------------------------------------- *)
+(*
+SELECT
+  substr(r_reason_desc, 1, 20),
+  avg(ws_quantity),
+  avg(wr_refunded_cash),
+  avg(wr_fee)
+FROM web_sales, web_returns, web_page, customer_demographics cd1,
+  customer_demographics cd2, customer_address, date_dim, reason
+WHERE ws_web_page_sk = wp_web_page_sk
+  AND ws_item_sk = wr_item_sk
+  AND ws_order_number = wr_order_number
+  AND ws_sold_date_sk = d_date_sk AND d_year = 2000
+  AND cd1.cd_demo_sk = wr_refunded_cdemo_sk
+  AND cd2.cd_demo_sk = wr_returning_cdemo_sk
+  AND ca_address_sk = wr_refunded_addr_sk
+  AND r_reason_sk = wr_reason_sk
+  AND
+  (
+    (
+      cd1.cd_marital_status = 'M'
+        AND
+        cd1.cd_marital_status = cd2.cd_marital_status
+        AND
+        cd1.cd_education_status = 'Advanced Degree'
+        AND
+        cd1.cd_education_status = cd2.cd_education_status
+        AND
+        ws_sales_price BETWEEN 100.00 AND 150.00
+    )
+      OR
+      (
+        cd1.cd_marital_status = 'S'
+          AND
+          cd1.cd_marital_status = cd2.cd_marital_status
+          AND
+          cd1.cd_education_status = 'College'
+          AND
+          cd1.cd_education_status = cd2.cd_education_status
+          AND
+          ws_sales_price BETWEEN 50.00 AND 100.00
+      )
+      OR
+      (
+        cd1.cd_marital_status = 'W'
+          AND
+          cd1.cd_marital_status = cd2.cd_marital_status
+          AND
+          cd1.cd_education_status = '2 yr Degree'
+          AND
+          cd1.cd_education_status = cd2.cd_education_status
+          AND
+          ws_sales_price BETWEEN 150.00 AND 200.00
+      )
+  )
+  AND
+  (
+    (
+      ca_country = 'United States'
+        AND
+        ca_state IN ('IN', 'OH', 'NJ')
+        AND ws_net_profit BETWEEN 100 AND 200
+    )
+      OR
+      (
+        ca_country = 'United States'
+          AND
+          ca_state IN ('WI', 'CT', 'KY')
+          AND ws_net_profit BETWEEN 150 AND 300
+      )
+      OR
+      (
+        ca_country = 'United States'
+          AND
+          ca_state IN ('LA', 'IA', 'AR')
+          AND ws_net_profit BETWEEN 50 AND 250
+      )
+  )
+GROUP BY r_reason_desc
+ORDER BY substr(r_reason_desc, 1, 20)
+  , avg(ws_quantity)
+  , avg(wr_refunded_cash)
+  , avg(wr_fee)
+LIMIT 100
+*)
+(* As in q48, each disjunct of the SQL's "OR"s repeats a join
+ * condition; the conditions are factored by hand. *)
+fun q85 () =
+  let
+    fun between (x, lo, hi) =
+      x >= SOME (Decimal.fromInt lo) andalso x <= SOME (Decimal.fromInt hi)
+  in
+    from ws in tpcds.web_sales,
+        wp in tpcds.web_page,
+        wr in tpcds.web_returns,
+        cd1 in tpcds.customer_demographics,
+        cd2 in tpcds.customer_demographics,
+        ca in tpcds.customer_address,
+        d in tpcds.date_dim,
+        r in tpcds.reason
+      where ws.ws_web_page_sk = SOME wp.wp_web_page_sk
+        andalso ws.ws_item_sk = wr.wr_item_sk
+        andalso ws.ws_order_number = wr.wr_order_number
+        andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+        andalso d.d_year = SOME 2000
+        andalso wr.wr_refunded_cdemo_sk = SOME cd1.cd_demo_sk
+        andalso wr.wr_returning_cdemo_sk = SOME cd2.cd_demo_sk
+        andalso cd1.cd_marital_status <> NONE
+        andalso cd1.cd_marital_status = cd2.cd_marital_status
+        andalso cd1.cd_education_status <> NONE
+        andalso cd1.cd_education_status = cd2.cd_education_status
+        andalso (cd1.cd_marital_status = SOME "M"
+            andalso cd1.cd_education_status = SOME "Advanced Degree"
+            andalso between (ws.ws_sales_price, 100, 150)
+          orelse cd1.cd_marital_status = SOME "S"
+            andalso cd1.cd_education_status = SOME "College"
+            andalso between (ws.ws_sales_price, 50, 100)
+          orelse cd1.cd_marital_status = SOME "W"
+            andalso cd1.cd_education_status = SOME "2 yr Degree"
+            andalso between (ws.ws_sales_price, 150, 200))
+        andalso wr.wr_refunded_addr_sk = SOME ca.ca_address_sk
+        andalso ca.ca_country = SOME "United States"
+        andalso (ca.ca_state elem [SOME "IN", SOME "OH", SOME "NJ"]
+            andalso between (ws.ws_net_profit, 100, 200)
+          orelse ca.ca_state elem [SOME "WI", SOME "CT", SOME "KY"]
+            andalso between (ws.ws_net_profit, 150, 300)
+          orelse ca.ca_state elem [SOME "LA", SOME "IA", SOME "AR"]
+            andalso between (ws.ws_net_profit, 50, 250))
+        andalso wr.wr_reason_sk = SOME r.r_reason_sk
+      group r.r_reason_desc
+        compute {`avg(ws_quantity)` = avg over ws.ws_quantity,
+          `avg(wr_refunded_cash)` = avg over wr.wr_refunded_cash,
+          `avg(wr_fee)` = avg over wr.wr_fee}
+      yield {reason =
+          Option.map (fn s => String.substring (s, 0, Int.min (20, size s)))
+            r_reason_desc,
+        `avg(ws_quantity)`, `avg(wr_refunded_cash)`, `avg(wr_fee)`}
+      order (reason, `avg(ws_quantity)`, `avg(wr_refunded_cash)`,
+        `avg(wr_fee)`)
+      take 100
+  end;
+> val q85 = fn
+>   : unit
+>      -> {avg(wr_fee):decimal option, avg(wr_refunded_cash):decimal option,
+>           avg(ws_quantity):real option, reason:string option} list
+val r85 = q85 ();
+> avg(wr_fee) avg(wr_refunded_cash) avg(ws_quantity) reason
+> ----------- --------------------- ---------------- ------
+>
+> val r85 : {avg(wr_fee):decimal option, avg(wr_refunded_cash):decimal option, avg(ws_quantity):real option, reason:string option} list
 
 (* --- q87 -------------------------------------------------------- *)
 (*
@@ -6085,6 +8153,56 @@ val r91 = q91 ();
 >
 > val r91 : {call_center:string, call_center_name:string option, manager:string option, returns_loss:decimal option} list
 
+(* --- q92 -------------------------------------------------------- *)
+(*
+SELECT sum(ws_ext_discount_amt) AS `Excess Discount Amount `
+FROM web_sales, item, date_dim
+WHERE i_manufact_id = 350
+  AND i_item_sk = ws_item_sk
+  AND d_date BETWEEN '2000-01-27' AND (cast('2000-01-27' AS DATE) + INTERVAL 90 days)
+  AND d_date_sk = ws_sold_date_sk
+  AND ws_ext_discount_amt >
+  (
+    SELECT 1.3 * avg(ws_ext_discount_amt)
+    FROM web_sales, date_dim
+    WHERE ws_item_sk = i_item_sk
+      AND d_date BETWEEN '2000-01-27' AND (cast('2000-01-27' AS DATE) + INTERVAL 90 days)
+      AND d_date_sk = ws_sold_date_sk
+  )
+ORDER BY sum(ws_ext_discount_amt)
+LIMIT 100
+*)
+fun q92 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+  in
+    from ws in tpcds.web_sales,
+        i in tpcds.item,
+        d in tpcds.date_dim
+      where i.i_manufact_id = SOME 350
+        andalso ws.ws_item_sk = i.i_item_sk
+        andalso d.d_date >= SOME (day (2000, Jan, 27))
+        andalso d.d_date <= SOME (day (2000, Jan, 27 + 90))
+        andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+        andalso (case (ws.ws_ext_discount_amt,
+                from ws2 in tpcds.web_sales,
+                    d2 in tpcds.date_dim
+                  where ws2.ws_item_sk = i.i_item_sk
+                    andalso d2.d_date >= SOME (day (2000, Jan, 27))
+                    andalso d2.d_date <= SOME (day (2000, Jan, 27 + 90))
+                    andalso ws2.ws_sold_date_sk = SOME d2.d_date_sk
+                  compute avg over ws2.ws_ext_discount_amt) of
+              (SOME amt, SOME average) => amt > decimal "1.3" * average
+            | _ => false)
+      compute {`Excess Discount Amount ` = sum over ws.ws_ext_discount_amt}
+  end;
+> val q92 = fn : unit -> {`Excess Discount Amount `:decimal option}
+val r92 = q92 ();
+> val r92 = {`Excess Discount Amount `=NONE}
+>   : {`Excess Discount Amount `:decimal option}
+
 (* --- q93 -------------------------------------------------------- *)
 (*
 SELECT
@@ -6134,6 +8252,156 @@ val r93 = q93 ();
 > -------------- --------
 >
 > val r93 : {ss_customer_sk:int option, sumsales:decimal option} list
+
+(* --- q94 -------------------------------------------------------- *)
+(*
+SELECT
+  count(DISTINCT ws_order_number) AS `order count `,
+  sum(ws_ext_ship_cost) AS `total shipping cost `,
+  sum(ws_net_profit) AS `total net profit `
+FROM
+  web_sales ws1, date_dim, customer_address, web_site
+WHERE
+  d_date BETWEEN '1999-02-01' AND
+  (CAST('1999-02-01' AS DATE) + INTERVAL 60 days)
+    AND ws1.ws_ship_date_sk = d_date_sk
+    AND ws1.ws_ship_addr_sk = ca_address_sk
+    AND ca_state = 'IL'
+    AND ws1.ws_web_site_sk = web_site_sk
+    AND web_company_name = 'pri'
+    AND EXISTS(SELECT *
+               FROM web_sales ws2
+               WHERE ws1.ws_order_number = ws2.ws_order_number
+                 AND ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
+    AND NOT EXISTS(SELECT *
+                   FROM web_returns wr1
+                   WHERE ws1.ws_order_number = wr1.wr_order_number)
+ORDER BY count(DISTINCT ws_order_number)
+LIMIT 100
+*)
+fun q94 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+  in
+    from ws1 in tpcds.web_sales,
+        d in tpcds.date_dim,
+        ca in tpcds.customer_address,
+        web in tpcds.web_site
+      where d.d_date >= SOME (day (1999, Feb, 1))
+        andalso d.d_date <= SOME (day (1999, Feb, 1 + 60))
+        andalso ws1.ws_ship_date_sk = SOME d.d_date_sk
+        andalso ws1.ws_ship_addr_sk = SOME ca.ca_address_sk
+        andalso ca.ca_state = SOME "IL"
+        andalso ws1.ws_web_site_sk = SOME web.web_site_sk
+        andalso web.web_company_name = SOME "pri"
+        andalso (exists ws2 in tpcds.web_sales
+          where ws1.ws_order_number = ws2.ws_order_number
+            andalso ws1.ws_warehouse_sk <> NONE
+            andalso ws2.ws_warehouse_sk <> NONE
+            andalso ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
+        andalso not (exists wr1 in tpcds.web_returns
+          where ws1.ws_order_number = wr1.wr_order_number)
+      compute {
+        `order count ` =
+          (fn orders => List.length (from n in orders distinct))
+            over ws1.ws_order_number,
+        `total shipping cost ` = sum over ws1.ws_ext_ship_cost,
+        `total net profit ` = sum over ws1.ws_net_profit}
+  end;
+> val q94 = fn
+>   : unit
+>      -> {`order count `:int, `total net profit `:decimal option,
+>           `total shipping cost `:decimal option}
+val r94 = q94 ();
+> val r94 =
+>   {`order count `=0,`total net profit `=NONE,`total shipping cost `=NONE}
+>   : {`order count `:int, `total net profit `:decimal option,
+>       `total shipping cost `:decimal option}
+
+(* --- q95 -------------------------------------------------------- *)
+(*
+WITH ws_wh AS
+(SELECT
+    ws1.ws_order_number,
+    ws1.ws_warehouse_sk wh1,
+    ws2.ws_warehouse_sk wh2
+  FROM web_sales ws1, web_sales ws2
+  WHERE ws1.ws_order_number = ws2.ws_order_number
+    AND ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
+SELECT
+  count(DISTINCT ws_order_number) AS `order count `,
+  sum(ws_ext_ship_cost) AS `total shipping cost `,
+  sum(ws_net_profit) AS `total net profit `
+FROM
+  web_sales ws1, date_dim, customer_address, web_site
+WHERE
+  d_date BETWEEN '1999-02-01' AND
+  (CAST('1999-02-01' AS DATE) + INTERVAL 60 DAY)
+    AND ws1.ws_ship_date_sk = d_date_sk
+    AND ws1.ws_ship_addr_sk = ca_address_sk
+    AND ca_state = 'IL'
+    AND ws1.ws_web_site_sk = web_site_sk
+    AND web_company_name = 'pri'
+    AND ws1.ws_order_number IN (SELECT ws_order_number
+  FROM ws_wh)
+    AND ws1.ws_order_number IN (SELECT wr_order_number
+  FROM web_returns, ws_wh
+  WHERE wr_order_number = ws_wh.ws_order_number)
+ORDER BY count(DISTINCT ws_order_number)
+LIMIT 100
+*)
+fun q95 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    val ws_wh =
+      from ws1 in tpcds.web_sales,
+          ws2 in tpcds.web_sales
+        where ws1.ws_order_number = ws2.ws_order_number
+          andalso ws1.ws_warehouse_sk <> NONE
+          andalso ws2.ws_warehouse_sk <> NONE
+          andalso ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk
+        yield {ws1.ws_order_number, wh1 = ws1.ws_warehouse_sk,
+          wh2 = ws2.ws_warehouse_sk}
+    val wh_orders = from w in ws_wh yield w.ws_order_number
+    val returned_orders =
+      from wr in tpcds.web_returns,
+          w in ws_wh
+        where wr.wr_order_number = w.ws_order_number
+        yield wr.wr_order_number
+  in
+    from ws1 in tpcds.web_sales,
+        d in tpcds.date_dim,
+        ca in tpcds.customer_address,
+        web in tpcds.web_site
+      where d.d_date >= SOME (day (1999, Feb, 1))
+        andalso d.d_date <= SOME (day (1999, Feb, 1 + 60))
+        andalso ws1.ws_ship_date_sk = SOME d.d_date_sk
+        andalso ws1.ws_ship_addr_sk = SOME ca.ca_address_sk
+        andalso ca.ca_state = SOME "IL"
+        andalso ws1.ws_web_site_sk = SOME web.web_site_sk
+        andalso web.web_company_name = SOME "pri"
+        andalso ws1.ws_order_number elem wh_orders
+        andalso ws1.ws_order_number elem returned_orders
+      compute {
+        `order count ` =
+          (fn orders => List.length (from n in orders distinct))
+            over ws1.ws_order_number,
+        `total shipping cost ` = sum over ws1.ws_ext_ship_cost,
+        `total net profit ` = sum over ws1.ws_net_profit}
+  end;
+> val q95 = fn
+>   : unit
+>      -> {`order count `:int, `total net profit `:decimal option,
+>           `total shipping cost `:decimal option}
+val r95 = q95 ();
+> val r95 =
+>   {`order count `=0,`total net profit `=NONE,`total shipping cost `=NONE}
+>   : {`order count `:int, `total net profit `:decimal option,
+>       `total shipping cost `:decimal option}
 
 (* --- q96 -------------------------------------------------------- *)
 (*

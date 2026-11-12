@@ -260,6 +260,59 @@ Recommend 2 for this branch, with 3 logged as an issue: the helpers are
 the prototype of the built-ins, and the queries written with them will
 not change shape when the built-ins arrive.
 
+**D11. Aggregates over options** (open, 2026-11-11; revisits #503,
+which is not yet on `main`). #503 made `count`, `sum`, `min`, `max`
+and `avg` behave differently when their elements are options, so
+their answers depend on a type rather than on their definition:
+
+| Expression | Result |
+| --- | --- |
+| `count [SOME 1, NONE]` | `1` |
+| `size (bag [SOME 1, NONE])`, `fun size xs = count xs` | `2` |
+| `least (bag [SOME 1, NONE])`, `fun least xs = min xs` | `ClassCastException` |
+| `min [SOME 1, NONE]` | `SOME 1` (NONE is least by `compare`) |
+| `min [{a = SOME 1}, {a = NONE}]` | `{a=NONE}` |
+| `min ([] : int option list)` | `NONE` (`min ([] : int list)` raises `Empty`) |
+
+Today, over empty input and over options:
+
+| Function | Empty, not options | Empty, options | All `NONE` | Some `NONE` |
+| --- | --- | --- | --- | --- |
+| `count` | 0 | 0 | 0 | counts `SOME`s |
+| `sum` | 0 | `NONE` | `NONE` | ignores `NONE` |
+| `min`, `max` | raises `Empty` | `NONE` | `NONE` | ignores `NONE` |
+| `avg` | raises `Empty` | `NONE` | `NONE` | ignores `NONE` |
+
+`min : 'a bag -> 'a` cannot be both. By its own definition, the least
+element by `compare`, `min` of an `int option` list should (a) raise
+`Empty` if the list is empty, (b) be `NONE` if all are `NONE`, and (c)
+be `NONE` if one is. #503 gives SQL's answers for (a) and (c).
+
+Proposal: two families, each uniform.
+
+* The plain aggregates are parametric, and do not look at the type.
+  `count : 'a bag -> int` counts elements; `sum` adds numbers, 0 if
+  empty; `min` and `max` order by `compare` and raise `Empty` if empty;
+  `avg` (int to real, real, decimal) raises `Empty` if empty.
+* The `Opt` aggregates have SQL's semantics, all of one shape: they
+  take options, ignore `NONE`, and return `NONE` if there is no `SOME`:
+  `minOpt, maxOpt : 'a option bag -> 'a option`, `sumOpt`, `avgOpt`
+  (`int option` to `real option`, and so on), and `countOpt : 'a option
+  bag -> int` (the number of `SOME`s; SQL's `COUNT` is never null). An
+  aggregate over values that are not options, but may be empty, wraps
+  them: `avgOpt over SOME e.sal` is `NONE` for an empty input, where
+  `avg` raises.
+
+So the overloads that remain are over the number type only, as `+`'s
+are. SQL translates one-for-one: `SUM(c)` is `sumOpt over c`,
+`COUNT(c)` is `countOpt over c`, `COUNT(*)` is `count over ()`; Spark's
+aggregates ignore nulls, so each `Opt` one maps to Spark's. The cost is
+a rewrite of #503 before it lands, and of the TPC-DS queries' `sum`,
+`min`, `max` and `avg` over option columns. Whatever is decided, the
+`ClassCastException` is a bug, and `Relational.compare`'s javadoc (NONE
+greatest) contradicts its doc in `relational.sig` and its behavior
+(NONE least).
+
 ## Milestones
 
 Each is one commit, or a few, squashed on landing as "(#502, part N)".
@@ -377,6 +430,16 @@ and `between` drop `NONE` as SQL does; a lone `<`, `<=`, `<>` or a
 function of a column gets a guard. No schema check yet: ascribing a
 type to `file`'s progressive record fails
 ("conflict ... vs {z$dummy:unit}").
+
+*Task (2026-11-11): review the Morel of `tpcds-10m.smli` for idiom.*
+It was written query by query, to agree with Spark, and reads like
+translated SQL. For example: chains of `orelse` and `elem` over a
+column (q41, q48, q91) may read better as `case` expressions; `@`
+joins collections where `union` says what is meant (q2, q4, q11, q66,
+q74); helpers such as `ratio`, `divide` and `times` are redefined in
+several queries; and the guards for `NONE` (`x <> NONE andalso x <
+SOME c`) are repeated. Settle the idioms, then apply them to every
+query, checking that each still agrees with Spark.
 
 **M4. Local pass.** Fix what M3 found in Morel itself (wrong answers,
 crashes, performance -- a nested-loop join over `store_sales` at SF 0.01
@@ -687,6 +750,22 @@ three, which it cannot do directly. Every tier needs D10.
   matches a repeated answer column (q64's `s1`) to a field `s1_2`, and
   a decimal that Morel computes to more places than Spark to within a
   relative 1e-9 (q66's ratios). Next: tier B.
+* 2026-11-12: part 5 committed (`af491aea`); D11 (aggregates over
+  options) written up, in `/tmp/avgOpt.md` too. **Tier B done**: all
+  78 queries of tiers A and B agree (77 values and q90's error); the
+  script runs in about 105s, half of it q35. Fixed on the way, each
+  with a test: (6) `TypeResolver` kept an earlier attempt's terms and
+  constraints when it retried after expanding a progressive type, so an
+  overload (`avg`) over a file table's column, in the first statement
+  that read it, was left unresolved and the statement returned a
+  function (`file.smli`); (7) the shell's line reader did not know that
+  a line continues a block comment, so a quote on it opened a literal
+  and the shell waited (`ShellTest`, following #506). For M4: (8) two
+  `exists` joined by `orelse` (q35) are not semi-joins, and run per
+  row (47s); (9) `x elem q`, for an uncorrelated query, searches a
+  list per row; q14b writes it as `exists`, which is a semi-join; (10)
+  q72's joins are reordered by hand, as q64's. Next: tier C, which
+  needs `rollup` or window functions.
 * (Superseded: M0's part is done, M1's is now Julian running it.)
   Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied

@@ -457,6 +457,18 @@ public class ShellTest {
             + "val it = 4 : int\n"
             + "- \r\n";
     fixture().withInputString(in3).assertOutput(is(expected3));
+    // A quote on a line that continues a comment does not open a literal.
+    final String in4 =
+        "(* a\n" //
+            + " * b \" c *)\n"
+            + "5;\n";
+    final String expected4 =
+        "- (* a\r\n" //
+            + "=  * b \" c *)\r\n"
+            + "= 5;\r\n"
+            + "val it = 5 : int\n"
+            + "- \r\n";
+    fixture().withInputString(in4).assertOutput(is(expected4));
   }
 
   /**
