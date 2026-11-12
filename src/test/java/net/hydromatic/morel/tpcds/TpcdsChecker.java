@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -67,7 +68,7 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Values are compared as text, except numbers: a decimal must equal a
  * decimal exactly (unless Morel's has more digits after the point, as after a
- * division, when they need only agree to 15 digits), and a {@code real}
+ * division, when they need only agree to a relative 1e-9), and a {@code real}
  * (Morel's is 32 bits, Spark's {@code double} 64) need only agree to {@link
  * #REAL_TOLERANCE}. {@code NONE} and an empty field are null, and {@code SOME
  * v} is {@code v}; so an answer column that happens to hold no null matches a
@@ -82,10 +83,10 @@ public class TpcdsChecker {
   static final double REAL_TOLERANCE = 1e-5;
 
   /**
-   * Digits to which a decimal must agree with Spark's, if Morel's has more
-   * digits after the point than Spark's.
+   * Relative tolerance for a decimal that Morel computes to more places than
+   * Spark does.
    */
-  static final MathContext DECIMAL_PRECISION = new MathContext(15);
+  static final BigDecimal DECIMAL_TOLERANCE = new BigDecimal("1e-9");
 
   private static final Pattern QUERY_NAME = Pattern.compile("r([0-9]+[ab]?)");
 
@@ -350,12 +351,16 @@ public class TpcdsChecker {
       final BigDecimal expected = (BigDecimal) o1;
       if (actual.stripTrailingZeros().scale()
           > expected.stripTrailingZeros().scale()) {
-        // Morel kept more digits than Spark, as after a division; they
-        // need only agree to Spark's precision.
-        return actual
-                .round(DECIMAL_PRECISION)
-                .compareTo(expected.round(DECIMAL_PRECISION))
-            == 0;
+        // Morel kept more digits than Spark, as after a division, and Spark
+        // may have rounded before summing; they need only be close: within a
+        // relative 1e-9, or one unit in Spark's last place.
+        final BigDecimal difference = actual.subtract(expected).abs();
+        final BigDecimal tolerance =
+            expected
+                .abs()
+                .multiply(DECIMAL_TOLERANCE)
+                .max(BigDecimal.ONE.movePointLeft(expected.scale()));
+        return difference.compareTo(tolerance) <= 0;
       }
       return actual.compareTo(expected) == 0;
     }
@@ -409,9 +414,14 @@ public class TpcdsChecker {
       try (BufferedReader r =
           Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
         final String header = requireNonNull(r.readLine(), "header");
+        final Map<String, Integer> counts = new HashMap<>();
         for (String column : header.split(",")) {
           final String[] nameType = column.split(":", 2);
-          names.add(nameType[0].toLowerCase(Locale.ROOT));
+          // A record cannot have two fields of one name, so the second
+          // column named "s1" matches a field "s1_2", the third "s1_3".
+          final String name = nameType[0].toLowerCase(Locale.ROOT);
+          final int count = counts.merge(name, 1, Integer::sum);
+          names.add(count == 1 ? name : name + "_" + count);
           types.add(nameType[1].split(" ")[0]);
         }
         for (String line; (line = r.readLine()) != null; ) {

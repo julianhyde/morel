@@ -368,14 +368,14 @@ the SQL in a comment above. `TpcdsChecker` (test scope) watches each
 `answers/qN.csv` as a multiset: columns by name ignoring case (one
 leftover column pairs with one leftover field, for Spark's `count(1)`),
 `NONE` as an empty field, decimals exactly, reals within 1e-5. So the
-oracle check is part of the test, not a separate Python step. 18 tier-A
-queries pass (q3 q15 q19 q38 q42 q45 q46 q52 q55 q68 q73 q79 q84 q87 q91
-q93 q96, and q90, which raises `Div` as Spark raises
-`DIVIDE_BY_ZERO`); the script runs in about 4s. D10 is answered by
-hand, with no helpers: `col = SOME c`, `>`, `>=` and `between` drop
-`NONE` as SQL does; a lone
-`<`, `<=`, `<>` or a function of a column gets a guard. No schema
-check yet: ascribing a type to `file`'s progressive record fails
+oracle check is part of the test, not a separate Python step. (Tier A
+is now complete; see the log.) The first 18 tier-A queries (q3 q15
+q19 q38 q42 q45 q46 q52 q55 q68 q73 q79 q84 q87 q91 q93 q96, and q90,
+which raises `Div` as Spark raises `DIVIDE_BY_ZERO`) ran in about 4s.
+D10 is answered by hand, with no helpers: `col = SOME c`, `>`, `>=`
+and `between` drop `NONE` as SQL does; a lone `<`, `<=`, `<>` or a
+function of a column gets a guard. No schema check yet: ascribing a
+type to `file`'s progressive record fails
 ("conflict ... vs {z$dummy:unit}").
 
 **M4. Local pass.** Fix what M3 found in Morel itself (wrong answers,
@@ -675,6 +675,18 @@ three, which it cannot do directly. Every tier needs D10.
   inner and outer columns it could be a semi-join (`not exists`: an
   anti-join) that evaluates the subquery once and probes a hash set.
   q69 takes 13s, most of it in three such subqueries.
+* 2026-11-11: semi- and anti-joins for `exists` (`edaa8b76`; q69 13s
+  to 6s), and #506 (comments in the shell, `ed83c2a5`); pushed. **Tier
+  A done**: all 53 queries agree with Spark (52 values and q90's
+  error); the script runs in 39s. More for M4: (4) Morel joins
+  comma-separated scans in the order written; q64 lists `d2` and `d3`
+  before `customer`, the only table they join to, and as written was a
+  cross product with `date_dim`, so the script moves `store` and
+  `customer` up, with a comment. (5) The `let`-bound arithmetic bug
+  (1) again in q75 (`minus`, used for counts and amounts). The checker
+  matches a repeated answer column (q64's `s1`) to a field `s1_2`, and
+  a decimal that Morel computes to more places than Spark to within a
+  relative 1e-9 (q66's ratios). Next: tier B.
 * (Superseded: M0's part is done, M1's is now Julian running it.)
   Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied

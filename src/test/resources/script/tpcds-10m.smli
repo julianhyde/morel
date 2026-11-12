@@ -1136,6 +1136,286 @@ val r19 = q19 ();
 >
 > val r19 : {brand:string option, brand_id:int option, ext_price:decimal option, i_manufact:string option, i_manufact_id:int option} list
 
+(* --- q23a ------------------------------------------------------- *)
+(*
+WITH frequent_ss_items AS
+(SELECT
+    substr(i_item_desc, 1, 30) itemdesc,
+    i_item_sk item_sk,
+    d_date solddate,
+    count(*) cnt
+  FROM store_sales, date_dim, item
+  WHERE ss_sold_date_sk = d_date_sk
+    AND ss_item_sk = i_item_sk
+    AND d_year IN (2000, 2000 + 1, 2000 + 2, 2000 + 3)
+  GROUP BY substr(i_item_desc, 1, 30), i_item_sk, d_date
+  HAVING count(*) > 4),
+    max_store_sales AS
+  (SELECT max(csales) tpcds_cmax
+  FROM (SELECT
+    c_customer_sk,
+    sum(ss_quantity * ss_sales_price) csales
+  FROM store_sales, customer, date_dim
+  WHERE ss_customer_sk = c_customer_sk
+    AND ss_sold_date_sk = d_date_sk
+    AND d_year IN (2000, 2000 + 1, 2000 + 2, 2000 + 3)
+  GROUP BY c_customer_sk) x),
+    best_ss_customer AS
+  (SELECT
+    c_customer_sk,
+    sum(ss_quantity * ss_sales_price) ssales
+  FROM store_sales, customer
+  WHERE ss_customer_sk = c_customer_sk
+  GROUP BY c_customer_sk
+  HAVING sum(ss_quantity * ss_sales_price) > (50 / 100.0) *
+    (SELECT *
+    FROM max_store_sales))
+SELECT sum(sales)
+FROM ((SELECT cs_quantity * cs_list_price sales
+FROM catalog_sales, date_dim
+WHERE d_year = 2000
+  AND d_moy = 2
+  AND cs_sold_date_sk = d_date_sk
+  AND cs_item_sk IN (SELECT item_sk
+FROM frequent_ss_items)
+  AND cs_bill_customer_sk IN (SELECT c_customer_sk
+FROM best_ss_customer))
+      UNION ALL
+      (SELECT ws_quantity * ws_list_price sales
+      FROM web_sales, date_dim
+      WHERE d_year = 2000
+        AND d_moy = 2
+        AND ws_sold_date_sk = d_date_sk
+        AND ws_item_sk IN (SELECT item_sk
+      FROM frequent_ss_items)
+        AND ws_bill_customer_sk IN (SELECT c_customer_sk
+      FROM best_ss_customer))) y
+LIMIT 100
+*)
+fun q23a () =
+  let
+    (* "quantity * price" *)
+    fun times (quantity, price) =
+      case (quantity, price) of
+          (SOME q, SOME p) => SOME (Decimal.fromInt q * p)
+        | _ => NONE
+    val years = [SOME 2000, SOME (2000 + 1), SOME (2000 + 2), SOME (2000 + 3)]
+    val frequent_ss_items =
+      from ss in tpcds.store_sales,
+          d in tpcds.date_dim,
+          i in tpcds.item
+        where ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso d.d_year elem years
+        group {itemdesc =
+            Option.map (fn s => String.substring (s, 0, Int.min (30, size s)))
+              i.i_item_desc,
+            item_sk = i.i_item_sk, solddate = d.d_date}
+          compute {cnt = count over ()}
+        where cnt > 4
+    val max_store_sales =
+      from x in (
+          from ss in tpcds.store_sales,
+              c in tpcds.customer,
+              d in tpcds.date_dim
+            where ss.ss_customer_sk = SOME c.c_customer_sk
+              andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem years
+            group c.c_customer_sk
+              compute {csales =
+                sum over times (ss.ss_quantity, ss.ss_sales_price)})
+        compute max over x.csales
+    val best_ss_customer =
+      from ss in tpcds.store_sales,
+          c in tpcds.customer
+        where ss.ss_customer_sk = SOME c.c_customer_sk
+        group c.c_customer_sk
+          compute {ssales = sum over times (ss.ss_quantity, ss.ss_sales_price)}
+        where (case (ssales, max_store_sales) of
+                  (SOME s, SOME m) => s > decimal "0.5" * m
+                | _ => false)
+    val items = from f in frequent_ss_items yield f.item_sk
+    val customers = from b in best_ss_customer yield SOME b.c_customer_sk
+  in
+    from y in (
+        from cs in tpcds.catalog_sales,
+            d in tpcds.date_dim
+          where d.d_year = SOME 2000
+            andalso d.d_moy = SOME 2
+            andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+            andalso cs.cs_item_sk elem items
+            andalso cs.cs_bill_customer_sk elem customers
+          yield {sales = times (cs.cs_quantity, cs.cs_list_price)}
+        union
+          (from ws in tpcds.web_sales,
+              d in tpcds.date_dim
+            where d.d_year = SOME 2000
+              andalso d.d_moy = SOME 2
+              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+              andalso ws.ws_item_sk elem items
+              andalso ws.ws_bill_customer_sk elem customers
+            yield {sales = times (ws.ws_quantity, ws.ws_list_price)}))
+      compute sum over y.sales
+  end;
+> val q23a = fn : unit -> decimal option
+val r23a = q23a ();
+> val r23a = NONE : decimal option
+
+(* --- q23b ------------------------------------------------------- *)
+(*
+WITH frequent_ss_items AS
+(SELECT
+    substr(i_item_desc, 1, 30) itemdesc,
+    i_item_sk item_sk,
+    d_date solddate,
+    count(*) cnt
+  FROM store_sales, date_dim, item
+  WHERE ss_sold_date_sk = d_date_sk
+    AND ss_item_sk = i_item_sk
+    AND d_year IN (2000, 2000 + 1, 2000 + 2, 2000 + 3)
+  GROUP BY substr(i_item_desc, 1, 30), i_item_sk, d_date
+  HAVING count(*) > 4),
+    max_store_sales AS
+  (SELECT max(csales) tpcds_cmax
+  FROM (SELECT
+    c_customer_sk,
+    sum(ss_quantity * ss_sales_price) csales
+  FROM store_sales, customer, date_dim
+  WHERE ss_customer_sk = c_customer_sk
+    AND ss_sold_date_sk = d_date_sk
+    AND d_year IN (2000, 2000 + 1, 2000 + 2, 2000 + 3)
+  GROUP BY c_customer_sk) x),
+    best_ss_customer AS
+  (SELECT
+    c_customer_sk,
+    sum(ss_quantity * ss_sales_price) ssales
+  FROM store_sales
+    , customer
+  WHERE ss_customer_sk = c_customer_sk
+  GROUP BY c_customer_sk
+  HAVING sum(ss_quantity * ss_sales_price) > (50 / 100.0) *
+    (SELECT *
+    FROM max_store_sales))
+SELECT
+  c_last_name,
+  c_first_name,
+  sales
+FROM ((SELECT
+  c_last_name,
+  c_first_name,
+  sum(cs_quantity * cs_list_price) sales
+FROM catalog_sales, customer, date_dim
+WHERE d_year = 2000
+  AND d_moy = 2
+  AND cs_sold_date_sk = d_date_sk
+  AND cs_item_sk IN (SELECT item_sk
+FROM frequent_ss_items)
+  AND cs_bill_customer_sk IN (SELECT c_customer_sk
+FROM best_ss_customer)
+  AND cs_bill_customer_sk = c_customer_sk
+GROUP BY c_last_name, c_first_name)
+      UNION ALL
+      (SELECT
+        c_last_name,
+        c_first_name,
+        sum(ws_quantity * ws_list_price) sales
+      FROM web_sales, customer, date_dim
+      WHERE d_year = 2000
+        AND d_moy = 2
+        AND ws_sold_date_sk = d_date_sk
+        AND ws_item_sk IN (SELECT item_sk
+      FROM frequent_ss_items)
+        AND ws_bill_customer_sk IN (SELECT c_customer_sk
+      FROM best_ss_customer)
+        AND ws_bill_customer_sk = c_customer_sk
+      GROUP BY c_last_name, c_first_name)) y
+ORDER BY c_last_name, c_first_name, sales
+LIMIT 100
+*)
+fun q23b () =
+  let
+    (* "quantity * price" *)
+    fun times (quantity, price) =
+      case (quantity, price) of
+          (SOME q, SOME p) => SOME (Decimal.fromInt q * p)
+        | _ => NONE
+    val years = [SOME 2000, SOME (2000 + 1), SOME (2000 + 2), SOME (2000 + 3)]
+    val frequent_ss_items =
+      from ss in tpcds.store_sales,
+          d in tpcds.date_dim,
+          i in tpcds.item
+        where ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso d.d_year elem years
+        group {itemdesc =
+            Option.map (fn s => String.substring (s, 0, Int.min (30, size s)))
+              i.i_item_desc,
+            item_sk = i.i_item_sk, solddate = d.d_date}
+          compute {cnt = count over ()}
+        where cnt > 4
+    val max_store_sales =
+      from x in (
+          from ss in tpcds.store_sales,
+              c in tpcds.customer,
+              d in tpcds.date_dim
+            where ss.ss_customer_sk = SOME c.c_customer_sk
+              andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem years
+            group c.c_customer_sk
+              compute {csales =
+                sum over times (ss.ss_quantity, ss.ss_sales_price)})
+        compute max over x.csales
+    val best_ss_customer =
+      from ss in tpcds.store_sales,
+          c in tpcds.customer
+        where ss.ss_customer_sk = SOME c.c_customer_sk
+        group c.c_customer_sk
+          compute {ssales = sum over times (ss.ss_quantity, ss.ss_sales_price)}
+        where (case (ssales, max_store_sales) of
+                  (SOME s, SOME m) => s > decimal "0.5" * m
+                | _ => false)
+    val items = from f in frequent_ss_items yield f.item_sk
+    val customers = from b in best_ss_customer yield SOME b.c_customer_sk
+  in
+    from y in (
+        from cs in tpcds.catalog_sales,
+            c in tpcds.customer,
+            d in tpcds.date_dim
+          where d.d_year = SOME 2000
+            andalso d.d_moy = SOME 2
+            andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+            andalso cs.cs_item_sk elem items
+            andalso cs.cs_bill_customer_sk elem customers
+            andalso cs.cs_bill_customer_sk = SOME c.c_customer_sk
+          group {c.c_last_name, c.c_first_name}
+            compute {sales =
+              sum over times (cs.cs_quantity, cs.cs_list_price)}
+        union
+          (from ws in tpcds.web_sales,
+              c in tpcds.customer,
+              d in tpcds.date_dim
+            where d.d_year = SOME 2000
+              andalso d.d_moy = SOME 2
+              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+              andalso ws.ws_item_sk elem items
+              andalso ws.ws_bill_customer_sk elem customers
+              andalso ws.ws_bill_customer_sk = SOME c.c_customer_sk
+            group {c.c_last_name, c.c_first_name}
+              compute {sales =
+                sum over times (ws.ws_quantity, ws.ws_list_price)}))
+      order (y.c_last_name, y.c_first_name, y.sales)
+      take 100
+  end;
+> val q23b = fn
+>   : unit
+>      -> {c_first_name:string option, c_last_name:string option,
+>           sales:decimal option} list
+val r23b = q23b ();
+> c_first_name c_last_name sales
+> ------------ ----------- -----
+>
+> val r23b : {c_first_name:string option, c_last_name:string option, sales:decimal option} list
+
 (* --- q25 -------------------------------------------------------- *)
 (*
 SELECT
@@ -1793,37 +2073,37 @@ fun q41 () =
       andalso (exists i in tpcds.item
         where i.i_manufact = i1.i_manufact
           andalso (i.i_category = SOME "Women"
-                andalso (i.i_color = SOME "powder" orelse i.i_color = SOME "khaki")
-                andalso (i.i_units = SOME "Ounce" orelse i.i_units = SOME "Oz")
-                andalso (i.i_size = SOME "medium" orelse i.i_size = SOME "extra large")
+                andalso i.i_color elem [SOME "powder", SOME "khaki"]
+                andalso i.i_units elem [SOME "Ounce", SOME "Oz"]
+                andalso i.i_size elem [SOME "medium", SOME "extra large"]
               orelse i.i_category = SOME "Women"
-                andalso (i.i_color = SOME "brown" orelse i.i_color = SOME "honeydew")
-                andalso (i.i_units = SOME "Bunch" orelse i.i_units = SOME "Ton")
-                andalso (i.i_size = SOME "N/A" orelse i.i_size = SOME "small")
+                andalso i.i_color elem [SOME "brown", SOME "honeydew"]
+                andalso i.i_units elem [SOME "Bunch", SOME "Ton"]
+                andalso i.i_size elem [SOME "N/A", SOME "small"]
               orelse i.i_category = SOME "Men"
-                andalso (i.i_color = SOME "floral" orelse i.i_color = SOME "deep")
-                andalso (i.i_units = SOME "N/A" orelse i.i_units = SOME "Dozen")
-                andalso (i.i_size = SOME "petite" orelse i.i_size = SOME "large")
+                andalso i.i_color elem [SOME "floral", SOME "deep"]
+                andalso i.i_units elem [SOME "N/A", SOME "Dozen"]
+                andalso i.i_size elem [SOME "petite", SOME "large"]
               orelse i.i_category = SOME "Men"
-                andalso (i.i_color = SOME "light" orelse i.i_color = SOME "cornflower")
-                andalso (i.i_units = SOME "Box" orelse i.i_units = SOME "Pound")
-                andalso (i.i_size = SOME "medium" orelse i.i_size = SOME "extra large")
+                andalso i.i_color elem [SOME "light", SOME "cornflower"]
+                andalso i.i_units elem [SOME "Box", SOME "Pound"]
+                andalso i.i_size elem [SOME "medium", SOME "extra large"]
               orelse i.i_category = SOME "Women"
-                andalso (i.i_color = SOME "midnight" orelse i.i_color = SOME "snow")
-                andalso (i.i_units = SOME "Pallet" orelse i.i_units = SOME "Gross")
-                andalso (i.i_size = SOME "medium" orelse i.i_size = SOME "extra large")
+                andalso i.i_color elem [SOME "midnight", SOME "snow"]
+                andalso i.i_units elem [SOME "Pallet", SOME "Gross"]
+                andalso i.i_size elem [SOME "medium", SOME "extra large"]
               orelse i.i_category = SOME "Women"
-                andalso (i.i_color = SOME "cyan" orelse i.i_color = SOME "papaya")
-                andalso (i.i_units = SOME "Cup" orelse i.i_units = SOME "Dram")
-                andalso (i.i_size = SOME "N/A" orelse i.i_size = SOME "small")
+                andalso i.i_color elem [SOME "cyan", SOME "papaya"]
+                andalso i.i_units elem [SOME "Cup", SOME "Dram"]
+                andalso i.i_size elem [SOME "N/A", SOME "small"]
               orelse i.i_category = SOME "Men"
-                andalso (i.i_color = SOME "orange" orelse i.i_color = SOME "frosted")
-                andalso (i.i_units = SOME "Each" orelse i.i_units = SOME "Tbl")
-                andalso (i.i_size = SOME "petite" orelse i.i_size = SOME "large")
+                andalso i.i_color elem [SOME "orange", SOME "frosted"]
+                andalso i.i_units elem [SOME "Each", SOME "Tbl"]
+                andalso i.i_size elem [SOME "petite", SOME "large"]
               orelse i.i_category = SOME "Men"
-                andalso (i.i_color = SOME "forest" orelse i.i_color = SOME "ghost")
-                andalso (i.i_units = SOME "Lb" orelse i.i_units = SOME "Bundle")
-                andalso (i.i_size = SOME "medium" orelse i.i_size = SOME "extra large")))
+                andalso i.i_color elem [SOME "forest", SOME "ghost"]
+                andalso i.i_units elem [SOME "Lb", SOME "Bundle"]
+                andalso i.i_size elem [SOME "medium", SOME "extra large"]))
     yield i1.i_product_name
     distinct
     order current
@@ -2699,6 +2979,161 @@ val r56 = q56 ();
 >
 > val r56 : {i_item_id:string, total_sales:decimal option} list
 
+(* --- q58 -------------------------------------------------------- *)
+(*
+WITH ss_items AS
+(SELECT
+    i_item_id item_id,
+    sum(ss_ext_sales_price) ss_item_rev
+  FROM store_sales, item, date_dim
+  WHERE ss_item_sk = i_item_sk
+    AND d_date IN (SELECT d_date
+  FROM date_dim
+  WHERE d_week_seq = (SELECT d_week_seq
+  FROM date_dim
+  WHERE d_date = '2000-01-03'))
+    AND ss_sold_date_sk = d_date_sk
+  GROUP BY i_item_id),
+    cs_items AS
+  (SELECT
+    i_item_id item_id,
+    sum(cs_ext_sales_price) cs_item_rev
+  FROM catalog_sales, item, date_dim
+  WHERE cs_item_sk = i_item_sk
+    AND d_date IN (SELECT d_date
+  FROM date_dim
+  WHERE d_week_seq = (SELECT d_week_seq
+  FROM date_dim
+  WHERE d_date = '2000-01-03'))
+    AND cs_sold_date_sk = d_date_sk
+  GROUP BY i_item_id),
+    ws_items AS
+  (SELECT
+    i_item_id item_id,
+    sum(ws_ext_sales_price) ws_item_rev
+  FROM web_sales, item, date_dim
+  WHERE ws_item_sk = i_item_sk
+    AND d_date IN (SELECT d_date
+  FROM date_dim
+  WHERE d_week_seq = (SELECT d_week_seq
+  FROM date_dim
+  WHERE d_date = '2000-01-03'))
+    AND ws_sold_date_sk = d_date_sk
+  GROUP BY i_item_id)
+SELECT
+  ss_items.item_id,
+  ss_item_rev,
+  ss_item_rev / (ss_item_rev + cs_item_rev + ws_item_rev) / 3 * 100 ss_dev,
+  cs_item_rev,
+  cs_item_rev / (ss_item_rev + cs_item_rev + ws_item_rev) / 3 * 100 cs_dev,
+  ws_item_rev,
+  ws_item_rev / (ss_item_rev + cs_item_rev + ws_item_rev) / 3 * 100 ws_dev,
+  (ss_item_rev + cs_item_rev + ws_item_rev) / 3 average
+FROM ss_items, cs_items, ws_items
+WHERE ss_items.item_id = cs_items.item_id
+  AND ss_items.item_id = ws_items.item_id
+  AND ss_item_rev BETWEEN 0.9 * cs_item_rev AND 1.1 * cs_item_rev
+  AND ss_item_rev BETWEEN 0.9 * ws_item_rev AND 1.1 * ws_item_rev
+  AND cs_item_rev BETWEEN 0.9 * ss_item_rev AND 1.1 * ss_item_rev
+  AND cs_item_rev BETWEEN 0.9 * ws_item_rev AND 1.1 * ws_item_rev
+  AND ws_item_rev BETWEEN 0.9 * ss_item_rev AND 1.1 * ss_item_rev
+  AND ws_item_rev BETWEEN 0.9 * cs_item_rev AND 1.1 * cs_item_rev
+ORDER BY item_id, ss_item_rev
+LIMIT 100
+*)
+fun q58 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    (* The scalar subquery "(SELECT d_week_seq ... WHERE d_date = ...)" *)
+    val week =
+      Relational.only
+        (from d in tpcds.date_dim
+          where d.d_date = SOME (day (2000, Jan, 3))
+          yield d.d_week_seq)
+    val dates =
+      from d in tpcds.date_dim
+        where week <> NONE andalso d.d_week_seq = week
+        yield d.d_date
+    val ss_items =
+      from ss in tpcds.store_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where ss.ss_item_sk = i.i_item_sk
+          andalso d.d_date elem dates
+          andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+        group {item_id = i.i_item_id}
+          compute {ss_item_rev = sum over ss.ss_ext_sales_price}
+    val cs_items =
+      from cs in tpcds.catalog_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where cs.cs_item_sk = i.i_item_sk
+          andalso d.d_date elem dates
+          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+        group {item_id = i.i_item_id}
+          compute {cs_item_rev = sum over cs.cs_ext_sales_price}
+    val ws_items =
+      from ws in tpcds.web_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where ws.ws_item_sk = i.i_item_sk
+          andalso d.d_date elem dates
+          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+        group {item_id = i.i_item_id}
+          compute {ws_item_rev = sum over ws.ws_ext_sales_price}
+    (* "x BETWEEN 0.9 * y AND 1.1 * y" *)
+    fun near (x, y) =
+      case (x, y) of
+          (SOME x, SOME y) =>
+            x >= decimal "0.9" * y andalso x <= decimal "1.1" * y
+        | _ => false
+    (* "rev / total / 3 * 100" *)
+    fun dev (rev, total) =
+      case (rev, total) of
+          (SOME r, SOME t) =>
+            SOME (r / t / Decimal.fromInt 3 * Decimal.fromInt 100)
+        | _ => NONE
+  in
+    from ss in ss_items,
+        cs in cs_items,
+        ws in ws_items
+      where ss.item_id = cs.item_id
+        andalso ss.item_id = ws.item_id
+        andalso near (ss.ss_item_rev, cs.cs_item_rev)
+        andalso near (ss.ss_item_rev, ws.ws_item_rev)
+        andalso near (cs.cs_item_rev, ss.ss_item_rev)
+        andalso near (cs.cs_item_rev, ws.ws_item_rev)
+        andalso near (ws.ws_item_rev, ss.ss_item_rev)
+        andalso near (ws.ws_item_rev, cs.cs_item_rev)
+      yield {ss, cs, ws,
+        total =
+          case (ss.ss_item_rev, cs.cs_item_rev, ws.ws_item_rev) of
+              (SOME s, SOME c, SOME w) => SOME (s + c + w)
+            | _ => NONE}
+      yield {ss.item_id, ss.ss_item_rev,
+        ss_dev = dev (ss.ss_item_rev, total),
+        cs.cs_item_rev,
+        cs_dev = dev (cs.cs_item_rev, total),
+        ws.ws_item_rev,
+        ws_dev = dev (ws.ws_item_rev, total),
+        average = Option.map (fn t => t / Decimal.fromInt 3) total}
+      order (item_id, ss_item_rev)
+      take 100
+  end;
+> val q58 = fn
+>   : unit
+>      -> {average:decimal option, cs_dev:decimal option,
+>           cs_item_rev:decimal option, item_id:string, ss_dev:decimal option,
+>           ss_item_rev:decimal option, ws_dev:decimal option,
+>           ws_item_rev:decimal option} list
+val r58 = q58 ();
+> average cs_dev cs_item_rev item_id ss_dev ss_item_rev ws_dev ws_item_rev
+> ------- ------ ----------- ------- ------ ----------- ------ -----------
+>
+> val r58 : {average:decimal option, cs_dev:decimal option, cs_item_rev:decimal option, item_id:string, ss_dev:decimal option, ss_item_rev:decimal option, ws_dev:decimal option, ws_item_rev:decimal option} list
+
 (* --- q59 -------------------------------------------------------- *)
 (*
 WITH wss AS
@@ -3186,6 +3621,854 @@ val r62 = q62 ();
 >       93            97            78             93          0 TWO DAY   Conventional childr site_0
 >
 > val r62 : {`30 days `:int, `31 - 60 days `:int, `61 - 90 days `:int, `91 - 120 days `:int, `>120 days `:int, sm_type:string option, w_warehouse_name:string option, web_name:string option} list
+
+(* --- q64 -------------------------------------------------------- *)
+(*
+WITH cs_ui AS
+(SELECT
+    cs_item_sk,
+    sum(cs_ext_list_price) AS sale,
+    sum(cr_refunded_cash + cr_reversed_charge + cr_store_credit) AS refund
+  FROM catalog_sales
+    , catalog_returns
+  WHERE cs_item_sk = cr_item_sk
+    AND cs_order_number = cr_order_number
+  GROUP BY cs_item_sk
+  HAVING sum(cs_ext_list_price) > 2 * sum(cr_refunded_cash + cr_reversed_charge + cr_store_credit)),
+    cross_sales AS
+  (SELECT
+    i_product_name product_name,
+    i_item_sk item_sk,
+    s_store_name store_name,
+    s_zip store_zip,
+    ad1.ca_street_number b_street_number,
+    ad1.ca_street_name b_streen_name,
+    ad1.ca_city b_city,
+    ad1.ca_zip b_zip,
+    ad2.ca_street_number c_street_number,
+    ad2.ca_street_name c_street_name,
+    ad2.ca_city c_city,
+    ad2.ca_zip c_zip,
+    d1.d_year AS syear,
+    d2.d_year AS fsyear,
+    d3.d_year s2year,
+    count(*) cnt,
+    sum(ss_wholesale_cost) s1,
+    sum(ss_list_price) s2,
+    sum(ss_coupon_amt) s3
+  FROM store_sales, store_returns, cs_ui, date_dim d1, date_dim d2, date_dim d3,
+    store, customer, customer_demographics cd1, customer_demographics cd2,
+    promotion, household_demographics hd1, household_demographics hd2,
+    customer_address ad1, customer_address ad2, income_band ib1, income_band ib2, item
+  WHERE ss_store_sk = s_store_sk AND
+    ss_sold_date_sk = d1.d_date_sk AND
+    ss_customer_sk = c_customer_sk AND
+    ss_cdemo_sk = cd1.cd_demo_sk AND
+    ss_hdemo_sk = hd1.hd_demo_sk AND
+    ss_addr_sk = ad1.ca_address_sk AND
+    ss_item_sk = i_item_sk AND
+    ss_item_sk = sr_item_sk AND
+    ss_ticket_number = sr_ticket_number AND
+    ss_item_sk = cs_ui.cs_item_sk AND
+    c_current_cdemo_sk = cd2.cd_demo_sk AND
+    c_current_hdemo_sk = hd2.hd_demo_sk AND
+    c_current_addr_sk = ad2.ca_address_sk AND
+    c_first_sales_date_sk = d2.d_date_sk AND
+    c_first_shipto_date_sk = d3.d_date_sk AND
+    ss_promo_sk = p_promo_sk AND
+    hd1.hd_income_band_sk = ib1.ib_income_band_sk AND
+    hd2.hd_income_band_sk = ib2.ib_income_band_sk AND
+    cd1.cd_marital_status <> cd2.cd_marital_status AND
+    i_color IN ('purple', 'burlywood', 'indian', 'spring', 'floral', 'medium') AND
+    i_current_price BETWEEN 64 AND 64 + 10 AND
+    i_current_price BETWEEN 64 + 1 AND 64 + 15
+  GROUP BY i_product_name, i_item_sk, s_store_name, s_zip, ad1.ca_street_number,
+    ad1.ca_street_name, ad1.ca_city, ad1.ca_zip, ad2.ca_street_number,
+    ad2.ca_street_name, ad2.ca_city, ad2.ca_zip, d1.d_year, d2.d_year, d3.d_year
+  )
+SELECT
+  cs1.product_name,
+  cs1.store_name,
+  cs1.store_zip,
+  cs1.b_street_number,
+  cs1.b_streen_name,
+  cs1.b_city,
+  cs1.b_zip,
+  cs1.c_street_number,
+  cs1.c_street_name,
+  cs1.c_city,
+  cs1.c_zip,
+  cs1.syear,
+  cs1.cnt,
+  cs1.s1,
+  cs1.s2,
+  cs1.s3,
+  cs2.s1,
+  cs2.s2,
+  cs2.s3,
+  cs2.syear,
+  cs2.cnt
+FROM cross_sales cs1, cross_sales cs2
+WHERE cs1.item_sk = cs2.item_sk AND
+  cs1.syear = 1999 AND
+  cs2.syear = 1999 + 1 AND
+  cs2.cnt <= cs1.cnt AND
+  cs1.store_name = cs2.store_name AND
+  cs1.store_zip = cs2.store_zip
+ORDER BY cs1.product_name, cs1.store_name, cs2.cnt
+*)
+fun q64 () =
+  let
+    (* "cr_refunded_cash + cr_reversed_charge + cr_store_credit" *)
+    fun refund cr =
+      case (cr.cr_refunded_cash, cr.cr_reversed_charge, cr.cr_store_credit) of
+          (SOME a, SOME b, SOME c) => SOME (a + b + c)
+        | _ => NONE
+    val cs_ui =
+      from cs in tpcds.catalog_sales,
+          cr in tpcds.catalog_returns
+        where cs.cs_item_sk = cr.cr_item_sk
+          andalso cs.cs_order_number = cr.cr_order_number
+        group cs.cs_item_sk
+          compute {sale = sum over cs.cs_ext_list_price,
+            refund = sum over refund cr}
+        where (case (sale, refund) of
+                  (SOME s, SOME r) => s > Decimal.fromInt 2 * r
+                | _ => false)
+    (* "store" and "customer" are scanned before "d2" and "d3", not after
+     * as in the SQL, because Morel joins in the order written, and "d2"
+     * and "d3" join only to "customer"; before it, each would be a cross
+     * product. *)
+    val cross_sales =
+      from ss in tpcds.store_sales,
+          sr in tpcds.store_returns,
+          cs_ui in cs_ui,
+          d1 in tpcds.date_dim,
+          s in tpcds.store,
+          c in tpcds.customer,
+          d2 in tpcds.date_dim,
+          d3 in tpcds.date_dim,
+          cd1 in tpcds.customer_demographics,
+          cd2 in tpcds.customer_demographics,
+          p in tpcds.promotion,
+          hd1 in tpcds.household_demographics,
+          hd2 in tpcds.household_demographics,
+          ad1 in tpcds.customer_address,
+          ad2 in tpcds.customer_address,
+          ib1 in tpcds.income_band,
+          ib2 in tpcds.income_band,
+          i in tpcds.item
+        where ss.ss_store_sk = SOME s.s_store_sk
+          andalso ss.ss_sold_date_sk = SOME d1.d_date_sk
+          andalso ss.ss_customer_sk = SOME c.c_customer_sk
+          andalso ss.ss_cdemo_sk = SOME cd1.cd_demo_sk
+          andalso ss.ss_hdemo_sk = SOME hd1.hd_demo_sk
+          andalso ss.ss_addr_sk = SOME ad1.ca_address_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_item_sk = sr.sr_item_sk
+          andalso ss.ss_ticket_number = sr.sr_ticket_number
+          andalso ss.ss_item_sk = cs_ui.cs_item_sk
+          andalso c.c_current_cdemo_sk = SOME cd2.cd_demo_sk
+          andalso c.c_current_hdemo_sk = SOME hd2.hd_demo_sk
+          andalso c.c_current_addr_sk = SOME ad2.ca_address_sk
+          andalso c.c_first_sales_date_sk = SOME d2.d_date_sk
+          andalso c.c_first_shipto_date_sk = SOME d3.d_date_sk
+          andalso ss.ss_promo_sk = SOME p.p_promo_sk
+          andalso hd1.hd_income_band_sk = SOME ib1.ib_income_band_sk
+          andalso hd2.hd_income_band_sk = SOME ib2.ib_income_band_sk
+          andalso cd1.cd_marital_status <> NONE
+          andalso cd2.cd_marital_status <> NONE
+          andalso cd1.cd_marital_status <> cd2.cd_marital_status
+          andalso i.i_color elem [SOME "purple", SOME "burlywood",
+            SOME "indian", SOME "spring", SOME "floral", SOME "medium"]
+          andalso i.i_current_price >= SOME (Decimal.fromInt 64)
+          andalso i.i_current_price <= SOME (Decimal.fromInt (64 + 10))
+          andalso i.i_current_price >= SOME (Decimal.fromInt (64 + 1))
+          andalso i.i_current_price <= SOME (Decimal.fromInt (64 + 15))
+        group {product_name = i.i_product_name, item_sk = i.i_item_sk,
+            store_name = s.s_store_name, store_zip = s.s_zip,
+            b_street_number = ad1.ca_street_number,
+            b_streen_name = ad1.ca_street_name, b_city = ad1.ca_city,
+            b_zip = ad1.ca_zip, c_street_number = ad2.ca_street_number,
+            c_street_name = ad2.ca_street_name, c_city = ad2.ca_city,
+            c_zip = ad2.ca_zip, syear = d1.d_year, fsyear = d2.d_year,
+            s2year = d3.d_year}
+          compute {cnt = count over (), s1 = sum over ss.ss_wholesale_cost,
+            s2 = sum over ss.ss_list_price, s3 = sum over ss.ss_coupon_amt}
+  in
+    from cs1 in cross_sales,
+        cs2 in cross_sales
+      where cs1.item_sk = cs2.item_sk
+        andalso cs1.syear = SOME 1999
+        andalso cs2.syear = SOME (1999 + 1)
+        andalso cs2.cnt <= cs1.cnt
+        andalso cs1.store_name <> NONE
+        andalso cs1.store_name = cs2.store_name
+        andalso cs1.store_zip <> NONE
+        andalso cs1.store_zip = cs2.store_zip
+      yield {cs1.product_name, cs1.store_name, cs1.store_zip,
+        cs1.b_street_number, cs1.b_streen_name, cs1.b_city, cs1.b_zip,
+        cs1.c_street_number, cs1.c_street_name, cs1.c_city, cs1.c_zip,
+        cs1.syear, cs1.cnt, cs1.s1, cs1.s2, cs1.s3, s1_2 = cs2.s1,
+        s2_2 = cs2.s2, s3_2 = cs2.s3, syear_2 = cs2.syear, cnt_2 = cs2.cnt}
+      order (product_name, store_name, cnt_2)
+  end;
+> val q64 = fn
+>   : unit
+>      -> {b_city:string option, b_streen_name:string option,
+>           b_street_number:string option, b_zip:string option,
+>           c_city:string option, c_street_name:string option,
+>           c_street_number:string option, c_zip:string option, cnt:int,
+>           cnt_2:int, product_name:string option, s1:decimal option,
+>           s1_2:decimal option, s2:decimal option, s2_2:decimal option,
+>           s3:decimal option, s3_2:decimal option, store_name:string option,
+>           store_zip:string option, syear:int option, syear_2:int option} list
+val r64 = q64 ();
+> b_city b_streen_name b_street_number b_zip c_city c_street_name c_street_number c_zip cnt cnt_2 product_name s1 s1_2 s2 s2_2 s3 s3_2 store_name store_zip syear syear_2
+> ------ ------------- --------------- ----- ------ ------------- --------------- ----- --- ----- ------------ -- ---- -- ---- -- ---- ---------- --------- ----- -------
+>
+> val r64 : {b_city:string option, b_streen_name:string option, b_street_number:string option, b_zip:string option, c_city:string option, c_street_name:string option, c_street_number:string option, c_zip:string option, cnt:int, cnt_2:int, product_name:string option, s1:decimal option, s1_2:decimal option, s2:decimal option, s2_2:decimal option, s3:decimal option, s3_2:decimal option, store_name:string option, store_zip:string option, syear:int option, syear_2:int option} list
+
+(* --- q66 -------------------------------------------------------- *)
+(*
+SELECT
+  w_warehouse_name,
+  w_warehouse_sq_ft,
+  w_city,
+  w_county,
+  w_state,
+  w_country,
+  ship_carriers,
+  year,
+  sum(jan_sales) AS jan_sales,
+  sum(feb_sales) AS feb_sales,
+  sum(mar_sales) AS mar_sales,
+  sum(apr_sales) AS apr_sales,
+  sum(may_sales) AS may_sales,
+  sum(jun_sales) AS jun_sales,
+  sum(jul_sales) AS jul_sales,
+  sum(aug_sales) AS aug_sales,
+  sum(sep_sales) AS sep_sales,
+  sum(oct_sales) AS oct_sales,
+  sum(nov_sales) AS nov_sales,
+  sum(dec_sales) AS dec_sales,
+  sum(jan_sales / w_warehouse_sq_ft) AS jan_sales_per_sq_foot,
+  sum(feb_sales / w_warehouse_sq_ft) AS feb_sales_per_sq_foot,
+  sum(mar_sales / w_warehouse_sq_ft) AS mar_sales_per_sq_foot,
+  sum(apr_sales / w_warehouse_sq_ft) AS apr_sales_per_sq_foot,
+  sum(may_sales / w_warehouse_sq_ft) AS may_sales_per_sq_foot,
+  sum(jun_sales / w_warehouse_sq_ft) AS jun_sales_per_sq_foot,
+  sum(jul_sales / w_warehouse_sq_ft) AS jul_sales_per_sq_foot,
+  sum(aug_sales / w_warehouse_sq_ft) AS aug_sales_per_sq_foot,
+  sum(sep_sales / w_warehouse_sq_ft) AS sep_sales_per_sq_foot,
+  sum(oct_sales / w_warehouse_sq_ft) AS oct_sales_per_sq_foot,
+  sum(nov_sales / w_warehouse_sq_ft) AS nov_sales_per_sq_foot,
+  sum(dec_sales / w_warehouse_sq_ft) AS dec_sales_per_sq_foot,
+  sum(jan_net) AS jan_net,
+  sum(feb_net) AS feb_net,
+  sum(mar_net) AS mar_net,
+  sum(apr_net) AS apr_net,
+  sum(may_net) AS may_net,
+  sum(jun_net) AS jun_net,
+  sum(jul_net) AS jul_net,
+  sum(aug_net) AS aug_net,
+  sum(sep_net) AS sep_net,
+  sum(oct_net) AS oct_net,
+  sum(nov_net) AS nov_net,
+  sum(dec_net) AS dec_net
+FROM (
+       (SELECT
+         w_warehouse_name,
+         w_warehouse_sq_ft,
+         w_city,
+         w_county,
+         w_state,
+         w_country,
+         concat('DHL', ',', 'BARIAN') AS ship_carriers,
+         d_year AS year,
+         sum(CASE WHEN d_moy = 1
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS jan_sales,
+         sum(CASE WHEN d_moy = 2
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS feb_sales,
+         sum(CASE WHEN d_moy = 3
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS mar_sales,
+         sum(CASE WHEN d_moy = 4
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS apr_sales,
+         sum(CASE WHEN d_moy = 5
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS may_sales,
+         sum(CASE WHEN d_moy = 6
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS jun_sales,
+         sum(CASE WHEN d_moy = 7
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS jul_sales,
+         sum(CASE WHEN d_moy = 8
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS aug_sales,
+         sum(CASE WHEN d_moy = 9
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS sep_sales,
+         sum(CASE WHEN d_moy = 10
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS oct_sales,
+         sum(CASE WHEN d_moy = 11
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS nov_sales,
+         sum(CASE WHEN d_moy = 12
+           THEN ws_ext_sales_price * ws_quantity
+             ELSE 0 END) AS dec_sales,
+         sum(CASE WHEN d_moy = 1
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS jan_net,
+         sum(CASE WHEN d_moy = 2
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS feb_net,
+         sum(CASE WHEN d_moy = 3
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS mar_net,
+         sum(CASE WHEN d_moy = 4
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS apr_net,
+         sum(CASE WHEN d_moy = 5
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS may_net,
+         sum(CASE WHEN d_moy = 6
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS jun_net,
+         sum(CASE WHEN d_moy = 7
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS jul_net,
+         sum(CASE WHEN d_moy = 8
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS aug_net,
+         sum(CASE WHEN d_moy = 9
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS sep_net,
+         sum(CASE WHEN d_moy = 10
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS oct_net,
+         sum(CASE WHEN d_moy = 11
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS nov_net,
+         sum(CASE WHEN d_moy = 12
+           THEN ws_net_paid * ws_quantity
+             ELSE 0 END) AS dec_net
+       FROM
+         web_sales, warehouse, date_dim, time_dim, ship_mode
+       WHERE
+         ws_warehouse_sk = w_warehouse_sk
+           AND ws_sold_date_sk = d_date_sk
+           AND ws_sold_time_sk = t_time_sk
+           AND ws_ship_mode_sk = sm_ship_mode_sk
+           AND d_year = 2001
+           AND t_time BETWEEN 30838 AND 30838 + 28800
+           AND sm_carrier IN ('DHL', 'BARIAN')
+       GROUP BY
+         w_warehouse_name, w_warehouse_sq_ft, w_city, w_county, w_state, w_country, d_year)
+       UNION ALL
+       (SELECT
+         w_warehouse_name,
+         w_warehouse_sq_ft,
+         w_city,
+         w_county,
+         w_state,
+         w_country,
+         concat('DHL', ',', 'BARIAN') AS ship_carriers,
+         d_year AS year,
+         sum(CASE WHEN d_moy = 1
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS jan_sales,
+         sum(CASE WHEN d_moy = 2
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS feb_sales,
+         sum(CASE WHEN d_moy = 3
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS mar_sales,
+         sum(CASE WHEN d_moy = 4
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS apr_sales,
+         sum(CASE WHEN d_moy = 5
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS may_sales,
+         sum(CASE WHEN d_moy = 6
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS jun_sales,
+         sum(CASE WHEN d_moy = 7
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS jul_sales,
+         sum(CASE WHEN d_moy = 8
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS aug_sales,
+         sum(CASE WHEN d_moy = 9
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS sep_sales,
+         sum(CASE WHEN d_moy = 10
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS oct_sales,
+         sum(CASE WHEN d_moy = 11
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS nov_sales,
+         sum(CASE WHEN d_moy = 12
+           THEN cs_sales_price * cs_quantity
+             ELSE 0 END) AS dec_sales,
+         sum(CASE WHEN d_moy = 1
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS jan_net,
+         sum(CASE WHEN d_moy = 2
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS feb_net,
+         sum(CASE WHEN d_moy = 3
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS mar_net,
+         sum(CASE WHEN d_moy = 4
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS apr_net,
+         sum(CASE WHEN d_moy = 5
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS may_net,
+         sum(CASE WHEN d_moy = 6
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS jun_net,
+         sum(CASE WHEN d_moy = 7
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS jul_net,
+         sum(CASE WHEN d_moy = 8
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS aug_net,
+         sum(CASE WHEN d_moy = 9
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS sep_net,
+         sum(CASE WHEN d_moy = 10
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS oct_net,
+         sum(CASE WHEN d_moy = 11
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS nov_net,
+         sum(CASE WHEN d_moy = 12
+           THEN cs_net_paid_inc_tax * cs_quantity
+             ELSE 0 END) AS dec_net
+       FROM
+         catalog_sales, warehouse, date_dim, time_dim, ship_mode
+       WHERE
+         cs_warehouse_sk = w_warehouse_sk
+           AND cs_sold_date_sk = d_date_sk
+           AND cs_sold_time_sk = t_time_sk
+           AND cs_ship_mode_sk = sm_ship_mode_sk
+           AND d_year = 2001
+           AND t_time BETWEEN 30838 AND 30838 + 28800
+           AND sm_carrier IN ('DHL', 'BARIAN')
+       GROUP BY
+         w_warehouse_name, w_warehouse_sq_ft, w_city, w_county, w_state, w_country, d_year
+       )
+     ) x
+GROUP BY
+  w_warehouse_name, w_warehouse_sq_ft, w_city, w_county, w_state, w_country,
+  ship_carriers, year
+ORDER BY w_warehouse_name
+LIMIT 100
+*)
+fun q66 () =
+  let
+    val zero = SOME (Decimal.fromInt 0)
+    (* "price * quantity" *)
+    fun times (price, quantity) =
+      case (price, quantity) of
+          (SOME p, SOME q) => SOME (p * Decimal.fromInt q)
+        | _ => NONE
+    (* "sales / w_warehouse_sq_ft" *)
+    fun perFoot (sales, sqFt) =
+      case (sales, sqFt) of
+          (SOME s, SOME f) => SOME (s / Decimal.fromInt f)
+        | _ => NONE
+    val x =
+      (from ws in tpcds.web_sales,
+          w in tpcds.warehouse,
+          d in tpcds.date_dim,
+          t in tpcds.time_dim,
+          sm in tpcds.ship_mode
+        where ws.ws_warehouse_sk = SOME w.w_warehouse_sk
+          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+          andalso ws.ws_sold_time_sk = SOME t.t_time_sk
+          andalso ws.ws_ship_mode_sk = SOME sm.sm_ship_mode_sk
+          andalso d.d_year = SOME 2001
+          andalso t.t_time >= SOME 30838
+          andalso t.t_time <= SOME (30838 + 28800)
+          andalso sm.sm_carrier elem [SOME "DHL", SOME "BARIAN"]
+        group {w.w_warehouse_name, w.w_warehouse_sq_ft, w.w_city,
+            w.w_county, w.w_state, w.w_country, year = d.d_year}
+          compute {
+            jan_sales = sum over
+              (if d.d_moy = SOME 1
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            feb_sales = sum over
+              (if d.d_moy = SOME 2
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            mar_sales = sum over
+              (if d.d_moy = SOME 3
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            apr_sales = sum over
+              (if d.d_moy = SOME 4
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            may_sales = sum over
+              (if d.d_moy = SOME 5
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            jun_sales = sum over
+              (if d.d_moy = SOME 6
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            jul_sales = sum over
+              (if d.d_moy = SOME 7
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            aug_sales = sum over
+              (if d.d_moy = SOME 8
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            sep_sales = sum over
+              (if d.d_moy = SOME 9
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            oct_sales = sum over
+              (if d.d_moy = SOME 10
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            nov_sales = sum over
+              (if d.d_moy = SOME 11
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            dec_sales = sum over
+              (if d.d_moy = SOME 12
+                then times (ws.ws_ext_sales_price,
+                  ws.ws_quantity)
+                else zero),
+            jan_net = sum over
+              (if d.d_moy = SOME 1
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            feb_net = sum over
+              (if d.d_moy = SOME 2
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            mar_net = sum over
+              (if d.d_moy = SOME 3
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            apr_net = sum over
+              (if d.d_moy = SOME 4
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            may_net = sum over
+              (if d.d_moy = SOME 5
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            jun_net = sum over
+              (if d.d_moy = SOME 6
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            jul_net = sum over
+              (if d.d_moy = SOME 7
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            aug_net = sum over
+              (if d.d_moy = SOME 8
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            sep_net = sum over
+              (if d.d_moy = SOME 9
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            oct_net = sum over
+              (if d.d_moy = SOME 10
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            nov_net = sum over
+              (if d.d_moy = SOME 11
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero),
+            dec_net = sum over
+              (if d.d_moy = SOME 12
+                then times (ws.ws_net_paid,
+                  ws.ws_quantity)
+                else zero)}
+        yield {w_warehouse_name, w_warehouse_sq_ft, w_city, w_county,
+          w_state, w_country, ship_carriers = "DHL" ^ "," ^ "BARIAN", year,
+          jan_sales, feb_sales, mar_sales, apr_sales, may_sales, jun_sales,
+          jul_sales, aug_sales, sep_sales, oct_sales, nov_sales, dec_sales,
+          jan_net, feb_net, mar_net, apr_net, may_net, jun_net, jul_net,
+          aug_net, sep_net, oct_net, nov_net, dec_net})
+      @
+      (from cs in tpcds.catalog_sales,
+          w in tpcds.warehouse,
+          d in tpcds.date_dim,
+          t in tpcds.time_dim,
+          sm in tpcds.ship_mode
+        where cs.cs_warehouse_sk = SOME w.w_warehouse_sk
+          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+          andalso cs.cs_sold_time_sk = SOME t.t_time_sk
+          andalso cs.cs_ship_mode_sk = SOME sm.sm_ship_mode_sk
+          andalso d.d_year = SOME 2001
+          andalso t.t_time >= SOME 30838
+          andalso t.t_time <= SOME (30838 + 28800)
+          andalso sm.sm_carrier elem [SOME "DHL", SOME "BARIAN"]
+        group {w.w_warehouse_name, w.w_warehouse_sq_ft, w.w_city,
+            w.w_county, w.w_state, w.w_country, year = d.d_year}
+          compute {
+            jan_sales = sum over
+              (if d.d_moy = SOME 1
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            feb_sales = sum over
+              (if d.d_moy = SOME 2
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            mar_sales = sum over
+              (if d.d_moy = SOME 3
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            apr_sales = sum over
+              (if d.d_moy = SOME 4
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            may_sales = sum over
+              (if d.d_moy = SOME 5
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            jun_sales = sum over
+              (if d.d_moy = SOME 6
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            jul_sales = sum over
+              (if d.d_moy = SOME 7
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            aug_sales = sum over
+              (if d.d_moy = SOME 8
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            sep_sales = sum over
+              (if d.d_moy = SOME 9
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            oct_sales = sum over
+              (if d.d_moy = SOME 10
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            nov_sales = sum over
+              (if d.d_moy = SOME 11
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            dec_sales = sum over
+              (if d.d_moy = SOME 12
+                then times (cs.cs_sales_price,
+                  cs.cs_quantity)
+                else zero),
+            jan_net = sum over
+              (if d.d_moy = SOME 1
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            feb_net = sum over
+              (if d.d_moy = SOME 2
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            mar_net = sum over
+              (if d.d_moy = SOME 3
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            apr_net = sum over
+              (if d.d_moy = SOME 4
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            may_net = sum over
+              (if d.d_moy = SOME 5
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            jun_net = sum over
+              (if d.d_moy = SOME 6
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            jul_net = sum over
+              (if d.d_moy = SOME 7
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            aug_net = sum over
+              (if d.d_moy = SOME 8
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            sep_net = sum over
+              (if d.d_moy = SOME 9
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            oct_net = sum over
+              (if d.d_moy = SOME 10
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            nov_net = sum over
+              (if d.d_moy = SOME 11
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero),
+            dec_net = sum over
+              (if d.d_moy = SOME 12
+                then times (cs.cs_net_paid_inc_tax,
+                  cs.cs_quantity)
+                else zero)}
+        yield {w_warehouse_name, w_warehouse_sq_ft, w_city, w_county,
+          w_state, w_country, ship_carriers = "DHL" ^ "," ^ "BARIAN", year,
+          jan_sales, feb_sales, mar_sales, apr_sales, may_sales, jun_sales,
+          jul_sales, aug_sales, sep_sales, oct_sales, nov_sales, dec_sales,
+          jan_net, feb_net, mar_net, apr_net, may_net, jun_net, jul_net,
+          aug_net, sep_net, oct_net, nov_net, dec_net})
+  in
+    from x in x
+      group {x.w_warehouse_name, x.w_warehouse_sq_ft, x.w_city, x.w_county,
+          x.w_state, x.w_country, x.ship_carriers, x.year}
+        compute {
+        jan_sales = sum over x.jan_sales,
+        feb_sales = sum over x.feb_sales,
+        mar_sales = sum over x.mar_sales,
+        apr_sales = sum over x.apr_sales,
+        may_sales = sum over x.may_sales,
+        jun_sales = sum over x.jun_sales,
+        jul_sales = sum over x.jul_sales,
+        aug_sales = sum over x.aug_sales,
+        sep_sales = sum over x.sep_sales,
+        oct_sales = sum over x.oct_sales,
+        nov_sales = sum over x.nov_sales,
+        dec_sales = sum over x.dec_sales,
+        jan_sales_per_sq_foot =
+          sum over
+            perFoot (x.jan_sales, x.w_warehouse_sq_ft),
+        feb_sales_per_sq_foot =
+          sum over
+            perFoot (x.feb_sales, x.w_warehouse_sq_ft),
+        mar_sales_per_sq_foot =
+          sum over
+            perFoot (x.mar_sales, x.w_warehouse_sq_ft),
+        apr_sales_per_sq_foot =
+          sum over
+            perFoot (x.apr_sales, x.w_warehouse_sq_ft),
+        may_sales_per_sq_foot =
+          sum over
+            perFoot (x.may_sales, x.w_warehouse_sq_ft),
+        jun_sales_per_sq_foot =
+          sum over
+            perFoot (x.jun_sales, x.w_warehouse_sq_ft),
+        jul_sales_per_sq_foot =
+          sum over
+            perFoot (x.jul_sales, x.w_warehouse_sq_ft),
+        aug_sales_per_sq_foot =
+          sum over
+            perFoot (x.aug_sales, x.w_warehouse_sq_ft),
+        sep_sales_per_sq_foot =
+          sum over
+            perFoot (x.sep_sales, x.w_warehouse_sq_ft),
+        oct_sales_per_sq_foot =
+          sum over
+            perFoot (x.oct_sales, x.w_warehouse_sq_ft),
+        nov_sales_per_sq_foot =
+          sum over
+            perFoot (x.nov_sales, x.w_warehouse_sq_ft),
+        dec_sales_per_sq_foot =
+          sum over
+            perFoot (x.dec_sales, x.w_warehouse_sq_ft),
+        jan_net = sum over x.jan_net,
+        feb_net = sum over x.feb_net,
+        mar_net = sum over x.mar_net,
+        apr_net = sum over x.apr_net,
+        may_net = sum over x.may_net,
+        jun_net = sum over x.jun_net,
+        jul_net = sum over x.jul_net,
+        aug_net = sum over x.aug_net,
+        sep_net = sum over x.sep_net,
+        oct_net = sum over x.oct_net,
+        nov_net = sum over x.nov_net,
+        dec_net = sum over x.dec_net}
+      order w_warehouse_name
+      take 100
+  end;
+> val q66 = fn
+>   : unit
+>      -> {apr_net:decimal option, apr_sales:decimal option,
+>           apr_sales_per_sq_foot:decimal option, aug_net:decimal option,
+>           aug_sales:decimal option, aug_sales_per_sq_foot:decimal option,
+>           dec_net:decimal option, dec_sales:decimal option,
+>           dec_sales_per_sq_foot:decimal option, feb_net:decimal option,
+>           feb_sales:decimal option, feb_sales_per_sq_foot:decimal option,
+>           jan_net:decimal option, jan_sales:decimal option,
+>           jan_sales_per_sq_foot:decimal option, jul_net:decimal option,
+>           jul_sales:decimal option, jul_sales_per_sq_foot:decimal option,
+>           jun_net:decimal option, jun_sales:decimal option,
+>           jun_sales_per_sq_foot:decimal option, mar_net:decimal option,
+>           mar_sales:decimal option, mar_sales_per_sq_foot:decimal option,
+>           may_net:decimal option, may_sales:decimal option,
+>           may_sales_per_sq_foot:decimal option, nov_net:decimal option,
+>           nov_sales:decimal option, nov_sales_per_sq_foot:decimal option,
+>           oct_net:decimal option, oct_sales:decimal option,
+>           oct_sales_per_sq_foot:decimal option, sep_net:decimal option,
+>           sep_sales:decimal option, sep_sales_per_sq_foot:decimal option,
+>           ship_carriers:string, w_city:string option, w_country:string option,
+>           w_county:string option, w_state:string option,
+>           w_warehouse_name:string option, w_warehouse_sq_ft:int option,
+>           year:int option} list
+val r66 = q66 ();
+> apr_net    apr_sales apr_sales_per_sq_foot                aug_net    aug_sales  aug_sales_per_sq_foot              dec_net     dec_sales  dec_sales_per_sq_foot              feb_net    feb_sales feb_sales_per_sq_foot                jan_net    jan_sales jan_sales_per_sq_foot                jul_net    jul_sales  jul_sales_per_sq_foot               jun_net    jun_sales  jun_sales_per_sq_foot               mar_net    mar_sales mar_sales_per_sq_foot                may_net    may_sales  may_sales_per_sq_foot               nov_net     nov_sales  nov_sales_per_sq_foot               oct_net     oct_sales  oct_sales_per_sq_foot               sep_net    sep_sales  sep_sales_per_sq_foot               ship_carriers w_city w_country     w_county          w_state w_warehouse_name    w_warehouse_sq_ft year
+> ---------- --------- ------------------------------------ ---------- ---------- ---------------------------------- ----------- ---------- ---------------------------------- ---------- --------- ------------------------------------ ---------- --------- ------------------------------------ ---------- ---------- ----------------------------------- ---------- ---------- ----------------------------------- ---------- --------- ------------------------------------ ---------- ---------- ----------------------------------- ----------- ---------- ----------------------------------- ----------- ---------- ----------------------------------- ---------- ---------- ----------------------------------- ------------- ------ ------------- ----------------- ------- ------------------- ----------------- ----
+> 4142886.32 333390.59 0.3409644329490983210044723441812992 9665997.01 2298210.15 2.35042003012926128083110125211319 19502364.49 2706805.34 2.76829753310281278028854955118037 8213766.03 766942.78 0.7843658997307184489055387318505973 7554063.29 661407.18 0.6764327813726302354193704763920977 5015953.55 1310866.26 1.340646030270396313307499486084392 4126236.48 2308974.68 2.361429104702762462581318835288258 7574329.97 307720.05 0.3147107192057165824458701128159814 3575413.31 1904937.34 1.948212995263794671027534626662044 23331407.18 5213564.64 5.332004454957981646309472308386182 13418884.62 2900278.47 2.966165913435134645889135363836909 10823343.9 1497771.61 1.531797426228820796349307159943832 DHL,BARIAN    Midway United States Williamson County TN      Conventional childr            977787 2001
+>
+> val r66 : {apr_net:decimal option, apr_sales:decimal option, apr_sales_per_sq_foot:decimal option, aug_net:decimal option, aug_sales:decimal option, aug_sales_per_sq_foot:decimal option, dec_net:decimal option, dec_sales:decimal option, dec_sales_per_sq_foot:decimal option, feb_net:decimal option, feb_sales:decimal option, feb_sales_per_sq_foot:decimal option, jan_net:decimal option, jan_sales:decimal option, jan_sales_per_sq_foot:decimal option, jul_net:decimal option, jul_sales:decimal option, jul_sales_per_sq_foot:decimal option, jun_net:decimal option, jun_sales:decimal option, jun_sales_per_sq_foot:decimal option, mar_net:decimal option, mar_sales:decimal option, mar_sales_per_sq_foot:decimal option, may_net:decimal option, may_sales:decimal option, may_sales_per_sq_foot:decimal option, nov_net:decimal option, nov_sales:decimal option, nov_sales_per_sq_foot:decimal option, oct_net:decimal option, oct_sales:decimal option, oct_sales_per_sq_foot:decimal option, sep_net:decimal option, sep_sales:decimal option, sep_sales_per_sq_foot:decimal option, ship_carriers:string, w_city:string option, w_country:string option, w_county:string option, w_state:string option, w_warehouse_name:string option, w_warehouse_sq_ft:int option, year:int option} list
 
 (* --- q68 -------------------------------------------------------- *)
 (*
@@ -3700,6 +4983,217 @@ val r74 = q74 ();
 >
 > val r74 : {customer_first_name:string option, customer_id:string, customer_last_name:string option} list
 
+(* --- q75 -------------------------------------------------------- *)
+(*
+WITH all_sales AS (
+  SELECT
+    d_year,
+    i_brand_id,
+    i_class_id,
+    i_category_id,
+    i_manufact_id,
+    SUM(sales_cnt) AS sales_cnt,
+    SUM(sales_amt) AS sales_amt
+  FROM (
+         SELECT
+           d_year,
+           i_brand_id,
+           i_class_id,
+           i_category_id,
+           i_manufact_id,
+           cs_quantity - COALESCE(cr_return_quantity, 0) AS sales_cnt,
+           cs_ext_sales_price - COALESCE(cr_return_amount, 0.0) AS sales_amt
+         FROM catalog_sales
+           JOIN item ON i_item_sk = cs_item_sk
+           JOIN date_dim ON d_date_sk = cs_sold_date_sk
+           LEFT JOIN catalog_returns ON (cs_order_number = cr_order_number
+             AND cs_item_sk = cr_item_sk)
+         WHERE i_category = 'Books'
+         UNION
+         SELECT
+           d_year,
+           i_brand_id,
+           i_class_id,
+           i_category_id,
+           i_manufact_id,
+           ss_quantity - COALESCE(sr_return_quantity, 0) AS sales_cnt,
+           ss_ext_sales_price - COALESCE(sr_return_amt, 0.0) AS sales_amt
+         FROM store_sales
+           JOIN item ON i_item_sk = ss_item_sk
+           JOIN date_dim ON d_date_sk = ss_sold_date_sk
+           LEFT JOIN store_returns ON (ss_ticket_number = sr_ticket_number
+             AND ss_item_sk = sr_item_sk)
+         WHERE i_category = 'Books'
+         UNION
+         SELECT
+           d_year,
+           i_brand_id,
+           i_class_id,
+           i_category_id,
+           i_manufact_id,
+           ws_quantity - COALESCE(wr_return_quantity, 0) AS sales_cnt,
+           ws_ext_sales_price - COALESCE(wr_return_amt, 0.0) AS sales_amt
+         FROM web_sales
+           JOIN item ON i_item_sk = ws_item_sk
+           JOIN date_dim ON d_date_sk = ws_sold_date_sk
+           LEFT JOIN web_returns ON (ws_order_number = wr_order_number
+             AND ws_item_sk = wr_item_sk)
+         WHERE i_category = 'Books') sales_detail
+  GROUP BY d_year, i_brand_id, i_class_id, i_category_id, i_manufact_id)
+SELECT
+  prev_yr.d_year AS prev_year,
+  curr_yr.d_year AS year,
+  curr_yr.i_brand_id,
+  curr_yr.i_class_id,
+  curr_yr.i_category_id,
+  curr_yr.i_manufact_id,
+  prev_yr.sales_cnt AS prev_yr_cnt,
+  curr_yr.sales_cnt AS curr_yr_cnt,
+  curr_yr.sales_cnt - prev_yr.sales_cnt AS sales_cnt_diff,
+  curr_yr.sales_amt - prev_yr.sales_amt AS sales_amt_diff
+FROM all_sales curr_yr, all_sales prev_yr
+WHERE curr_yr.i_brand_id = prev_yr.i_brand_id
+  AND curr_yr.i_class_id = prev_yr.i_class_id
+  AND curr_yr.i_category_id = prev_yr.i_category_id
+  AND curr_yr.i_manufact_id = prev_yr.i_manufact_id
+  AND curr_yr.d_year = 2002
+  AND prev_yr.d_year = 2002 - 1
+  AND CAST(curr_yr.sales_cnt AS DECIMAL(17, 2)) / CAST(prev_yr.sales_cnt AS DECIMAL(17, 2)) < 0.9
+ORDER BY sales_cnt_diff
+LIMIT 100
+*)
+fun q75 () =
+  let
+    val all_sales =
+      from sales_detail in (
+        from cs in tpcds.catalog_sales
+          join i in tpcds.item on i.i_item_sk = cs.cs_item_sk
+          join d in tpcds.date_dim
+            on cs.cs_sold_date_sk = SOME d.d_date_sk
+          left join cr in tpcds.catalog_returns
+            on cs.cs_order_number = cr.cr_order_number
+              andalso cs.cs_item_sk = cr.cr_item_sk
+          where i.i_category = SOME "Books"
+          yield {d.d_year, i.i_brand_id, i.i_class_id, i.i_category_id,
+            i.i_manufact_id,
+            sales_cnt =
+              Option.map
+                (fn q => q - getOpt (Option.`join` cr?.cr_return_quantity, 0))
+                cs.cs_quantity,
+            sales_amt =
+              Option.map
+                (fn p =>
+                  p - getOpt (Option.`join` cr?.cr_return_amount,
+                        Decimal.fromInt 0))
+                cs.cs_ext_sales_price}
+        union distinct
+          (from ss in tpcds.store_sales
+            join i in tpcds.item on i.i_item_sk = ss.ss_item_sk
+            join d in tpcds.date_dim
+              on ss.ss_sold_date_sk = SOME d.d_date_sk
+            left join sr in tpcds.store_returns
+              on ss.ss_ticket_number = sr.sr_ticket_number
+                andalso ss.ss_item_sk = sr.sr_item_sk
+            where i.i_category = SOME "Books"
+            yield {d.d_year, i.i_brand_id, i.i_class_id, i.i_category_id,
+              i.i_manufact_id,
+              sales_cnt =
+                Option.map
+                  (fn q => q - getOpt (Option.`join` sr?.sr_return_quantity, 0))
+                  ss.ss_quantity,
+              sales_amt =
+                Option.map
+                  (fn p =>
+                    p - getOpt (Option.`join` sr?.sr_return_amt,
+                          Decimal.fromInt 0))
+                  ss.ss_ext_sales_price}),
+          (from ws in tpcds.web_sales
+            join i in tpcds.item on i.i_item_sk = ws.ws_item_sk
+            join d in tpcds.date_dim
+              on ws.ws_sold_date_sk = SOME d.d_date_sk
+            left join wr in tpcds.web_returns
+              on ws.ws_order_number = wr.wr_order_number
+                andalso ws.ws_item_sk = wr.wr_item_sk
+            where i.i_category = SOME "Books"
+            yield {d.d_year, i.i_brand_id, i.i_class_id, i.i_category_id,
+              i.i_manufact_id,
+              sales_cnt =
+                Option.map
+                  (fn q => q - getOpt (Option.`join` wr?.wr_return_quantity, 0))
+                  ws.ws_quantity,
+              sales_amt =
+                Option.map
+                  (fn p =>
+                    p - getOpt (Option.`join` wr?.wr_return_amt,
+                          Decimal.fromInt 0))
+                  ws.ws_ext_sales_price}))
+        group {sales_detail.d_year, sales_detail.i_brand_id,
+            sales_detail.i_class_id, sales_detail.i_category_id,
+            sales_detail.i_manufact_id}
+          compute {sales_cnt = sum over sales_detail.sales_cnt,
+            sales_amt = sum over sales_detail.sales_amt}
+    (* "CAST(a AS DECIMAL(17, 2)) / CAST(b AS DECIMAL(17, 2)) < 0.9" *)
+    fun fell (a, b) =
+      case (a, b) of
+          (SOME a, SOME b) =>
+            Decimal.fromInt a / Decimal.fromInt b < decimal "0.9"
+        | _ => false
+    (* "a - b"; one for counts, one for amounts. *)
+    fun minus (a : int option, b) =
+      case (a, b) of
+          (SOME a, SOME b) => SOME (a - b)
+        | _ => NONE
+    fun minusAmt (a : decimal option, b) =
+      case (a, b) of
+          (SOME a, SOME b) => SOME (a - b)
+        | _ => NONE
+  in
+    from curr_yr in all_sales,
+        prev_yr in all_sales
+      where curr_yr.i_brand_id <> NONE
+        andalso curr_yr.i_brand_id = prev_yr.i_brand_id
+        andalso curr_yr.i_class_id <> NONE
+        andalso curr_yr.i_class_id = prev_yr.i_class_id
+        andalso curr_yr.i_category_id <> NONE
+        andalso curr_yr.i_category_id = prev_yr.i_category_id
+        andalso curr_yr.i_manufact_id <> NONE
+        andalso curr_yr.i_manufact_id = prev_yr.i_manufact_id
+        andalso curr_yr.d_year = SOME 2002
+        andalso prev_yr.d_year = SOME (2002 - 1)
+        andalso fell (curr_yr.sales_cnt, prev_yr.sales_cnt)
+      yield {prev_year = prev_yr.d_year, year = curr_yr.d_year,
+        curr_yr.i_brand_id, curr_yr.i_class_id, curr_yr.i_category_id,
+        curr_yr.i_manufact_id, prev_yr_cnt = prev_yr.sales_cnt,
+        curr_yr_cnt = curr_yr.sales_cnt,
+        sales_cnt_diff = minus (curr_yr.sales_cnt, prev_yr.sales_cnt),
+        sales_amt_diff = minusAmt (curr_yr.sales_amt, prev_yr.sales_amt)}
+      order sales_cnt_diff
+      take 100
+  end;
+> val q75 = fn
+>   : unit
+>      -> {curr_yr_cnt:int option, i_brand_id:int option,
+>           i_category_id:int option, i_class_id:int option,
+>           i_manufact_id:int option, prev_year:int option,
+>           prev_yr_cnt:int option, sales_amt_diff:decimal option,
+>           sales_cnt_diff:int option, year:int option} list
+val r75 = q75 ();
+> curr_yr_cnt i_brand_id i_category_id i_class_id i_manufact_id prev_year prev_yr_cnt sales_amt_diff sales_cnt_diff year
+> ----------- ---------- ------------- ---------- ------------- --------- ----------- -------------- -------------- ----
+>        1560    9008002             9          8            12      2001        2788      -91938.97          -1228 2002
+>        1873    4001001             9         15            42      2001        2998      -53106.14          -1125 2002
+>        1715    9015002             9         15           275      2001        2827      -68057.69          -1112 2002
+>        2018    9012008             9         12           474      2001        3054      -41320.66          -1036 2002
+>        1408    9010008             9         10           301      2001        2235      -17432.59           -827 2002
+>        1139    9010004             9          3           948      2001        1962         -64840           -823 2002
+>        1705    9007008             9          7           614      2001        2516      -69842.25           -811 2002
+>        1663   10003008             9          8           175      2001        2378      -43833.59           -715 2002
+>        1637    9009010             9          1           503      2001        2342      -31349.51           -705 2002
+>        1890    9010008             9         10           621      2001        2584       -52230.8           -694 2002
+> ...
+>
+> val r75 : {curr_yr_cnt:int option, i_brand_id:int option, i_category_id:int option, i_class_id:int option, i_manufact_id:int option, prev_year:int option, prev_yr_cnt:int option, sales_amt_diff:decimal option, sales_cnt_diff:int option, year:int option} list
+
 (* --- q76 -------------------------------------------------------- *)
 (*
 SELECT
@@ -3803,6 +5297,172 @@ val r76 = q76 ();
 > ...
 >
 > val r76 : {channel:string, col_name:int option, d_qoy:int option, d_year:int option, i_category:string option, sales_amt:decimal option, sales_cnt:int} list
+
+(* --- q78 -------------------------------------------------------- *)
+(*
+WITH ws AS
+(SELECT
+    d_year AS ws_sold_year,
+    ws_item_sk,
+    ws_bill_customer_sk ws_customer_sk,
+    sum(ws_quantity) ws_qty,
+    sum(ws_wholesale_cost) ws_wc,
+    sum(ws_sales_price) ws_sp
+  FROM web_sales
+    LEFT JOIN web_returns ON wr_order_number = ws_order_number AND ws_item_sk = wr_item_sk
+    JOIN date_dim ON ws_sold_date_sk = d_date_sk
+  WHERE wr_order_number IS NULL
+  GROUP BY d_year, ws_item_sk, ws_bill_customer_sk
+),
+    cs AS
+  (SELECT
+    d_year AS cs_sold_year,
+    cs_item_sk,
+    cs_bill_customer_sk cs_customer_sk,
+    sum(cs_quantity) cs_qty,
+    sum(cs_wholesale_cost) cs_wc,
+    sum(cs_sales_price) cs_sp
+  FROM catalog_sales
+    LEFT JOIN catalog_returns ON cr_order_number = cs_order_number AND cs_item_sk = cr_item_sk
+    JOIN date_dim ON cs_sold_date_sk = d_date_sk
+  WHERE cr_order_number IS NULL
+  GROUP BY d_year, cs_item_sk, cs_bill_customer_sk
+  ),
+    ss AS
+  (SELECT
+    d_year AS ss_sold_year,
+    ss_item_sk,
+    ss_customer_sk,
+    sum(ss_quantity) ss_qty,
+    sum(ss_wholesale_cost) ss_wc,
+    sum(ss_sales_price) ss_sp
+  FROM store_sales
+    LEFT JOIN store_returns ON sr_ticket_number = ss_ticket_number AND ss_item_sk = sr_item_sk
+    JOIN date_dim ON ss_sold_date_sk = d_date_sk
+  WHERE sr_ticket_number IS NULL
+  GROUP BY d_year, ss_item_sk, ss_customer_sk
+  )
+SELECT
+  round(ss_qty / (coalesce(ws_qty + cs_qty, 1)), 2) ratio,
+  ss_qty store_qty,
+  ss_wc store_wholesale_cost,
+  ss_sp store_sales_price,
+  coalesce(ws_qty, 0) + coalesce(cs_qty, 0) other_chan_qty,
+  coalesce(ws_wc, 0) + coalesce(cs_wc, 0) other_chan_wholesale_cost,
+  coalesce(ws_sp, 0) + coalesce(cs_sp, 0) other_chan_sales_price
+FROM ss
+  LEFT JOIN ws
+    ON (ws_sold_year = ss_sold_year AND ws_item_sk = ss_item_sk AND ws_customer_sk = ss_customer_sk)
+  LEFT JOIN cs
+    ON (cs_sold_year = ss_sold_year AND cs_item_sk = ss_item_sk AND cs_customer_sk = ss_customer_sk)
+WHERE coalesce(ws_qty, 0) > 0 AND coalesce(cs_qty, 0) > 0 AND ss_sold_year = 2000
+ORDER BY
+  ratio,
+  ss_qty DESC, ss_wc DESC, ss_sp DESC,
+  other_chan_qty,
+  other_chan_wholesale_cost,
+  other_chan_sales_price,
+  round(ss_qty / (coalesce(ws_qty + cs_qty, 1)), 2)
+LIMIT 100
+*)
+fun q78 () =
+  let
+    val ws =
+      from ws in tpcds.web_sales
+        left join wr in tpcds.web_returns
+          on wr.wr_order_number = ws.ws_order_number
+            andalso ws.ws_item_sk = wr.wr_item_sk
+        join d in tpcds.date_dim on ws.ws_sold_date_sk = SOME d.d_date_sk
+        where not (Option.isSome wr)
+        group {ws_sold_year = d.d_year, ws_item_sk = ws.ws_item_sk,
+            ws_customer_sk = ws.ws_bill_customer_sk}
+          compute {ws_qty = sum over ws.ws_quantity,
+            ws_wc = sum over ws.ws_wholesale_cost,
+            ws_sp = sum over ws.ws_sales_price}
+    val cs =
+      from cs in tpcds.catalog_sales
+        left join cr in tpcds.catalog_returns
+          on cr.cr_order_number = cs.cs_order_number
+            andalso cs.cs_item_sk = cr.cr_item_sk
+        join d in tpcds.date_dim on cs.cs_sold_date_sk = SOME d.d_date_sk
+        where not (Option.isSome cr)
+        group {cs_sold_year = d.d_year, cs_item_sk = cs.cs_item_sk,
+            cs_customer_sk = cs.cs_bill_customer_sk}
+          compute {cs_qty = sum over cs.cs_quantity,
+            cs_wc = sum over cs.cs_wholesale_cost,
+            cs_sp = sum over cs.cs_sales_price}
+    val ss =
+      from ss in tpcds.store_sales
+        left join sr in tpcds.store_returns
+          on sr.sr_ticket_number = ss.ss_ticket_number
+            andalso ss.ss_item_sk = sr.sr_item_sk
+        join d in tpcds.date_dim on ss.ss_sold_date_sk = SOME d.d_date_sk
+        where not (Option.isSome sr)
+        group {ss_sold_year = d.d_year, ss_item_sk = ss.ss_item_sk,
+            ss_customer_sk = ss.ss_customer_sk}
+          compute {ss_qty = sum over ss.ss_quantity,
+            ss_wc = sum over ss.ss_wholesale_cost,
+            ss_sp = sum over ss.ss_sales_price}
+    (* "coalesce(a, 0) + coalesce(b, 0)" *)
+    fun plus (a, b) = getOpt (a, 0) + getOpt (b, 0)
+    fun plusAmt (a, b) =
+      getOpt (a, Decimal.fromInt 0) + getOpt (b, Decimal.fromInt 0)
+    (* "round(ss_qty / coalesce(ws_qty + cs_qty, 1), 2)" *)
+    fun ratio (ss_qty, ws_qty, cs_qty) =
+      let
+        val other =
+          case (ws_qty, cs_qty) of
+              (SOME w, SOME c) => w + c
+            | _ => 1
+      in
+        Option.map
+          (fn q => Real.realRound (Real.fromInt q / Real.fromInt other * 100.0)
+            / 100.0)
+          ss_qty
+      end
+  in
+    from ss in ss
+      left join ws in ws
+        on ss.ss_customer_sk <> NONE
+          andalso ws.ws_sold_year = ss.ss_sold_year
+          andalso ws.ws_item_sk = ss.ss_item_sk
+          andalso ws.ws_customer_sk = ss.ss_customer_sk
+      left join cs in cs
+        on ss.ss_customer_sk <> NONE
+          andalso cs.cs_sold_year = ss.ss_sold_year
+          andalso cs.cs_item_sk = ss.ss_item_sk
+          andalso cs.cs_customer_sk = ss.ss_customer_sk
+      yield {ss,
+        ws_qty = Option.`join` ws?.ws_qty,
+        ws_wc = Option.`join` ws?.ws_wc,
+        ws_sp = Option.`join` ws?.ws_sp,
+        cs_qty = Option.`join` cs?.cs_qty,
+        cs_wc = Option.`join` cs?.cs_wc,
+        cs_sp = Option.`join` cs?.cs_sp}
+      where getOpt (ws_qty, 0) > 0
+        andalso getOpt (cs_qty, 0) > 0
+        andalso ss.ss_sold_year = SOME 2000
+      yield {ratio = ratio (ss.ss_qty, ws_qty, cs_qty), store_qty = ss.ss_qty,
+        store_wholesale_cost = ss.ss_wc, store_sales_price = ss.ss_sp,
+        other_chan_qty = plus (ws_qty, cs_qty),
+        other_chan_wholesale_cost = plusAmt (ws_wc, cs_wc),
+        other_chan_sales_price = plusAmt (ws_sp, cs_sp)}
+      order (ratio, DESC store_qty, DESC store_wholesale_cost,
+        DESC store_sales_price, other_chan_qty, other_chan_wholesale_cost,
+        other_chan_sales_price)
+      take 100
+  end;
+> val q78 = fn
+>   : unit
+>      -> {other_chan_qty:int, other_chan_sales_price:decimal,
+>           other_chan_wholesale_cost:decimal, ratio:real option,
+>           store_qty:int option, store_sales_price:decimal option,
+>           store_wholesale_cost:decimal option} list
+val r78 = q78 ();
+> other_chan_qty other_chan_sales_price other_chan_wholesale_cost ratio store_qty store_sales_price store_wholesale_cost
+> -------------- ---------------------- ------------------------- ----- --------- ----------------- --------------------
+>
+> val r78 : {other_chan_qty:int, other_chan_sales_price:decimal, other_chan_wholesale_cost:decimal, ratio:real option, store_qty:int option, store_sales_price:decimal option, store_wholesale_cost:decimal option} list
 
 (* --- q79 -------------------------------------------------------- *)
 (*
@@ -4135,6 +5795,181 @@ fun q87 () =
 > val q87 = fn : unit -> int
 val r87 = q87 ();
 > val r87 = 1994 : int
+
+(* --- q88 -------------------------------------------------------- *)
+(*
+SELECT *
+FROM
+  (SELECT count(*) h8_30_to_9
+  FROM store_sales, household_demographics, time_dim, store
+  WHERE ss_sold_time_sk = time_dim.t_time_sk
+    AND ss_hdemo_sk = household_demographics.hd_demo_sk
+    AND ss_store_sk = s_store_sk
+    AND time_dim.t_hour = 8
+    AND time_dim.t_minute >= 30
+    AND (
+    (household_demographics.hd_dep_count = 4 AND household_demographics.hd_vehicle_count <= 4 + 2)
+      OR
+      (household_demographics.hd_dep_count = 2 AND household_demographics.hd_vehicle_count <= 2 + 2)
+      OR
+      (household_demographics.hd_dep_count = 0 AND
+        household_demographics.hd_vehicle_count <= 0 + 2))
+    AND store.s_store_name = 'ese') s1,
+  (SELECT count(*) h9_to_9_30
+  FROM store_sales, household_demographics, time_dim, store
+  WHERE ss_sold_time_sk = time_dim.t_time_sk
+    AND ss_hdemo_sk = household_demographics.hd_demo_sk
+    AND ss_store_sk = s_store_sk
+    AND time_dim.t_hour = 9
+    AND time_dim.t_minute < 30
+    AND (
+    (household_demographics.hd_dep_count = 4 AND household_demographics.hd_vehicle_count <= 4 + 2)
+      OR
+      (household_demographics.hd_dep_count = 2 AND household_demographics.hd_vehicle_count <= 2 + 2)
+      OR
+      (household_demographics.hd_dep_count = 0 AND
+        household_demographics.hd_vehicle_count <= 0 + 2))
+    AND store.s_store_name = 'ese') s2,
+  (SELECT count(*) h9_30_to_10
+  FROM store_sales, household_demographics, time_dim, store
+  WHERE ss_sold_time_sk = time_dim.t_time_sk
+    AND ss_hdemo_sk = household_demographics.hd_demo_sk
+    AND ss_store_sk = s_store_sk
+    AND time_dim.t_hour = 9
+    AND time_dim.t_minute >= 30
+    AND (
+    (household_demographics.hd_dep_count = 4 AND household_demographics.hd_vehicle_count <= 4 + 2)
+      OR
+      (household_demographics.hd_dep_count = 2 AND household_demographics.hd_vehicle_count <= 2 + 2)
+      OR
+      (household_demographics.hd_dep_count = 0 AND
+        household_demographics.hd_vehicle_count <= 0 + 2))
+    AND store.s_store_name = 'ese') s3,
+  (SELECT count(*) h10_to_10_30
+  FROM store_sales, household_demographics, time_dim, store
+  WHERE ss_sold_time_sk = time_dim.t_time_sk
+    AND ss_hdemo_sk = household_demographics.hd_demo_sk
+    AND ss_store_sk = s_store_sk
+    AND time_dim.t_hour = 10
+    AND time_dim.t_minute < 30
+    AND (
+    (household_demographics.hd_dep_count = 4 AND household_demographics.hd_vehicle_count <= 4 + 2)
+      OR
+      (household_demographics.hd_dep_count = 2 AND household_demographics.hd_vehicle_count <= 2 + 2)
+      OR
+      (household_demographics.hd_dep_count = 0 AND
+        household_demographics.hd_vehicle_count <= 0 + 2))
+    AND store.s_store_name = 'ese') s4,
+  (SELECT count(*) h10_30_to_11
+  FROM store_sales, household_demographics, time_dim, store
+  WHERE ss_sold_time_sk = time_dim.t_time_sk
+    AND ss_hdemo_sk = household_demographics.hd_demo_sk
+    AND ss_store_sk = s_store_sk
+    AND time_dim.t_hour = 10
+    AND time_dim.t_minute >= 30
+    AND (
+    (household_demographics.hd_dep_count = 4 AND household_demographics.hd_vehicle_count <= 4 + 2)
+      OR
+      (household_demographics.hd_dep_count = 2 AND household_demographics.hd_vehicle_count <= 2 + 2)
+      OR
+      (household_demographics.hd_dep_count = 0 AND
+        household_demographics.hd_vehicle_count <= 0 + 2))
+    AND store.s_store_name = 'ese') s5,
+  (SELECT count(*) h11_to_11_30
+  FROM store_sales, household_demographics, time_dim, store
+  WHERE ss_sold_time_sk = time_dim.t_time_sk
+    AND ss_hdemo_sk = household_demographics.hd_demo_sk
+    AND ss_store_sk = s_store_sk
+    AND time_dim.t_hour = 11
+    AND time_dim.t_minute < 30
+    AND (
+    (household_demographics.hd_dep_count = 4 AND household_demographics.hd_vehicle_count <= 4 + 2)
+      OR
+      (household_demographics.hd_dep_count = 2 AND household_demographics.hd_vehicle_count <= 2 + 2)
+      OR
+      (household_demographics.hd_dep_count = 0 AND
+        household_demographics.hd_vehicle_count <= 0 + 2))
+    AND store.s_store_name = 'ese') s6,
+  (SELECT count(*) h11_30_to_12
+  FROM store_sales, household_demographics, time_dim, store
+  WHERE ss_sold_time_sk = time_dim.t_time_sk
+    AND ss_hdemo_sk = household_demographics.hd_demo_sk
+    AND ss_store_sk = s_store_sk
+    AND time_dim.t_hour = 11
+    AND time_dim.t_minute >= 30
+    AND (
+    (household_demographics.hd_dep_count = 4 AND household_demographics.hd_vehicle_count <= 4 + 2)
+      OR
+      (household_demographics.hd_dep_count = 2 AND household_demographics.hd_vehicle_count <= 2 + 2)
+      OR
+      (household_demographics.hd_dep_count = 0 AND
+        household_demographics.hd_vehicle_count <= 0 + 2))
+    AND store.s_store_name = 'ese') s7,
+  (SELECT count(*) h12_to_12_30
+  FROM store_sales, household_demographics, time_dim, store
+  WHERE ss_sold_time_sk = time_dim.t_time_sk
+    AND ss_hdemo_sk = household_demographics.hd_demo_sk
+    AND ss_store_sk = s_store_sk
+    AND time_dim.t_hour = 12
+    AND time_dim.t_minute < 30
+    AND (
+    (household_demographics.hd_dep_count = 4 AND household_demographics.hd_vehicle_count <= 4 + 2)
+      OR
+      (household_demographics.hd_dep_count = 2 AND household_demographics.hd_vehicle_count <= 2 + 2)
+      OR
+      (household_demographics.hd_dep_count = 0 AND
+        household_demographics.hd_vehicle_count <= 0 + 2))
+    AND store.s_store_name = 'ese') s8
+*)
+fun q88 () =
+  let
+    (* The number of sales in the half hour that starts at "hour", or
+     * at half past it if not "early". *)
+    fun sales (hour, early) =
+      from ss in tpcds.store_sales,
+          hd in tpcds.household_demographics,
+          t in tpcds.time_dim,
+          s in tpcds.store
+        where ss.ss_sold_time_sk = SOME t.t_time_sk
+          andalso ss.ss_hdemo_sk = SOME hd.hd_demo_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso t.t_hour = SOME hour
+          andalso (if early
+            then t.t_minute <> NONE andalso t.t_minute < SOME 30
+            else t.t_minute >= SOME 30)
+          andalso (hd.hd_dep_count = SOME 4
+              andalso hd.hd_vehicle_count <> NONE
+              andalso hd.hd_vehicle_count <= SOME (4 + 2)
+            orelse hd.hd_dep_count = SOME 2
+              andalso hd.hd_vehicle_count <> NONE
+              andalso hd.hd_vehicle_count <= SOME (2 + 2)
+            orelse hd.hd_dep_count = SOME 0
+              andalso hd.hd_vehicle_count <> NONE
+              andalso hd.hd_vehicle_count <= SOME (0 + 2))
+          andalso s.s_store_name = SOME "ese"
+        compute count over ()
+  in
+    [{
+      h8_30_to_9 = sales (8, false),
+      h9_to_9_30 = sales (9, true),
+      h9_30_to_10 = sales (9, false),
+      h10_to_10_30 = sales (10, true),
+      h10_30_to_11 = sales (10, false),
+      h11_to_11_30 = sales (11, true),
+      h11_30_to_12 = sales (11, false),
+      h12_to_12_30 = sales (12, true)}]
+  end;
+> val q88 = fn
+>   : unit
+>      -> {h10_30_to_11:int, h10_to_10_30:int, h11_30_to_12:int,
+>           h11_to_11_30:int, h12_to_12_30:int, h8_30_to_9:int, h9_30_to_10:int,
+>           h9_to_9_30:int} list
+val r88 = q88 ();
+> h10_30_to_11 h10_to_10_30 h11_30_to_12 h11_to_11_30 h12_to_12_30 h8_30_to_9 h9_30_to_10 h9_to_9_30
+> ------------ ------------ ------------ ------------ ------------ ---------- ----------- ----------
+>            0            0            0            0            0          0           0          0
+>
+> val r88 : {h10_30_to_11:int, h10_to_10_30:int, h11_30_to_12:int, h11_to_11_30:int, h12_to_12_30:int, h8_30_to_9:int, h9_30_to_10:int, h9_to_9_30:int} list
 
 (* --- q90 -------------------------------------------------------- *)
 (*
