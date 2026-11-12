@@ -773,12 +773,18 @@ public enum CoreBuilder {
     checkCollection(left);
     checkCollection(right);
     checkBoolType(condition, "join condition");
-    final boolean ordered = isOrdered(left) && isOrdered(right);
-    final Type type =
-        collectionType(
-            typeSystem,
-            ordered,
-            joinElementType(typeSystem, joinType, left, right));
+    final Type type;
+    if (joinType.filtersLeft()) {
+      // A semi- or anti-join keeps some of the left elements, in their order.
+      type = left.type;
+    } else {
+      final boolean ordered = isOrdered(left) && isOrdered(right);
+      type =
+          collectionType(
+              typeSystem,
+              ordered,
+              joinElementType(typeSystem, joinType, left, right));
+    }
     return new Core.Join(
         pos, type, joinType, leftId, rightId, ordinalId, left, right,
         condition);
@@ -847,6 +853,10 @@ public enum CoreBuilder {
       case SKIP:
       case TAKE:
         return ((Core.SingleRel) node).input;
+      case JOIN:
+        // A semi- or anti-join is a filter of its left input.
+        final Core.Join join = (Core.Join) node;
+        return join.joinType.filtersLeft() ? join.left : null;
       default:
         return null;
     }
@@ -1541,6 +1551,27 @@ public enum CoreBuilder {
   public Core.Exp only(TypeSystem typeSystem, Pos pos, Core.Exp a0) {
     return call(
         typeSystem, BuiltIn.RELATIONAL_ONLY, a0.type.elementType(), pos, a0);
+  }
+
+  /**
+   * Returns a semi-join or anti-join as the filter it was made from: {@code
+   * filter(left, nonEmpty(filter(right, condition)))}, with {@code not} for an
+   * anti-join. The inner filter reads the left element, so it is a correlated
+   * query; that is what a translator that has {@code EXISTS} wants.
+   */
+  public Core.Filter existsFilter(TypeSystem typeSystem, Core.Join join) {
+    checkArgument(join.joinType.filtersLeft(), "not a semi- or anti-join");
+    final Core.Exp query =
+        join.condition.isBoolLiteral(true)
+            ? join.right
+            : filter(join.rightId, null, join.right, join.condition);
+    final Core.Exp exists = nonEmpty(typeSystem, join.pos(), query);
+    return filter(
+        join.pos(),
+        join.leftId,
+        null,
+        join.left,
+        join.joinType == JoinType.ANTI ? not(typeSystem, exists) : exists);
   }
 
   public Core.Exp nonEmpty(TypeSystem typeSystem, Pos pos, Core.Exp a0) {

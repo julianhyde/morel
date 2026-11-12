@@ -125,6 +125,296 @@ public class RelRules {
       };
 
   /**
+   * Converts a conjunct {@code exists q} of a {@code filter} into a semi-join
+   * of the filter's input with {@code q}, and {@code not (exists q)} into an
+   * anti-join, when {@code q} reads the row only in equalities: {@code from c
+   * in customers where (exists s in sales where s.cust = c.id)} becomes a
+   * semi-join of {@code customers} with {@code sales} on {@code s.cust = c.id},
+   * which evaluates {@code sales} once rather than once per customer, and can
+   * be a hash join.
+   *
+   * <p>The equalities may be in any filter of {@code q} that is under only
+   * filters and inner joins; each comes out of its filter and into the join's
+   * condition, re-expressed over {@code q}'s element. If {@code q} reads the
+   * row anywhere else, the conjunct stays. The other conjuncts go into a filter
+   * below the join, so that they can move into the joins below it; a filter
+   * that reads its ordinal is not changed.
+   */
+  public static final RelRule FILTER_EXISTS_INTO_JOIN =
+      new RelRule() {
+        @Override
+        public String name() {
+          return "FilterExistsIntoJoin";
+        }
+
+        @Override
+        public Core.@Nullable Exp apply(RelRule.Context cx, Core.Rel rel) {
+          if (!(rel instanceof Core.Filter)) {
+            return null;
+          }
+          final Core.Filter filter = (Core.Filter) rel;
+          if (filter.ordinalId != null) {
+            return null;
+          }
+          final TypeSystem typeSystem = cx.typeSystem();
+          final List<Core.Exp> conjuncts = conjuncts(filter.condition);
+          for (int i = 0; i < conjuncts.size(); i++) {
+            final Core.Exp conjunct = conjuncts.get(i);
+            // The names by which the query may read the row: the filter's id,
+            // and the name the resolver gave it in a "let", if any.
+            final Set<Core.NamedPat> rowNames = new HashSet<>();
+            rowNames.add(filter.id);
+            Core.Exp e = conjunct;
+            if (e instanceof Core.Let
+                && ((Core.Let) e).decl instanceof Core.NonRecValDecl) {
+              final Core.NonRecValDecl decl =
+                  (Core.NonRecValDecl) ((Core.Let) e).decl;
+              if (decl.exp instanceof Core.Id
+                  && ((Core.Id) decl.exp).idPat.equals(filter.id)) {
+                rowNames.add(decl.pat);
+                e = ((Core.Let) e).exp;
+              }
+            }
+            boolean anti = false;
+            if (e.isCallTo(BuiltIn.BOOL_NOT)) {
+              anti = true;
+              e = ((Core.Apply) e).arg;
+            }
+            if (e.isCallTo(BuiltIn.RELATIONAL_EMPTY)) {
+              anti = !anti;
+            } else if (!e.isCallTo(BuiltIn.RELATIONAL_NON_EMPTY)) {
+              continue;
+            }
+            // Whether the query has a row does not depend on what its
+            // elements are, or their order; so a projection or a sort on top
+            // of it, such as the record of a query with several scans, can go.
+            Core.Exp q = ((Core.Apply) e).arg;
+            while ((q instanceof Core.Project || q instanceof Core.Sort)
+                && ((Core.RowRel) q).ordinalId == null) {
+              q = ((Core.RowRel) q).input;
+            }
+            final Decorrelated d =
+                decorrelate(typeSystem, q, rowNames, ImmutableSet.of());
+            if (d == null || d.conditions.isEmpty()) {
+              continue;
+            }
+            final List<Core.Exp> others = new ArrayList<>(conjuncts);
+            others.remove(i);
+            final Core.Exp left =
+                others.isEmpty()
+                    ? filter.input
+                    : core.filter(
+                        filter.pos(),
+                        filter.id,
+                        null,
+                        filter.input,
+                        core.andAlso(typeSystem, others));
+            final Core.IdPat leftId =
+                core.idPat(
+                    filter.id.type,
+                    filter.id.name,
+                    typeSystem.nameGenerator::inc);
+            final Core.IdPat rightId =
+                core.idPat(
+                    d.rel.type.elementType(),
+                    d.name,
+                    typeSystem.nameGenerator::inc);
+            final List<Core.Exp> conditions = new ArrayList<>();
+            for (Function<Core.Exp, Core.Exp> condition : d.conditions) {
+              Core.Exp c = condition.apply(core.id(rightId));
+              for (Core.NamedPat rowName : rowNames) {
+                c = core.substitute(typeSystem, c, rowName, core.id(leftId));
+              }
+              conditions.add(c);
+            }
+            return core.join(
+                filter.pos(),
+                typeSystem,
+                anti ? JoinType.ANTI : JoinType.SEMI,
+                leftId,
+                rightId,
+                null,
+                left,
+                d.rel,
+                core.andAlso(typeSystem, conditions));
+          }
+          return null;
+        }
+      };
+
+  /**
+   * A query from which the equalities that read the outer row have been taken:
+   * the query without them, and each equality as a function of an expression
+   * for the query's element.
+   */
+  private static class Decorrelated {
+    final Core.Exp rel;
+    final List<Function<Core.Exp, Core.Exp>> conditions;
+    /**
+     * A name for the query's element, after the id of the node it came from.
+     */
+    final String name;
+
+    Decorrelated(
+        Core.Exp rel,
+        List<Function<Core.Exp, Core.Exp>> conditions,
+        String name) {
+      this.rel = rel;
+      this.conditions = conditions;
+      this.name = name;
+    }
+  }
+
+  /**
+   * Takes from a query the equalities that read the outer row, under any of
+   * {@code rowNames}; returns null if the query reads it in any other way.
+   * {@code locals} are the patterns that the query binds above this node, which
+   * the outer side of an equality must not read.
+   */
+  private static @Nullable Decorrelated decorrelate(
+      TypeSystem typeSystem,
+      Core.Exp node,
+      Set<Core.NamedPat> rowNames,
+      Set<Core.NamedPat> locals) {
+    if (rowNames.stream().noneMatch(p -> Core.mentions(node, p))) {
+      return new Decorrelated(node, ImmutableList.of(), name(node));
+    }
+    if (node instanceof Core.Filter) {
+      final Core.Filter filter = (Core.Filter) node;
+      if (filter.ordinalId != null) {
+        return null;
+      }
+      final Set<Core.NamedPat> locals2 =
+          ImmutableSet.<Core.NamedPat>builder()
+              .addAll(locals)
+              .add(filter.id)
+              .build();
+      final Decorrelated input =
+          decorrelate(typeSystem, filter.input, rowNames, locals2);
+      if (input == null) {
+        return null;
+      }
+      final List<Function<Core.Exp, Core.Exp>> conditions =
+          new ArrayList<>(input.conditions);
+      final List<Core.Exp> remaining = new ArrayList<>();
+      for (Core.Exp conjunct : core.decomposeAnd(filter.condition)) {
+        if (rowNames.stream().noneMatch(p -> Core.mentions(conjunct, p))) {
+          remaining.add(conjunct);
+          continue;
+        }
+        if (!conjunct.isCallTo(BuiltIn.OP_EQ)
+            || !isOuterKey(conjunct.arg(0), rowNames, locals2)
+                && !isOuterKey(conjunct.arg(1), rowNames, locals2)) {
+          return null;
+        }
+        // The equality, given an expression for the element; the filter's
+        // element is its input's.
+        conditions.add(
+            element ->
+                core.substitute(typeSystem, conjunct, filter.id, element));
+      }
+      final Core.Exp rel =
+          remaining.isEmpty()
+              ? input.rel
+              : core.filter(
+                  filter.pos(),
+                  filter.id,
+                  null,
+                  input.rel,
+                  core.andAlso(typeSystem, remaining));
+      return new Decorrelated(rel, conditions, filter.id.name);
+    }
+    if (node instanceof Core.Join) {
+      final Core.Join join = (Core.Join) node;
+      if (join.joinType != JoinType.INNER
+          || join.ordinalId != null
+          || rowNames.stream()
+              .anyMatch(p -> Core.mentions(join.condition, p))) {
+        return null;
+      }
+      final Decorrelated left =
+          decorrelate(typeSystem, join.left, rowNames, locals);
+      final Decorrelated right =
+          decorrelate(
+              typeSystem,
+              join.right,
+              rowNames,
+              ImmutableSet.<Core.NamedPat>builder()
+                  .addAll(locals)
+                  .add(join.leftId)
+                  .build());
+      if (left == null || right == null) {
+        return null;
+      }
+      final Core.Join join2 =
+          join.copy(
+              typeSystem, join.joinType, left.rel, right.rel, join.condition);
+      final int leftCount = core.componentCount(join2.left);
+      final int rightCount = core.componentCount(join2.right);
+      final List<Function<Core.Exp, Core.Exp>> conditions = new ArrayList<>();
+      // An input's element, from the join's element: the input's components.
+      left.conditions.forEach(
+          c ->
+              conditions.add(
+                  element ->
+                      c.apply(
+                          slice(typeSystem, join2, element, 0, leftCount))));
+      right.conditions.forEach(
+          c ->
+              conditions.add(
+                  element ->
+                      c.apply(
+                          slice(
+                              typeSystem,
+                              join2,
+                              element,
+                              leftCount,
+                              leftCount + rightCount))));
+      return new Decorrelated(join2, conditions, left.name);
+    }
+    return null;
+  }
+
+  /**
+   * Returns whether one side of an equality is a key over the outer row: it
+   * reads the row, and none of the query's own patterns.
+   */
+  private static boolean isOuterKey(
+      Core.Exp exp, Set<Core.NamedPat> rowNames, Set<Core.NamedPat> locals) {
+    return rowNames.stream().anyMatch(p -> Core.mentions(exp, p))
+        && locals.stream().noneMatch(p -> Core.mentions(exp, p));
+  }
+
+  /**
+   * Returns the expression for the element of an input of a join, given an
+   * expression for the join's element: its components {@code start} to {@code
+   * end}, as a tuple if there are several.
+   */
+  private static Core.Exp slice(
+      TypeSystem typeSystem,
+      Core.Join join,
+      Core.Exp element,
+      int start,
+      int end) {
+    final List<Core.Exp> components =
+        core.components(typeSystem, join, element).subList(start, end);
+    return components.size() == 1
+        ? components.get(0)
+        : core.tuple(typeSystem, null, components);
+  }
+
+  /** Returns a name for the element of a query, after its id, if it has one. */
+  private static String name(Core.Exp node) {
+    if (node instanceof Core.RowRel) {
+      return ((Core.RowRel) node).id.name;
+    }
+    if (node instanceof Core.Join) {
+      return name(((Core.Join) node).left);
+    }
+    return "e";
+  }
+
+  /**
    * Moves the conjuncts of a {@code filter} over a {@code join} into the join,
    * as far down as each can go: into the left input, if it reads only the left
    * element; into the right input, if it reads only the right element and the
@@ -173,6 +463,33 @@ public class RelRules {
             return null;
           }
           final TypeSystem typeSystem = cx.typeSystem();
+          if (join.joinType.filtersLeft()) {
+            // A semi- or anti-join's element is its left element, so a safe
+            // conjunct can filter the left input instead.
+            final List<Core.Exp> toLeft = new ArrayList<>();
+            final List<Core.Exp> remaining = new ArrayList<>();
+            for (Core.Exp conjunct : conjuncts(filter.condition)) {
+              (conjunct.isSafe() ? toLeft : remaining).add(conjunct);
+            }
+            if (toLeft.isEmpty()) {
+              return null;
+            }
+            final Core.Join join2 =
+                join.copy(
+                    typeSystem,
+                    join.joinType,
+                    filterOver(typeSystem, join.left, filter.id, toLeft),
+                    join.right,
+                    join.condition);
+            return remaining.isEmpty()
+                ? join2
+                : core.filter(
+                    filter.pos(),
+                    filter.id,
+                    null,
+                    join2,
+                    core.andAlso(typeSystem, remaining));
+          }
           // The element, over the join's own ids. The components of a side
           // that an outer join pads with NONE are options, which the ids are
           // not, so they are placeholders; a conjunct that reads one stays.
@@ -484,6 +801,7 @@ public class RelRules {
           GROUND,
           FILTER_TRUE,
           FILTER_MERGE,
+          FILTER_EXISTS_INTO_JOIN,
           FILTER_INTO_JOIN,
           PROJECT_IDENTITY,
           PROJECT_MERGE,

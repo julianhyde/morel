@@ -1213,9 +1213,10 @@ Sys.plan();
 >       LogicalProject(deptno=[$0], $f1=[true])
 >         LogicalAggregate(group=[{0}])
 >           LogicalProject(deptno=[$1])
->             LogicalFilter(condition=[AND(=($5, 'CLERK'), IS NOT NULL($1))])
+>             LogicalFilter(condition=[IS NOT NULL($1)])
 >               LogicalProject(comm=[$6], deptno=[$7], empno=[$0], ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])
->                 JdbcTableScan(table=[[scott, EMP]])
+>                 LogicalFilter(condition=[=($2, 'CLERK')])
+>                   JdbcTableScan(table=[[scott, EMP]])
 > ))|_} : string
 
 (*) Functional programming <=> relational programming

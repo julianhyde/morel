@@ -141,6 +141,11 @@ public class SparkTranslator {
    * which is the order the text prints them.
    */
   private Relation rel(Core.Exp exp) {
+    if (exp instanceof Core.Join && ((Core.Join) exp).joinType.filtersLeft()) {
+      // A semi- or anti-join goes to Spark as the filter with "exists" that
+      // it came from.
+      return rel(core.existsFilter(typeSystem, (Core.Join) exp));
+    }
     if (!(exp instanceof Core.Rel)) {
       // The query is the collection itself -- `from e in emps`, with no step
       // but the scan -- so the plan is the read, and there is nothing above it

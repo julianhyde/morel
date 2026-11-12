@@ -151,6 +151,38 @@ public abstract class RowSinks {
       Code leftKeyCode,
       Code rightKeyCode,
       RowSink rowSink) {
+    return hashScan(
+        op,
+        pat,
+        varCount,
+        code,
+        conditionCode,
+        leftKeyCode,
+        rightKeyCode,
+        true,
+        ifNone(op),
+        Emit.NOTHING,
+        rowSink);
+  }
+
+  /**
+   * As {@link #hashScan(Op, Core.Pat, int, Code, Code, Code, Code, RowSink)},
+   * but with the choices of what to pass on that {@link #scan(Op, Core.Pat,
+   * int, boolean, Code, Code, int[], boolean, Emit, Emit, RowSink)} has; so it
+   * can be a hash semi-join or anti-join.
+   */
+  public static RowSink hashScan(
+      Op op,
+      Core.Pat pat,
+      int varCount,
+      Code code,
+      Code conditionCode,
+      Code leftKeyCode,
+      Code rightKeyCode,
+      boolean emitMatches,
+      Emit ifNone,
+      Emit ifSome,
+      RowSink rowSink) {
     return new HashScanRowSink(
         op,
         pat,
@@ -159,6 +191,9 @@ public abstract class RowSinks {
         conditionCode,
         leftKeyCode,
         rightKeyCode,
+        emitMatches,
+        ifNone,
+        ifSome,
         rowSink);
   }
 
@@ -176,6 +211,43 @@ public abstract class RowSinks {
       Code conditionCode,
       int @Nullable [] ordinalSlots,
       RowSink rowSink) {
+    return scan(
+        op,
+        pat,
+        varCount,
+        dependent,
+        code,
+        conditionCode,
+        ordinalSlots,
+        true,
+        ifNone(op),
+        Emit.NOTHING,
+        rowSink);
+  }
+
+  /**
+   * As {@link #scan(Op, Core.Pat, int, boolean, Code, Code, int[], RowSink)},
+   * but says what to pass on for each input row: each pair that matches, if
+   * {@code emitMatches}; and, once the elements are scanned, {@code ifNone} if
+   * no element matched and {@code ifSome} if one did.
+   *
+   * <p>An inner join is {@code (true, NOTHING, NOTHING)}; a {@code left join}
+   * {@code (true, PADDED_ROW, NOTHING)}; a semi-join {@code (false, NOTHING,
+   * ROW)}; an anti-join {@code (false, ROW, NOTHING)}. A scan that passes on no
+   * match stops at the first, because it knows the answer.
+   */
+  public static RowSink scan(
+      Op op,
+      Core.Pat pat,
+      int varCount,
+      boolean dependent,
+      Code code,
+      Code conditionCode,
+      int @Nullable [] ordinalSlots,
+      boolean emitMatches,
+      Emit ifNone,
+      Emit ifSome,
+      RowSink rowSink) {
     return new ScanRowSink(
         op,
         pat,
@@ -184,7 +256,28 @@ public abstract class RowSinks {
         code,
         conditionCode,
         ordinalSlots,
+        emitMatches,
+        ifNone,
+        ifSome,
         rowSink);
+  }
+
+  /** What an inner join or {@code left join} passes on for an unmatched row. */
+  private static Emit ifNone(Op op) {
+    return op == Op.LEFT_JOIN ? Emit.PADDED_ROW : Emit.NOTHING;
+  }
+
+  /**
+   * What a scan passes on for an input row, beyond the pairs that match, once
+   * it has scanned the elements.
+   */
+  public enum Emit {
+    /** Nothing. */
+    NOTHING,
+    /** The input row, as it is. */
+    ROW,
+    /** The input row, with {@code NONE} for each scanned variable. */
+    PADDED_ROW
   }
 
   /**
@@ -322,7 +415,12 @@ public abstract class RowSinks {
     }
   }
 
-  /** Implementation of {@link RowSink} for a {@code join} step. */
+  /**
+   * Implementation of {@link RowSink} for a {@code join} step: a scan, inner
+   * join, {@code left join}, semi-join or anti-join, evaluated as a nested
+   * loop. What it passes on for each input row is set by {@link #emitMatches},
+   * {@link #ifNone} and {@link #ifSome}.
+   */
   private static class ScanRowSink extends BaseRowSink {
     final Op op; // inner (SCAN) or left
     final Core.Pat pat;
@@ -345,6 +443,17 @@ public abstract class RowSinks {
      */
     final int @Nullable [] ordinalSlots;
 
+    /** Whether to pass on each pair that matches. */
+    final boolean emitMatches;
+
+    /** What to pass on for an input row that no element matches. */
+    final Emit ifNone;
+
+    /**
+     * What to pass on, besides the pairs, for a row that an element matches.
+     */
+    final Emit ifSome;
+
     /**
      * The elements, if the collection is independent; set in {@link #start}.
      */
@@ -358,6 +467,9 @@ public abstract class RowSinks {
         Code code,
         Code conditionCode,
         int @Nullable [] ordinalSlots,
+        boolean emitMatches,
+        Emit ifNone,
+        Emit ifSome,
         RowSink rowSink) {
       super(rowSink);
       checkArgument(
@@ -372,6 +484,9 @@ public abstract class RowSinks {
       this.code = code;
       this.conditionCode = conditionCode;
       this.ordinalSlots = ordinalSlots;
+      this.emitMatches = emitMatches;
+      this.ifNone = requireNonNull(ifNone);
+      this.ifSome = requireNonNull(ifSome);
     }
 
     @Override
@@ -399,10 +514,23 @@ public abstract class RowSinks {
           : ImmutableList.copyOf(iterable);
     }
 
+    /**
+     * Returns the name of this scan in a plan: "join", or "semiJoin" or
+     * "antiJoin" if it passes on rows rather than pairs; with a prefix, such as
+     * "hash", as "hashJoin".
+     */
+    String name(String prefix) {
+      final String name =
+          emitMatches ? "join" : ifSome == Emit.ROW ? "semiJoin" : "antiJoin";
+      return prefix.isEmpty()
+          ? name
+          : prefix + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
+
     @Override
     public Describer describe(Describer describer) {
       return describer.start(
-          "join",
+          name(""),
           d ->
               d.arg("pat", pat.describe(describer))
                   .arg("exp", code)
@@ -444,6 +572,11 @@ public abstract class RowSinks {
         // Push scan variable bindings onto the stack.
         if (Closure.StackClosure.pushBindings(pat, element, s)) {
           if ((Boolean) conditionCode.eval(s)) {
+            matched = true;
+            if (!emitMatches) {
+              // A semi- or anti-join: one match decides.
+              break;
+            }
             if (optionalRight) {
               // 'left join': the newly scanned fields are optional downstream,
               // so wrap them in 'SOME'. (The 'on' condition above saw the raw,
@@ -452,27 +585,34 @@ public abstract class RowSinks {
                 s.slots[k] = Codes.optionSome(s.slots[k]);
               }
             }
-            matched = true;
             rowSink.accept(s);
           }
         }
       }
       s.restore(savedTop);
-      if (optionalRight && !matched) {
-        // 'left join' with no matching right row: emit the input ('left') row
-        // with 'NONE' for the newly scanned fields.
-        for (int k = 0; k < varCount; k++) {
-          s.push(Codes.OPTION_NONE);
-        }
-        rowSink.accept(s);
-        s.restore(savedTop);
+      switch (matched ? ifSome : ifNone) {
+        case ROW:
+          // A semi-join's row that matched, or an anti-join's that did not.
+          rowSink.accept(s);
+          break;
+        case PADDED_ROW:
+          // 'left join' with no matching right row: emit the input ('left')
+          // row with 'NONE' for the newly scanned fields.
+          for (int k = 0; k < varCount; k++) {
+            s.push(Codes.OPTION_NONE);
+          }
+          rowSink.accept(s);
+          s.restore(savedTop);
+          break;
+        default:
+          break;
       }
     }
   }
 
   /**
-   * Implementation of {@link RowSink} for an inner {@code join} or {@code left
-   * join} step that is evaluated as a hash join.
+   * Implementation of {@link RowSink} for an inner {@code join}, {@code left
+   * join}, semi-join or anti-join step that is evaluated as a hash join.
    *
    * <p>The collection is evaluated once, in {@link #start}, and each element is
    * put in a bucket by its key. Each input row evaluates its key, and is
@@ -497,8 +637,22 @@ public abstract class RowSinks {
         Code conditionCode,
         Code leftKeyCode,
         Code rightKeyCode,
+        boolean emitMatches,
+        Emit ifNone,
+        Emit ifSome,
         RowSink rowSink) {
-      super(op, pat, varCount, false, code, conditionCode, null, rowSink);
+      super(
+          op,
+          pat,
+          varCount,
+          false,
+          code,
+          conditionCode,
+          null,
+          emitMatches,
+          ifNone,
+          ifSome,
+          rowSink);
       this.leftKeyCode = requireNonNull(leftKeyCode);
       this.rightKeyCode = requireNonNull(rightKeyCode);
     }
@@ -532,7 +686,7 @@ public abstract class RowSinks {
     @Override
     public Describer describe(Describer describer) {
       return describer.start(
-          "hashJoin",
+          name("hash"),
           d ->
               d.arg("pat", pat.describe(describer))
                   .arg("exp", code)

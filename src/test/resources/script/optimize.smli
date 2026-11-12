@@ -1111,8 +1111,8 @@ Sys.planEx "-1";
 
 (* A conjunct that refers to the row from inside a query, here an
  * "exists", makes the resolver name the row, in a "let" around the
- * whole condition. The other conjuncts still move; the "exists" stays,
- * in its "let". *)
+ * whole condition. The other conjuncts still move; the "exists"
+ * becomes a semi-join (see below). *)
 from x in xs, y in ys
   where x.b = y.c andalso (exists z in zs where z.e = y.d)
   yield {x.a, y.d};
@@ -1122,16 +1122,95 @@ Sys.planEx "-1";
 >   {_|
 > val it =
 >   project r [{a = #a (#1 r), d = #d (#2 r)}] : {a:int, d:int} list
->     filter r [let val v$0 = r in #nonEmpty Relational (r$0[v$0]) end] : t$0
+>     join r z [semi] [#e z = #d (#2 r)] : t$0
 >       join x y [#b x = #c y] : t$0
 >         xs : {a:int, b:int} list
 >         ys : {c:int, d:int} list
->
-> r$0[v$0] =
->   filter z [#e z = #d (#2 v$0)] : {e:int, f:string} list
->     zs : {e:int, f:string} list
+>       zs : {e:int, f:string} list
 >
 > t$0 ({a:int, b:int} * {c:int, d:int}) list
 > |_} : string
+
+(* --- Exists as a semi-join -------------------------------------- *)
+
+(* An "exists" whose query reads the row only in equalities becomes a
+ * semi-join: the query is evaluated once, not once per row, and the
+ * join hashes it. Each row that has a match is kept once, however
+ * many it has, in its order. Here "ys" has two elements with "c = 2",
+ * and "xs" keeps each of its elements with "b = 2" once. *)
+from x in xs where (exists y in ys where y.c = x.b) yield x.a;
+> val it = [1,2,3] : int list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink hashSemiJoin(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), leftKey apply(fnValue nth:1, argCode stack(offset 1, name x)), rightKey apply(fnValue nth:0, argCode stack(offset 1, name y)), condition apply2(fnValue =, apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 2, name x))), sink collect(apply(fnValue nth:0, argCode stack(offset 1, name x))))))"
+>   : string
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project x [#a x] : int list
+>     join x y [semi] [#c y = #b x] : {a:int, b:int} list
+>       xs : {a:int, b:int} list
+>       ys : {c:int, d:int} list
+> |_} : string
+
+(* "not (exists ...)" becomes an anti-join. A conjunct of the query
+ * that does not read the row stays in the query. *)
+from x in xs
+  where not (exists y in ys where y.c = x.b andalso y.d > 5)
+  yield x.a;
+> val it = [4] : int list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([[1, 2], [2, 3], [3, 2], [4, 9]]), sink hashAntiJoin(pat y, exp from(sink join(pat y, exp constant([[2, 5], [3, 6], [2, 7], [8, 8]]), sink where(condition apply2(fnValue >, apply(fnValue nth:1, argCode stack(offset 1, name y)), constant(5)), sink collect(stack(offset 1, name y))))), leftKey apply(fnValue nth:1, argCode stack(offset 1, name x)), rightKey apply(fnValue nth:0, argCode stack(offset 1, name y)), condition apply2(fnValue =, apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 2, name x))), sink collect(apply(fnValue nth:0, argCode stack(offset 1, name x))))))"
+>   : string
+
+(* The equality may be in a filter under a join in the query; it comes
+ * out to the semi-join's condition. *)
+from x in xs
+  where (exists y in ys, z in zs where y.d = z.e andalso y.c = x.b)
+  yield x.a;
+> val it = [1,3] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project x [#a x] : int list
+>     join x y [semi] [#c (#1 y) = #b x] : {a:int, b:int} list
+>       xs : {a:int, b:int} list
+>       join y z [#d y = #e z] : t$0
+>         ys : {c:int, d:int} list
+>         zs : {e:int, f:string} list
+>
+> t$0 ({c:int, d:int} * {e:int, f:string}) list
+> |_} : string
+
+(* An "exists" whose query reads the row other than in an equality is
+ * left as it is, and evaluated for each row. *)
+from x in xs where (exists y in ys where y.c > x.b) yield x.a;
+> val it = [1,2,3] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project x [#a x] : int list
+>     filter x [let
+>           val v$0 = x
+>         in
+>           #nonEmpty Relational (r$0[v$0])
+>         end] : {a:int, b:int} list
+>       xs : {a:int, b:int} list
+>
+> r$0[v$0] =
+>   filter y [#c y > #b v$0] : {c:int, d:int} list
+>     ys : {c:int, d:int} list
+> |_} : string
+
+(* So is one whose query reads the row above a "group". *)
+from x in xs
+  where (exists g in (from y in ys group y.c compute {n = count over ()})
+    where g.c = x.b andalso g.n > 1)
+  yield x.a;
+> val it = [1,3] : int list
 
 (*) End optimize.smli

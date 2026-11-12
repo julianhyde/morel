@@ -868,6 +868,11 @@ public class CalciteCompiler extends Compiler {
 
   private @Nullable TreeOut join(
       RelContext cx, Core.Join join, Core.IdPat target) {
+    if (join.joinType.filtersLeft()) {
+      // A semi- or anti-join is translated as the filter with "exists" that it
+      // came from, which Calcite decorrelates in its own way.
+      return tree(cx, core.existsFilter(typeSystem, join), target);
+    }
     if (join.joinType != JoinType.INNER || join.ordinalId != null) {
       return null;
     }

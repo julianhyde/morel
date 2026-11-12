@@ -643,11 +643,11 @@ public class AlgebraTest {
             + "    LogicalProject(deptno=[$0], $f1=[true])\n"
             + "      LogicalAggregate(group=[{0}])\n"
             + "        LogicalProject(deptno=[$1])\n"
-            + "          LogicalFilter(condition=[AND(=($5, 'CLERK'), "
-            + "IS NOT NULL($1))])\n"
+            + "          LogicalFilter(condition=[IS NOT NULL($1)])\n"
             + "            LogicalProject(comm=[$6], deptno=[$7], empno=[$0], "
             + "ename=[$1], hiredate=[$4], job=[$2], mgr=[$3], sal=[$5])\n"
-            + "              JdbcTableScan(table=[[scott, EMP]])\n"
+            + "              LogicalFilter(condition=[=($2, 'CLERK')])\n"
+            + "                JdbcTableScan(table=[[scott, EMP]])\n"
             + ")";
     final UnaryOperator<Ml> fn =
         ml ->
