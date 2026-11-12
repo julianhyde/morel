@@ -41,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Pos;
@@ -338,16 +339,17 @@ public class Shell {
 
   /**
    * Returns whether we can ignore a line. We can ignore a line if it consists
-   * only of comments, spaces, and optionally semicolon, and if we are not on a
-   * continuation line.
+   * only of comments, spaces, and optionally semicolon, if it does not end
+   * inside a block comment (which the next line continues), and if we are not
+   * on a continuation line.
    */
-  private static boolean canIgnoreLine(StringBuilder buf, String line) {
+  static boolean canIgnoreLine(StringBuilder buf, String line) {
+    if (buf.length() > 0 || MorelHighlighter.endsInComment(line)) {
+      return false;
+    }
     final String trimmedLine =
-        line.replaceAll("\\(\\*.*\\*\\)", "")
-            .replaceAll("\\(\\*\\) .*$", "")
-            .trim();
-    return buf.length() == 0
-        && (trimmedLine.isEmpty() || trimmedLine.equals(";"));
+        MorelHighlighter.DEFAULT.blankComments(line).trim();
+    return trimmedLine.isEmpty() || trimmedLine.equals(";");
   }
 
   /**
@@ -380,6 +382,9 @@ public class Shell {
       return;
     }
 
+    // The text of the statement so far, before the line being read; the
+    // parser needs it to know whether the line starts inside a comment.
+    final AtomicReference<CharSequence> before = new AtomicReference<>("");
     final Parser parser =
         new DefaultParser() {
           {
@@ -405,11 +410,22 @@ public class Shell {
           @Override
           public ParsedLine parse(
               String line, int cursor, ParseContext context) {
-            // Remove from "(*)" to end of line, if present
-            if (line.matches(".*\\(\\*\\).*")) {
-              line = line.replaceAll("\\(\\*\\).*$", "");
-            }
-            return super.parse(line, cursor, context);
+            // Blank out comments, so that a quote inside one does not open a
+            // literal. The comments are kept in the line that the shell
+            // evaluates; this parse only decides whether the line is complete,
+            // and what its first word is. A comment may have begun on an
+            // earlier line of the statement, so blank the whole statement,
+            // and parse the part of it that is this line.
+            final String prefix = String.valueOf(before.get());
+            final String text =
+                prefix.isEmpty() || prefix.endsWith("\n")
+                    ? prefix + line
+                    : prefix + "\n" + line;
+            final String blanked = MorelHighlighter.DEFAULT.blankComments(text);
+            return super.parse(
+                blanked.substring(blanked.length() - line.length()),
+                cursor,
+                context);
           }
 
           /**
@@ -490,7 +506,7 @@ public class Shell {
     Environment env =
         Environments.env(typeSystem, session, valueMap(config, typeSystem));
     final LineFn lineFn =
-        new TerminalLineFn(minusPrompt, equalsPrompt, lineReader);
+        new TerminalLineFn(minusPrompt, equalsPrompt, lineReader, before);
     final SubShell subShell =
         new SubShell(
             1,
@@ -1210,16 +1226,23 @@ public class Shell {
     private final String minusPrompt;
     private final String equalsPrompt;
     private final LineReader lineReader;
+    /** Where the parser reads the statement so far. */
+    private final AtomicReference<CharSequence> before;
 
     TerminalLineFn(
-        String minusPrompt, String equalsPrompt, LineReader lineReader) {
+        String minusPrompt,
+        String equalsPrompt,
+        LineReader lineReader,
+        AtomicReference<CharSequence> before) {
       this.minusPrompt = minusPrompt;
       this.equalsPrompt = equalsPrompt;
       this.lineReader = lineReader;
+      this.before = before;
     }
 
     @Override
     public Pair<LineType, String> read(StringBuilder buf) {
+      before.set(buf);
       final String line;
       try {
         final String prompt = buf.length() == 0 ? minusPrompt : equalsPrompt;
@@ -1255,7 +1278,7 @@ public class Shell {
       if ("help".equals(pl.word()) || "?".equals(pl.word())) {
         return Pair.of(LineType.HELP, "");
       }
-      return Pair.of(LineType.REGULAR, pl.line());
+      return Pair.of(LineType.REGULAR, line);
     }
   }
 }

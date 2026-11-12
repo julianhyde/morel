@@ -766,38 +766,81 @@ public class MorelHighlighter {
   }
 
   /**
-   * Scans a comment starting at {@code start} and returns the end index. A
-   * {@code (*)} begins a line comment, which runs to the end of the line; any
-   * other {@code (*} begins a block comment, which may nest and runs to the
-   * matching {@code *)} (or the end of input).
+   * Scans a comment starting at {@code start} and returns the end index, or
+   * {@code n} if it is a block comment that does not end. See {@link
+   * #commentEnd}.
    */
   private static int scanComment(String s, int start, int n) {
-    // "(*)" is a line comment: it runs to the end of the line.
-    if (start + 2 < n && s.charAt(start + 2) == ')') {
-      int i = start + 3;
-      while (i < n && s.charAt(i) != '\n') {
-        i++;
-      }
-      return i;
+    final int end = commentEnd(s, start, n);
+    return end < 0 ? n : end;
+  }
+
+  /**
+   * Returns the end of the comment that starts at {@code start}, or -1 if it is
+   * a block comment that does not end; the rules are the lexer's.
+   *
+   * <p>A {@code (*)} begins a line comment, which runs to the end of the line
+   * (the line ending is not part of it). Any other {@code (*} begins a block
+   * comment, which runs to the matching {@code *)}. Block comments nest, and a
+   * {@code (*)} inside one begins a line comment too, so a {@code *)} later on
+   * that line does not end the block: in {@code (* count(*) *)} the block is
+   * still open at the end of the line.
+   */
+  public static int commentEnd(String s, int start, int n) {
+    if (s.startsWith("(*)", start)) {
+      return lineEnd(s, start + 3, n);
     }
-    // Otherwise "(*" is a block comment, which may nest.
     int depth = 0;
     int i = start;
     while (i < n) {
-      if (s.charAt(i) == '(' && i + 1 < n && s.charAt(i + 1) == '*') {
+      if (s.startsWith("(*)", i) && depth > 0) {
+        i = lineEnd(s, i + 3, n);
+      } else if (s.startsWith("(*", i)) {
         depth++;
         i += 2;
-      } else if (s.charAt(i) == '*' && i + 1 < n && s.charAt(i + 1) == ')') {
+      } else if (s.startsWith("*)", i)) {
         depth--;
         i += 2;
         if (depth == 0) {
-          break;
+          return i;
         }
       } else {
         i++;
       }
     }
+    return -1;
+  }
+
+  /** Returns the position of the next line ending at or after {@code i}. */
+  private static int lineEnd(String s, int i, int n) {
+    while (i < n && s.charAt(i) != '\n' && s.charAt(i) != '\r') {
+      i++;
+    }
     return i;
+  }
+
+  /**
+   * Returns whether code ends inside a block comment that has not ended, so
+   * that the next line continues the comment.
+   */
+  public static boolean endsInComment(String s) {
+    final int n = s.length();
+    int i = 0;
+    while (i < n) {
+      final char c = s.charAt(i);
+      if (c == '(' && i + 1 < n && s.charAt(i + 1) == '*') {
+        final int end = commentEnd(s, i, n);
+        if (end < 0) {
+          return true;
+        }
+        i = end;
+      } else if (c == '"') {
+        i = scanString(s, i, n);
+      } else {
+        i++;
+      }
+    }
+    return false;
   }
 
   /** Scans a string literal {@code "..."} and returns end index. */
