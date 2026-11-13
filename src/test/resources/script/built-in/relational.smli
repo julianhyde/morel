@@ -29,7 +29,10 @@ Relational;
 > val it =
 >   {avg=fn,avgOpt=fn,avgSome=fn,compare=fn,count=fn,countSome=fn,empty=fn,
 >    iterate=fn,max=fn,maxBy=fn,maxOpt=fn,maxSome=fn,min=fn,minBy=fn,minOpt=fn,
->    minSome=fn,nonEmpty=fn,only=fn,somes=fn,sum=fn,sumOpt=fn,sumSome=fn}
+>    minSome=fn,nonEmpty=fn,only=fn,somes=fn,stddevPop=fn,stddevPopOpt=fn,
+>    stddevPopSome=fn,stddevSamp=fn,stddevSampOpt=fn,stddevSampSome=fn,sum=fn,
+>    sumOpt=fn,sumSome=fn,varPop=fn,varPopOpt=fn,varPopSome=fn,varSamp=fn,
+>    varSampOpt=fn,varSampSome=fn}
 >   : {avg:int bag -> real, avgOpt:int bag -> real option,
 >       avgSome:int option bag -> real option, compare:'a * 'a -> order,
 >       count:'b bag -> int, countSome:'c option bag -> int,
@@ -40,8 +43,16 @@ Relational;
 >       min:'k bag -> 'k, minBy:('l -> 'm) -> 'l bag -> 'l,
 >       minOpt:'n bag -> 'n option, minSome:'o option bag -> 'o option,
 >       nonEmpty:'p bag -> bool, only:'q bag -> 'q,
->       somes:'r option bag -> 'r bag, sum:'s bag -> 's,
->       sumOpt:'t bag -> 't option, sumSome:'u option bag -> 'u option}
+>       somes:'r option bag -> 'r bag, stddevPop:int bag -> real,
+>       stddevPopOpt:int bag -> real option,
+>       stddevPopSome:int option bag -> real option,
+>       stddevSamp:int bag -> real, stddevSampOpt:int bag -> real option,
+>       stddevSampSome:int option bag -> real option, sum:'s bag -> 's,
+>       sumOpt:'t bag -> 't option, sumSome:'u option bag -> 'u option,
+>       varPop:int bag -> real, varPopOpt:int bag -> real option,
+>       varPopSome:int option bag -> real option, varSamp:int bag -> real,
+>       varSampOpt:int bag -> real option,
+>       varSampSome:int option bag -> real option}
 
 (* Descending:
  *   datatype descending = DESC of 'a
@@ -294,6 +305,62 @@ somes ([] : int option list);
 > val it = [] : int bag
 somes [SOME NONE, NONE, SOME (SOME 2)];
 > val it = [NONE,SOME 2] : int option bag
+
+(* "stddevSamp" and "varSamp" are the sample standard deviation and
+ * variance, dividing by one less than the number of elements;
+ * "stddevPop" and "varPop" divide by the number of elements. The
+ * elements may be int, real or decimal; the result is a real. *)
+Relational.stddevSamp [2, 4, 4, 4, 5, 5, 7, 9];
+> val it = 2.13809 : real
+Relational.stddevPop [2, 4, 4, 4, 5, 5, 7, 9];
+> val it = 2 : real
+Relational.varSamp [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0];
+> val it = 4.571429 : real
+Relational.varPop (bag [decimal "1.5", decimal "2.5"]);
+> val it = 0.25 : real
+[1, 2, 3, 4].stddevSamp ();
+> val it = 1.2909944 : real
+from i in [1, 2, 3, 4] compute {s = stddevSamp over i, v = varPop over i};
+> val it = {s=1.2909944,v=1.25} : {s:real, v:real}
+(*) A sample statistic needs two elements; a population statistic, one.
+stddevPop [7];
+> val it = 0 : real
+stddevSamp [7];
+> uncaught exception Empty
+>   raised at: stdIn:1.1-1.15
+varPop ([] : real list);
+> uncaught exception Empty
+>   raised at: stdIn:1.1-1.24
+Relational.varSamp ["a", "b"];
+> stdIn:1.1-1.30 Error: Cannot deduce type: no valid overloads
+>   raised at: stdIn:1.1-1.30
+(* The "Opt" forms return NONE where the plain forms raise Empty, and
+ * otherwise SOME of the result. *)
+stddevSampOpt [7];
+> val it = NONE : real option
+stddevPopOpt [7];
+> val it = SOME 0 : real option
+varSampOpt [1, 2, 3, 4];
+> val it = SOME 1.6666666 : real option
+varPopOpt ([] : decimal list);
+> val it = NONE : real option
+(* The "Some" forms are SQL's STDDEV_SAMP, STDDEV_POP, VAR_SAMP and
+ * VAR_POP: they ignore NONE, and return NONE if there are too few SOMEs. *)
+stddevSampSome [SOME 1, NONE, SOME 3];
+> val it = SOME 1.4142135 : real option
+stddevSampSome [SOME 1, NONE];
+> val it = NONE : real option
+stddevPopSome [SOME 1, NONE];
+> val it = SOME 0 : real option
+varSampSome (bag [SOME 1.5, SOME 2.5, NONE]);
+> val it = SOME 0.5 : real option
+varPopSome ([NONE] : int option list);
+> val it = NONE : real option
+from i in [SOME 1, NONE, SOME 3] compute stddevSampSome over i;
+> val it = SOME 1.4142135 : real option
+(*) "stddevSampSome" is "stddevSampOpt" of "somes".
+stddevSampOpt (somes [SOME 1, NONE, SOME 3]);
+> val it = SOME 1.4142135 : real option
 
 (* "maxOpt" and "minOpt" are "max" and "min", but NONE on an empty
  * collection rather than raising Empty. *)

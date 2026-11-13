@@ -4592,6 +4592,77 @@ public enum BuiltIn {
               1, h -> ts.fnType(ts.collectionType(h.option(0)), h.bag(0)))),
 
   /**
+   * Function "Relational.stddevPop", aka "stddevPop", of type "int collection
+   * &rarr; real" (overloaded: the elements may be int, real or decimal).
+   *
+   * <p>Returns the population standard deviation of the elements. Raises {@code
+   * Empty} if the collection is empty.
+   */
+  RELATIONAL_STDDEV_POP(
+      "Relational", "stddevPop", true, ts -> deviationType(ts, false, false)),
+
+  /**
+   * Function "Relational.stddevPopOpt", aka "stddevPopOpt", of type "int
+   * collection &rarr; real option" (overloaded as {@code stddevPop} is).
+   *
+   * <p>Returns {@code SOME} of the population standard deviation of the
+   * elements, as {@code stddevPop} does, or {@code NONE} if the collection is
+   * empty.
+   */
+  RELATIONAL_STDDEV_POP_OPT(
+      "Relational", "stddevPopOpt", true, ts -> deviationType(ts, true, false)),
+
+  /**
+   * Function "Relational.stddevPopSome", aka "stddevPopSome", of type "int
+   * option collection &rarr; real option" (overloaded as {@code stddevPop} is).
+   *
+   * <p>Returns {@code SOME} of the population standard deviation of the values
+   * of the {@code SOME} elements, ignoring {@code NONE}, or {@code NONE} if
+   * there are none; SQL's {@code STDDEV_POP}.
+   */
+  RELATIONAL_STDDEV_POP_SOME(
+      "Relational", "stddevPopSome", true, ts -> deviationType(ts, true, true)),
+
+  /**
+   * Function "Relational.stddevSamp", aka "stddevSamp", of type "int collection
+   * &rarr; real" (overloaded: the elements may be int, real or decimal).
+   *
+   * <p>Returns the sample standard deviation of the elements. Raises {@code
+   * Empty} if the collection has fewer than two elements.
+   */
+  RELATIONAL_STDDEV_SAMP(
+      "Relational", "stddevSamp", true, ts -> deviationType(ts, false, false)),
+
+  /**
+   * Function "Relational.stddevSampOpt", aka "stddevSampOpt", of type "int
+   * collection &rarr; real option" (overloaded as {@code stddevSamp} is).
+   *
+   * <p>Returns {@code SOME} of the sample standard deviation of the elements,
+   * as {@code stddevSamp} does, or {@code NONE} if the collection has fewer
+   * than two elements.
+   */
+  RELATIONAL_STDDEV_SAMP_OPT(
+      "Relational",
+      "stddevSampOpt",
+      true,
+      ts -> deviationType(ts, true, false)),
+
+  /**
+   * Function "Relational.stddevSampSome", aka "stddevSampSome", of type "int
+   * option collection &rarr; real option" (overloaded as {@code stddevSamp}
+   * is).
+   *
+   * <p>Returns {@code SOME} of the sample standard deviation of the values of
+   * the {@code SOME} elements, ignoring {@code NONE}, or {@code NONE} if there
+   * are fewer than two; SQL's {@code STDDEV_SAMP}.
+   */
+  RELATIONAL_STDDEV_SAMP_SOME(
+      "Relational",
+      "stddevSampSome",
+      true,
+      ts -> deviationType(ts, true, true)),
+
+  /**
    * Function "Relational.sum", aka "sum", of type "&alpha; collection &rarr;
    * &alpha;" (where &alpha; must be numeric); the collection is a list or a
    * bag, whichever the argument is.
@@ -4640,6 +4711,69 @@ public enum BuiltIn {
       ts ->
           ts.forallType(
               1, h -> ts.fnType(ts.collectionType(h.option(0)), h.option(0)))),
+
+  /**
+   * Function "Relational.varPop", aka "varPop", of type "int collection &rarr;
+   * real" (overloaded: the elements may be int, real or decimal).
+   *
+   * <p>Returns the population variance of the elements. Raises {@code Empty} if
+   * the collection is empty.
+   */
+  RELATIONAL_VAR_POP(
+      "Relational", "varPop", true, ts -> deviationType(ts, false, false)),
+
+  /**
+   * Function "Relational.varPopOpt", aka "varPopOpt", of type "int collection
+   * &rarr; real option" (overloaded as {@code varPop} is).
+   *
+   * <p>Returns {@code SOME} of the population variance of the elements, as
+   * {@code varPop} does, or {@code NONE} if the collection is empty.
+   */
+  RELATIONAL_VAR_POP_OPT(
+      "Relational", "varPopOpt", true, ts -> deviationType(ts, true, false)),
+
+  /**
+   * Function "Relational.varPopSome", aka "varPopSome", of type "int option
+   * collection &rarr; real option" (overloaded as {@code varPop} is).
+   *
+   * <p>Returns {@code SOME} of the population variance of the values of the
+   * {@code SOME} elements, ignoring {@code NONE}, or {@code NONE} if there are
+   * none; SQL's {@code VAR_POP}.
+   */
+  RELATIONAL_VAR_POP_SOME(
+      "Relational", "varPopSome", true, ts -> deviationType(ts, true, true)),
+
+  /**
+   * Function "Relational.varSamp", aka "varSamp", of type "int collection
+   * &rarr; real" (overloaded: the elements may be int, real or decimal).
+   *
+   * <p>Returns the sample variance of the elements. Raises {@code Empty} if the
+   * collection has fewer than two elements.
+   */
+  RELATIONAL_VAR_SAMP(
+      "Relational", "varSamp", true, ts -> deviationType(ts, false, false)),
+
+  /**
+   * Function "Relational.varSampOpt", aka "varSampOpt", of type "int collection
+   * &rarr; real option" (overloaded as {@code varSamp} is).
+   *
+   * <p>Returns {@code SOME} of the sample variance of the elements, as {@code
+   * varSamp} does, or {@code NONE} if the collection has fewer than two
+   * elements.
+   */
+  RELATIONAL_VAR_SAMP_OPT(
+      "Relational", "varSampOpt", true, ts -> deviationType(ts, true, false)),
+
+  /**
+   * Function "Relational.varSampSome", aka "varSampSome", of type "int option
+   * collection &rarr; real option" (overloaded as {@code varSamp} is).
+   *
+   * <p>Returns {@code SOME} of the sample variance of the values of the {@code
+   * SOME} elements, ignoring {@code NONE}, or {@code NONE} if there are fewer
+   * than two; SQL's {@code VAR_SAMP}.
+   */
+  RELATIONAL_VAR_SAMP_SOME(
+      "Relational", "varSampSome", true, ts -> deviationType(ts, true, true)),
 
   /**
    * Function "Spark.catalog", of type "connection &rarr; {...}".
@@ -6316,6 +6450,25 @@ public enum BuiltIn {
     return ts.multi(types);
   }
 
+  /**
+   * Returns the type of "stddevPop", "stddevSamp", "varPop" and "varSamp" and
+   * their "Opt" and "Some" forms: the elements are {@code int}, {@code real} or
+   * {@code decimal} (options, if {@code some}), and the result is a {@code
+   * real} (an option, if {@code opt}). One variant for each element type and
+   * each kind of collection, as in {@link #avgType}.
+   */
+  private static Type deviationType(TypeSystem ts, boolean opt, boolean some) {
+    final Type decimal = ts.lookup(Eqtype.DECIMAL);
+    final Type result = opt ? ts.option(REAL) : REAL;
+    final List<Type> types = new ArrayList<>();
+    for (Type t : new Type[] {INT, REAL, decimal}) {
+      final Type element = some ? ts.option(t) : t;
+      types.add(ts.fnType(ts.bag(element), result));
+      types.add(ts.fnType(ts.listType(element), result));
+    }
+    return ts.multi(types);
+  }
+
   /** Returns the type "{...}", a progressive record with no known fields. */
   private static Type progressiveUnit(TypeSystem ts) {
     return ts.progressiveRecordType(
@@ -6453,9 +6606,21 @@ public enum BuiltIn {
     consumer.accept("nonEmpty", RELATIONAL_NON_EMPTY);
     consumer.accept("only", RELATIONAL_ONLY);
     consumer.accept("somes", RELATIONAL_SOMES);
+    consumer.accept("stddevPop", RELATIONAL_STDDEV_POP);
+    consumer.accept("stddevPopOpt", RELATIONAL_STDDEV_POP_OPT);
+    consumer.accept("stddevPopSome", RELATIONAL_STDDEV_POP_SOME);
+    consumer.accept("stddevSamp", RELATIONAL_STDDEV_SAMP);
+    consumer.accept("stddevSampOpt", RELATIONAL_STDDEV_SAMP_OPT);
+    consumer.accept("stddevSampSome", RELATIONAL_STDDEV_SAMP_SOME);
     consumer.accept("sum", RELATIONAL_SUM);
     consumer.accept("sumOpt", RELATIONAL_SUM_OPT);
     consumer.accept("sumSome", RELATIONAL_SUM_SOME);
+    consumer.accept("varPop", RELATIONAL_VAR_POP);
+    consumer.accept("varPopOpt", RELATIONAL_VAR_POP_OPT);
+    consumer.accept("varPopSome", RELATIONAL_VAR_POP_SOME);
+    consumer.accept("varSamp", RELATIONAL_VAR_SAMP);
+    consumer.accept("varSampOpt", RELATIONAL_VAR_SAMP_OPT);
+    consumer.accept("varSampSome", RELATIONAL_VAR_SAMP_SOME);
     consumer.accept("concat", STRING_CONCAT);
     consumer.accept("explode", STRING_EXPLODE);
     consumer.accept("fields", STRING_FIELDS);

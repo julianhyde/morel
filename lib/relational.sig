@@ -213,6 +213,65 @@ sig
   val somes : 'a option bag -> 'a bag [@@method] [@@prototype "somes list"]
 
   (**
+   * returns the population standard deviation of the elements of `list`.
+   *
+   * The type is overloaded: the elements may be `int`, `real` or `decimal`, and
+   * the result is a `real`. Raises `Empty` if `list` is empty.
+   *)
+  val stddevPop : int bag -> real [@@method] [@@prototype "stddevPop list"]
+
+  (**
+   * returns `SOME` of the population standard deviation of the elements of
+   * `list`, as `stddevPop` does, or `NONE` if `list` is empty.
+   *
+   * To ignore `NONE`, as SQL's `STDDEV_POP` ignores nulls, use `stddevPopSome`.
+   *)
+  val stddevPopOpt : int bag -> real option
+      [@@method] [@@prototype "stddevPopOpt list"]
+
+  (**
+   * returns `SOME` of the population standard deviation of the values of the
+   * `SOME` elements of `list`, ignoring `NONE`, or `NONE` if there are none. It
+   * is SQL's `STDDEV_POP`, which ignores nulls.
+   *
+   * The type is overloaded, as `stddevPop`'s is.
+   *)
+  val stddevPopSome : int option bag -> real option
+      [@@method] [@@prototype "stddevPopSome list"]
+
+  (**
+   * returns the sample standard deviation of the elements of `list`.
+   *
+   * The type is overloaded: the elements may be `int`, `real` or `decimal`, and
+   * the result is a `real`. Raises `Empty` if `list` has fewer than two
+   * elements.
+   *
+   * The sample standard deviation divides by one less than the number of
+   * elements.
+   *)
+  val stddevSamp : int bag -> real [@@method] [@@prototype "stddevSamp list"]
+
+  (**
+   * returns `SOME` of the sample standard deviation of the elements of `list`,
+   * as `stddevSamp` does, or `NONE` if `list` has fewer than two elements.
+   *
+   * To ignore `NONE`, as SQL's `STDDEV_SAMP` ignores nulls, use
+   * `stddevSampSome`.
+   *)
+  val stddevSampOpt : int bag -> real option
+      [@@method] [@@prototype "stddevSampOpt list"]
+
+  (**
+   * returns `SOME` of the sample standard deviation of the values of the `SOME`
+   * elements of `list`, ignoring `NONE`, or `NONE` if there are fewer than two.
+   * It is SQL's `STDDEV_SAMP`, which ignores nulls.
+   *
+   * The type is overloaded, as `stddevSamp`'s is.
+   *)
+  val stddevSampSome : int option bag -> real option
+      [@@method] [@@prototype "stddevSampSome list"]
+
+  (**
    * returns the sum of the elements of `list`. Often used with
    * `group`, for example `from e in emps group e.deptno compute sumId =
    * sum of e.id`.
@@ -237,6 +296,63 @@ sig
    *)
   val sumSome : 'a option bag -> 'a option
       [@@method] [@@prototype "sumSome list"]
+
+  (**
+   * returns the population variance of the elements of `list`.
+   *
+   * The type is overloaded: the elements may be `int`, `real` or `decimal`, and
+   * the result is a `real`. Raises `Empty` if `list` is empty.
+   *)
+  val varPop : int bag -> real [@@method] [@@prototype "varPop list"]
+
+  (**
+   * returns `SOME` of the population variance of the elements of `list`, as
+   * `varPop` does, or `NONE` if `list` is empty.
+   *
+   * To ignore `NONE`, as SQL's `VAR_POP` ignores nulls, use `varPopSome`.
+   *)
+  val varPopOpt : int bag -> real option
+      [@@method] [@@prototype "varPopOpt list"]
+
+  (**
+   * returns `SOME` of the population variance of the values of the `SOME`
+   * elements of `list`, ignoring `NONE`, or `NONE` if there are none. It is
+   * SQL's `VAR_POP`, which ignores nulls.
+   *
+   * The type is overloaded, as `varPop`'s is.
+   *)
+  val varPopSome : int option bag -> real option
+      [@@method] [@@prototype "varPopSome list"]
+
+  (**
+   * returns the sample variance of the elements of `list`.
+   *
+   * The type is overloaded: the elements may be `int`, `real` or `decimal`, and
+   * the result is a `real`. Raises `Empty` if `list` has fewer than two
+   * elements.
+   *
+   * The sample variance divides by one less than the number of elements.
+   *)
+  val varSamp : int bag -> real [@@method] [@@prototype "varSamp list"]
+
+  (**
+   * returns `SOME` of the sample variance of the elements of `list`, as
+   * `varSamp` does, or `NONE` if `list` has fewer than two elements.
+   *
+   * To ignore `NONE`, as SQL's `VAR_SAMP` ignores nulls, use `varSampSome`.
+   *)
+  val varSampOpt : int bag -> real option
+      [@@method] [@@prototype "varSampOpt list"]
+
+  (**
+   * returns `SOME` of the sample variance of the values of the `SOME` elements
+   * of `list`, ignoring `NONE`, or `NONE` if there are fewer than two. It is
+   * SQL's `VAR_SAMP`, which ignores nulls.
+   *
+   * The type is overloaded, as `varSamp`'s is.
+   *)
+  val varSampSome : int option bag -> real option
+      [@@method] [@@prototype "varSampSome list"]
 end
 [@@description "Relational algebra operations for Morel queries."]
 [@@specified "morel"]
