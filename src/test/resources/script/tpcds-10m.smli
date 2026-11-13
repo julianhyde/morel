@@ -1722,18 +1722,19 @@ fun q13 () =
       `sum(ss_ext_wholesale_cost)` = sumSome over ss.ss_ext_wholesale_cost};
 > val q13 = fn
 >   : unit
->      -> {avg(ss_ext_sales_price):decimal option,
->           avg(ss_ext_wholesale_cost):decimal option,
->           avg(ss_quantity):real option,
->           sum(ss_ext_wholesale_cost):decimal option}
+>      -> {`avg(ss_ext_sales_price)`:decimal option,
+>           `avg(ss_ext_wholesale_cost)`:decimal option,
+>           `avg(ss_quantity)`:real option,
+>           `sum(ss_ext_wholesale_cost)`:decimal option}
 val r13 = q13 ();
 > val r13 =
->   {avg(ss_ext_sales_price)=SOME 3582.7,
->    avg(ss_ext_wholesale_cost)=SOME 3466.65,avg(ss_quantity)=SOME 55,
->    sum(ss_ext_wholesale_cost)=SOME 3466.65}
->   : {avg(ss_ext_sales_price):decimal option,
->       avg(ss_ext_wholesale_cost):decimal option, avg(ss_quantity):real option,
->       sum(ss_ext_wholesale_cost):decimal option}
+>   {`avg(ss_ext_sales_price)`=SOME 3582.7,
+>    `avg(ss_ext_wholesale_cost)`=SOME 3466.65,`avg(ss_quantity)`=SOME 55,
+>    `sum(ss_ext_wholesale_cost)`=SOME 3466.65}
+>   : {`avg(ss_ext_sales_price)`:decimal option,
+>       `avg(ss_ext_wholesale_cost)`:decimal option,
+>       `avg(ss_quantity)`:real option,
+>       `sum(ss_ext_wholesale_cost)`:decimal option}
 
 (* --- q14a ------------------------------------------------------- *)
 (*
@@ -2019,7 +2020,7 @@ fun q14a () =
 >   : unit
 >      -> {channel:string option, i_brand_id:int option,
 >           i_category_id:int option, i_class_id:int option,
->           sum(number_sales):int, sum(sales):decimal option} list
+>           `sum(number_sales)`:int, `sum(sales)`:decimal option} list
 val r14a = q14a ();
 > channel i_brand_id i_category_id i_class_id sum(number_sales) sum(sales)
 > ------- ---------- ------------- ---------- ----------------- -----------
@@ -2035,7 +2036,7 @@ val r14a = q14a ();
 > catalog    1001001             5          3                 1        4674
 > ...
 >
-> val r14a : {channel:string option, i_brand_id:int option, i_category_id:int option, i_class_id:int option, sum(number_sales):int, sum(sales):decimal option} list
+> val r14a : {channel:string option, i_brand_id:int option, i_category_id:int option, i_class_id:int option, `sum(number_sales)`:int, `sum(sales)`:decimal option} list
 
 (* --- q14b ------------------------------------------------------- *)
 (*
@@ -4545,14 +4546,17 @@ fun q35 () =
     take 100;
 > val q35 = fn
 >   : unit
->      -> {avg(cd_dep_college_count):real option, avg(cd_dep_count):real option,
->           avg(cd_dep_employed_count):real option, ca_state:string option,
+>      -> {`avg(cd_dep_college_count)`:real option,
+>           `avg(cd_dep_count)`:real option,
+>           `avg(cd_dep_employed_count)`:real option, ca_state:string option,
 >           cd_dep_college_count:int option, cd_dep_employed_count:int option,
 >           cd_gender:string option, cd_marital_status:string option, cnt1:int,
->           cnt2:int, cnt3:int, max(cd_dep_college_count):int option,
->           max(cd_dep_count):int option, max(cd_dep_employed_count):int option,
->           min(cd_dep_college_count):int option, min(cd_dep_count):int option,
->           min(cd_dep_employed_count):int option} list
+>           cnt2:int, cnt3:int, `max(cd_dep_college_count)`:int option,
+>           `max(cd_dep_count)`:int option,
+>           `max(cd_dep_employed_count)`:int option,
+>           `min(cd_dep_college_count)`:int option,
+>           `min(cd_dep_count)`:int option,
+>           `min(cd_dep_employed_count)`:int option} list
 val r35 = q35 ();
 > avg(cd_dep_college_count) avg(cd_dep_count) avg(cd_dep_employed_count) ca_state cd_dep_college_count cd_dep_employed_count cd_gender cd_marital_status cnt1 cnt2 cnt3 max(cd_dep_college_count) max(cd_dep_count) max(cd_dep_employed_count) min(cd_dep_college_count) min(cd_dep_count) min(cd_dep_employed_count)
 > ------------------------- ----------------- -------------------------- -------- -------------------- --------------------- --------- ----------------- ---- ---- ---- ------------------------- ----------------- -------------------------- ------------------------- ----------------- --------------------------
@@ -4568,7 +4572,7 @@ val r35 = q35 ();
 >                         0                 3                          2                             0                     2 M         U                    1    1    1                         0                 3                          2                         0                 3                          2
 > ...
 >
-> val r35 : {avg(cd_dep_college_count):real option, avg(cd_dep_count):real option, avg(cd_dep_employed_count):real option, ca_state:string option, cd_dep_college_count:int option, cd_dep_employed_count:int option, cd_gender:string option, cd_marital_status:string option, cnt1:int, cnt2:int, cnt3:int, max(cd_dep_college_count):int option, max(cd_dep_count):int option, max(cd_dep_employed_count):int option, min(cd_dep_college_count):int option, min(cd_dep_count):int option, min(cd_dep_employed_count):int option} list
+> val r35 : {`avg(cd_dep_college_count)`:real option, `avg(cd_dep_count)`:real option, `avg(cd_dep_employed_count)`:real option, ca_state:string option, cd_dep_college_count:int option, cd_dep_employed_count:int option, cd_gender:string option, cd_marital_status:string option, cnt1:int, cnt2:int, cnt3:int, `max(cd_dep_college_count)`:int option, `max(cd_dep_count)`:int option, `max(cd_dep_employed_count)`:int option, `min(cd_dep_college_count)`:int option, `min(cd_dep_count)`:int option, `min(cd_dep_employed_count)`:int option} list
 
 (* --- q36 -------------------------------------------------------- *)
 (*
@@ -11193,13 +11197,13 @@ fun q85 () =
   end;
 > val q85 = fn
 >   : unit
->      -> {avg(wr_fee):decimal option, avg(wr_refunded_cash):decimal option,
->           avg(ws_quantity):real option, reason:string option} list
+>      -> {`avg(wr_fee)`:decimal option, `avg(wr_refunded_cash)`:decimal option,
+>           `avg(ws_quantity)`:real option, reason:string option} list
 val r85 = q85 ();
 > avg(wr_fee) avg(wr_refunded_cash) avg(ws_quantity) reason
 > ----------- --------------------- ---------------- ------
 >
-> val r85 : {avg(wr_fee):decimal option, avg(wr_refunded_cash):decimal option, avg(ws_quantity):real option, reason:string option} list
+> val r85 : {`avg(wr_fee)`:decimal option, `avg(wr_refunded_cash)`:decimal option, `avg(ws_quantity)`:real option, reason:string option} list
 
 (* --- q86 -------------------------------------------------------- *)
 (*

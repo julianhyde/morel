@@ -297,6 +297,11 @@ val `val` = "yes, you can use keywords as identifiers";
 #c {`a``b` = 1, c = 2};
 > val it = 2 : int
 
+(*) A label that is not an identifier is printed with back-ticks.
+{`sum(x)` = 1, `1a` = 2, `_b` = 3, b' = 4, 1 = 5};
+> val it = {1=5,`1a`=2,`_b`=3,b'=4,`sum(x)`=1}
+>   : {1:int, `1a`:int, `_b`:int, b':int, `sum(x)`:int}
+
 (*) Quoted type name
 val x: `int` = 1;
 > val x = 1 : int
