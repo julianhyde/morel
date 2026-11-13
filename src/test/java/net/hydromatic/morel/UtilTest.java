@@ -857,6 +857,8 @@ public class UtilTest {
     checkSplitJoin("", Collections.emptyList());
     checkSplitJoin("a,'b,c',d", Arrays.asList("a", "b,c", "d"));
     checkSplitJoin(",a,,bc,", Arrays.asList("", "a", "", "bc", ""));
+    checkSplitJoin("'it''s',a", Arrays.asList("it's", "a"));
+    checkSplitJoin("'''',''',x,'''", Arrays.asList("'", "',x,'"));
   }
 
   private static void checkSplitJoin(String s, List<String> list) {
