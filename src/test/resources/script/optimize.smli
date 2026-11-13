@@ -1079,4 +1079,29 @@ Sys.planEx "-1";
 > t$0 ({a:int, b:int} * {c:int, d:int}) list
 > |_} : string
 
+(* A conjunct that refers to the row from inside a query, here an
+ * "exists", makes the resolver name the row, in a "let" around the
+ * whole condition. The other conjuncts still move; the "exists" stays,
+ * in its "let". *)
+from x in xs, y in ys
+  where x.b = y.c andalso (exists z in zs where z.e = y.d)
+  yield {x.a, y.d};
+> val it = [{a=1,d=5},{a=1,d=7},{a=3,d=5},{a=3,d=7}] : {a:int, d:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   project r [{a = #a (#1 r), d = #d (#2 r)}] : {a:int, d:int} list
+>     filter r [let val v$0 = r in #nonEmpty Relational (r$0[v$0]) end] : t$0
+>       join x y [#b x = #c y] : t$0
+>         xs : {a:int, b:int} list
+>         ys : {c:int, d:int} list
+>
+> r$0[v$0] =
+>   filter z [#e z = #d (#2 v$0)] : {e:int, f:string} list
+>     zs : {e:int, f:string} list
+>
+> t$0 ({a:int, b:int} * {c:int, d:int}) list
+> |_} : string
+
 (*) End optimize.smli
