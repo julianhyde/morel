@@ -740,9 +740,16 @@ of `decimal` values, a `decimal`. `avg`, `min` and `max` raise `Empty`
 over an empty collection; `sumOpt`, `avgOpt`, `minOpt` and `maxOpt`
 return `NONE` instead, and otherwise `SOME` of the result.
 
+`stddevSamp`, `stddevPop`, `varSamp` and `varPop` are the sample and
+population standard deviation and variance, a `real`. A sample
+statistic needs two elements, and a population statistic one; with
+fewer, they raise `Empty`, and their `Opt` forms (such as
+`stddevSampOpt`) return `NONE`.
+
 SQL's aggregate functions ignore nulls. To aggregate an option that
-way, ignoring `NONE`, use `countSome`, `sumSome`, `avgSome`, `minSome`
-or `maxSome`: `countSome over e.comm` is the number of employees that
+way, ignoring `NONE`, use `countSome`, `sumSome`, `avgSome`, `minSome`,
+`maxSome`, `stddevSampSome`, `stddevPopSome`, `varSampSome` or
+`varPopSome`: `countSome over e.comm` is the number of employees that
 have a commission, and `sumSome over e.comm` is the total of the
 commissions there are, `NONE` for a group that has none. (`somes`
 keeps the values of the `SOME`s, so `sumSome` is `sumOpt o somes`.)

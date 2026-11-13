@@ -91,9 +91,21 @@ public final class RelationalCodes {
     c.accept(BuiltIn.RELATIONAL_NON_EMPTY, RELATIONAL_NON_EMPTY);
     c.accept(BuiltIn.RELATIONAL_ONLY, RELATIONAL_ONLY);
     c.accept(BuiltIn.RELATIONAL_SOMES, RELATIONAL_SOMES);
+    c.accept(BuiltIn.RELATIONAL_STDDEV_POP, RELATIONAL_STDDEV_POP);
+    c.accept(BuiltIn.RELATIONAL_STDDEV_POP_OPT, RELATIONAL_STDDEV_POP_OPT);
+    c.accept(BuiltIn.RELATIONAL_STDDEV_POP_SOME, RELATIONAL_STDDEV_POP_SOME);
+    c.accept(BuiltIn.RELATIONAL_STDDEV_SAMP, RELATIONAL_STDDEV_SAMP);
+    c.accept(BuiltIn.RELATIONAL_STDDEV_SAMP_OPT, RELATIONAL_STDDEV_SAMP_OPT);
+    c.accept(BuiltIn.RELATIONAL_STDDEV_SAMP_SOME, RELATIONAL_STDDEV_SAMP_SOME);
     c.accept(BuiltIn.RELATIONAL_SUM, RELATIONAL_SUM);
     c.accept(BuiltIn.RELATIONAL_SUM_OPT, RELATIONAL_SUM_OPT);
     c.accept(BuiltIn.RELATIONAL_SUM_SOME, RELATIONAL_SUM_SOME);
+    c.accept(BuiltIn.RELATIONAL_VAR_POP, RELATIONAL_VAR_POP);
+    c.accept(BuiltIn.RELATIONAL_VAR_POP_OPT, RELATIONAL_VAR_POP_OPT);
+    c.accept(BuiltIn.RELATIONAL_VAR_POP_SOME, RELATIONAL_VAR_POP_SOME);
+    c.accept(BuiltIn.RELATIONAL_VAR_SAMP, RELATIONAL_VAR_SAMP);
+    c.accept(BuiltIn.RELATIONAL_VAR_SAMP_OPT, RELATIONAL_VAR_SAMP_OPT);
+    c.accept(BuiltIn.RELATIONAL_VAR_SAMP_SOME, RELATIONAL_VAR_SAMP_SOME);
     c.accept(BuiltIn.Z_EXTENT, Z_EXTENT);
     c.accept(BuiltIn.Z_LIST, Z_LIST);
     c.accept(BuiltIn.Z_SUM_DECIMAL, Z_SUM_DECIMAL);
@@ -368,6 +380,34 @@ public final class RelationalCodes {
         }
       };
 
+  /** @see BuiltIn#RELATIONAL_STDDEV_POP */
+  private static final Applicable RELATIONAL_STDDEV_POP =
+      new RelationalDeviation(BuiltIn.RELATIONAL_STDDEV_POP, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_STDDEV_POP_OPT */
+  private static final Applicable RELATIONAL_STDDEV_POP_OPT =
+      new RelationalDeviation(
+          BuiltIn.RELATIONAL_STDDEV_POP_OPT, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_STDDEV_POP_SOME */
+  private static final Applicable RELATIONAL_STDDEV_POP_SOME =
+      new RelationalDeviation(
+          BuiltIn.RELATIONAL_STDDEV_POP_SOME, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_STDDEV_SAMP */
+  private static final Applicable RELATIONAL_STDDEV_SAMP =
+      new RelationalDeviation(BuiltIn.RELATIONAL_STDDEV_SAMP, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_STDDEV_SAMP_OPT */
+  private static final Applicable RELATIONAL_STDDEV_SAMP_OPT =
+      new RelationalDeviation(
+          BuiltIn.RELATIONAL_STDDEV_SAMP_OPT, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_STDDEV_SAMP_SOME */
+  private static final Applicable RELATIONAL_STDDEV_SAMP_SOME =
+      new RelationalDeviation(
+          BuiltIn.RELATIONAL_STDDEV_SAMP_SOME, Pos.ZERO, null);
+
   /** @see BuiltIn#RELATIONAL_SUM */
   static final Macro RELATIONAL_SUM =
       (typeSystem, env, argType, pos) -> {
@@ -411,6 +451,30 @@ public final class RelationalCodes {
         }
         throw notDefined(BuiltIn.RELATIONAL_SUM_OPT, argType, pos);
       };
+
+  /** @see BuiltIn#RELATIONAL_VAR_POP */
+  private static final Applicable RELATIONAL_VAR_POP =
+      new RelationalDeviation(BuiltIn.RELATIONAL_VAR_POP, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_VAR_POP_OPT */
+  private static final Applicable RELATIONAL_VAR_POP_OPT =
+      new RelationalDeviation(BuiltIn.RELATIONAL_VAR_POP_OPT, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_VAR_POP_SOME */
+  private static final Applicable RELATIONAL_VAR_POP_SOME =
+      new RelationalDeviation(BuiltIn.RELATIONAL_VAR_POP_SOME, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_VAR_SAMP */
+  private static final Applicable RELATIONAL_VAR_SAMP =
+      new RelationalDeviation(BuiltIn.RELATIONAL_VAR_SAMP, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_VAR_SAMP_OPT */
+  private static final Applicable RELATIONAL_VAR_SAMP_OPT =
+      new RelationalDeviation(BuiltIn.RELATIONAL_VAR_SAMP_OPT, Pos.ZERO, null);
+
+  /** @see BuiltIn#RELATIONAL_VAR_SAMP_SOME */
+  private static final Applicable RELATIONAL_VAR_SAMP_SOME =
+      new RelationalDeviation(BuiltIn.RELATIONAL_VAR_SAMP_SOME, Pos.ZERO, null);
 
   /** @see BuiltIn#Z_EXTENT */
   private static final Applicable Z_EXTENT =
@@ -703,6 +767,98 @@ public final class RelationalCodes {
             pos);
       }
       throw new IllegalStateException("avg has no type: " + valueType);
+    }
+  }
+
+  /**
+   * Implements {@link #RELATIONAL_STDDEV_POP}, {@link #RELATIONAL_STDDEV_SAMP},
+   * {@link #RELATIONAL_VAR_POP}, {@link #RELATIONAL_VAR_SAMP}, and their {@code
+   * Opt} and {@code Some} forms.
+   *
+   * <p>Its type is overloaded; the elements may be {@code int}, {@code real} or
+   * {@code decimal}, and the result is a {@code real}, computed in {@code
+   * double} in two passes (the mean, then the squared deviations from it). The
+   * population forms need one element, and the sample forms two; with fewer,
+   * the plain form raises {@link BuiltInExn#EMPTY}, and the {@code Opt} and
+   * {@code Some} forms return {@code NONE}. The {@code Some} forms ignore
+   * {@code NONE} elements.
+   */
+  private static class RelationalDeviation
+      extends BasePositionedApplicable1<Object, List> implements Typed {
+    /** Type of the values; null until {@link #withType} is run. */
+    private final @Nullable Type valueType;
+
+    RelationalDeviation(BuiltIn builtIn, Pos pos, @Nullable Type valueType) {
+      super(builtIn, pos);
+      this.valueType = valueType;
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new RelationalDeviation(builtIn, pos, valueType);
+    }
+
+    @Override
+    public Applicable withType(TypeSystem typeSystem, Type type, Pos pos) {
+      final Type paramType = FnType.of(type).paramType;
+      if (paramType.isCollection()) {
+        final Type valueType =
+            isSome() ? paramType.elementType().arg(0) : paramType.elementType();
+        if (valueType == PrimitiveType.INT
+            || valueType == PrimitiveType.REAL
+            || isDecimal(valueType)) {
+          return new RelationalDeviation(builtIn, pos, valueType);
+        }
+      }
+      throw notDefined(builtIn, paramType, pos);
+    }
+
+    private boolean isSome() {
+      return builtIn.mlName.endsWith("Some");
+    }
+
+    private boolean isOpt() {
+      return isSome() || builtIn.mlName.endsWith("Opt");
+    }
+
+    /** Whether this is a sample (rather than a population) statistic. */
+    private boolean isSample() {
+      return builtIn.mlName.contains("Samp");
+    }
+
+    /** Whether this is a standard deviation (rather than a variance). */
+    private boolean isStddev() {
+      return builtIn.mlName.startsWith("stddev");
+    }
+
+    @Override
+    public Object apply(List list) {
+      final List values = isSome() ? someValues(list) : list;
+      final int n = values.size();
+      if (n < (isSample() ? 2 : 1)) {
+        if (isOpt()) {
+          return Codes.OPTION_NONE;
+        }
+        throw new MorelRuntimeException(BuiltInExn.EMPTY, pos);
+      }
+      double sum = 0;
+      for (Object o : values) {
+        sum += toDouble(o);
+      }
+      final double mean = sum / n;
+      double sumSquares = 0;
+      for (Object o : values) {
+        final double d = toDouble(o) - mean;
+        sumSquares += d * d;
+      }
+      final double variance = sumSquares / (isSample() ? n - 1 : n);
+      final float result =
+          (float) (isStddev() ? Math.sqrt(variance) : variance);
+      return isOpt() ? Codes.optionSome(result) : result;
+    }
+
+    private static double toDouble(Object o) {
+      return ((Number) o).doubleValue();
     }
   }
 

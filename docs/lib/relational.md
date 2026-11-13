@@ -52,9 +52,21 @@ val <a id='minSome' href="#minSome-impl">minSome</a> : 'a option bag -> 'a optio
 val <a id='nonEmpty' href="#nonEmpty-impl">nonEmpty</a> : 'a bag -> bool
 val <a id='only' href="#only-impl">only</a> : 'a bag -> 'a
 val <a id='somes' href="#somes-impl">somes</a> : 'a option bag -> 'a bag
+val <a id='stddevPop' href="#stddevPop-impl">stddevPop</a> : int bag -> real
+val <a id='stddevPopOpt' href="#stddevPopOpt-impl">stddevPopOpt</a> : int bag -> real option
+val <a id='stddevPopSome' href="#stddevPopSome-impl">stddevPopSome</a> : int option bag -> real option
+val <a id='stddevSamp' href="#stddevSamp-impl">stddevSamp</a> : int bag -> real
+val <a id='stddevSampOpt' href="#stddevSampOpt-impl">stddevSampOpt</a> : int bag -> real option
+val <a id='stddevSampSome' href="#stddevSampSome-impl">stddevSampSome</a> : int option bag -> real option
 val <a id='sum' href="#sum-impl">sum</a> : 'a bag -> 'a
 val <a id='sumOpt' href="#sumOpt-impl">sumOpt</a> : 'a bag -> 'a option
 val <a id='sumSome' href="#sumSome-impl">sumSome</a> : 'a option bag -> 'a option
+val <a id='varPop' href="#varPop-impl">varPop</a> : int bag -> real
+val <a id='varPopOpt' href="#varPopOpt-impl">varPopOpt</a> : int bag -> real option
+val <a id='varPopSome' href="#varPopSome-impl">varPopSome</a> : int option bag -> real option
+val <a id='varSamp' href="#varSamp-impl">varSamp</a> : int bag -> real
+val <a id='varSampOpt' href="#varSampOpt-impl">varSampOpt</a> : int bag -> real option
+val <a id='varSampSome' href="#varSampSome-impl">varSampSome</a> : int option bag -> real option
 </pre>
 
 <a id="descending-impl"></a>
@@ -238,6 +250,61 @@ the order.
 
 `sumOpt (somes list)` is `sumSome list`, and so on.
 
+<a id="stddevPop-impl"></a>
+<h3><code>stddevPop</code></h3>
+
+`stddevPop list` (or `list.stddevPop ()`) returns the population standard deviation of the elements of `list`.
+
+The type is overloaded: the elements may be `int`, `real` or `decimal`, and
+the result is a `real`. Raises `Empty` if `list` is empty.
+
+<a id="stddevPopOpt-impl"></a>
+<h3><code>stddevPopOpt</code></h3>
+
+`stddevPopOpt list` (or `list.stddevPopOpt ()`) returns `SOME` of the population standard deviation of the elements of
+`list`, as `stddevPop` does, or `NONE` if `list` is empty.
+
+To ignore `NONE`, as SQL's `STDDEV_POP` ignores nulls, use `stddevPopSome`.
+
+<a id="stddevPopSome-impl"></a>
+<h3><code>stddevPopSome</code></h3>
+
+`stddevPopSome list` (or `list.stddevPopSome ()`) returns `SOME` of the population standard deviation of the values of the
+`SOME` elements of `list`, ignoring `NONE`, or `NONE` if there are none. It
+is SQL's `STDDEV_POP`, which ignores nulls.
+
+The type is overloaded, as `stddevPop`'s is.
+
+<a id="stddevSamp-impl"></a>
+<h3><code>stddevSamp</code></h3>
+
+`stddevSamp list` (or `list.stddevSamp ()`) returns the sample standard deviation of the elements of `list`.
+
+The type is overloaded: the elements may be `int`, `real` or `decimal`, and
+the result is a `real`. Raises `Empty` if `list` has fewer than two
+elements.
+
+The sample standard deviation divides by one less than the number of
+elements.
+
+<a id="stddevSampOpt-impl"></a>
+<h3><code>stddevSampOpt</code></h3>
+
+`stddevSampOpt list` (or `list.stddevSampOpt ()`) returns `SOME` of the sample standard deviation of the elements of `list`,
+as `stddevSamp` does, or `NONE` if `list` has fewer than two elements.
+
+To ignore `NONE`, as SQL's `STDDEV_SAMP` ignores nulls, use
+`stddevSampSome`.
+
+<a id="stddevSampSome-impl"></a>
+<h3><code>stddevSampSome</code></h3>
+
+`stddevSampSome list` (or `list.stddevSampSome ()`) returns `SOME` of the sample standard deviation of the values of the `SOME`
+elements of `list`, ignoring `NONE`, or `NONE` if there are fewer than two.
+It is SQL's `STDDEV_SAMP`, which ignores nulls.
+
+The type is overloaded, as `stddevSamp`'s is.
+
 <a id="sum-impl"></a>
 <h3><code>sum</code></h3>
 
@@ -262,5 +329,58 @@ To ignore `NONE`, as SQL's `SUM` ignores nulls, use `sumSome`.
 `sumSome list` (or `list.sumSome ()`) returns `SOME` of the sum of the values of the `SOME` elements of
 `list`, ignoring `NONE`, or `NONE` if there are none. It is SQL's `SUM`,
 which ignores nulls.
+
+<a id="varPop-impl"></a>
+<h3><code>varPop</code></h3>
+
+`varPop list` (or `list.varPop ()`) returns the population variance of the elements of `list`.
+
+The type is overloaded: the elements may be `int`, `real` or `decimal`, and
+the result is a `real`. Raises `Empty` if `list` is empty.
+
+<a id="varPopOpt-impl"></a>
+<h3><code>varPopOpt</code></h3>
+
+`varPopOpt list` (or `list.varPopOpt ()`) returns `SOME` of the population variance of the elements of `list`, as
+`varPop` does, or `NONE` if `list` is empty.
+
+To ignore `NONE`, as SQL's `VAR_POP` ignores nulls, use `varPopSome`.
+
+<a id="varPopSome-impl"></a>
+<h3><code>varPopSome</code></h3>
+
+`varPopSome list` (or `list.varPopSome ()`) returns `SOME` of the population variance of the values of the `SOME`
+elements of `list`, ignoring `NONE`, or `NONE` if there are none. It is
+SQL's `VAR_POP`, which ignores nulls.
+
+The type is overloaded, as `varPop`'s is.
+
+<a id="varSamp-impl"></a>
+<h3><code>varSamp</code></h3>
+
+`varSamp list` (or `list.varSamp ()`) returns the sample variance of the elements of `list`.
+
+The type is overloaded: the elements may be `int`, `real` or `decimal`, and
+the result is a `real`. Raises `Empty` if `list` has fewer than two
+elements.
+
+The sample variance divides by one less than the number of elements.
+
+<a id="varSampOpt-impl"></a>
+<h3><code>varSampOpt</code></h3>
+
+`varSampOpt list` (or `list.varSampOpt ()`) returns `SOME` of the sample variance of the elements of `list`, as
+`varSamp` does, or `NONE` if `list` has fewer than two elements.
+
+To ignore `NONE`, as SQL's `VAR_SAMP` ignores nulls, use `varSampSome`.
+
+<a id="varSampSome-impl"></a>
+<h3><code>varSampSome</code></h3>
+
+`varSampSome list` (or `list.varSampSome ()`) returns `SOME` of the sample variance of the values of the `SOME` elements
+of `list`, ignoring `NONE`, or `NONE` if there are fewer than two. It is
+SQL's `VAR_SAMP`, which ignores nulls.
+
+The type is overloaded, as `varSamp`'s is.
 
 [//]: # (end:lib/relational)

@@ -395,4 +395,80 @@ Sys.set ("sparkPushDown", false);
 >   }
 > }|_} : string
 
+(* "stddevSampSome" and "varPopSome" become Spark's "stddev_samp" and
+ * "var_pop", which ignore nulls as they ignore NONE. This is
+ *   SELECT deptno, STDDEV_SAMP(comm), VAR_POP(mgr)
+ *   FROM emp GROUP BY deptno *)
+(spark.connection.prepare (fn () =>
+  from e in emps
+    group e.deptno
+    compute {s = stddevSampSome over e.comm, v = varPopSome over e.mgr}
+)).toString ();
+> val it =
+>   {_|
+> root {
+>   common {
+>     plan_id: 0
+>   }
+>   aggregate {
+>     input {
+>       common {
+>         plan_id: 1
+>       }
+>       subquery_alias {
+>         input {
+>           common {
+>             plan_id: 2
+>           }
+>           read {
+>             named_table {
+>               unparsed_identifier: "scott.emps"
+>             }
+>           }
+>         }
+>         alias: "e"
+>       }
+>     }
+>     group_type: GROUP_TYPE_GROUPBY
+>     grouping_expressions {
+>       unresolved_attribute {
+>         unparsed_identifier: "e.deptno"
+>         is_metadata_column: false
+>       }
+>     }
+>     aggregate_expressions {
+>       alias {
+>         expr {
+>           unresolved_function {
+>             function_name: "stddev_samp"
+>             arguments {
+>               unresolved_attribute {
+>                 unparsed_identifier: "e.comm"
+>                 is_metadata_column: false
+>               }
+>             }
+>           }
+>         }
+>         name: "s"
+>       }
+>     }
+>     aggregate_expressions {
+>       alias {
+>         expr {
+>           unresolved_function {
+>             function_name: "var_pop"
+>             arguments {
+>               unresolved_attribute {
+>                 unparsed_identifier: "e.mgr"
+>                 is_metadata_column: false
+>               }
+>             }
+>           }
+>         }
+>         name: "v"
+>       }
+>     }
+>   }
+> }|_} : string
+
 (*) End spark-plan.smli
