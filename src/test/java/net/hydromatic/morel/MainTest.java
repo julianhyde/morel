@@ -1422,7 +1422,7 @@ public class MainTest {
     final String plan2b =
         "apply2Tuple(fnValue Math.pow,"
             + " apply(fnValue List.hd, "
-            + "argCode tuple(tuple(constant(2.0), constant(3.0)))))";
+            + "argCode constant([[2.0, 3.0]])))";
     ml(ml2b).assertEval(is(8f)).assertPlan(isCode(plan2b));
 
     // As above with 3 arguments.
@@ -1435,7 +1435,7 @@ public class MainTest {
     final String plan3b =
         "apply3Tuple(fnValue String.substring,"
             + " apply(fnValue List.hd, "
-            + "argCode tuple(tuple(constant(morel), constant(3), constant(2)))))";
+            + "argCode constant([[morel, 3, 2]])))";
     ml(ml3b).assertEval(is("el")).assertPlan(isCode(plan3b));
 
     // Invoke a function that has two curried arguments on one argument.
@@ -3173,7 +3173,7 @@ public class MainTest {
             + " yield {a, a2 = a + a, sb}";
     final String plan =
         "from("
-            + "sink join(pat r, exp tuple(tuple(constant(2), constant(3))), "
+            + "sink join(pat r, exp constant([[2, 3]]), "
             + "sink group(key tuple(apply(fnValue nth:0, argCode stack(offset 1, name r))), "
             + "agg aggregate, "
             + "sink yield(codes [tuple(get(name a), get(name sb))], "

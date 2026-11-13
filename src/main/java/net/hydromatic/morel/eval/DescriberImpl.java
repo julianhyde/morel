@@ -20,6 +20,7 @@ package net.hydromatic.morel.eval;
 
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -94,7 +95,11 @@ class DescriberImpl implements Describer {
       buf.append(buf.length() == start ? "(" : ", ")
           .append(name)
           .append(name.isEmpty() ? "" : " ")
-          .append(value);
+          // A decimal such as 100 may be held as 1E+2; print it as 100.
+          .append(
+              value instanceof BigDecimal
+                  ? ((BigDecimal) value).toPlainString()
+                  : value);
       return this;
     }
 

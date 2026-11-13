@@ -78,7 +78,7 @@ val noneInt = if true then NONE else SOME 0;
 > val noneInt = NONE : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply(fnCode match(true, constant([NONE]), _, apply(fnValue tyCon, argCode constant(0))), argCode constant(true)))"
+>   "globalMarshal(globals [SOME], body apply(fnCode match(true, constant([NONE]), _, constant([SOME, 0])), argCode constant(true)))"
 >   : string
 Sys.unset "inlinePassCount";
 > val it = () : unit
@@ -142,7 +142,7 @@ Option.mapPartial (fn s => if s = "" then NONE else (SOME (String.size s))) (SOM
 > val it = NONE : int option
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply2(fnValue Option.mapPartial, match(s, tailApply(fnCode match(true, constant([NONE]), _, tailApply(fnValue tyCon, argCode apply(fnValue String.size, argCode stack(offset 1, name s)))), argCode apply2(fnValue =, stack(offset 1, name s), constant()))), apply(fnValue tyCon, argCode constant())))"
+>   "globalMarshal(globals [SOME], body apply2(fnValue Option.mapPartial, match(s, tailApply(fnCode match(true, constant([NONE]), _, tailApply(fnValue tyCon, argCode apply(fnValue String.size, argCode stack(offset 1, name s)))), argCode apply2(fnValue =, stack(offset 1, name s), constant()))), constant([SOME, ])))"
 >   : string
 
 (*) val compose : ('a -> 'b) * ('c -> 'a option) -> 'c -> 'b option

@@ -69,8 +69,7 @@ DESC (DESC "a");
 Relational.avg [1, 2, 4];
 > val it = 2.3333333 : real
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.avg, argCode tuple(constant(1), constant(2), constant(4)))"
+> val it = "apply(fnValue Relational.avg, argCode constant([1, 2, 4]))"
 >   : string
 Relational.avg (bag [1, 2, 4]);
 > val it = 2.3333333 : real
@@ -139,8 +138,7 @@ Relational.count (bag []);
 Relational.count (bag [false]);
 > val it = 1 : int
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.count, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false))))"
+> val it = "apply(fnValue Relational.count, argCode constant([false]))"
 >   : string
 (* "count" counts elements, whatever they are, NONE among them;
  * "countSome" counts the SOMEs, as SQL's COUNT(x) ignores nulls. *)
@@ -165,8 +163,7 @@ Relational.nonEmpty (bag []);
 Relational.nonEmpty (bag [false]);
 > val it = true : bool
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.nonEmpty, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false))))"
+> val it = "apply(fnValue Relational.nonEmpty, argCode constant([false]))"
 >   : string
 
 Relational.empty (bag [1, 2, 3]);
@@ -176,8 +173,7 @@ Relational.empty (bag []);
 Relational.empty (bag [false]);
 > val it = false : bool
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.empty, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false))))"
+> val it = "apply(fnValue Relational.empty, argCode constant([false]))"
 >   : string
 
 val emps = [
@@ -234,20 +230,19 @@ Sys.plan ();
 Relational.sum (bag [1, 2, 3]);
 > val it = 6 : int
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.sum$int, argCode apply(fnValue Bag.fromList, argCode tuple(constant(1), constant(2), constant(3))))"
+> val it = "apply(fnValue Relational.sum$int, argCode constant([1, 2, 3]))"
 >   : string
 Relational.sum (bag [1.0, 2.5, 3.5]);
 > val it = 7 : real
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.sum$real, argCode apply(fnValue Bag.fromList, argCode tuple(constant(1.0), constant(2.5), constant(3.5))))"
+>   "apply(fnValue Relational.sum$real, argCode constant([1.0, 2.5, 3.5]))"
 >   : string
 Relational.sum (bag [decimal "0.1", decimal "0.2", decimal "12.30"]);
 > val it = 12.6 : decimal
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.sum$decimal, argCode apply(fnValue Bag.fromList, argCode tuple(constant(0.1), constant(0.2), constant(12.3))))"
+>   "apply(fnValue Relational.sum$decimal, argCode constant([0.1, 0.2, 12.3]))"
 >   : string
 Relational.sum (bag [Decimal.maxFinite, Decimal.maxFinite]);
 > uncaught exception Overflow [overflow]
@@ -263,8 +258,7 @@ Relational.sum [SOME 1, NONE, SOME 3];
 Relational.sumOpt [1, 2, 3];
 > val it = SOME 6 : int option
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.sumOpt$int, argCode tuple(constant(1), constant(2), constant(3)))"
+> val it = "apply(fnValue Relational.sumOpt$int, argCode constant([1, 2, 3]))"
 >   : string
 Relational.sumOpt ([] : int list);
 > val it = NONE : int option
@@ -426,8 +420,7 @@ Relational.max (bag [INL 1, INR "a", INL 2]);
 Relational.max (bag [false, true]);
 > val it = true : bool
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.max, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false), constant(true))))"
+> val it = "apply(fnValue Relational.max, argCode constant([false, true]))"
 >   : string
 
 (* `maxBy keyFn` returns the element with the greatest key. The key need not
@@ -457,7 +450,7 @@ maxBy String.size (bag [] : string bag);
 >   raised at: stdIn:1.1-1.40
 Sys.plan ();
 > val it =
->   "apply2(fnValue Relational.maxBy, constant(String.size), apply(fnValue Bag.fromList, argCode tuple))"
+>   "apply2(fnValue Relational.maxBy, constant(String.size), constant([]))"
 >   : string
 
 Relational.min (bag [1, 2, 3]);
@@ -492,8 +485,7 @@ Relational.min (bag [INL 1, INR "a", INL 2]);
 Relational.min (bag [false, true]);
 > val it = false : bool
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.min, argCode apply(fnValue Bag.fromList, argCode tuple(constant(false), constant(true))))"
+> val it = "apply(fnValue Relational.min, argCode constant([false, true]))"
 >   : string
 
 (* `minBy keyFn` returns the element with the least key. Both `john` and
@@ -522,7 +514,7 @@ minBy String.size (bag [] : string bag);
 >   raised at: stdIn:1.1-1.40
 Sys.plan ();
 > val it =
->   "apply2(fnValue Relational.minBy, constant(String.size), apply(fnValue Bag.fromList, argCode tuple))"
+>   "apply2(fnValue Relational.minBy, constant(String.size), constant([]))"
 >   : string
 
 Relational.only [2];
@@ -534,7 +526,7 @@ Relational.only [];
 > uncaught exception Empty
 >   raised at: stdIn:1.1-1.19
 Sys.plan ();
-> val it = "apply(fnValue Relational.only, argCode tuple)" : string
+> val it = "apply(fnValue Relational.only, argCode constant([]))" : string
 
 1 elem [1, 2, 3];
 > val it = true : bool
@@ -559,9 +551,7 @@ bag [1, 2] elem [bag [0], bag [], bag [1, 2]];
 (1, 2) elem [(0, 1), (2, 3)];
 > val it = false : bool
 Sys.plan ();
-> val it =
->   "apply2(fnValue elem, tuple(constant(1), constant(2)), tuple(tuple(constant(0), constant(1)), tuple(constant(2), constant(3))))"
->   : string
+> val it = "elemSet(constant([1, 2]), set [[0, 1], [2, 3]])" : string
 
 (* Repeat the above tests for the bag version of elem. *)
 1 elem bag [1, 2, 3];
@@ -596,9 +586,7 @@ bag [] elem bag [bag [0], bag [], bag [1, 2]];
 (1, 2) notelem [(0, 1), (2, 3)];
 > val it = true : bool
 Sys.plan ();
-> val it =
->   "apply2(fnValue notelem, tuple(constant(1), constant(2)), tuple(tuple(constant(0), constant(1)), tuple(constant(2), constant(3))))"
->   : string
+> val it = "notElemSet(constant([1, 2]), set [[0, 1], [2, 3]])" : string
 
 (* Repeat the above tests for the bag version of notelem. *)
 1 notelem bag [1, 2, 3];

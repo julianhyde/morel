@@ -31,9 +31,11 @@ import static net.hydromatic.morel.util.Static.transformEager;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -247,6 +249,16 @@ public abstract class Codes {
    */
   public static Code typedValue(TypedValue typedValue) {
     return new TypedValueCode(typedValue);
+  }
+
+  /**
+   * Returns a Code that evaluates "x elem c" (or, if {@code negate}, "x notelem
+   * c") where {@code c} is a constant collection, by looking {@code x} up in a
+   * hash set of the collection's elements.
+   */
+  public static Code elemSet(
+      Code code, Collection<?> elements, boolean negate) {
+    return new ElemSetCode(code, ImmutableSet.copyOf(elements), negate);
   }
 
   /** Returns a Code that evaluates "andalso". */
@@ -1345,6 +1357,43 @@ public abstract class Codes {
       return describer.start(
           "apply2",
           d -> d.arg("fnValue", fnValue).arg("", argCode0).arg("", argCode1));
+    }
+  }
+
+  /**
+   * Code that evaluates whether a value is an element of a constant collection,
+   * looking it up in a set.
+   *
+   * <p>Equivalent to {@code elem} (and {@code notelem}), which uses {@link
+   * List#contains}: a set and a list both compare elements using {@link
+   * Object#equals}.
+   */
+  private static class ElemSetCode implements Code {
+    private final Code code;
+    private final ImmutableSet<?> elements;
+    private final boolean negate;
+
+    ElemSetCode(Code code, ImmutableSet<?> elements, boolean negate) {
+      this.code = requireNonNull(code);
+      this.elements = requireNonNull(elements);
+      this.negate = negate;
+    }
+
+    @Override
+    public int maxSlots() {
+      return code.maxSlots();
+    }
+
+    @Override
+    public Object eval(Stack stack) {
+      return elements.contains(code.eval(stack)) != negate;
+    }
+
+    @Override
+    public Describer describe(Describer describer) {
+      return describer.start(
+          negate ? "notElemSet" : "elemSet",
+          d -> d.arg("", code).arg("set", (Object) elements));
     }
   }
 

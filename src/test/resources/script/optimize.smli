@@ -604,8 +604,7 @@ from x, y
 exists i where i elem [3, 1, 2];
 > val it = true : bool
 Sys.plan ();
-> val it =
->   "apply(fnValue Relational.nonEmpty, argCode tuple(constant(3), constant(1), constant(2)))"
+> val it = "apply(fnValue Relational.nonEmpty, argCode constant([3, 1, 2]))"
 >   : string
 forall i where i elem [2, 4] require i mod 2 = 0;
 > val it = true : bool
@@ -834,7 +833,7 @@ from x in [{s="a",n=decimal "1.50"},{s="b",n=decimal "2"}]
 > val it = ["a","b"] : string list
 Sys.plan ();
 > val it =
->   "from(sink join(pat x, exp tuple(tuple(constant(1.5), constant(a)), tuple(constant(2), constant(b))), sink hashJoin(pat y, exp tuple(tuple(constant(1.5), constant(a)), tuple(constant(2), constant(b))), leftKey tuple(apply(fnValue nth:0, argCode stack(offset 1, name x)), apply(fnValue nth:1, argCode stack(offset 1, name x))), rightKey tuple(apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 1, name y))), condition apply2(fnValue =, tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 2, name x))), tuple(apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 1, name y)))), sink collect(apply(fnValue nth:1, argCode stack(offset 2, name x))))))"
+>   "from(sink join(pat x, exp constant([[1.5, a], [2, b]]), sink hashJoin(pat y, exp constant([[1.5, a], [2, b]]), leftKey tuple(apply(fnValue nth:0, argCode stack(offset 1, name x)), apply(fnValue nth:1, argCode stack(offset 1, name x))), rightKey tuple(apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 1, name y))), condition apply2(fnValue =, tuple(apply(fnValue nth:0, argCode stack(offset 2, name x)), apply(fnValue nth:1, argCode stack(offset 2, name x))), tuple(apply(fnValue nth:0, argCode stack(offset 1, name y)), apply(fnValue nth:1, argCode stack(offset 1, name y)))), sink collect(apply(fnValue nth:1, argCode stack(offset 2, name x))))))"
 >   : string
 
 (*) Empty inputs.
@@ -855,7 +854,7 @@ from x in [1.5, 2.5] join y in [2.5, 3.5] on x = y yield x;
 > val it = [2.5] : real list
 Sys.plan ();
 > val it =
->   "from(sink join(pat x, exp tuple(constant(1.5), constant(2.5)), sink join(pat y, exp tuple(constant(2.5), constant(3.5)), condition apply2(fnValue =, stack(offset 2, name x), stack(offset 1, name y)), sink collect(stack(offset 2, name x)))))"
+>   "from(sink join(pat x, exp constant([1.5, 2.5]), sink join(pat y, exp constant([2.5, 3.5]), condition apply2(fnValue =, stack(offset 2, name x), stack(offset 1, name y)), sink collect(stack(offset 2, name x)))))"
 >   : string
 
 (* Nor is a right side that reads the left element; nor a condition
@@ -1212,5 +1211,74 @@ from x in xs
     where g.c = x.b andalso g.n > 1)
   yield x.a;
 > val it = [1,3] : int list
+
+(* --- Constant folding ------------------------------------------- *)
+
+(* A call that converts a constant without losing information is
+ * evaluated at compile time. *)
+from x in [1, 2] yield Decimal.fromInt x + Decimal.fromInt 100;
+> val it = [101,102] : decimal list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([1, 2]), sink collect(apply2(fnValue Decimal.+, apply(fnValue Decimal.fromInt, argCode stack(offset 1, name x)), constant(100)))))"
+>   : string
+Real.fromInt 7;
+> val it = 7 : real
+Sys.plan ();
+> val it = "constant(7.0)" : string
+(*) A real cannot hold every int, so this call is not folded.
+Real.fromInt 16777217;
+> val it = 1.6777216E7 : real
+Sys.plan ();
+> val it = "apply(fnValue Real.fromInt, argCode constant(16777217))" : string
+(*) A call that would raise is left, and raises only if reached.
+if true then #"a" else Char.chr 300;
+> val it = #"a" : char
+Sys.plan ();
+> val it = "constant(a)" : string
+Char.chr 300;
+> uncaught exception Chr
+>   raised at: stdIn:1.1-1.13
+
+(* A value made of constants -- a tuple, record, list or bag, or a
+ * datatype constructor applied to a constant -- is evaluated once. *)
+fn () => [SOME 1, NONE, SOME 3];
+> val it = fn : unit -> int option list
+Sys.plan ();
+> val it = "match(v, constant([[SOME, 1], [NONE], [SOME, 3]]))" : string
+fn () => {a = (1, SOME "x"), b = bag [Time.fromSeconds 10]};
+> val it = fn : unit -> {a:int * string option, b:time bag}
+Sys.plan ();
+> val it = "match(v, constant([[1, [SOME, x]], [10000000000]]))" : string
+
+(*) A field of a record whose other fields are constant.
+fn x => #b {a = 1, b = x + 1};
+> val it = fn : int -> int
+Sys.plan ();
+> val it =
+>   "match(x, apply2(fnValue Int.+, stack(offset 1, name x), constant(1)))"
+>   : string
+(*) Not if another field might raise.
+fn x => #b {a = 1 div x, b = x + 1};
+> val it = fn : int -> int
+Sys.plan ();
+> val it =
+>   "match(x, tailApply(fnValue nth:1, argCode tuple(apply2(fnValue Int.div, constant(1), stack(offset 1, name x)), apply2(fnValue Int.+, stack(offset 1, name x), constant(1)))))"
+>   : string
+
+(* "elem" and "notelem" against a constant collection look the value
+ * up in a set. *)
+from x in [SOME 1, NONE, SOME 4] where x elem [SOME 1, SOME 3, SOME 5];
+> val it = [SOME 1] : int option list
+Sys.plan ();
+> val it =
+>   "globalMarshal(globals [SOME], body from(sink join(pat x, exp constant([[SOME, 1], [NONE], [SOME, 4]]), sink where(condition elemSet(stack(offset 1, name x), set [[SOME, 1], [SOME, 3], [SOME, 5]]), sink collect(stack(offset 1, name x))))))"
+>   : string
+from x in [1, 2, 3] where x notelem [1, 3];
+> val it = [2] : int list
+Sys.plan ();
+> val it =
+>   "from(sink join(pat x, exp constant([1, 2, 3]), sink where(condition notElemSet(stack(offset 1, name x), set [1, 3]), sink collect(stack(offset 1, name x)))))"
+>   : string
 
 (*) End optimize.smli

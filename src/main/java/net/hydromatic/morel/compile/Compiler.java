@@ -32,6 +32,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.UnsignedLong;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -343,6 +344,34 @@ public class Compiler {
   }
 
   public Code compile(Context cx, Core.Exp expression) {
+    if ((expression.op == Op.TUPLE || expression.op == Op.APPLY)
+        && Folder.isConstant(expression)) {
+      // The expression constructs a value from constants, such as
+      // '[SOME 1, SOME 3]'; evaluate it now, rather than each time the code
+      // runs. If evaluating it raises, leave it to raise at run time.
+      final Code code = compile2(cx, expression);
+      if (!code.isConstant() && canFold(code)) {
+        try {
+          return Codes.constant(code.eval(Stack.withCapacity(code.maxSlots())));
+        } catch (MorelRuntimeException e) {
+          // fall through
+        }
+      }
+      return code;
+    }
+    return compile2(cx, expression);
+  }
+
+  /**
+   * Returns whether code that computes a constant may be replaced by the value
+   * it computes. A subclass may say no if it knows more about the code than its
+   * value; for example, it may translate the code to a relational expression.
+   */
+  protected boolean canFold(Code code) {
+    return true;
+  }
+
+  private Code compile2(Context cx, Core.Exp expression) {
     final Core.Literal literal;
     final Code argCode;
     final List<Code> codes;
@@ -762,6 +791,23 @@ public class Compiler {
   @SuppressWarnings("rawtypes")
   protected Code finishCompileApply2(
       Context cx, Applicable2 applicable2, PairList<Code, Type> argCodes) {
+    final BuiltIn builtIn =
+        applicable2 instanceof Applicable
+            ? Codes.BUILT_IN_MAP.get((Applicable) applicable2)
+            : null;
+    if ((builtIn == BuiltIn.OP_ELEM || builtIn == BuiltIn.OP_NOT_ELEM)
+        && argCodes.left(1).isConstant()) {
+      // "x elem [1, 2, 3]" looks up "x" in a set.
+      final Code collectionCode = argCodes.left(1);
+      final Object collection =
+          collectionCode.eval(Stack.withCapacity(collectionCode.maxSlots()));
+      if (collection instanceof Collection) {
+        return Codes.elemSet(
+            argCodes.left(0),
+            (Collection<?>) collection,
+            builtIn == BuiltIn.OP_NOT_ELEM);
+      }
+    }
     return Codes.apply2(applicable2, argCodes.left(0), argCodes.left(1));
   }
 
@@ -1185,6 +1231,10 @@ public class Compiler {
   protected Code compileTail(Context cx, Core.Exp expression) {
     switch (expression.op) {
       case APPLY:
+        if (Folder.isConstant(expression)) {
+          // A constant, such as '[1, 2]', contains no tail call; fold it.
+          return compile(cx, expression);
+        }
         return compileApply(cx, (Core.Apply) expression, true);
 
       case CASE:

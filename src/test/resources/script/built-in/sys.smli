@@ -364,9 +364,7 @@ Sys.set;
 Sys.set ("hybrid", false);
 > val it = () : unit
 Sys.plan ();
-> val it =
->   "apply(fnValue Sys.set, argCode tuple(constant(hybrid), constant(false)))"
->   : string
+> val it = "apply(fnValue Sys.set, argCode constant([hybrid, false]))" : string
 
 (*) val planEx : string -> string
 Sys.planEx;

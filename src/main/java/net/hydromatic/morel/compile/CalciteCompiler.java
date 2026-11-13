@@ -192,6 +192,17 @@ public class CalciteCompiler extends Compiler {
         dummySession, env, typeSystem, calcite.dataContext.getTypeFactory());
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Code that can become a relational expression, such as a list of
+   * constants, is not folded, so that Calcite sees the list.
+   */
+  @Override
+  protected boolean canFold(Code code) {
+    return !(code instanceof RelCode);
+  }
+
   @Override
   public Code compileArg(Context cx, Core.Exp expression) {
     Code code = super.compileArg(cx, expression);
