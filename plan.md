@@ -657,6 +657,50 @@ three, which it cannot do directly. Every tier needs D10.
   matters only if someone compares our numbers with another
   implementation's.
 
+## Merging to main
+
+The branch carries much that is not TPC-DS: bug fixes and optimizer
+work found on the way. It goes to `main` in pieces, smallest and most
+independent first, each piece its own PR, rebased onto `main` and
+passing `fullMake` on its own. Bug fixes go first, so that `main`
+gets them without waiting for the features. Each significant bug has
+a GitHub issue, logged before its PR, and the fix's commit cites it;
+#509 to #513 were logged 2026-11-13.
+Then 502-tpc-ds is rebased onto `main`; the pieces already merged
+drop out.
+
+1. **Hash join** (#504, #505), on branch `504-hash-join`: the fix for
+   #508, `Exps`, hash join, pushing a `where` into a join, and the fix
+   for a `where` whose condition is wrapped in a `let`. Ready.
+2. **Bug fixes**, each its own commit, in one PR or several. All
+   occur on `main` (checked 2026-11-13):
+   * a comment containing `(*)` in the shell (#506), and the shell's
+     line reader within a block comment (part 6);
+   * overloaded arithmetic in a `let` type-checks at one type and
+     runs at another (#509, `4ebbf48d`);
+   * an operator section, such as `op -`, is not defined for
+     `decimal` or `word` (#510, `0e901257`);
+   * a record label that contains a back-tick loses the record's
+     other fields (#511, `2937c556`);
+   * a label such as `sum(x)` is printed without back-ticks
+     (#512, `37729be2`).
+3. **Inlining into loops** (part 4's `Analyzer` change, `57a9e002`,
+   `757c2cc1`): a value used once, inside a lambda, a query's
+   per-row expression, or an aggregate, is no longer inlined there and
+   so evaluated each time (#513). Occurs on `main`. Also
+   `Test.tick`, `Test.ticks` and `Test.zeroTicks`, which test it.
+4. **Semi-joins and anti-joins** for `exists` and `not exists`
+   (`f90e6dc8`, `94aaed99`, `3e9cba2e`). After 1.
+5. **Constant folding** (`d321bbb5`, `5dd3f96c`).
+6. **Aggregates over options** (#503, #256), on branch `503-avg`.
+7. **The file reader**: decimal, date and option columns (part 1),
+   reading a table when the code runs (part 3), `?.` learning a
+   table's fields (part 3), and deducing a declaration again
+   (part 6).
+8. **TPC-DS** (#502): the generator, the queries, the script and
+   `TpcdsChecker`. `plan.md` stays on the branch, as the Spark
+   plan did.
+
 ## Log
 
 * 2026-11-08: plan written. Branch at `main`; no code yet. Maturity:
@@ -761,8 +805,8 @@ three, which it cannot do directly. Every tier needs D10.
   inner and outer columns it could be a semi-join (`not exists`: an
   anti-join) that evaluates the subquery once and probes a hash set.
   q69 takes 13s, most of it in three such subqueries.
-* 2026-11-11: semi- and anti-joins for `exists` (`edaa8b76`; q69 13s
-  to 6s), and #506 (comments in the shell, `ed83c2a5`); pushed. **Tier
+* 2026-11-11: semi- and anti-joins for `exists` (`f90e6dc8`; q69 13s
+  to 6s), and #506 (comments in the shell, `710d519f`); pushed. **Tier
   A done**: all 53 queries agree with Spark (52 values and q90's
   error); the script runs in 39s. More for M4: (4) Morel joins
   comma-separated scans in the order written; q64 lists `d2` and `d3`
@@ -773,7 +817,7 @@ three, which it cannot do directly. Every tier needs D10.
   matches a repeated answer column (q64's `s1`) to a field `s1_2`, and
   a decimal that Morel computes to more places than Spark to within a
   relative 1e-9 (q66's ratios). Next: tier B.
-* 2026-11-12: part 5 committed (`af491aea`); D11 (aggregates over
+* 2026-11-12: part 5 committed (`d313c535`); D11 (aggregates over
   options) written up, in `/tmp/avgOpt.md` too. **Tier B done**: all
   78 queries of tiers A and B agree (77 values and q90's error); the
   script runs in about 105s, half of it q35. Fixed on the way, each
