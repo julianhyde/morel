@@ -442,6 +442,26 @@ several queries; and the guards for `NONE` (`x <> NONE andalso x <
 SOME c`) are repeated. Settle the idioms, then apply them to every
 query, checking that each still agrees with Spark.
 
+*Review done 2026-11-12.*
+* `@` became `union` (q2, q4, q5, q11, q14a, q66, q74, q77, q80).
+* `day` and `lift2` are defined once, at the top of the file.
+  `lift2 (op -) (a, b)` is SQL's `a - b`, `NULL` if either operand
+  is. `lift2` replaces the many copies of `minus` and `divide`, and
+  `times` is defined using it. This needed operator sections to work
+  on `decimal`, which they now do.
+* The type annotations that worked around overloaded arithmetic in a
+  `let` are gone.
+* A chain of `orelse` whose branches test disjoint keys became a
+  `case`: q13, q48 and q85 (marital status), q41 (category), q47 and
+  q57 (year and month), q88 (dependants). Chains over lists of states
+  that overlap (q13), or that would need or-patterns (q48, q85, q53),
+  stayed as they were; Morel has no or-patterns.
+* q49 defines its ranking once, now that the crash with a correlated
+  subquery in a function called more than once (#508) is fixed.
+* q51 still needs two copies of `running`: Morel does not generalize a
+  let-bound function whose body is a query.
+* The guards for `NONE` stay; the header of the file explains them.
+
 *M3 completed 2026-11-12; see the log.*
 
 **M4. Local pass.** Fix what M3 found in Morel itself (wrong answers,

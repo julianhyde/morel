@@ -57,6 +57,20 @@ Sys.set ("output", "tabular");
 Sys.set ("printLength", 10);
 > val it = () : unit
 
+(* A date, at midnight UTC; SQL's "cast('2000-08-23' AS DATE)" is
+ * "day (2000, Aug, 23)". *)
+fun day (year, month, day) =
+  Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+    offset = SOME Time.zeroTime};
+> val day = fn : int * month * int -> date
+
+(* "lift2 f (a, b)" applies "f" to the values of two options, or is
+ * NONE if either is NONE, as SQL's arithmetic is NULL if an operand
+ * is NULL; "lift2 (op -) (a, b)" is SQL's "a - b". *)
+fun lift2 f (SOME a, SOME b) = SOME (f (a, b))
+  | lift2 f _ = NONE;
+> val lift2 = fn : ('a * 'b -> 'c) -> 'a option * 'b option -> 'c option
+
 (* --- q1 --------------------------------------------------------- *)
 (*
 WITH customer_total_return AS
@@ -202,13 +216,13 @@ ORDER BY d_week_seq1
 fun q2 () =
   let
     val wscs =
-      (from ws in tpcds.web_sales
+      from ws in tpcds.web_sales
         yield {sold_date_sk = ws.ws_sold_date_sk,
-          sales_price = ws.ws_ext_sales_price})
-      @
-      (from cs in tpcds.catalog_sales
-        yield {sold_date_sk = cs.cs_sold_date_sk,
-          sales_price = cs.cs_ext_sales_price})
+          sales_price = ws.ws_ext_sales_price}
+        union
+          (from cs in tpcds.catalog_sales
+            yield {sold_date_sk = cs.cs_sold_date_sk,
+              sales_price = cs.cs_ext_sales_price})
     val wswscs =
       from w in wscs,
           d in tpcds.date_dim
@@ -466,7 +480,7 @@ LIMIT 100
 fun q4 () =
   let
     val year_total =
-      (from c in tpcds.customer,
+      from c in tpcds.customer,
           ss in tpcds.store_sales,
           d in tpcds.date_dim
         where ss.ss_customer_sk = SOME c.c_customer_sk
@@ -487,53 +501,52 @@ fun q4 () =
         yield {customer_id, customer_first_name, customer_last_name,
           customer_preferred_cust_flag, customer_birth_country,
           customer_login, customer_email_address, dyear, year_total,
-          sale_type = "s"})
-      @
-      (from c in tpcds.customer,
-          cs in tpcds.catalog_sales,
-          d in tpcds.date_dim
-        where cs.cs_bill_customer_sk = SOME c.c_customer_sk
-          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
-        group {customer_id = c.c_customer_id,
-            customer_first_name = c.c_first_name,
-            customer_last_name = c.c_last_name,
-            customer_preferred_cust_flag = c.c_preferred_cust_flag,
-            customer_birth_country = c.c_birth_country,
-            customer_login = c.c_login,
-            customer_email_address = c.c_email_address, dyear = d.d_year}
-          compute {year_total = sumSome over
-            (case (cs.cs_ext_list_price, cs.cs_ext_wholesale_cost,
-                cs.cs_ext_discount_amt, cs.cs_ext_sales_price) of
-                (SOME lp, SOME wc, SOME da, SOME sp) =>
-                  SOME ((lp - wc - da + sp) / Decimal.fromInt 2)
-              | _ => NONE)}
-        yield {customer_id, customer_first_name, customer_last_name,
-          customer_preferred_cust_flag, customer_birth_country,
-          customer_login, customer_email_address, dyear, year_total,
-          sale_type = "c"})
-      @
-      (from c in tpcds.customer,
-          ws in tpcds.web_sales,
-          d in tpcds.date_dim
-        where ws.ws_bill_customer_sk = SOME c.c_customer_sk
-          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
-        group {customer_id = c.c_customer_id,
-            customer_first_name = c.c_first_name,
-            customer_last_name = c.c_last_name,
-            customer_preferred_cust_flag = c.c_preferred_cust_flag,
-            customer_birth_country = c.c_birth_country,
-            customer_login = c.c_login,
-            customer_email_address = c.c_email_address, dyear = d.d_year}
-          compute {year_total = sumSome over
-            (case (ws.ws_ext_list_price, ws.ws_ext_wholesale_cost,
-                ws.ws_ext_discount_amt, ws.ws_ext_sales_price) of
-                (SOME lp, SOME wc, SOME da, SOME sp) =>
-                  SOME ((lp - wc - da + sp) / Decimal.fromInt 2)
-              | _ => NONE)}
-        yield {customer_id, customer_first_name, customer_last_name,
-          customer_preferred_cust_flag, customer_birth_country,
-          customer_login, customer_email_address, dyear, year_total,
-          sale_type = "w"})
+          sale_type = "s"}
+        union
+          (from c in tpcds.customer,
+              cs in tpcds.catalog_sales,
+              d in tpcds.date_dim
+            where cs.cs_bill_customer_sk = SOME c.c_customer_sk
+              andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+            group {customer_id = c.c_customer_id,
+                customer_first_name = c.c_first_name,
+                customer_last_name = c.c_last_name,
+                customer_preferred_cust_flag = c.c_preferred_cust_flag,
+                customer_birth_country = c.c_birth_country,
+                customer_login = c.c_login,
+                customer_email_address = c.c_email_address, dyear = d.d_year}
+              compute {year_total = sumSome over
+                (case (cs.cs_ext_list_price, cs.cs_ext_wholesale_cost,
+                    cs.cs_ext_discount_amt, cs.cs_ext_sales_price) of
+                    (SOME lp, SOME wc, SOME da, SOME sp) =>
+                      SOME ((lp - wc - da + sp) / Decimal.fromInt 2)
+                  | _ => NONE)}
+            yield {customer_id, customer_first_name, customer_last_name,
+              customer_preferred_cust_flag, customer_birth_country,
+              customer_login, customer_email_address, dyear, year_total,
+              sale_type = "c"}),
+          (from c in tpcds.customer,
+              ws in tpcds.web_sales,
+              d in tpcds.date_dim
+            where ws.ws_bill_customer_sk = SOME c.c_customer_sk
+              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+            group {customer_id = c.c_customer_id,
+                customer_first_name = c.c_first_name,
+                customer_last_name = c.c_last_name,
+                customer_preferred_cust_flag = c.c_preferred_cust_flag,
+                customer_birth_country = c.c_birth_country,
+                customer_login = c.c_login,
+                customer_email_address = c.c_email_address, dyear = d.d_year}
+              compute {year_total = sumSome over
+                (case (ws.ws_ext_list_price, ws.ws_ext_wholesale_cost,
+                    ws.ws_ext_discount_amt, ws.ws_ext_sales_price) of
+                    (SOME lp, SOME wc, SOME da, SOME sp) =>
+                      SOME ((lp - wc - da + sp) / Decimal.fromInt 2)
+                  | _ => NONE)}
+            yield {customer_id, customer_first_name, customer_last_name,
+              customer_preferred_cust_flag, customer_birth_country,
+              customer_login, customer_email_address, dyear, year_total,
+              sale_type = "w"})
     val zero = SOME (Decimal.fromInt 0)
     (* "CASE WHEN b > 0 THEN a / b ELSE NULL END" *)
     fun ratio (a, b) =
@@ -744,15 +757,8 @@ LIMIT 100
  * a union, a sale having no return amount and a return no sales. *)
 fun q5 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val zero = Decimal.fromInt 0
-    (* "a - b" and "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
-    fun minus (a : decimal option, b) =
-      case (a, b) of
-          (SOME a, SOME b) => SOME (a - b)
-        | _ => NONE
+    (* "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
     fun minus0 (a, b) = Option.map (fn a => a - getOpt (b, zero)) a
     fun inRange d =
       d >= SOME (day (2000, Aug, 23))
@@ -762,11 +768,11 @@ fun q5 () =
             yield {key = ss.ss_store_sk, date_sk = ss.ss_sold_date_sk,
               sales_price = ss.ss_ext_sales_price,
               profit = ss.ss_net_profit, return_amt = SOME zero,
-              net_loss = SOME zero})
-          @ (from sr in tpcds.store_returns
-            yield {key = sr.sr_store_sk, date_sk = sr.sr_returned_date_sk,
-              sales_price = SOME zero, profit = SOME zero,
-              return_amt = sr.sr_return_amt, net_loss = sr.sr_net_loss}),
+              net_loss = SOME zero}
+            union (from sr in tpcds.store_returns
+                yield {key = sr.sr_store_sk, date_sk = sr.sr_returned_date_sk,
+                  sales_price = SOME zero, profit = SOME zero,
+                  return_amt = sr.sr_return_amt, net_loss = sr.sr_net_loss})),
           d in tpcds.date_dim,
           s in tpcds.store
         where x.date_sk = SOME d.d_date_sk
@@ -782,11 +788,11 @@ fun q5 () =
             yield {key = cs.cs_catalog_page_sk, date_sk = cs.cs_sold_date_sk,
               sales_price = cs.cs_ext_sales_price,
               profit = cs.cs_net_profit, return_amt = SOME zero,
-              net_loss = SOME zero})
-          @ (from cr in tpcds.catalog_returns
-            yield {key = cr.cr_catalog_page_sk, date_sk = cr.cr_returned_date_sk,
-              sales_price = SOME zero, profit = SOME zero,
-              return_amt = cr.cr_return_amount, net_loss = cr.cr_net_loss}),
+              net_loss = SOME zero}
+            union (from cr in tpcds.catalog_returns
+                yield {key = cr.cr_catalog_page_sk, date_sk = cr.cr_returned_date_sk,
+                  sales_price = SOME zero, profit = SOME zero,
+                  return_amt = cr.cr_return_amount, net_loss = cr.cr_net_loss})),
           d in tpcds.date_dim,
           cp in tpcds.catalog_page
         where x.date_sk = SOME d.d_date_sk
@@ -802,14 +808,14 @@ fun q5 () =
             yield {key = ws.ws_web_site_sk, date_sk = ws.ws_sold_date_sk,
               sales_price = ws.ws_ext_sales_price,
               profit = ws.ws_net_profit, return_amt = SOME zero,
-              net_loss = SOME zero})
-          @ (from wr in tpcds.web_returns
-              left join ws in tpcds.web_sales
-                on wr.wr_item_sk = ws.ws_item_sk
-                  andalso wr.wr_order_number = ws.ws_order_number
-            yield {key = Option.`join` ws?.ws_web_site_sk, date_sk = wr.wr_returned_date_sk,
-              sales_price = SOME zero, profit = SOME zero,
-              return_amt = wr.wr_return_amt, net_loss = wr.wr_net_loss}),
+              net_loss = SOME zero}
+            union (from wr in tpcds.web_returns
+                  left join ws in tpcds.web_sales
+                    on wr.wr_item_sk = ws.ws_item_sk
+                      andalso wr.wr_order_number = ws.ws_order_number
+                yield {key = Option.`join` ws?.ws_web_site_sk, date_sk = wr.wr_returned_date_sk,
+                  sales_price = SOME zero, profit = SOME zero,
+                  return_amt = wr.wr_return_amt, net_loss = wr.wr_net_loss})),
           d in tpcds.date_dim,
           web in tpcds.web_site
         where x.date_sk = SOME d.d_date_sk
@@ -821,18 +827,17 @@ fun q5 () =
             returns = sumSome over x.return_amt,
             profit_loss = sumSome over x.net_loss}
     val x =
-      (from r in ssr
+      from r in ssr
         yield {channel = SOME "store channel", id = SOME ("store" ^ r.id),
-          r.sales, r.returns, profit = minus (r.profit, r.profit_loss)})
-      @
-      (from r in csr
-        yield {channel = SOME "catalog channel",
-          id = SOME ("catalog_page" ^ r.id), r.sales, r.returns,
-          profit = minus (r.profit, r.profit_loss)})
-      @
-      (from r in wsr
-        yield {channel = SOME "web channel", id = SOME ("web_site" ^ r.id),
-          r.sales, r.returns, profit = minus (r.profit, r.profit_loss)})
+          r.sales, r.returns, profit = lift2 (op -) (r.profit, r.profit_loss)}
+        union
+          (from r in csr
+            yield {channel = SOME "catalog channel",
+              id = SOME ("catalog_page" ^ r.id), r.sales, r.returns,
+              profit = lift2 (op -) (r.profit, r.profit_loss)}),
+          (from r in wsr
+            yield {channel = SOME "web channel", id = SOME ("web_site" ^ r.id),
+              r.sales, r.returns, profit = lift2 (op -) (r.profit, r.profit_loss)})
   in
     from r in (from b in x
           group {b.channel, b.id}
@@ -1471,7 +1476,7 @@ LIMIT 100
 fun q11 () =
   let
     val year_total =
-      (from c in tpcds.customer,
+      from c in tpcds.customer,
           ss in tpcds.store_sales,
           d in tpcds.date_dim
         where ss.ss_customer_sk = SOME c.c_customer_sk
@@ -1490,28 +1495,28 @@ fun q11 () =
         yield {customer_id, customer_first_name, customer_last_name,
           customer_preferred_cust_flag, customer_birth_country,
           customer_login, customer_email_address, dyear, year_total,
-          sale_type = "s"})
-      @
-      (from c in tpcds.customer,
-          ws in tpcds.web_sales,
-          d in tpcds.date_dim
-        where ws.ws_bill_customer_sk = SOME c.c_customer_sk
-          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
-        group {customer_id = c.c_customer_id,
-            customer_first_name = c.c_first_name,
-            customer_last_name = c.c_last_name,
-            customer_preferred_cust_flag = c.c_preferred_cust_flag,
-            customer_birth_country = c.c_birth_country,
-            customer_login = c.c_login,
-            customer_email_address = c.c_email_address, dyear = d.d_year}
-          compute {year_total = sumSome over
-            (case (ws.ws_ext_list_price, ws.ws_ext_discount_amt) of
-                (SOME lp, SOME da) => SOME (lp - da)
-              | _ => NONE)}
-        yield {customer_id, customer_first_name, customer_last_name,
-          customer_preferred_cust_flag, customer_birth_country,
-          customer_login, customer_email_address, dyear, year_total,
-          sale_type = "w"})
+          sale_type = "s"}
+        union
+          (from c in tpcds.customer,
+              ws in tpcds.web_sales,
+              d in tpcds.date_dim
+            where ws.ws_bill_customer_sk = SOME c.c_customer_sk
+              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+            group {customer_id = c.c_customer_id,
+                customer_first_name = c.c_first_name,
+                customer_last_name = c.c_last_name,
+                customer_preferred_cust_flag = c.c_preferred_cust_flag,
+                customer_birth_country = c.c_birth_country,
+                customer_login = c.c_login,
+                customer_email_address = c.c_email_address, dyear = d.d_year}
+              compute {year_total = sumSome over
+                (case (ws.ws_ext_list_price, ws.ws_ext_discount_amt) of
+                    (SOME lp, SOME da) => SOME (lp - da)
+                  | _ => NONE)}
+            yield {customer_id, customer_first_name, customer_last_name,
+              customer_preferred_cust_flag, customer_birth_country,
+              customer_login, customer_email_address, dyear, year_total,
+              sale_type = "w"})
     val zero = SOME (Decimal.fromInt 0)
     (* "CASE WHEN b > 0 THEN a / b ELSE NULL END" *)
     fun ratio (a, b) =
@@ -1581,9 +1586,6 @@ LIMIT 100
  * partition, as NONE = NONE. *)
 fun q12 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val items =
       from ws in tpcds.web_sales,
           i in tpcds.item,
@@ -1622,7 +1624,7 @@ fun q12 () =
 >           itemrevenue:decimal option, revenueratio:decimal option} list
 val r12 = q12 ();
 > uncaught exception Div [divide by zero]
->   raised at: stdIn:30.22-30.61
+>   raised at: stdIn:27.22-27.61
 
 (* --- q13 -------------------------------------------------------- *)
 (*
@@ -1690,21 +1692,18 @@ fun q13 () =
       andalso d.d_year = SOME 2001
       andalso ss.ss_hdemo_sk = SOME hd.hd_demo_sk
       andalso ss.ss_cdemo_sk = SOME cd.cd_demo_sk
-      andalso (cd.cd_marital_status = SOME "M"
-          andalso cd.cd_education_status = SOME "Advanced Degree"
-          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 100)
-          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 150)
-          andalso hd.hd_dep_count = SOME 3
-        orelse cd.cd_marital_status = SOME "S"
-          andalso cd.cd_education_status = SOME "College"
-          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 50)
-          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 100)
-          andalso hd.hd_dep_count = SOME 1
-        orelse cd.cd_marital_status = SOME "W"
-          andalso cd.cd_education_status = SOME "2 yr Degree"
-          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 150)
-          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 200)
-          andalso hd.hd_dep_count = SOME 1)
+      andalso (case (cd.cd_marital_status, cd.cd_education_status,
+              hd.hd_dep_count) of
+            (SOME "M", SOME "Advanced Degree", SOME 3) =>
+              ss.ss_sales_price >= SOME (Decimal.fromInt 100)
+              andalso ss.ss_sales_price <= SOME (Decimal.fromInt 150)
+          | (SOME "S", SOME "College", SOME 1) =>
+              ss.ss_sales_price >= SOME (Decimal.fromInt 50)
+              andalso ss.ss_sales_price <= SOME (Decimal.fromInt 100)
+          | (SOME "W", SOME "2 yr Degree", SOME 1) =>
+              ss.ss_sales_price >= SOME (Decimal.fromInt 150)
+              andalso ss.ss_sales_price <= SOME (Decimal.fromInt 200)
+          | _ => false)
       andalso ss.ss_addr_sk = SOME ca.ca_address_sk
       andalso ca.ca_country = SOME "United States"
       andalso (ca.ca_state elem [SOME "TX", SOME "OH", SOME "TX"]
@@ -1864,10 +1863,7 @@ LIMIT 100
 fun q14a () =
   let
     (* "quantity * price" *)
-    fun times (quantity, price) =
-      case (quantity, price) of
-          (SOME q, SOME p) => SOME (Decimal.fromInt q * p)
-        | _ => NONE
+    val times = lift2 (fn (q, p) => Decimal.fromInt q * p)
     val years = [SOME 1999, SOME (1999 + 1), SOME (1999 + 2)]
     val cross_items =
       from i in tpcds.item,
@@ -1928,7 +1924,7 @@ fun q14a () =
             yield {quantity = ws.ws_quantity, list_price = ws.ws_list_price})
         compute avgSome over times (x.quantity, x.list_price)
     val y =
-      (from ss in tpcds.store_sales,
+      from ss in tpcds.store_sales,
           i in tpcds.item,
           d in tpcds.date_dim
         where (exists ci in cross_items where ci = ss.ss_item_sk)
@@ -1944,43 +1940,42 @@ fun q14a () =
                   (SOME s, SOME a) => s > a
                 | _ => false)
         yield {channel = SOME "store", i_brand_id, i_class_id,
-          i_category_id, sales, number_sales})
-      @
-      (from cs in tpcds.catalog_sales,
-          i in tpcds.item,
-          d in tpcds.date_dim
-        where (exists ci in cross_items where ci = cs.cs_item_sk)
-          andalso cs.cs_item_sk = i.i_item_sk
-          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
-          andalso d.d_year = SOME (1999 + 2)
-          andalso d.d_moy = SOME 11
-        group {i.i_brand_id, i.i_class_id, i.i_category_id}
-          compute {
-            sales = sumSome over times (cs.cs_quantity, cs.cs_list_price),
-            number_sales = count over ()}
-        where (case (sales, average_sales) of
-                  (SOME s, SOME a) => s > a
-                | _ => false)
-        yield {channel = SOME "catalog", i_brand_id, i_class_id,
-          i_category_id, sales, number_sales})
-      @
-      (from ws in tpcds.web_sales,
-          i in tpcds.item,
-          d in tpcds.date_dim
-        where (exists ci in cross_items where ci = ws.ws_item_sk)
-          andalso ws.ws_item_sk = i.i_item_sk
-          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
-          andalso d.d_year = SOME (1999 + 2)
-          andalso d.d_moy = SOME 11
-        group {i.i_brand_id, i.i_class_id, i.i_category_id}
-          compute {
-            sales = sumSome over times (ws.ws_quantity, ws.ws_list_price),
-            number_sales = count over ()}
-        where (case (sales, average_sales) of
-                  (SOME s, SOME a) => s > a
-                | _ => false)
-        yield {channel = SOME "web", i_brand_id, i_class_id,
-          i_category_id, sales, number_sales})
+          i_category_id, sales, number_sales}
+        union
+          (from cs in tpcds.catalog_sales,
+              i in tpcds.item,
+              d in tpcds.date_dim
+            where (exists ci in cross_items where ci = cs.cs_item_sk)
+              andalso cs.cs_item_sk = i.i_item_sk
+              andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year = SOME (1999 + 2)
+              andalso d.d_moy = SOME 11
+            group {i.i_brand_id, i.i_class_id, i.i_category_id}
+              compute {
+                sales = sumSome over times (cs.cs_quantity, cs.cs_list_price),
+                number_sales = count over ()}
+            where (case (sales, average_sales) of
+                      (SOME s, SOME a) => s > a
+                    | _ => false)
+            yield {channel = SOME "catalog", i_brand_id, i_class_id,
+              i_category_id, sales, number_sales}),
+          (from ws in tpcds.web_sales,
+              i in tpcds.item,
+              d in tpcds.date_dim
+            where (exists ci in cross_items where ci = ws.ws_item_sk)
+              andalso ws.ws_item_sk = i.i_item_sk
+              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year = SOME (1999 + 2)
+              andalso d.d_moy = SOME 11
+            group {i.i_brand_id, i.i_class_id, i.i_category_id}
+              compute {
+                sales = sumSome over times (ws.ws_quantity, ws.ws_list_price),
+                number_sales = count over ()}
+            where (case (sales, average_sales) of
+                      (SOME s, SOME a) => s > a
+                    | _ => false)
+            yield {channel = SOME "web", i_brand_id, i_class_id,
+              i_category_id, sales, number_sales})
   in
     from r in (from b in y
           group {b.channel, b.i_brand_id, b.i_class_id, b.i_category_id}
@@ -2139,10 +2134,7 @@ LIMIT 100
 fun q14b () =
   let
     (* "quantity * price" *)
-    fun times (quantity, price) =
-      case (quantity, price) of
-          (SOME q, SOME p) => SOME (Decimal.fromInt q * p)
-        | _ => NONE
+    val times = lift2 (fn (q, p) => Decimal.fromInt q * p)
     val years = [SOME 1999, SOME (1999 + 1), SOME (1999 + 2)]
     val cross_items =
       from i in tpcds.item,
@@ -2361,36 +2353,30 @@ ORDER BY count(DISTINCT cs_order_number)
 LIMIT 100
 *)
 fun q16 () =
-  let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
-  in
-    from cs1 in tpcds.catalog_sales,
-        d in tpcds.date_dim,
-        ca in tpcds.customer_address,
-        cc in tpcds.call_center
-      where d.d_date >= SOME (day (2002, Feb, 1))
-        andalso d.d_date <= SOME (day (2002, Feb, 1 + 60))
-        andalso cs1.cs_ship_date_sk = SOME d.d_date_sk
-        andalso cs1.cs_ship_addr_sk = SOME ca.ca_address_sk
-        andalso ca.ca_state = SOME "GA"
-        andalso cs1.cs_call_center_sk = SOME cc.cc_call_center_sk
-        andalso cc.cc_county elem [SOME "Williamson County"]
-        andalso (exists cs2 in tpcds.catalog_sales
-          where cs1.cs_order_number = cs2.cs_order_number
-            andalso cs1.cs_warehouse_sk <> NONE
-            andalso cs2.cs_warehouse_sk <> NONE
-            andalso cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk)
-        andalso not (exists cr1 in tpcds.catalog_returns
-          where cs1.cs_order_number = cr1.cr_order_number)
-      compute {
-        `order count ` =
-          (fn orders => List.length (from n in orders distinct))
-            over cs1.cs_order_number,
-        `total shipping cost ` = sumSome over cs1.cs_ext_ship_cost,
-        `total net profit ` = sumSome over cs1.cs_net_profit}
-  end;
+  from cs1 in tpcds.catalog_sales,
+      d in tpcds.date_dim,
+      ca in tpcds.customer_address,
+      cc in tpcds.call_center
+    where d.d_date >= SOME (day (2002, Feb, 1))
+      andalso d.d_date <= SOME (day (2002, Feb, 1 + 60))
+      andalso cs1.cs_ship_date_sk = SOME d.d_date_sk
+      andalso cs1.cs_ship_addr_sk = SOME ca.ca_address_sk
+      andalso ca.ca_state = SOME "GA"
+      andalso cs1.cs_call_center_sk = SOME cc.cc_call_center_sk
+      andalso cc.cc_county elem [SOME "Williamson County"]
+      andalso (exists cs2 in tpcds.catalog_sales
+        where cs1.cs_order_number = cs2.cs_order_number
+          andalso cs1.cs_warehouse_sk <> NONE
+          andalso cs2.cs_warehouse_sk <> NONE
+          andalso cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk)
+      andalso not (exists cr1 in tpcds.catalog_returns
+        where cs1.cs_order_number = cr1.cr_order_number)
+    compute {
+      `order count ` =
+        (fn orders => List.length (from n in orders distinct))
+          over cs1.cs_order_number,
+      `total shipping cost ` = sumSome over cs1.cs_ext_ship_cost,
+      `total net profit ` = sumSome over cs1.cs_net_profit};
 > val q16 = fn
 >   : unit
 >      -> {`order count `:int, `total net profit `:decimal option,
@@ -2438,65 +2424,57 @@ ORDER BY i_item_id, i_item_desc, s_state
 LIMIT 100
 *)
 fun q17 () =
-  let
-    (* "a / b" of two reals that may be NONE *)
-    fun divide (a, b) =
-      case (a, b) of
-          (SOME a, SOME b) => SOME (a / b)
-        | _ => NONE
-  in
-    from ss in tpcds.store_sales,
-        sr in tpcds.store_returns,
-        cs in tpcds.catalog_sales,
-        d1 in tpcds.date_dim,
-        d2 in tpcds.date_dim,
-        d3 in tpcds.date_dim,
-        s in tpcds.store,
-        i in tpcds.item
-      where d1.d_quarter_name = SOME "2001Q1"
-        andalso ss.ss_sold_date_sk = SOME d1.d_date_sk
-        andalso ss.ss_item_sk = i.i_item_sk
-        andalso ss.ss_store_sk = SOME s.s_store_sk
-        andalso ss.ss_customer_sk <> NONE
-        andalso ss.ss_customer_sk = sr.sr_customer_sk
-        andalso ss.ss_item_sk = sr.sr_item_sk
-        andalso ss.ss_ticket_number = sr.sr_ticket_number
-        andalso sr.sr_returned_date_sk = SOME d2.d_date_sk
-        andalso d2.d_quarter_name
-          elem [SOME "2001Q1", SOME "2001Q2", SOME "2001Q3"]
-        andalso sr.sr_customer_sk = cs.cs_bill_customer_sk
-        andalso sr.sr_item_sk = cs.cs_item_sk
-        andalso cs.cs_sold_date_sk = SOME d3.d_date_sk
-        andalso d3.d_quarter_name
-          elem [SOME "2001Q1", SOME "2001Q2", SOME "2001Q3"]
-      group {i.i_item_id, i.i_item_desc, s.s_state}
-          compute {store_sales_quantitycount = countSome over ss.ss_quantity,
-            store_sales_quantityave = avgSome over ss.ss_quantity,
-            sd_store_sales = stddevSampSome over ss.ss_quantity,
-            as_store_returns_quantitycount = countSome over sr.sr_return_quantity,
-            as_store_returns_quantityave = avgSome over sr.sr_return_quantity,
-            sd_store_returns = stddevSampSome over sr.sr_return_quantity,
-            catalog_sales_quantitycount = countSome over cs.cs_quantity,
-            catalog_sales_quantityave = avgSome over cs.cs_quantity,
-            sd_catalog_sales = stddevSampSome over cs.cs_quantity}
-      order (i_item_id, i_item_desc, s_state)
-      yield {i_item_id, i_item_desc, s_state, store_sales_quantitycount,
-        store_sales_quantityave,
-        store_sales_quantitystdev = sd_store_sales,
-        store_sales_quantitycov =
-          divide (sd_store_sales, store_sales_quantityave),
-        as_store_returns_quantitycount, as_store_returns_quantityave,
-        as_store_returns_quantitystdev = sd_store_returns,
-        store_returns_quantitycov =
-          divide (sd_store_returns, as_store_returns_quantityave),
-        catalog_sales_quantitycount, catalog_sales_quantityave,
-        (* As in the SQL, this "stdev" is the coefficient of variation. *)
-        catalog_sales_quantitystdev =
-          divide (sd_catalog_sales, catalog_sales_quantityave),
-        catalog_sales_quantitycov =
-          divide (sd_catalog_sales, catalog_sales_quantityave)}
-      take 100
-  end;
+  from ss in tpcds.store_sales,
+      sr in tpcds.store_returns,
+      cs in tpcds.catalog_sales,
+      d1 in tpcds.date_dim,
+      d2 in tpcds.date_dim,
+      d3 in tpcds.date_dim,
+      s in tpcds.store,
+      i in tpcds.item
+    where d1.d_quarter_name = SOME "2001Q1"
+      andalso ss.ss_sold_date_sk = SOME d1.d_date_sk
+      andalso ss.ss_item_sk = i.i_item_sk
+      andalso ss.ss_store_sk = SOME s.s_store_sk
+      andalso ss.ss_customer_sk <> NONE
+      andalso ss.ss_customer_sk = sr.sr_customer_sk
+      andalso ss.ss_item_sk = sr.sr_item_sk
+      andalso ss.ss_ticket_number = sr.sr_ticket_number
+      andalso sr.sr_returned_date_sk = SOME d2.d_date_sk
+      andalso d2.d_quarter_name
+        elem [SOME "2001Q1", SOME "2001Q2", SOME "2001Q3"]
+      andalso sr.sr_customer_sk = cs.cs_bill_customer_sk
+      andalso sr.sr_item_sk = cs.cs_item_sk
+      andalso cs.cs_sold_date_sk = SOME d3.d_date_sk
+      andalso d3.d_quarter_name
+        elem [SOME "2001Q1", SOME "2001Q2", SOME "2001Q3"]
+    group {i.i_item_id, i.i_item_desc, s.s_state}
+        compute {store_sales_quantitycount = countSome over ss.ss_quantity,
+          store_sales_quantityave = avgSome over ss.ss_quantity,
+          sd_store_sales = stddevSampSome over ss.ss_quantity,
+          as_store_returns_quantitycount = countSome over sr.sr_return_quantity,
+          as_store_returns_quantityave = avgSome over sr.sr_return_quantity,
+          sd_store_returns = stddevSampSome over sr.sr_return_quantity,
+          catalog_sales_quantitycount = countSome over cs.cs_quantity,
+          catalog_sales_quantityave = avgSome over cs.cs_quantity,
+          sd_catalog_sales = stddevSampSome over cs.cs_quantity}
+    order (i_item_id, i_item_desc, s_state)
+    yield {i_item_id, i_item_desc, s_state, store_sales_quantitycount,
+      store_sales_quantityave,
+      store_sales_quantitystdev = sd_store_sales,
+      store_sales_quantitycov =
+        lift2 (op /) (sd_store_sales, store_sales_quantityave),
+      as_store_returns_quantitycount, as_store_returns_quantityave,
+      as_store_returns_quantitystdev = sd_store_returns,
+      store_returns_quantitycov =
+        lift2 (op /) (sd_store_returns, as_store_returns_quantityave),
+      catalog_sales_quantitycount, catalog_sales_quantityave,
+      (* As in the SQL, this "stdev" is the coefficient of variation. *)
+      catalog_sales_quantitystdev =
+        lift2 (op /) (sd_catalog_sales, catalog_sales_quantityave),
+      catalog_sales_quantitycov =
+        lift2 (op /) (sd_catalog_sales, catalog_sales_quantityave)}
+    take 100;
 > val q17 = fn
 >   : unit
 >      -> {as_store_returns_quantityave:real option,
@@ -2763,9 +2741,6 @@ LIMIT 100
  * partition, as NONE = NONE. *)
 fun q20 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val items =
       from cs in tpcds.catalog_sales,
           i in tpcds.item,
@@ -2849,9 +2824,6 @@ LIMIT 100
 *)
 fun q21 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     (* "CASE WHEN b > 0 THEN a / b ELSE NULL END BETWEEN 2/3 AND 3/2" *)
     fun steady (after, before) =
       case (after, before) of
@@ -3052,10 +3024,7 @@ LIMIT 100
 fun q23a () =
   let
     (* "quantity * price" *)
-    fun times (quantity, price) =
-      case (quantity, price) of
-          (SOME q, SOME p) => SOME (Decimal.fromInt q * p)
-        | _ => NONE
+    val times = lift2 (fn (q, p) => Decimal.fromInt q * p)
     val years = [SOME 2000, SOME (2000 + 1), SOME (2000 + 2), SOME (2000 + 3)]
     val frequent_ss_items =
       from ss in tpcds.store_sales,
@@ -3192,10 +3161,7 @@ LIMIT 100
 fun q23b () =
   let
     (* "quantity * price" *)
-    fun times (quantity, price) =
-      case (quantity, price) of
-          (SOME q, SOME p) => SOME (Decimal.fromInt q * p)
-        | _ => NONE
+    val times = lift2 (fn (q, p) => Decimal.fromInt q * p)
     val years = [SOME 2000, SOME (2000 + 1), SOME (2000 + 2), SOME (2000 + 3)]
     val frequent_ss_items =
       from ss in tpcds.store_sales,
@@ -4097,11 +4063,6 @@ fun q31 () =
           andalso ws.ws_bill_addr_sk = SOME ca.ca_address_sk
         group {ca.ca_county, d.d_qoy, d.d_year}
           compute {web_sales = sumSome over ws.ws_ext_sales_price}
-    (* "a / b", which raises if "b" is zero *)
-    fun divide (a : decimal option, b) =
-      case (a, b) of
-          (SOME x, SOME y) => SOME (x / y)
-        | _ => NONE
     (* "CASE WHEN b > 0 THEN a / b ELSE NULL END" *)
     fun ratio (a, b) =
       case (a, b) of
@@ -4135,10 +4096,10 @@ fun q31 () =
         andalso ratio (ws3.web_sales, ws2.web_sales)
           > ratio (ss3.store_sales, ss2.store_sales)
       yield {ss1.ca_county, ss1.d_year,
-        web_q1_q2_increase = divide (ws2.web_sales, ws1.web_sales),
-        store_q1_q2_increase = divide (ss2.store_sales, ss1.store_sales),
-        web_q2_q3_increase = divide (ws3.web_sales, ws2.web_sales),
-        store_q2_q3_increase = divide (ss3.store_sales, ss2.store_sales)}
+        web_q1_q2_increase = lift2 (op /) (ws2.web_sales, ws1.web_sales),
+        store_q1_q2_increase = lift2 (op /) (ss2.store_sales, ss1.store_sales),
+        web_q2_q3_increase = lift2 (op /) (ws3.web_sales, ws2.web_sales),
+        store_q2_q3_increase = lift2 (op /) (ss3.store_sales, ss2.store_sales)}
       order ca_county
   end;
 > val q31 = fn
@@ -4173,31 +4134,25 @@ WHERE
 LIMIT 100
 *)
 fun q32 () =
-  let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
-  in
-    from cs in tpcds.catalog_sales,
-        i in tpcds.item,
-        d in tpcds.date_dim
-      where i.i_manufact_id = SOME 977
-        andalso cs.cs_item_sk = i.i_item_sk
-        andalso d.d_date >= SOME (day (2000, Jan, 27))
-        andalso d.d_date <= SOME (day (2000, Jan, 27 + 90))
-        andalso cs.cs_sold_date_sk = SOME d.d_date_sk
-        andalso (case (cs.cs_ext_discount_amt,
-                from cs2 in tpcds.catalog_sales,
-                    d2 in tpcds.date_dim
-                  where cs2.cs_item_sk = i.i_item_sk
-                    andalso d2.d_date >= SOME (day (2000, Jan, 27))
-                    andalso d2.d_date <= SOME (day (2000, Jan, 27 + 90))
-                    andalso cs2.cs_sold_date_sk = SOME d2.d_date_sk
-                  compute avgSome over cs2.cs_ext_discount_amt) of
-              (SOME amt, SOME average) => amt > decimal "1.3" * average
-            | _ => false)
-      compute {`excess discount amount` = sumSome over cs.cs_ext_discount_amt}
-  end;
+  from cs in tpcds.catalog_sales,
+      i in tpcds.item,
+      d in tpcds.date_dim
+    where i.i_manufact_id = SOME 977
+      andalso cs.cs_item_sk = i.i_item_sk
+      andalso d.d_date >= SOME (day (2000, Jan, 27))
+      andalso d.d_date <= SOME (day (2000, Jan, 27 + 90))
+      andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+      andalso (case (cs.cs_ext_discount_amt,
+              from cs2 in tpcds.catalog_sales,
+                  d2 in tpcds.date_dim
+                where cs2.cs_item_sk = i.i_item_sk
+                  andalso d2.d_date >= SOME (day (2000, Jan, 27))
+                  andalso d2.d_date <= SOME (day (2000, Jan, 27 + 90))
+                  andalso cs2.cs_sold_date_sk = SOME d2.d_date_sk
+                compute avgSome over cs2.cs_ext_discount_amt) of
+            (SOME amt, SOME average) => amt > decimal "1.3" * average
+          | _ => false)
+    compute {`excess discount amount` = sumSome over cs.cs_ext_discount_amt};
 > val q32 = fn : unit -> {`excess discount amount`:decimal option}
 val r32 = q32 ();
 > val r32 = {`excess discount amount`=NONE}
@@ -4682,29 +4637,23 @@ ORDER BY i_item_id
 LIMIT 100
 *)
 fun q37 () =
-  let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
-  in
-    from i in tpcds.item,
-        inv in tpcds.inventory,
-        d in tpcds.date_dim,
-        cs in tpcds.catalog_sales
-      where i.i_current_price >= SOME (Decimal.fromInt 68)
-        andalso i.i_current_price <= SOME (Decimal.fromInt (68 + 30))
-        andalso inv.inv_item_sk = i.i_item_sk
-        andalso inv.inv_date_sk = d.d_date_sk
-        andalso d.d_date >= SOME (day (2000, Feb, 1))
-        andalso d.d_date <= SOME (day (2000, Feb, 1 + 60))
-        andalso i.i_manufact_id elem [SOME 677, SOME 940, SOME 694, SOME 808]
-        andalso inv.inv_quantity_on_hand >= SOME 100
-        andalso inv.inv_quantity_on_hand <= SOME 500
-        andalso cs.cs_item_sk = i.i_item_sk
-      group {i.i_item_id, i.i_item_desc, i.i_current_price}
-      order i_item_id
-      take 100
-  end;
+  from i in tpcds.item,
+      inv in tpcds.inventory,
+      d in tpcds.date_dim,
+      cs in tpcds.catalog_sales
+    where i.i_current_price >= SOME (Decimal.fromInt 68)
+      andalso i.i_current_price <= SOME (Decimal.fromInt (68 + 30))
+      andalso inv.inv_item_sk = i.i_item_sk
+      andalso inv.inv_date_sk = d.d_date_sk
+      andalso d.d_date >= SOME (day (2000, Feb, 1))
+      andalso d.d_date <= SOME (day (2000, Feb, 1 + 60))
+      andalso i.i_manufact_id elem [SOME 677, SOME 940, SOME 694, SOME 808]
+      andalso inv.inv_quantity_on_hand >= SOME 100
+      andalso inv.inv_quantity_on_hand <= SOME 500
+      andalso cs.cs_item_sk = i.i_item_sk
+    group {i.i_item_id, i.i_item_desc, i.i_current_price}
+    order i_item_id
+    take 100;
 > val q37 = fn
 >   : unit
 >      -> {i_current_price:decimal option, i_item_desc:string option,
@@ -4832,11 +4781,6 @@ ORDER BY inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean, inv1.cov
 *)
 fun q39a () =
   let
-    (* "a / b" of two reals that may be NONE *)
-    fun divide (a, b) =
-      case (a, b) of
-          (SOME a, SOME b) => SOME (a / b)
-        | _ => NONE
     val inv =
       from inv in tpcds.inventory,
           i in tpcds.item,
@@ -4852,7 +4796,7 @@ fun q39a () =
         (* "CASE mean WHEN 0 THEN NULL ELSE stdev / mean END" *)
         yield {w_warehouse_name, w_warehouse_sk, i_item_sk, d_moy, stdev,
           mean,
-          cov = if mean = SOME 0.0 then NONE else divide (stdev, mean)}
+          cov = if mean = SOME 0.0 then NONE else lift2 (op /) (stdev, mean)}
         (* "CASE mean WHEN 0 THEN 0 ELSE stdev / mean END > 1" *)
         where (if mean = SOME 0.0 then false else cov > SOME 1.0)
   in
@@ -4938,11 +4882,6 @@ ORDER BY inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean, inv1.cov
 *)
 fun q39b () =
   let
-    (* "a / b" of two reals that may be NONE *)
-    fun divide (a, b) =
-      case (a, b) of
-          (SOME a, SOME b) => SOME (a / b)
-        | _ => NONE
     val inv =
       from inv in tpcds.inventory,
           i in tpcds.item,
@@ -4958,7 +4897,7 @@ fun q39b () =
         (* "CASE mean WHEN 0 THEN NULL ELSE stdev / mean END" *)
         yield {w_warehouse_name, w_warehouse_sk, i_item_sk, d_moy, stdev,
           mean,
-          cov = if mean = SOME 0.0 then NONE else divide (stdev, mean)}
+          cov = if mean = SOME 0.0 then NONE else lift2 (op /) (stdev, mean)}
         (* "CASE mean WHEN 0 THEN 0 ELSE stdev / mean END > 1" *)
         where (if mean = SOME 0.0 then false else cov > SOME 1.0)
   in
@@ -5018,9 +4957,6 @@ LIMIT 100
 *)
 fun q40 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val zero = Decimal.fromInt 0
     (* "cs_sales_price - coalesce(cr_refunded_cash, 0)" *)
     fun net (price, refunded) =
@@ -5134,38 +5070,34 @@ fun q41 () =
       andalso i1.i_manufact <> NONE
       andalso (exists i in tpcds.item
         where i.i_manufact = i1.i_manufact
-          andalso (i.i_category = SOME "Women"
-                andalso i.i_color elem [SOME "powder", SOME "khaki"]
-                andalso i.i_units elem [SOME "Ounce", SOME "Oz"]
-                andalso i.i_size elem [SOME "medium", SOME "extra large"]
-              orelse i.i_category = SOME "Women"
-                andalso i.i_color elem [SOME "brown", SOME "honeydew"]
-                andalso i.i_units elem [SOME "Bunch", SOME "Ton"]
-                andalso i.i_size elem [SOME "N/A", SOME "small"]
-              orelse i.i_category = SOME "Men"
-                andalso i.i_color elem [SOME "floral", SOME "deep"]
-                andalso i.i_units elem [SOME "N/A", SOME "Dozen"]
-                andalso i.i_size elem [SOME "petite", SOME "large"]
-              orelse i.i_category = SOME "Men"
-                andalso i.i_color elem [SOME "light", SOME "cornflower"]
-                andalso i.i_units elem [SOME "Box", SOME "Pound"]
-                andalso i.i_size elem [SOME "medium", SOME "extra large"]
-              orelse i.i_category = SOME "Women"
-                andalso i.i_color elem [SOME "midnight", SOME "snow"]
-                andalso i.i_units elem [SOME "Pallet", SOME "Gross"]
-                andalso i.i_size elem [SOME "medium", SOME "extra large"]
-              orelse i.i_category = SOME "Women"
-                andalso i.i_color elem [SOME "cyan", SOME "papaya"]
-                andalso i.i_units elem [SOME "Cup", SOME "Dram"]
-                andalso i.i_size elem [SOME "N/A", SOME "small"]
-              orelse i.i_category = SOME "Men"
-                andalso i.i_color elem [SOME "orange", SOME "frosted"]
-                andalso i.i_units elem [SOME "Each", SOME "Tbl"]
-                andalso i.i_size elem [SOME "petite", SOME "large"]
-              orelse i.i_category = SOME "Men"
-                andalso i.i_color elem [SOME "forest", SOME "ghost"]
-                andalso i.i_units elem [SOME "Lb", SOME "Bundle"]
-                andalso i.i_size elem [SOME "medium", SOME "extra large"]))
+          andalso (case i.i_category of
+                SOME "Women" =>
+                  i.i_color elem [SOME "powder", SOME "khaki"]
+                    andalso i.i_units elem [SOME "Ounce", SOME "Oz"]
+                    andalso i.i_size elem [SOME "medium", SOME "extra large"]
+                  orelse i.i_color elem [SOME "brown", SOME "honeydew"]
+                    andalso i.i_units elem [SOME "Bunch", SOME "Ton"]
+                    andalso i.i_size elem [SOME "N/A", SOME "small"]
+                  orelse i.i_color elem [SOME "midnight", SOME "snow"]
+                    andalso i.i_units elem [SOME "Pallet", SOME "Gross"]
+                    andalso i.i_size elem [SOME "medium", SOME "extra large"]
+                  orelse i.i_color elem [SOME "cyan", SOME "papaya"]
+                    andalso i.i_units elem [SOME "Cup", SOME "Dram"]
+                    andalso i.i_size elem [SOME "N/A", SOME "small"]
+              | SOME "Men" =>
+                  i.i_color elem [SOME "floral", SOME "deep"]
+                    andalso i.i_units elem [SOME "N/A", SOME "Dozen"]
+                    andalso i.i_size elem [SOME "petite", SOME "large"]
+                  orelse i.i_color elem [SOME "light", SOME "cornflower"]
+                    andalso i.i_units elem [SOME "Box", SOME "Pound"]
+                    andalso i.i_size elem [SOME "medium", SOME "extra large"]
+                  orelse i.i_color elem [SOME "orange", SOME "frosted"]
+                    andalso i.i_units elem [SOME "Each", SOME "Tbl"]
+                    andalso i.i_size elem [SOME "petite", SOME "large"]
+                  orelse i.i_color elem [SOME "forest", SOME "ghost"]
+                    andalso i.i_units elem [SOME "Lb", SOME "Bundle"]
+                    andalso i.i_size elem [SOME "medium", SOME "extra large"]
+              | _ => false))
     yield i1.i_product_name
     distinct
     order current
@@ -5634,9 +5566,11 @@ fun q47 () =
         where ss.ss_item_sk = i.i_item_sk
           andalso ss.ss_sold_date_sk = SOME d.d_date_sk
           andalso ss.ss_store_sk = SOME s.s_store_sk
-          andalso (d.d_year = SOME 1999
-            orelse d.d_year = SOME (1999 - 1) andalso d.d_moy = SOME 12
-            orelse d.d_year = SOME (1999 + 1) andalso d.d_moy = SOME 1)
+          andalso (case (d.d_year, d.d_moy) of
+                (SOME 1999, _) => true
+              | (SOME 1998, SOME 12) => true
+              | (SOME 2000, SOME 1) => true
+              | _ => false)
         yield {i.i_category, i.i_brand, s.s_store_name, s.s_company_name,
           d.d_year, d.d_moy, sales_price = ss.ss_sales_price}
     val groups =
@@ -5814,18 +5748,17 @@ fun q48 () =
       andalso ss.ss_sold_date_sk = SOME d.d_date_sk
       andalso d.d_year = SOME 2001
       andalso ss.ss_cdemo_sk = SOME cd.cd_demo_sk
-      andalso (cd.cd_marital_status = SOME "M"
-          andalso cd.cd_education_status = SOME "4 yr Degree"
-          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 100)
-          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 150)
-        orelse cd.cd_marital_status = SOME "D"
-          andalso cd.cd_education_status = SOME "2 yr Degree"
-          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 50)
-          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 100)
-        orelse cd.cd_marital_status = SOME "S"
-          andalso cd.cd_education_status = SOME "College"
-          andalso ss.ss_sales_price >= SOME (Decimal.fromInt 150)
-          andalso ss.ss_sales_price <= SOME (Decimal.fromInt 200))
+      andalso (case (cd.cd_marital_status, cd.cd_education_status) of
+            (SOME "M", SOME "4 yr Degree") =>
+              ss.ss_sales_price >= SOME (Decimal.fromInt 100)
+              andalso ss.ss_sales_price <= SOME (Decimal.fromInt 150)
+          | (SOME "D", SOME "2 yr Degree") =>
+              ss.ss_sales_price >= SOME (Decimal.fromInt 50)
+              andalso ss.ss_sales_price <= SOME (Decimal.fromInt 100)
+          | (SOME "S", SOME "College") =>
+              ss.ss_sales_price >= SOME (Decimal.fromInt 150)
+              andalso ss.ss_sales_price <= SOME (Decimal.fromInt 200)
+          | _ => false)
       andalso ss.ss_addr_sk = SOME ca.ca_address_sk
       andalso ca.ca_country = SOME "United States"
       andalso (ca.ca_state elem [SOME "CO", SOME "OH", SOME "TX"]
@@ -5977,122 +5910,104 @@ LIMIT 100
  * than in a function: a function whose query reads its argument
  * twice, called twice, raises ArrayIndexOutOfBoundsException. *)
 fun q49 () =
-  from x in
-      (let
-        val rows =
-          from ws in tpcds.web_sales
-            left join wr in tpcds.web_returns
-              on ws.ws_order_number = wr.wr_order_number
-                andalso ws.ws_item_sk = wr.wr_item_sk,
-            d in tpcds.date_dim
-            where Option.`join` wr?.wr_return_amt
-                > SOME (Decimal.fromInt 10000)
-              andalso ws.ws_net_profit > SOME (Decimal.fromInt 1)
-              andalso ws.ws_net_paid > SOME (Decimal.fromInt 0)
-              andalso ws.ws_quantity > SOME 0
-              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
-              andalso d.d_year = SOME 2001
-              andalso d.d_moy = SOME 12
-            group {item = ws.ws_item_sk}
-              compute {
-                return_qty =
-                  sum over getOpt (Option.`join` wr?.wr_return_quantity, 0),
-                qty = sum over getOpt (ws.ws_quantity, 0),
-                return_amt = sum over getOpt (Option.`join` wr?.wr_return_amt,
-                  Decimal.fromInt 0),
-                net_paid = sum over getOpt (ws.ws_net_paid,
-                  Decimal.fromInt 0)}
-            yield {item,
-              return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
-              currency_ratio = return_amt / net_paid}
-      in
-        from r in rows
-          yield {channel = "web", r.item, r.return_ratio,
-            return_rank =
-              1 + count (from s in rows where s.return_ratio < r.return_ratio),
-            currency_rank =
-              1 + count (from s in rows
-                where s.currency_ratio < r.currency_ratio)}
-          where return_rank <= 10 orelse currency_rank <= 10
-      end)
-    union distinct
-          (let
-            val rows =
-              from cs in tpcds.catalog_sales
-                left join cr in tpcds.catalog_returns
-                  on cs.cs_order_number = cr.cr_order_number
-                    andalso cs.cs_item_sk = cr.cr_item_sk,
-                d in tpcds.date_dim
-                where Option.`join` cr?.cr_return_amount
-                    > SOME (Decimal.fromInt 10000)
-                  andalso cs.cs_net_profit > SOME (Decimal.fromInt 1)
-                  andalso cs.cs_net_paid > SOME (Decimal.fromInt 0)
-                  andalso cs.cs_quantity > SOME 0
-                  andalso cs.cs_sold_date_sk = SOME d.d_date_sk
-                  andalso d.d_year = SOME 2001
-                  andalso d.d_moy = SOME 12
-                group {item = cs.cs_item_sk}
-                  compute {
-                    return_qty =
-                      sum over getOpt (Option.`join` cr?.cr_return_quantity, 0),
-                    qty = sum over getOpt (cs.cs_quantity, 0),
-                    return_amt = sum over getOpt (Option.`join` cr?.cr_return_amount,
-                      Decimal.fromInt 0),
-                    net_paid = sum over getOpt (cs.cs_net_paid,
-                      Decimal.fromInt 0)}
-                yield {item,
-                  return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
-                  currency_ratio = return_amt / net_paid}
-          in
-            from r in rows
-              yield {channel = "catalog", r.item, r.return_ratio,
-                return_rank =
-                  1 + count (from s in rows where s.return_ratio < r.return_ratio),
-                currency_rank =
-                  1 + count (from s in rows
-                    where s.currency_ratio < r.currency_ratio)}
-              where return_rank <= 10 orelse currency_rank <= 10
-          end),
-          (let
-            val rows =
-              from ss in tpcds.store_sales
-                left join sr in tpcds.store_returns
-                  on ss.ss_ticket_number = sr.sr_ticket_number
-                    andalso ss.ss_item_sk = sr.sr_item_sk,
-                d in tpcds.date_dim
-                where Option.`join` sr?.sr_return_amt
-                    > SOME (Decimal.fromInt 10000)
-                  andalso ss.ss_net_profit > SOME (Decimal.fromInt 1)
-                  andalso ss.ss_net_paid > SOME (Decimal.fromInt 0)
-                  andalso ss.ss_quantity > SOME 0
-                  andalso ss.ss_sold_date_sk = SOME d.d_date_sk
-                  andalso d.d_year = SOME 2001
-                  andalso d.d_moy = SOME 12
-                group {item = ss.ss_item_sk}
-                  compute {
-                    return_qty =
-                      sum over getOpt (Option.`join` sr?.sr_return_quantity, 0),
-                    qty = sum over getOpt (ss.ss_quantity, 0),
-                    return_amt = sum over getOpt (Option.`join` sr?.sr_return_amt,
-                      Decimal.fromInt 0),
-                    net_paid = sum over getOpt (ss.ss_net_paid,
-                      Decimal.fromInt 0)}
-                yield {item,
-                  return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
-                  currency_ratio = return_amt / net_paid}
-          in
-            from r in rows
-              yield {channel = "store", r.item, r.return_ratio,
-                return_rank =
-                  1 + count (from s in rows where s.return_ratio < r.return_ratio),
-                currency_rank =
-                  1 + count (from s in rows
-                    where s.currency_ratio < r.currency_ratio)}
-              where return_rank <= 10 orelse currency_rank <= 10
-          end)
-    yield {x.channel, x.item, x.return_ratio, x.return_rank, x.currency_rank}
-    order (channel, return_rank, currency_rank)
-    take 100;
+  let
+    (* The rows of a channel that are in the top 10 by return ratio or
+     * by currency ratio, with their ranks. *)
+    fun ranked channel rows =
+      from r in rows
+        yield {channel, r.item, r.return_ratio,
+          return_rank =
+            1 + count (from s in rows where s.return_ratio < r.return_ratio),
+          currency_rank =
+            1 + count (from s in rows
+              where s.currency_ratio < r.currency_ratio)}
+        where return_rank <= 10 orelse currency_rank <= 10
+    val web =
+      from ws in tpcds.web_sales
+        left join wr in tpcds.web_returns
+          on ws.ws_order_number = wr.wr_order_number
+            andalso ws.ws_item_sk = wr.wr_item_sk,
+        d in tpcds.date_dim
+        where Option.`join` wr?.wr_return_amt
+            > SOME (Decimal.fromInt 10000)
+          andalso ws.ws_net_profit > SOME (Decimal.fromInt 1)
+          andalso ws.ws_net_paid > SOME (Decimal.fromInt 0)
+          andalso ws.ws_quantity > SOME 0
+          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME 2001
+          andalso d.d_moy = SOME 12
+        group {item = ws.ws_item_sk}
+          compute {
+            return_qty =
+              sum over getOpt (Option.`join` wr?.wr_return_quantity, 0),
+            qty = sum over getOpt (ws.ws_quantity, 0),
+            return_amt = sum over getOpt (Option.`join` wr?.wr_return_amt,
+              Decimal.fromInt 0),
+            net_paid = sum over getOpt (ws.ws_net_paid,
+              Decimal.fromInt 0)}
+        yield {item,
+          return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
+          currency_ratio = return_amt / net_paid}
+    val catalog =
+      from cs in tpcds.catalog_sales
+        left join cr in tpcds.catalog_returns
+          on cs.cs_order_number = cr.cr_order_number
+            andalso cs.cs_item_sk = cr.cr_item_sk,
+        d in tpcds.date_dim
+        where Option.`join` cr?.cr_return_amount
+            > SOME (Decimal.fromInt 10000)
+          andalso cs.cs_net_profit > SOME (Decimal.fromInt 1)
+          andalso cs.cs_net_paid > SOME (Decimal.fromInt 0)
+          andalso cs.cs_quantity > SOME 0
+          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME 2001
+          andalso d.d_moy = SOME 12
+        group {item = cs.cs_item_sk}
+          compute {
+            return_qty =
+              sum over getOpt (Option.`join` cr?.cr_return_quantity, 0),
+            qty = sum over getOpt (cs.cs_quantity, 0),
+            return_amt = sum over getOpt (Option.`join` cr?.cr_return_amount,
+              Decimal.fromInt 0),
+            net_paid = sum over getOpt (cs.cs_net_paid,
+              Decimal.fromInt 0)}
+        yield {item,
+          return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
+          currency_ratio = return_amt / net_paid}
+    val store =
+      from ss in tpcds.store_sales
+        left join sr in tpcds.store_returns
+          on ss.ss_ticket_number = sr.sr_ticket_number
+            andalso ss.ss_item_sk = sr.sr_item_sk,
+        d in tpcds.date_dim
+        where Option.`join` sr?.sr_return_amt
+            > SOME (Decimal.fromInt 10000)
+          andalso ss.ss_net_profit > SOME (Decimal.fromInt 1)
+          andalso ss.ss_net_paid > SOME (Decimal.fromInt 0)
+          andalso ss.ss_quantity > SOME 0
+          andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME 2001
+          andalso d.d_moy = SOME 12
+        group {item = ss.ss_item_sk}
+          compute {
+            return_qty =
+              sum over getOpt (Option.`join` sr?.sr_return_quantity, 0),
+            qty = sum over getOpt (ss.ss_quantity, 0),
+            return_amt = sum over getOpt (Option.`join` sr?.sr_return_amt,
+              Decimal.fromInt 0),
+            net_paid = sum over getOpt (ss.ss_net_paid,
+              Decimal.fromInt 0)}
+        yield {item,
+          return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
+          currency_ratio = return_amt / net_paid}
+  in
+    from x in ranked "web" web
+        union distinct (ranked "catalog" catalog), (ranked "store" store)
+      yield {x.channel, x.item, x.return_ratio, x.return_rank,
+        x.currency_rank}
+      order (channel, return_rank, currency_rank)
+      take 100
+  end;
 > val q49 = fn
 >   : unit
 >      -> {channel:string, currency_rank:int, item:int, return_rank:int,
@@ -6279,10 +6194,10 @@ fun q51 () =
     (* "a + b" and the greater of "a" and "b", ignoring NONE *)
     fun plus (NONE, b) = b
       | plus (a, NONE) = a
-      | plus (SOME (a : decimal), SOME b) = SOME (a + b)
+      | plus (SOME a, SOME b) = SOME (a + b)
     fun greater (NONE, b) = b
       | greater (a, NONE) = a
-      | greater (SOME (a : decimal), SOME b) = SOME (if a > b then a else b)
+      | greater (SOME a, SOME b) = SOME (if a > b then a else b)
     (* For each item, its days sorted by date, each with the running
      * value of "f" over "value" up to and including that day.
      * "running" is for the days of one channel, "running2" for the rows
@@ -6958,9 +6873,11 @@ fun q57 () =
         where cs.cs_item_sk = i.i_item_sk
           andalso cs.cs_sold_date_sk = SOME d.d_date_sk
           andalso cs.cs_call_center_sk = SOME cc.cc_call_center_sk
-          andalso (d.d_year = SOME 1999
-            orelse d.d_year = SOME (1999 - 1) andalso d.d_moy = SOME 12
-            orelse d.d_year = SOME (1999 + 1) andalso d.d_moy = SOME 1)
+          andalso (case (d.d_year, d.d_moy) of
+                (SOME 1999, _) => true
+              | (SOME 1998, SOME 12) => true
+              | (SOME 2000, SOME 1) => true
+              | _ => false)
         yield {i.i_category, i.i_brand, cc.cc_name, d.d_year, d.d_moy,
           sales_price = cs.cs_sales_price}
     val groups =
@@ -7111,9 +7028,6 @@ LIMIT 100
 *)
 fun q58 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     (* The scalar subquery "(SELECT d_week_seq ... WHERE d_date = ...)" *)
     val week =
       Relational.only
@@ -7302,11 +7216,6 @@ fun q59 () =
           then ss.ss_sales_price else NONE),
         sat_sales = sumSome over (if d.d_day_name = SOME "Saturday"
           then ss.ss_sales_price else NONE)}
-    (* "a / b" *)
-    fun divide (a : decimal option, b) =
-      case (a, b) of
-          (SOME x, SOME y) => SOME (x / y)
-        | _ => NONE
     fun weeks (lo, hi) =
       from w in wss,
           s in tpcds.store,
@@ -7326,19 +7235,19 @@ fun q59 () =
       yield {s_store_name1 = y.s_store_name, s_store_id1 = y.s_store_id,
         d_week_seq1 = y.w.d_week_seq,
         `(sun_sales1 / sun_sales2)` =
-          divide (y.w.sun_sales, x.w.sun_sales),
+          lift2 (op /) (y.w.sun_sales, x.w.sun_sales),
         `(mon_sales1 / mon_sales2)` =
-          divide (y.w.mon_sales, x.w.mon_sales),
+          lift2 (op /) (y.w.mon_sales, x.w.mon_sales),
         `(tue_sales1 / tue_sales2)` =
-          divide (y.w.tue_sales, x.w.tue_sales),
+          lift2 (op /) (y.w.tue_sales, x.w.tue_sales),
         `(wed_sales1 / wed_sales2)` =
-          divide (y.w.wed_sales, x.w.wed_sales),
+          lift2 (op /) (y.w.wed_sales, x.w.wed_sales),
         `(thu_sales1 / thu_sales2)` =
-          divide (y.w.thu_sales, x.w.thu_sales),
+          lift2 (op /) (y.w.thu_sales, x.w.thu_sales),
         `(fri_sales1 / fri_sales2)` =
-          divide (y.w.fri_sales, x.w.fri_sales),
+          lift2 (op /) (y.w.fri_sales, x.w.fri_sales),
         `(sat_sales1 / sat_sales2)` =
-          divide (y.w.sat_sales, x.w.sat_sales)}
+          lift2 (op /) (y.w.sat_sales, x.w.sat_sales)}
       order (s_store_name1, s_store_id1, d_week_seq1)
       take 100
   end;
@@ -8329,17 +8238,14 @@ fun q66 () =
   let
     val zero = SOME (Decimal.fromInt 0)
     (* "price * quantity" *)
-    fun times (price, quantity) =
-      case (price, quantity) of
-          (SOME p, SOME q) => SOME (p * Decimal.fromInt q)
-        | _ => NONE
+    val times = lift2 (fn (p, q) => p * Decimal.fromInt q)
     (* "sales / w_warehouse_sq_ft" *)
     fun perFoot (sales, sqFt) =
       case (sales, sqFt) of
           (SOME s, SOME f) => SOME (s / Decimal.fromInt f)
         | _ => NONE
     val x =
-      (from ws in tpcds.web_sales,
+      from ws in tpcds.web_sales,
           w in tpcds.warehouse,
           d in tpcds.date_dim,
           t in tpcds.time_dim,
@@ -8480,150 +8386,150 @@ fun q66 () =
           jan_sales, feb_sales, mar_sales, apr_sales, may_sales, jun_sales,
           jul_sales, aug_sales, sep_sales, oct_sales, nov_sales, dec_sales,
           jan_net, feb_net, mar_net, apr_net, may_net, jun_net, jul_net,
-          aug_net, sep_net, oct_net, nov_net, dec_net})
-      @
-      (from cs in tpcds.catalog_sales,
-          w in tpcds.warehouse,
-          d in tpcds.date_dim,
-          t in tpcds.time_dim,
-          sm in tpcds.ship_mode
-        where cs.cs_warehouse_sk = SOME w.w_warehouse_sk
-          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
-          andalso cs.cs_sold_time_sk = SOME t.t_time_sk
-          andalso cs.cs_ship_mode_sk = SOME sm.sm_ship_mode_sk
-          andalso d.d_year = SOME 2001
-          andalso t.t_time >= SOME 30838
-          andalso t.t_time <= SOME (30838 + 28800)
-          andalso sm.sm_carrier elem [SOME "DHL", SOME "BARIAN"]
-        group {w.w_warehouse_name, w.w_warehouse_sq_ft, w.w_city,
-            w.w_county, w.w_state, w.w_country, year = d.d_year}
-          compute {
-            jan_sales = sumSome over
-              (if d.d_moy = SOME 1
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            feb_sales = sumSome over
-              (if d.d_moy = SOME 2
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            mar_sales = sumSome over
-              (if d.d_moy = SOME 3
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            apr_sales = sumSome over
-              (if d.d_moy = SOME 4
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            may_sales = sumSome over
-              (if d.d_moy = SOME 5
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            jun_sales = sumSome over
-              (if d.d_moy = SOME 6
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            jul_sales = sumSome over
-              (if d.d_moy = SOME 7
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            aug_sales = sumSome over
-              (if d.d_moy = SOME 8
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            sep_sales = sumSome over
-              (if d.d_moy = SOME 9
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            oct_sales = sumSome over
-              (if d.d_moy = SOME 10
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            nov_sales = sumSome over
-              (if d.d_moy = SOME 11
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            dec_sales = sumSome over
-              (if d.d_moy = SOME 12
-                then times (cs.cs_sales_price,
-                  cs.cs_quantity)
-                else zero),
-            jan_net = sumSome over
-              (if d.d_moy = SOME 1
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            feb_net = sumSome over
-              (if d.d_moy = SOME 2
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            mar_net = sumSome over
-              (if d.d_moy = SOME 3
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            apr_net = sumSome over
-              (if d.d_moy = SOME 4
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            may_net = sumSome over
-              (if d.d_moy = SOME 5
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            jun_net = sumSome over
-              (if d.d_moy = SOME 6
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            jul_net = sumSome over
-              (if d.d_moy = SOME 7
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            aug_net = sumSome over
-              (if d.d_moy = SOME 8
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            sep_net = sumSome over
-              (if d.d_moy = SOME 9
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            oct_net = sumSome over
-              (if d.d_moy = SOME 10
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            nov_net = sumSome over
-              (if d.d_moy = SOME 11
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero),
-            dec_net = sumSome over
-              (if d.d_moy = SOME 12
-                then times (cs.cs_net_paid_inc_tax,
-                  cs.cs_quantity)
-                else zero)}
-        yield {w_warehouse_name, w_warehouse_sq_ft, w_city, w_county,
-          w_state, w_country, ship_carriers = "DHL" ^ "," ^ "BARIAN", year,
-          jan_sales, feb_sales, mar_sales, apr_sales, may_sales, jun_sales,
-          jul_sales, aug_sales, sep_sales, oct_sales, nov_sales, dec_sales,
-          jan_net, feb_net, mar_net, apr_net, may_net, jun_net, jul_net,
-          aug_net, sep_net, oct_net, nov_net, dec_net})
+          aug_net, sep_net, oct_net, nov_net, dec_net}
+        union
+          (from cs in tpcds.catalog_sales,
+              w in tpcds.warehouse,
+              d in tpcds.date_dim,
+              t in tpcds.time_dim,
+              sm in tpcds.ship_mode
+            where cs.cs_warehouse_sk = SOME w.w_warehouse_sk
+              andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+              andalso cs.cs_sold_time_sk = SOME t.t_time_sk
+              andalso cs.cs_ship_mode_sk = SOME sm.sm_ship_mode_sk
+              andalso d.d_year = SOME 2001
+              andalso t.t_time >= SOME 30838
+              andalso t.t_time <= SOME (30838 + 28800)
+              andalso sm.sm_carrier elem [SOME "DHL", SOME "BARIAN"]
+            group {w.w_warehouse_name, w.w_warehouse_sq_ft, w.w_city,
+                w.w_county, w.w_state, w.w_country, year = d.d_year}
+              compute {
+                jan_sales = sumSome over
+                  (if d.d_moy = SOME 1
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                feb_sales = sumSome over
+                  (if d.d_moy = SOME 2
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                mar_sales = sumSome over
+                  (if d.d_moy = SOME 3
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                apr_sales = sumSome over
+                  (if d.d_moy = SOME 4
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                may_sales = sumSome over
+                  (if d.d_moy = SOME 5
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                jun_sales = sumSome over
+                  (if d.d_moy = SOME 6
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                jul_sales = sumSome over
+                  (if d.d_moy = SOME 7
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                aug_sales = sumSome over
+                  (if d.d_moy = SOME 8
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                sep_sales = sumSome over
+                  (if d.d_moy = SOME 9
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                oct_sales = sumSome over
+                  (if d.d_moy = SOME 10
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                nov_sales = sumSome over
+                  (if d.d_moy = SOME 11
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                dec_sales = sumSome over
+                  (if d.d_moy = SOME 12
+                    then times (cs.cs_sales_price,
+                      cs.cs_quantity)
+                    else zero),
+                jan_net = sumSome over
+                  (if d.d_moy = SOME 1
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                feb_net = sumSome over
+                  (if d.d_moy = SOME 2
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                mar_net = sumSome over
+                  (if d.d_moy = SOME 3
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                apr_net = sumSome over
+                  (if d.d_moy = SOME 4
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                may_net = sumSome over
+                  (if d.d_moy = SOME 5
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                jun_net = sumSome over
+                  (if d.d_moy = SOME 6
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                jul_net = sumSome over
+                  (if d.d_moy = SOME 7
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                aug_net = sumSome over
+                  (if d.d_moy = SOME 8
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                sep_net = sumSome over
+                  (if d.d_moy = SOME 9
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                oct_net = sumSome over
+                  (if d.d_moy = SOME 10
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                nov_net = sumSome over
+                  (if d.d_moy = SOME 11
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero),
+                dec_net = sumSome over
+                  (if d.d_moy = SOME 12
+                    then times (cs.cs_net_paid_inc_tax,
+                      cs.cs_quantity)
+                    else zero)}
+            yield {w_warehouse_name, w_warehouse_sq_ft, w_city, w_county,
+              w_state, w_country, ship_carriers = "DHL" ^ "," ^ "BARIAN", year,
+              jan_sales, feb_sales, mar_sales, apr_sales, may_sales, jun_sales,
+              jul_sales, aug_sales, sep_sales, oct_sales, nov_sales, dec_sales,
+              jan_net, feb_net, mar_net, apr_net, may_net, jun_net, jul_net,
+              aug_net, sep_net, oct_net, nov_net, dec_net})
   in
     from x in x
       group {x.w_warehouse_name, x.w_warehouse_sq_ft, x.w_city, x.w_county,
@@ -9545,7 +9451,7 @@ LIMIT 100
 fun q74 () =
   let
     val year_total =
-      (from c in tpcds.customer,
+      from c in tpcds.customer,
           ss in tpcds.store_sales,
           d in tpcds.date_dim
         where ss.ss_customer_sk = SOME c.c_customer_sk
@@ -9556,20 +9462,20 @@ fun q74 () =
             customer_last_name = c.c_last_name, year = d.d_year}
           compute {year_total = sumSome over ss.ss_net_paid}
         yield {customer_id, customer_first_name, customer_last_name, year,
-          year_total, sale_type = "s"})
-      @
-      (from c in tpcds.customer,
-          ws in tpcds.web_sales,
-          d in tpcds.date_dim
-        where ws.ws_bill_customer_sk = SOME c.c_customer_sk
-          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
-          andalso d.d_year elem [SOME 2001, SOME (2001 + 1)]
-        group {customer_id = c.c_customer_id,
-            customer_first_name = c.c_first_name,
-            customer_last_name = c.c_last_name, year = d.d_year}
-          compute {year_total = sumSome over ws.ws_net_paid}
-        yield {customer_id, customer_first_name, customer_last_name, year,
-          year_total, sale_type = "w"})
+          year_total, sale_type = "s"}
+        union
+          (from c in tpcds.customer,
+              ws in tpcds.web_sales,
+              d in tpcds.date_dim
+            where ws.ws_bill_customer_sk = SOME c.c_customer_sk
+              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem [SOME 2001, SOME (2001 + 1)]
+            group {customer_id = c.c_customer_id,
+                customer_first_name = c.c_first_name,
+                customer_last_name = c.c_last_name, year = d.d_year}
+              compute {year_total = sumSome over ws.ws_net_paid}
+            yield {customer_id, customer_first_name, customer_last_name, year,
+              year_total, sale_type = "w"})
     val zero = SOME (Decimal.fromInt 0)
     (* "CASE WHEN b > 0 THEN a / b ELSE NULL END" *)
     fun ratio (a, b) =
@@ -9780,15 +9686,6 @@ fun q75 () =
           (SOME a, SOME b) =>
             Decimal.fromInt a / Decimal.fromInt b < decimal "0.9"
         | _ => false
-    (* "a - b"; one for counts, one for amounts. *)
-    fun minus (a : int option, b) =
-      case (a, b) of
-          (SOME a, SOME b) => SOME (a - b)
-        | _ => NONE
-    fun minusAmt (a : decimal option, b) =
-      case (a, b) of
-          (SOME a, SOME b) => SOME (a - b)
-        | _ => NONE
   in
     from curr_yr in all_sales,
         prev_yr in all_sales
@@ -9807,8 +9704,8 @@ fun q75 () =
         curr_yr.i_brand_id, curr_yr.i_class_id, curr_yr.i_category_id,
         curr_yr.i_manufact_id, prev_yr_cnt = prev_yr.sales_cnt,
         curr_yr_cnt = curr_yr.sales_cnt,
-        sales_cnt_diff = minus (curr_yr.sales_cnt, prev_yr.sales_cnt),
-        sales_amt_diff = minusAmt (curr_yr.sales_amt, prev_yr.sales_amt)}
+        sales_cnt_diff = lift2 (op -) (curr_yr.sales_cnt, prev_yr.sales_cnt),
+        sales_amt_diff = lift2 (op -) (curr_yr.sales_amt, prev_yr.sales_amt)}
       order sales_cnt_diff
       take 100
   end;
@@ -10047,15 +9944,8 @@ LIMIT 100
  * is one record. *)
 fun q77 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val zero = Decimal.fromInt 0
-    (* "a - b" and "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
-    fun minus (a : decimal option, b) =
-      case (a, b) of
-          (SOME a, SOME b) => SOME (a - b)
-        | _ => NONE
+    (* "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
     fun minus0 (a, b) = Option.map (fn a => a - getOpt (b, zero)) a
     fun inRange d =
       d >= SOME (day (2000, Aug, 3)) andalso d <= SOME (day (2000, Aug, 3 + 30))
@@ -10115,24 +10005,23 @@ fun q77 () =
           compute {returns = sumSome over wr.wr_return_amt,
             profit_loss = sumSome over wr.wr_net_loss}
     val x =
-      (from s in ss
+      from s in ss
         left join r in sr on s.s_store_sk = r.s_store_sk
         yield {channel = SOME "store channel", id = SOME s.s_store_sk,
           s.sales,
           returns = SOME (getOpt (Option.`join` r?.returns, zero)),
-          profit = minus0 (s.profit, Option.`join` r?.profit_loss)})
-      @
-      (from c in cs
-        yield {channel = SOME "catalog channel", id = c.cs_call_center_sk,
-          c.sales, returns = cr.returns,
-          profit = minus (c.profit, cr.profit_loss)})
-      @
-      (from w in ws
-        left join r in wr on w.wp_web_page_sk = r.wp_web_page_sk
-        yield {channel = SOME "web channel", id = SOME w.wp_web_page_sk,
-          w.sales,
-          returns = SOME (getOpt (Option.`join` r?.returns, zero)),
-          profit = minus0 (w.profit, Option.`join` r?.profit_loss)})
+          profit = minus0 (s.profit, Option.`join` r?.profit_loss)}
+        union
+          (from c in cs
+            yield {channel = SOME "catalog channel", id = c.cs_call_center_sk,
+              c.sales, returns = cr.returns,
+              profit = lift2 (op -) (c.profit, cr.profit_loss)}),
+          (from w in ws
+            left join r in wr on w.wp_web_page_sk = r.wp_web_page_sk
+            yield {channel = SOME "web channel", id = SOME w.wp_web_page_sk,
+              w.sales,
+              returns = SOME (getOpt (Option.`join` r?.returns, zero)),
+              profit = minus0 (w.profit, Option.`join` r?.profit_loss)})
   in
     from r in (from b in x
           group {b.channel, b.id}
@@ -10523,15 +10412,8 @@ LIMIT 100
  * "getOpt (x, 0)". *)
 fun q80 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val zero = Decimal.fromInt 0
-    (* "a - b" and "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
-    fun minus (a : decimal option, b) =
-      case (a, b) of
-          (SOME a, SOME b) => SOME (a - b)
-        | _ => NONE
+    (* "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
     fun minus0 (a, b) = Option.map (fn a => a - getOpt (b, zero)) a
     fun inRange d =
       d >= SOME (day (2000, Aug, 23))
@@ -10606,18 +10488,17 @@ fun q80 () =
               sumSome over minus0 (ws.ws_net_profit,
                 Option.`join` wr?.wr_net_loss)}
     val x =
-      (from r in ssr
+      from r in ssr
         yield {channel = SOME "store channel", id = SOME ("store" ^ r.id),
-          r.sales, returns = SOME r.returns, r.profit})
-      @
-      (from r in csr
-        yield {channel = SOME "catalog channel",
-          id = SOME ("catalog_page" ^ r.id), r.sales,
-          returns = SOME r.returns, r.profit})
-      @
-      (from r in wsr
-        yield {channel = SOME "web channel", id = SOME ("web_site" ^ r.id),
-          r.sales, returns = SOME r.returns, r.profit})
+          r.sales, returns = SOME r.returns, r.profit}
+        union
+          (from r in csr
+            yield {channel = SOME "catalog channel",
+              id = SOME ("catalog_page" ^ r.id), r.sales,
+              returns = SOME r.returns, r.profit}),
+          (from r in wsr
+            yield {channel = SOME "web channel", id = SOME ("web_site" ^ r.id),
+              r.sales, returns = SOME r.returns, r.profit})
   in
     from r in (from b in x
           group {b.channel, b.id}
@@ -10786,29 +10667,23 @@ ORDER BY i_item_id
 LIMIT 100
 *)
 fun q82 () =
-  let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
-  in
-    from i in tpcds.item,
-        inv in tpcds.inventory,
-        d in tpcds.date_dim,
-        ss in tpcds.store_sales
-      where i.i_current_price >= SOME (Decimal.fromInt 62)
-        andalso i.i_current_price <= SOME (Decimal.fromInt (62 + 30))
-        andalso inv.inv_item_sk = i.i_item_sk
-        andalso inv.inv_date_sk = d.d_date_sk
-        andalso d.d_date >= SOME (day (2000, May, 25))
-        andalso d.d_date <= SOME (day (2000, May, 25 + 60))
-        andalso i.i_manufact_id elem [SOME 129, SOME 270, SOME 821, SOME 423]
-        andalso inv.inv_quantity_on_hand >= SOME 100
-        andalso inv.inv_quantity_on_hand <= SOME 500
-        andalso ss.ss_item_sk = i.i_item_sk
-      group {i.i_item_id, i.i_item_desc, i.i_current_price}
-      order i_item_id
-      take 100
-  end;
+  from i in tpcds.item,
+      inv in tpcds.inventory,
+      d in tpcds.date_dim,
+      ss in tpcds.store_sales
+    where i.i_current_price >= SOME (Decimal.fromInt 62)
+      andalso i.i_current_price <= SOME (Decimal.fromInt (62 + 30))
+      andalso inv.inv_item_sk = i.i_item_sk
+      andalso inv.inv_date_sk = d.d_date_sk
+      andalso d.d_date >= SOME (day (2000, May, 25))
+      andalso d.d_date <= SOME (day (2000, May, 25 + 60))
+      andalso i.i_manufact_id elem [SOME 129, SOME 270, SOME 821, SOME 423]
+      andalso inv.inv_quantity_on_hand >= SOME 100
+      andalso inv.inv_quantity_on_hand <= SOME 500
+      andalso ss.ss_item_sk = i.i_item_sk
+    group {i.i_item_id, i.i_item_desc, i.i_current_price}
+    order i_item_id
+    take 100;
 > val q82 = fn
 >   : unit
 >      -> {i_current_price:decimal option, i_item_desc:string option,
@@ -10880,9 +10755,6 @@ LIMIT 100
 *)
 fun q83 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val weeks =
       from d in tpcds.date_dim
         where d.d_date elem [SOME (day (2000, Jun, 30)),
@@ -11120,15 +10992,14 @@ fun q85 () =
         andalso cd1.cd_marital_status = cd2.cd_marital_status
         andalso cd1.cd_education_status <> NONE
         andalso cd1.cd_education_status = cd2.cd_education_status
-        andalso (cd1.cd_marital_status = SOME "M"
-            andalso cd1.cd_education_status = SOME "Advanced Degree"
-            andalso between (ws.ws_sales_price, 100, 150)
-          orelse cd1.cd_marital_status = SOME "S"
-            andalso cd1.cd_education_status = SOME "College"
-            andalso between (ws.ws_sales_price, 50, 100)
-          orelse cd1.cd_marital_status = SOME "W"
-            andalso cd1.cd_education_status = SOME "2 yr Degree"
-            andalso between (ws.ws_sales_price, 150, 200))
+        andalso (case (cd1.cd_marital_status, cd1.cd_education_status) of
+              (SOME "M", SOME "Advanced Degree") =>
+                between (ws.ws_sales_price, 100, 150)
+            | (SOME "S", SOME "College") =>
+                between (ws.ws_sales_price, 50, 100)
+            | (SOME "W", SOME "2 yr Degree") =>
+                between (ws.ws_sales_price, 150, 200)
+            | _ => false)
         andalso wr.wr_refunded_addr_sk = SOME ca.ca_address_sk
         andalso ca.ca_country = SOME "United States"
         andalso (ca.ca_state elem [SOME "IN", SOME "OH", SOME "NJ"]
@@ -11456,15 +11327,12 @@ fun q88 () =
           andalso (if early
             then t.t_minute <> NONE andalso t.t_minute < SOME 30
             else t.t_minute >= SOME 30)
-          andalso (hd.hd_dep_count = SOME 4
-              andalso hd.hd_vehicle_count <> NONE
-              andalso hd.hd_vehicle_count <= SOME (4 + 2)
-            orelse hd.hd_dep_count = SOME 2
-              andalso hd.hd_vehicle_count <> NONE
-              andalso hd.hd_vehicle_count <= SOME (2 + 2)
-            orelse hd.hd_dep_count = SOME 0
-              andalso hd.hd_vehicle_count <> NONE
-              andalso hd.hd_vehicle_count <= SOME (0 + 2))
+          andalso (case hd.hd_dep_count of
+                SOME c =>
+                  c elem [4, 2, 0]
+                  andalso hd.hd_vehicle_count <> NONE
+                  andalso hd.hd_vehicle_count <= SOME (c + 2)
+              | NONE => false)
           andalso s.s_store_name = SOME "ese"
         compute count over ()
   in
@@ -11732,31 +11600,25 @@ ORDER BY sum(ws_ext_discount_amt)
 LIMIT 100
 *)
 fun q92 () =
-  let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
-  in
-    from ws in tpcds.web_sales,
-        i in tpcds.item,
-        d in tpcds.date_dim
-      where i.i_manufact_id = SOME 350
-        andalso ws.ws_item_sk = i.i_item_sk
-        andalso d.d_date >= SOME (day (2000, Jan, 27))
-        andalso d.d_date <= SOME (day (2000, Jan, 27 + 90))
-        andalso ws.ws_sold_date_sk = SOME d.d_date_sk
-        andalso (case (ws.ws_ext_discount_amt,
-                from ws2 in tpcds.web_sales,
-                    d2 in tpcds.date_dim
-                  where ws2.ws_item_sk = i.i_item_sk
-                    andalso d2.d_date >= SOME (day (2000, Jan, 27))
-                    andalso d2.d_date <= SOME (day (2000, Jan, 27 + 90))
-                    andalso ws2.ws_sold_date_sk = SOME d2.d_date_sk
-                  compute avgSome over ws2.ws_ext_discount_amt) of
-              (SOME amt, SOME average) => amt > decimal "1.3" * average
-            | _ => false)
-      compute {`Excess Discount Amount ` = sumSome over ws.ws_ext_discount_amt}
-  end;
+  from ws in tpcds.web_sales,
+      i in tpcds.item,
+      d in tpcds.date_dim
+    where i.i_manufact_id = SOME 350
+      andalso ws.ws_item_sk = i.i_item_sk
+      andalso d.d_date >= SOME (day (2000, Jan, 27))
+      andalso d.d_date <= SOME (day (2000, Jan, 27 + 90))
+      andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+      andalso (case (ws.ws_ext_discount_amt,
+              from ws2 in tpcds.web_sales,
+                  d2 in tpcds.date_dim
+                where ws2.ws_item_sk = i.i_item_sk
+                  andalso d2.d_date >= SOME (day (2000, Jan, 27))
+                  andalso d2.d_date <= SOME (day (2000, Jan, 27 + 90))
+                  andalso ws2.ws_sold_date_sk = SOME d2.d_date_sk
+                compute avgSome over ws2.ws_ext_discount_amt) of
+            (SOME amt, SOME average) => amt > decimal "1.3" * average
+          | _ => false)
+    compute {`Excess Discount Amount ` = sumSome over ws.ws_ext_discount_amt};
 > val q92 = fn : unit -> {`Excess Discount Amount `:decimal option}
 val r92 = q92 ();
 > val r92 = {`Excess Discount Amount `=NONE}
@@ -11839,36 +11701,30 @@ ORDER BY count(DISTINCT ws_order_number)
 LIMIT 100
 *)
 fun q94 () =
-  let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
-  in
-    from ws1 in tpcds.web_sales,
-        d in tpcds.date_dim,
-        ca in tpcds.customer_address,
-        web in tpcds.web_site
-      where d.d_date >= SOME (day (1999, Feb, 1))
-        andalso d.d_date <= SOME (day (1999, Feb, 1 + 60))
-        andalso ws1.ws_ship_date_sk = SOME d.d_date_sk
-        andalso ws1.ws_ship_addr_sk = SOME ca.ca_address_sk
-        andalso ca.ca_state = SOME "IL"
-        andalso ws1.ws_web_site_sk = SOME web.web_site_sk
-        andalso web.web_company_name = SOME "pri"
-        andalso (exists ws2 in tpcds.web_sales
-          where ws1.ws_order_number = ws2.ws_order_number
-            andalso ws1.ws_warehouse_sk <> NONE
-            andalso ws2.ws_warehouse_sk <> NONE
-            andalso ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
-        andalso not (exists wr1 in tpcds.web_returns
-          where ws1.ws_order_number = wr1.wr_order_number)
-      compute {
-        `order count ` =
-          (fn orders => List.length (from n in orders distinct))
-            over ws1.ws_order_number,
-        `total shipping cost ` = sumSome over ws1.ws_ext_ship_cost,
-        `total net profit ` = sumSome over ws1.ws_net_profit}
-  end;
+  from ws1 in tpcds.web_sales,
+      d in tpcds.date_dim,
+      ca in tpcds.customer_address,
+      web in tpcds.web_site
+    where d.d_date >= SOME (day (1999, Feb, 1))
+      andalso d.d_date <= SOME (day (1999, Feb, 1 + 60))
+      andalso ws1.ws_ship_date_sk = SOME d.d_date_sk
+      andalso ws1.ws_ship_addr_sk = SOME ca.ca_address_sk
+      andalso ca.ca_state = SOME "IL"
+      andalso ws1.ws_web_site_sk = SOME web.web_site_sk
+      andalso web.web_company_name = SOME "pri"
+      andalso (exists ws2 in tpcds.web_sales
+        where ws1.ws_order_number = ws2.ws_order_number
+          andalso ws1.ws_warehouse_sk <> NONE
+          andalso ws2.ws_warehouse_sk <> NONE
+          andalso ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
+      andalso not (exists wr1 in tpcds.web_returns
+        where ws1.ws_order_number = wr1.wr_order_number)
+    compute {
+      `order count ` =
+        (fn orders => List.length (from n in orders distinct))
+          over ws1.ws_order_number,
+      `total shipping cost ` = sumSome over ws1.ws_ext_ship_cost,
+      `total net profit ` = sumSome over ws1.ws_net_profit};
 > val q94 = fn
 >   : unit
 >      -> {`order count `:int, `total net profit `:decimal option,
@@ -11913,9 +11769,6 @@ LIMIT 100
 *)
 fun q95 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val ws_wh =
       from ws1 in tpcds.web_sales,
           ws2 in tpcds.web_sales
@@ -12100,9 +11953,6 @@ ORDER BY
  * partition, as NONE = NONE. *)
 fun q98 () =
   let
-    fun day (year, month, day) =
-      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
-        offset = SOME Time.zeroTime}
     val items =
       from ss in tpcds.store_sales,
           i in tpcds.item,
