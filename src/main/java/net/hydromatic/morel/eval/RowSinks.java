@@ -549,7 +549,9 @@ public abstract class RowSinks {
 
     @Override
     public int maxSlots() {
-      return varCount + rowSink.maxSlots();
+      return Math.max(
+          code.maxSlots(),
+          varCount + Slots.maxOf(rowSink.maxSlots(), conditionCode));
     }
 
     @Override
@@ -677,6 +679,13 @@ public abstract class RowSinks {
     }
 
     @Override
+    public int maxSlots() {
+      return Math.max(
+          Math.max(super.maxSlots(), leftKeyCode.maxSlots()),
+          varCount + rightKeyCode.maxSlots());
+    }
+
+    @Override
     public void accept(Stack stack) {
       final Object key = leftKeyCode.eval(stack);
       final List<Object> bucket = buckets.get(key);
@@ -782,7 +791,11 @@ public abstract class RowSinks {
 
     @Override
     public int maxSlots() {
-      return leftSlotCount + varCount + rowSink.maxSlots();
+      return Math.max(
+          code.maxSlots(),
+          leftSlotCount
+              + varCount
+              + Slots.maxOf(rowSink.maxSlots(), conditionCode));
     }
 
     @Override
@@ -905,6 +918,11 @@ public abstract class RowSinks {
     }
 
     @Override
+    public int maxSlots() {
+      return Slots.maxOf(rowSink.maxSlots(), filterCode);
+    }
+
+    @Override
     public void accept(Stack stack) {
       if ((Boolean) filterCode.eval(stack)) {
         rowSink.accept(stack);
@@ -926,6 +944,11 @@ public abstract class RowSinks {
     public Describer describe(Describer describer) {
       return describer.start(
           "skip", d -> d.arg("count", skipCode).arg("sink", rowSink));
+    }
+
+    @Override
+    public int maxSlots() {
+      return Slots.maxOf(rowSink.maxSlots(), skipCode);
     }
 
     @Override
@@ -958,6 +981,11 @@ public abstract class RowSinks {
     public Describer describe(Describer describer) {
       return describer.start(
           "take", d -> d.arg("count", takeCode).arg("sink", rowSink));
+    }
+
+    @Override
+    public int maxSlots() {
+      return Slots.maxOf(rowSink.maxSlots(), takeCode);
     }
 
     @Override
@@ -1171,7 +1199,7 @@ public abstract class RowSinks {
 
     @Override
     public int maxSlots() {
-      return names.size() + rowSink.maxSlots();
+      return Slots.maxOf(names.size() + rowSink.maxSlots(), codes);
     }
 
     /**
@@ -1497,7 +1525,9 @@ public abstract class RowSinks {
 
     @Override
     public int maxSlots() {
-      return scanDepth + rowSink.maxSlots();
+      return scanDepth
+          + Slots.maxOf(
+              Slots.maxOf(rowSink.maxSlots(), keyCode), inSlots.rightList());
     }
 
     static <E> boolean isPrefix(List<E> list0, List<E> list1) {
@@ -1627,7 +1657,9 @@ public abstract class RowSinks {
 
     @Override
     public int maxSlots() {
-      return inSlots.size() + rowSink.maxSlots();
+      return inSlots.size()
+          + Slots.maxOf(
+              Slots.maxOf(rowSink.maxSlots(), code), inSlots.rightList());
     }
 
     @Override
@@ -1723,7 +1755,7 @@ public abstract class RowSinks {
 
     @Override
     public int maxSlots() {
-      return codes.size() + rowSink.maxSlots();
+      return codes.size() + Slots.maxOf(rowSink.maxSlots(), codes);
     }
 
     @Override
@@ -1782,6 +1814,11 @@ public abstract class RowSinks {
     @Override
     public Describer describe(Describer describer) {
       return describer.start("collect", d -> d.arg("", code));
+    }
+
+    @Override
+    public int maxSlots() {
+      return code.maxSlots();
     }
 
     @Override
