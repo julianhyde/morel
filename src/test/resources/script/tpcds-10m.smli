@@ -22,12 +22,12 @@
  * and checks each "rN" against Spark's answer (TpcdsChecker).
  *
  * A column not declared "not null" is an option. SQL's aggregates,
- * which ignore null, are "sumSome", "avgSome", "minSome", "maxSome"
- * and "countSome". As NONE < SOME c, "col = SOME c", ">", ">=" (so
- * "between") drop rows where the column is NONE, as SQL's "where"
- * does; a lone "<", "<=", "<>", a function of a column (such as
- * "substr"), and an equality of two option columns (NONE = NONE, but
- * NULL = NULL is not true) are written with a guard.
+ * which ignore null, are "sumSome", "avgSome", "minSome", "maxSome",
+ * "countSome" and "stddevSampSome". As NONE < SOME c, "col = SOME c",
+ * ">", ">=" (so "between") drop rows where the column is NONE, as
+ * SQL's "where" does; a lone "<", "<=", "<>", a function of a column
+ * (such as "substr"), and an equality of two option columns (NONE =
+ * NONE, but NULL = NULL is not true) are written with a guard.
  *)
 (*) requires: tpcds
 
@@ -2439,21 +2439,6 @@ LIMIT 100
 *)
 fun q17 () =
   let
-    (* "stddev_samp(x)": the sample standard deviation of the values of
-     * the SOMEs, or NONE if there are fewer than two. The sums are exact
-     * ints; only the square root is real. *)
-    fun stddevSamp xs =
-      let
-        val vs = somes xs
-        val n = count vs
-        val s = sum vs
-        val s2 = sum (from v in vs yield v * v)
-      in
-        if n < 2 then NONE
-        else
-          SOME (Math.sqrt (Real.fromInt (n * s2 - s * s)
-            / Real.fromInt (n * (n - 1))))
-      end
     (* "a / b" of two reals that may be NONE *)
     fun divide (a, b) =
       case (a, b) of
@@ -2487,13 +2472,13 @@ fun q17 () =
       group {i.i_item_id, i.i_item_desc, s.s_state}
           compute {store_sales_quantitycount = countSome over ss.ss_quantity,
             store_sales_quantityave = avgSome over ss.ss_quantity,
-            sd_store_sales = stddevSamp over ss.ss_quantity,
+            sd_store_sales = stddevSampSome over ss.ss_quantity,
             as_store_returns_quantitycount = countSome over sr.sr_return_quantity,
             as_store_returns_quantityave = avgSome over sr.sr_return_quantity,
-            sd_store_returns = stddevSamp over sr.sr_return_quantity,
+            sd_store_returns = stddevSampSome over sr.sr_return_quantity,
             catalog_sales_quantitycount = countSome over cs.cs_quantity,
             catalog_sales_quantityave = avgSome over cs.cs_quantity,
-            sd_catalog_sales = stddevSamp over cs.cs_quantity}
+            sd_catalog_sales = stddevSampSome over cs.cs_quantity}
       order (i_item_id, i_item_desc, s_state)
       yield {i_item_id, i_item_desc, s_state, store_sales_quantitycount,
         store_sales_quantityave,
@@ -4847,21 +4832,6 @@ ORDER BY inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean, inv1.cov
 *)
 fun q39a () =
   let
-    (* "stddev_samp(x)": the sample standard deviation of the values of
-     * the SOMEs, or NONE if there are fewer than two. The sums are exact
-     * ints; only the square root is real. *)
-    fun stddevSamp xs =
-      let
-        val vs = somes xs
-        val n = count vs
-        val s = sum vs
-        val s2 = sum (from v in vs yield v * v)
-      in
-        if n < 2 then NONE
-        else
-          SOME (Math.sqrt (Real.fromInt (n * s2 - s * s)
-            / Real.fromInt (n * (n - 1))))
-      end
     (* "a / b" of two reals that may be NONE *)
     fun divide (a, b) =
       case (a, b) of
@@ -4877,7 +4847,7 @@ fun q39a () =
           andalso inv.inv_date_sk = d.d_date_sk
           andalso d.d_year = SOME 2001
         group {w.w_warehouse_name, w.w_warehouse_sk, i.i_item_sk, d.d_moy}
-          compute {stdev = stddevSamp over inv.inv_quantity_on_hand,
+          compute {stdev = stddevSampSome over inv.inv_quantity_on_hand,
             mean = avgSome over inv.inv_quantity_on_hand}
         (* "CASE mean WHEN 0 THEN NULL ELSE stdev / mean END" *)
         yield {w_warehouse_name, w_warehouse_sk, i_item_sk, d_moy, stdev,
@@ -4908,8 +4878,8 @@ fun q39a () =
 val r39a = q39a ();
 > cov       cov_2     d_moy d_moy_2 i_item_sk i_item_sk_2 mean   mean_2    w_warehouse_sk w_warehouse_sk_2
 > --------- --------- ----- ------- --------- ----------- ------ --------- -------------- ----------------
-> 1.0202744 1.3849913     1       2       633         633    222 349.33334              1                1
-> 1.1177534 1.0149925     1       2       675         675 381.25     255.5              1                1
+> 1.0202744 1.3849914     1       2       633         633    222 349.33334              1                1
+> 1.1177534 1.0149924     1       2       675         675 381.25     255.5              1                1
 > 1.2868938 1.2386651     1       2      1157        1157    338    354.25              1                1
 > 1.1390924 1.1236527     1       2      1637        1637    298       234              1                1
 >
@@ -4968,21 +4938,6 @@ ORDER BY inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean, inv1.cov
 *)
 fun q39b () =
   let
-    (* "stddev_samp(x)": the sample standard deviation of the values of
-     * the SOMEs, or NONE if there are fewer than two. The sums are exact
-     * ints; only the square root is real. *)
-    fun stddevSamp xs =
-      let
-        val vs = somes xs
-        val n = count vs
-        val s = sum vs
-        val s2 = sum (from v in vs yield v * v)
-      in
-        if n < 2 then NONE
-        else
-          SOME (Math.sqrt (Real.fromInt (n * s2 - s * s)
-            / Real.fromInt (n * (n - 1))))
-      end
     (* "a / b" of two reals that may be NONE *)
     fun divide (a, b) =
       case (a, b) of
@@ -4998,7 +4953,7 @@ fun q39b () =
           andalso inv.inv_date_sk = d.d_date_sk
           andalso d.d_year = SOME 2001
         group {w.w_warehouse_name, w.w_warehouse_sk, i.i_item_sk, d.d_moy}
-          compute {stdev = stddevSamp over inv.inv_quantity_on_hand,
+          compute {stdev = stddevSampSome over inv.inv_quantity_on_hand,
             mean = avgSome over inv.inv_quantity_on_hand}
         (* "CASE mean WHEN 0 THEN NULL ELSE stdev / mean END" *)
         yield {w_warehouse_name, w_warehouse_sk, i_item_sk, d_moy, stdev,
