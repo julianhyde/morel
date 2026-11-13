@@ -165,6 +165,44 @@ t3 (true, 10);
 Test.ticks ();
 > val it = 1 : int
 
+(* A value used once, as the aggregate function of a "group", is not
+ * inlined: the aggregate function is evaluated for each group. *)
+fun g1 (s, xs) =
+  let
+    val f =
+      if String.size s > 0 then (fn (ys : int bag) => count ys)
+      else (fn ys => 0)
+  in
+    from x in xs group {k = x mod 2} compute {c = f over x}
+  end;
+> val g1 = fn : string * int bag -> {c:int, k:int} bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val g1 =
+>   fn v => case v of (s, xs) => let
+>       val f =
+>         case #size String s > 0 of true => fn ys => #count Relational ys
+>           | _ => fn ys_1 => 0
+>     in
+>       r$0[f, xs]
+>     end
+>
+> r$0[f, xs] =
+>   group x [k = #mod Int (x, 2)] [c = f over x] : {c:int, k:int} bag
+>     xs : int bag
+> |_} : string
+fun g2 xs =
+  let val f = Test.tick (fn (ys : int bag) => count ys)
+  in from x in xs group {k = x mod 2} compute {c = f over x} end;
+> val g2 = fn : int bag -> {c:int, k:int} bag
+Test.zeroTicks ();
+> val it = () : unit
+g2 (bag [1, 2, 3, 4, 5]);
+> val it = [{c=3,k=1},{c=2,k=0}] : {c:int, k:int} bag
+Test.ticks ();
+> val it = 1 : int
+
 (*) A dead variable (not used) is removed.
 let val x = 1 val y = 2 in y end;
 > val it = 2 : int

@@ -167,7 +167,8 @@ public class Analyzer extends EnvVisitor {
     final List<Binding> bindings = new ArrayList<>();
     group.keys.forEach(
         (name, key) -> bindings.add(Binding.of(core.idPat(key.type, name, 0))));
-    final EnvVisitor v2 = bind(bindings);
+    // The aggregate function is evaluated once for each group.
+    final EnvVisitor v2 = deeper().bind(bindings);
     group
         .aggregates
         .values()
