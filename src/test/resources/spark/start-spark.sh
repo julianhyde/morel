@@ -96,14 +96,30 @@ if [ -n "$tpcds" ]; then
   tpcds=$(cd "$tpcds" && pwd)
 fi
 
-# Hash of the init script, which the container records when it is
-# created; "--reuse" recreates a container whose hash is not this one,
-# because such a container holds tables that init.py no longer creates.
-# With --tpcds, the hash covers the TPC-DS scripts, schema, queries and
-# data set too, so a container with TPC-DS and one without differ.
+# The server's configuration. Spark redacts the value of a table property
+# that matches spark.sql.redaction.options.regex, "(?i)url" by default,
+# in what SHOW TBLPROPERTIES returns. A "morel.nullable" property lists
+# columns, and a column such as TPC-DS's wp_url would hide the whole
+# list, so that Morel would read every column of the table as not null.
+# The test server holds no secrets; "(?!)" matches nothing.
+spark_conf=(
+  --conf spark.plugins=org.apache.spark.sql.connect.SparkConnectPlugin
+  --conf spark.connect.grpc.binding.port=15002
+  --conf spark.sql.ansi.enabled=true
+  --conf spark.sql.session.timeZone=UTC
+  --conf "spark.sql.redaction.options.regex=(?!)"
+)
+
+# Hash of the init script and the configuration, which the container
+# records when it is created; "--reuse" recreates a container whose hash
+# is not this one, because such a container holds tables that init.py no
+# longer creates, or runs with other settings. With --tpcds, the hash
+# covers the TPC-DS scripts, schema, queries and data set too, so a
+# container with TPC-DS and one without differ.
 init_sha() {
   {
     cat "$dir/init.py"
+    printf '%s\n' "${spark_conf[@]}"
     if [ -n "$tpcds" ]; then
       echo "tpcds=$tpcds"
       cat "$tpcds/VERSION" "$dir/init-tpcds.py" "$tpcds_res/schema.sql" \
@@ -178,11 +194,7 @@ else
   docker run -d --name "$name" -p "$port:15002" \
     --label "morel.init.sha=$(init_sha)" \
     "${mounts[@]}" "$image" \
-    /opt/spark/bin/spark-submit \
-    --conf spark.plugins=org.apache.spark.sql.connect.SparkConnectPlugin \
-    --conf spark.connect.grpc.binding.port=15002 \
-    --conf spark.sql.ansi.enabled=true \
-    --conf spark.sql.session.timeZone=UTC \
+    /opt/spark/bin/spark-submit "${spark_conf[@]}" \
     /morel/init.py >/dev/null
 fi
 
