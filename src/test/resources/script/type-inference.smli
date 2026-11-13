@@ -284,6 +284,16 @@ end;
 :t fun choose b (x, y) = if b then x else y;
 > val choose : bool -> 'a * 'a -> 'a
 
+(* A type variable constrained by an overloaded operator is not
+ * generalized; its type comes from how the function is used. *)
+let fun minus (a, b) = a - b in minus (1.5, 0.25) end;
+> val it = 1.25 : real
+let fun minus (a, b) = a - b in minus (3, 1) end;
+> val it = 2 : int
+let fun minus (a, b) = a - b in (minus (1.5, 0.25), minus (3, 1)) end;
+> stdIn:1.1-1.70 Error: Cannot deduce type: conflict: real vs int
+>   raised at: stdIn:1.1-1.70
+
 (*) Record types, including duplicate fields
 :t map #empno [{empno = 10, name = "Shaggy"}];
 > val it : int list

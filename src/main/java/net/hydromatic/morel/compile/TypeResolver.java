@@ -4595,6 +4595,12 @@ public class TypeResolver {
     for (Variable v : priorVars) {
       collectVars(subst.resolve(v), envVars);
     }
+    // As in Standard ML, a type variable of an overloaded built-in operator
+    // (such as the 'num' of '-') is not generalized. Its type comes from how
+    // the binding is used, or, failing that, from the operator's default.
+    for (Map.Entry<Variable, PrimitiveType> entry : preferredTypes) {
+      collectVars(subst.resolve(entry.getKey()), envVars);
+    }
 
     // Variables that still carry an unresolved overload constraint. A binding
     // that mentions one is qualified; it is generalized (with dictionary
