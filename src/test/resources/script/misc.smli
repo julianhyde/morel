@@ -216,6 +216,19 @@ it 5;
 > val it = 7 : int
 (op /) (6.0, 4.0);
 > val it = 1.5 : real
+(*) An operator section takes the type of its arguments: decimal, word.
+(op -) (decimal "1.5", decimal "0.25");
+> val it = 1.25 : decimal
+(op /) (decimal "1", decimal "4");
+> val it = 0.25 : decimal
+(op * ) (0w3, 0w5);
+> val it = 0wxf : word
+List.foldl (op +) (decimal "0") [decimal "1.5", decimal "2"];
+> val it = 3.5 : decimal
+(*) As for "/" written infix, there is no "op /" of ints.
+(op /) (6, 4);
+> stdIn:1.1-1.14 Error: Cannot deduce type: no valid overloads
+>   raised at: stdIn:1.1-1.14
 (op ^) ("foo","bar");
 > val it = "foobar" : string
 (op ::) (1,[2,3,4]);

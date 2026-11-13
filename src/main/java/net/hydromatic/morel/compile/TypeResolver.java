@@ -28,7 +28,6 @@ import static net.hydromatic.morel.ast.AstBuilder.ast;
 import static net.hydromatic.morel.type.RecordType.mutableMap;
 import static net.hydromatic.morel.util.Ord.forEachIndexed;
 import static net.hydromatic.morel.util.Pair.forEach;
-import static net.hydromatic.morel.util.PairList.copyOf;
 import static net.hydromatic.morel.util.Static.joinQuoted;
 import static net.hydromatic.morel.util.Static.last;
 import static net.hydromatic.morel.util.Static.skip;
@@ -1770,12 +1769,17 @@ public class TypeResolver {
           equiv(v, fnType.apply(v3));
           preferredTypes.add(v3, preferredType);
 
-          PairList<Term, Constraint.Action> termActions =
-              copyOf(
-                  fnType.apply(toTerm(PrimitiveType.INT)),
-                  noAction,
-                  fnType.apply(toTerm(PrimitiveType.REAL)),
-                  noAction);
+          // One candidate for each type the operator is defined for, such
+          // as int, real, word and decimal for "op +".
+          final PairList<Term, Constraint.Action> termActions = PairList.of();
+          for (PrimitiveType t : overloadDomain(builtIn)) {
+            termActions.add(fnType.apply(toTerm(t)), noAction);
+          }
+          if (builtIn != BuiltIn.OP_DIV && builtIn != BuiltIn.OP_MOD) {
+            final Type decimal = typeSystem.lookup(BuiltIn.Eqtype.DECIMAL);
+            termActions.add(
+                fnType.apply(toTerm(decimal, Subst.EMPTY)), noAction);
+          }
           constraints.add(unifier.constraint(v, termActions));
         });
   }
