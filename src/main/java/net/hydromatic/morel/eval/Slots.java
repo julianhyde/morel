@@ -88,6 +88,22 @@ public final class Slots {
     }
     return max;
   }
+
+  /**
+   * Returns the max of {@code base} and {@link Code#maxSlots()} over the given
+   * codes.
+   *
+   * @param base minimum slot count (e.g. {@code n + child.maxSlots()})
+   * @param codes additional code nodes evaluated in series
+   * @return max slot count
+   */
+  public static int maxOf(int base, final Code... codes) {
+    int max = base;
+    for (Code code : codes) {
+      max = Math.max(max, code.maxSlots());
+    }
+    return max;
+  }
 }
 
 // End Slots.java
