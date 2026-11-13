@@ -291,6 +291,12 @@ val `identifier with ``backtick`` and period.` = 2;
 val `val` = "yes, you can use keywords as identifiers";
 > val `val` = "yes, you can use keywords as identifiers" : string
 
+(*) A label may contain a back-tick, and the record keeps all its fields.
+{`a``b` = 1, c = 2};
+> val it = {`a``b`=1,c=2} : {`a``b`:int, c:int}
+#c {`a``b` = 1, c = 2};
+> val it = 2 : int
+
 (*) Quoted type name
 val x: `int` = 1;
 > val x = 1 : int

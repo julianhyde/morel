@@ -500,7 +500,8 @@ public class Static {
    * taking into account quoted substrings.
    *
    * <p>For example, {@code split("a,'b,c',d", ',', '\'')} returns the list
-   * {@code ["a", "b,c", "d"]}.
+   * {@code ["a", "b,c", "d"]}. Within quotes, a doubled quote stands for one
+   * quote: {@code split("'it''s',a", ',', '\'')} returns {@code ["it's", "a"]}.
    */
   public static List<String> splitQuoted(String s, char sep, char quote) {
     if (s.isEmpty()) {
@@ -514,7 +515,12 @@ public class Static {
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
       if (c == quote) {
-        inQuote = !inQuote;
+        if (inQuote && i + 1 < s.length() && s.charAt(i + 1) == quote) {
+          current.append(quote);
+          ++i;
+        } else {
+          inQuote = !inQuote;
+        }
       } else if (c == sep && !inQuote) {
         result.add(current.toString());
         current.setLength(0);
@@ -546,9 +552,11 @@ public class Static {
       }
       first = false;
 
-      // Quote the string if it contains the separator
-      if (s.indexOf(sep) >= 0) {
-        result.append(quote).append(s).append(quote);
+      // Quote the string if it contains the separator or the quote; double
+      // each quote within it.
+      if (s.indexOf(sep) >= 0 || s.indexOf(quote) >= 0) {
+        final String q = String.valueOf(quote);
+        result.append(quote).append(s.replace(q, q + q)).append(quote);
       } else {
         result.append(s);
       }
