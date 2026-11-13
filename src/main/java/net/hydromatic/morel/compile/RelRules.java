@@ -198,8 +198,17 @@ public class RelRules {
             if (d == null || d.conditions.isEmpty()) {
               continue;
             }
-            final List<Core.Exp> others = new ArrayList<>(conjuncts);
-            others.remove(i);
+            // The conjuncts before the "exists" are evaluated before it, so
+            // they may go below the join; so may a conjunct after it that can
+            // neither raise nor have an effect. A conjunct after it that might
+            // raise stays above, so that it still sees only the rows that
+            // pass the "exists".
+            final List<Core.Exp> others =
+                new ArrayList<>(conjuncts.subList(0, i));
+            final List<Core.Exp> above = new ArrayList<>();
+            for (Core.Exp c : conjuncts.subList(i + 1, conjuncts.size())) {
+              (c.isSafe() ? others : above).add(c);
+            }
             final Core.Exp left =
                 others.isEmpty()
                     ? filter.input
@@ -227,16 +236,25 @@ public class RelRules {
               }
               conditions.add(c);
             }
-            return core.join(
-                filter.pos(),
-                typeSystem,
-                anti ? JoinType.ANTI : JoinType.SEMI,
-                leftId,
-                rightId,
-                null,
-                left,
-                d.rel,
-                core.andAlso(typeSystem, conditions));
+            final Core.Rel join =
+                core.join(
+                    filter.pos(),
+                    typeSystem,
+                    anti ? JoinType.ANTI : JoinType.SEMI,
+                    leftId,
+                    rightId,
+                    null,
+                    left,
+                    d.rel,
+                    core.andAlso(typeSystem, conditions));
+            return above.isEmpty()
+                ? join
+                : core.filter(
+                    filter.pos(),
+                    filter.id,
+                    null,
+                    join,
+                    core.andAlso(typeSystem, above));
           }
           return null;
         }
@@ -299,6 +317,14 @@ public class RelRules {
       final List<Core.Exp> remaining = new ArrayList<>();
       for (Core.Exp conjunct : core.decomposeAnd(filter.condition)) {
         if (rowNames.stream().noneMatch(p -> Core.mentions(conjunct, p))) {
+          // Once the equalities are taken out, the query is evaluated once,
+          // over all of its elements, rather than for each outer row; a
+          // conjunct that the equalities used to guard, or that would not
+          // have been evaluated at all, would then be evaluated. Only a
+          // conjunct that can neither raise nor have an effect may stay.
+          if (!conjunct.isSafe()) {
+            return null;
+          }
           remaining.add(conjunct);
           continue;
         }

@@ -1212,6 +1212,63 @@ from x in xs
   yield x.a;
 > val it = [1,3] : int list
 
+(* The rewrite keeps the order in which "andalso" evaluates. A
+ * conjunct after "exists" that might raise stays above the semi-join,
+ * so that it sees only the rows that pass the "exists"; here "div"
+ * would raise for the customer that has no orders. *)
+val custs = [{id = 1, n = 0}, {id = 2, n = 1}];
+> val custs = [{id=1,n=0},{id=2,n=1}] : {id:int, n:int} list
+val orders = [{cust = 2, qty = 1}, {cust = 3, qty = 0}];
+> val orders = [{cust=2,qty=1},{cust=3,qty=0}] : {cust:int, qty:int} list
+from c in custs
+  where (exists r in orders where r.cust = c.id)
+    andalso 100 div c.n > 1;
+> val it = [{id=2,n=1}] : {id:int, n:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   filter c [#div Int (100, #n c) > 1] : {id:int, n:int} list
+>     join c r [semi] [#cust r = #id c] : {id:int, n:int} list
+>       custs : {id:int, n:int} list
+>       orders : {cust:int, qty:int} list
+> |_} : string
+(* A subquery is not decorrelated if a conjunct that stays in it might
+ * raise: decorrelated, it would be evaluated over every order, and
+ * "div" would raise for the order whose customer is not in "custs". *)
+from c in custs
+  where (exists r in orders where r.cust = c.id andalso 10 div r.qty > 1);
+> val it = [{id=2,n=1}] : {id:int, n:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   filter c [let
+>         val v$0 = c
+>       in
+>         #nonEmpty Relational (r$0[v$0])
+>       end] : {id:int, n:int} list
+>     custs : {id:int, n:int} list
+>
+> r$0[v$0] =
+>   filter r [#cust r = #id v$0
+>       andalso #div Int (10, #qty r) > 1] : {cust:int, qty:int} list
+>     orders : {cust:int, qty:int} list
+> |_} : string
+(*) A conjunct before "exists" moves below the semi-join.
+from c in custs
+  where c.n > 0 andalso (exists r in orders where r.cust = c.id);
+> val it = [{id=2,n=1}] : {id:int, n:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   join c r [semi] [#cust r = #id c] : {id:int, n:int} list
+>     filter c [#n c > 0] : {id:int, n:int} list
+>       custs : {id:int, n:int} list
+>     orders : {cust:int, qty:int} list
+> |_} : string
+
 (* --- Constant folding ------------------------------------------- *)
 
 (* A call that converts a constant without losing information is
