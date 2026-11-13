@@ -18,6 +18,11 @@
  *
  * Tests for inlining and other optimizations.
  *)
+(*) Make visible the "Test" structure, for "Test.tick".
+Sys.set ("excludeStructures", "");
+> val it = () : unit
+Sys.clearEnv ();
+> val it = () : unit
 Sys.set ("stringDepth", NONE);
 > val it = () : unit
 
@@ -72,6 +77,93 @@ Sys.planEx "-1";
 >   filter x [x > 15] : int list
 >     [10, 20, 30] : int list
 > |_} : string
+
+(* As above, but the use is in one branch of a "case" with several
+ * branches. "y" is still not inlined into the lambda, or into the
+ * query, which would evaluate it for each element. *)
+fun f1 xs =
+  let val y = String.size (String.implode xs)
+  in List.map (fn x => x + y) [1, 2, 3] end;
+> val f1 = fn : char list -> int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val f1 =
+>   fn xs => let
+>     val y = #size String (#implode String xs)
+>   in
+>     #map List (fn x => x + y) ([1, 2, 3])
+>   end|_} : string
+fun f2 (b, xs) =
+  let val y = String.size (String.implode xs)
+  in case b of true => List.map (fn x => x + y) [1, 2, 3] | false => [] end;
+> val f2 = fn : bool * char list -> int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val f2 =
+>   fn v => case v of (b, xs) => let
+>       val y = #size String (#implode String xs)
+>     in
+>       case b of true => #map List (fn x => x + y) ([1, 2, 3]) | false => []
+>     end|_} : string
+fun f3 (b, xs) =
+  let val y = String.size (String.implode xs)
+  in case b of true => (from r in [1, 2, 3] where r > y) | false => [] end;
+> val f3 = fn : bool * char list -> int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val f3 =
+>   fn v => case v of (b, xs) => let
+>       val y = #size String (#implode String xs)
+>     in
+>       case b of true => r$0[y] | false => []
+>     end
+>
+> r$0[y] =
+>   filter r [r > y] : int list
+>     [1, 2, 3] : int list
+> |_} : string
+f3 (true, [#"a", #"b"]);
+> val it = [3] : int list
+
+(* The same, measured by running: "Test.tick" counts how many times
+ * "y" is evaluated. Once, however many elements there are. Counting
+ * starts at "Test.zeroTicks"; "tick" and "ticks" fail before it. *)
+Test.ticks ();
+> uncaught exception Fail [Fail: call Test.zeroTicks first]
+>   raised at: stdIn:1.1-1.14
+fun t1 n =
+  let val y = Test.tick n
+  in List.map (fn x => x + y) [1, 2, 3] end;
+> val t1 = fn : int -> int list
+Test.zeroTicks ();
+> val it = () : unit
+t1 10;
+> val it = [11,12,13] : int list
+Test.ticks ();
+> val it = 1 : int
+fun t2 (b, n) =
+  let val y = Test.tick n
+  in case b of true => List.map (fn x => x + y) [1, 2, 3] | false => [] end;
+> val t2 = fn : bool * int -> int list
+Test.zeroTicks ();
+> val it = () : unit
+t2 (true, 10);
+> val it = [11,12,13] : int list
+Test.ticks ();
+> val it = 1 : int
+fun t3 (b, n) =
+  let val y = Test.tick n
+  in case b of true => (from r in [1, 2, 3] where r > y - 10) | false => [] end;
+> val t3 = fn : bool * int -> int list
+Test.zeroTicks ();
+> val it = () : unit
+t3 (true, 10);
+> val it = [1,2,3] : int list
+Test.ticks ();
+> val it = 1 : int
 
 (*) A dead variable (not used) is removed.
 let val x = 1 val y = 2 in y end;

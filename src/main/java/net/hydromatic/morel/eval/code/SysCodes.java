@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableList;
 import java.io.StringReader;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import net.hydromatic.morel.ast.AstDumper;
@@ -124,6 +125,9 @@ public final class SysCodes {
     c.accept(BuiltIn.TEST_LIST_SUM, TEST_LIST_SUM);
     c.accept(BuiltIn.TEST_OVER_COUNT, TEST_OVER_COUNT);
     c.accept(BuiltIn.TEST_OVER_SUM, TEST_OVER_SUM);
+    c.accept(BuiltIn.TEST_TICK, TEST_TICK);
+    c.accept(BuiltIn.TEST_TICKS, TEST_TICKS);
+    c.accept(BuiltIn.TEST_ZERO_TICKS, TEST_ZERO_TICKS);
     c.accept(BuiltIn.VARIANT_PARSE, VARIANT_PARSE);
     c.accept(BuiltIn.VARIANT_PRINT, VARIANT_PRINT);
     c.accept(BuiltIn.Z_TEST_OVER_COUNT_BAG, Z_TEST_OVER_COUNT_BAG);
@@ -710,6 +714,54 @@ public final class SysCodes {
 
   /** @see BuiltIn#TEST_OVER_SUM */
   private static final Macro TEST_OVER_SUM = RELATIONAL_SUM;
+
+  /** @see BuiltIn#TEST_TICK */
+  private static final Applicable TEST_TICK =
+      new TestTick(BuiltIn.TEST_TICK, Pos.ZERO);
+
+  /** @see BuiltIn#TEST_TICKS */
+  private static final Applicable TEST_TICKS =
+      new TestTick(BuiltIn.TEST_TICKS, Pos.ZERO);
+
+  /** @see BuiltIn#TEST_ZERO_TICKS */
+  private static final Applicable TEST_ZERO_TICKS =
+      new ApplicableImpl(BuiltIn.TEST_ZERO_TICKS) {
+        @Override
+        public Object apply(Stack stack, Object arg) {
+          stack.session.ticks = new AtomicInteger();
+          return Unit.INSTANCE;
+        }
+      };
+
+  /**
+   * Implements {@link #TEST_TICK} and {@link #TEST_TICKS}. Each raises {@code
+   * Fail} if {@code Test.zeroTicks} has not been called, so that a test cannot
+   * count calls made before it began.
+   */
+  private static class TestTick extends BasePositionedApplicable {
+    TestTick(BuiltIn builtIn, Pos pos) {
+      super(builtIn, pos);
+    }
+
+    @Override
+    public Applicable withPos(Pos pos) {
+      return new TestTick(builtIn, pos);
+    }
+
+    @Override
+    public Object apply(Stack stack, Object arg) {
+      final AtomicInteger ticks = stack.session.ticks;
+      if (ticks == null) {
+        throw new MorelRuntimeException(
+            BuiltInExn.FAIL, "call Test.zeroTicks first", pos);
+      }
+      if (builtIn == BuiltIn.TEST_TICK) {
+        ticks.incrementAndGet();
+        return arg;
+      }
+      return ticks.get();
+    }
+  }
 
   /** @see BuiltIn#VARIANT_PARSE */
   private static final Typed VARIANT_PARSE = new VariantParser(null);

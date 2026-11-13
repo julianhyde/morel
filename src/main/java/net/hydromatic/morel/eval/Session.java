@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.hydromatic.morel.ast.Core;
@@ -117,6 +118,13 @@ public class Session {
    * outer.
    */
   public final NameGenerator nameGenerator;
+
+  /**
+   * How many times {@code Test.tick} has been called since {@code
+   * Test.zeroTicks}; for tests of how often an expression is evaluated. Null
+   * until {@code Test.zeroTicks} is called.
+   */
+  public @Nullable AtomicInteger ticks;
 
   /** Controls element ordering when printing bag values. */
   private BagPrinter bagPrinter = BagPrinter.NATURAL;

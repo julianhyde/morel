@@ -5516,6 +5516,39 @@ public enum BuiltIn {
               ts.forallType(1, h -> ts.fnType(h.bag(0), h.get(0))),
               ts.forallType(1, h -> ts.fnType(h.list(0), h.get(0))))),
 
+  /**
+   * Function "Test.tick", of type "&alpha; &rarr; &alpha;".
+   *
+   * <p>{@code tick x} returns {@code x}, and adds one to a counter that {@code
+   * Test.ticks} reads. It is a function call like any other, which the
+   * optimizer must neither repeat nor drop; so a test can count how many times
+   * an expression is evaluated.
+   *
+   * <p>Raises {@code Fail} if {@code Test.zeroTicks} has not been called in
+   * this session.
+   */
+  TEST_TICK(
+      "Test",
+      "tick",
+      ts -> ts.forallType(1, h -> ts.fnType(h.get(0), h.get(0)))),
+
+  /**
+   * Function "Test.ticks", of type "unit &rarr; int".
+   *
+   * <p>Returns how many times {@code Test.tick} has been called since {@code
+   * Test.zeroTicks} was last called, in this session. Raises {@code Fail} if
+   * {@code Test.zeroTicks} has not been called.
+   */
+  TEST_TICKS("Test", "ticks", ts -> ts.fnType(UNIT, INT)),
+
+  /**
+   * Function "Test.zeroTicks", of type "unit &rarr; unit".
+   *
+   * <p>Sets to zero the counter that {@code Test.tick} increments and {@code
+   * Test.ticks} reads. A test calls it before it counts.
+   */
+  TEST_ZERO_TICKS("Test", "zeroTicks", ts -> ts.fnType(UNIT, UNIT)),
+
   /** Function "Time.+", of type "time * time &rarr; time". */
   TIME_ADD(
       "Time",

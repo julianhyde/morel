@@ -34,6 +34,7 @@ import net.hydromatic.morel.ast.Exps;
 import net.hydromatic.morel.ast.Op;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
+import org.jspecify.annotations.Nullable;
 
 /** Shuttle that counts how many times each expression is used. */
 public class Analyzer extends EnvVisitor {
@@ -46,9 +47,16 @@ public class Analyzer extends EnvVisitor {
    */
   private final int depth;
 
+  /**
+   * Uses in the enclosing expression, if this analyzer counts the uses in one
+   * branch of a {@code case}; null otherwise. A binding declared outside the
+   * branch has its declaration's depth there.
+   */
+  private final @Nullable Map<Core.NamedPat, MutableUse> outer;
+
   /** Creates an Analyzer. */
   private static Analyzer of(TypeSystem typeSystem, Environment env) {
-    return new Analyzer(typeSystem, env, new HashMap<>(), 0);
+    return new Analyzer(typeSystem, env, new HashMap<>(), 0, null);
   }
 
   /** Private constructor. */
@@ -56,10 +64,12 @@ public class Analyzer extends EnvVisitor {
       TypeSystem typeSystem,
       Environment env,
       Map<Core.NamedPat, MutableUse> map,
-      int depth) {
+      int depth,
+      @Nullable Map<Core.NamedPat, MutableUse> outer) {
     super(typeSystem, env);
     this.map = map;
     this.depth = depth;
+    this.outer = outer;
   }
 
   /** Analyzes an expression. */
@@ -84,12 +94,12 @@ public class Analyzer extends EnvVisitor {
 
   @Override
   protected Analyzer push(Environment env) {
-    return new Analyzer(typeSystem, env, map, depth);
+    return new Analyzer(typeSystem, env, map, depth, outer);
   }
 
   /** Returns an analyzer for a node that may be evaluated many times. */
   private Analyzer deeper() {
-    return new Analyzer(typeSystem, env, map, depth + 1);
+    return new Analyzer(typeSystem, env, map, depth + 1, outer);
   }
 
   @Override
@@ -172,7 +182,16 @@ public class Analyzer extends EnvVisitor {
 
   /** Gets or creates a {@link MutableUse} for a given name. */
   private MutableUse use(Core.NamedPat name) {
-    return map.computeIfAbsent(name, k -> new MutableUse());
+    return map.computeIfAbsent(
+        name,
+        k -> {
+          final MutableUse use = new MutableUse();
+          final MutableUse outerUse = outer == null ? null : outer.get(name);
+          if (outerUse != null) {
+            use.depth = outerUse.depth;
+          }
+          return use;
+        });
   }
 
   @Override
@@ -209,7 +228,10 @@ public class Analyzer extends EnvVisitor {
       final Multimap<Core.NamedPat, MutableUse> multimap =
           HashMultimap.create();
       final Map<Core.NamedPat, MutableUse> subMap = new HashMap<>();
-      final Analyzer analyzer = new Analyzer(typeSystem, env, subMap, depth);
+      final Map<Core.NamedPat, MutableUse> outerMap =
+          outer == null ? map : merged(outer, map);
+      final Analyzer analyzer =
+          new Analyzer(typeSystem, env, subMap, depth, outerMap);
       case_.matchList.forEach(
           e -> {
             subMap.clear();
@@ -226,8 +248,32 @@ public class Analyzer extends EnvVisitor {
                   baseUse.parallel = true;
                 }
                 baseUse.useCount += maxCount;
+                // What a branch learned about the binding: whether a use is
+                // inside a lambda or a query that its declaration is not, and,
+                // for a binding that a branch declares, what it is bound to.
+                for (MutableUse use : uses) {
+                  baseUse.repeated |= use.repeated;
+                  baseUse.value |= use.value;
+                  baseUse.atomic |= use.atomic;
+                  if (baseUse.depth < 0) {
+                    baseUse.depth = use.depth;
+                  }
+                }
               });
     }
+  }
+
+  /**
+   * Returns a map that contains the entries of {@code map} and, for keys that
+   * it lacks, of {@code outer}; for the uses of a {@code case} inside a branch
+   * of another {@code case}.
+   */
+  private static Map<Core.NamedPat, MutableUse> merged(
+      Map<Core.NamedPat, MutableUse> outer,
+      Map<Core.NamedPat, MutableUse> map) {
+    final Map<Core.NamedPat, MutableUse> merged = new HashMap<>(outer);
+    merged.putAll(map);
+    return merged;
   }
 
   /** How a binding (assignment of a value to a variable) is used. */
