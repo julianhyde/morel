@@ -1231,6 +1231,10 @@ Real.fromInt 16777217;
 > val it = 1.6777216E7 : real
 Sys.plan ();
 > val it = "apply(fnValue Real.fromInt, argCode constant(16777217))" : string
+Real.fromInt 2147483647;
+> val it = 2.1474836E9 : real
+Sys.plan ();
+> val it = "apply(fnValue Real.fromInt, argCode constant(2147483647))" : string
 (*) A call that would raise is left, and raises only if reached.
 if true then #"a" else Char.chr 300;
 > val it = #"a" : char

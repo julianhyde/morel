@@ -146,7 +146,9 @@ public final class Folder {
       return false;
     }
     final int i = ((Core.Literal) arg).unwrap(Integer.class);
-    return (int) (float) i == i;
+    // Compare as long: '(int) (float) i' saturates, so for Int.maxInt, whose
+    // float is 2^31, it would give Int.maxInt back.
+    return (long) (float) i == i;
   }
 
   /** Calls a built-in function, given as a literal, with an argument. */
