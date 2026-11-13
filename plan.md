@@ -128,7 +128,7 @@ with Spark loading the result.
 
 * *Why 1.4.* It is the last release compiled for Java 8 (class version
   52); 1.5 to 1.7 are class version 69, Java 25, which Morel cannot
-  depend on while it builds on JDK 8. Licence Apache 2.0. Dependencies
+  depend on while it builds on JDK 8. License Apache 2.0. Dependencies
   Guava and jsr305, which Morel already has, and `airline` for its
   command line, which we exclude because we call the library.
 * *The API* (read from the jar with `javap`; not yet run):
@@ -164,7 +164,7 @@ with Spark loading the result.
 99 queries with their parameters substituted, in Spark's dialect, under
 Apache 2.0 (`sql/core/src/test/resources/tpcds/`, from knowledge; check
 the path and the version). That makes the oracle runnable as is, and
-avoids the TPC toolkit's licence for the query templates. Spark's golden
+avoids the TPC toolkit's license for the query templates. Spark's golden
 answers next to them are for SF 1, so they are not ours to use.
 
 **D2. Data stays out of the repo** (agreed 2026-11-08). Generated into a
@@ -489,7 +489,7 @@ the same answers. Likely its own issue; not required to close #502.
 `sql/core/src/test/resources/tpcds/`, 103 files: the 99 queries, with
 14, 23, 24 and 39 in two parts. Identical at `v4.0.0` and at `master`
 (`f093bdfa9ad`), so pin `v4.0.0`, the container's version. The files
-carry no licence header. Spark's schema is
+carry no license header. Spark's schema is
 `sql/core/src/test/scala/org/apache/spark/sql/TPCDSSchema.scala`: types
 match the spec (`DECIMAL(7,2)`, `INT`, `CHAR(n)`, `DATE`) but it has no
 `NOT NULL` at all, so D3's key columns come from the TPC-DS DDL itself.
@@ -647,7 +647,7 @@ three, which it cannot do directly. Every tier needs D10.
 * **`int` is 32-bit.** Keys fit at SF 0.01; sums of quantities likely
   do; `bigint` columns raise `Overflow` rather than wrap, which is
   safe.
-* **Licences.** The generator (Apache 2.0) and Spark's query copies
+* **Licenses.** The generator (Apache 2.0) and Spark's query copies
   (Apache 2.0) are clear; the TPC's EULA still covers the benchmark's
   name and the publication of results. Nothing here publishes a
   benchmark result, but say "derived from TPC-DS" in the script, as
