@@ -1399,6 +1399,24 @@ Sys.planEx "-1";
 >     orders : {cust:int, qty:int} list
 > |_} : string
 
+(* The subquery's equality reads "r", which a join inside the subquery
+ * binds; after decorrelation, "r" is part of the subquery's element. *)
+from c in custs
+  where (exists r in orders, t in (from u in orders where r.cust = c.id));
+> val it = [{id=2,n=1}] : {id:int, n:int} list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   join c r [semi] [#cust (#1 e) = #id c] : {id:int, n:int} list
+>     custs : {id:int, n:int} list
+>     join r t : t$0
+>       orders : {cust:int, qty:int} list
+>       orders : {cust:int, qty:int} list
+>
+> t$0 ({cust:int, qty:int} * {cust:int, qty:int}) list
+> |_} : string
+
 (* --- Constant folding ------------------------------------------- *)
 
 (* A call that converts a constant without losing information is

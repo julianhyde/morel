@@ -385,17 +385,24 @@ public class RelRules {
                   element ->
                       c.apply(
                           slice(typeSystem, join2, element, 0, leftCount))));
+      // A condition from the right input may also read the left input's
+      // element (the right input of a dependent join may), by the join's
+      // left id; that, too, becomes a component of the join's element.
       right.conditions.forEach(
           c ->
               conditions.add(
                   element ->
-                      c.apply(
-                          slice(
-                              typeSystem,
-                              join2,
-                              element,
-                              leftCount,
-                              leftCount + rightCount))));
+                      core.substitute(
+                          typeSystem,
+                          c.apply(
+                              slice(
+                                  typeSystem,
+                                  join2,
+                                  element,
+                                  leftCount,
+                                  leftCount + rightCount)),
+                          join2.leftId,
+                          slice(typeSystem, join2, element, 0, leftCount))));
       return new Decorrelated(join2, conditions, left.name);
     }
     return null;
