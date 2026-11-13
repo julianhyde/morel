@@ -24,6 +24,12 @@
 # One configuration of the regular CI (main.yml) also starts a server, so
 # that a change that breaks the adapter is caught on the push that breaks
 # it. This workflow is the slower, more thorough one.
+#
+# It also runs the TPC-DS queries (hydromatic/morel#502): it generates
+# the data (about 25 seconds), loads it into the server, which captures
+# Spark SQL's answer to each query (about a minute), and checks Morel's
+# value of each query against Spark's answer (about two minutes). The
+# data and the answers are deterministic.
 name: Spark
 
 on:
@@ -46,9 +52,14 @@ jobs:
           java-version: "21"
           distribution: 'temurin'
           cache: 'maven'
-      - name: Start Spark Connect server
+      - name: Generate the TPC-DS data
         run: |
-          uri=$(src/test/resources/spark/start-spark.sh --new)
+          dir=$(src/test/resources/tpcds/generate.sh --dir "$RUNNER_TEMP/tpcds")
+          echo "MOREL_TPCDS=$dir" >> "$GITHUB_ENV"
+      - name: Start Spark Connect server, and capture the TPC-DS answers
+        run: |
+          uri=$(src/test/resources/spark/start-spark.sh --new \
+            --tpcds "$MOREL_TPCDS")
           echo "SPARK_REMOTE=$uri" >> "$GITHUB_ENV"
       - name: Check the generated plans against the PySpark client
         run: |
@@ -61,8 +72,10 @@ jobs:
             > /tmp/generated.smli
           diff src/test/resources/script/spark-plan-generated.smli \
             /tmp/generated.smli
-      - name: Build and test with live Spark
-        run: ./mvnw --batch-mode verify -Dmorel.spark=true
+      - name: Build and test with live Spark, and the TPC-DS queries
+        run: |
+          ./mvnw --batch-mode verify -Dmorel.spark=true \
+            -Dmorel.tpcds="$MOREL_TPCDS"
       - name: Server log on failure
         if: failure()
         run: docker logs --tail 200 morel-spark

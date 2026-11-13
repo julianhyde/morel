@@ -697,9 +697,10 @@ drop out.
    reading a table when the code runs (part 3), `?.` learning a
    table's fields (part 3), and deducing a declaration again
    (part 6).
-8. **TPC-DS** (#502): the generator, the queries, the script and
-   `TpcdsChecker`. `plan.md` stays on the branch, as the Spark
-   plan did.
+8. **TPC-DS** (#502): the generator, the queries, the script,
+   `TpcdsChecker`, and the weekly Spark workflow's TPC-DS steps,
+   which run on schedule only once on `main`. `plan.md` stays on the
+   branch, as the Spark plan did.
 
 ## Log
 
@@ -859,6 +860,20 @@ drop out.
   option, ...} list`. (14) A backquoted label prints without its
   backquotes (`sum(sales)=6492`). (15) q18's joins reordered, as
   q64's. Next: M4.
+* 2026-11-13: timings, at SF 0.01, on a laptop. Generating the data
+  (`tpcds/generate.sh --force`): 25s (54s CPU), including Maven's
+  startup. Starting a Spark container with `--tpcds`, loading the
+  data and capturing the answers: 51s, with the image already
+  present; q12 and q90 fail, as before. Morel's script, checked
+  against the answers: 90-105s. `./mvnw verify` with live Spark and
+  `-Dmorel.tpcds`: 1m55s, all 677 tests passing, `testScriptTpcds`
+  108s of it; the other live-Spark tests are not disturbed by the
+  `tpcds` database. A fresh copy of the data and of the answers is
+  byte-for-byte the cached one: both are deterministic. So the weekly
+  Spark workflow (`spark.yml`) now generates the data, starts its
+  server with `--tpcds`, and runs the script, about 3 minutes more in
+  a 30-minute job; no cache needed. Not yet measured: the queries
+  run on Spark (M5).
 * (Superseded: M0's part is done, M1's is now Julian running it.)
   Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied
