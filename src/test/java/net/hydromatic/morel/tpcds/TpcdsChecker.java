@@ -45,6 +45,7 @@ import net.hydromatic.morel.compile.Tracer;
 import net.hydromatic.morel.compile.Tracers;
 import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.FnType;
+import net.hydromatic.morel.type.ForallType;
 import net.hydromatic.morel.type.RecordLikeType;
 import net.hydromatic.morel.type.RecordType;
 import net.hydromatic.morel.type.TupleType;
@@ -171,6 +172,11 @@ public class TpcdsChecker {
     final List<String> names = new ArrayList<>();
     final List<Type> types = new ArrayList<>();
     final List<List<Object>> rows = new ArrayList<>();
+    if (type instanceof ForallType) {
+      // A polymorphic value, such as a list whose elements have a field
+      // whose type was never fixed; its values are those of its body.
+      type = ((ForallType) type).type;
+    }
     final Type rowType;
     final List<?> values;
     if (type.isCollection()) {
@@ -204,7 +210,8 @@ public class TpcdsChecker {
     // Match the answer's columns to the value's fields.
     if (names.size() != answer.names.size()) {
       return format(
-          "has fields %s; answer has columns %s", names, answer.names);
+          "has fields %s (type %s); answer has columns %s",
+          names, type, answer.names);
     }
     final int[] map = new int[names.size()]; // map[column] = field
     final List<Integer> unmatchedFields = new ArrayList<>();

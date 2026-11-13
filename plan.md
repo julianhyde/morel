@@ -442,6 +442,8 @@ several queries; and the guards for `NONE` (`x <> NONE andalso x <
 SOME c`) are repeated. Settle the idioms, then apply them to every
 query, checking that each still agrees with Spark.
 
+*M3 completed 2026-11-12; see the log.*
+
 **M4. Local pass.** Fix what M3 found in Morel itself (wrong answers,
 crashes, performance -- a nested-loop join over `store_sales` at SF 0.01
 is about 29K rows, so a cross product of three fact tables is not
@@ -776,6 +778,23 @@ three, which it cannot do directly. Every tier needs D10.
   compositions such as `sumOpt o somes`, because an overloaded function
   (`avgOpt`) cannot yet be composed with `o`. The TPC-DS queries now
   use the `Some` forms; all 78 still agree.
+* 2026-11-12: **M3 done**: tier C written, so all 103 query files are
+  in `tpcds-10m.smli`; 101 values agree with Spark, and q12 and q90
+  raise `Div` as Spark raises `DIVIDE_BY_ZERO`; the script runs in
+  about 100s. Written around (D7): `rollup` (11 queries) as a union of
+  groupings; window functions (15) as a grouped query joined back, a
+  rank as a count or a sort with `ordinal`, a running total as a fold;
+  `stddev_samp` (3) as a function. Issues drafted, not filed:
+  `/tmp/rollup.md`, `/tmp/window.md`, `/tmp/stddev.md`. More for M4:
+  (11) a `let`-bound function whose query reads its argument twice,
+  called twice, raises `ArrayIndexOutOfBoundsException` (on `main`
+  too): `let fun r xs = from x in xs yield 1 + count (from y in xs
+  where y < x) in (r [1, 2], r [3]) end`; q49 writes it out. (12)
+  Such a function is not generalized over two record types (q51 has
+  two copies). (13) q51's value has type `forall 'a. {d_date: 'a
+  option, ...} list`. (14) A backquoted label prints without its
+  backquotes (`sum(sales)=6492`). (15) q18's joins reordered, as
+  q64's. Next: M4.
 * (Superseded: M0's part is done, M1's is now Julian running it.)
   Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied

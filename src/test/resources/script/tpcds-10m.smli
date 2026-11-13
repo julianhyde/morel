@@ -606,6 +606,277 @@ val r4 = q4 ();
 >
 > val r4 : {customer_birth_country:string option, customer_email_address:string option, customer_first_name:string option, customer_id:string, customer_last_name:string option, customer_login:string option, customer_preferred_cust_flag:string option} list
 
+(* --- q5 --------------------------------------------------------- *)
+(*
+WITH ssr AS
+( SELECT
+    s_store_id,
+    sum(sales_price) AS sales,
+    sum(profit) AS profit,
+    sum(return_amt) AS RETURNS,
+    sum(net_loss) AS profit_loss
+  FROM
+    (SELECT
+       ss_store_sk AS store_sk,
+       ss_sold_date_sk AS date_sk,
+       ss_ext_sales_price AS sales_price,
+       ss_net_profit AS profit,
+       cast(0 AS DECIMAL(7, 2)) AS return_amt,
+       cast(0 AS DECIMAL(7, 2)) AS net_loss
+     FROM store_sales
+     UNION ALL
+     SELECT
+       sr_store_sk AS store_sk,
+       sr_returned_date_sk AS date_sk,
+       cast(0 AS DECIMAL(7, 2)) AS sales_price,
+       cast(0 AS DECIMAL(7, 2)) AS profit,
+       sr_return_amt AS return_amt,
+       sr_net_loss AS net_loss
+     FROM store_returns)
+    salesreturns, date_dim, store
+  WHERE date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-23' AS DATE)
+  AND ((cast('2000-08-23' AS DATE) + INTERVAL 14 days))
+    AND store_sk = s_store_sk
+  GROUP BY s_store_id),
+    csr AS
+  ( SELECT
+    cp_catalog_page_id,
+    sum(sales_price) AS sales,
+    sum(profit) AS profit,
+    sum(return_amt) AS RETURNS,
+    sum(net_loss) AS profit_loss
+  FROM
+    (SELECT
+       cs_catalog_page_sk AS page_sk,
+       cs_sold_date_sk AS date_sk,
+       cs_ext_sales_price AS sales_price,
+       cs_net_profit AS profit,
+       cast(0 AS DECIMAL(7, 2)) AS return_amt,
+       cast(0 AS DECIMAL(7, 2)) AS net_loss
+     FROM catalog_sales
+     UNION ALL
+     SELECT
+       cr_catalog_page_sk AS page_sk,
+       cr_returned_date_sk AS date_sk,
+       cast(0 AS DECIMAL(7, 2)) AS sales_price,
+       cast(0 AS DECIMAL(7, 2)) AS profit,
+       cr_return_amount AS return_amt,
+       cr_net_loss AS net_loss
+     FROM catalog_returns
+    ) salesreturns, date_dim, catalog_page
+  WHERE date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-23' AS DATE)
+  AND ((cast('2000-08-23' AS DATE) + INTERVAL 14 days))
+    AND page_sk = cp_catalog_page_sk
+  GROUP BY cp_catalog_page_id)
+  ,
+    wsr AS
+  ( SELECT
+    web_site_id,
+    sum(sales_price) AS sales,
+    sum(profit) AS profit,
+    sum(return_amt) AS RETURNS,
+    sum(net_loss) AS profit_loss
+  FROM
+    (SELECT
+       ws_web_site_sk AS wsr_web_site_sk,
+       ws_sold_date_sk AS date_sk,
+       ws_ext_sales_price AS sales_price,
+       ws_net_profit AS profit,
+       cast(0 AS DECIMAL(7, 2)) AS return_amt,
+       cast(0 AS DECIMAL(7, 2)) AS net_loss
+     FROM web_sales
+     UNION ALL
+     SELECT
+       ws_web_site_sk AS wsr_web_site_sk,
+       wr_returned_date_sk AS date_sk,
+       cast(0 AS DECIMAL(7, 2)) AS sales_price,
+       cast(0 AS DECIMAL(7, 2)) AS profit,
+       wr_return_amt AS return_amt,
+       wr_net_loss AS net_loss
+     FROM web_returns
+       LEFT OUTER JOIN web_sales ON
+                                   (wr_item_sk = ws_item_sk
+                                     AND wr_order_number = ws_order_number)
+    ) salesreturns, date_dim, web_site
+  WHERE date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-23' AS DATE)
+  AND ((cast('2000-08-23' AS DATE) + INTERVAL 14 days))
+    AND wsr_web_site_sk = web_site_sk
+  GROUP BY web_site_id)
+SELECT
+  channel,
+  id,
+  sum(sales) AS sales,
+  sum(returns) AS returns,
+  sum(profit) AS profit
+FROM
+  (SELECT
+     'store channel' AS channel,
+     concat('store', s_store_id) AS id,
+     sales,
+     returns,
+     (profit - profit_loss) AS profit
+   FROM ssr
+   UNION ALL
+   SELECT
+     'catalog channel' AS channel,
+     concat('catalog_page', cp_catalog_page_id) AS id,
+     sales,
+     returns,
+     (profit - profit_loss) AS profit
+   FROM csr
+   UNION ALL
+   SELECT
+     'web channel' AS channel,
+     concat('web_site', web_site_id) AS id,
+     sales,
+     returns,
+     (profit - profit_loss) AS profit
+   FROM wsr
+  ) x
+GROUP BY ROLLUP (channel, id)
+ORDER BY channel, id
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22. Each channel's sales and returns are
+ * a union, a sale having no return amount and a return no sales. *)
+fun q5 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    val zero = Decimal.fromInt 0
+    (* "a - b" and "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
+    fun minus (a : decimal option, b) =
+      case (a, b) of
+          (SOME a, SOME b) => SOME (a - b)
+        | _ => NONE
+    fun minus0 (a, b) = Option.map (fn a => a - getOpt (b, zero)) a
+    fun inRange d =
+      d >= SOME (day (2000, Aug, 23))
+      andalso d <= SOME (day (2000, Aug, 23 + 14))
+    val ssr =
+      from x in (from ss in tpcds.store_sales
+            yield {key = ss.ss_store_sk, date_sk = ss.ss_sold_date_sk,
+              sales_price = ss.ss_ext_sales_price,
+              profit = ss.ss_net_profit, return_amt = SOME zero,
+              net_loss = SOME zero})
+          @ (from sr in tpcds.store_returns
+            yield {key = sr.sr_store_sk, date_sk = sr.sr_returned_date_sk,
+              sales_price = SOME zero, profit = SOME zero,
+              return_amt = sr.sr_return_amt, net_loss = sr.sr_net_loss}),
+          d in tpcds.date_dim,
+          s in tpcds.store
+        where x.date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso x.key = SOME s.s_store_sk
+        group {id = s.s_store_id}
+          compute {sales = sumSome over x.sales_price,
+            profit = sumSome over x.profit,
+            returns = sumSome over x.return_amt,
+            profit_loss = sumSome over x.net_loss}
+    val csr =
+      from x in (from cs in tpcds.catalog_sales
+            yield {key = cs.cs_catalog_page_sk, date_sk = cs.cs_sold_date_sk,
+              sales_price = cs.cs_ext_sales_price,
+              profit = cs.cs_net_profit, return_amt = SOME zero,
+              net_loss = SOME zero})
+          @ (from cr in tpcds.catalog_returns
+            yield {key = cr.cr_catalog_page_sk, date_sk = cr.cr_returned_date_sk,
+              sales_price = SOME zero, profit = SOME zero,
+              return_amt = cr.cr_return_amount, net_loss = cr.cr_net_loss}),
+          d in tpcds.date_dim,
+          cp in tpcds.catalog_page
+        where x.date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso x.key = SOME cp.cp_catalog_page_sk
+        group {id = cp.cp_catalog_page_id}
+          compute {sales = sumSome over x.sales_price,
+            profit = sumSome over x.profit,
+            returns = sumSome over x.return_amt,
+            profit_loss = sumSome over x.net_loss}
+    val wsr =
+      from x in (from ws in tpcds.web_sales
+            yield {key = ws.ws_web_site_sk, date_sk = ws.ws_sold_date_sk,
+              sales_price = ws.ws_ext_sales_price,
+              profit = ws.ws_net_profit, return_amt = SOME zero,
+              net_loss = SOME zero})
+          @ (from wr in tpcds.web_returns
+              left join ws in tpcds.web_sales
+                on wr.wr_item_sk = ws.ws_item_sk
+                  andalso wr.wr_order_number = ws.ws_order_number
+            yield {key = Option.`join` ws?.ws_web_site_sk, date_sk = wr.wr_returned_date_sk,
+              sales_price = SOME zero, profit = SOME zero,
+              return_amt = wr.wr_return_amt, net_loss = wr.wr_net_loss}),
+          d in tpcds.date_dim,
+          web in tpcds.web_site
+        where x.date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso x.key = SOME web.web_site_sk
+        group {id = web.web_site_id}
+          compute {sales = sumSome over x.sales_price,
+            profit = sumSome over x.profit,
+            returns = sumSome over x.return_amt,
+            profit_loss = sumSome over x.net_loss}
+    val x =
+      (from r in ssr
+        yield {channel = SOME "store channel", id = SOME ("store" ^ r.id),
+          r.sales, r.returns, profit = minus (r.profit, r.profit_loss)})
+      @
+      (from r in csr
+        yield {channel = SOME "catalog channel",
+          id = SOME ("catalog_page" ^ r.id), r.sales, r.returns,
+          profit = minus (r.profit, r.profit_loss)})
+      @
+      (from r in wsr
+        yield {channel = SOME "web channel", id = SOME ("web_site" ^ r.id),
+          r.sales, r.returns, profit = minus (r.profit, r.profit_loss)})
+  in
+    from r in (from b in x
+          group {b.channel, b.id}
+            compute {sales = sumSome over b.sales,
+                returns = sumSome over b.returns,
+                profit = sumSome over b.profit}
+          yield {channel, id, sales, returns, profit})
+        union
+          (from b in x
+              group {b.channel}
+                compute {sales = sumSome over b.sales,
+                    returns = sumSome over b.returns,
+                    profit = sumSome over b.profit}
+              yield {channel, id = NONE, sales, returns, profit}),
+          (from b in x
+              group {}
+                compute {sales = sumSome over b.sales,
+                    returns = sumSome over b.returns,
+                    profit = sumSome over b.profit}
+              yield {channel = NONE, id = NONE, sales, returns, profit})
+      order (r.channel, r.id)
+      take 100
+  end;
+> val q5 = fn
+>   : unit
+>      -> {channel:string option, id:string option, profit:decimal option,
+>           returns:decimal option, sales:decimal option} list
+val r5 = q5 ();
+> channel         id                           profit      returns   sales
+> --------------- ---------------------------- ----------- --------- ----------
+>                                              -1396287.18 105874.72 5501160.58
+> catalog channel                               -267633.04  47472.68 2749513.37
+> catalog channel catalog_pageAAAAAAAAAAABAAAA    -7892.57         0    3565.53
+> catalog channel catalog_pageAAAAAAAAABABAAAA      4226.7         0   17651.76
+> catalog channel catalog_pageAAAAAAAAADCBAAAA     -944.83         0    8320.65
+> catalog channel catalog_pageAAAAAAAAAEABAAAA     1031.84         0    6839.68
+> catalog channel catalog_pageAAAAAAAAAECBAAAA      277.31         0   19248.58
+> catalog channel catalog_pageAAAAAAAAAEPAAAAA    -2898.27   3679.83          0
+> catalog channel catalog_pageAAAAAAAAAFABAAAA     8598.04         0   19046.96
+> catalog channel catalog_pageAAAAAAAAAFCBAAAA    -4111.59         0    1198.75
+> ...
+>
+> val r5 : {channel:string option, id:string option, profit:decimal option, returns:decimal option, sales:decimal option} list
+
 (* --- q6 --------------------------------------------------------- *)
 (*
 SELECT
@@ -1280,6 +1551,79 @@ val r11 = q11 ();
 >   [SOME "N",SOME "N",SOME "N",SOME "N",SOME "N",SOME "N",SOME "N",SOME "Y",
 >    SOME "Y"] : string option list
 
+(* --- q12 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_desc,
+  i_category,
+  i_class,
+  i_current_price,
+  sum(ws_ext_sales_price) AS itemrevenue,
+  sum(ws_ext_sales_price) * 100 / sum(sum(ws_ext_sales_price))
+  OVER
+  (PARTITION BY i_class) AS revenueratio
+FROM
+  web_sales, item, date_dim
+WHERE
+  ws_item_sk = i_item_sk
+    AND i_category IN ('Sports', 'Books', 'Home')
+    AND ws_sold_date_sk = d_date_sk
+    AND d_date BETWEEN cast('1999-02-22' AS DATE)
+  AND (cast('1999-02-22' AS DATE) + INTERVAL 30 days)
+GROUP BY
+  i_item_id, i_item_desc, i_category, i_class, i_current_price
+ORDER BY
+  i_category, i_class, i_item_id, i_item_desc, revenueratio
+LIMIT 100
+*)
+(* "SUM(...) OVER (PARTITION BY i_class)" is each class's total, joined
+ * to the class's rows. A partition is not a join: its NONE class is one
+ * partition, as NONE = NONE. *)
+fun q12 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    val items =
+      from ws in tpcds.web_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where ws.ws_item_sk = i.i_item_sk
+          andalso i.i_category elem [SOME "Sports", SOME "Books", SOME "Home"]
+          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_date >= SOME (day (1999, Feb, 22))
+          andalso d.d_date <= SOME (day (1999, Feb, 22 + 30))
+        group {i.i_item_id, i.i_item_desc, i.i_category, i.i_class,
+            i.i_current_price}
+          compute {itemrevenue = sumSome over ws.ws_ext_sales_price}
+    val classes =
+      from r in items
+        group r.i_class compute {total = sumSome over r.itemrevenue}
+  in
+    from r in items,
+        c in classes
+      where c.i_class = r.i_class
+      yield {r.i_item_id, r.i_item_desc, r.i_category, r.i_class,
+        r.i_current_price, r.itemrevenue,
+        revenueratio =
+          case (r.itemrevenue, c.total) of
+              (SOME revenue, SOME total) =>
+                SOME (revenue * Decimal.fromInt 100 / total)
+            | _ => NONE}
+      order (i_category, i_class, i_item_id, i_item_desc, revenueratio)
+      yield {i_item_desc, i_category, i_class, i_current_price, itemrevenue,
+        revenueratio}
+      take 100
+  end;
+> val q12 = fn
+>   : unit
+>      -> {i_category:string option, i_class:string option,
+>           i_current_price:decimal option, i_item_desc:string option,
+>           itemrevenue:decimal option, revenueratio:decimal option} list
+val r12 = q12 ();
+> uncaught exception Div [divide by zero]
+>   raised at: stdIn:30.22-30.61
+
 (* --- q13 -------------------------------------------------------- *)
 (*
 SELECT
@@ -1390,6 +1734,308 @@ val r13 = q13 ();
 >   : {avg(ss_ext_sales_price):decimal option,
 >       avg(ss_ext_wholesale_cost):decimal option, avg(ss_quantity):real option,
 >       sum(ss_ext_wholesale_cost):decimal option}
+
+(* --- q14a ------------------------------------------------------- *)
+(*
+WITH cross_items AS
+(SELECT i_item_sk ss_item_sk
+  FROM item,
+    (SELECT
+      iss.i_brand_id brand_id,
+      iss.i_class_id class_id,
+      iss.i_category_id category_id
+    FROM store_sales, item iss, date_dim d1
+    WHERE ss_item_sk = iss.i_item_sk
+      AND ss_sold_date_sk = d1.d_date_sk
+      AND d1.d_year BETWEEN 1999 AND 1999 + 2
+    INTERSECT
+    SELECT
+      ics.i_brand_id,
+      ics.i_class_id,
+      ics.i_category_id
+    FROM catalog_sales, item ics, date_dim d2
+    WHERE cs_item_sk = ics.i_item_sk
+      AND cs_sold_date_sk = d2.d_date_sk
+      AND d2.d_year BETWEEN 1999 AND 1999 + 2
+    INTERSECT
+    SELECT
+      iws.i_brand_id,
+      iws.i_class_id,
+      iws.i_category_id
+    FROM web_sales, item iws, date_dim d3
+    WHERE ws_item_sk = iws.i_item_sk
+      AND ws_sold_date_sk = d3.d_date_sk
+      AND d3.d_year BETWEEN 1999 AND 1999 + 2) x
+  WHERE i_brand_id = brand_id
+    AND i_class_id = class_id
+    AND i_category_id = category_id
+),
+    avg_sales AS
+  (SELECT avg(quantity * list_price) average_sales
+  FROM (
+         SELECT
+           ss_quantity quantity,
+           ss_list_price list_price
+         FROM store_sales, date_dim
+         WHERE ss_sold_date_sk = d_date_sk
+           AND d_year BETWEEN 1999 AND 2001
+         UNION ALL
+         SELECT
+           cs_quantity quantity,
+           cs_list_price list_price
+         FROM catalog_sales, date_dim
+         WHERE cs_sold_date_sk = d_date_sk
+           AND d_year BETWEEN 1999 AND 1999 + 2
+         UNION ALL
+         SELECT
+           ws_quantity quantity,
+           ws_list_price list_price
+         FROM web_sales, date_dim
+         WHERE ws_sold_date_sk = d_date_sk
+           AND d_year BETWEEN 1999 AND 1999 + 2) x)
+SELECT
+  channel,
+  i_brand_id,
+  i_class_id,
+  i_category_id,
+  sum(sales),
+  sum(number_sales)
+FROM (
+       SELECT
+         'store' channel,
+         i_brand_id,
+         i_class_id,
+         i_category_id,
+         sum(ss_quantity * ss_list_price) sales,
+         count(*) number_sales
+       FROM store_sales, item, date_dim
+       WHERE ss_item_sk IN (SELECT ss_item_sk
+       FROM cross_items)
+         AND ss_item_sk = i_item_sk
+         AND ss_sold_date_sk = d_date_sk
+         AND d_year = 1999 + 2
+         AND d_moy = 11
+       GROUP BY i_brand_id, i_class_id, i_category_id
+       HAVING sum(ss_quantity * ss_list_price) > (SELECT average_sales
+       FROM avg_sales)
+       UNION ALL
+       SELECT
+         'catalog' channel,
+         i_brand_id,
+         i_class_id,
+         i_category_id,
+         sum(cs_quantity * cs_list_price) sales,
+         count(*) number_sales
+       FROM catalog_sales, item, date_dim
+       WHERE cs_item_sk IN (SELECT ss_item_sk
+       FROM cross_items)
+         AND cs_item_sk = i_item_sk
+         AND cs_sold_date_sk = d_date_sk
+         AND d_year = 1999 + 2
+         AND d_moy = 11
+       GROUP BY i_brand_id, i_class_id, i_category_id
+       HAVING sum(cs_quantity * cs_list_price) > (SELECT average_sales FROM avg_sales)
+       UNION ALL
+       SELECT
+         'web' channel,
+         i_brand_id,
+         i_class_id,
+         i_category_id,
+         sum(ws_quantity * ws_list_price) sales,
+         count(*) number_sales
+       FROM web_sales, item, date_dim
+       WHERE ws_item_sk IN (SELECT ss_item_sk
+       FROM cross_items)
+         AND ws_item_sk = i_item_sk
+         AND ws_sold_date_sk = d_date_sk
+         AND d_year = 1999 + 2
+         AND d_moy = 11
+       GROUP BY i_brand_id, i_class_id, i_category_id
+       HAVING sum(ws_quantity * ws_list_price) > (SELECT average_sales
+       FROM avg_sales)
+     ) y
+GROUP BY ROLLUP (channel, i_brand_id, i_class_id, i_category_id)
+ORDER BY channel, i_brand_id, i_class_id, i_category_id
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22; "IN (SELECT ...)" is "exists", as in
+ * q14b, whose "cross_items" and "average_sales" this shares. *)
+fun q14a () =
+  let
+    (* "quantity * price" *)
+    fun times (quantity, price) =
+      case (quantity, price) of
+          (SOME q, SOME p) => SOME (Decimal.fromInt q * p)
+        | _ => NONE
+    val years = [SOME 1999, SOME (1999 + 1), SOME (1999 + 2)]
+    val cross_items =
+      from i in tpcds.item,
+          x in (
+            from x in (
+                from ss in tpcds.store_sales,
+                    iss in tpcds.item,
+                    d1 in tpcds.date_dim
+                  where ss.ss_item_sk = iss.i_item_sk
+                    andalso ss.ss_sold_date_sk = SOME d1.d_date_sk
+                    andalso d1.d_year elem years
+                  yield {brand_id = iss.i_brand_id,
+                    class_id = iss.i_class_id,
+                    category_id = iss.i_category_id})
+              intersect distinct
+                (from cs in tpcds.catalog_sales,
+                    ics in tpcds.item,
+                    d2 in tpcds.date_dim
+                  where cs.cs_item_sk = ics.i_item_sk
+                    andalso cs.cs_sold_date_sk = SOME d2.d_date_sk
+                    andalso d2.d_year elem years
+                  yield {brand_id = ics.i_brand_id,
+                    class_id = ics.i_class_id,
+                    category_id = ics.i_category_id}),
+                (from ws in tpcds.web_sales,
+                    iws in tpcds.item,
+                    d3 in tpcds.date_dim
+                  where ws.ws_item_sk = iws.i_item_sk
+                    andalso ws.ws_sold_date_sk = SOME d3.d_date_sk
+                    andalso d3.d_year elem years
+                  yield {brand_id = iws.i_brand_id,
+                    class_id = iws.i_class_id,
+                    category_id = iws.i_category_id}))
+        where i.i_brand_id <> NONE
+          andalso i.i_brand_id = x.brand_id
+          andalso i.i_class_id <> NONE
+          andalso i.i_class_id = x.class_id
+          andalso i.i_category_id <> NONE
+          andalso i.i_category_id = x.category_id
+        yield i.i_item_sk
+    val average_sales =
+      from x in (
+          from ss in tpcds.store_sales,
+              d in tpcds.date_dim
+            where ss.ss_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem years
+            yield {quantity = ss.ss_quantity, list_price = ss.ss_list_price})
+        union
+          (from cs in tpcds.catalog_sales,
+              d in tpcds.date_dim
+            where cs.cs_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem years
+            yield {quantity = cs.cs_quantity, list_price = cs.cs_list_price}),
+          (from ws in tpcds.web_sales,
+              d in tpcds.date_dim
+            where ws.ws_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year elem years
+            yield {quantity = ws.ws_quantity, list_price = ws.ws_list_price})
+        compute avgSome over times (x.quantity, x.list_price)
+    val y =
+      (from ss in tpcds.store_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where (exists ci in cross_items where ci = ss.ss_item_sk)
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME (1999 + 2)
+          andalso d.d_moy = SOME 11
+        group {i.i_brand_id, i.i_class_id, i.i_category_id}
+          compute {
+            sales = sumSome over times (ss.ss_quantity, ss.ss_list_price),
+            number_sales = count over ()}
+        where (case (sales, average_sales) of
+                  (SOME s, SOME a) => s > a
+                | _ => false)
+        yield {channel = SOME "store", i_brand_id, i_class_id,
+          i_category_id, sales, number_sales})
+      @
+      (from cs in tpcds.catalog_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where (exists ci in cross_items where ci = cs.cs_item_sk)
+          andalso cs.cs_item_sk = i.i_item_sk
+          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME (1999 + 2)
+          andalso d.d_moy = SOME 11
+        group {i.i_brand_id, i.i_class_id, i.i_category_id}
+          compute {
+            sales = sumSome over times (cs.cs_quantity, cs.cs_list_price),
+            number_sales = count over ()}
+        where (case (sales, average_sales) of
+                  (SOME s, SOME a) => s > a
+                | _ => false)
+        yield {channel = SOME "catalog", i_brand_id, i_class_id,
+          i_category_id, sales, number_sales})
+      @
+      (from ws in tpcds.web_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where (exists ci in cross_items where ci = ws.ws_item_sk)
+          andalso ws.ws_item_sk = i.i_item_sk
+          andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_year = SOME (1999 + 2)
+          andalso d.d_moy = SOME 11
+        group {i.i_brand_id, i.i_class_id, i.i_category_id}
+          compute {
+            sales = sumSome over times (ws.ws_quantity, ws.ws_list_price),
+            number_sales = count over ()}
+        where (case (sales, average_sales) of
+                  (SOME s, SOME a) => s > a
+                | _ => false)
+        yield {channel = SOME "web", i_brand_id, i_class_id,
+          i_category_id, sales, number_sales})
+  in
+    from r in (from b in y
+          group {b.channel, b.i_brand_id, b.i_class_id, b.i_category_id}
+            compute {`sum(sales)` = sumSome over b.sales,
+                `sum(number_sales)` = sum over b.number_sales}
+          yield {channel, i_brand_id, i_class_id, i_category_id, `sum(sales)`,
+            `sum(number_sales)`})
+        union
+          (from b in y
+              group {b.channel, b.i_brand_id, b.i_class_id}
+                compute {`sum(sales)` = sumSome over b.sales,
+                    `sum(number_sales)` = sum over b.number_sales}
+              yield {channel, i_brand_id, i_class_id, i_category_id = NONE,
+                `sum(sales)`, `sum(number_sales)`}),
+          (from b in y
+              group {b.channel, b.i_brand_id}
+                compute {`sum(sales)` = sumSome over b.sales,
+                    `sum(number_sales)` = sum over b.number_sales}
+              yield {channel, i_brand_id, i_class_id = NONE, i_category_id = NONE,
+                `sum(sales)`, `sum(number_sales)`}),
+          (from b in y
+              group {b.channel}
+                compute {`sum(sales)` = sumSome over b.sales,
+                    `sum(number_sales)` = sum over b.number_sales}
+              yield {channel, i_brand_id = NONE, i_class_id = NONE,
+                i_category_id = NONE, `sum(sales)`, `sum(number_sales)`}),
+          (from b in y
+              group {}
+                compute {`sum(sales)` = sumSome over b.sales,
+                    `sum(number_sales)` = sum over b.number_sales}
+              yield {channel = NONE, i_brand_id = NONE, i_class_id = NONE,
+                i_category_id = NONE, `sum(sales)`, `sum(number_sales)`})
+      order (r.channel, r.i_brand_id, r.i_class_id, r.i_category_id)
+      take 100
+  end;
+> val q14a = fn
+>   : unit
+>      -> {channel:string option, i_brand_id:int option,
+>           i_category_id:int option, i_class_id:int option,
+>           sum(number_sales):int, sum(sales):decimal option} list
+val r14a = q14a ();
+> channel i_brand_id i_category_id i_class_id sum(number_sales) sum(sales)
+> ------- ---------- ------------- ---------- ----------------- -----------
+>                                                          6492 29692203.94
+> catalog                                                  2669  13962792.7
+> catalog    1001001                                         17    80785.46
+> catalog    1001001                        1                 3    24855.29
+> catalog    1001001             5          1                 3    24855.29
+> catalog    1001001                        2                 3    14819.17
+> catalog    1001001             2          2                 3    14819.17
+> catalog    1001001                        3                 7    35648.65
+> catalog    1001001             2          3                 6    30974.65
+> catalog    1001001             5          3                 1        4674
+> ...
+>
+> val r14a : {channel:string option, i_brand_id:int option, i_category_id:int option, i_class_id:int option, sum(number_sales):int, sum(sales):decimal option} list
 
 (* --- q14b ------------------------------------------------------- *)
 (*
@@ -1754,6 +2400,290 @@ val r16 = q16 ();
 >   : {`order count `:int, `total net profit `:decimal option,
 >       `total shipping cost `:decimal option}
 
+(* --- q17 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_id,
+  i_item_desc,
+  s_state,
+  count(ss_quantity) AS store_sales_quantitycount,
+  avg(ss_quantity) AS store_sales_quantityave,
+  stddev_samp(ss_quantity) AS store_sales_quantitystdev,
+  stddev_samp(ss_quantity) / avg(ss_quantity) AS store_sales_quantitycov,
+  count(sr_return_quantity) as_store_returns_quantitycount,
+  avg(sr_return_quantity) as_store_returns_quantityave,
+  stddev_samp(sr_return_quantity) as_store_returns_quantitystdev,
+  stddev_samp(sr_return_quantity) / avg(sr_return_quantity) AS store_returns_quantitycov,
+  count(cs_quantity) AS catalog_sales_quantitycount,
+  avg(cs_quantity) AS catalog_sales_quantityave,
+  stddev_samp(cs_quantity) / avg(cs_quantity) AS catalog_sales_quantitystdev,
+  stddev_samp(cs_quantity) / avg(cs_quantity) AS catalog_sales_quantitycov
+FROM store_sales, store_returns, catalog_sales, date_dim d1, date_dim d2, date_dim d3, store, item
+WHERE d1.d_quarter_name = '2001Q1'
+  AND d1.d_date_sk = ss_sold_date_sk
+  AND i_item_sk = ss_item_sk
+  AND s_store_sk = ss_store_sk
+  AND ss_customer_sk = sr_customer_sk
+  AND ss_item_sk = sr_item_sk
+  AND ss_ticket_number = sr_ticket_number
+  AND sr_returned_date_sk = d2.d_date_sk
+  AND d2.d_quarter_name IN ('2001Q1', '2001Q2', '2001Q3')
+  AND sr_customer_sk = cs_bill_customer_sk
+  AND sr_item_sk = cs_item_sk
+  AND cs_sold_date_sk = d3.d_date_sk
+  AND d3.d_quarter_name IN ('2001Q1', '2001Q2', '2001Q3')
+GROUP BY i_item_id, i_item_desc, s_state
+ORDER BY i_item_id, i_item_desc, s_state
+LIMIT 100
+*)
+fun q17 () =
+  let
+    (* "stddev_samp(x)": the sample standard deviation of the values of
+     * the SOMEs, or NONE if there are fewer than two. The sums are exact
+     * ints; only the square root is real. *)
+    fun stddevSamp xs =
+      let
+        val vs = somes xs
+        val n = count vs
+        val s = sum vs
+        val s2 = sum (from v in vs yield v * v)
+      in
+        if n < 2 then NONE
+        else
+          SOME (Math.sqrt (Real.fromInt (n * s2 - s * s)
+            / Real.fromInt (n * (n - 1))))
+      end
+    (* "a / b" of two reals that may be NONE *)
+    fun divide (a, b) =
+      case (a, b) of
+          (SOME a, SOME b) => SOME (a / b)
+        | _ => NONE
+  in
+    from ss in tpcds.store_sales,
+        sr in tpcds.store_returns,
+        cs in tpcds.catalog_sales,
+        d1 in tpcds.date_dim,
+        d2 in tpcds.date_dim,
+        d3 in tpcds.date_dim,
+        s in tpcds.store,
+        i in tpcds.item
+      where d1.d_quarter_name = SOME "2001Q1"
+        andalso ss.ss_sold_date_sk = SOME d1.d_date_sk
+        andalso ss.ss_item_sk = i.i_item_sk
+        andalso ss.ss_store_sk = SOME s.s_store_sk
+        andalso ss.ss_customer_sk <> NONE
+        andalso ss.ss_customer_sk = sr.sr_customer_sk
+        andalso ss.ss_item_sk = sr.sr_item_sk
+        andalso ss.ss_ticket_number = sr.sr_ticket_number
+        andalso sr.sr_returned_date_sk = SOME d2.d_date_sk
+        andalso d2.d_quarter_name
+          elem [SOME "2001Q1", SOME "2001Q2", SOME "2001Q3"]
+        andalso sr.sr_customer_sk = cs.cs_bill_customer_sk
+        andalso sr.sr_item_sk = cs.cs_item_sk
+        andalso cs.cs_sold_date_sk = SOME d3.d_date_sk
+        andalso d3.d_quarter_name
+          elem [SOME "2001Q1", SOME "2001Q2", SOME "2001Q3"]
+      group {i.i_item_id, i.i_item_desc, s.s_state}
+          compute {store_sales_quantitycount = countSome over ss.ss_quantity,
+            store_sales_quantityave = avgSome over ss.ss_quantity,
+            sd_store_sales = stddevSamp over ss.ss_quantity,
+            as_store_returns_quantitycount = countSome over sr.sr_return_quantity,
+            as_store_returns_quantityave = avgSome over sr.sr_return_quantity,
+            sd_store_returns = stddevSamp over sr.sr_return_quantity,
+            catalog_sales_quantitycount = countSome over cs.cs_quantity,
+            catalog_sales_quantityave = avgSome over cs.cs_quantity,
+            sd_catalog_sales = stddevSamp over cs.cs_quantity}
+      order (i_item_id, i_item_desc, s_state)
+      yield {i_item_id, i_item_desc, s_state, store_sales_quantitycount,
+        store_sales_quantityave,
+        store_sales_quantitystdev = sd_store_sales,
+        store_sales_quantitycov =
+          divide (sd_store_sales, store_sales_quantityave),
+        as_store_returns_quantitycount, as_store_returns_quantityave,
+        as_store_returns_quantitystdev = sd_store_returns,
+        store_returns_quantitycov =
+          divide (sd_store_returns, as_store_returns_quantityave),
+        catalog_sales_quantitycount, catalog_sales_quantityave,
+        (* As in the SQL, this "stdev" is the coefficient of variation. *)
+        catalog_sales_quantitystdev =
+          divide (sd_catalog_sales, catalog_sales_quantityave),
+        catalog_sales_quantitycov =
+          divide (sd_catalog_sales, catalog_sales_quantityave)}
+      take 100
+  end;
+> val q17 = fn
+>   : unit
+>      -> {as_store_returns_quantityave:real option,
+>           as_store_returns_quantitycount:int,
+>           as_store_returns_quantitystdev:real option,
+>           catalog_sales_quantityave:real option,
+>           catalog_sales_quantitycount:int,
+>           catalog_sales_quantitycov:real option,
+>           catalog_sales_quantitystdev:real option, i_item_desc:string option,
+>           i_item_id:string, s_state:string option,
+>           store_returns_quantitycov:real option,
+>           store_sales_quantityave:real option, store_sales_quantitycount:int,
+>           store_sales_quantitycov:real option,
+>           store_sales_quantitystdev:real option} list
+val r17 = q17 ();
+> as_store_returns_quantityave as_store_returns_quantitycount as_store_returns_quantitystdev catalog_sales_quantityave catalog_sales_quantitycount catalog_sales_quantitycov catalog_sales_quantitystdev i_item_desc                                                             i_item_id        s_state store_returns_quantitycov store_sales_quantityave store_sales_quantitycount store_sales_quantitycov store_sales_quantitystdev
+> ---------------------------- ------------------------------ ------------------------------ ------------------------- --------------------------- ------------------------- --------------------------- ----------------------------------------------------------------------- ---------------- ------- ------------------------- ----------------------- ------------------------- ----------------------- -------------------------
+>                            4                              1                                                        6                           1                                                       Schools check by a machines. Main units will involve hands. All large # AAAAAAAAJDBAAAAA TN                                                      4                         1
+>                           33                              1                                                       45                           1                                                       Available, lucky groups spread entirely always similar societies; thin# AAAAAAAAJHDAAAAA TN                                                     97                         1
+>                           21                              1                                                        3                           1                                                       Terms cannot enc                                                        AAAAAAAALEEAAAAA TN                                                     56                         1
+>                           13                              1                                                       12                           1                                                       Candidates will hold. Chief ages used to choose with the foundations; # AAAAAAAAOFDAAAAA TN                                                     16                         1
+>                            9                              1                                                       64                           1                                                       Desperately general missiles ought to know here other far talks. New t# AAAAAAAAOIAAAAAA TN                                                     18                         1
+>
+> val r17 : {as_store_returns_quantityave:real option, as_store_returns_quantitycount:int, as_store_returns_quantitystdev:real option, catalog_sales_quantityave:real option, catalog_sales_quantitycount:int, catalog_sales_quantitycov:real option, catalog_sales_quantitystdev:real option, i_item_desc:string option, i_item_id:string, s_state:string option, store_returns_quantitycov:real option, store_sales_quantityave:real option, store_sales_quantitycount:int, store_sales_quantitycov:real option, store_sales_quantitystdev:real option} list
+
+(* --- q18 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_id,
+  ca_country,
+  ca_state,
+  ca_county,
+  avg(cast(cs_quantity AS DECIMAL(12, 2))) agg1,
+  avg(cast(cs_list_price AS DECIMAL(12, 2))) agg2,
+  avg(cast(cs_coupon_amt AS DECIMAL(12, 2))) agg3,
+  avg(cast(cs_sales_price AS DECIMAL(12, 2))) agg4,
+  avg(cast(cs_net_profit AS DECIMAL(12, 2))) agg5,
+  avg(cast(c_birth_year AS DECIMAL(12, 2))) agg6,
+  avg(cast(cd1.cd_dep_count AS DECIMAL(12, 2))) agg7
+FROM catalog_sales, customer_demographics cd1,
+  customer_demographics cd2, customer, customer_address, date_dim, item
+WHERE cs_sold_date_sk = d_date_sk AND
+  cs_item_sk = i_item_sk AND
+  cs_bill_cdemo_sk = cd1.cd_demo_sk AND
+  cs_bill_customer_sk = c_customer_sk AND
+  cd1.cd_gender = 'F' AND
+  cd1.cd_education_status = 'Unknown' AND
+  c_current_cdemo_sk = cd2.cd_demo_sk AND
+  c_current_addr_sk = ca_address_sk AND
+  c_birth_month IN (1, 6, 8, 9, 12, 2) AND
+  d_year = 1998 AND
+  ca_state IN ('MS', 'IN', 'ND', 'OK', 'NM', 'VA', 'MS')
+GROUP BY ROLLUP (i_item_id, ca_country, ca_state, ca_county)
+ORDER BY ca_country, ca_state, ca_county, i_item_id
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22; "cast(x AS DECIMAL(12, 2))" of an int is
+ * "Decimal.fromInt". "customer" is scanned before "cd2", not after as in
+ * the SQL, because Morel joins in the order written, and "cd2" joins
+ * only to "customer". *)
+fun q18 () =
+  let
+    val dec = Option.map Decimal.fromInt
+    val base =
+      from cs in tpcds.catalog_sales,
+          cd1 in tpcds.customer_demographics,
+          c in tpcds.customer,
+          cd2 in tpcds.customer_demographics,
+          ca in tpcds.customer_address,
+          d in tpcds.date_dim,
+          i in tpcds.item
+        where cs.cs_sold_date_sk = SOME d.d_date_sk
+          andalso cs.cs_item_sk = i.i_item_sk
+          andalso cs.cs_bill_cdemo_sk = SOME cd1.cd_demo_sk
+          andalso cs.cs_bill_customer_sk = SOME c.c_customer_sk
+          andalso cd1.cd_gender = SOME "F"
+          andalso cd1.cd_education_status = SOME "Unknown"
+          andalso c.c_current_cdemo_sk = SOME cd2.cd_demo_sk
+          andalso c.c_current_addr_sk = SOME ca.ca_address_sk
+          andalso c.c_birth_month
+            elem [SOME 1, SOME 6, SOME 8, SOME 9, SOME 12, SOME 2]
+          andalso d.d_year = SOME 1998
+          andalso ca.ca_state elem [SOME "MS", SOME "IN", SOME "ND",
+            SOME "OK", SOME "NM", SOME "VA", SOME "MS"]
+        yield {i_item_id = SOME i.i_item_id, ca.ca_country, ca.ca_state,
+          ca.ca_county, quantity = dec cs.cs_quantity,
+          list_price = cs.cs_list_price, coupon_amt = cs.cs_coupon_amt,
+          sales_price = cs.cs_sales_price, net_profit = cs.cs_net_profit,
+          birth_year = dec c.c_birth_year, dep_count = dec cd1.cd_dep_count}
+  in
+    from r in (from b in base
+          group {b.i_item_id, b.ca_country, b.ca_state, b.ca_county}
+            compute {agg1 = avgSome over b.quantity,
+                agg2 = avgSome over b.list_price,
+                agg3 = avgSome over b.coupon_amt,
+                agg4 = avgSome over b.sales_price,
+                agg5 = avgSome over b.net_profit,
+                agg6 = avgSome over b.birth_year,
+                agg7 = avgSome over b.dep_count}
+          yield {i_item_id, ca_country, ca_state, ca_county, agg1, agg2, agg3,
+            agg4, agg5, agg6, agg7})
+        union
+          (from b in base
+              group {b.i_item_id, b.ca_country, b.ca_state}
+                compute {agg1 = avgSome over b.quantity,
+                    agg2 = avgSome over b.list_price,
+                    agg3 = avgSome over b.coupon_amt,
+                    agg4 = avgSome over b.sales_price,
+                    agg5 = avgSome over b.net_profit,
+                    agg6 = avgSome over b.birth_year,
+                    agg7 = avgSome over b.dep_count}
+              yield {i_item_id, ca_country, ca_state, ca_county = NONE, agg1,
+                agg2, agg3, agg4, agg5, agg6, agg7}),
+          (from b in base
+              group {b.i_item_id, b.ca_country}
+                compute {agg1 = avgSome over b.quantity,
+                    agg2 = avgSome over b.list_price,
+                    agg3 = avgSome over b.coupon_amt,
+                    agg4 = avgSome over b.sales_price,
+                    agg5 = avgSome over b.net_profit,
+                    agg6 = avgSome over b.birth_year,
+                    agg7 = avgSome over b.dep_count}
+              yield {i_item_id, ca_country, ca_state = NONE, ca_county = NONE,
+                agg1, agg2, agg3, agg4, agg5, agg6, agg7}),
+          (from b in base
+              group {b.i_item_id}
+                compute {agg1 = avgSome over b.quantity,
+                    agg2 = avgSome over b.list_price,
+                    agg3 = avgSome over b.coupon_amt,
+                    agg4 = avgSome over b.sales_price,
+                    agg5 = avgSome over b.net_profit,
+                    agg6 = avgSome over b.birth_year,
+                    agg7 = avgSome over b.dep_count}
+              yield {i_item_id, ca_country = NONE, ca_state = NONE,
+                ca_county = NONE, agg1, agg2, agg3, agg4, agg5, agg6, agg7}),
+          (from b in base
+              group {}
+                compute {agg1 = avgSome over b.quantity,
+                    agg2 = avgSome over b.list_price,
+                    agg3 = avgSome over b.coupon_amt,
+                    agg4 = avgSome over b.sales_price,
+                    agg5 = avgSome over b.net_profit,
+                    agg6 = avgSome over b.birth_year,
+                    agg7 = avgSome over b.dep_count}
+              yield {i_item_id = NONE, ca_country = NONE, ca_state = NONE,
+                ca_county = NONE, agg1, agg2, agg3, agg4, agg5, agg6, agg7})
+      order (r.ca_country, r.ca_state, r.ca_county, r.i_item_id)
+      take 100
+  end;
+> val q18 = fn
+>   : unit
+>      -> {agg1:decimal option, agg2:decimal option, agg3:decimal option,
+>           agg4:decimal option, agg5:decimal option, agg6:decimal option,
+>           agg7:decimal option, ca_country:string option,
+>           ca_county:string option, ca_state:string option,
+>           i_item_id:string option} list
+val r18 = q18 ();
+> agg1                                agg2                                agg3                                agg4                                agg5                                agg6                                agg7                                ca_country ca_county ca_state i_item_id
+> ----------------------------------- ----------------------------------- ----------------------------------- ----------------------------------- ----------------------------------- ----------------------------------- ----------------------------------- ---------- --------- -------- ----------------
+> 55.58695652173913043478260869565217 102.4504347826086956521739130434783 266.1018478260869565217391304347826 55.03097826086956521739130434782609 137.8272826086956521739130434782609 1946.923913043478260869565217391304 3.804347826086956521739130434782609
+>                                  42                               39.17                              586.27                               21.15                             -632.89                                1957                                   5                               AAAAAAAAAAEAAAAA
+>                                  34                               54.81                                   0                               51.52                               72.76                                1935                                   6                               AAAAAAAAAAFAAAAA
+>                                  29                              114.35                                   0                              114.35                             1892.83                                1934                                   0                               AAAAAAAAABEAAAAA
+>                                  86                               29.35                                   0                               17.31                              -50.74                                1957                                   4                               AAAAAAAAABGAAAAA
+>                                  84                               38.86                              849.89                               24.09                               11.95                                1935                                   6                               AAAAAAAAACFAAAAA
+>                                  53                               53.31                                   0                               39.98                             1151.16                                1935                                   2                               AAAAAAAAAEAAAAAA
+>                                  31                              207.53                                   0                              151.49                             2500.46                                1960                                   6                               AAAAAAAAAJBAAAAA
+>                                  90                               25.65                                   0                               13.33                               -15.3                                1935                                   6                               AAAAAAAAAJHAAAAA
+>                                  22                              154.63                                   0                              105.14                               766.7                                1957                                   4                               AAAAAAAAALDAAAAA
+> ...
+>
+> val r18 : {agg1:decimal option, agg2:decimal option, agg3:decimal option, agg4:decimal option, agg5:decimal option, agg6:decimal option, agg7:decimal option, ca_country:string option, ca_county:string option, ca_state:string option, i_item_id:string option} list
+
 (* --- q19 -------------------------------------------------------- *)
 (*
 SELECT
@@ -1820,6 +2750,88 @@ val r19 = q19 ();
 > ...
 >
 > val r19 : {brand:string option, brand_id:int option, ext_price:decimal option, i_manufact:string option, i_manufact_id:int option} list
+
+(* --- q20 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_desc,
+  i_category,
+  i_class,
+  i_current_price,
+  sum(cs_ext_sales_price) AS itemrevenue,
+  sum(cs_ext_sales_price) * 100 / sum(sum(cs_ext_sales_price))
+  OVER
+  (PARTITION BY i_class) AS revenueratio
+FROM catalog_sales, item, date_dim
+WHERE cs_item_sk = i_item_sk
+  AND i_category IN ('Sports', 'Books', 'Home')
+  AND cs_sold_date_sk = d_date_sk
+  AND d_date BETWEEN cast('1999-02-22' AS DATE)
+AND (cast('1999-02-22' AS DATE) + INTERVAL 30 days)
+GROUP BY i_item_id, i_item_desc, i_category, i_class, i_current_price
+ORDER BY i_category, i_class, i_item_id, i_item_desc, revenueratio
+LIMIT 100
+*)
+(* "SUM(...) OVER (PARTITION BY i_class)" is each class's total, joined
+ * to the class's rows. A partition is not a join: its NONE class is one
+ * partition, as NONE = NONE. *)
+fun q20 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    val items =
+      from cs in tpcds.catalog_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where cs.cs_item_sk = i.i_item_sk
+          andalso i.i_category elem [SOME "Sports", SOME "Books", SOME "Home"]
+          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_date >= SOME (day (1999, Feb, 22))
+          andalso d.d_date <= SOME (day (1999, Feb, 22 + 30))
+        group {i.i_item_id, i.i_item_desc, i.i_category, i.i_class,
+            i.i_current_price}
+          compute {itemrevenue = sumSome over cs.cs_ext_sales_price}
+    val classes =
+      from r in items
+        group r.i_class compute {total = sumSome over r.itemrevenue}
+  in
+    from r in items,
+        c in classes
+      where c.i_class = r.i_class
+      yield {r.i_item_id, r.i_item_desc, r.i_category, r.i_class,
+        r.i_current_price, r.itemrevenue,
+        revenueratio =
+          case (r.itemrevenue, c.total) of
+              (SOME revenue, SOME total) =>
+                SOME (revenue * Decimal.fromInt 100 / total)
+            | _ => NONE}
+      order (i_category, i_class, i_item_id, i_item_desc, revenueratio)
+      yield {i_item_desc, i_category, i_class, i_current_price, itemrevenue,
+        revenueratio}
+      take 100
+  end;
+> val q20 = fn
+>   : unit
+>      -> {i_category:string option, i_class:string option,
+>           i_current_price:decimal option, i_item_desc:string option,
+>           itemrevenue:decimal option, revenueratio:decimal option} list
+val r20 = q20 ();
+> i_category i_class   i_current_price i_item_desc                                                             itemrevenue revenueratio
+> ---------- --------- --------------- ----------------------------------------------------------------------- ----------- -----------------------------------
+> Books      arts                35.27 Legs appear eventually soci                                                 2797.92 42.94423536201275778021991515278025
+> Books      arts                 8.22 Communities used to relocate clearly strange, new walls; european, ric#       150.8 2.314573216028879979862599075398604
+> Books      arts                 2.72 Beneath decent wives write t                                                3566.52 54.74119142195836223991748577182115
+> Books      business            78.25 Satisfactory, technical shadows get. Lexical structures would not blam#      721.68 6.939524364492343906857597821446292
+> Books      business             2.42 Cases include proudly without a columns. Solid, pre                            1781 17.12572454988480281858078611018158
+> Books      business             9.44 All                                                                          608.88 5.854863090361515294877860217163034
+> Books      business              8.9 Unions shall see enough over true attitudes; of course full variable           7288 70.07988799526133797968375585120909
+> Books      computers            7.56 Boots recommend usually just local centres; c                                2287.8 15.44087275554583667419879971815244
+> Books      computers            9.23 More important names induce; now similar standards will train correctl#     1240.47 8.372208858760356682945792939232694
+> Books      computers            4.34 Clearly actual places would supply apparently only rats.                    9187.71 62.00990515991609365762000793708644
+> ...
+>
+> val r20 : {i_category:string option, i_class:string option, i_current_price:decimal option, i_item_desc:string option, itemrevenue:decimal option, revenueratio:decimal option} list
 
 (* --- q21 -------------------------------------------------------- *)
 (*
@@ -1910,6 +2922,90 @@ val r21 = q21 ();
 > ...
 >
 > val r21 : {i_item_id:string, inv_after:int option, inv_before:int option, w_warehouse_name:string option} list
+
+(* --- q22 -------------------------------------------------------- *)
+(*
+SELECT
+  i_product_name,
+  i_brand,
+  i_class,
+  i_category,
+  avg(inv_quantity_on_hand) qoh
+FROM inventory, date_dim, item, warehouse
+WHERE inv_date_sk = d_date_sk
+  AND inv_item_sk = i_item_sk
+  AND inv_warehouse_sk = w_warehouse_sk
+  AND d_month_seq BETWEEN 1200 AND 1200 + 11
+GROUP BY ROLLUP (i_product_name, i_brand, i_class, i_category)
+ORDER BY qoh, i_product_name, i_brand, i_class, i_category
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP (a, b, c, d)" is a union of the groupings by (a, b,
+ * c, d), (a, b, c), (a, b), (a) and (), a key that is rolled up being
+ * NONE. *)
+fun q22 () =
+  let
+    val base =
+      from inv in tpcds.inventory,
+          d in tpcds.date_dim,
+          i in tpcds.item,
+          w in tpcds.warehouse
+        where inv.inv_date_sk = d.d_date_sk
+          andalso inv.inv_item_sk = i.i_item_sk
+          andalso inv.inv_warehouse_sk = w.w_warehouse_sk
+          andalso d.d_month_seq >= SOME 1200
+          andalso d.d_month_seq <= SOME (1200 + 11)
+        yield {i.i_product_name, i.i_brand, i.i_class, i.i_category,
+          qoh = inv.inv_quantity_on_hand}
+  in
+    from r in (from b in base
+          group {b.i_product_name, b.i_brand, b.i_class, b.i_category}
+            compute {qoh = avgSome over b.qoh}
+          yield {i_product_name, i_brand, i_class, i_category, qoh})
+        union
+          (from b in base
+              group {b.i_product_name, b.i_brand, b.i_class}
+                compute {qoh = avgSome over b.qoh}
+              yield {i_product_name, i_brand, i_class, i_category = NONE, qoh}),
+          (from b in base
+              group {b.i_product_name, b.i_brand}
+                compute {qoh = avgSome over b.qoh}
+              yield {i_product_name, i_brand, i_class = NONE, i_category = NONE,
+                qoh}),
+          (from b in base
+              group {b.i_product_name}
+                compute {qoh = avgSome over b.qoh}
+              yield {i_product_name, i_brand = NONE, i_class = NONE,
+                i_category = NONE, qoh}),
+          (from b in base
+              group {}
+                compute {qoh = avgSome over b.qoh}
+              yield {i_product_name = NONE, i_brand = NONE, i_class = NONE,
+                i_category = NONE, qoh})
+      order (r.qoh, r.i_product_name, r.i_brand, r.i_class, r.i_category)
+      take 100
+  end;
+> val q22 = fn
+>   : unit
+>      -> {i_brand:string option, i_category:string option,
+>           i_class:string option, i_product_name:string option,
+>           qoh:real option} list
+val r22 = q22 ();
+> i_brand                i_category  i_class    i_product_name    qoh
+> ---------------------- ----------- ---------- ----------------- ---------
+>                                               n stcallyable     376.40817
+> exportiexporti #2                             n stcallyable     376.40817
+> exportiexporti #2                  toddlers   n stcallyable     376.40817
+> exportiexporti #2      Children    toddlers   n stcallyable     376.40817
+>                                               oughtcallycally   379.12766
+> edu packamalgamalg #16                        oughtcallycally   379.12766
+> edu packamalgamalg #16             automotive oughtcallycally   379.12766
+> edu packamalgamalg #16 Electronics automotive oughtcallycally   379.12766
+>                                               ableoughteseought 380.97827
+> exportimaxi #3                                ableoughteseought 380.97827
+> ...
+>
+> val r22 : {i_brand:string option, i_category:string option, i_class:string option, i_product_name:string option, qoh:real option} list
 
 (* --- q23a ------------------------------------------------------- *)
 (*
@@ -2507,6 +3603,101 @@ val r26 = q26 ();
 > ...
 >
 > val r26 : {agg1:real option, agg2:decimal option, agg3:decimal option, agg4:decimal option, i_item_id:string} list
+
+(* --- q27 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_id,
+  s_state,
+  grouping(s_state) g_state,
+  avg(ss_quantity) agg1,
+  avg(ss_list_price) agg2,
+  avg(ss_coupon_amt) agg3,
+  avg(ss_sales_price) agg4
+FROM store_sales, customer_demographics, date_dim, store, item
+WHERE ss_sold_date_sk = d_date_sk AND
+  ss_item_sk = i_item_sk AND
+  ss_store_sk = s_store_sk AND
+  ss_cdemo_sk = cd_demo_sk AND
+  cd_gender = 'M' AND
+  cd_marital_status = 'S' AND
+  cd_education_status = 'College' AND
+  d_year = 2002 AND
+  s_state IN ('TN', 'TN', 'TN', 'TN', 'TN', 'TN')
+GROUP BY ROLLUP (i_item_id, s_state)
+ORDER BY i_item_id, s_state
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP (i_item_id, s_state)" is a union of groupings, as in
+ * q22; "grouping(s_state)" is 1 where "s_state" is rolled up. *)
+fun q27 () =
+  let
+    val base =
+      from ss in tpcds.store_sales,
+          cd in tpcds.customer_demographics,
+          d in tpcds.date_dim,
+          s in tpcds.store,
+          i in tpcds.item
+        where ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso ss.ss_cdemo_sk = SOME cd.cd_demo_sk
+          andalso cd.cd_gender = SOME "M"
+          andalso cd.cd_marital_status = SOME "S"
+          andalso cd.cd_education_status = SOME "College"
+          andalso d.d_year = SOME 2002
+          andalso s.s_state elem [SOME "TN"]
+        yield {i_item_id = SOME i.i_item_id, s.s_state, ss.ss_quantity,
+          ss.ss_list_price, ss.ss_coupon_amt, ss.ss_sales_price}
+  in
+    from r in (from b in base
+          group {b.i_item_id, b.s_state}
+            compute {agg1 = avgSome over b.ss_quantity,
+                agg2 = avgSome over b.ss_list_price,
+                agg3 = avgSome over b.ss_coupon_amt,
+                agg4 = avgSome over b.ss_sales_price}
+          yield {i_item_id, s_state, g_state = 0, agg1, agg2, agg3, agg4})
+        union
+          (from b in base
+              group {b.i_item_id}
+                compute {agg1 = avgSome over b.ss_quantity,
+                    agg2 = avgSome over b.ss_list_price,
+                    agg3 = avgSome over b.ss_coupon_amt,
+                    agg4 = avgSome over b.ss_sales_price}
+              yield {i_item_id, s_state = NONE, g_state = 1, agg1, agg2, agg3,
+                agg4}),
+          (from b in base
+              group {}
+                compute {agg1 = avgSome over b.ss_quantity,
+                    agg2 = avgSome over b.ss_list_price,
+                    agg3 = avgSome over b.ss_coupon_amt,
+                    agg4 = avgSome over b.ss_sales_price}
+              yield {i_item_id = NONE, s_state = NONE, g_state = 1, agg1, agg2,
+                agg3, agg4})
+      order (r.i_item_id, r.s_state)
+      take 100
+  end;
+> val q27 = fn
+>   : unit
+>      -> {agg1:real option, agg2:decimal option, agg3:decimal option,
+>           agg4:decimal option, g_state:int, i_item_id:string option,
+>           s_state:string option} list
+val r27 = q27 ();
+> agg1      agg2                                agg3                                agg4                                g_state i_item_id        s_state
+> --------- ----------------------------------- ----------------------------------- ----------------------------------- ------- ---------------- -------
+> 52.651283 73.44605597964376590330788804071247 180.0023076923076923076923076923077 37.16441326530612244897959183673469       1
+>                                        107.31                                                                   64.38       1 AAAAAAAAAAEAAAAA
+>                                        107.31                                                                   64.38       0 AAAAAAAAAAEAAAAA TN
+>        78                               86.99                             1098.98                               31.31       1 AAAAAAAAABBAAAAA
+>        78                               86.99                             1098.98                               31.31       0 AAAAAAAAABBAAAAA TN
+>        77                               89.23                                   0                               53.53       1 AAAAAAAAABHAAAAA
+>        77                               89.23                                   0                               53.53       0 AAAAAAAAABHAAAAA TN
+>      41.5                             111.355                                   0                               67.13       1 AAAAAAAAACCAAAAA
+>      41.5                             111.355                                   0                               67.13       0 AAAAAAAAACCAAAAA TN
+>        57                               49.78                                   0                               45.29       1 AAAAAAAAACFAAAAA
+> ...
+>
+> val r27 : {agg1:real option, agg2:decimal option, agg3:decimal option, agg4:decimal option, g_state:int, i_item_id:string option, s_state:string option} list
 
 (* --- q28 -------------------------------------------------------- *)
 (*
@@ -3379,6 +4570,110 @@ val r35 = q35 ();
 >
 > val r35 : {avg(cd_dep_college_count):real option, avg(cd_dep_count):real option, avg(cd_dep_employed_count):real option, ca_state:string option, cd_dep_college_count:int option, cd_dep_employed_count:int option, cd_gender:string option, cd_marital_status:string option, cnt1:int, cnt2:int, cnt3:int, max(cd_dep_college_count):int option, max(cd_dep_count):int option, max(cd_dep_employed_count):int option, min(cd_dep_college_count):int option, min(cd_dep_count):int option, min(cd_dep_employed_count):int option} list
 
+(* --- q36 -------------------------------------------------------- *)
+(*
+SELECT
+  sum(ss_net_profit) / sum(ss_ext_sales_price) AS gross_margin,
+  i_category,
+  i_class,
+  grouping(i_category) + grouping(i_class) AS lochierarchy,
+  rank()
+  OVER (
+    PARTITION BY grouping(i_category) + grouping(i_class),
+      CASE WHEN grouping(i_class) = 0
+        THEN i_category END
+    ORDER BY sum(ss_net_profit) / sum(ss_ext_sales_price) ASC) AS rank_within_parent
+FROM
+  store_sales, date_dim d1, item, store
+WHERE
+  d1.d_year = 2001
+    AND d1.d_date_sk = ss_sold_date_sk
+    AND i_item_sk = ss_item_sk
+    AND s_store_sk = ss_store_sk
+    AND s_state IN ('TN', 'TN', 'TN', 'TN', 'TN', 'TN', 'TN', 'TN')
+GROUP BY ROLLUP (i_category, i_class)
+ORDER BY
+  lochierarchy DESC
+  , CASE WHEN lochierarchy = 0
+  THEN i_category END
+  , rank_within_parent
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22. "rank() OVER (PARTITION BY p ORDER BY
+ * m)" is one more than the number of rows in the row's partition whose
+ * "m" comes before its own (ascending); NONE is less than any SOME, so it
+ * is first ascending and last descending, as Spark's nulls are. *)
+fun q36 () =
+  let
+    val base =
+      from ss in tpcds.store_sales,
+          d1 in tpcds.date_dim,
+          i in tpcds.item,
+          s in tpcds.store
+        where d1.d_year = SOME 2001
+          andalso ss.ss_sold_date_sk = SOME d1.d_date_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso s.s_state elem [SOME "TN"]
+        yield {i.i_category, i.i_class, ss.ss_net_profit,
+          ss.ss_ext_sales_price}
+    val rolled =
+      from r in (from b in base
+          group {b.i_category, b.i_class}
+            compute {profit = sumSome over b.ss_net_profit,
+                sales = sumSome over b.ss_ext_sales_price}
+          yield {i_category, i_class, g1 = 0, g2 = 0, profit, sales})
+        union
+          (from b in base
+              group {b.i_category}
+                compute {profit = sumSome over b.ss_net_profit,
+                    sales = sumSome over b.ss_ext_sales_price}
+              yield {i_category, i_class = NONE, g1 = 0, g2 = 1, profit, sales}),
+          (from b in base
+              group {}
+                compute {profit = sumSome over b.ss_net_profit,
+                    sales = sumSome over b.ss_ext_sales_price}
+              yield {i_category = NONE, i_class = NONE, g1 = 1, g2 = 1, profit,
+                sales})
+      yield {gross_margin = case (r.profit, r.sales) of
+            (SOME p, SOME s) => SOME (p / s)
+          | _ => NONE, r.i_category, r.i_class,
+        lochierarchy = r.g1 + r.g2,
+        parent = if r.g2 = 0 then r.i_category else NONE}
+  in
+    from r in rolled
+      yield {r.gross_margin, r.i_category, r.i_class, r.lochierarchy,
+        rank_within_parent =
+          1 + count (from s in rolled
+            where s.lochierarchy = r.lochierarchy
+              andalso s.parent = r.parent
+              andalso s.gross_margin < r.gross_margin)}
+      order (DESC lochierarchy,
+        if lochierarchy = 0 then i_category else NONE, rank_within_parent)
+      take 100
+  end;
+> val q36 = fn
+>   : unit
+>      -> {gross_margin:decimal option, i_category:string option,
+>           i_class:string option, lochierarchy:int, rank_within_parent:int}
+>         list
+val r36 = q36 ();
+> gross_margin                          i_category i_class lochierarchy rank_within_parent
+> ------------------------------------- ---------- ------- ------------ ------------------
+> -0.4331559481566202339401446831067734                               2                  1
+> -0.4547926026521220005892869319871307                               1                  1
+> -0.4521923971793171868054913276780606 Books                         1                  2
+> -0.4497600536210663168105622436194191 Men                           1                  3
+> -0.4478241743420524255363462035952167 Shoes                         1                  4
+>  -0.447243210569164726607423410794415 Music                         1                  5
+> -0.4356320315670182613102634028613931 Sports                        1                  6
+> -0.4354396250259286380346037253173168 Women                         1                  7
+> -0.4216664275403777139851932742818025 Children                      1                  8
+> -0.4168157409361537963042442102898811 Home                          1                  9
+> ...
+>
+> val r36 : {gross_margin:decimal option, i_category:string option, i_class:string option, lochierarchy:int, rank_within_parent:int} list
+
 (* --- q37 -------------------------------------------------------- *)
 (*
 SELECT
@@ -3495,6 +4790,244 @@ fun q38 () =
 > val q38 = fn : unit -> int
 val r38 = q38 ();
 > val r38 = 0 : int
+
+(* --- q39a ------------------------------------------------------- *)
+(*
+WITH inv AS
+(SELECT
+    w_warehouse_name,
+    w_warehouse_sk,
+    i_item_sk,
+    d_moy,
+    stdev,
+    mean,
+    CASE mean
+    WHEN 0
+      THEN NULL
+    ELSE stdev / mean END cov
+  FROM (SELECT
+    w_warehouse_name,
+    w_warehouse_sk,
+    i_item_sk,
+    d_moy,
+    stddev_samp(inv_quantity_on_hand) stdev,
+    avg(inv_quantity_on_hand) mean
+  FROM inventory, item, warehouse, date_dim
+  WHERE inv_item_sk = i_item_sk
+    AND inv_warehouse_sk = w_warehouse_sk
+    AND inv_date_sk = d_date_sk
+    AND d_year = 2001
+  GROUP BY w_warehouse_name, w_warehouse_sk, i_item_sk, d_moy) foo
+  WHERE CASE mean
+        WHEN 0
+          THEN 0
+        ELSE stdev / mean END > 1)
+SELECT
+  inv1.w_warehouse_sk,
+  inv1.i_item_sk,
+  inv1.d_moy,
+  inv1.mean,
+  inv1.cov,
+  inv2.w_warehouse_sk,
+  inv2.i_item_sk,
+  inv2.d_moy,
+  inv2.mean,
+  inv2.cov
+FROM inv inv1, inv inv2
+WHERE inv1.i_item_sk = inv2.i_item_sk
+  AND inv1.w_warehouse_sk = inv2.w_warehouse_sk
+  AND inv1.d_moy = 1
+  AND inv2.d_moy = 1 + 1
+ORDER BY inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean, inv1.cov
+  , inv2.d_moy, inv2.mean, inv2.cov
+*)
+fun q39a () =
+  let
+    (* "stddev_samp(x)": the sample standard deviation of the values of
+     * the SOMEs, or NONE if there are fewer than two. The sums are exact
+     * ints; only the square root is real. *)
+    fun stddevSamp xs =
+      let
+        val vs = somes xs
+        val n = count vs
+        val s = sum vs
+        val s2 = sum (from v in vs yield v * v)
+      in
+        if n < 2 then NONE
+        else
+          SOME (Math.sqrt (Real.fromInt (n * s2 - s * s)
+            / Real.fromInt (n * (n - 1))))
+      end
+    (* "a / b" of two reals that may be NONE *)
+    fun divide (a, b) =
+      case (a, b) of
+          (SOME a, SOME b) => SOME (a / b)
+        | _ => NONE
+    val inv =
+      from inv in tpcds.inventory,
+          i in tpcds.item,
+          w in tpcds.warehouse,
+          d in tpcds.date_dim
+        where inv.inv_item_sk = i.i_item_sk
+          andalso inv.inv_warehouse_sk = w.w_warehouse_sk
+          andalso inv.inv_date_sk = d.d_date_sk
+          andalso d.d_year = SOME 2001
+        group {w.w_warehouse_name, w.w_warehouse_sk, i.i_item_sk, d.d_moy}
+          compute {stdev = stddevSamp over inv.inv_quantity_on_hand,
+            mean = avgSome over inv.inv_quantity_on_hand}
+        (* "CASE mean WHEN 0 THEN NULL ELSE stdev / mean END" *)
+        yield {w_warehouse_name, w_warehouse_sk, i_item_sk, d_moy, stdev,
+          mean,
+          cov = if mean = SOME 0.0 then NONE else divide (stdev, mean)}
+        (* "CASE mean WHEN 0 THEN 0 ELSE stdev / mean END > 1" *)
+        where (if mean = SOME 0.0 then false else cov > SOME 1.0)
+  in
+    from inv1 in inv,
+        inv2 in inv
+      where inv1.i_item_sk = inv2.i_item_sk
+        andalso inv1.w_warehouse_sk = inv2.w_warehouse_sk
+        andalso inv1.d_moy = SOME 1
+        andalso inv2.d_moy = SOME (1 + 1)
+      order (inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean,
+        inv1.cov, inv2.d_moy, inv2.mean, inv2.cov)
+      yield {inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean,
+        inv1.cov, w_warehouse_sk_2 = inv2.w_warehouse_sk,
+        i_item_sk_2 = inv2.i_item_sk, d_moy_2 = inv2.d_moy,
+        mean_2 = inv2.mean, cov_2 = inv2.cov}
+  end;
+> val q39a = fn
+>   : unit
+>      -> {cov:real option, cov_2:real option, d_moy:int option,
+>           d_moy_2:int option, i_item_sk:int, i_item_sk_2:int,
+>           mean:real option, mean_2:real option, w_warehouse_sk:int,
+>           w_warehouse_sk_2:int} list
+val r39a = q39a ();
+> cov       cov_2     d_moy d_moy_2 i_item_sk i_item_sk_2 mean   mean_2    w_warehouse_sk w_warehouse_sk_2
+> --------- --------- ----- ------- --------- ----------- ------ --------- -------------- ----------------
+> 1.0202744 1.3849913     1       2       633         633    222 349.33334              1                1
+> 1.1177534 1.0149925     1       2       675         675 381.25     255.5              1                1
+> 1.2868938 1.2386651     1       2      1157        1157    338    354.25              1                1
+> 1.1390924 1.1236527     1       2      1637        1637    298       234              1                1
+>
+> val r39a : {cov:real option, cov_2:real option, d_moy:int option, d_moy_2:int option, i_item_sk:int, i_item_sk_2:int, mean:real option, mean_2:real option, w_warehouse_sk:int, w_warehouse_sk_2:int} list
+
+(* --- q39b ------------------------------------------------------- *)
+(*
+WITH inv AS
+(SELECT
+    w_warehouse_name,
+    w_warehouse_sk,
+    i_item_sk,
+    d_moy,
+    stdev,
+    mean,
+    CASE mean
+    WHEN 0
+      THEN NULL
+    ELSE stdev / mean END cov
+  FROM (SELECT
+    w_warehouse_name,
+    w_warehouse_sk,
+    i_item_sk,
+    d_moy,
+    stddev_samp(inv_quantity_on_hand) stdev,
+    avg(inv_quantity_on_hand) mean
+  FROM inventory, item, warehouse, date_dim
+  WHERE inv_item_sk = i_item_sk
+    AND inv_warehouse_sk = w_warehouse_sk
+    AND inv_date_sk = d_date_sk
+    AND d_year = 2001
+  GROUP BY w_warehouse_name, w_warehouse_sk, i_item_sk, d_moy) foo
+  WHERE CASE mean
+        WHEN 0
+          THEN 0
+        ELSE stdev / mean END > 1)
+SELECT
+  inv1.w_warehouse_sk,
+  inv1.i_item_sk,
+  inv1.d_moy,
+  inv1.mean,
+  inv1.cov,
+  inv2.w_warehouse_sk,
+  inv2.i_item_sk,
+  inv2.d_moy,
+  inv2.mean,
+  inv2.cov
+FROM inv inv1, inv inv2
+WHERE inv1.i_item_sk = inv2.i_item_sk
+  AND inv1.w_warehouse_sk = inv2.w_warehouse_sk
+  AND inv1.d_moy = 1
+  AND inv2.d_moy = 1 + 1
+  AND inv1.cov > 1.5
+ORDER BY inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean, inv1.cov
+  , inv2.d_moy, inv2.mean, inv2.cov
+*)
+fun q39b () =
+  let
+    (* "stddev_samp(x)": the sample standard deviation of the values of
+     * the SOMEs, or NONE if there are fewer than two. The sums are exact
+     * ints; only the square root is real. *)
+    fun stddevSamp xs =
+      let
+        val vs = somes xs
+        val n = count vs
+        val s = sum vs
+        val s2 = sum (from v in vs yield v * v)
+      in
+        if n < 2 then NONE
+        else
+          SOME (Math.sqrt (Real.fromInt (n * s2 - s * s)
+            / Real.fromInt (n * (n - 1))))
+      end
+    (* "a / b" of two reals that may be NONE *)
+    fun divide (a, b) =
+      case (a, b) of
+          (SOME a, SOME b) => SOME (a / b)
+        | _ => NONE
+    val inv =
+      from inv in tpcds.inventory,
+          i in tpcds.item,
+          w in tpcds.warehouse,
+          d in tpcds.date_dim
+        where inv.inv_item_sk = i.i_item_sk
+          andalso inv.inv_warehouse_sk = w.w_warehouse_sk
+          andalso inv.inv_date_sk = d.d_date_sk
+          andalso d.d_year = SOME 2001
+        group {w.w_warehouse_name, w.w_warehouse_sk, i.i_item_sk, d.d_moy}
+          compute {stdev = stddevSamp over inv.inv_quantity_on_hand,
+            mean = avgSome over inv.inv_quantity_on_hand}
+        (* "CASE mean WHEN 0 THEN NULL ELSE stdev / mean END" *)
+        yield {w_warehouse_name, w_warehouse_sk, i_item_sk, d_moy, stdev,
+          mean,
+          cov = if mean = SOME 0.0 then NONE else divide (stdev, mean)}
+        (* "CASE mean WHEN 0 THEN 0 ELSE stdev / mean END > 1" *)
+        where (if mean = SOME 0.0 then false else cov > SOME 1.0)
+  in
+    from inv1 in inv,
+        inv2 in inv
+      where inv1.i_item_sk = inv2.i_item_sk
+        andalso inv1.w_warehouse_sk = inv2.w_warehouse_sk
+        andalso inv1.d_moy = SOME 1
+        andalso inv2.d_moy = SOME (1 + 1)
+        andalso inv1.cov > SOME 1.5
+      order (inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean,
+        inv1.cov, inv2.d_moy, inv2.mean, inv2.cov)
+      yield {inv1.w_warehouse_sk, inv1.i_item_sk, inv1.d_moy, inv1.mean,
+        inv1.cov, w_warehouse_sk_2 = inv2.w_warehouse_sk,
+        i_item_sk_2 = inv2.i_item_sk, d_moy_2 = inv2.d_moy,
+        mean_2 = inv2.mean, cov_2 = inv2.cov}
+  end;
+> val q39b = fn
+>   : unit
+>      -> {cov:real option, cov_2:real option, d_moy:int option,
+>           d_moy_2:int option, i_item_sk:int, i_item_sk_2:int,
+>           mean:real option, mean_2:real option, w_warehouse_sk:int,
+>           w_warehouse_sk_2:int} list
+val r39b = q39b ();
+> cov cov_2 d_moy d_moy_2 i_item_sk i_item_sk_2 mean mean_2 w_warehouse_sk w_warehouse_sk_2
+> --- ----- ----- ------- --------- ----------- ---- ------ -------------- ----------------
+>
+> val r39b : {cov:real option, cov_2:real option, d_moy:int option, d_moy_2:int option, i_item_sk:int, i_item_sk_2:int, mean:real option, mean_2:real option, w_warehouse_sk:int, w_warehouse_sk_2:int} list
 
 (* --- q40 -------------------------------------------------------- *)
 (*
@@ -3808,6 +5341,105 @@ val r43 = q43 ();
 >
 > val r43 : {fri_sales:decimal option, mon_sales:decimal option, s_store_id:string, s_store_name:string option, sat_sales:decimal option, sun_sales:decimal option, thu_sales:decimal option, tue_sales:decimal option, wed_sales:decimal option} list
 
+(* --- q44 -------------------------------------------------------- *)
+(*
+SELECT
+  asceding.rnk,
+  i1.i_product_name best_performing,
+  i2.i_product_name worst_performing
+FROM (SELECT *
+FROM (SELECT
+  item_sk,
+  rank()
+  OVER (
+    ORDER BY rank_col ASC) rnk
+FROM (SELECT
+  ss_item_sk item_sk,
+  avg(ss_net_profit) rank_col
+FROM store_sales ss1
+WHERE ss_store_sk = 4
+GROUP BY ss_item_sk
+HAVING avg(ss_net_profit) > 0.9 * (SELECT avg(ss_net_profit) rank_col
+FROM store_sales
+WHERE ss_store_sk = 4
+  AND ss_addr_sk IS NULL
+GROUP BY ss_store_sk)) V1) V11
+WHERE rnk < 11) asceding,
+  (SELECT *
+  FROM (SELECT
+    item_sk,
+    rank()
+    OVER (
+      ORDER BY rank_col DESC) rnk
+  FROM (SELECT
+    ss_item_sk item_sk,
+    avg(ss_net_profit) rank_col
+  FROM store_sales ss1
+  WHERE ss_store_sk = 4
+  GROUP BY ss_item_sk
+  HAVING avg(ss_net_profit) > 0.9 * (SELECT avg(ss_net_profit) rank_col
+  FROM store_sales
+  WHERE ss_store_sk = 4
+    AND ss_addr_sk IS NULL
+  GROUP BY ss_store_sk)) V2) V21
+  WHERE rnk < 11) descending,
+  item i1, item i2
+WHERE asceding.rnk = descending.rnk
+  AND i1.i_item_sk = asceding.item_sk
+  AND i2.i_item_sk = descending.item_sk
+ORDER BY asceding.rnk
+LIMIT 100
+*)
+(* "rank() OVER (ORDER BY rank_col)" is one more than the number of
+ * rows whose "rank_col" comes before; there are few rows. *)
+fun q44 () =
+  let
+    (* The average profit of store 4's sales that have no address. *)
+    val threshold =
+      from ss in tpcds.store_sales
+        where ss.ss_store_sk = SOME 4 andalso ss.ss_addr_sk = NONE
+        compute avgSome over ss.ss_net_profit
+    val v1 =
+      from ss1 in tpcds.store_sales
+        where ss1.ss_store_sk = SOME 4
+        group {item_sk = ss1.ss_item_sk}
+          compute {rank_col = avgSome over ss1.ss_net_profit}
+        where (case (rank_col, threshold) of
+                  (SOME r, SOME t) => r > decimal "0.9" * t
+                | _ => false)
+    val ascending =
+      from v in v1
+        yield {v.item_sk,
+          rnk = 1 + count (from w in v1 where w.rank_col < v.rank_col)}
+        where rnk < 11
+    val descending =
+      from v in v1
+        yield {v.item_sk,
+          rnk = 1 + count (from w in v1 where w.rank_col > v.rank_col)}
+        where rnk < 11
+  in
+    from a in ascending,
+        d in descending,
+        i1 in tpcds.item,
+        i2 in tpcds.item
+      where a.rnk = d.rnk
+        andalso i1.i_item_sk = a.item_sk
+        andalso i2.i_item_sk = d.item_sk
+      order a.rnk
+      yield {a.rnk, best_performing = i1.i_product_name,
+        worst_performing = i2.i_product_name}
+      take 100
+  end;
+> val q44 = fn
+>   : unit
+>      -> {best_performing:string option, rnk:int,
+>           worst_performing:string option} list
+val r44 = q44 ();
+> best_performing rnk worst_performing
+> --------------- --- ----------------
+>
+> val r44 : {best_performing:string option, rnk:int, worst_performing:string option} list
+
 (* --- q45 -------------------------------------------------------- *)
 (*
 SELECT
@@ -3959,6 +5591,189 @@ val r46 = q46 ();
 >
 > val r46 : {amt:decimal option, bought_city:string option, c_first_name:string option, c_last_name:string option, ca_city:string option, profit:decimal option, ss_ticket_number:int} list
 
+(* --- q47 -------------------------------------------------------- *)
+(*
+WITH v1 AS (
+  SELECT
+    i_category,
+    i_brand,
+    s_store_name,
+    s_company_name,
+    d_year,
+    d_moy,
+    sum(ss_sales_price) sum_sales,
+    avg(sum(ss_sales_price))
+    OVER
+    (PARTITION BY i_category, i_brand,
+      s_store_name, s_company_name, d_year)
+    avg_monthly_sales,
+    rank()
+    OVER
+    (PARTITION BY i_category, i_brand,
+      s_store_name, s_company_name
+      ORDER BY d_year, d_moy) rn
+  FROM item, store_sales, date_dim, store
+  WHERE ss_item_sk = i_item_sk AND
+    ss_sold_date_sk = d_date_sk AND
+    ss_store_sk = s_store_sk AND
+    (
+      d_year = 1999 OR
+        (d_year = 1999 - 1 AND d_moy = 12) OR
+        (d_year = 1999 + 1 AND d_moy = 1)
+    )
+  GROUP BY i_category, i_brand,
+    s_store_name, s_company_name,
+    d_year, d_moy),
+    v2 AS (
+    SELECT
+      v1.i_category,
+      v1.i_brand,
+      v1.s_store_name,
+      v1.s_company_name,
+      v1.d_year,
+      v1.d_moy,
+      v1.avg_monthly_sales,
+      v1.sum_sales,
+      v1_lag.sum_sales psum,
+      v1_lead.sum_sales nsum
+    FROM v1, v1 v1_lag, v1 v1_lead
+    WHERE v1.i_category = v1_lag.i_category AND
+      v1.i_category = v1_lead.i_category AND
+      v1.i_brand = v1_lag.i_brand AND
+      v1.i_brand = v1_lead.i_brand AND
+      v1.s_store_name = v1_lag.s_store_name AND
+      v1.s_store_name = v1_lead.s_store_name AND
+      v1.s_company_name = v1_lag.s_company_name AND
+      v1.s_company_name = v1_lead.s_company_name AND
+      v1.rn = v1_lag.rn + 1 AND
+      v1.rn = v1_lead.rn - 1)
+SELECT *
+FROM v2
+WHERE d_year = 1999 AND
+  avg_monthly_sales > 0 AND
+  CASE WHEN avg_monthly_sales > 0
+    THEN abs(sum_sales - avg_monthly_sales) / avg_monthly_sales
+  ELSE NULL END > 0.1
+ORDER BY sum_sales - avg_monthly_sales, 3
+LIMIT 100
+*)
+(* "avg(sum(x)) OVER (PARTITION BY p)" is the average of the groups' sums
+ * for each "p", joined to the groups, as in q53. "rank() OVER (PARTITION
+ * BY p ORDER BY d_year, d_moy)" is a group's position in its partition,
+ * because the (year, month) of each group in a partition is distinct:
+ * the groups are sorted by partition and month once, and a group's rank
+ * is its position less its partition's first position, plus one. The lag
+ * and lead are joins, whose equalities (unlike a partition's) drop a row
+ * whose key is NONE. *)
+fun q47 () =
+  let
+    val base =
+      from i in tpcds.item,
+          ss in tpcds.store_sales,
+          d in tpcds.date_dim,
+          s in tpcds.store
+        where ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso (d.d_year = SOME 1999
+            orelse d.d_year = SOME (1999 - 1) andalso d.d_moy = SOME 12
+            orelse d.d_year = SOME (1999 + 1) andalso d.d_moy = SOME 1)
+        yield {i.i_category, i.i_brand, s.s_store_name, s.s_company_name,
+          d.d_year, d.d_moy, sales_price = ss.ss_sales_price}
+    val groups =
+      from b in base
+        group {b.i_category, b.i_brand, b.s_store_name, b.s_company_name,
+            b.d_year, b.d_moy}
+          compute {sum_sales = sumSome over b.sales_price}
+    val averages =
+      from g in groups
+        group {g.i_category, g.i_brand, g.s_store_name, g.s_company_name,
+            g.d_year}
+          compute {avg_monthly_sales = avgSome over g.sum_sales}
+    val sorted =
+      from g in groups
+        order (g.i_category, g.i_brand, g.s_store_name, g.s_company_name,
+          g.d_year, g.d_moy)
+        yield {g, pos = ordinal}
+    val firsts =
+      from x in sorted
+        group {x.g.i_category, x.g.i_brand, x.g.s_store_name,
+            x.g.s_company_name}
+          compute {first = min over x.pos}
+    val v1s =
+      from x in sorted,
+          a in averages,
+          f in firsts
+        where a.i_category = x.g.i_category
+          andalso a.i_brand = x.g.i_brand
+          andalso a.s_store_name = x.g.s_store_name
+          andalso a.s_company_name = x.g.s_company_name
+          andalso a.d_year = x.g.d_year
+          andalso f.i_category = x.g.i_category
+          andalso f.i_brand = x.g.i_brand
+          andalso f.s_store_name = x.g.s_store_name
+          andalso f.s_company_name = x.g.s_company_name
+        yield {x.g, a.avg_monthly_sales, rn = x.pos - f.first + 1}
+        yield {g.i_category, g.i_brand, g.s_store_name, g.s_company_name,
+          g.d_year, g.d_moy, sum_sales = g.sum_sales, avg_monthly_sales, rn}
+  in
+    from v1 in v1s,
+        v1_lag in v1s,
+        v1_lead in v1s
+      where v1.i_category <> NONE
+        andalso v1.i_category = v1_lag.i_category
+        andalso v1.i_brand <> NONE
+        andalso v1.i_brand = v1_lag.i_brand
+        andalso v1.s_store_name <> NONE
+        andalso v1.s_store_name = v1_lag.s_store_name
+        andalso v1.s_company_name <> NONE
+        andalso v1.s_company_name = v1_lag.s_company_name
+        andalso v1.i_category = v1_lead.i_category
+        andalso v1.i_brand = v1_lead.i_brand
+        andalso v1.s_store_name = v1_lead.s_store_name
+        andalso v1.s_company_name = v1_lead.s_company_name
+        andalso v1.rn = v1_lag.rn + 1
+        andalso v1.rn = v1_lead.rn - 1
+        andalso v1.d_year = SOME 1999
+        andalso v1.avg_monthly_sales > SOME (Decimal.fromInt 0)
+        andalso (case (v1.sum_sales, v1.avg_monthly_sales) of
+                    (SOME s, SOME a) =>
+                      a > Decimal.fromInt 0
+                      andalso Decimal.abs (s - a) / a > decimal "0.1"
+                  | _ => false)
+      order ((case (v1.sum_sales, v1.avg_monthly_sales) of
+                 (SOME s, SOME a) => SOME (s - a)
+               | _ => NONE),
+        v1.s_store_name)
+      yield {v1.i_category, v1.i_brand, v1.s_store_name, v1.s_company_name,
+        v1.d_year, v1.d_moy, v1.avg_monthly_sales, v1.sum_sales,
+        psum = v1_lag.sum_sales, nsum = v1_lead.sum_sales}
+      take 100
+  end;
+> val q47 = fn
+>   : unit
+>      -> {avg_monthly_sales:decimal option, d_moy:int option,
+>           d_year:int option, i_brand:string option, i_category:string option,
+>           nsum:decimal option, psum:decimal option,
+>           s_company_name:string option, s_store_name:string option,
+>           sum_sales:decimal option} list
+val r47 = q47 ();
+> avg_monthly_sales                   d_moy d_year i_brand             i_category nsum    psum   s_company_name s_store_name sum_sales
+> ----------------------------------- ----- ------ ------------------- ---------- ------- ------ -------------- ------------ ---------
+> 829.9283333333333333333333333333333     6   1999 edu packedu pack #1 Shoes        253.1 354.24 Unknown        able            165.07
+> 722.3891666666666666666666666666667     7   1999 exportiedu pack #1  Shoes       335.67 284.76 Unknown        able            113.01
+> 867.6766666666666666666666666666667     2   1999 edu packedu pack #1 Shoes       337.06 697.15 Unknown        ought           278.18
+> 829.9283333333333333333333333333333     7   1999 edu packedu pack #1 Shoes      1819.85 165.07 Unknown        able             253.1
+> 583.4541666666666666666666666666667     5   1999 exportiexporti #1   Children    336.73 600.74 Unknown        ought            21.45
+> 867.6766666666666666666666666666667     6   1999 edu packedu pack #1 Shoes        732.7 425.25 Unknown        ought           332.06
+> 829.9283333333333333333333333333333     3   1999 edu packedu pack #1 Shoes       774.32 365.13 Unknown        able               296
+> 867.6766666666666666666666666666667     3   1999 edu packedu pack #1 Shoes       962.42 278.18 Unknown        ought           337.06
+> 525.0083333333333333333333333333333     6   1999 importoexporti #1   Children    183.19 308.29 Unknown        able              4.68
+>                              609.84     3   1999 amalgamalg #1       Women        488.7 298.74 Unknown        ought            95.65
+> ...
+>
+> val r47 : {avg_monthly_sales:decimal option, d_moy:int option, d_year:int option, i_brand:string option, i_category:string option, nsum:decimal option, psum:decimal option, s_company_name:string option, s_store_name:string option, sum_sales:decimal option} list
+
 (* --- q48 -------------------------------------------------------- *)
 (*
 SELECT sum(ss_quantity)
@@ -4068,6 +5883,270 @@ fun q48 () =
 val r48 = q48 ();
 > val r48 = SOME 1858 : int option
 
+(* --- q49 -------------------------------------------------------- *)
+(*
+SELECT
+  'web' AS channel,
+  web.item,
+  web.return_ratio,
+  web.return_rank,
+  web.currency_rank
+FROM (
+       SELECT
+         item,
+         return_ratio,
+         currency_ratio,
+         rank()
+         OVER (
+           ORDER BY return_ratio) AS return_rank,
+         rank()
+         OVER (
+           ORDER BY currency_ratio) AS currency_rank
+       FROM
+         (SELECT
+           ws.ws_item_sk AS item,
+           (cast(sum(coalesce(wr.wr_return_quantity, 0)) AS DECIMAL(15, 4)) /
+             cast(sum(coalesce(ws.ws_quantity, 0)) AS DECIMAL(15, 4))) AS return_ratio,
+           (cast(sum(coalesce(wr.wr_return_amt, 0)) AS DECIMAL(15, 4)) /
+             cast(sum(coalesce(ws.ws_net_paid, 0)) AS DECIMAL(15, 4))) AS currency_ratio
+         FROM
+           web_sales ws LEFT OUTER JOIN web_returns wr
+             ON (ws.ws_order_number = wr.wr_order_number AND
+             ws.ws_item_sk = wr.wr_item_sk)
+           , date_dim
+         WHERE
+           wr.wr_return_amt > 10000
+             AND ws.ws_net_profit > 1
+             AND ws.ws_net_paid > 0
+             AND ws.ws_quantity > 0
+             AND ws_sold_date_sk = d_date_sk
+             AND d_year = 2001
+             AND d_moy = 12
+         GROUP BY ws.ws_item_sk
+         ) in_web
+     ) web
+WHERE (web.return_rank <= 10 OR web.currency_rank <= 10)
+UNION
+SELECT
+  'catalog' AS channel,
+  catalog.item,
+  catalog.return_ratio,
+  catalog.return_rank,
+  catalog.currency_rank
+FROM (
+       SELECT
+         item,
+         return_ratio,
+         currency_ratio,
+         rank()
+         OVER (
+           ORDER BY return_ratio) AS return_rank,
+         rank()
+         OVER (
+           ORDER BY currency_ratio) AS currency_rank
+       FROM
+         (SELECT
+           cs.cs_item_sk AS item,
+           (cast(sum(coalesce(cr.cr_return_quantity, 0)) AS DECIMAL(15, 4)) /
+             cast(sum(coalesce(cs.cs_quantity, 0)) AS DECIMAL(15, 4))) AS return_ratio,
+           (cast(sum(coalesce(cr.cr_return_amount, 0)) AS DECIMAL(15, 4)) /
+             cast(sum(coalesce(cs.cs_net_paid, 0)) AS DECIMAL(15, 4))) AS currency_ratio
+         FROM
+           catalog_sales cs LEFT OUTER JOIN catalog_returns cr
+             ON (cs.cs_order_number = cr.cr_order_number AND
+             cs.cs_item_sk = cr.cr_item_sk)
+           , date_dim
+         WHERE
+           cr.cr_return_amount > 10000
+             AND cs.cs_net_profit > 1
+             AND cs.cs_net_paid > 0
+             AND cs.cs_quantity > 0
+             AND cs_sold_date_sk = d_date_sk
+             AND d_year = 2001
+             AND d_moy = 12
+         GROUP BY cs.cs_item_sk
+         ) in_cat
+     ) catalog
+WHERE (catalog.return_rank <= 10 OR catalog.currency_rank <= 10)
+UNION
+SELECT
+  'store' AS channel,
+  store.item,
+  store.return_ratio,
+  store.return_rank,
+  store.currency_rank
+FROM (
+       SELECT
+         item,
+         return_ratio,
+         currency_ratio,
+         rank()
+         OVER (
+           ORDER BY return_ratio) AS return_rank,
+         rank()
+         OVER (
+           ORDER BY currency_ratio) AS currency_rank
+       FROM
+         (SELECT
+           sts.ss_item_sk AS item,
+           (cast(sum(coalesce(sr.sr_return_quantity, 0)) AS DECIMAL(15, 4)) /
+             cast(sum(coalesce(sts.ss_quantity, 0)) AS DECIMAL(15, 4))) AS return_ratio,
+           (cast(sum(coalesce(sr.sr_return_amt, 0)) AS DECIMAL(15, 4)) /
+             cast(sum(coalesce(sts.ss_net_paid, 0)) AS DECIMAL(15, 4))) AS currency_ratio
+         FROM
+           store_sales sts LEFT OUTER JOIN store_returns sr
+             ON (sts.ss_ticket_number = sr.sr_ticket_number AND sts.ss_item_sk = sr.sr_item_sk)
+           , date_dim
+         WHERE
+           sr.sr_return_amt > 10000
+             AND sts.ss_net_profit > 1
+             AND sts.ss_net_paid > 0
+             AND sts.ss_quantity > 0
+             AND ss_sold_date_sk = d_date_sk
+             AND d_year = 2001
+             AND d_moy = 12
+         GROUP BY sts.ss_item_sk
+         ) in_store
+     ) store
+WHERE (store.return_rank <= 10 OR store.currency_rank <= 10)
+ORDER BY 1, 4, 5
+LIMIT 100
+*)
+(* "rank() OVER (ORDER BY x)" is one more than the number of rows whose
+ * "x" is less; there are few rows. "sum(coalesce(x, 0))" is "sum" of
+ * "getOpt (x, 0)". The ranking is written out in each branch, rather
+ * than in a function: a function whose query reads its argument
+ * twice, called twice, raises ArrayIndexOutOfBoundsException. *)
+fun q49 () =
+  from x in
+      (let
+        val rows =
+          from ws in tpcds.web_sales
+            left join wr in tpcds.web_returns
+              on ws.ws_order_number = wr.wr_order_number
+                andalso ws.ws_item_sk = wr.wr_item_sk,
+            d in tpcds.date_dim
+            where Option.`join` wr?.wr_return_amt
+                > SOME (Decimal.fromInt 10000)
+              andalso ws.ws_net_profit > SOME (Decimal.fromInt 1)
+              andalso ws.ws_net_paid > SOME (Decimal.fromInt 0)
+              andalso ws.ws_quantity > SOME 0
+              andalso ws.ws_sold_date_sk = SOME d.d_date_sk
+              andalso d.d_year = SOME 2001
+              andalso d.d_moy = SOME 12
+            group {item = ws.ws_item_sk}
+              compute {
+                return_qty =
+                  sum over getOpt (Option.`join` wr?.wr_return_quantity, 0),
+                qty = sum over getOpt (ws.ws_quantity, 0),
+                return_amt = sum over getOpt (Option.`join` wr?.wr_return_amt,
+                  Decimal.fromInt 0),
+                net_paid = sum over getOpt (ws.ws_net_paid,
+                  Decimal.fromInt 0)}
+            yield {item,
+              return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
+              currency_ratio = return_amt / net_paid}
+      in
+        from r in rows
+          yield {channel = "web", r.item, r.return_ratio,
+            return_rank =
+              1 + count (from s in rows where s.return_ratio < r.return_ratio),
+            currency_rank =
+              1 + count (from s in rows
+                where s.currency_ratio < r.currency_ratio)}
+          where return_rank <= 10 orelse currency_rank <= 10
+      end)
+    union distinct
+          (let
+            val rows =
+              from cs in tpcds.catalog_sales
+                left join cr in tpcds.catalog_returns
+                  on cs.cs_order_number = cr.cr_order_number
+                    andalso cs.cs_item_sk = cr.cr_item_sk,
+                d in tpcds.date_dim
+                where Option.`join` cr?.cr_return_amount
+                    > SOME (Decimal.fromInt 10000)
+                  andalso cs.cs_net_profit > SOME (Decimal.fromInt 1)
+                  andalso cs.cs_net_paid > SOME (Decimal.fromInt 0)
+                  andalso cs.cs_quantity > SOME 0
+                  andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+                  andalso d.d_year = SOME 2001
+                  andalso d.d_moy = SOME 12
+                group {item = cs.cs_item_sk}
+                  compute {
+                    return_qty =
+                      sum over getOpt (Option.`join` cr?.cr_return_quantity, 0),
+                    qty = sum over getOpt (cs.cs_quantity, 0),
+                    return_amt = sum over getOpt (Option.`join` cr?.cr_return_amount,
+                      Decimal.fromInt 0),
+                    net_paid = sum over getOpt (cs.cs_net_paid,
+                      Decimal.fromInt 0)}
+                yield {item,
+                  return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
+                  currency_ratio = return_amt / net_paid}
+          in
+            from r in rows
+              yield {channel = "catalog", r.item, r.return_ratio,
+                return_rank =
+                  1 + count (from s in rows where s.return_ratio < r.return_ratio),
+                currency_rank =
+                  1 + count (from s in rows
+                    where s.currency_ratio < r.currency_ratio)}
+              where return_rank <= 10 orelse currency_rank <= 10
+          end),
+          (let
+            val rows =
+              from ss in tpcds.store_sales
+                left join sr in tpcds.store_returns
+                  on ss.ss_ticket_number = sr.sr_ticket_number
+                    andalso ss.ss_item_sk = sr.sr_item_sk,
+                d in tpcds.date_dim
+                where Option.`join` sr?.sr_return_amt
+                    > SOME (Decimal.fromInt 10000)
+                  andalso ss.ss_net_profit > SOME (Decimal.fromInt 1)
+                  andalso ss.ss_net_paid > SOME (Decimal.fromInt 0)
+                  andalso ss.ss_quantity > SOME 0
+                  andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+                  andalso d.d_year = SOME 2001
+                  andalso d.d_moy = SOME 12
+                group {item = ss.ss_item_sk}
+                  compute {
+                    return_qty =
+                      sum over getOpt (Option.`join` sr?.sr_return_quantity, 0),
+                    qty = sum over getOpt (ss.ss_quantity, 0),
+                    return_amt = sum over getOpt (Option.`join` sr?.sr_return_amt,
+                      Decimal.fromInt 0),
+                    net_paid = sum over getOpt (ss.ss_net_paid,
+                      Decimal.fromInt 0)}
+                yield {item,
+                  return_ratio = Decimal.fromInt return_qty / Decimal.fromInt qty,
+                  currency_ratio = return_amt / net_paid}
+          in
+            from r in rows
+              yield {channel = "store", r.item, r.return_ratio,
+                return_rank =
+                  1 + count (from s in rows where s.return_ratio < r.return_ratio),
+                currency_rank =
+                  1 + count (from s in rows
+                    where s.currency_ratio < r.currency_ratio)}
+              where return_rank <= 10 orelse currency_rank <= 10
+          end)
+    yield {x.channel, x.item, x.return_ratio, x.return_rank, x.currency_rank}
+    order (channel, return_rank, currency_rank)
+    take 100;
+> val q49 = fn
+>   : unit
+>      -> {channel:string, currency_rank:int, item:int, return_rank:int,
+>           return_ratio:decimal} list
+val r49 = q49 ();
+> channel currency_rank item return_rank return_ratio
+> ------- ------------- ---- ----------- ------------------------------------
+> catalog             1  767           1                                    1
+> store               1 1841           1                                0.775
+> store               2  737           2 0.9420289855072463768115942028985507
+>
+> val r49 : {channel:string, currency_rank:int, item:int, return_rank:int, return_ratio:decimal} list
+
 (* --- q50 -------------------------------------------------------- *)
 (*
 SELECT
@@ -4172,6 +6251,196 @@ val r50 = q50 ();
 >
 > val r50 : {`30 days `:int, `31 - 60 days `:int, `61 - 90 days `:int, `91 - 120 days `:int, `>120 days `:int, s_city:string option, s_company_id:int option, s_county:string option, s_state:string option, s_store_name:string option, s_street_name:string option, s_street_number:string option, s_street_type:string option, s_suite_number:string option, s_zip:string option} list
 
+(* --- q51 -------------------------------------------------------- *)
+(*
+WITH web_v1 AS (
+  SELECT
+    ws_item_sk item_sk,
+    d_date,
+    sum(sum(ws_sales_price))
+    OVER (PARTITION BY ws_item_sk
+      ORDER BY d_date
+      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) cume_sales
+  FROM web_sales, date_dim
+  WHERE ws_sold_date_sk = d_date_sk
+    AND d_month_seq BETWEEN 1200 AND 1200 + 11
+    AND ws_item_sk IS NOT NULL
+  GROUP BY ws_item_sk, d_date),
+    store_v1 AS (
+    SELECT
+      ss_item_sk item_sk,
+      d_date,
+      sum(sum(ss_sales_price))
+      OVER (PARTITION BY ss_item_sk
+        ORDER BY d_date
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) cume_sales
+    FROM store_sales, date_dim
+    WHERE ss_sold_date_sk = d_date_sk
+      AND d_month_seq BETWEEN 1200 AND 1200 + 11
+      AND ss_item_sk IS NOT NULL
+    GROUP BY ss_item_sk, d_date)
+SELECT *
+FROM (SELECT
+  item_sk,
+  d_date,
+  web_sales,
+  store_sales,
+  max(web_sales)
+  OVER (PARTITION BY item_sk
+    ORDER BY d_date
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) web_cumulative,
+  max(store_sales)
+  OVER (PARTITION BY item_sk
+    ORDER BY d_date
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) store_cumulative
+FROM (SELECT
+  CASE WHEN web.item_sk IS NOT NULL
+    THEN web.item_sk
+  ELSE store.item_sk END item_sk,
+  CASE WHEN web.d_date IS NOT NULL
+    THEN web.d_date
+  ELSE store.d_date END d_date,
+  web.cume_sales web_sales,
+  store.cume_sales store_sales
+FROM web_v1 web FULL OUTER JOIN store_v1 store ON (web.item_sk = store.item_sk
+  AND web.d_date = store.d_date)
+     ) x) y
+WHERE web_cumulative > store_cumulative
+ORDER BY item_sk, d_date
+LIMIT 100
+*)
+(* "sum(sum(x)) OVER (PARTITION BY item ORDER BY d_date ROWS BETWEEN
+ * UNBOUNDED PRECEDING AND CURRENT ROW)" is a running total of each item's
+ * days, in date order; the days of each item are collected, sorted, and
+ * folded. "max(...) OVER (...)" likewise. Both ignore NONE, as SQL's
+ * aggregates ignore null. (A total for each row over the rows before it
+ * would take time quadratic in the number of an item's days.) *)
+fun q51 () =
+  let
+    (* "a + b" and the greater of "a" and "b", ignoring NONE *)
+    fun plus (NONE, b) = b
+      | plus (a, NONE) = a
+      | plus (SOME (a : decimal), SOME b) = SOME (a + b)
+    fun greater (NONE, b) = b
+      | greater (a, NONE) = a
+      | greater (SOME (a : decimal), SOME b) = SOME (if a > b then a else b)
+    (* For each item, its days sorted by date, each with the running
+     * value of "f" over "value" up to and including that day.
+     * "running" is for the days of one channel, "running2" for the rows
+     * of the join; Morel does not generalize one function to both row
+     * types. *)
+    fun running f item date value rows =
+      from g in (from r in rows
+            group {k = item r}
+              compute {days = (fn rs => from x in rs order date x) over r}),
+          x in List.rev (#2 (List.foldl
+            (fn (day, (acc, out)) =>
+              let
+                val acc2 = f (acc, value day)
+              in
+                (acc2, {day, cume = acc2} :: out)
+              end)
+            (NONE, []) g.days))
+        yield {item_sk = g.k, x.day, x.cume}
+    fun running2 f item date value rows =
+      from g in (from r in rows
+            group {k = item r}
+              compute {days = (fn rs => from x in rs order date x) over r}),
+          x in List.rev (#2 (List.foldl
+            (fn (day, (acc, out)) =>
+              let
+                val acc2 = f (acc, value day)
+              in
+                (acc2, {day, cume = acc2} :: out)
+              end)
+            (NONE, []) g.days))
+        yield {item_sk = g.k, x.day, x.cume}
+    val web_v1 =
+      from x in running plus #item_sk #d_date #sales (
+      from ws in tpcds.web_sales,
+          d in tpcds.date_dim
+        where ws.ws_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_month_seq >= SOME 1200
+          andalso d.d_month_seq <= SOME (1200 + 11)
+        group {item_sk = ws.ws_item_sk, d.d_date}
+          compute {sales = sumSome over ws.ws_sales_price})
+        yield {x.item_sk, x.day.d_date, cume_sales = x.cume}
+    val store_v1 =
+      from x in running plus #item_sk #d_date #sales (
+      from ss in tpcds.store_sales,
+          d in tpcds.date_dim
+        where ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_month_seq >= SOME 1200
+          andalso d.d_month_seq <= SOME (1200 + 11)
+        group {item_sk = ss.ss_item_sk, d.d_date}
+          compute {sales = sumSome over ss.ss_sales_price})
+        yield {x.item_sk, x.day.d_date, cume_sales = x.cume}
+    val joined =
+      from web in web_v1
+        full join store in store_v1
+          on web.item_sk = store.item_sk
+            andalso web.d_date <> NONE
+            andalso web.d_date = store.d_date
+        yield {item_sk =
+            case (web, store) of
+                (SOME w, _) => w.item_sk
+              | (_, SOME s) => s.item_sk
+              | _ => raise Fail "no side",
+          d_date =
+            case Option.`join` web?.d_date of
+                SOME d => SOME d
+              | NONE => Option.`join` store?.d_date,
+          web_sales = Option.`join` web?.cume_sales,
+          store_sales = Option.`join` store?.cume_sales}
+    val web_cumulative =
+      from x in running2 greater #item_sk #d_date #web_sales joined
+        yield {x.item_sk, x.day.d_date, x.day.web_sales, x.day.store_sales,
+          web_cumulative = x.cume}
+  in
+    from y in web_cumulative,
+        z in running2 greater #item_sk #d_date #store_sales joined
+      where z.item_sk = y.item_sk
+        andalso z.day.d_date = y.d_date
+        andalso z.day.web_sales = y.web_sales
+        andalso (case (y.web_cumulative, z.cume) of
+                    (SOME w, SOME s) => w > s
+                  | _ => false)
+      order (y.item_sk, y.d_date)
+      yield {y.item_sk, y.d_date, y.web_sales, y.store_sales,
+        y.web_cumulative, store_cumulative = z.cume}
+      take 100
+  end;
+> val q51 = fn
+>   : unit
+>      -> {d_date:'a option, item_sk:int, store_cumulative:decimal option,
+>           store_sales:decimal option, web_cumulative:decimal option,
+>           web_sales:decimal option} list
+val r51 = q51 ();
+> val r51 =
+>   [{d_date=SOME 2000-04-15T00:00Z,item_sk=5,store_cumulative=SOME 79.51,
+>     store_sales=NONE,web_cumulative=SOME 114.2,web_sales=SOME 114.2},
+>    {d_date=SOME 2000-05-01T00:00Z,item_sk=5,store_cumulative=SOME 110.03,
+>     store_sales=SOME 110.03,web_cumulative=SOME 114.2,web_sales=NONE},
+>    {d_date=SOME 2000-02-16T00:00Z,item_sk=11,store_cumulative=SOME 126.45,
+>     store_sales=NONE,web_cumulative=SOME 130.39,web_sales=SOME 130.39},
+>    {d_date=SOME 2000-01-03T00:00Z,item_sk=23,store_cumulative=SOME 7.69,
+>     store_sales=SOME 7.69,web_cumulative=SOME 29.57,web_sales=SOME 29.57},
+>    {d_date=SOME 2000-05-26T00:00Z,item_sk=31,store_cumulative=SOME 30.94,
+>     store_sales=NONE,web_cumulative=SOME 49.63,web_sales=SOME 49.63},
+>    {d_date=SOME 2000-06-25T00:00Z,item_sk=31,store_cumulative=SOME 46.72,
+>     store_sales=SOME 46.72,web_cumulative=SOME 49.63,web_sales=NONE},
+>    {d_date=SOME 2000-02-02T00:00Z,item_sk=71,store_cumulative=SOME 3.55,
+>     store_sales=NONE,web_cumulative=SOME 75.48,web_sales=SOME 75.48},
+>    {d_date=SOME 2000-03-11T00:00Z,item_sk=77,store_cumulative=SOME 5.4,
+>     store_sales=SOME 5.4,web_cumulative=SOME 142.95,web_sales=NONE},
+>    {d_date=SOME 2000-03-25T00:00Z,item_sk=77,store_cumulative=SOME 18.48,
+>     store_sales=SOME 18.48,web_cumulative=SOME 142.95,web_sales=NONE},
+>    {d_date=SOME 2000-04-02T00:00Z,item_sk=77,store_cumulative=SOME 132.34,
+>     store_sales=SOME 132.34,web_cumulative=SOME 142.95,web_sales=NONE},...]
+>   : {d_date:'a option, item_sk:int, store_cumulative:decimal option,
+>       store_sales:decimal option, web_cumulative:decimal option,
+>       web_sales:decimal option} list
+
 (* --- q52 -------------------------------------------------------- *)
 (*
 SELECT
@@ -4222,6 +6491,110 @@ val r52 = q52 ();
 > ...
 >
 > val r52 : {brand:string option, brand_id:int option, d_year:int option, ext_price:decimal option} list
+
+(* --- q53 -------------------------------------------------------- *)
+(*
+SELECT *
+FROM
+  (SELECT
+    i_manufact_id,
+    sum(ss_sales_price) sum_sales,
+    avg(sum(ss_sales_price))
+    OVER (PARTITION BY i_manufact_id) avg_quarterly_sales
+  FROM item, store_sales, date_dim, store
+  WHERE ss_item_sk = i_item_sk AND
+    ss_sold_date_sk = d_date_sk AND
+    ss_store_sk = s_store_sk AND
+    d_month_seq IN (1200, 1200 + 1, 1200 + 2, 1200 + 3, 1200 + 4, 1200 + 5, 1200 + 6,
+                          1200 + 7, 1200 + 8, 1200 + 9, 1200 + 10, 1200 + 11) AND
+    ((i_category IN ('Books', 'Children', 'Electronics') AND
+      i_class IN ('personal', 'portable', 'reference', 'self-help') AND
+      i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7',
+                  'exportiunivamalg #9', 'scholaramalgamalg #9'))
+      OR
+      (i_category IN ('Women', 'Music', 'Men') AND
+        i_class IN ('accessories', 'classical', 'fragrances', 'pants') AND
+        i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1',
+                    'importoamalg #1')))
+  GROUP BY i_manufact_id, d_qoy) tmp1
+WHERE CASE WHEN avg_quarterly_sales > 0
+  THEN abs(sum_sales - avg_quarterly_sales) / avg_quarterly_sales
+      ELSE NULL END > 0.1
+ORDER BY avg_quarterly_sales,
+  sum_sales,
+  i_manufact_id
+LIMIT 100
+*)
+(* "avg(sum(x)) OVER (PARTITION BY k)" is the average of the groups'
+ * sums for each "k", joined to the groups. A partition is not a join:
+ * its NONE key is one partition, as NONE = NONE. "d_month_seq IN (1200,
+ * ..., 1200 + 11)" is a range. *)
+fun q53 () =
+  let
+    val base =
+      from i in tpcds.item,
+          ss in tpcds.store_sales,
+          d in tpcds.date_dim,
+          s in tpcds.store
+        where ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso d.d_month_seq >= SOME 1200
+          andalso d.d_month_seq <= SOME (1200 + 11)
+          andalso (i.i_category
+                elem [SOME "Books", SOME "Children", SOME "Electronics"]
+              andalso i.i_class elem [SOME "personal", SOME "portable",
+                SOME "reference", SOME "self-help"]
+              andalso i.i_brand elem [SOME "scholaramalgamalg #14",
+                SOME "scholaramalgamalg #7", SOME "exportiunivamalg #9",
+                SOME "scholaramalgamalg #9"]
+            orelse i.i_category elem [SOME "Women", SOME "Music", SOME "Men"]
+              andalso i.i_class elem [SOME "accessories", SOME "classical",
+                SOME "fragrances", SOME "pants"]
+              andalso i.i_brand elem [SOME "amalgimporto #1",
+                SOME "edu packscholar #1", SOME "exportiimporto #1",
+                SOME "importoamalg #1"])
+        yield {i.i_manufact_id, d.d_qoy, ss.ss_sales_price}
+    val groups =
+      from b in base
+        group {b.i_manufact_id, b.d_qoy}
+          compute {sum_sales = sumSome over b.ss_sales_price}
+    val averages =
+      from r in groups
+        group {r.i_manufact_id}
+          compute {avg_quarterly_sales = avgSome over r.sum_sales}
+  in
+    from r in groups,
+        a in averages
+      where a.i_manufact_id = r.i_manufact_id
+        andalso (case (r.sum_sales, a.avg_quarterly_sales) of
+                    (SOME s, SOME a) => a > Decimal.fromInt 0
+                      andalso Decimal.abs (s - a) / a > decimal "0.1"
+                  | _ => false)
+      order (a.avg_quarterly_sales, r.sum_sales, r.i_manufact_id)
+      yield {r.i_manufact_id, r.sum_sales, a.avg_quarterly_sales}
+      take 100
+  end;
+> val q53 = fn
+>   : unit
+>      -> {avg_quarterly_sales:decimal option, i_manufact_id:int option,
+>           sum_sales:decimal option} list
+val r53 = q53 ();
+> avg_quarterly_sales                 i_manufact_id sum_sales
+> ----------------------------------- ------------- ---------
+>                            122.3775           451     51.42
+>                            122.3775           451      53.4
+>                            122.3775           451    142.01
+>                            122.3775           451    242.68
+> 124.1833333333333333333333333333333           107         0
+> 124.1833333333333333333333333333333           107     25.41
+> 124.1833333333333333333333333333333           107    347.14
+>                            162.5475           227     36.67
+>                            162.5475           227     87.04
+>                            162.5475           227    246.82
+> ...
+>
+> val r53 : {avg_quarterly_sales:decimal option, i_manufact_id:int option, sum_sales:decimal option} list
 
 (* --- q54 -------------------------------------------------------- *)
 (*
@@ -4548,6 +6921,172 @@ val r56 = q56 ();
 > ...
 >
 > val r56 : {i_item_id:string, total_sales:decimal option} list
+
+(* --- q57 -------------------------------------------------------- *)
+(*
+WITH v1 AS (
+  SELECT
+    i_category,
+    i_brand,
+    cc_name,
+    d_year,
+    d_moy,
+    sum(cs_sales_price) sum_sales,
+    avg(sum(cs_sales_price))
+    OVER
+    (PARTITION BY i_category, i_brand, cc_name, d_year)
+    avg_monthly_sales,
+    rank()
+    OVER
+    (PARTITION BY i_category, i_brand, cc_name
+      ORDER BY d_year, d_moy) rn
+  FROM item, catalog_sales, date_dim, call_center
+  WHERE cs_item_sk = i_item_sk AND
+    cs_sold_date_sk = d_date_sk AND
+    cc_call_center_sk = cs_call_center_sk AND
+    (
+      d_year = 1999 OR
+        (d_year = 1999 - 1 AND d_moy = 12) OR
+        (d_year = 1999 + 1 AND d_moy = 1)
+    )
+  GROUP BY i_category, i_brand,
+    cc_name, d_year, d_moy),
+    v2 AS (
+    SELECT
+      v1.i_category,
+      v1.i_brand,
+      v1.cc_name,
+      v1.d_year,
+      v1.d_moy,
+      v1.avg_monthly_sales,
+      v1.sum_sales,
+      v1_lag.sum_sales psum,
+      v1_lead.sum_sales nsum
+    FROM v1, v1 v1_lag, v1 v1_lead
+    WHERE v1.i_category = v1_lag.i_category AND
+      v1.i_category = v1_lead.i_category AND
+      v1.i_brand = v1_lag.i_brand AND
+      v1.i_brand = v1_lead.i_brand AND
+      v1.cc_name = v1_lag.cc_name AND
+      v1.cc_name = v1_lead.cc_name AND
+      v1.rn = v1_lag.rn + 1 AND
+      v1.rn = v1_lead.rn - 1)
+SELECT *
+FROM v2
+WHERE d_year = 1999 AND
+  avg_monthly_sales > 0 AND
+  CASE WHEN avg_monthly_sales > 0
+    THEN abs(sum_sales - avg_monthly_sales) / avg_monthly_sales
+  ELSE NULL END > 0.1
+ORDER BY sum_sales - avg_monthly_sales, 3
+LIMIT 100
+*)
+(* "avg(sum(x)) OVER (PARTITION BY p)" is the average of the groups' sums
+ * for each "p", joined to the groups, as in q53. "rank() OVER (PARTITION
+ * BY p ORDER BY d_year, d_moy)" is a group's position in its partition,
+ * because the (year, month) of each group in a partition is distinct:
+ * the groups are sorted by partition and month once, and a group's rank
+ * is its position less its partition's first position, plus one. The lag
+ * and lead are joins, whose equalities (unlike a partition's) drop a row
+ * whose key is NONE. *)
+fun q57 () =
+  let
+    val base =
+      from i in tpcds.item,
+          cs in tpcds.catalog_sales,
+          d in tpcds.date_dim,
+          cc in tpcds.call_center
+        where cs.cs_item_sk = i.i_item_sk
+          andalso cs.cs_sold_date_sk = SOME d.d_date_sk
+          andalso cs.cs_call_center_sk = SOME cc.cc_call_center_sk
+          andalso (d.d_year = SOME 1999
+            orelse d.d_year = SOME (1999 - 1) andalso d.d_moy = SOME 12
+            orelse d.d_year = SOME (1999 + 1) andalso d.d_moy = SOME 1)
+        yield {i.i_category, i.i_brand, cc.cc_name, d.d_year, d.d_moy,
+          sales_price = cs.cs_sales_price}
+    val groups =
+      from b in base
+        group {b.i_category, b.i_brand, b.cc_name, b.d_year, b.d_moy}
+          compute {sum_sales = sumSome over b.sales_price}
+    val averages =
+      from g in groups
+        group {g.i_category, g.i_brand, g.cc_name, g.d_year}
+          compute {avg_monthly_sales = avgSome over g.sum_sales}
+    val sorted =
+      from g in groups
+        order (g.i_category, g.i_brand, g.cc_name, g.d_year, g.d_moy)
+        yield {g, pos = ordinal}
+    val firsts =
+      from x in sorted
+        group {x.g.i_category, x.g.i_brand, x.g.cc_name}
+          compute {first = min over x.pos}
+    val v1s =
+      from x in sorted,
+          a in averages,
+          f in firsts
+        where a.i_category = x.g.i_category
+          andalso a.i_brand = x.g.i_brand
+          andalso a.cc_name = x.g.cc_name
+          andalso a.d_year = x.g.d_year
+          andalso f.i_category = x.g.i_category
+          andalso f.i_brand = x.g.i_brand
+          andalso f.cc_name = x.g.cc_name
+        yield {x.g, a.avg_monthly_sales, rn = x.pos - f.first + 1}
+        yield {g.i_category, g.i_brand, g.cc_name, g.d_year, g.d_moy,
+          sum_sales = g.sum_sales, avg_monthly_sales, rn}
+  in
+    from v1 in v1s,
+        v1_lag in v1s,
+        v1_lead in v1s
+      where v1.i_category <> NONE
+        andalso v1.i_category = v1_lag.i_category
+        andalso v1.i_brand <> NONE
+        andalso v1.i_brand = v1_lag.i_brand
+        andalso v1.cc_name <> NONE
+        andalso v1.cc_name = v1_lag.cc_name
+        andalso v1.i_category = v1_lead.i_category
+        andalso v1.i_brand = v1_lead.i_brand
+        andalso v1.cc_name = v1_lead.cc_name
+        andalso v1.rn = v1_lag.rn + 1
+        andalso v1.rn = v1_lead.rn - 1
+        andalso v1.d_year = SOME 1999
+        andalso v1.avg_monthly_sales > SOME (Decimal.fromInt 0)
+        andalso (case (v1.sum_sales, v1.avg_monthly_sales) of
+                    (SOME s, SOME a) =>
+                      a > Decimal.fromInt 0
+                      andalso Decimal.abs (s - a) / a > decimal "0.1"
+                  | _ => false)
+      order ((case (v1.sum_sales, v1.avg_monthly_sales) of
+                 (SOME s, SOME a) => SOME (s - a)
+               | _ => NONE),
+        v1.cc_name)
+      yield {v1.i_category, v1.i_brand, v1.cc_name, v1.d_year, v1.d_moy,
+        v1.avg_monthly_sales, v1.sum_sales, psum = v1_lag.sum_sales,
+        nsum = v1_lead.sum_sales}
+      take 100
+  end;
+> val q57 = fn
+>   : unit
+>      -> {avg_monthly_sales:decimal option, cc_name:string option,
+>           d_moy:int option, d_year:int option, i_brand:string option,
+>           i_category:string option, nsum:decimal option, psum:decimal option,
+>           sum_sales:decimal option} list
+val r57 = q57 ();
+> avg_monthly_sales                   cc_name      d_moy d_year i_brand             i_category nsum    psum   sum_sales
+> ----------------------------------- ------------ ----- ------ ------------------- ---------- ------- ------ ---------
+> 815.9291666666666666666666666666667 NY Metro         6   1999 exportiimporto #1   Men         476.17 570.54     45.63
+> 866.9258333333333333333333333333333 Mid Atlantic     4   1999 edu packedu pack #1 Shoes       558.99 294.79    126.89
+> 866.9258333333333333333333333333333 Mid Atlantic     7   1999 edu packedu pack #1 Shoes      1541.27 486.59    129.07
+> 815.9291666666666666666666666666667 NY Metro         2   1999 exportiimporto #1   Men         452.95 507.68     87.03
+> 812.7466666666666666666666666666667 NY Metro         3   1999 exportiedu pack #1  Shoes       242.01 307.75    150.52
+> 699.2033333333333333333333333333333 NY Metro         7   1999 edu packedu pack #1 Shoes      1041.43 477.39     55.06
+> 708.9716666666666666666666666666667 Mid Atlantic     2   1999 amalgedu pack #1    Shoes       272.12    513     66.28
+> 737.4641666666666666666666666666667 NY Metro         4   1999 edu packamalg #1    Women       520.38  652.8    101.67
+> 866.9258333333333333333333333333333 Mid Atlantic     2   1999 edu packedu pack #1 Shoes       294.79 494.34    244.85
+> 851.3316666666666666666666666666667 Mid Atlantic     2   1999 exportiedu pack #1  Shoes       420.01 555.43    269.64
+> ...
+>
+> val r57 : {avg_monthly_sales:decimal option, cc_name:string option, d_moy:int option, d_year:int option, i_brand:string option, i_category:string option, nsum:decimal option, psum:decimal option, sum_sales:decimal option} list
 
 (* --- q58 -------------------------------------------------------- *)
 (*
@@ -5191,6 +7730,111 @@ val r62 = q62 ();
 >       93            97            78             93          0 TWO DAY   Conventional childr site_0
 >
 > val r62 : {`30 days `:int, `31 - 60 days `:int, `61 - 90 days `:int, `91 - 120 days `:int, `>120 days `:int, sm_type:string option, w_warehouse_name:string option, web_name:string option} list
+
+(* --- q63 -------------------------------------------------------- *)
+(*
+SELECT *
+FROM (SELECT
+  i_manager_id,
+  sum(ss_sales_price) sum_sales,
+  avg(sum(ss_sales_price))
+  OVER (PARTITION BY i_manager_id) avg_monthly_sales
+FROM item
+  , store_sales
+  , date_dim
+  , store
+WHERE ss_item_sk = i_item_sk
+  AND ss_sold_date_sk = d_date_sk
+  AND ss_store_sk = s_store_sk
+  AND d_month_seq IN (1200, 1200 + 1, 1200 + 2, 1200 + 3, 1200 + 4, 1200 + 5, 1200 + 6, 1200 + 7,
+                            1200 + 8, 1200 + 9, 1200 + 10, 1200 + 11)
+  AND ((i_category IN ('Books', 'Children', 'Electronics')
+  AND i_class IN ('personal', 'portable', 'refernece', 'self-help')
+  AND i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7',
+                  'exportiunivamalg #9', 'scholaramalgamalg #9'))
+  OR (i_category IN ('Women', 'Music', 'Men')
+  AND i_class IN ('accessories', 'classical', 'fragrances', 'pants')
+  AND i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1',
+                  'importoamalg #1')))
+GROUP BY i_manager_id, d_moy) tmp1
+WHERE CASE WHEN avg_monthly_sales > 0
+  THEN abs(sum_sales - avg_monthly_sales) / avg_monthly_sales
+      ELSE NULL END > 0.1
+ORDER BY i_manager_id
+  , avg_monthly_sales
+  , sum_sales
+LIMIT 100
+*)
+(* "avg(sum(x)) OVER (PARTITION BY k)" is the average of the groups'
+ * sums for each "k", joined to the groups. A partition is not a join:
+ * its NONE key is one partition, as NONE = NONE. "d_month_seq IN (1200,
+ * ..., 1200 + 11)" is a range. *)
+fun q63 () =
+  let
+    val base =
+      from i in tpcds.item,
+          ss in tpcds.store_sales,
+          d in tpcds.date_dim,
+          s in tpcds.store
+        where ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso d.d_month_seq >= SOME 1200
+          andalso d.d_month_seq <= SOME (1200 + 11)
+          andalso (i.i_category
+                elem [SOME "Books", SOME "Children", SOME "Electronics"]
+              andalso i.i_class elem [SOME "personal", SOME "portable",
+                SOME "refernece", SOME "self-help"]
+              andalso i.i_brand elem [SOME "scholaramalgamalg #14",
+                SOME "scholaramalgamalg #7", SOME "exportiunivamalg #9",
+                SOME "scholaramalgamalg #9"]
+            orelse i.i_category elem [SOME "Women", SOME "Music", SOME "Men"]
+              andalso i.i_class elem [SOME "accessories", SOME "classical",
+                SOME "fragrances", SOME "pants"]
+              andalso i.i_brand elem [SOME "amalgimporto #1",
+                SOME "edu packscholar #1", SOME "exportiimporto #1",
+                SOME "importoamalg #1"])
+        yield {i.i_manager_id, d.d_moy, ss.ss_sales_price}
+    val groups =
+      from b in base
+        group {b.i_manager_id, b.d_moy}
+          compute {sum_sales = sumSome over b.ss_sales_price}
+    val averages =
+      from r in groups
+        group {r.i_manager_id}
+          compute {avg_monthly_sales = avgSome over r.sum_sales}
+  in
+    from r in groups,
+        a in averages
+      where a.i_manager_id = r.i_manager_id
+        andalso (case (r.sum_sales, a.avg_monthly_sales) of
+                    (SOME s, SOME a) => a > Decimal.fromInt 0
+                      andalso Decimal.abs (s - a) / a > decimal "0.1"
+                  | _ => false)
+      order (r.i_manager_id, a.avg_monthly_sales, r.sum_sales)
+      yield {r.i_manager_id, r.sum_sales, a.avg_monthly_sales}
+      take 100
+  end;
+> val q63 = fn
+>   : unit
+>      -> {avg_monthly_sales:decimal option, i_manager_id:int option,
+>           sum_sales:decimal option} list
+val r63 = q63 ();
+> avg_monthly_sales                   i_manager_id sum_sales
+> ----------------------------------- ------------ ---------
+> 241.1741666666666666666666666666667            6      4.68
+> 241.1741666666666666666666666666667            6     17.82
+> 241.1741666666666666666666666666667            6     51.64
+> 241.1741666666666666666666666666667            6     51.86
+> 241.1741666666666666666666666666667            6     92.48
+> 241.1741666666666666666666666666667            6    143.63
+> 241.1741666666666666666666666666667            6    175.21
+> 241.1741666666666666666666666666667            6    199.64
+> 241.1741666666666666666666666666667            6    280.21
+> 241.1741666666666666666666666666667            6    431.02
+> ...
+>
+> val r63 : {avg_monthly_sales:decimal option, i_manager_id:int option, sum_sales:decimal option} list
 
 (* --- q64 -------------------------------------------------------- *)
 (*
@@ -6120,6 +8764,173 @@ val r66 = q66 ();
 >
 > val r66 : {apr_net:decimal option, apr_sales:decimal option, apr_sales_per_sq_foot:decimal option, aug_net:decimal option, aug_sales:decimal option, aug_sales_per_sq_foot:decimal option, dec_net:decimal option, dec_sales:decimal option, dec_sales_per_sq_foot:decimal option, feb_net:decimal option, feb_sales:decimal option, feb_sales_per_sq_foot:decimal option, jan_net:decimal option, jan_sales:decimal option, jan_sales_per_sq_foot:decimal option, jul_net:decimal option, jul_sales:decimal option, jul_sales_per_sq_foot:decimal option, jun_net:decimal option, jun_sales:decimal option, jun_sales_per_sq_foot:decimal option, mar_net:decimal option, mar_sales:decimal option, mar_sales_per_sq_foot:decimal option, may_net:decimal option, may_sales:decimal option, may_sales_per_sq_foot:decimal option, nov_net:decimal option, nov_sales:decimal option, nov_sales_per_sq_foot:decimal option, oct_net:decimal option, oct_sales:decimal option, oct_sales_per_sq_foot:decimal option, sep_net:decimal option, sep_sales:decimal option, sep_sales_per_sq_foot:decimal option, ship_carriers:string, w_city:string option, w_country:string option, w_county:string option, w_state:string option, w_warehouse_name:string option, w_warehouse_sq_ft:int option, year:int option} list
 
+(* --- q67 -------------------------------------------------------- *)
+(*
+SELECT *
+FROM
+  (SELECT
+    i_category,
+    i_class,
+    i_brand,
+    i_product_name,
+    d_year,
+    d_qoy,
+    d_moy,
+    s_store_id,
+    sumsales,
+    rank()
+    OVER (PARTITION BY i_category
+      ORDER BY sumsales DESC) rk
+  FROM
+    (SELECT
+      i_category,
+      i_class,
+      i_brand,
+      i_product_name,
+      d_year,
+      d_qoy,
+      d_moy,
+      s_store_id,
+      sum(coalesce(ss_sales_price * ss_quantity, 0)) sumsales
+    FROM store_sales, date_dim, store, item
+    WHERE ss_sold_date_sk = d_date_sk
+      AND ss_item_sk = i_item_sk
+      AND ss_store_sk = s_store_sk
+      AND d_month_seq BETWEEN 1200 AND 1200 + 11
+    GROUP BY ROLLUP (i_category, i_class, i_brand, i_product_name, d_year, d_qoy,
+      d_moy, s_store_id)) dw1) dw2
+WHERE rk <= 100
+ORDER BY
+  i_category, i_class, i_brand, i_product_name, d_year,
+  d_qoy, d_moy, s_store_id, sumsales, rk
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22. "rank() OVER (PARTITION BY i_category
+ * ORDER BY sumsales DESC)": each partition is sorted, and a row's rank is
+ * one more than the position ("ordinal") of the first row with its
+ * "sumsales"; counting, for each row, the rows that rank above it would
+ * take time quadratic in the size of the partition. *)
+fun q67 () =
+  let
+    val base =
+      from ss in tpcds.store_sales,
+          d in tpcds.date_dim,
+          s in tpcds.store,
+          i in tpcds.item
+        where ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso d.d_month_seq >= SOME 1200
+          andalso d.d_month_seq <= SOME (1200 + 11)
+        yield {i.i_category, i.i_class, i.i_brand, i.i_product_name,
+          d.d_year, d.d_qoy, d.d_moy, s_store_id = SOME s.s_store_id,
+          sales =
+            case (ss.ss_sales_price, ss.ss_quantity) of
+                (SOME p, SOME q) => p * Decimal.fromInt q
+              | _ => Decimal.fromInt 0}
+    val dw1 =
+      from r in (from b in base
+          group {b.i_category, b.i_class, b.i_brand, b.i_product_name,
+                b.d_year, b.d_qoy, b.d_moy, b.s_store_id}
+            compute {sumsales = sum over b.sales}
+          yield {i_category, i_class, i_brand, i_product_name, d_year, d_qoy,
+            d_moy, s_store_id, sumsales})
+        union
+          (from b in base
+              group {b.i_category, b.i_class, b.i_brand, b.i_product_name,
+                    b.d_year, b.d_qoy, b.d_moy}
+                compute {sumsales = sum over b.sales}
+              yield {i_category, i_class, i_brand, i_product_name, d_year, d_qoy,
+                d_moy, s_store_id = NONE, sumsales}),
+          (from b in base
+              group {b.i_category, b.i_class, b.i_brand, b.i_product_name,
+                    b.d_year, b.d_qoy}
+                compute {sumsales = sum over b.sales}
+              yield {i_category, i_class, i_brand, i_product_name, d_year, d_qoy,
+                d_moy = NONE, s_store_id = NONE, sumsales}),
+          (from b in base
+              group {b.i_category, b.i_class, b.i_brand, b.i_product_name,
+                    b.d_year}
+                compute {sumsales = sum over b.sales}
+              yield {i_category, i_class, i_brand, i_product_name, d_year,
+                d_qoy = NONE, d_moy = NONE, s_store_id = NONE, sumsales}),
+          (from b in base
+              group {b.i_category, b.i_class, b.i_brand, b.i_product_name}
+                compute {sumsales = sum over b.sales}
+              yield {i_category, i_class, i_brand, i_product_name, d_year = NONE,
+                d_qoy = NONE, d_moy = NONE, s_store_id = NONE, sumsales}),
+          (from b in base
+              group {b.i_category, b.i_class, b.i_brand}
+                compute {sumsales = sum over b.sales}
+              yield {i_category, i_class, i_brand, i_product_name = NONE,
+                d_year = NONE, d_qoy = NONE, d_moy = NONE, s_store_id = NONE,
+                sumsales}),
+          (from b in base
+              group {b.i_category, b.i_class}
+                compute {sumsales = sum over b.sales}
+              yield {i_category, i_class, i_brand = NONE, i_product_name = NONE,
+                d_year = NONE, d_qoy = NONE, d_moy = NONE, s_store_id = NONE,
+                sumsales}),
+          (from b in base
+              group {b.i_category}
+                compute {sumsales = sum over b.sales}
+              yield {i_category, i_class = NONE, i_brand = NONE,
+                i_product_name = NONE, d_year = NONE, d_qoy = NONE, d_moy = NONE,
+                s_store_id = NONE, sumsales}),
+          (from b in base
+              group {}
+                compute {sumsales = sum over b.sales}
+              yield {i_category = NONE, i_class = NONE, i_brand = NONE,
+                i_product_name = NONE, d_year = NONE, d_qoy = NONE, d_moy = NONE,
+                s_store_id = NONE, sumsales})
+    (* Each partition, sorted, with each row's position in it. *)
+    val sorted =
+      from c in (from r in dw1 yield r.i_category distinct),
+          x in (from r in dw1
+            where r.i_category = c
+            order DESC r.sumsales
+            yield {r, pos = ordinal})
+        yield x
+    val firsts =
+      from x in sorted
+        group {x.r.i_category, x.r.sumsales} compute {first = min over x.pos}
+    val dw2 =
+      from x in sorted,
+          f in firsts
+        where f.i_category = x.r.i_category andalso f.sumsales = x.r.sumsales
+        yield {x.r, rk = f.first + 1}
+  in
+    from x in dw2
+      where x.rk <= 100
+      yield {x.r.i_category, x.r.i_class, x.r.i_brand, x.r.i_product_name,
+        x.r.d_year, x.r.d_qoy, x.r.d_moy, x.r.s_store_id, x.r.sumsales, x.rk}
+      order (i_category, i_class, i_brand, i_product_name, d_year, d_qoy,
+        d_moy, s_store_id, sumsales, rk)
+      take 100
+  end;
+> val q67 = fn
+>   : unit
+>      -> {d_moy:int option, d_qoy:int option, d_year:int option,
+>           i_brand:string option, i_category:string option,
+>           i_class:string option, i_product_name:string option, rk:int,
+>           s_store_id:string option, sumsales:decimal} list
+val r67 = q67 ();
+> d_moy d_qoy d_year i_brand      i_category i_class i_product_name rk s_store_id       sumsales
+> ----- ----- ------ ------------ ---------- ------- -------------- -- ---------------- -----------
+>                                                                    3                    100526.93
+>                                                                    2                    156515.09
+>                                                                    1                  42866790.98
+>                    brandmaxi #2                                    8                     53021.66
+>                    brandmaxi #2                    oughteingought  8                     53021.66
+>               2000 brandmaxi #2                    oughteingought  8                     53021.66
+>           1   2000 brandmaxi #2                    oughteingought 43                      5482.24
+>     2     1   2000 brandmaxi #2                    oughteingought 45                      5164.84
+>     2     1   2000 brandmaxi #2                    oughteingought 45 AAAAAAAABAAAAAAA     5164.84
+>     3     1   2000 brandmaxi #2                    oughteingought 87                        317.4
+> ...
+>
+> val r67 : {d_moy:int option, d_qoy:int option, d_year:int option, i_brand:string option, i_category:string option, i_class:string option, i_product_name:string option, rk:int, s_store_id:string option, sumsales:decimal} list
+
 (* --- q68 -------------------------------------------------------- *)
 (*
 SELECT
@@ -6308,6 +9119,125 @@ val r69 = q69 ();
 > ...
 >
 > val r69 : {cd_credit_rating:string option, cd_education_status:string option, cd_gender:string option, cd_marital_status:string option, cd_purchase_estimate:int option, cnt1:int, cnt2:int, cnt3:int} list
+
+(* --- q70 -------------------------------------------------------- *)
+(*
+SELECT
+  sum(ss_net_profit) AS total_sum,
+  s_state,
+  s_county,
+  grouping(s_state) + grouping(s_county) AS lochierarchy,
+  rank()
+  OVER (
+    PARTITION BY grouping(s_state) + grouping(s_county),
+      CASE WHEN grouping(s_county) = 0
+        THEN s_state END
+    ORDER BY sum(ss_net_profit) DESC) AS rank_within_parent
+FROM
+  store_sales, date_dim d1, store
+WHERE
+  d1.d_month_seq BETWEEN 1200 AND 1200 + 11
+    AND d1.d_date_sk = ss_sold_date_sk
+    AND s_store_sk = ss_store_sk
+    AND s_state IN
+    (SELECT s_state
+    FROM
+      (SELECT
+        s_state AS s_state,
+        rank()
+        OVER (PARTITION BY s_state
+          ORDER BY sum(ss_net_profit) DESC) AS ranking
+      FROM store_sales, store, date_dim
+      WHERE d_month_seq BETWEEN 1200 AND 1200 + 11
+        AND d_date_sk = ss_sold_date_sk
+        AND s_store_sk = ss_store_sk
+      GROUP BY s_state) tmp1
+    WHERE ranking <= 5)
+GROUP BY ROLLUP (s_state, s_county)
+ORDER BY
+  lochierarchy DESC
+  , CASE WHEN lochierarchy = 0
+  THEN s_state END
+  , rank_within_parent
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22. "rank() OVER (PARTITION BY p ORDER BY
+ * m)" is one more than the number of rows in the row's partition whose
+ * "m" comes before its own (descending); NONE is less than any SOME, so it
+ * is first ascending and last descending, as Spark's nulls are. *)
+fun q70 () =
+  let
+    (* The states whose rank, within the partition of their own state,
+     * is at most 5; each state is its own partition, so all of them. *)
+    val states =
+      let
+        val totals =
+          from ss in tpcds.store_sales,
+              s in tpcds.store,
+              d in tpcds.date_dim
+            where d.d_month_seq >= SOME 1200
+              andalso d.d_month_seq <= SOME (1200 + 11)
+              andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+              andalso ss.ss_store_sk = SOME s.s_store_sk
+            group s.s_state compute {total = sumSome over ss.ss_net_profit}
+      in
+        from t in totals
+          where 1 + count (from u in totals
+              where u.s_state = t.s_state andalso u.total > t.total) <= 5
+          yield t.s_state
+      end
+    val base =
+      from ss in tpcds.store_sales,
+          d1 in tpcds.date_dim,
+          s in tpcds.store
+        where d1.d_month_seq >= SOME 1200
+          andalso d1.d_month_seq <= SOME (1200 + 11)
+          andalso ss.ss_sold_date_sk = SOME d1.d_date_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso s.s_state <> NONE
+          andalso s.s_state elem states
+        yield {s.s_state, s.s_county, ss.ss_net_profit}
+    val rolled =
+      from r in (from b in base
+          group {b.s_state, b.s_county}
+            compute {total = sumSome over b.ss_net_profit}
+          yield {s_state, s_county, g1 = 0, g2 = 0, total})
+        union
+          (from b in base
+              group {b.s_state}
+                compute {total = sumSome over b.ss_net_profit}
+              yield {s_state, s_county = NONE, g1 = 0, g2 = 1, total}),
+          (from b in base
+              group {}
+                compute {total = sumSome over b.ss_net_profit}
+              yield {s_state = NONE, s_county = NONE, g1 = 1, g2 = 1, total})
+      yield {total_sum = r.total, r.s_state, r.s_county,
+        lochierarchy = r.g1 + r.g2,
+        parent = if r.g2 = 0 then r.s_state else NONE}
+  in
+    from r in rolled
+      yield {r.total_sum, r.s_state, r.s_county, r.lochierarchy,
+        rank_within_parent =
+          1 + count (from s in rolled
+            where s.lochierarchy = r.lochierarchy
+              andalso s.parent = r.parent
+              andalso s.total_sum > r.total_sum)}
+      order (DESC lochierarchy,
+        if lochierarchy = 0 then s_state else NONE, rank_within_parent)
+      take 100
+  end;
+> val q70 = fn
+>   : unit
+>      -> {lochierarchy:int, rank_within_parent:int, s_county:string option,
+>           s_state:string option, total_sum:decimal option} list
+val r70 = q70 ();
+> lochierarchy rank_within_parent s_county          s_state total_sum
+> ------------ ------------------ ----------------- ------- ------------
+>            2                  1                           -18926197.59
+>            1                  1                   TN      -18926197.59
+>            0                  1 Williamson County TN      -18926197.59
+>
+> val r70 : {lochierarchy:int, rank_within_parent:int, s_county:string option, s_state:string option, total_sum:decimal option} list
 
 (* --- q71 -------------------------------------------------------- *)
 (*
@@ -7051,6 +9981,243 @@ val r76 = q76 ();
 >
 > val r76 : {channel:string, col_name:int option, d_qoy:int option, d_year:int option, i_category:string option, sales_amt:decimal option, sales_cnt:int} list
 
+(* --- q77 -------------------------------------------------------- *)
+(*
+WITH ss AS
+(SELECT
+    s_store_sk,
+    sum(ss_ext_sales_price) AS sales,
+    sum(ss_net_profit) AS profit
+  FROM store_sales, date_dim, store
+  WHERE ss_sold_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-03' AS DATE) AND
+  (cast('2000-08-03' AS DATE) + INTERVAL 30 days)
+    AND ss_store_sk = s_store_sk
+  GROUP BY s_store_sk),
+    sr AS
+  (SELECT
+    s_store_sk,
+    sum(sr_return_amt) AS returns,
+    sum(sr_net_loss) AS profit_loss
+  FROM store_returns, date_dim, store
+  WHERE sr_returned_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-03' AS DATE) AND
+  (cast('2000-08-03' AS DATE) + INTERVAL 30 days)
+    AND sr_store_sk = s_store_sk
+  GROUP BY s_store_sk),
+    cs AS
+  (SELECT
+    cs_call_center_sk,
+    sum(cs_ext_sales_price) AS sales,
+    sum(cs_net_profit) AS profit
+  FROM catalog_sales, date_dim
+  WHERE cs_sold_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-03' AS DATE) AND
+  (cast('2000-08-03' AS DATE) + INTERVAL 30 days)
+  GROUP BY cs_call_center_sk),
+    cr AS
+  (SELECT
+    sum(cr_return_amount) AS returns,
+    sum(cr_net_loss) AS profit_loss
+  FROM catalog_returns, date_dim
+  WHERE cr_returned_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-03' AS DATE) AND
+  (cast('2000-08-03' AS DATE) + INTERVAL 30 days)),
+    ws AS
+  (SELECT
+    wp_web_page_sk,
+    sum(ws_ext_sales_price) AS sales,
+    sum(ws_net_profit) AS profit
+  FROM web_sales, date_dim, web_page
+  WHERE ws_sold_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-03' AS DATE) AND
+  (cast('2000-08-03' AS DATE) + INTERVAL 30 days)
+    AND ws_web_page_sk = wp_web_page_sk
+  GROUP BY wp_web_page_sk),
+    wr AS
+  (SELECT
+    wp_web_page_sk,
+    sum(wr_return_amt) AS returns,
+    sum(wr_net_loss) AS profit_loss
+  FROM web_returns, date_dim, web_page
+  WHERE wr_returned_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-03' AS DATE) AND
+  (cast('2000-08-03' AS DATE) + INTERVAL 30 days)
+    AND wr_web_page_sk = wp_web_page_sk
+  GROUP BY wp_web_page_sk)
+SELECT
+  channel,
+  id,
+  sum(sales) AS sales,
+  sum(returns) AS returns,
+  sum(profit) AS profit
+FROM
+  (SELECT
+     'store channel' AS channel,
+     ss.s_store_sk AS id,
+     sales,
+     coalesce(returns, 0) AS returns,
+     (profit - coalesce(profit_loss, 0)) AS profit
+   FROM ss
+     LEFT JOIN sr
+       ON ss.s_store_sk = sr.s_store_sk
+   UNION ALL
+   SELECT
+     'catalog channel' AS channel,
+     cs_call_center_sk AS id,
+     sales,
+     returns,
+     (profit - profit_loss) AS profit
+   FROM cs, cr
+   UNION ALL
+   SELECT
+     'web channel' AS channel,
+     ws.wp_web_page_sk AS id,
+     sales,
+     coalesce(returns, 0) returns,
+     (profit - coalesce(profit_loss, 0)) AS profit
+   FROM ws
+     LEFT JOIN wr
+       ON ws.wp_web_page_sk = wr.wp_web_page_sk
+  ) x
+GROUP BY ROLLUP (channel, id)
+ORDER BY channel, id
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22; "cr", an aggregate without "GROUP BY",
+ * is one record. *)
+fun q77 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    val zero = Decimal.fromInt 0
+    (* "a - b" and "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
+    fun minus (a : decimal option, b) =
+      case (a, b) of
+          (SOME a, SOME b) => SOME (a - b)
+        | _ => NONE
+    fun minus0 (a, b) = Option.map (fn a => a - getOpt (b, zero)) a
+    fun inRange d =
+      d >= SOME (day (2000, Aug, 3)) andalso d <= SOME (day (2000, Aug, 3 + 30))
+    val ss =
+      from ss in tpcds.store_sales,
+          d in tpcds.date_dim,
+          s in tpcds.store
+        where ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+        group s.s_store_sk
+          compute {sales = sumSome over ss.ss_ext_sales_price,
+            profit = sumSome over ss.ss_net_profit}
+    val sr =
+      from sr in tpcds.store_returns,
+          d in tpcds.date_dim,
+          s in tpcds.store
+        where sr.sr_returned_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso sr.sr_store_sk = SOME s.s_store_sk
+        group s.s_store_sk
+          compute {returns = sumSome over sr.sr_return_amt,
+            profit_loss = sumSome over sr.sr_net_loss}
+    val cs =
+      from cs in tpcds.catalog_sales,
+          d in tpcds.date_dim
+        where cs.cs_sold_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+        group cs.cs_call_center_sk
+          compute {sales = sumSome over cs.cs_ext_sales_price,
+            profit = sumSome over cs.cs_net_profit}
+    val cr =
+      from cr in tpcds.catalog_returns,
+          d in tpcds.date_dim
+        where cr.cr_returned_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+        compute {returns = sumSome over cr.cr_return_amount,
+          profit_loss = sumSome over cr.cr_net_loss}
+    val ws =
+      from ws in tpcds.web_sales,
+          d in tpcds.date_dim,
+          wp in tpcds.web_page
+        where ws.ws_sold_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso ws.ws_web_page_sk = SOME wp.wp_web_page_sk
+        group wp.wp_web_page_sk
+          compute {sales = sumSome over ws.ws_ext_sales_price,
+            profit = sumSome over ws.ws_net_profit}
+    val wr =
+      from wr in tpcds.web_returns,
+          d in tpcds.date_dim,
+          wp in tpcds.web_page
+        where wr.wr_returned_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso wr.wr_web_page_sk = SOME wp.wp_web_page_sk
+        group wp.wp_web_page_sk
+          compute {returns = sumSome over wr.wr_return_amt,
+            profit_loss = sumSome over wr.wr_net_loss}
+    val x =
+      (from s in ss
+        left join r in sr on s.s_store_sk = r.s_store_sk
+        yield {channel = SOME "store channel", id = SOME s.s_store_sk,
+          s.sales,
+          returns = SOME (getOpt (Option.`join` r?.returns, zero)),
+          profit = minus0 (s.profit, Option.`join` r?.profit_loss)})
+      @
+      (from c in cs
+        yield {channel = SOME "catalog channel", id = c.cs_call_center_sk,
+          c.sales, returns = cr.returns,
+          profit = minus (c.profit, cr.profit_loss)})
+      @
+      (from w in ws
+        left join r in wr on w.wp_web_page_sk = r.wp_web_page_sk
+        yield {channel = SOME "web channel", id = SOME w.wp_web_page_sk,
+          w.sales,
+          returns = SOME (getOpt (Option.`join` r?.returns, zero)),
+          profit = minus0 (w.profit, Option.`join` r?.profit_loss)})
+  in
+    from r in (from b in x
+          group {b.channel, b.id}
+            compute {sales = sumSome over b.sales,
+                returns = sumSome over b.returns,
+                profit = sumSome over b.profit}
+          yield {channel, id, sales, returns, profit})
+        union
+          (from b in x
+              group {b.channel}
+                compute {sales = sumSome over b.sales,
+                    returns = sumSome over b.returns,
+                    profit = sumSome over b.profit}
+              yield {channel, id = NONE, sales, returns, profit}),
+          (from b in x
+              group {}
+                compute {sales = sumSome over b.sales,
+                    returns = sumSome over b.returns,
+                    profit = sumSome over b.profit}
+              yield {channel = NONE, id = NONE, sales, returns, profit})
+      order (r.channel, r.id)
+      take 100
+  end;
+> val q77 = fn
+>   : unit
+>      -> {channel:string option, id:int option, profit:decimal option,
+>           returns:decimal option, sales:decimal option} list
+val r77 = q77 ();
+> channel         id profit      returns   sales
+> --------------- -- ----------- --------- -----------
+>                     -2936643.9 520152.18 10562473.34
+> catalog channel       -92768.3 125239.36    18576.62
+> catalog channel     -706314.15 375718.08  5303233.82
+> catalog channel  1  -306527.36 125239.36  2951634.33
+> catalog channel  2  -307018.49 125239.36  2333022.87
+> store channel      -2182916.04 120967.75  4594316.58
+> store channel    1 -1145210.47  45274.29  2711561.63
+> store channel    2 -1037705.57  75693.46  1882754.95
+> web channel          -47413.71  23466.35   664922.94
+> web channel      1    -30502.7   3161.21   329250.79
+> ...
+>
+> val r77 : {channel:string option, id:int option, profit:decimal option, returns:decimal option, sales:decimal option} list
+
 (* --- q78 -------------------------------------------------------- *)
 (*
 WITH ws AS
@@ -7295,6 +10462,246 @@ val r79 = q79 ();
 > ...
 >
 > val r79 : {amt:decimal option, c_first_name:string option, c_last_name:string option, city:string option, profit:decimal option, ss_ticket_number:int} list
+
+(* --- q80 -------------------------------------------------------- *)
+(*
+WITH ssr AS
+(SELECT
+    s_store_id AS store_id,
+    sum(ss_ext_sales_price) AS sales,
+    sum(coalesce(sr_return_amt, 0)) AS returns,
+    sum(ss_net_profit - coalesce(sr_net_loss, 0)) AS profit
+  FROM store_sales
+    LEFT OUTER JOIN store_returns ON
+                                    (ss_item_sk = sr_item_sk AND
+                                      ss_ticket_number = sr_ticket_number)
+    ,
+    date_dim, store, item, promotion
+  WHERE ss_sold_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-23' AS DATE)
+  AND (cast('2000-08-23' AS DATE) + INTERVAL 30 days)
+    AND ss_store_sk = s_store_sk
+    AND ss_item_sk = i_item_sk
+    AND i_current_price > 50
+    AND ss_promo_sk = p_promo_sk
+    AND p_channel_tv = 'N'
+  GROUP BY s_store_id),
+    csr AS
+  (SELECT
+    cp_catalog_page_id AS catalog_page_id,
+    sum(cs_ext_sales_price) AS sales,
+    sum(coalesce(cr_return_amount, 0)) AS returns,
+    sum(cs_net_profit - coalesce(cr_net_loss, 0)) AS profit
+  FROM catalog_sales
+    LEFT OUTER JOIN catalog_returns ON
+                                      (cs_item_sk = cr_item_sk AND
+                                        cs_order_number = cr_order_number)
+    ,
+    date_dim, catalog_page, item, promotion
+  WHERE cs_sold_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-23' AS DATE)
+  AND (cast('2000-08-23' AS DATE) + INTERVAL 30 days)
+    AND cs_catalog_page_sk = cp_catalog_page_sk
+    AND cs_item_sk = i_item_sk
+    AND i_current_price > 50
+    AND cs_promo_sk = p_promo_sk
+    AND p_channel_tv = 'N'
+  GROUP BY cp_catalog_page_id),
+    wsr AS
+  (SELECT
+    web_site_id,
+    sum(ws_ext_sales_price) AS sales,
+    sum(coalesce(wr_return_amt, 0)) AS returns,
+    sum(ws_net_profit - coalesce(wr_net_loss, 0)) AS profit
+  FROM web_sales
+    LEFT OUTER JOIN web_returns ON
+                                  (ws_item_sk = wr_item_sk AND ws_order_number = wr_order_number)
+    ,
+    date_dim, web_site, item, promotion
+  WHERE ws_sold_date_sk = d_date_sk
+    AND d_date BETWEEN cast('2000-08-23' AS DATE)
+  AND (cast('2000-08-23' AS DATE) + INTERVAL 30 days)
+    AND ws_web_site_sk = web_site_sk
+    AND ws_item_sk = i_item_sk
+    AND i_current_price > 50
+    AND ws_promo_sk = p_promo_sk
+    AND p_channel_tv = 'N'
+  GROUP BY web_site_id)
+SELECT
+  channel,
+  id,
+  sum(sales) AS sales,
+  sum(returns) AS returns,
+  sum(profit) AS profit
+FROM (SELECT
+        'store channel' AS channel,
+        concat('store', store_id) AS id,
+        sales,
+        returns,
+        profit
+      FROM ssr
+      UNION ALL
+      SELECT
+        'catalog channel' AS channel,
+        concat('catalog_page', catalog_page_id) AS id,
+        sales,
+        returns,
+        profit
+      FROM csr
+      UNION ALL
+      SELECT
+        'web channel' AS channel,
+        concat('web_site', web_site_id) AS id,
+        sales,
+        returns,
+        profit
+      FROM wsr) x
+GROUP BY ROLLUP (channel, id)
+ORDER BY channel, id
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22; "sum(coalesce(x, 0))" is "sum" of
+ * "getOpt (x, 0)". *)
+fun q80 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    val zero = Decimal.fromInt 0
+    (* "a - b" and "a - coalesce(b, 0)", where "a" and "b" may be NONE *)
+    fun minus (a : decimal option, b) =
+      case (a, b) of
+          (SOME a, SOME b) => SOME (a - b)
+        | _ => NONE
+    fun minus0 (a, b) = Option.map (fn a => a - getOpt (b, zero)) a
+    fun inRange d =
+      d >= SOME (day (2000, Aug, 23))
+      andalso d <= SOME (day (2000, Aug, 23 + 30))
+    val ssr =
+      from ss in tpcds.store_sales
+        left join sr in tpcds.store_returns
+          on ss.ss_item_sk = sr.sr_item_sk
+            andalso ss.ss_ticket_number = sr.sr_ticket_number,
+        d in tpcds.date_dim,
+        s in tpcds.store,
+        i in tpcds.item,
+        p in tpcds.promotion
+        where ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso ss.ss_item_sk = i.i_item_sk
+          andalso i.i_current_price > SOME (Decimal.fromInt 50)
+          andalso ss.ss_promo_sk = SOME p.p_promo_sk
+          andalso p.p_channel_tv = SOME "N"
+        group {id = s.s_store_id}
+          compute {sales = sumSome over ss.ss_ext_sales_price,
+            returns =
+              sum over getOpt (Option.`join` sr?.sr_return_amt, zero),
+            profit =
+              sumSome over minus0 (ss.ss_net_profit,
+                Option.`join` sr?.sr_net_loss)}
+    val csr =
+      from cs in tpcds.catalog_sales
+        left join cr in tpcds.catalog_returns
+          on cs.cs_item_sk = cr.cr_item_sk
+            andalso cs.cs_order_number = cr.cr_order_number,
+        d in tpcds.date_dim,
+        cp in tpcds.catalog_page,
+        i in tpcds.item,
+        p in tpcds.promotion
+        where cs.cs_sold_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso cs.cs_catalog_page_sk = SOME cp.cp_catalog_page_sk
+          andalso cs.cs_item_sk = i.i_item_sk
+          andalso i.i_current_price > SOME (Decimal.fromInt 50)
+          andalso cs.cs_promo_sk = SOME p.p_promo_sk
+          andalso p.p_channel_tv = SOME "N"
+        group {id = cp.cp_catalog_page_id}
+          compute {sales = sumSome over cs.cs_ext_sales_price,
+            returns =
+              sum over getOpt (Option.`join` cr?.cr_return_amount, zero),
+            profit =
+              sumSome over minus0 (cs.cs_net_profit,
+                Option.`join` cr?.cr_net_loss)}
+    val wsr =
+      from ws in tpcds.web_sales
+        left join wr in tpcds.web_returns
+          on ws.ws_item_sk = wr.wr_item_sk
+            andalso ws.ws_order_number = wr.wr_order_number,
+        d in tpcds.date_dim,
+        web in tpcds.web_site,
+        i in tpcds.item,
+        p in tpcds.promotion
+        where ws.ws_sold_date_sk = SOME d.d_date_sk
+          andalso inRange d.d_date
+          andalso ws.ws_web_site_sk = SOME web.web_site_sk
+          andalso ws.ws_item_sk = i.i_item_sk
+          andalso i.i_current_price > SOME (Decimal.fromInt 50)
+          andalso ws.ws_promo_sk = SOME p.p_promo_sk
+          andalso p.p_channel_tv = SOME "N"
+        group {id = web.web_site_id}
+          compute {sales = sumSome over ws.ws_ext_sales_price,
+            returns =
+              sum over getOpt (Option.`join` wr?.wr_return_amt, zero),
+            profit =
+              sumSome over minus0 (ws.ws_net_profit,
+                Option.`join` wr?.wr_net_loss)}
+    val x =
+      (from r in ssr
+        yield {channel = SOME "store channel", id = SOME ("store" ^ r.id),
+          r.sales, returns = SOME r.returns, r.profit})
+      @
+      (from r in csr
+        yield {channel = SOME "catalog channel",
+          id = SOME ("catalog_page" ^ r.id), r.sales,
+          returns = SOME r.returns, r.profit})
+      @
+      (from r in wsr
+        yield {channel = SOME "web channel", id = SOME ("web_site" ^ r.id),
+          r.sales, returns = SOME r.returns, r.profit})
+  in
+    from r in (from b in x
+          group {b.channel, b.id}
+            compute {sales = sumSome over b.sales,
+                returns = sumSome over b.returns,
+                profit = sumSome over b.profit}
+          yield {channel, id, sales, returns, profit})
+        union
+          (from b in x
+              group {b.channel}
+                compute {sales = sumSome over b.sales,
+                    returns = sumSome over b.returns,
+                    profit = sumSome over b.profit}
+              yield {channel, id = NONE, sales, returns, profit}),
+          (from b in x
+              group {}
+                compute {sales = sumSome over b.sales,
+                    returns = sumSome over b.returns,
+                    profit = sumSome over b.profit}
+              yield {channel = NONE, id = NONE, sales, returns, profit})
+      order (r.channel, r.id)
+      take 100
+  end;
+> val q80 = fn
+>   : unit
+>      -> {channel:string option, id:string option, profit:decimal option,
+>           returns:decimal option, sales:decimal option} list
+val r80 = q80 ();
+> channel         id                           profit     returns  sales
+> --------------- ---------------------------- ---------- -------- ---------
+>                                              -187177.32 30018.55 616756.14
+> catalog channel                               -35412.38 12293.74 286009.96
+> catalog channel catalog_pageAAAAAAAAABABAAAA    -147.11        0         0
+> catalog channel catalog_pageAAAAAAAAAEABAAAA    1652.64        0   3697.98
+> catalog channel catalog_pageAAAAAAAAAKCBAAAA   -7159.68        0    850.41
+> catalog channel catalog_pageAAAAAAAAALCBAAAA    -256.33        0    335.04
+> catalog channel catalog_pageAAAAAAAAALPAAAAA   -1445.22        0         0
+> catalog channel catalog_pageAAAAAAAABBABAAAA    4022.86        0   7491.21
+> catalog channel catalog_pageAAAAAAAABJCBAAAA    2974.02        0   7827.79
+> catalog channel catalog_pageAAAAAAAABKPAAAAA       -372        0   5292.94
+> ...
+>
+> val r80 : {channel:string option, id:string option, profit:decimal option, returns:decimal option, sales:decimal option} list
 
 (* --- q81 -------------------------------------------------------- *)
 (*
@@ -7794,6 +11201,98 @@ val r85 = q85 ();
 >
 > val r85 : {avg(wr_fee):decimal option, avg(wr_refunded_cash):decimal option, avg(ws_quantity):real option, reason:string option} list
 
+(* --- q86 -------------------------------------------------------- *)
+(*
+SELECT
+  sum(ws_net_paid) AS total_sum,
+  i_category,
+  i_class,
+  grouping(i_category) + grouping(i_class) AS lochierarchy,
+  rank()
+  OVER (
+    PARTITION BY grouping(i_category) + grouping(i_class),
+      CASE WHEN grouping(i_class) = 0
+        THEN i_category END
+    ORDER BY sum(ws_net_paid) DESC) AS rank_within_parent
+FROM
+  web_sales, date_dim d1, item
+WHERE
+  d1.d_month_seq BETWEEN 1200 AND 1200 + 11
+    AND d1.d_date_sk = ws_sold_date_sk
+    AND i_item_sk = ws_item_sk
+GROUP BY ROLLUP (i_category, i_class)
+ORDER BY
+  lochierarchy DESC,
+  CASE WHEN lochierarchy = 0
+    THEN i_category END,
+  rank_within_parent
+LIMIT 100
+*)
+(* "GROUP BY ROLLUP", as in q22. "rank() OVER (PARTITION BY p ORDER BY
+ * m)" is one more than the number of rows in the row's partition whose
+ * "m" comes before its own (descending); NONE is less than any SOME, so it
+ * is first ascending and last descending, as Spark's nulls are. *)
+fun q86 () =
+  let
+    val base =
+      from ws in tpcds.web_sales,
+          d1 in tpcds.date_dim,
+          i in tpcds.item
+        where d1.d_month_seq >= SOME 1200
+          andalso d1.d_month_seq <= SOME (1200 + 11)
+          andalso ws.ws_sold_date_sk = SOME d1.d_date_sk
+          andalso ws.ws_item_sk = i.i_item_sk
+        yield {i.i_category, i.i_class, ws.ws_net_paid}
+    val rolled =
+      from r in (from b in base
+          group {b.i_category, b.i_class}
+            compute {total = sumSome over b.ws_net_paid}
+          yield {i_category, i_class, g1 = 0, g2 = 0, total})
+        union
+          (from b in base
+              group {b.i_category}
+                compute {total = sumSome over b.ws_net_paid}
+              yield {i_category, i_class = NONE, g1 = 0, g2 = 1, total}),
+          (from b in base
+              group {}
+                compute {total = sumSome over b.ws_net_paid}
+              yield {i_category = NONE, i_class = NONE, g1 = 1, g2 = 1, total})
+      yield {total_sum = r.total, r.i_category, r.i_class,
+        lochierarchy = r.g1 + r.g2,
+        parent = if r.g2 = 0 then r.i_category else NONE}
+  in
+    from r in rolled
+      yield {r.total_sum, r.i_category, r.i_class, r.lochierarchy,
+        rank_within_parent =
+          1 + count (from s in rolled
+            where s.lochierarchy = r.lochierarchy
+              andalso s.parent = r.parent
+              andalso s.total_sum > r.total_sum)}
+      order (DESC lochierarchy,
+        if lochierarchy = 0 then i_category else NONE, rank_within_parent)
+      take 100
+  end;
+> val q86 = fn
+>   : unit
+>      -> {i_category:string option, i_class:string option, lochierarchy:int,
+>           rank_within_parent:int, total_sum:decimal option} list
+val r86 = q86 ();
+> i_category  i_class lochierarchy rank_within_parent total_sum
+> ----------- ------- ------------ ------------------ ----------
+>                                2                  1 5189585.33
+> Men                            1                  1  655046.32
+> Women                          1                  2  626624.82
+> Books                          1                  3  581067.68
+> Music                          1                  4  561790.19
+> Shoes                          1                  5  510840.54
+> Electronics                    1                  6  495178.04
+> Jewelry                        1                  7  472123.12
+> Children                       1                  8  459386.12
+> Sports                         1                  9  405665.89
+> ...
+>
+> val r86 : {i_category:string option, i_class:string option, lochierarchy:int, rank_within_parent:int, total_sum:decimal option} list
+
 (* --- q87 -------------------------------------------------------- *)
 (*
 SELECT count(*)
@@ -8031,6 +11530,114 @@ val r88 = q88 ();
 >            0            0            0            0            0          0           0          0
 >
 > val r88 : {h10_30_to_11:int, h10_to_10_30:int, h11_30_to_12:int, h11_to_11_30:int, h12_to_12_30:int, h8_30_to_9:int, h9_30_to_10:int, h9_to_9_30:int} list
+
+(* --- q89 -------------------------------------------------------- *)
+(*
+SELECT *
+FROM (
+       SELECT
+         i_category,
+         i_class,
+         i_brand,
+         s_store_name,
+         s_company_name,
+         d_moy,
+         sum(ss_sales_price) sum_sales,
+         avg(sum(ss_sales_price))
+         OVER
+         (PARTITION BY i_category, i_brand, s_store_name, s_company_name)
+         avg_monthly_sales
+       FROM item, store_sales, date_dim, store
+       WHERE ss_item_sk = i_item_sk AND
+         ss_sold_date_sk = d_date_sk AND
+         ss_store_sk = s_store_sk AND
+         d_year IN (1999) AND
+         ((i_category IN ('Books', 'Electronics', 'Sports') AND
+           i_class IN ('computers', 'stereo', 'football'))
+           OR (i_category IN ('Men', 'Jewelry', 'Women') AND
+           i_class IN ('shirts', 'birdal', 'dresses')))
+       GROUP BY i_category, i_class, i_brand,
+         s_store_name, s_company_name, d_moy) tmp1
+WHERE CASE WHEN (avg_monthly_sales <> 0)
+  THEN (abs(sum_sales - avg_monthly_sales) / avg_monthly_sales)
+      ELSE NULL END > 0.1
+ORDER BY sum_sales - avg_monthly_sales, s_store_name
+LIMIT 100
+*)
+(* "avg(sum(x)) OVER (PARTITION BY k)" is the average of the groups'
+ * sums for each "k", joined to the groups. A partition is not a join:
+ * its NONE key is one partition, as NONE = NONE. "d_month_seq IN (1200,
+ * ..., 1200 + 11)" is a range. *)
+fun q89 () =
+  let
+    val base =
+      from i in tpcds.item,
+          ss in tpcds.store_sales,
+          d in tpcds.date_dim,
+          s in tpcds.store
+        where ss.ss_item_sk = i.i_item_sk
+          andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso ss.ss_store_sk = SOME s.s_store_sk
+          andalso d.d_year elem [SOME 1999]
+          andalso (i.i_category
+                elem [SOME "Books", SOME "Electronics", SOME "Sports"]
+              andalso i.i_class
+                elem [SOME "computers", SOME "stereo", SOME "football"]
+            orelse i.i_category elem [SOME "Men", SOME "Jewelry", SOME "Women"]
+              andalso i.i_class
+                elem [SOME "shirts", SOME "birdal", SOME "dresses"])
+        yield {i.i_category, i.i_class, i.i_brand, s.s_store_name,
+          s.s_company_name, d.d_moy, ss.ss_sales_price}
+    val groups =
+      from b in base
+        group {b.i_category, b.i_class, b.i_brand, b.s_store_name,
+            b.s_company_name, b.d_moy}
+          compute {sum_sales = sumSome over b.ss_sales_price}
+    val averages =
+      from r in groups
+        group {r.i_category, r.i_brand, r.s_store_name, r.s_company_name}
+          compute {avg_monthly_sales = avgSome over r.sum_sales}
+  in
+    from r in groups,
+        a in averages
+      where a.i_category = r.i_category
+        andalso a.i_brand = r.i_brand
+        andalso a.s_store_name = r.s_store_name
+        andalso a.s_company_name = r.s_company_name
+        andalso (case (r.sum_sales, a.avg_monthly_sales) of
+                    (SOME s, SOME a) => a <> Decimal.fromInt 0
+                      andalso Decimal.abs (s - a) / a > decimal "0.1"
+                  | _ => false)
+      order ((case (r.sum_sales, a.avg_monthly_sales) of
+                  (SOME s, SOME a) => SOME (s - a)
+                | _ => NONE),
+        r.s_store_name)
+      yield {r.i_category, r.i_class, r.i_brand, r.s_store_name,
+        r.s_company_name, r.d_moy, r.sum_sales, a.avg_monthly_sales}
+      take 100
+  end;
+> val q89 = fn
+>   : unit
+>      -> {avg_monthly_sales:decimal option, d_moy:int option,
+>           i_brand:string option, i_category:string option,
+>           i_class:string option, s_company_name:string option,
+>           s_store_name:string option, sum_sales:decimal option} list
+val r89 = q89 ();
+> avg_monthly_sales                   d_moy i_brand           i_category i_class s_company_name s_store_name sum_sales
+> ----------------------------------- ----- ----------------- ---------- ------- -------------- ------------ ---------
+>                              609.84     3 amalgamalg #1     Women      dresses Unknown        ought            95.65
+> 603.4933333333333333333333333333333     7 amalgamalg #1     Women      dresses Unknown        able             99.64
+> 603.4933333333333333333333333333333     6 amalgamalg #1     Women      dresses Unknown        able            102.02
+> 695.0541666666666666666666666666667     3 importoimporto #1 Men        shirts  Unknown        able            228.92
+> 695.0541666666666666666666666666667     6 importoimporto #1 Men        shirts  Unknown        able             267.6
+> 507.8416666666666666666666666666667     5 importoimporto #1 Men        shirts  Unknown        ought           118.51
+> 507.8416666666666666666666666666667     6 importoimporto #1 Men        shirts  Unknown        ought           119.36
+> 603.4933333333333333333333333333333     2 amalgamalg #1     Women      dresses Unknown        able            234.31
+> 695.0541666666666666666666666666667     4 importoimporto #1 Men        shirts  Unknown        able            329.45
+> 695.0541666666666666666666666666667     2 importoimporto #1 Men        shirts  Unknown        able            356.06
+> ...
+>
+> val r89 : {avg_monthly_sales:decimal option, d_moy:int option, i_brand:string option, i_category:string option, i_class:string option, s_company_name:string option, s_store_name:string option, sum_sales:decimal option} list
 
 (* --- q90 -------------------------------------------------------- *)
 (*
@@ -8504,6 +12111,90 @@ fun q97 () =
 val r97 = q97 ();
 > val r97 = {catalog_only=16944,store_and_catalog=391,store_only=22255}
 >   : {catalog_only:int, store_and_catalog:int, store_only:int}
+
+(* --- q98 -------------------------------------------------------- *)
+(*
+SELECT
+  i_item_desc,
+  i_category,
+  i_class,
+  i_current_price,
+  sum(ss_ext_sales_price) AS itemrevenue,
+  sum(ss_ext_sales_price) * 100 / sum(sum(ss_ext_sales_price))
+  OVER
+  (PARTITION BY i_class) AS revenueratio
+FROM
+  store_sales, item, date_dim
+WHERE
+  ss_item_sk = i_item_sk
+    AND i_category IN ('Sports', 'Books', 'Home')
+    AND ss_sold_date_sk = d_date_sk
+    AND d_date BETWEEN cast('1999-02-22' AS DATE)
+  AND (cast('1999-02-22' AS DATE) + INTERVAL 30 days)
+GROUP BY
+  i_item_id, i_item_desc, i_category, i_class, i_current_price
+ORDER BY
+  i_category, i_class, i_item_id, i_item_desc, revenueratio
+*)
+(* "SUM(...) OVER (PARTITION BY i_class)" is each class's total, joined
+ * to the class's rows. A partition is not a join: its NONE class is one
+ * partition, as NONE = NONE. *)
+fun q98 () =
+  let
+    fun day (year, month, day) =
+      Date.date {year, month, day, hour = 0, minute = 0, second = 0,
+        offset = SOME Time.zeroTime}
+    val items =
+      from ss in tpcds.store_sales,
+          i in tpcds.item,
+          d in tpcds.date_dim
+        where ss.ss_item_sk = i.i_item_sk
+          andalso i.i_category elem [SOME "Sports", SOME "Books", SOME "Home"]
+          andalso ss.ss_sold_date_sk = SOME d.d_date_sk
+          andalso d.d_date >= SOME (day (1999, Feb, 22))
+          andalso d.d_date <= SOME (day (1999, Feb, 22 + 30))
+        group {i.i_item_id, i.i_item_desc, i.i_category, i.i_class,
+            i.i_current_price}
+          compute {itemrevenue = sumSome over ss.ss_ext_sales_price}
+    val classes =
+      from r in items
+        group r.i_class compute {total = sumSome over r.itemrevenue}
+  in
+    from r in items,
+        c in classes
+      where c.i_class = r.i_class
+      yield {r.i_item_id, r.i_item_desc, r.i_category, r.i_class,
+        r.i_current_price, r.itemrevenue,
+        revenueratio =
+          case (r.itemrevenue, c.total) of
+              (SOME revenue, SOME total) =>
+                SOME (revenue * Decimal.fromInt 100 / total)
+            | _ => NONE}
+      order (i_category, i_class, i_item_id, i_item_desc, revenueratio)
+      yield {i_item_desc, i_category, i_class, i_current_price, itemrevenue,
+        revenueratio}
+  end;
+> val q98 = fn
+>   : unit
+>      -> {i_category:string option, i_class:string option,
+>           i_current_price:decimal option, i_item_desc:string option,
+>           itemrevenue:decimal option, revenueratio:decimal option} list
+val r98 = q98 ();
+> i_category i_class   i_current_price i_item_desc                                                             itemrevenue revenueratio
+> ---------- --------- --------------- ----------------------------------------------------------------------- ----------- ------------------------------------
+> Books      arts                35.27 Legs appear eventually soci                                                 3072.84  19.02714403982223895448665832392659
+> Books      arts                  4.1 Then western animals could teach somewhere. Today waiting servants con#     6979.62   43.2180767899480921400119010982819
+> Books      arts                 8.22 Communities used to relocate clearly strange, new walls; european, ric#      496.91  3.076885924691187552516227785287345
+> Books      arts                 2.72 Beneath decent wives write t                                                 5600.4  34.67789324553848135298521279250417
+> Books      business            78.25 Satisfactory, technical shadows get. Lexical structures would not blam#     1292.16  44.61570333540501346592086181893516
+> Books      business             3.68 Hands may not allow only in a lands; linear, other pubs say; social, p#      376.42  12.99703059180995787583730405358746
+> Books      business              8.9 Unions shall see enough over true attitudes; of course full variable        1227.62  42.38726607278502865824183412747738
+> Books      computers            3.83 Capital, united feelings paint only things. Greatly financial economie#     4346.62  79.19417843660267902692145116387541
+> Books      computers            9.23 More important names induce; now similar standards will train correctl#       32.24 0.5874036177066480096783127086157389
+> Books      computers            4.34 Clearly actual places would supply apparently only rats.                      911.4   16.6054484236302418120599938781757
+> ...
+>
+> val r98 : {i_category:string option, i_class:string option, i_current_price:decimal option, i_item_desc:string option, itemrevenue:decimal option, revenueratio:decimal option} list
 
 (* --- q99 -------------------------------------------------------- *)
 (*
