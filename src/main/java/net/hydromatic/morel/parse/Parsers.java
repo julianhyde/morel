@@ -52,6 +52,9 @@ public final class Parsers {
     return Pos.ZERO;
   }
 
+  /** Characters that may make up a symbolic identifier, such as {@code <=}. */
+  private static final String SYMBOLIC_CHARS = "!%&$#+-/:<=>?@\\~^|*";
+
   /**
    * Keyword tokens that are not reserved. {@code all}, {@code lenient} and
    * {@code or} are keywords only inside a record modifier, where no identifier
@@ -408,16 +411,43 @@ public final class Parsers {
 
   /**
    * Appends an identifier or label, enclosing it in back-ticks if necessary
-   * (because it contains a back-tick or space, or is a reserved word).
+   * (because it is a reserved word, or is not an alphanumeric identifier, a
+   * numeric label or a symbolic identifier).
    */
   public static StringBuilder appendId(StringBuilder buf, String id) {
-    if (id.contains("`")) {
-      return buf.append("`").append(id.replaceAll("`", "``")).append("`");
-    } else if (id.contains(" ") || RESERVED_WORDS.contains(id)) {
-      return buf.append("`").append(id).append("`");
+    if (RESERVED_WORDS.contains(id) || !isPlainId(id)) {
+      return buf.append("`").append(id.replace("`", "``")).append("`");
     } else {
       return buf.append(id);
     }
+  }
+
+  /**
+   * Returns whether a name can be written without back-ticks: an alphanumeric
+   * identifier such as {@code x1'}, a numeric label such as {@code 2}, or a
+   * symbolic identifier such as {@code <=}. Allows {@code $} in an alphanumeric
+   * identifier, for names that Morel generates, such as {@code v$0} and {@code
+   * $r}.
+   */
+  private static boolean isPlainId(String id) {
+    if (id.isEmpty()) {
+      return false;
+    }
+    final char c0 = id.charAt(0);
+    if (Character.isLetter(c0)
+        || c0 == '$' && id.length() > 1 && Character.isLetter(id.charAt(1))) {
+      return id.chars()
+          .allMatch(
+              c ->
+                  Character.isLetterOrDigit(c)
+                      || c == '_'
+                      || c == '\''
+                      || c == '$');
+    }
+    if (c0 >= '1' && c0 <= '9') {
+      return id.chars().allMatch(c -> c >= '0' && c <= '9');
+    }
+    return id.chars().allMatch(c -> SYMBOLIC_CHARS.indexOf(c) >= 0);
   }
 
   /**
