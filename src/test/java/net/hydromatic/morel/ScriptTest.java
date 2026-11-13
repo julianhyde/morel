@@ -128,7 +128,27 @@ public class ScriptTest {
   @Timeout(1800)
   void testScriptTpcds() throws Exception {
     assumeTrue(holds("tpcds"), "requires tpcds");
-    checkTpcds("script/tpcds-10m.smli");
+    checkTpcds("script/tpcds-10m.smli", false);
+  }
+
+  /**
+   * Runs the TPC-DS script with every query pushed down to Spark, and checks
+   * each query's value against Spark SQL's answer.
+   *
+   * <p>The server must hold the data set, as database {@code tpcds}: start it
+   * with {@code start-spark.sh --tpcds DIR}, where {@code DIR} is the directory
+   * that {@code morel.tpcds} names. Before the script, the harness binds {@code
+   * tpcds} to the server's database; a query that Spark cannot do fails, rather
+   * than being evaluated here. The script's output is the same as when it runs
+   * locally.
+   */
+  @Test
+  @Timeout(3600)
+  void testScriptTpcdsSpark() throws Exception {
+    assumeTrue(holds("tpcds"), "requires tpcds");
+    assumeTrue(holds("spark"), "requires spark");
+    assumeTrue(holds("spark-prepare"), "requires spark-prepare");
+    checkTpcds("script/tpcds-10m.smli", true);
   }
 
   /**
@@ -136,16 +156,30 @@ public class ScriptTest {
    * property {@code morel.tpcds} names, and checks the value of each query
    * against Spark SQL's answer in its {@code answers} subdirectory.
    */
-  private static void checkTpcds(String path) throws Exception {
+  private static void checkTpcds(String path, boolean spark) throws Exception {
     final File dataDirectory = tpcdsDirectory();
     final TpcdsChecker checker =
         new TpcdsChecker(new File(dataDirectory, "answers"));
     final Map<Prop, Object> props = new LinkedHashMap<>();
     Prop.DIRECTORY.set(props, dataDirectory);
     AssertionError scriptError = null;
-    try {
-      Script.create(path, null, false, props, checker.tracer(Tracers.empty()))
-          .run();
+    try (SparkConnectionValue connection =
+        spark ? new SparkConnectionValue(sparkUri()) : null) {
+      Script script =
+          Script.create(
+              path, null, false, props, checker.tracer(Tracers.empty()));
+      if (connection == null) {
+        // The tables are the data set's files.
+        script = script.withPrelude("val tpcds = file;");
+      } else {
+        // The tables are the server's, in its database "tpcds".
+        script =
+            script
+                .withValues(ImmutableMap.of("spark", connection))
+                .withPrelude("val tpcds = spark.catalog.tpcds;")
+                .withSparkPushDown();
+      }
+      script.run();
     } catch (AssertionError e) {
       scriptError = e;
     }

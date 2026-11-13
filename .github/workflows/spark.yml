@@ -28,8 +28,9 @@
 # It also runs the TPC-DS queries (hydromatic/morel#502): it generates
 # the data (about 25 seconds), loads it into the server, which captures
 # Spark SQL's answer to each query (about a minute), and checks Morel's
-# value of each query against Spark's answer (about two minutes). The
-# data and the answers are deterministic.
+# value of each query against Spark's answer twice: evaluated locally
+# (about two minutes), and with every query run on the server (about
+# two minutes more). The data and the answers are deterministic.
 name: Spark
 
 on:

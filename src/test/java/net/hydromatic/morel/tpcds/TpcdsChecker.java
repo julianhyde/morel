@@ -94,6 +94,10 @@ public class TpcdsChecker {
   private static final Pattern FUNCTION_NAME =
       Pattern.compile("q([0-9]+[ab]?)");
 
+  /** Name of a file of Spark's answers: "q14a.csv", "q12.error". */
+  private static final Pattern ANSWER_FILE =
+      Pattern.compile("(q[0-9]+[ab]?)\\.(csv|error)");
+
   private final File answerDirectory;
   private final Map<String, String> results = new TreeMap<>();
 
@@ -120,10 +124,26 @@ public class TpcdsChecker {
   /**
    * Returns the failures, one per line; empty if every query agreed. A query
    * that is defined but whose value was never bound fails too, unless Spark's
-   * answer is an error.
+   * answer is an error; and so does a query that has an answer but was never
+   * defined, say because it did not type-check.
    */
   public String failures() {
     final StringBuilder b = new StringBuilder();
+    final Set<String> answered = new TreeSet<>();
+    final String[] files = answerDirectory.list();
+    if (files != null) {
+      for (String file : files) {
+        final Matcher matcher = ANSWER_FILE.matcher(file);
+        if (matcher.matches()) {
+          answered.add(matcher.group(1));
+        }
+      }
+    }
+    for (String query : answered) {
+      if (!defined.contains(query)) {
+        b.append(query).append(": has an answer, but was not defined\n");
+      }
+    }
     for (String query : defined) {
       if (!results.containsKey(query)
           && !new File(answerDirectory, query + ".error").exists()) {
@@ -142,7 +162,13 @@ public class TpcdsChecker {
   private void onBinding(Binding binding) {
     final String name = binding.id.name;
     final Matcher fnMatcher = FUNCTION_NAME.matcher(name);
-    if (fnMatcher.matches() && binding.id.type instanceof FnType) {
+    // A function whose type has a type variable, such as q51's, is a
+    // ForallType of a FnType.
+    final Type type =
+        binding.id.type instanceof ForallType
+            ? ((ForallType) binding.id.type).type
+            : binding.id.type;
+    if (fnMatcher.matches() && type instanceof FnType) {
       defined.add(name);
       return;
     }

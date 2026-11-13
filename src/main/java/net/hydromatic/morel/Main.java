@@ -445,6 +445,15 @@ public class Main {
   }
 
   public void run() {
+    run("");
+  }
+
+  /**
+   * Runs the input, after the statements of {@code prelude}, which run in the
+   * same session but print nothing; so a harness can bind values that a script
+   * reads, such as the tables of a data set, as the script itself would.
+   */
+  public void run(String prelude) {
     Environment env = Environments.env(typeSystem, session, valueMap);
     final Consumer<String> echoLines = out::println;
     final Consumer<String> outLines =
@@ -455,7 +464,16 @@ public class Main {
     session.withShell(
         shell,
         outLines,
-        session1 -> shell.run(session1, in, echoLines, outLines));
+        session1 -> {
+          if (!prelude.isEmpty()) {
+            shell.run(
+                session1,
+                new BufferingReader(buffer(new StringReader(prelude))),
+                line -> {},
+                line -> {});
+          }
+          shell.run(session1, in, echoLines, outLines);
+        });
     out.flush();
   }
 

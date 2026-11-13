@@ -470,6 +470,8 @@ is about 29K rows, so a cross product of three fact tables is not
 viable and the optimizer must find the joins). Each fix with a test of
 its own outside TPC-DS. Done when the script passes locally.
 
+*M5 done 2026-11-13; see the log.*
+
 **M5. Spark pass.** Run with `--spark`, `sparkFallback=false`. Each
 refusal is a translator gap: fix it here if small, else an issue.
 Expect: `Date` functions, `Option` handling (`IS NULL`, three-valued
@@ -874,6 +876,33 @@ drop out.
   server with `--tpcds`, and runs the script, about 3 minutes more in
   a 30-minute job; no cache needed. Not yet measured: the queries
   run on Spark (M5).
+* 2026-11-13: **M5 done.** `ScriptTest.testScriptTpcdsSpark` runs the
+  script with every query on Spark (`sparkPushDown`, no fallback),
+  reading the server's `tpcds` database. The harness binds `tpcds`
+  before the script, silently (a prelude): `val tpcds = file;`
+  locally, `val tpcds = spark.catalog.tpcds;` on Spark; so both modes
+  run the same script against the same expected output, which is now
+  in full (`printLength` and `stringDepth` `NONE`; 17,000 lines, from
+  12,000), and both check each value against Spark's answer. (Binding
+  `tpcds` as a foreign value does not work: a foreign value is a
+  parameter, never inlined, so a table is not a literal, which both
+  the local read and Spark's scan need.) q24a and q24b, whose SQL has
+  no `ORDER BY`, end with `unorder`, and so are bags in both modes.
+  All 101 values agree with Spark SQL's answers, and q12 and q90
+  raise as Spark does; about 1m45s. None of the gaps feared below
+  (dates, three-valued `where`, decimal aggregates, set operations,
+  subqueries) stopped a query. What did: four queries used list
+  functions on a table (`List.length`, a list pattern), which a
+  catalog table, a bag, does not allow; and Spark redacts a table
+  property whose value matches `spark.sql.redaction.options.regex`,
+  default `(?i)url`, so `web_page`'s `morel.nullable`, which names
+  `wp_url`, came back as `*********(redacted)`, and Morel read every
+  column of the table as not null. The test server now sets that
+  regex to `(?!)`. A user's server can redact the property too, and
+  Morel then reads the table wrongly without saying so: **issue
+  needed** before the Spark work merges. `TpcdsChecker` now also fails
+  a query that has an answer but was never defined, such as one that
+  does not type-check; it had missed four.
 * (Superseded: M0's part is done, M1's is now Julian running it.)
   Blocked for M0 and M1: fetching Spark's TPC-DS query files
   (`gh api`) and running the downloaded generator jar were both denied
