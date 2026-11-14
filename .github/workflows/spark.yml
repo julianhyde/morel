@@ -48,7 +48,7 @@ jobs:
           cache: 'maven'
       - name: Start Spark Connect server
         run: |
-          uri=$(src/test/resources/spark/start-spark.sh --new)
+          uri=$(src/test/resources/spark/spark-server.sh restart)
           echo "SPARK_REMOTE=$uri" >> "$GITHUB_ENV"
       - name: Check the generated plans against the PySpark client
         run: |

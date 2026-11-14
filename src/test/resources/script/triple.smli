@@ -22,7 +22,7 @@
  * in Calcite "hybrid" mode with a tracer that fails if a query is
  * not pushed down (ScriptTest.testScriptTripleCalcite); and with
  * every query wrapped in Spark.remote, run on the container that
- * start-spark.sh starts (ScriptTest.testScriptTripleSpark).
+ * spark-server.sh starts (ScriptTest.testScriptTripleSpark).
  *
  * The queries name the data set, as the other two modes need them to,
  * and a data set is not a table of the server, so its rows cross to

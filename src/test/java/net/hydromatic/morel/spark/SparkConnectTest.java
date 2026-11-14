@@ -48,7 +48,7 @@ import org.junit.jupiter.api.Test;
  * tables that {@code src/test/resources/spark/init.py} creates. To run it:
  *
  * <pre>{@code
- * export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
+ * export SPARK_REMOTE=$(src/test/resources/spark/spark-server.sh start)
  * ./mvnw test -Dtest=SparkConnectTest -Dmorel.spark=true
  * }</pre>
  */

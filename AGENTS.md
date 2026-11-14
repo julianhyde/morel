@@ -379,7 +379,7 @@ with the profile on; this reproduces it on any JDK:
 To run the tests that need a Spark Connect server (Docker required):
 
 ```bash
-export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
+export SPARK_REMOTE=$(src/test/resources/spark/spark-server.sh start)
 ./mvnw test -Dtest=SparkConnectTest -Dmorel.spark=true
 ```
 

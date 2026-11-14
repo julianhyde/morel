@@ -17,7 +17,7 @@
  * License.
  *
  * The Spark structure against a live Spark Connect server, the one
- * that SPARK_REMOTE names; the test container (start-spark.sh) holds
+ * that SPARK_REMOTE names; the test container (spark-server.sh) holds
  * the tables this script expects. The harness binds "spark" to the
  * connection and closes it afterwards. Runs only when the server is
  * available; see docs/script-format.md.

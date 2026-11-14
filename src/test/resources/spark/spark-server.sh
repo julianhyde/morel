@@ -17,24 +17,29 @@
 # language governing permissions and limitations under the
 # License.
 #
-# Starts a Spark Connect server in a Docker container, in ANSI mode
+# Controls a Spark Connect server in a Docker container, in ANSI mode
 # with the UTC time zone, holding the tables that init.py (in this
-# directory) creates, and prints its URI (for example
-# "sc://localhost:15002") on stdout once it accepts connections.
-# Everything else goes to stderr, so
+# directory) creates. "start" and "restart" print the server's URI
+# (for example "sc://localhost:15002") on stdout once it accepts
+# connections. Everything else goes to stderr, so
 #
-#   export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
+#   export SPARK_REMOTE=$(src/test/resources/spark/spark-server.sh start)
 #
 # is enough to point the tests at it.
 #
-# Usage: start-spark.sh [OPTIONS]
+# Usage: spark-server.sh COMMAND [OPTIONS]
 #
-#   --reuse         Use the container if it exists and was created from
+# Commands:
+#
+#   start           Use the container if it exists and was created from
 #                   the current init.py, starting it if it is stopped;
-#                   otherwise create a fresh one (default).
-#   --new           Remove the container if it exists, and create a
+#                   otherwise create a fresh one.
+#   restart         Remove the container if it exists, and create a
 #                   fresh one.
-#   --stop          Stop and remove the container, and exit.
+#   stop            Stop and remove the container.
+#
+# Options:
+#
 #   --name NAME     Container name (default: morel-spark).
 #   --port PORT     Host port for Spark Connect (default: 15002).
 #   --image IMAGE   Docker image (default: apache/spark:4.0.0).
@@ -47,34 +52,39 @@ name=morel-spark
 port=15002
 image=apache/spark:4.0.0
 timeout=120
-mode=reuse
 
 usage() {
   sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2
 }
 
+case "${1:-}" in
+  (start) mode=reuse; shift ;;
+  (restart) mode=new; shift ;;
+  (stop) mode=stop; shift ;;
+  (--help) usage; exit 0 ;;
+  ('') echo "spark-server.sh: no command" >&2; usage; exit 2 ;;
+  (*) echo "spark-server.sh: unknown command '$1'" >&2; usage; exit 2 ;;
+esac
+
 while [ $# -gt 0 ]; do
   case "$1" in
-    (--reuse) mode=reuse; shift ;;
-    (--new) mode=new; shift ;;
-    (--stop) mode=stop; shift ;;
     (--name) name=$2; shift 2 ;;
     (--port) port=$2; shift 2 ;;
     (--image) image=$2; shift 2 ;;
     (--timeout) timeout=$2; shift 2 ;;
     (--help) usage; exit 0 ;;
-    (*) echo "start-spark.sh: unknown option '$1'" >&2; usage; exit 2 ;;
+    (*) echo "spark-server.sh: unknown option '$1'" >&2; usage; exit 2 ;;
   esac
 done
 
 log() {
-  echo "start-spark.sh: $*" >&2
+  echo "spark-server.sh: $*" >&2
 }
 
 dir=$(cd "$(dirname "$0")" && pwd)
 
 # Hash of the init script, which the container records when it is
-# created; "--reuse" recreates a container whose hash is not this one,
+# created; "start" recreates a container whose hash is not this one,
 # because such a container holds tables that init.py no longer creates.
 init_sha() {
   shasum -a 256 "$dir/init.py" | cut -d' ' -f1
@@ -135,7 +145,7 @@ else
   log "creating container $name from $image on port $port"
   # init.py is the driver program; the Connect server runs inside it
   # (spark.plugins), so clients see the tables it creates. The container
-  # carries the hash of the init.py it was created from, so that --reuse
+  # carries the hash of the init.py it was created from, so that "start"
   # can tell whether it holds the tables this one would create.
   docker run -d --name "$name" -p "$port:15002" \
     --label "morel.init.sha=$(init_sha)" \
@@ -181,4 +191,4 @@ log "Spark Connect server is ready"
 # than by whoever typed the URI.
 echo "sc://localhost:$port"
 
-# End start-spark.sh
+# End spark-server.sh

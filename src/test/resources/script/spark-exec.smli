@@ -18,7 +18,7 @@
  *
  * The corpus of spark.smli, each query prepared and executed on a
  * live Spark Connect server, whose scott database holds Morel's scott
- * rows (start-spark.sh seeds it); so the results are those of
+ * rows (spark-server.sh seeds it); so the results are those of
  * spark.smli. The harness binds "spark" to the connection, and closes
  * it afterwards. Runs once the translator exists (Spark.prepare) and
  * a server is available; see docs/script-format.md.
