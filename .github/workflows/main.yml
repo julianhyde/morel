@@ -89,7 +89,7 @@ jobs:
       - name: Start Spark Connect server
         if: matrix.spark
         run: |
-          uri=$(src/test/resources/spark/start-spark.sh --new)
+          uri=$(src/test/resources/spark/spark-server.sh restart)
           echo "SPARK_REMOTE=$uri" >> "$GITHUB_ENV"
       - name: Build with Maven
         run: |

@@ -60,7 +60,7 @@ Start a server. This one is a Docker container holding the `scott` tables,
 which is what Morel's own tests use; any Spark Connect server will do.
 
 ```bash
-$ src/test/resources/spark/start-spark.sh
+$ src/test/resources/spark/spark-server.sh start
 sc://localhost:15002
 ```
 
@@ -269,8 +269,9 @@ raised instead, so that a query fails the same way wherever it ran:
 | `$SPARK_REMOTE` | The default server, which `Spark.connectDefault` also reads |
 
 `--spark` starts no server and stops none. Start one yourself --
-`src/test/resources/spark/start-spark.sh` runs a container and prints its
-URI; `--stop` removes it -- or point `--spark` at a cluster you have.
+`src/test/resources/spark/spark-server.sh start` runs a container and
+prints its URI; `spark-server.sh stop` removes it -- or point `--spark` at
+a cluster you have.
 
 ### Session properties
 
@@ -346,7 +347,7 @@ any JDK.
 Tests that need a server are skipped unless you ask for them:
 
 ```bash
-export SPARK_REMOTE=$(src/test/resources/spark/start-spark.sh)
+export SPARK_REMOTE=$(src/test/resources/spark/spark-server.sh start)
 ./mvnw test -Dmorel.spark=true
 ```
 

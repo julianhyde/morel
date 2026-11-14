@@ -31,7 +31,7 @@
 # The lightweight client is all it needs: no server is contacted, the
 # client's config and column-validation round trips being stubbed, and
 # plans built offline. With --execute the queries also run against a
-# Spark Connect server at localhost:15002 (started by start-spark.sh,
+# Spark Connect server at localhost:15002 (started by spark-server.sh,
 # which seeds the scott database), and their rows go to stderr so that
 # the plans can still be diffed.
 import os, re, sys

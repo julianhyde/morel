@@ -52,9 +52,9 @@ usage() {
   echo "                      as 'spark', and run each query there. Without URI,"
   echo "                      uses \$SPARK_REMOTE if set, else sc://localhost:15002."
   echo "                      Starts no server: run"
-  echo "                      src/test/resources/spark/start-spark.sh for a local"
-  echo "                      one, or name a cluster of your own. Turn the"
-  echo "                      pushing off within a session with"
+  echo "                      src/test/resources/spark/spark-server.sh start"
+  echo "                      for a local one, or name a cluster of your own."
+  echo "                      Turn the pushing off within a session with"
   echo "                      Sys.set (\"sparkPushDown\", false)."
   echo "  --no-spark          No Spark: what omitting --spark does (the default),"
   echo "                      said out loud. \$SPARK_REMOTE is hidden from Morel."
@@ -187,7 +187,7 @@ export JAVA_OPTS=-Djavax.xml.parsers.DocumentBuilderFactory=com.sun.org.apache.x
 
 # With "--spark", Morel binds the server as "spark" and sends queries to
 # it. Nothing here starts a server: run
-# src/test/resources/spark/start-spark.sh, which has the options for that,
+# src/test/resources/spark/spark-server.sh, which has the commands for that,
 # or point "--spark" at a cluster of your own. SPARK_REMOTE is exported so
 # that the URI has one source inside Morel, the one "connectDefault" reads.
 if [ "$SPARK" ]; then

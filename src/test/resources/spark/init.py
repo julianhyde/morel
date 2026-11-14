@@ -15,7 +15,7 @@
 # language governing permissions and limitations under the
 # License.
 #
-# Driver program for the Morel test container. start-spark.sh runs it
+# Driver program for the Morel test container. spark-server.sh runs it
 # with spark-submit and the Spark Connect plugin, so the Connect server
 # runs in this program's SparkContext and clients see the tables it
 # creates. It creates the tables, prints a marker line, and then
