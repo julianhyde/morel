@@ -68,6 +68,12 @@ public class Script {
   /** Tracer installed on {@link Main} (e.g. to assert Calcite push-down). */
   private final Tracer tracer;
 
+  /**
+   * Statements that run before the script, in the same session, and print
+   * nothing; empty if none.
+   */
+  private final String prelude;
+
   /** Internal constructor. */
   private Script(
       File inFile,
@@ -78,7 +84,8 @@ public class Script {
       boolean loadDictionary,
       Map<String, ForeignValue> extraValues,
       Map<Prop, Object> propOverrides,
-      Tracer tracer) {
+      Tracer tracer,
+      String prelude) {
     this.inFile = requireNonNull(inFile, "inFile");
     this.outFile = requireNonNull(outFile, "outFile");
     this.noInput = noInput;
@@ -88,6 +95,7 @@ public class Script {
     this.extraValues = ImmutableMap.copyOf(extraValues);
     this.propOverrides = ImmutableMap.copyOf(propOverrides);
     this.tracer = requireNonNull(tracer, "tracer");
+    this.prelude = requireNonNull(prelude, "prelude");
   }
 
   /**
@@ -119,7 +127,8 @@ public class Script {
         loadDictionary,
         extraValues,
         map,
-        tracer);
+        tracer,
+        prelude);
   }
 
   /**
@@ -139,6 +148,25 @@ public class Script {
     return new File(file.getParentFile(), suffix + "-" + file.getName());
   }
 
+  /**
+   * Returns a copy of this script that first runs the statements of {@code
+   * prelude}, in the same session, printing nothing; so a harness can bind a
+   * value that the script reads, as the script itself would.
+   */
+  public Script withPrelude(String prelude) {
+    return new Script(
+        inFile,
+        outFile,
+        noInput,
+        echo,
+        idempotent,
+        loadDictionary,
+        extraValues,
+        propOverrides,
+        tracer,
+        prelude);
+  }
+
   /** Returns a copy of this script with more foreign values bound. */
   public Script withValues(Map<String, ForeignValue> values) {
     final Map<String, ForeignValue> map = new LinkedHashMap<>(extraValues);
@@ -152,7 +180,8 @@ public class Script {
         loadDictionary,
         map,
         propOverrides,
-        tracer);
+        tracer,
+        prelude);
   }
 
   /** Creates a Script. */
@@ -214,7 +243,8 @@ public class Script {
         loadDictionary,
         ImmutableMap.of(),
         propOverrides,
-        tracer);
+        tracer,
+        "");
   }
 
   /**
@@ -311,7 +341,7 @@ public class Script {
       final Main main =
           new Main(
               argList, reader, writer, dictionary, propMap, idempotent, tracer);
-      main.run();
+      main.run(prelude);
     }
 
     final String inName =

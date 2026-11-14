@@ -21,6 +21,7 @@ package net.hydromatic.morel.compile;
 import java.util.List;
 import net.hydromatic.morel.ast.Core;
 import net.hydromatic.morel.eval.Code;
+import net.hydromatic.morel.type.Binding;
 import org.jspecify.annotations.Nullable;
 
 /** Called on various events during compilation. */
@@ -33,6 +34,12 @@ public interface Tracer {
 
   /** Called on the result of an evaluation. */
   void onResult(Object o);
+
+  /**
+   * Called with each value that a statement in a session binds, after the
+   * statement is evaluated.
+   */
+  void onBinding(Binding binding);
 
   /** Called with the list of warnings after evaluation. */
   void onWarnings(List<? extends Throwable> warningList);

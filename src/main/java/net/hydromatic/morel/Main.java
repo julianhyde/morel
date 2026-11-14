@@ -445,6 +445,17 @@ public class Main {
   }
 
   public void run() {
+    run("");
+  }
+
+  /**
+   * Runs the input, after the statements of {@code prelude}, which run in the
+   * same session but print nothing; so a harness can bind values that a script
+   * reads, such as the tables of a data set, as the script itself would.
+   *
+   * @throws IllegalArgumentException if a statement of the prelude fails
+   */
+  public void run(String prelude) {
     Environment env = Environments.env(typeSystem, session, valueMap);
     final Consumer<String> echoLines = out::println;
     final Consumer<String> outLines =
@@ -452,6 +463,23 @@ public class Main {
     final Multimap<String, Binding> outBindings =
         ArrayListMultimap.create(100, 2);
     final Shell shell = new Shell(this, env, echoLines, outLines, outBindings);
+    if (!prelude.isEmpty()) {
+      // The prelude prints nothing, unless a statement fails; then there is
+      // no point running the input.
+      final StringBuilder b = new StringBuilder();
+      session.withShell(
+          shell,
+          outLines,
+          session1 ->
+              shell.run(
+                  session1,
+                  new BufferingReader(buffer(new StringReader(prelude))),
+                  line -> {},
+                  line -> b.append(line).append('\n')));
+      if (shell.errorCount > 0) {
+        throw new IllegalArgumentException("error in prelude: " + b);
+      }
+    }
     session.withShell(
         shell,
         outLines,
@@ -507,6 +535,11 @@ public class Main {
      * is a multimap so that overloads with the same name can all be stored.
      */
     protected final Multimap<String, Binding> bindingMap;
+    /**
+     * The number of statements that have failed in this shell, with an error or
+     * an exception, including those in its sub-shells.
+     */
+    protected int errorCount;
 
     Shell(
         Main main,
@@ -591,6 +624,7 @@ public class Main {
             outLines.accept(code);
           }
           outLines.accept(e.description());
+          ++errorCount;
           if (code.isEmpty()) {
             // If we consumed no input, we're not making progress, so we'll
             // never finish. Abort.
@@ -598,6 +632,7 @@ public class Main {
           }
         }
       }
+      errorCount += subShell.errorCount;
     }
 
     @Override
@@ -607,6 +642,7 @@ public class Main {
 
     @Override
     public void handle(RuntimeException e, StringBuilder buf) {
+      ++errorCount;
       if (e instanceof MorelException) {
         ((MorelException) e).describe(buf);
       } else {
@@ -793,6 +829,7 @@ public class Main {
           if (main.session.code != null) {
             tracer.onPlan(main.session.code);
           }
+          bindings.forEach(tracer::onBinding);
         }
 
         if (buffered) {
@@ -814,6 +851,7 @@ public class Main {
           }
         }
       } catch (MorelRuntimeException e) {
+        ++errorCount;
         appendToOutput(e, outLines);
         if (buffered) {
           outLines.bufferedLines().forEach(outLines.consumer());

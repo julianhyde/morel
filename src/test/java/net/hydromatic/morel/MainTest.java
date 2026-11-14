@@ -45,6 +45,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasToString;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -113,6 +114,43 @@ public class MainTest {
             + "val it = fn : int -> int\n"
             + "val it = 6 : int\n";
     assertThat(out, hasToString(expected));
+  }
+
+  /**
+   * Tests that a prelude binds values that the input can read, and prints
+   * nothing; and that if a statement of the prelude fails, the run fails,
+   * rather than the input running without the prelude's bindings.
+   */
+  @Test
+  void testPrelude() {
+    assertThat(
+        runWithPrelude("val y = 2;", "y + 1;\n"), is("val it = 3 : int\n"));
+    final IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> runWithPrelude("val y = 2;\nval z = 1 div 0;", "y;\n"));
+    assertThat(e.getMessage(), containsString("error in prelude:"));
+    assertThat(e.getMessage(), containsString("uncaught exception Div"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> runWithPrelude("val z = noSuchValue;", "1;\n"));
+  }
+
+  /** Runs input after a prelude, and returns the output. */
+  private static String runWithPrelude(String prelude, String ml) {
+    final ByteArrayOutputStream out = new ByteArrayOutputStream();
+    try (PrintStream ps = new PrintStream(out)) {
+      final InputStream in = new ByteArrayInputStream(ml.getBytes());
+      new Main(
+              ImmutableList.of(),
+              in,
+              ps,
+              ImmutableMap.of(),
+              ImmutableMap.of(),
+              false)
+          .run(prelude);
+    }
+    return out.toString();
   }
 
   /**

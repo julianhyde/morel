@@ -36,6 +36,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -50,6 +51,7 @@ import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
 import net.hydromatic.morel.eval.Prop;
 import net.hydromatic.morel.foreign.SparkBackend;
+import net.hydromatic.morel.tpcds.TpcdsChecker;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -96,6 +98,9 @@ public class ScriptTest {
       }
       return;
     }
+    // A TPC-DS script takes longer than this method's timeout; it runs in
+    // testScriptTpcds.
+    assumeTrue(!conditions.contains("tpcds"), "run by testScriptTpcds");
     Method method = findMethod(path);
     if (method != null) {
       try {
@@ -116,6 +121,99 @@ public class ScriptTest {
   }
 
   /**
+   * Runs {@code tpcds-10m.smli}, the TPC-DS queries at scale factor 0.01,
+   * checking each query's value against Spark SQL's answer.
+   */
+  @Test
+  @Timeout(1800)
+  void testScriptTpcds() throws Exception {
+    assumeTrue(holds("tpcds"), "requires tpcds");
+    checkTpcds("script/tpcds-10m.smli", false);
+  }
+
+  /**
+   * Runs the TPC-DS script with every query pushed down to Spark, and checks
+   * each query's value against Spark SQL's answer.
+   *
+   * <p>The server must hold the data set, as database {@code tpcds}: start it
+   * with {@code spark-server.sh start --tpcds DIR}, where {@code DIR} is the
+   * directory that {@code morel.tpcds} names. Before the script, the harness
+   * binds {@code tpcds} to the server's database; a query that Spark cannot do
+   * fails, rather than being evaluated here. The script's output is the same as
+   * when it runs locally.
+   */
+  @Test
+  @Timeout(3600)
+  void testScriptTpcdsSpark() throws Exception {
+    assumeTrue(holds("tpcds"), "requires tpcds");
+    assumeTrue(holds("spark"), "requires spark");
+    assumeTrue(holds("spark-prepare"), "requires spark-prepare");
+    checkTpcds("script/tpcds-10m.smli", true);
+  }
+
+  /**
+   * Runs a TPC-DS script over the data in the directory that the system
+   * property {@code morel.tpcds} names, and checks the value of each query
+   * against Spark SQL's answer in its {@code answers} subdirectory.
+   */
+  private static void checkTpcds(String path, boolean spark) throws Exception {
+    final File dataDirectory = tpcdsDirectory();
+    final TpcdsChecker checker =
+        new TpcdsChecker(new File(dataDirectory, "answers"));
+    final Map<Prop, Object> props = new LinkedHashMap<>();
+    Prop.DIRECTORY.set(props, dataDirectory);
+    AssertionError scriptError = null;
+    try (SparkConnectionValue connection =
+        spark ? new SparkConnectionValue(sparkUri()) : null) {
+      Script script =
+          Script.create(
+              path, null, false, props, checker.tracer(Tracers.empty()));
+      if (connection == null) {
+        // The tables are the data set's files.
+        script = script.withPrelude("val tpcds = file;");
+      } else {
+        // The tables are the server's, in its database "tpcds".
+        script =
+            script
+                .withValues(ImmutableMap.of("spark", connection))
+                .withPrelude("val tpcds = spark.catalog.tpcds;")
+                .withSparkPushDown();
+      }
+      script.run();
+    } catch (AssertionError e) {
+      scriptError = e;
+    }
+    final String failures = checker.failures();
+    if (!failures.isEmpty()) {
+      final AssertionError e =
+          new AssertionError(
+              "Queries differ from Spark's answers:\n" + failures);
+      if (scriptError != null) {
+        e.addSuppressed(scriptError);
+      }
+      throw e;
+    }
+    if (scriptError != null) {
+      throw scriptError;
+    }
+  }
+
+  /** Returns the TPC-DS data directory, or null if there is none. */
+  private static @Nullable File tpcdsDirectory0() {
+    final String dir = System.getProperty("morel.tpcds");
+    if (dir == null) {
+      return null;
+    }
+    final File file =
+        new File(dir.replaceFirst("^~", System.getProperty("user.home")));
+    return new File(file, "answers").isDirectory() ? file : null;
+  }
+
+  private static File tpcdsDirectory() {
+    return requireNonNull(tpcdsDirectory0(), "tpcds directory");
+  }
+
+  /**
    * Skips the test if the script's header has a directive {@code (*) requires:
    * <condition>} whose condition does not hold. The conditions:
    *
@@ -127,6 +225,13 @@ public class ScriptTest {
    *       morel.spark} is set, and {@code SPARK_REMOTE} names the server. The
    *       harness binds {@code spark} to a connection to it, as {@code
    *       Spark.connect} would return, and closes it after the script;
+   *   <li>{@code tpcds}: TPC-DS data: system property {@code morel.tpcds} names
+   *       a directory that {@code tpcds/generate.sh} wrote, and that holds
+   *       Spark SQL's answers in an {@code answers} subdirectory (written by
+   *       {@code spark-server.sh start --tpcds}). Before the script, the
+   *       harness binds {@code tpcds} to its tables, and it checks the value of
+   *       each query that the script binds as {@code rN} against Spark's
+   *       answer;
    *   <li>{@code spark-prepare}: the Spark translator exists, that is, the
    *       {@code Spark} structure has {@code prepare}.
    * </ul>
@@ -184,6 +289,8 @@ public class ScriptTest {
       case "spark":
         return System.getProperty("morel.spark") != null
             && System.getenv("SPARK_REMOTE") != null;
+      case "tpcds":
+        return tpcdsDirectory0() != null;
       case "spark-prepare":
         // The translator: true once the Spark structure has "prepare".
         final BuiltIn.Structure spark = BuiltIn.BY_STRUCTURE.get("Spark");
