@@ -2797,17 +2797,16 @@ Sys.planEx "999";
 >   {_|
 > val it =
 >   project r [#dname (#1 r)] : string list
->     filter r [#deptno (#1 r) = #deptno (#2 r)
->         andalso #deptno (#1 r) = 20] : t$0
->       join d e : t$0
+>     join d e [#deptno d = #deptno e] : t$0
+>       filter d [#deptno d = 20] : t$1
 >         sort r [r] : t$1
 >           project r [#d r] : t$1
 >             group d [d = d] : t$2
 >               #toList Bag (#depts scott) : t$1
->         sort r [r] : t$3
->           project r [#e r] : t$3
->             group e [e = e] : t$4
->               #toList Bag (#emps scott) : t$3
+>       sort r [r] : t$3
+>         project r [#e r] : t$3
+>           group e [e = e] : t$4
+>             #toList Bag (#emps scott) : t$3
 >
 > t$0 ({deptno:int, dname:string, loc:string} * {comm:real, deptno:int, empno:int, ename:string, hiredate:string, job:string, mgr:int, sal:real}) list
 > t$1 {deptno:int, dname:string, loc:string} list
