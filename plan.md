@@ -661,48 +661,89 @@ three, which it cannot do directly. Every tier needs D10.
 
 ## Merging to main
 
-The branch carries much that is not TPC-DS: bug fixes and optimizer
-work found on the way. It goes to `main` in pieces, smallest and most
-independent first, each piece its own PR, rebased onto `main` and
-passing `fullMake` on its own. Bug fixes go first, so that `main`
-gets them without waiting for the features. Each significant bug has
-a GitHub issue, logged before its PR, and the fix's commit cites it;
-#509 to #513 were logged 2026-11-13.
-Then 502-tpc-ds is rebased onto `main`; the pieces already merged
-drop out.
+*Revised 2026-11-14.* The branch is a diary: 36 commits, in the order
+the work was done. `main` gets the same changes as about 16 commits, in
+8 pull requests, each rebased onto `main`, passing `fullMake` on its
+own, and citing an issue. Fixes go first; features next; TPC-DS last.
+`plan.md` and the commits that change only it stay on the branch, and
+every other commit loses its changes to `plan.md`. Each PR's script
+outputs (plans, mostly) are regenerated after its rebase, because the
+order differs from the branch's.
 
-1. **Hash join** (#504, #505), on branch `504-hash-join`: the fix for
-   #508, `Exps`, hash join, pushing a `where` into a join, and the fix
-   for a `where` whose condition is wrapped in a `let`. Ready.
-2. **Bug fixes**, each its own commit, in one PR or several. All
-   occur on `main` (checked 2026-11-13):
-   * a comment containing `(*)` in the shell (#506), and the shell's
-     line reader within a block comment (part 6);
-   * overloaded arithmetic in a `let` type-checks at one type and
-     runs at another (#509, `4ebbf48d`);
-   * an operator section, such as `op -`, is not defined for
-     `decimal` or `word` (#510, `0e901257`);
-   * a record label that contains a back-tick loses the record's
-     other fields (#511, `2937c556`);
-   * a label such as `sum(x)` is printed without back-ticks
-     (#512, `37729be2`).
-3. **Inlining into loops** (part 4's `Analyzer` change, `57a9e002`,
-   `757c2cc1`): a value used once, inside a lambda, a query's
-   per-row expression, or an aggregate, is no longer inlined there and
-   so evaluated each time (#513). Occurs on `main`. Also
-   `Test.tick`, `Test.ticks` and `Test.zeroTicks`, which test it.
-4. **Semi-joins and anti-joins** for `exists` and `not exists`
-   (`f90e6dc8`, `94aaed99`, `3e9cba2e`). After 1.
-5. **Constant folding** (`d321bbb5`, `5dd3f96c`).
-6. **Aggregates over options** (#503, #256), on branch `503-avg`.
-7. **The file reader**: decimal, date and option columns (part 1),
-   reading a table when the code runs (part 3), `?.` learning a
-   table's fields (part 3), and deducing a declaration again
-   (part 6).
-8. **TPC-DS** (#502): the generator, the queries, the script,
-   `TpcdsChecker`, and the weekly Spark workflow's TPC-DS steps,
-   which run on schedule only once on `main`. `plan.md` stays on the
-   branch, as the Spark plan did.
+Hashes are as of 2026-11-14; rewording and the 504-hash-join rebase
+have changed some before, so match by subject.
+
+1. **Small fixes**, independent of the others; one PR, or one each:
+   * #506: `710d519f`, *squashing in* the shell's line reader within a
+     block comment, **factored out** of part 6 (`8cacf9b1`, its
+     `Shell.java` and `ShellTest.java` changes);
+   * #508: `7895a0df`, the first commit of `504-hash-join`, which is
+     already the fix as it applies to `main`; its part for the
+     hash-scan sink is in #504's commit;
+   * #509 `4ebbf48d`, then #510 `0e901257` (both `TypeResolver`);
+   * #511 `2937c556`, then #512 `37729be2` (both `simple.smli`).
+2. **Expression predicates, and inlining into loops** (#513):
+   * one commit, "Consolidate expression predicates in class Exps":
+     `3f745160` (`isAtom`, `isCheap`), plus `isSimple` and
+     `isConstructor` **factored out** of #504's commit (`c336fae9`)
+     and `isSafe` **factored out** of #505's (`31e8176a`), each with
+     its tests in `ExpsTest`. `isSafe` has no caller until 3;
+   * one commit for #513, *squashing* the depth tracking **factored
+     out** of part 4 (`3b66f9b5`: `Analyzer.java`, `EnvVisitor.java`,
+     its tests in `optimize.smli`, `hybrid.smli` and `AlgebraTest`),
+     `57a9e002` (a branch of a `case`, and `Test.tick`) and
+     `757c2cc1` (an aggregate). It needs `isSimple`, which is why the
+     predicates come first, and why this PR no longer waits for hash
+     join.
+3. **Hash join** (#504, #505), after 2: `c336fae9` #504, and
+   `31e8176a` #505 with `feb4f13c` *squashed in* (it fixes a rule that
+   only `31e8176a` adds; it is part 4's fix for a `where` wrapped in a
+   `let`). Both lose the predicates that move to 2. This rewrites
+   `504-hash-join`, which is pushed: a forced push.
+4. **Semi-joins and anti-joins** for `exists` and `not exists`, after
+   3: one commit, *squashing* `f90e6dc8`, `94aaed99` (the order of
+   `andalso`) and `3e9cba2e` (decorrelating through a join). **Issue
+   needed**; *rename* to cite it.
+5. **Constant folding**, after 2: one commit, *squashing* `d321bbb5`
+   and `5dd3f96c`. **Issue needed**; *rename*. Its expected plans
+   depend on whether 3 and 4 are in; regenerate them.
+6. **Aggregates** (branch `503-avg`), independent of 1-5:
+   * #503 and #256: *squash* `a16d59cc` and `c2e75c71`, which revises
+     it, into one commit;
+   * standard deviation and variance, `82d23d53`: #503 does not ask
+     for them, so **issue needed** (draft `/tmp/stddev.md`); *rename*
+     to cite it. After the #503 commit, whose `Opt` and `Some` forms
+     it follows.
+7. **The file reader**: `3a7f5f03` (decimal, date and option columns;
+   *rename* to cite an issue of its own rather than #502), then, each
+   **factored out** of a TPC-DS commit and with an issue:
+   * part 3 (`8de37f32`): a table is read when the code that scans it
+     runs, its rows held by a soft reference (`Files`, `Codes`,
+     `Compiler`); and `?.` on the right of a `left join` learns the
+     fields of a table (`TypeResolver`);
+   * part 6 (`8cacf9b1`): `TypeResolver` deduces a declaration again
+     with fresh terms. Its test is `avg` over an option column, so
+     merge after 6, or test with another overloaded function.
+8. **TPC-DS** (#502), last:
+   * the generator, schema, queries and Spark's answers: part 2
+     (`88771711`);
+   * the harness: `Tracer.onBinding` (part 3) and the prelude,
+     `Main.run(prelude)` and `Script.withPrelude` (part 11),
+     **factored out** as one commit;
+   * the script and `TpcdsChecker`: parts 3 to 11, *squashed* into
+     one commit (what is left of them once the above are factored out);
+   * the test server does not redact (`63fd6b89`), then the weekly
+     workflow (`d185ade3` and part 11's change to it).
+
+**Dropped** (stay on the branch): `7f66e9bd`, `e27c6d4f`, `cc4af17f`,
+`9bd5514f`, and the parts' changes to `plan.md`.
+
+**Issues to log first**, besides #509-#513: semi-joins (4), constant
+folding (5), standard deviation and variance (6, `/tmp/stddev.md`),
+the file reader's types (7), reading a table lazily (7),
+`?.` on a table's fields (7), deducing again with fresh terms (7), and
+Spark redacting `morel.nullable` (`/tmp/redaction.md`; not fixed in
+the adapter, only worked around in the test server, so it stays open).
 
 ## Log
 
