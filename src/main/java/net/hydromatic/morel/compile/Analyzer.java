@@ -18,32 +18,58 @@
  */
 package net.hydromatic.morel.compile;
 
+import static net.hydromatic.morel.ast.CoreBuilder.core;
+
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import net.hydromatic.morel.ast.AstNode;
 import net.hydromatic.morel.ast.Core;
+import net.hydromatic.morel.ast.Exps;
+import net.hydromatic.morel.ast.Op;
+import net.hydromatic.morel.type.Binding;
 import net.hydromatic.morel.type.TypeSystem;
+import org.jspecify.annotations.Nullable;
 
 /** Shuttle that counts how many times each expression is used. */
 public class Analyzer extends EnvVisitor {
   private final Map<Core.NamedPat, MutableUse> map;
 
+  /**
+   * How many lambdas and per-row expressions of a query enclose the node being
+   * visited. A binding read at a greater depth than it was declared may be read
+   * many times.
+   */
+  private final int depth;
+
+  /**
+   * Uses in the enclosing expression, if this analyzer counts the uses in one
+   * branch of a {@code case}; null otherwise. A binding declared outside the
+   * branch has its declaration's depth there.
+   */
+  private final @Nullable Map<Core.NamedPat, MutableUse> outer;
+
   /** Creates an Analyzer. */
   private static Analyzer of(TypeSystem typeSystem, Environment env) {
-    return new Analyzer(typeSystem, env, new HashMap<>());
+    return new Analyzer(typeSystem, env, new HashMap<>(), 0, null);
   }
 
   /** Private constructor. */
   private Analyzer(
       TypeSystem typeSystem,
       Environment env,
-      Map<Core.NamedPat, MutableUse> map) {
+      Map<Core.NamedPat, MutableUse> map,
+      int depth,
+      @Nullable Map<Core.NamedPat, MutableUse> outer) {
     super(typeSystem, env);
     this.map = map;
+    this.depth = depth;
+    this.outer = outer;
   }
 
   /** Analyzes an expression. */
@@ -68,23 +94,105 @@ public class Analyzer extends EnvVisitor {
 
   @Override
   protected Analyzer push(Environment env) {
-    return new Analyzer(typeSystem, env, map);
+    return new Analyzer(typeSystem, env, map, depth, outer);
+  }
+
+  /** Returns an analyzer for a node that may be evaluated many times. */
+  private Analyzer deeper() {
+    return new Analyzer(typeSystem, env, map, depth + 1, outer);
   }
 
   @Override
   protected void visit(Core.IdPat idPat) {
-    use(idPat);
+    final MutableUse use = use(idPat);
+    if (use.depth < 0) {
+      use.depth = depth;
+    }
   }
 
   @Override
   protected void visit(Core.Id id) {
-    use(id.idPat).useCount++;
+    final MutableUse use = use(id.idPat);
+    use.useCount++;
+    if (use.depth >= 0 && depth > use.depth) {
+      use.repeated = true;
+    }
     super.visit(id);
+  }
+
+  // A lambda's body, and the expressions that a query evaluates for each
+  // row, may be evaluated many times.
+
+  @Override
+  protected void visit(Core.Fn fn) {
+    fn.idPat.accept(this);
+    fn.exp.accept(deeper().bind(Binding.of(fn.idPat)));
+  }
+
+  @Override
+  protected void visit(Core.Filter filter) {
+    filter.input.accept(this);
+    filter.condition.accept(deeper().bind(patternBindings(filter)));
+  }
+
+  @Override
+  protected void visit(Core.Project project) {
+    project.input.accept(this);
+    project.exp.accept(deeper().bind(patternBindings(project)));
+  }
+
+  @Override
+  protected void visit(Core.Sort sort) {
+    sort.input.accept(this);
+    sort.exp.accept(deeper().bind(patternBindings(sort)));
+  }
+
+  @Override
+  protected void visit(Core.Join join) {
+    join.left.accept(this);
+    final List<Binding> rightBindings = new ArrayList<>();
+    rightBindings.add(Binding.of(join.leftId));
+    if (join.ordinalId != null) {
+      rightBindings.add(Binding.of(join.ordinalId));
+    }
+    join.right.accept(deeper().bind(rightBindings));
+    join.condition.accept(deeper().bind(patternBindings(join)));
+  }
+
+  @Override
+  protected void visit(Core.Group group) {
+    group.input.accept(this);
+    final EnvVisitor rowV = deeper().bind(patternBindings(group));
+    group.keys.values().forEach(rowV::accept);
+    final List<Binding> bindings = new ArrayList<>();
+    group.keys.forEach(
+        (name, key) -> bindings.add(Binding.of(core.idPat(key.type, name, 0))));
+    // The aggregate function is evaluated once for each group.
+    final EnvVisitor v2 = deeper().bind(bindings);
+    group
+        .aggregates
+        .values()
+        .forEach(
+            aggregate -> {
+              aggregate.aggregate.accept(v2);
+              if (aggregate.argument != null) {
+                aggregate.argument.accept(rowV);
+              }
+            });
   }
 
   /** Gets or creates a {@link MutableUse} for a given name. */
   private MutableUse use(Core.NamedPat name) {
-    return map.computeIfAbsent(name, k -> new MutableUse());
+    return map.computeIfAbsent(
+        name,
+        k -> {
+          final MutableUse use = new MutableUse();
+          final MutableUse outerUse = outer == null ? null : outer.get(name);
+          if (outerUse != null) {
+            use.depth = outerUse.depth;
+          }
+          return use;
+        });
   }
 
   @Override
@@ -92,6 +200,11 @@ public class Analyzer extends EnvVisitor {
     super.visit(valDecl);
     if (valDecl.exp.isAtom()) {
       use(valDecl.pat).atomic = true;
+    }
+    if (valDecl.exp.op == Op.FN
+        || valDecl.exp.isSimple()
+        || valDecl.exp.isConstant()) {
+      use(valDecl.pat).value = true;
     }
   }
 
@@ -116,7 +229,10 @@ public class Analyzer extends EnvVisitor {
       final Multimap<Core.NamedPat, MutableUse> multimap =
           HashMultimap.create();
       final Map<Core.NamedPat, MutableUse> subMap = new HashMap<>();
-      final Analyzer analyzer = new Analyzer(typeSystem, env, subMap);
+      final Map<Core.NamedPat, MutableUse> outerMap =
+          outer == null ? map : merged(outer, map);
+      final Analyzer analyzer =
+          new Analyzer(typeSystem, env, subMap, depth, outerMap);
       case_.matchList.forEach(
           e -> {
             subMap.clear();
@@ -133,8 +249,32 @@ public class Analyzer extends EnvVisitor {
                   baseUse.parallel = true;
                 }
                 baseUse.useCount += maxCount;
+                // What a branch learned about the binding: whether a use is
+                // inside a lambda or a query that its declaration is not, and,
+                // for a binding that a branch declares, what it is bound to.
+                for (MutableUse use : uses) {
+                  baseUse.repeated |= use.repeated;
+                  baseUse.value |= use.value;
+                  baseUse.atomic |= use.atomic;
+                  if (baseUse.depth < 0) {
+                    baseUse.depth = use.depth;
+                  }
+                }
               });
     }
+  }
+
+  /**
+   * Returns a map that contains the entries of {@code map} and, for keys that
+   * it lacks, of {@code outer}; for the uses of a {@code case} inside a branch
+   * of another {@code case}.
+   */
+  private static Map<Core.NamedPat, MutableUse> merged(
+      Map<Core.NamedPat, MutableUse> outer,
+      Map<Core.NamedPat, MutableUse> map) {
+    final Map<Core.NamedPat, MutableUse> merged = new HashMap<>(outer);
+    merged.putAll(map);
+    return merged;
   }
 
   /** How a binding (assignment of a value to a variable) is used. */
@@ -217,6 +357,18 @@ public class Analyzer extends EnvVisitor {
     boolean top;
     boolean atomic;
     boolean parallel;
+    /**
+     * Whether the expression is a lambda, is simple (see {@link Exps}), or is a
+     * constant; inlining it into a loop repeats no work worth avoiding.
+     */
+    boolean value;
+    /**
+     * Whether a use is inside a lambda or query that its declaration is not.
+     */
+    boolean repeated;
+    /** Depth of the declaration, or -1 if not seen. */
+    int depth = -1;
+
     int useCount;
 
     static int max(Collection<MutableUse> uses) {
@@ -240,7 +392,11 @@ public class Analyzer extends EnvVisitor {
               : atomic
                   ? Use.ATOMIC
                   : useCount == 1
-                      ? (parallel ? Use.MULTI_SAFE : Use.ONCE_SAFE)
+                      ? (repeated && !value
+                          // Inlining would evaluate it each time the lambda
+                          // or the query's row expression is evaluated.
+                          ? Use.ONCE_UNSAFE
+                          : parallel ? Use.MULTI_SAFE : Use.ONCE_SAFE)
                       : Use.MULTI_UNSAFE;
     }
   }

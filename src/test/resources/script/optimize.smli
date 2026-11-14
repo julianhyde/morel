@@ -18,6 +18,11 @@
  *
  * Tests for inlining and other optimizations.
  *)
+(*) Make visible the "Test" structure, for "Test.tick".
+Sys.set ("excludeStructures", "");
+> val it = () : unit
+Sys.clearEnv ();
+> val it = () : unit
 Sys.set ("stringDepth", NONE);
 > val it = () : unit
 
@@ -42,6 +47,161 @@ let val x = 5 in x + x end;
 > val it = 10 : int
 Sys.plan ();
 > val it = "apply2(fnValue Int.+, constant(5), constant(5))" : string
+
+(* A variable used once, but in an expression that a query evaluates
+ * for each row, is not inlined: that would evaluate it once per row,
+ * not once. Here "ys" would be computed for each element of "xs". *)
+let
+  val n = 2
+  val ys = from i in [1, 2, 3] where i > n yield i * 10
+in
+  from x in [10, 20, 30] where x elem ys
+end;
+> val it = [30] : int list
+Sys.planEx "-1";
+> val it =
+>   "val it =\n  let\n    val ys =\n      project i [#`*` Int (i, 10)] : int list\n        filter i [i > 2] : int list\n          [1, 2, 3] : int list\n    \n  in\n    r$0[ys]\n  end\n\nr$0[ys] =\n  filter x [op elem (x, ys)] : int list\n    [10, 20, 30] : int list\n"
+>   : string
+
+(*) A function used once in a query is inlined, because it is a value.
+let
+  fun big x = x > 15
+in
+  from x in [10, 20, 30] where big x
+end;
+> val it = [20,30] : int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val it =
+>   filter x [x > 15] : int list
+>     [10, 20, 30] : int list
+> |_} : string
+
+(* As above, but the use is in one branch of a "case" with several
+ * branches. "y" is still not inlined into the lambda, or into the
+ * query, which would evaluate it for each element. *)
+fun f1 xs =
+  let val y = String.size (String.implode xs)
+  in List.map (fn x => x + y) [1, 2, 3] end;
+> val f1 = fn : char list -> int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val f1 =
+>   fn xs => let
+>     val y = #size String (#implode String xs)
+>   in
+>     #map List (fn x => x + y) ([1, 2, 3])
+>   end|_} : string
+fun f2 (b, xs) =
+  let val y = String.size (String.implode xs)
+  in case b of true => List.map (fn x => x + y) [1, 2, 3] | false => [] end;
+> val f2 = fn : bool * char list -> int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val f2 =
+>   fn v => case v of (b, xs) => let
+>       val y = #size String (#implode String xs)
+>     in
+>       case b of true => #map List (fn x => x + y) ([1, 2, 3]) | false => []
+>     end|_} : string
+fun f3 (b, xs) =
+  let val y = String.size (String.implode xs)
+  in case b of true => (from r in [1, 2, 3] where r > y) | false => [] end;
+> val f3 = fn : bool * char list -> int list
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val f3 =
+>   fn v => case v of (b, xs) => let
+>       val y = #size String (#implode String xs)
+>     in
+>       case b of true => r$0[y] | false => []
+>     end
+>
+> r$0[y] =
+>   filter r [r > y] : int list
+>     [1, 2, 3] : int list
+> |_} : string
+f3 (true, [#"a", #"b"]);
+> val it = [3] : int list
+
+(* The same, measured by running: "Test.tick" counts how many times
+ * "y" is evaluated. Once, however many elements there are. Counting
+ * starts at "Test.zeroTicks"; "tick" and "ticks" fail before it. *)
+Test.ticks ();
+> uncaught exception Fail [Fail: call Test.zeroTicks first]
+>   raised at: stdIn:1.1-1.14
+fun t1 n =
+  let val y = Test.tick n
+  in List.map (fn x => x + y) [1, 2, 3] end;
+> val t1 = fn : int -> int list
+Test.zeroTicks ();
+> val it = () : unit
+t1 10;
+> val it = [11,12,13] : int list
+Test.ticks ();
+> val it = 1 : int
+fun t2 (b, n) =
+  let val y = Test.tick n
+  in case b of true => List.map (fn x => x + y) [1, 2, 3] | false => [] end;
+> val t2 = fn : bool * int -> int list
+Test.zeroTicks ();
+> val it = () : unit
+t2 (true, 10);
+> val it = [11,12,13] : int list
+Test.ticks ();
+> val it = 1 : int
+fun t3 (b, n) =
+  let val y = Test.tick n
+  in case b of true => (from r in [1, 2, 3] where r > y - 10) | false => [] end;
+> val t3 = fn : bool * int -> int list
+Test.zeroTicks ();
+> val it = () : unit
+t3 (true, 10);
+> val it = [1,2,3] : int list
+Test.ticks ();
+> val it = 1 : int
+
+(* A value used once, as the aggregate function of a "group", is not
+ * inlined: the aggregate function is evaluated for each group. *)
+fun g1 (s, xs) =
+  let
+    val f =
+      if String.size s > 0 then (fn (ys : int bag) => count ys)
+      else (fn ys => 0)
+  in
+    from x in xs group {k = x mod 2} compute {c = f over x}
+  end;
+> val g1 = fn : string * int bag -> {c:int, k:int} bag
+Sys.planEx "-1";
+> val it =
+>   {_|
+> val g1 =
+>   fn v => case v of (s, xs) => let
+>       val f =
+>         case #size String s > 0 of true => fn ys => #count Relational ys
+>           | _ => fn ys_1 => 0
+>     in
+>       r$0[f, xs]
+>     end
+>
+> r$0[f, xs] =
+>   group x [k = #mod Int (x, 2)] [c = f over x] : {c:int, k:int} bag
+>     xs : int bag
+> |_} : string
+fun g2 xs =
+  let val f = Test.tick (fn (ys : int bag) => count ys)
+  in from x in xs group {k = x mod 2} compute {c = f over x} end;
+> val g2 = fn : int bag -> {c:int, k:int} bag
+Test.zeroTicks ();
+> val it = () : unit
+g2 (bag [1, 2, 3, 4, 5]);
+> val it = [{c=3,k=1},{c=2,k=0}] : {c:int, k:int} bag
+Test.ticks ();
+> val it = 1 : int
 
 (*) A dead variable (not used) is removed.
 let val x = 1 val y = 2 in y end;
