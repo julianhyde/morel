@@ -25,7 +25,27 @@ public enum JoinType {
   INNER,
   LEFT,
   RIGHT,
-  FULL;
+  FULL,
+  /**
+   * Semi-join: each left element that has at least one match in the right
+   * input, once. The element is the left input's element. Never written; the
+   * rules make one from {@code exists}.
+   */
+  SEMI,
+  /**
+   * Anti-join: each left element that has no match in the right input. The
+   * element is the left input's element. Never written; the rules make one from
+   * {@code not (exists ...)}.
+   */
+  ANTI;
+
+  /**
+   * Returns whether the element is the left input's element, which the join
+   * keeps or drops; that is, whether this is a semi-join or an anti-join.
+   */
+  public boolean filtersLeft() {
+    return this == SEMI || this == ANTI;
+  }
 
   /**
    * Returns whether the left element is optional, and therefore whether {@code

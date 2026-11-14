@@ -483,11 +483,34 @@ class RelCompiler {
       liveSlots = pairSlots;
       conditionCode = Codes.ordinalInc(pairSlots, conditionCode);
     }
-    // The element is the inputs' components in order.
-    final List<Core.Exp> exps = new ArrayList<>(leftComponents);
-    exps.addAll(rightComponents);
-    final RowSinkFactory nf =
-        next.sink(rowScan.defer(target, core.tuple(typeSystem, null, exps)));
+    // The element is the inputs' components in order; a semi- or anti-join's
+    // is the left element, and what follows sees the row without the right
+    // element, which the scan pops before it passes the row on.
+    final RowSinkFactory nf;
+    final boolean emitMatches = !join.joinType.filtersLeft();
+    final RowSinks.Emit ifNone =
+        join.joinType == JoinType.ANTI
+            ? RowSinks.Emit.ROW
+            : join.joinType == JoinType.LEFT
+                ? RowSinks.Emit.PADDED_ROW
+                : RowSinks.Emit.NOTHING;
+    final RowSinks.Emit ifSome =
+        join.joinType == JoinType.SEMI
+            ? RowSinks.Emit.ROW
+            : RowSinks.Emit.NOTHING;
+    if (emitMatches) {
+      final List<Core.Exp> exps = new ArrayList<>(leftComponents);
+      exps.addAll(rightComponents);
+      nf = next.sink(rowScan.defer(target, core.tuple(typeSystem, null, exps)));
+    } else {
+      nf =
+          next.sink(
+              row.defer(
+                  target,
+                  leftComponents.size() == 1
+                      ? leftComponents.get(0)
+                      : core.tuple(typeSystem, null, leftComponents)));
+    }
     final Code conditionCode2 = conditionCode;
     if (!build && !dependent && liveSlots == null) {
       // An equality between a key over the input row and a key over the
@@ -506,6 +529,9 @@ class RelCompiler {
                 conditionCode2,
                 leftKeyCode,
                 rightKeyCode,
+                emitMatches,
+                ifNone,
+                ifSome,
                 nf.get());
       }
     }
@@ -531,6 +557,9 @@ class RelCompiler {
             rightCode,
             conditionCode2,
             liveSlots,
+            emitMatches,
+            ifNone,
+            ifSome,
             nf.get());
   }
 
