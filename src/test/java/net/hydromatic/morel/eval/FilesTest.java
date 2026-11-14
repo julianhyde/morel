@@ -18,17 +18,25 @@
  */
 package net.hydromatic.morel.eval;
 
+import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 import net.hydromatic.morel.type.PrimitiveType;
+import net.hydromatic.morel.type.TypeSystem;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** Tests for {@link Files}. */
 class FilesTest {
@@ -168,6 +176,44 @@ class FilesTest {
             "uncaught exception Fail [Fail: line has 2 fields, "
                 + "but the header has 3: a,b]"));
     assertThrows(MorelRuntimeException.class, () -> split("a", 2));
+  }
+
+  /**
+   * Reading a table twice gives the same rows, so that the queries that scan it
+   * share one copy, rather than each holding its own.
+   */
+  @Test
+  void testRowsShared() {
+    final URL url =
+        requireNonNull(FilesTest.class.getResource("/data/scott/depts.csv"));
+    final java.io.File depts0 = new java.io.File(url.getFile()); // lint:skip
+    final File dir = Files.create(depts0.getParentFile());
+    final File depts =
+        dir.discoverField(new TypeSystem(), "depts")
+            .fieldValueAs("depts", File.class);
+    final List<?> rows = depts.valueAs(List.class);
+    assertThat(rows.size(), is(4));
+    assertThat(depts.valueAs(List.class), sameInstance(rows));
+  }
+  /** If a file changes, the next scan reads it again. */
+  @Test
+  void testRowsReread(@TempDir Path dir) throws IOException {
+    final Path t = dir.resolve("t.csv");
+    write(t, "n:int", "1", "2");
+    final File d = Files.create(dir.toFile());
+    final File table =
+        d.discoverField(new TypeSystem(), "t").fieldValueAs("t", File.class);
+    final List<?> rows = table.valueAs(List.class);
+    assertThat(rows.size(), is(2));
+    assertThat(table.valueAs(List.class), sameInstance(rows));
+    write(t, "n:int", "1", "2", "3");
+    assertThat(table.valueAs(List.class).size(), is(3));
+  }
+
+  /** Writes lines to a file. */
+  private static void write(Path path, String... lines) throws IOException {
+    java.nio.file.Files.write( // lint:skip
+        path, Arrays.asList(lines), StandardCharsets.UTF_8);
   }
 }
 

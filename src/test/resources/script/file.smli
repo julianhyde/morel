@@ -158,4 +158,11 @@ from e in file.scott.emps
 >    {comm=NONE,ename="MILLER",mgrno=SOME 7782,sal=1300}]
 >   : {comm:decimal option, ename:string, mgrno:int option, sal:decimal} list
 
+(* A function that scans a table reads it each time it is called,
+ * rather than holding the rows from when it was defined. *)
+fun deptNames () = from d in file.scott.depts yield d.dname;
+> val deptNames = fn : unit -> string list
+deptNames ();
+> val it = ["ACCOUNTING","RESEARCH","SALES","OPERATIONS"] : string list
+
 (*) End file.smli
