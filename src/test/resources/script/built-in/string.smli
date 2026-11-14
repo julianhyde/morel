@@ -126,7 +126,7 @@ String.extract("abc", 1, SOME 99);
 >   raised at: stdIn:1.1-1.34
 Sys.plan ();
 > val it =
->   "globalMarshal(globals [SOME], body apply3(fnValue String.extract, constant(abc), constant(1), apply(fnValue tyCon, argCode constant(99))))"
+>   "globalMarshal(globals [SOME], body apply3(fnValue String.extract, constant(abc), constant(1), constant([SOME, 99])))"
 >   : string
 
 (*) val substring : string * int * int -> string
@@ -182,7 +182,7 @@ String.concat ["a"];
 String.concat [];
 > val it = "" : string
 Sys.plan ();
-> val it = "apply(fnValue String.concat, argCode tuple)" : string
+> val it = "apply(fnValue String.concat, argCode constant([]))" : string
 
 (*) val concatWith : string -> string list -> string
 String.concatWith;
@@ -196,7 +196,8 @@ String.concatWith "," ["", ""];
 String.concatWith "," [];
 > val it = "" : string
 Sys.plan ();
-> val it = "apply2(fnValue String.concatWith, constant(,), tuple)" : string
+> val it = "apply2(fnValue String.concatWith, constant(,), constant([]))"
+>   : string
 
 (*) val str : char -> string
 String.str;
@@ -204,7 +205,7 @@ String.str;
 String.str #"a";
 > val it = "a" : string
 Sys.plan ();
-> val it = "apply(fnValue String.str, argCode constant(a))" : string
+> val it = "constant(a)" : string
 
 (*) val implode : char list -> string
 String.implode;
@@ -214,7 +215,7 @@ String.implode [#"a", #"b", #"c"];
 String.implode [];
 > val it = "" : string
 Sys.plan ();
-> val it = "apply(fnValue String.implode, argCode tuple)" : string
+> val it = "apply(fnValue String.implode, argCode constant([]))" : string
 
 (*) val explode : string -> char list
 String.explode;

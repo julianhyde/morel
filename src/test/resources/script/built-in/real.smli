@@ -951,7 +951,7 @@ Real.fromInt 1;
 Real.fromInt ~2;
 > val it = ~2 : real
 Sys.plan ();
-> val it = "apply(fnValue Real.fromInt, argCode constant(-2))" : string
+> val it = "constant(-2.0)" : string
 
 (*) real is a synonym for Real.fromInt
 real;
@@ -959,7 +959,7 @@ real;
 real ~2;
 > val it = ~2 : real
 Sys.plan ();
-> val it = "apply(fnValue Real.fromInt, argCode constant(-2))" : string
+> val it = "constant(-2.0)" : string
 
 (*  "fromString s" scans a `real` value from a string. Returns `SOME(r)` if a
  *  `real` value can be scanned from a prefix of `s`, ignoring any initial

@@ -180,7 +180,7 @@ map (fn e => {a = 1, b = true}) [];
 > val it = [] : {a:int, b:bool} list
 Sys.plan();
 > val it =
->   {|apply2(fnValue List.map, match(e, tuple(constant(1), constant(true))), calcite(plan LogicalValues(tuples=[[]])
+>   {|apply2(fnValue List.map, match(e, constant([1, true])), calcite(plan LogicalValues(tuples=[[]])
 > ))|} : string
 
 (*) Query on an empty list whose element is referenced
@@ -215,7 +215,7 @@ map (fn e => {a = 1, b = true}) [0];
 > val it = [{a=1,b=true}] : {a:int, b:bool} list
 Sys.plan();
 > val it =
->   {|apply2(fnValue List.map, match(e, tuple(constant(1), constant(true))), calcite(plan LogicalValues(tuples=[[{ 0 }]])
+>   {|apply2(fnValue List.map, match(e, constant([1, true])), calcite(plan LogicalValues(tuples=[[{ 0 }]])
 > ))|} : string
 
 (*) Simple query with scan, filter, project
@@ -416,7 +416,7 @@ from p in [(1, 2), (2, 1), (1, 9)] compute max over p;
 > val it = (2,1) : int * int
 Sys.plan ();
 > val it =
->   "apply(fnValue Relational.only, argCode from(sink join(pat p, exp tuple(tuple(constant(1), constant(2)), tuple(constant(2), constant(1)), tuple(constant(1), constant(9))), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
+>   "apply(fnValue Relational.only, argCode from(sink join(pat p, exp tuple(constant([1, 2]), constant([2, 1]), constant([1, 9])), sink group(key tuple, agg aggregate, sink yield(codes [tuple(get(name max))], sink collect(apply(fnValue nth:0, argCode stack(offset 1, name $0))))))))"
 >   : string
 from ox in [SOME 1, NONE, SOME 3] compute min over ox;
 > val it = NONE : int option

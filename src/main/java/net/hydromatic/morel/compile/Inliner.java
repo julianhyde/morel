@@ -27,7 +27,6 @@ import static net.hydromatic.morel.util.Static.allMatch;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +40,6 @@ import net.hydromatic.morel.eval.Applicable1;
 import net.hydromatic.morel.eval.Closure;
 import net.hydromatic.morel.eval.Code;
 import net.hydromatic.morel.eval.Codes;
-import net.hydromatic.morel.eval.Decimals;
 import net.hydromatic.morel.eval.Stack;
 import net.hydromatic.morel.eval.Unit;
 import net.hydromatic.morel.eval.code.GeneralCodes;
@@ -196,16 +194,30 @@ public class Inliner extends EnvShuttle {
       }
       return core.valueLiteral(apply2, o);
     }
-    if (apply2.isCallTo(BuiltIn.DECIMAL_DECIMAL)
-        && apply2.arg.op == Op.STRING_LITERAL) {
-      // Evaluate 'decimal "12.3"' at compile time. If the string is not a
-      // valid decimal, leave the call to raise 'Domain' at run time. (If the
-      // user wrote an invalid literal, Resolver has already reported it.)
-      final BigDecimal d =
-          Decimals.parseExact(((Core.Literal) apply2.arg).unwrap(String.class));
-      if (d != null) {
-        return core.valueLiteral(apply2, d);
+    if (apply2.fn.op == Op.RECORD_SELECTOR && apply2.arg.op == Op.TUPLE) {
+      // A field of a record or tuple whose other fields are constant, such as
+      // '#b {a = 1, b = x}', is that field, 'x'. (If another field is not
+      // constant, it might raise, so the record is evaluated.)
+      final Core.RecordSelector selector = (Core.RecordSelector) apply2.fn;
+      final List<Core.Exp> args = ((Core.Tuple) apply2.arg).args;
+      boolean othersConstant = true;
+      for (int i = 0; i < args.size(); i++) {
+        if (i != selector.slot && !Folder.isConstant(args.get(i))) {
+          othersConstant = false;
+        }
       }
+      if (othersConstant) {
+        return args.get(selector.slot);
+      }
+    }
+    // Evaluate at compile time a call that converts or constructs a value,
+    // such as 'decimal "12.3"' or 'Decimal.fromInt 100'. If the call would
+    // raise, such as 'decimal' of a string that is not a valid decimal, leave
+    // it to raise at run time. (If the user wrote an invalid decimal literal,
+    // Resolver has already reported it.)
+    final Core.Literal folded = Folder.foldCall(typeSystem, apply2);
+    if (folded != null) {
+      return folded;
     }
     if (apply2.fn.op == Op.FN) {
       // Beta-reduction:
