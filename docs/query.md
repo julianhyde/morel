@@ -734,6 +734,25 @@ typically an aggregate function such as `count` or `sum` but may be an
 expression such as `min 0` or `fn x => x`. The right operand of `over`
 is an expression that is evaluated for each element in the group.
 
+The built-in aggregate functions are `count`, `sum`, `avg`, `min` and
+`max`. `avg` of `int` values is a `real`; of `real` values, a `real`;
+of `decimal` values, a `decimal`. `avg`, `min` and `max` raise `Empty`
+over an empty collection; `sumOpt`, `avgOpt`, `minOpt` and `maxOpt`
+return `NONE` instead, and otherwise `SOME` of the result.
+
+`stddevSamp`, `stddevPop`, `varSamp` and `varPop` are the sample and
+population standard deviation and variance, a `real`. A sample
+statistic needs two elements, and a population statistic one; with
+fewer, they raise `Empty`, and their `Opt` forms (such as
+`stddevSampOpt`) return `NONE`.
+
+SQL's aggregate functions ignore nulls. To aggregate an option that
+way, ignoring `NONE`, use `countSome`, `sumSome`, `avgSome`, `minSome`,
+`maxSome`, `stddevSampSome`, `stddevPopSome`, `varSampSome` or
+`varPopSome`: `countSome over e.comm` is the number of employees that
+have a commission, and `sumSome over e.comm` is the total of the
+commissions there are, `NONE` for a group that has none.
+
 An `over` expression is just an expression (albeit one that can only
 be used in a `compute` clause), and that means that it can be part of
 a larger expression. That larger expression can include other `over`

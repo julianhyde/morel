@@ -412,10 +412,19 @@ public class TypeResolver {
 
   /** Deduces the datatype of a declaration. */
   private Resolved deduceType_(Ast.Decl decl) {
-    // Clean up from previous attempt.
+    // Clean up from previous attempt. The terms and constraints of an earlier
+    // attempt are of nodes that this attempt deduces afresh; if they stayed,
+    // a constraint that an earlier attempt could not resolve (an overload
+    // whose argument's type was not yet known) would stay unresolved.
     validations.clear();
     modifiedFields.clear();
     unresolvedRecords.clear();
+    terms.clear();
+    map.clear();
+    actionMap.clear();
+    overloads.clear();
+    constraints.clear();
+    erasedVariables.clear();
     final int fieldsLearned0 = fieldsLearned;
 
     final TypeEnvHolder typeEnvs =

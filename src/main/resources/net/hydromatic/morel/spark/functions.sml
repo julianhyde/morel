@@ -150,11 +150,13 @@
    divergence = "char list"},
 
   (* Collections and queries; the translator handles the structure *)
+  {morel = "Relational.avg", kind = "aggregate", spark = "avg",
+   divergence = ""},
   {morel = "Relational.count", kind = "aggregate", spark = "count",
    divergence = ""},
   {morel = "Relational.sum", kind = "aggregate", spark = "sum", divergence = ""},
-  (* `sum` resolves to an internal operator, one per summable type;
-   * Spark picks the type itself, so all three reach one function. *)
+  (* `sum` resolves to an internal operator, one per summable type; Spark
+   * picks the type itself, so all three reach one function. *)
   {morel = "$.sum:int", kind = "aggregate", spark = "sum", divergence = ""},
   {morel = "$.sum:real", kind = "aggregate", spark = "sum",
    divergence = ""},
@@ -162,6 +164,25 @@
    divergence = ""},
   {morel = "Relational.min", kind = "aggregate", spark = "min", divergence = ""},
   {morel = "Relational.max", kind = "aggregate", spark = "max", divergence = ""},
+  (* Spark's aggregates ignore nulls, as these ignore NONE. *)
+  {morel = "Relational.avgSome", kind = "aggregate", spark = "avg",
+   divergence = ""},
+  {morel = "Relational.countSome", kind = "aggregate", spark = "count",
+   divergence = ""},
+  {morel = "Relational.maxSome", kind = "aggregate", spark = "max",
+   divergence = ""},
+  {morel = "Relational.minSome", kind = "aggregate", spark = "min",
+   divergence = ""},
+  {morel = "Relational.stddevPopSome", kind = "aggregate",
+   spark = "stddev_pop", divergence = ""},
+  {morel = "Relational.stddevSampSome", kind = "aggregate",
+   spark = "stddev_samp", divergence = ""},
+  {morel = "Relational.sumSome", kind = "aggregate", spark = "sum",
+   divergence = ""},
+  {morel = "Relational.varPopSome", kind = "aggregate",
+   spark = "var_pop", divergence = ""},
+  {morel = "Relational.varSampSome", kind = "aggregate",
+   spark = "var_samp", divergence = ""},
   {morel = "op elem", kind = "subquery", spark = "exists",
    divergence = "Spark Connect 4.0 has no IN subquery; an EXISTS with an equality"},
   {morel = "op notelem", kind = "subquery", spark = "not exists",
