@@ -1140,6 +1140,40 @@ from i in [3] right join j in [5, 2, 8, 1] on i < j;
 > val it = [{i=SOME 3,j=5},{i=SOME 3,j=8},{i=NONE,j=2},{i=NONE,j=1}]
 >   : {i:int option, j:int} list
 
+(* A join in a function keeps its kind when the function's body is
+ * inlined into a call. *)
+fun leftJoin (xs, ys) = from x in xs left join y in ys on x = y;
+> val leftJoin = fn : 'a bag * 'a bag -> {x:'a, y:'a option} bag
+leftJoin (bag [1, 2], bag [2, 3]);
+> val it = [{x=1,y=NONE},{x=2,y=SOME 2}] : {x:int, y:int option} bag
+
+(* "?." reads a field of the side that a 'left join' wraps in 'option',
+ * and "Option.join" flattens the result. *)
+from w in [{a = 1, s = SOME 2}, {a = 2, s = SOME 4}]
+  left join z in [{a = 1, s = SOME 3}] on w.a = z.a
+  yield Option.`join` z?.s;
+> val it = [SOME 3,NONE] : int option list
+
+(* The left input of a 'full join' or 'right join' that is computed, here a
+ * projection, is wrapped whole in 'option', not the variables it is
+ * computed from. *)
+let
+  val xs = from i in [1, 2] yield {k = i, d = i * 10}
+  val ys = from i in [2, 3] yield {k = i}
+in
+  from x in xs full join y in ys on x.k = y.k
+end;
+> val it =
+>   [{x=SOME {d=10,k=1},y=NONE},{x=SOME {d=20,k=2},y=SOME {k=2}},
+>    {x=NONE,y=SOME {k=3}}] : {x:{d:int, k:int} option, y:{k:int} option} list
+let
+  val xs = from i in [1, 2] yield {k = i, d = i * 10}
+in
+  from x in xs right join j in [2, 3] on x.k = j
+end;
+> val it = [{j=2,x=SOME {d=20,k=2}},{j=3,x=NONE}]
+>   : {j:int, x:{d:int, k:int} option} list
+
 (* Degenerate joins ----------------------------------------------- *)
 
 (*) Join atom to list of units
@@ -1622,6 +1656,10 @@ from i in [2, 1, 2]
 from i in [2, 1, 2]
   compute {s = sum over i, t = 1 + sum over i * 3};
 > val it = {s=5,t=16} : {s:int, t:int}
+(*) With braces, a single aggregate is a record of one field.
+from i in [2, 1, 2]
+  compute {s = sum over i};
+> val it = {s=5} : {s:int}
 from i in [2, 1, 2]
   group i compute (sum over i);
 > val it = [{i=2,sum=4},{i=1,sum=1}] : {i:int, sum:int} list

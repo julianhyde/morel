@@ -170,6 +170,19 @@ from e in file.scott.emps
 >    {ename="KING",grade=SOME 4},{ename="KING",grade=SOME 5},
 >    {ename="MILLER",grade=NONE}] : {ename:string, grade:int option} list
 
+(* A date read from a file equals the same date made by "Date.date",
+ * and the two may be compared and joined. *)
+from r in file.types.all
+  where r.dt = Date.date {year=1970, month=Jan, day=1, hour=0, minute=0,
+    second=0, offset=SOME Time.zeroTime}
+  yield r.i;
+> val it = [~2] : int list
+from r in file.types.all
+  join d in [Date.date {year=1999, month=Dec, day=31, hour=0, minute=0,
+    second=0, offset=SOME Time.zeroTime}] on r.dt = d
+  yield r.s;
+> val it = ["plain"] : string list
+
 (* A function that scans a table reads it each time it is called,
  * rather than holding the rows from when it was defined. *)
 fun deptNames () = from d in file.scott.depts yield d.dname;

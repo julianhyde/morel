@@ -143,6 +143,29 @@ Date.compare (Date.fromTimeUniv (Time.zeroTime), Date.fromTimeUniv (Time.fromSec
 (Date.fromTimeUniv (Time.zeroTime)).compare (Date.fromTimeUniv (Time.fromSeconds 1));
 > val it = LESS : order
 
+(* A date is a value like any other: it compares by the instant it
+ * denotes, whichever way it was made, and may be a key of a group, a
+ * "distinct" or a set operation, and a sort key. *)
+val epoch = Date.fromTimeUniv Time.zeroTime;
+> val epoch = 1970-01-01T00:00Z : date
+val epoch2 = Date.date {year=1970, month=Jan, day=1, hour=0, minute=0,
+  second=0, offset=SOME Time.zeroTime};
+> val epoch2 = 1970-01-01T00:00Z : date
+epoch = epoch2;
+> val it = true : bool
+val later = Date.date {year=2000, month=Jan, day=1, hour=0, minute=0,
+  second=0, offset=SOME Time.zeroTime};
+> val later = 2000-01-01T00:00Z : date
+from d in [later, epoch, epoch2] order d;
+> val it = [1970-01-01T00:00Z,1970-01-01T00:00Z,2000-01-01T00:00Z] : date list
+from d in [later, epoch, later, epoch2] group d compute count over ();
+> val it = [{count=2,d=2000-01-01T00:00Z},{count=2,d=1970-01-01T00:00Z}]
+>   : {count:int, d:date} list
+from d in [later, epoch, later, epoch2] distinct;
+> val it = [2000-01-01T00:00Z,1970-01-01T00:00Z] : date list
+from d in [later, epoch] intersect [epoch2];
+> val it = [1970-01-01T00:00Z] : date list
+
 Date.fmt "%Y-%m-%d" (Date.fromTimeUniv (Time.zeroTime));
 > val it = "1970-01-01" : string
 
