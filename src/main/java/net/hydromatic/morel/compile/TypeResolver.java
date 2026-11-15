@@ -4292,7 +4292,10 @@ public class TypeResolver {
     final Term t = substitution.resolve(term);
     if (t instanceof Variable) {
       // A layer (or the record) is not yet resolved; defer until it is.
-      actionMap.put(
+      // Other safe selectors on the same receiver, such as "w?.a" and
+      // "w?.b", may be waiting for the same variable, so add to its
+      // actions rather than replace them.
+      addAction(
           (Variable) t,
           (v, t2, sub, tp) ->
               resolveSafeField(functors, fieldName, t2, vResult, sub, tp));
@@ -4330,6 +4333,21 @@ public class TypeResolver {
       result = unifier.apply(layer.operator, args);
     }
     termPairs.accept(substitution.resolve(vResult), result);
+  }
+
+  /**
+   * Registers an action to be called when a variable is resolved; if the
+   * variable already has an action, both are called, the earlier first.
+   */
+  private void addAction(Variable variable, Action action) {
+    actionMap.merge(
+        variable,
+        action,
+        (a0, a1) ->
+            (v, t, substitution, termPairs) -> {
+              a0.accept(v, t, substitution, termPairs);
+              a1.accept(v, t, substitution, termPairs);
+            });
   }
 
   /**

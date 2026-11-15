@@ -10113,7 +10113,7 @@ fun q51 () =
   end;
 > val q51 = fn
 >   : unit
->      -> {d_date:'a option, item_sk:int, store_cumulative:decimal option,
+>      -> {d_date:date option, item_sk:int, store_cumulative:decimal option,
 >           store_sales:decimal option, web_cumulative:decimal option,
 >           web_sales:decimal option} list
 val r51 = q51 ();
@@ -10318,7 +10318,7 @@ val r51 = q51 ();
 >     store_sales=NONE,web_cumulative=SOME 327.17,web_sales=SOME 327.17},
 >    {d_date=SOME 2000-09-18T00:00Z,item_sk=511,store_cumulative=SOME 116.65,
 >     store_sales=SOME 116.65,web_cumulative=SOME 327.17,web_sales=NONE}]
->   : {d_date:'a option, item_sk:int, store_cumulative:decimal option,
+>   : {d_date:date option, item_sk:int, store_cumulative:decimal option,
 >       store_sales:decimal option, web_cumulative:decimal option,
 >       web_sales:decimal option} list
 

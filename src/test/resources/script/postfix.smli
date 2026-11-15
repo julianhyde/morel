@@ -272,6 +272,12 @@ let val xs = [SOME {a=1}, NONE] in xs?.a end;
 from x in [SOME {a=10}, NONE] yield x?.a;
 > val it = [SOME 10,NONE] : int option list
 
+(* Two "?." of the same receiver, whose type is not yet known when they
+ * are deduced, each resolve; "s" had type "'a" and printed as
+ * "[SOME, x]". *)
+from w in [SOME {d = 5, s = "x"}] yield {d = w?.d, s = w?.s};
+> val it = [{d=SOME 5,s=SOME "x"}] : {d:int option, s:string option} list
+
 (*) Receiver is not a functor.
 let val n = 5 in n?.x end;
 > stdIn:1.18 Error: '?.' applied to non-functor type int (expected option or list)
