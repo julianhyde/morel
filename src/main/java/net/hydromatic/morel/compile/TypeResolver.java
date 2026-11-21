@@ -256,6 +256,27 @@ public class TypeResolver {
       newSetFromMap(new IdentityHashMap<>());
 
   /**
+   * Environment of the declaration being deduced: the values that were declared
+   * before it. A name bound above this, by a {@code fn}, {@code let}, {@code
+   * case} or a query in the declaration, hides the value of the same name in
+   * it.
+   */
+  private @Nullable TypeEnv rootTypeEnv;
+
+  /**
+   * Identifiers that refer to a variable bound in the declaration being
+   * deduced, not to a value in {@link #rootTypeEnv}, each with the environment
+   * that binds it. Cleared at the start of each attempt.
+   */
+  private final Map<Ast.Id, BindTypeEnv> localIds = new IdentityHashMap<>();
+
+  /**
+   * The expression of each variable that a {@code val} in a {@code let} binds,
+   * by the environment that binds it. Cleared at the start of each attempt.
+   */
+  private final Map<BindTypeEnv, Ast.Exp> localExps = new IdentityHashMap<>();
+
+  /**
    * Number of times the fields of a record operand have become known. If it
    * changes during an attempt, the declaration is deduced again, and this time
    * the modifiers that needed those fields can be applied.
@@ -419,6 +440,8 @@ public class TypeResolver {
     validations.clear();
     modifiedFields.clear();
     unresolvedRecords.clear();
+    localIds.clear();
+    localExps.clear();
     terms.clear();
     map.clear();
     actionMap.clear();
@@ -432,6 +455,7 @@ public class TypeResolver {
     env.forEachType(typeSystem, typeEnvs);
 
     final TypeEnv typeEnv = typeEnvs.typeEnv;
+    rootTypeEnv = typeEnv;
     final Ast.Decl node2 = deduceDeclType(typeEnv, decl, PairList.of());
     final boolean debug = false;
     @SuppressWarnings("ConstantConditions")
@@ -512,7 +536,8 @@ public class TypeResolver {
           apply -> {},
           apply -> {});
       if (progressive.get()) {
-        node2.accept(FieldExpander.create(typeSystem, env));
+        node2.accept(
+            FieldExpander.create(typeSystem, env, localIds, localExps));
       } else {
         checkNoUnresolvedFieldRefs(node2, typeMap);
         checkRecordModifiers();
@@ -1631,7 +1656,9 @@ public class TypeResolver {
           final List<Variable> priorVars = unifier.variables();
           final Ast.Decl decl2 = deduceDeclType(e2, decl, termMap);
           decls.add(decl2);
-          e2 = bindDeclGeneralized(e2, termMap, priorVars, decl2);
+          final TypeEnv e3 = bindDeclGeneralized(e2, termMap, priorVars, decl2);
+          recordLocalExps(e3, e2, decl2);
+          e2 = e3;
           termMap.clear();
         }
         final Ast.Exp exp2 = deduceExpType(e2, let.exp, v);
@@ -1668,9 +1695,7 @@ public class TypeResolver {
         return deduceQueryType(e, (Ast.Query) node, v);
 
       case ID:
-        final Ast.Id id = (Ast.Id) node;
-        final Term term = e.get(typeSystem, id.name, TypeEnv.unbound(id));
-        return reg(id, v, term);
+        return deduceIdType(e, (Ast.Id) node, v);
 
       case OP_SECTION:
         final Ast.OpSection opSection = (Ast.OpSection) node;
@@ -6245,6 +6270,57 @@ public class TypeResolver {
     }
   }
 
+  /** Deduces the type of an identifier. */
+  private Ast.Exp deduceIdType(TypeEnv e, Ast.Id id, Variable v) {
+    final Term term = e.get(typeSystem, id.name, TypeEnv.unbound(id));
+    final @Nullable BindTypeEnv binder = localBinder(e, id.name);
+    if (binder != null) {
+      localIds.put(id, binder);
+    }
+    return reg(id, v, term);
+  }
+
+  /**
+   * Returns the environment that binds {@code name}, in environment {@code e},
+   * if it is a variable bound in the declaration being deduced; or null if it
+   * is a value declared before it.
+   */
+  private @Nullable BindTypeEnv localBinder(TypeEnv e, String name) {
+    for (TypeEnv e2 = e;
+        e2 != rootTypeEnv && e2 instanceof BindTypeEnv;
+        e2 = ((BindTypeEnv) e2).parent) {
+      if (((BindTypeEnv) e2).definedName.equals(name)) {
+        return (BindTypeEnv) e2;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Records the expression of each variable that a {@code val} declaration
+   * binds, so that if the variable is a part of {@code file}, as {@code w} is
+   * in {@code let val w = file.wordle in w.words end}, the fields read from it
+   * can be learned. {@code e} is the environment after the declaration, and
+   * {@code e0} the environment before.
+   */
+  private void recordLocalExps(TypeEnv e, TypeEnv e0, Ast.Decl decl) {
+    while (decl instanceof Ast.AttributedDecl) {
+      decl = ((Ast.AttributedDecl) decl).decl;
+    }
+    if (!(decl instanceof Ast.ValDecl) || ((Ast.ValDecl) decl).rec) {
+      return;
+    }
+    for (Ast.ValBind valBind : ((Ast.ValDecl) decl).valBinds) {
+      if (valBind.pat instanceof Ast.IdPat) {
+        final String name = ((Ast.IdPat) valBind.pat).name;
+        final @Nullable BindTypeEnv binder = localBinder(e, name);
+        if (binder != null && localBinder(e0, name) != binder) {
+          localExps.put(binder, valBind.exp);
+        }
+      }
+    }
+  }
+
   /** Type environment. */
   interface TypeEnv {
     /**
@@ -6779,17 +6855,36 @@ public class TypeResolver {
    * references.
    */
   static class FieldExpander extends EnvVisitor {
-    static FieldExpander create(TypeSystem typeSystem, Environment env) {
-      return new FieldExpander(typeSystem, env);
+    /**
+     * Identifiers that refer to a variable, not to a value in {@code env}, each
+     * with the environment that binds it.
+     */
+    private final Map<Ast.Id, BindTypeEnv> localIds;
+
+    /** The expression of each variable that a {@code let} binds. */
+    private final Map<BindTypeEnv, Ast.Exp> localExps;
+
+    static FieldExpander create(
+        TypeSystem typeSystem,
+        Environment env,
+        Map<Ast.Id, BindTypeEnv> localIds,
+        Map<BindTypeEnv, Ast.Exp> localExps) {
+      return new FieldExpander(typeSystem, env, localIds, localExps);
     }
 
-    private FieldExpander(TypeSystem typeSystem, Environment env) {
+    private FieldExpander(
+        TypeSystem typeSystem,
+        Environment env,
+        Map<Ast.Id, BindTypeEnv> localIds,
+        Map<BindTypeEnv, Ast.Exp> localExps) {
       super(typeSystem, env);
+      this.localIds = localIds;
+      this.localExps = localExps;
     }
 
     @Override
     protected EnvVisitor push(Environment env) {
-      return new FieldExpander(typeSystem, env);
+      return new FieldExpander(typeSystem, env, localIds, localExps);
     }
 
     @Override
@@ -6831,6 +6926,16 @@ public class TypeResolver {
           return null;
 
         case ID:
+          // In "val s = file.scott; from s in file.map.states yield
+          // s.state", the "s" of "s.state" is the query's variable, not
+          // the value "s" in the environment. A variable that a "let"
+          // binds, such as "w" in "let val w = file.wordle in w.words end",
+          // is the value of its expression.
+          final @Nullable BindTypeEnv binder = localIds.get((Ast.Id) exp);
+          if (binder != null) {
+            final Ast.@Nullable Exp localExp = localExps.get(binder);
+            return localExp == null ? null : expandField(env, localExp);
+          }
           final Binding binding = env.getOpt(((Ast.Id) exp).name);
           if (binding != null && binding.value instanceof TypedValue) {
             return (TypedValue) binding.value;

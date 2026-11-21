@@ -158,6 +158,19 @@ from e in file.scott.emps
 >    {comm=NONE,ename="MILLER",mgrno=SOME 7782,sal=1300}]
 >   : {comm:decimal option, ename:string, mgrno:int option, sal:decimal} list
 
+(* A variable that "let" binds to part of "file", here "m", tells Morel
+ * the fields read from it, as "file.map" would; and a variable that has
+ * the name of a value bound to part of "file", here the query's "s"
+ * ("s" is "file.scott"), hides that value. This is the first read of
+ * "file.map". *)
+let
+  val m = file.map
+in
+  from s in [{state = "AL"}]
+    yield {s.state, n = List.length m.`adjacent-states`}
+end;
+> val it = [{n=218,state="AL"}] : {n:int, state:string} list
+
 (* An arithmetic operator in a query that first reads a table, and so
  * learns its fields partway through, sees the field's type; so it does
  * in "exists" and "forall". Each reads a different table, to be the
@@ -166,6 +179,7 @@ from w in file.wordle.words yield String.size w.word * 2 take 3;
 > val it = [10,10,10] : int list
 exists a in file.wordle.answers where a.answer * 2 = 4018;
 > val it = true : bool
+
 forall a in file.map.`adjacent-states` require String.size a.state * 2 = 4;
 > val it = true : bool
 
