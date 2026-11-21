@@ -278,6 +278,15 @@ from x in [SOME {a=10}, NONE] yield x?.a;
 from w in [SOME {d = 5, s = "x"}] yield {d = w?.d, s = w?.s};
 > val it = [{d=SOME 5,s=SOME "x"}] : {d:int option, s:string option} list
 
+(* In an argument, "f x?.a" is "f (x?.a)", as "f x.a" is "f (x.a)",
+ * and may be followed by a comma. *)
+let val r = SOME {a = SOME 1} in Option.`join` r?.a end;
+> val it = SOME 1 : int option
+let val r = SOME {a = 2} in (valOf r?.a, 3) end;
+> val it = (2,3) : int * int
+let val r = SOME {a = 2} in {k = valOf r?.a, d = 1} end;
+> val it = {d=1,k=2} : {d:int, k:int}
+
 (*) Receiver is not a functor.
 let val n = 5 in n?.x end;
 > stdIn:1.18 Error: '?.' applied to non-functor type int (expected option or list)
