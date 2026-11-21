@@ -891,6 +891,16 @@ from i in [5,6,7,8] group {} compute sum over ordinal;
 from i in [1,2,3,4] group {k = i mod 2} compute {s = sum over ordinal};
 > val it = [{k=1,s=2},{k=0,s=4}] : {k:int, s:int} list
 
+(* The argument of an aggregate may bind variables, here "p" and "q"
+ * in a "case", for each row. *)
+from x in [{k = 1, a = SOME 1, b = SOME 2}, {k = 1, a = NONE, b = SOME 3},
+    {k = 2, a = SOME 4, b = SOME 5}]
+  group x.k
+  compute {t = sum over (case (x.a, x.b) of
+      (SOME p, SOME q) => p + q
+    | _ => 0)};
+> val it = [{k=1,t=3},{k=2,t=9}] : {k:int, t:int} list
+
 (*) An argument-less aggregate still sees whole rows.
 from i in [1,2,3,4] group {} compute {c = count over (), s = sum over ordinal};
 > val it = [{c=4,s=6}] : {c:int, s:int} list
