@@ -113,8 +113,11 @@ fi
 # in what SHOW TBLPROPERTIES returns. A "morel.nullable" property lists
 # columns, and a column such as TPC-DS's wp_url would hide the whole
 # list, so that Morel would read every column of the table as not null.
-# The test server holds no secrets; "(?!)" matches nothing.
+# The test server holds no secrets; "(?!)" matches nothing. The driver,
+# which in local mode also runs the tasks, needs more than the default
+# 1 GB to run the TPC-DS queries.
 spark_conf=(
+  --conf spark.driver.memory=2g
   --conf spark.plugins=org.apache.spark.sql.connect.SparkConnectPlugin
   --conf spark.connect.grpc.binding.port=15002
   --conf spark.sql.ansi.enabled=true

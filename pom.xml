@@ -74,6 +74,11 @@ License.
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <top.dir>${project.basedir}</top.dir>
+    <!-- Options for the JVM that runs the tests, such as a heap size:
+         '-Dsurefire.jvmArgs=-Xmx8g'. The TPC-DS tests ('-Dmorel.tpcds')
+         hold the data set in memory, and need more than the default
+         heap of a machine with 16 GB. -->
+    <surefire.jvmArgs></surefire.jvmArgs>
 
     <!-- Component and plugin versions, in alphabetical order. -->
     <!-- // lint: sort until '^$' where '##<[a-z]' -->
@@ -471,6 +476,9 @@ License.
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${maven-surefire-plugin.version}</version>
+        <configuration>
+          <argLine>${surefire.jvmArgs}</argLine>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
@@ -780,7 +788,7 @@ License.
             <version>${maven-surefire-plugin.version}</version>
             <configuration>
               <!-- Arrow's memory management needs this on JDK 9+. -->
-              <argLine>--add-opens=java.base/java.nio=ALL-UNNAMED</argLine>
+              <argLine>${surefire.jvmArgs} --add-opens=java.base/java.nio=ALL-UNNAMED</argLine>
             </configuration>
           </plugin>
         </plugins>

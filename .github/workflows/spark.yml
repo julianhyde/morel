@@ -75,8 +75,11 @@ jobs:
             /tmp/generated.smli
       - name: Build and test with live Spark, and the TPC-DS queries
         run: |
+          # The local TPC-DS test holds the data set in memory, more than
+          # the default heap (a quarter of the runner's 16 GB) allows
+          # alongside the other tests.
           ./mvnw --batch-mode verify -Dmorel.spark=true \
-            -Dmorel.tpcds="$MOREL_TPCDS"
+            -Dmorel.tpcds="$MOREL_TPCDS" -Dsurefire.jvmArgs=-Xmx8g
       - name: Server log on failure
         if: failure()
         run: docker logs --tail 200 morel-spark
