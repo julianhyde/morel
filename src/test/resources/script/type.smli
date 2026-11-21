@@ -771,7 +771,7 @@ type_string ("x" ^ "y") ^ "z";
  * "(type_string f) x", which applies x to the resulting string,
  * rather than the type of "f x". *)
 type_string String.size "abc";
-> stdIn:1.1-1.30 Error: Cannot deduce type: conflict: T2 -> T0 vs string
+> stdIn:1.1-1.30 Error: Cannot deduce type: conflict: 'a -> 'b vs string
 >   raised at: stdIn:1.1-1.30
 
 fun foo list = (size list, type_string (true, list));
@@ -883,11 +883,28 @@ id_list [1,2];
 id_list ["a","b"];
 > val it = ["a","b"] : string list
 id_list (true, 1);
-> stdIn:1.1-1.18 Error: Cannot deduce type: conflict: bool * int vs T6 list
+> stdIn:1.1-1.18 Error: Cannot deduce type: conflict: bool * int vs 'a list
 >   raised at: stdIn:1.1-1.18
 id_list (bag [false,true]);
-> stdIn:1.1-1.27 Error: Cannot deduce type: conflict: T9 list vs T7 bag
+> stdIn:1.1-1.27 Error: Cannot deduce type: conflict: 'a list vs 'b bag
 >   raised at: stdIn:1.1-1.27
+
+(* In a conflict or a cycle, a type variable is named 'a, 'b, ... in
+ * the order that the message meets it, rather than by the unifier's
+ * numbering; and a type is written as Morel writes it, bracketed where
+ * it must be. *)
+fn (x, y) => x :: (y, y);
+> stdIn:1.1-1.25 Error: Cannot deduce type: conflict: 'a * 'a vs 'b list
+>   raised at: stdIn:1.1-1.25
+fn (f, x) => f x + (f, f);
+> stdIn:1.1-1.26 Error: Cannot deduce type: cycle: variable 'a in ('b -> 'a) * ('b -> 'a)
+>   raised at: stdIn:1.1-1.26
+fn (p : (int * int) * int) => p = 1;
+> stdIn:1.1-1.36 Error: Cannot deduce type: conflict: (int * int) * int vs int
+>   raised at: stdIn:1.1-1.36
+fn (f : (int -> int) -> int) => f = 1;
+> stdIn:1.1-1.38 Error: Cannot deduce type: conflict: (int -> int) -> int vs int
+>   raised at: stdIn:1.1-1.38
 
 (*) Same, without parentheses around the argument.
 fun id_list x: 'a list = x;
@@ -926,7 +943,7 @@ first_pair [("a",true),("c",false)];
 > stdIn:1.1-1.36 Error: Cannot deduce type: conflict: string vs bool
 >   raised at: stdIn:1.1-1.36
 first_pair (bag [("a","b"),("c","d")]);
-> stdIn:1.1-1.39 Error: Cannot deduce type: conflict: T11 bag vs (T13 * T13) list
+> stdIn:1.1-1.39 Error: Cannot deduce type: conflict: 'a bag vs ('b * 'b) list
 >   raised at: stdIn:1.1-1.39
 
 (* Function that uses its argument in a query and therefore requires
@@ -1653,7 +1670,7 @@ val e: int option = "a";
 > stdIn:1.1-1.24 Error: Cannot deduce type: conflict: int option vs string
 >   raised at: stdIn:1.1-1.24
 val f: int bag = [1];
-> stdIn:1.1-1.21 Error: Cannot deduce type: conflict: int bag vs T2 list
+> stdIn:1.1-1.21 Error: Cannot deduce type: conflict: int bag vs 'a list
 >   raised at: stdIn:1.1-1.21
 
 (*) A compound element of a postfix type constructor is parenthesized.

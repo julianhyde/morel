@@ -83,7 +83,7 @@ public class TypeVar implements Type {
    * 675 &rarr; 'zz, 676 &rarr; 'baa, etc. (Think of it is a base 26 number,
    * with "a" as 0, "z" as 25.)
    */
-  static String name(int i) {
+  public static String name(int i) {
     if (i < 0) {
       throw new IllegalArgumentException();
     }

@@ -1566,7 +1566,7 @@ fun ancestors () =
         (y2, z) in ancestors ()
       where y = y2
       yield (x, z));
-> stdIn:1.1-7.20 Error: Cannot deduce type: conflict: T45 * T46 vs {x:T7, y:T8}
+> stdIn:1.1-7.20 Error: Cannot deduce type: conflict: 'a * 'b vs {x:'c, y:'d}
 >   raised at: stdIn:1.1-7.20
 
 (* Morel "forwards" relation *)

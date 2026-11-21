@@ -24,12 +24,14 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import net.hydromatic.morel.type.TypeVar;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -103,14 +105,13 @@ public class MartelliUnifier extends Unifier {
               // The expansions still disagree, so report the aliases that were
               // written rather than what they expand to.
               tracer.onConflict(left, right);
-              return failure(
-                  "conflict: " + render(left) + " vs " + render(right));
+              return failure(conflict(left, right));
             }
             work.add(left2, right2);
             continue;
           }
           tracer.onConflict(left, right);
-          return failure("conflict: " + render(left) + " vs " + render(right));
+          return failure(conflict(left, right));
         }
 
         // Two collections that differ only in orderedness (list vs bag) share
@@ -120,7 +121,7 @@ public class MartelliUnifier extends Unifier {
         // reads "T list vs T bag".
         if (isOrderednessConflict(left, right)) {
           tracer.onConflict(left, right);
-          return failure("conflict: " + render(left) + " vs " + render(right));
+          return failure(conflict(left, right));
         }
 
         // decompose
@@ -139,7 +140,12 @@ public class MartelliUnifier extends Unifier {
         // Occurs check
         if (term.contains(variable)) {
           tracer.onCycle(variable, term);
-          return failure("cycle: variable " + variable + " in " + term);
+          final Map<Variable, String> varNames = new HashMap<>();
+          return failure(
+              "cycle: variable "
+                  + render(variable, varNames)
+                  + " in "
+                  + render(term, varNames));
         }
 
         // If 'term' is already in the table, map 'variable' to its ultimate
@@ -224,11 +230,28 @@ public class MartelliUnifier extends Unifier {
   }
 
   /**
+   * Returns the message for two terms that cannot be unified. A variable in
+   * either prints as a type variable, {@code 'a}, {@code 'b}, ..., named in the
+   * order the message meets it, so that the message does not depend on the
+   * unifier's internal numbering. (Issue #357.)
+   *
+   * <p>The variables are free: the unifier substitutes each variable that it
+   * solves into the pairs that remain, so none is known by the time a pair
+   * conflicts.
+   */
+  private static String conflict(Term left, Term right) {
+    final Map<Variable, String> varNames = new HashMap<>();
+    final String left2 = render(left, varNames);
+    final String right2 = render(right, varNames);
+    return "conflict: " + left2 + " vs " + right2;
+  }
+
+  /**
    * Renders a term for an error message, in the syntax a type is written in
    * rather than the unifier's internal form: {@code int * int} rather than
    * {@code tuple(int, int)}, {@code T list} rather than {@code list(T)}.
    */
-  private static String render(Term term) {
+  private static String render(Term term, Map<Variable, String> varNames) {
     if (term instanceof Sequence) {
       final Sequence seq = (Sequence) term;
       final String ord = orderednessAtom(seq);
@@ -242,20 +265,33 @@ public class MartelliUnifier extends Unifier {
             ORDERED_OP.equals(orderednessAtom(seq.terms.get(1)))
                 ? "list"
                 : "bag";
-        return atomic(seq.terms.get(0)) + " " + kind;
+        return atomic(seq.terms.get(0), varNames) + " " + kind;
       }
       if (seq.operator.startsWith(ALIAS_PREFIX)) {
         // "$alias:t(int)" reads "t (alias for int)".
         return seq.operator.substring(ALIAS_PREFIX.length())
             + " (alias for "
-            + render(seq.terms.get(0))
+            + render(seq.terms.get(0), varNames)
             + ")";
       }
       if (seq.operator.equals(TUPLE_OP) && !seq.terms.isEmpty()) {
-        return join(seq.terms, " * ");
+        // A component that is a function or a tuple is bracketed:
+        // "(int -> int) * int", "(int * int) * int".
+        final StringBuilder b = new StringBuilder();
+        for (Term t : seq.terms) {
+          if (b.length() > 0) {
+            b.append(" * ");
+          }
+          b.append(bracketed(t, varNames, FN_OP, TUPLE_OP));
+        }
+        return b.toString();
       }
       if (seq.operator.equals(FN_OP) && seq.terms.size() == 2) {
-        return render(seq.terms.get(0)) + " -> " + render(seq.terms.get(1));
+        // "->" associates to the right, so a parameter that is a function
+        // is bracketed: "(int -> int) -> int".
+        return bracketed(seq.terms.get(0), varNames, FN_OP)
+            + " -> "
+            + render(seq.terms.get(1), varNames);
       }
       if (seq.operator.startsWith(RECORD_OP + ":")) {
         final List<String> names = fieldNames(seq);
@@ -265,7 +301,9 @@ public class MartelliUnifier extends Unifier {
             if (i > 0) {
               b.append(", ");
             }
-            b.append(names.get(i)).append(':').append(render(seq.terms.get(i)));
+            b.append(names.get(i))
+                .append(':')
+                .append(render(seq.terms.get(i), varNames));
           }
           return b.append('}').toString();
         }
@@ -273,11 +311,17 @@ public class MartelliUnifier extends Unifier {
       if (!seq.terms.isEmpty()) {
         // A type constructor applied to arguments, e.g. "int option".
         return (seq.terms.size() == 1
-                ? atomic(seq.terms.get(0))
-                : "(" + join(seq.terms, ", ") + ")")
+                ? atomic(seq.terms.get(0), varNames)
+                : "(" + join(seq.terms, ", ", varNames) + ")")
             + " "
             + seq.operator;
       }
+    }
+    if (term instanceof Variable) {
+      // A variable that the substitution does not resolve is named as a type
+      // variable is, in the order the message meets it.
+      return varNames.computeIfAbsent(
+          (Variable) term, v -> TypeVar.name(varNames.size()));
     }
     return term.toString();
   }
@@ -323,21 +367,39 @@ public class MartelliUnifier extends Unifier {
    * the postfix type constructor it is the argument of: {@code (int * int)
    * list}, not {@code int * int list}.
    */
-  private static String atomic(Term term) {
-    final String s = render(term);
+  private static String atomic(Term term, Map<Variable, String> varNames) {
+    final String s = render(term, varNames);
     return s.indexOf(' ') < 0 || s.startsWith("(") || s.startsWith("{")
         ? s
         : "(" + s + ")";
   }
 
+  /**
+   * Renders a term, bracketed if it is a sequence, with arguments, whose
+   * operator is one of {@code operators}.
+   */
+  private static String bracketed(
+      Term term, Map<Variable, String> varNames, String... operators) {
+    final String s = render(term, varNames);
+    if (term instanceof Sequence && !((Sequence) term).terms.isEmpty()) {
+      for (String operator : operators) {
+        if (((Sequence) term).operator.equals(operator)) {
+          return "(" + s + ")";
+        }
+      }
+    }
+    return s;
+  }
+
   /** Renders terms, separated. */
-  private static String join(List<Term> terms, String separator) {
+  private static String join(
+      List<Term> terms, String separator, Map<Variable, String> varNames) {
     final StringBuilder b = new StringBuilder();
     for (int i = 0; i < terms.size(); i++) {
       if (i > 0) {
         b.append(separator);
       }
-      b.append(render(terms.get(i)));
+      b.append(render(terms.get(i), varNames));
     }
     return b.toString();
   }
@@ -533,7 +595,7 @@ public class MartelliUnifier extends Unifier {
                 return failure(
                     format(
                         "no instance of '%s' matches argument type '%s'",
-                        c.name, render(constraint.arg)));
+                        c.name, render(constraint.arg, new HashMap<>())));
               }
               return failure("no valid overloads");
             case 1:
