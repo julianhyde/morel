@@ -84,6 +84,16 @@ Bool.`orelse` (false, false);
 > val it = false : bool
 Bool.`orelse` (true, false);
 > val it = true : bool
+(* "andalso" and "orelse" evaluate their right operand only if the
+ * left does not decide the answer, so "1 div 0" is not evaluated. *)
+false andalso 1 div 0 = 1;
+> val it = false : bool
+true orelse 1 div 0 = 1;
+> val it = true : bool
+from i in [0, 1, 2] where i <> 0 andalso 10 div i > 1;
+> val it = [1,2] : int list
+from i in [0, 1, 2] where i = 0 orelse 10 div i > 6;
+> val it = [0,1] : int list
 Bool.`=` (true, true);
 > val it = true : bool
 Bool.`=` (true, false);
