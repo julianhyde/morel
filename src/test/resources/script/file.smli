@@ -158,6 +158,17 @@ from e in file.scott.emps
 >    {comm=NONE,ename="MILLER",mgrno=SOME 7782,sal=1300}]
 >   : {comm:decimal option, ename:string, mgrno:int option, sal:decimal} list
 
+(* An arithmetic operator in a query that first reads a table, and so
+ * learns its fields partway through, sees the field's type; so it does
+ * in "exists" and "forall". Each reads a different table, to be the
+ * first to read it. *)
+from w in file.wordle.words yield String.size w.word * 2 take 3;
+> val it = [10,10,10] : int list
+exists a in file.wordle.answers where a.answer * 2 = 4018;
+> val it = true : bool
+forall a in file.map.`adjacent-states` require String.size a.state * 2 = 4;
+> val it = true : bool
+
 (* A field of a table on the right of a left join, read with "?.",
  * tells Morel the table's fields, as "." does. *)
 from e in file.scott.emps
