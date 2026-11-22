@@ -48,7 +48,11 @@ jobs:
         javadoc: [ false ]
         spark: [ false ]
         include:
+          # Zulu, not Temurin: setup-java must download JDK 8, and the
+          # runner could not unpack Temurin 8u514 from GitHub's release
+          # storage ("not in gzip format"); Zulu comes from Azul's CDN.
           - java-version: "8"
+            distribution: "zulu"
             guava-version: "23.1-jre"
             hsqldb-version: "2.5.1"
             checkstyle-version: "9.3"
@@ -84,7 +88,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: ${{ matrix.java-version }}
-          distribution: 'temurin'
+          distribution: ${{ matrix.distribution || 'temurin' }}
           cache: 'maven'
       - name: Start Spark Connect server
         if: matrix.spark
